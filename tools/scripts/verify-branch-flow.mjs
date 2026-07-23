@@ -163,6 +163,7 @@ export function verifyProtectedPushTopology({
   const mergedHead = afterParents[1];
   if (branch === "nightly") {
     for (const protectedBranch of LONG_LIVED_BRANCHES) {
+      if (protectedBranch === branch) continue;
       const protectedTip = resolveBranch(protectedBranch);
       if (protectedTip && ancestor(mergedHead, protectedTip)) {
         return {
@@ -178,7 +179,7 @@ export function verifyProtectedPushTopology({
   if (!upstreamTip) {
     return { ok: false, message: `cannot verify the repository-owned ${upstream} tip.` };
   }
-  if (!ancestor(mergedHead, upstreamTip)) {
+  if (mergedHead !== upstreamTip) {
     return { ok: false, message: `${branch} may only merge the repository-owned ${upstream} branch.` };
   }
   return { ok: true, message: `${branch} advanced from ${upstream}.` };
@@ -289,7 +290,7 @@ export function runBranchFlowSelfTest() {
     release: "release-tip"
   };
   const graph = new Map([
-    ["feature-tip", new Set()],
+    ["feature-tip", new Set(["nightly-tip"])],
     ["nightly-source", new Set(["nightly-tip"])],
     ["stable-source", new Set(["stable-tip"])]
   ]);
@@ -304,19 +305,25 @@ export function runBranchFlowSelfTest() {
       label: "nightly merge advances stable",
       expected: true,
       input: { branch: "stable", before: "old-stable", after: "new-stable" },
-      parents: () => ["old-stable", "nightly-source"]
+      parents: () => ["old-stable", "nightly-tip"]
     },
     {
       label: "stable merge advances release",
       expected: true,
       input: { branch: "release", before: "old-release", after: "new-release" },
-      parents: () => ["old-release", "stable-source"]
+      parents: () => ["old-release", "stable-tip"]
     },
     {
       label: "direct commit cannot advance nightly",
       expected: false,
       input: { branch: "nightly", before: "old-nightly", after: "direct" },
       parents: () => ["old-nightly"]
+    },
+    {
+      label: "stable head cannot advance nightly",
+      expected: false,
+      input: { branch: "nightly", before: "old-nightly", after: "new-nightly" },
+      parents: () => ["old-nightly", "stable-source"]
     },
     {
       label: "temporary branch cannot advance stable",
