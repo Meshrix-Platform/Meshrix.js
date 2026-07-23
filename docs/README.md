@@ -42,6 +42,7 @@ protocol, and runbook documents below own the detailed maintenance rules.
 | State machines | [state-machine/STATE-MACHINES.md](state-machine/STATE-MACHINES.md) |
 | Entity configuration | [ENTITY-CONFIG-LAYOUT.md](ENTITY-CONFIG-LAYOUT.md) |
 | Compatibility | [COMPATIBILITY.md](COMPATIBILITY.md) |
+| Local temporary report policy | [REPORTS.md](REPORTS.md) |
 
 ## External Maintenance Framework
 
