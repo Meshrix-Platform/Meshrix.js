@@ -1183,7 +1183,8 @@ export function createToolSkillManagementProvider({
   async function resolveMcpAuthorizationRequest(input = {}, { authSession = null } = {}) {
     const current = requirePlatform();
     const requestId = String(input.requestId || input["request-id"] || input.id || "").trim();
-    const resolution = String(input.resolution || "").trim();
+    const resolutionInput = String(input.resolution || "").trim();
+    const resolution = resolutionInput === "denied" ? "rejected" : resolutionInput;
     const resolvedBy = String(
       authSession?.user?.userId || authSession?.user?.id || authSession?.user?.username || ""
     ).trim();

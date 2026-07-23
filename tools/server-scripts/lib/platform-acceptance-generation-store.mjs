@@ -278,7 +278,11 @@ export async function createAcceptanceGenerationWorkspace(repoRoot, { id } = {})
     const stats = await fs.stat(dependencyRoot);
     if (!stats.isDirectory()) throw new Error("not a directory");
     await linkWorkspaceNodeModules(repoRoot, paths.workspace);
-    await fs.symlink(path.join(repoRoot, ".git"), path.join(paths.workspace, ".git"), "junction");
+    await fs.writeFile(
+      path.join(paths.workspace, ".git"),
+      `gitdir: ${path.join(repoRoot, ".git")}\n`,
+      "utf8",
+    );
   } catch (error) {
     await fs.rm(paths.workspace, { recursive: true, force: true });
     if (error?.message === "not a directory" || error?.code === "ENOENT") {

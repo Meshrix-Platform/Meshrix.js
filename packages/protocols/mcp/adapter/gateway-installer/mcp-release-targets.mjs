@@ -64,3 +64,13 @@ export function mcpSupportedTargetDetails() {
     adapter: { ...adapter }
   }));
 }
+
+export function mcpPublicSupportedTargetDetails() {
+  return MCP_CLIENT_TARGETS.map(({ target, label, priority, locations }) => ({
+    target,
+    label,
+    priority,
+    installMode: "external-client-adapter",
+    locations: [...locations]
+  }));
+}

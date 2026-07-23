@@ -32719,7 +32719,6 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "requestId",
         "resolution"
       ],
       "properties": {
@@ -32735,6 +32734,27 @@ export const SERVER_API_OPERATIONS = [
         },
         "reason": {
           "type": "string"
+        },
+        "clientName": {
+          "type": "string"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "toolsets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "toolAllow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -33584,8 +33604,20 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "required": [],
-      "properties": {}
+      "required": [
+        "backupId"
+      ],
+      "properties": {
+        "backupId": {
+          "type": "string"
+        },
+        "includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -33697,8 +33729,23 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "required": [],
-      "properties": {}
+      "required": [
+        "backupId"
+      ],
+      "properties": {
+        "backupId": {
+          "type": "string"
+        },
+        "includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "confirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,

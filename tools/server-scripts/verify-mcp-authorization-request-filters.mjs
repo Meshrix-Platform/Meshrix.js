@@ -193,7 +193,7 @@ try {
     });
     assert.equal(approved.status, 200, JSON.stringify(approved.payload, null, 2));
     const denied = await api("POST", `/api/console/mcp/authorization/requests/${encodeURIComponent(deniedId)}/resolve`, {
-      resolution: "rejected"
+      resolution: "denied"
     });
     assert.equal(denied.status, 200, JSON.stringify(denied.payload, null, 2));
 

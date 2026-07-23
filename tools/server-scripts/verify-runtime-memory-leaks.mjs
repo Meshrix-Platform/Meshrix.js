@@ -260,23 +260,35 @@ async function writeJsonAtomically(filePath, value) {
   await fs.rename(temporary, filePath);
 }
 
-function createChildEnvironment(runRoot, profilePath) {
+const ISOLATED_CHILD_ENV_KEYS = [
+  "NODE_OPTIONS",
+  "ELECTRON_RUN_AS_NODE",
+  "LICO_ACCEPTANCE_GENERATION_WORKER",
+  "LICO_ACCEPTANCE_PARALLELISM",
+  "LICO_ACCEPTANCE_PROOF_LEDGER_DIR",
+  "LICO_ACCEPTANCE_RELEASE_ID",
+  "LICO_ACCEPTANCE_SKIP_LEDGER_ANCHOR",
+  "LICO_ACCEPTANCE_STARTED_AT_MS",
+  "LICO_EDITION",
+  "LICO_FEATURE_PROFILE",
+  "LICO_RELEASE_PARALLELISM",
+  "LICO_RUNTIME_CONFIG",
+  "LICO_REQUIRE_RUNTIME_CONFIG",
+  "LICO_SERVER_DATA_DIR",
+  "LICO_SERVER_PORT",
+  "LICO_SERVER_READY_FILE"
+];
+
+function createIsolatedChildEnvironment(overrides = {}) {
   const environment = { ...process.env };
-  for (const key of [
-    "NODE_OPTIONS",
-    "ELECTRON_RUN_AS_NODE",
-    "LICO_EDITION",
-    "LICO_FEATURE_PROFILE",
-    "LICO_RUNTIME_CONFIG",
-    "LICO_REQUIRE_RUNTIME_CONFIG",
-    "LICO_SERVER_DATA_DIR",
-    "LICO_SERVER_PORT",
-    "LICO_SERVER_READY_FILE"
-  ]) {
+  for (const key of ISOLATED_CHILD_ENV_KEYS) {
     delete environment[key];
   }
-  return {
-    ...environment,
+  return { ...environment, ...overrides };
+}
+
+function createChildEnvironment(runRoot, profilePath) {
+  return createIsolatedChildEnvironment({
     NO_COLOR: "1",
     LICO_HTTP_RATE_LIMIT_IP_PER_MINUTE: "1000000",
     LICO_HTTP_RATE_LIMIT_SUBJECT_PER_MINUTE: "1000000",
@@ -287,7 +299,7 @@ function createChildEnvironment(runRoot, profilePath) {
     LICO_MEMORY_PROFILE_STACK_DEPTH: String(memoryPolicy.heapProfileStackDepth),
     LICO_MEMORY_PROFILE_PATH: profilePath,
     TMPDIR: runRoot
-  };
+  });
 }
 
 function compactHighRiskFacts(value) {
@@ -378,9 +390,9 @@ function compactHighRiskResult(message) {
 async function runHighRiskWorkloads(runRoot) {
   const workloadRoot = path.join(runRoot, "high-risk-workloads");
   await fs.mkdir(workloadRoot, { recursive: true, mode: 0o700 });
-  const environment = { ...process.env };
-  delete environment.NODE_OPTIONS;
-  environment.LICO_RESOURCE_LOAD_PROFILE = selectedHighRiskProfile;
+  const environment = createIsolatedChildEnvironment({
+    LICO_RESOURCE_LOAD_PROFILE: selectedHighRiskProfile
+  });
   const workloadOutput = boundedOutputCollector();
   highRiskChild = spawn(process.execPath, [
     "--expose-gc",

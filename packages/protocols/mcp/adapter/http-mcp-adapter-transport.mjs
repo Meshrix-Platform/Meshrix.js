@@ -19,7 +19,7 @@ import {
   MCP_STABLE_TOOL_NAME,
   MCP_TOOLSET_VERSION
 } from "./http-mcp-adapter-constants.mjs";
-import { buildLicoMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthorizationErrorData, mcpConnectorRuntimeMetadata, mcpDiscoveryBase, mcpInitializeResult, mcpRuntimeMetadata, mcpSupportedTargetDetails, mcpVersionInfo, mcpHandshake } from "./http-mcp-adapter-discovery.mjs";
+import { buildLicoMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthorizationErrorData, mcpConnectorRuntimeMetadata, mcpDiscoveryBase, mcpInitializeResult, mcpPublicSupportedTargetDetails, mcpRuntimeMetadata, mcpSupportedTargetDetails, mcpVersionInfo, mcpHandshake } from "./http-mcp-adapter-discovery.mjs";
 import { broadcastMcpOperationReply, inferMcpTargetReceipt, projectMcpOperationPayload } from "./http-mcp-adapter-replies.mjs";
 import { hasMcpAuthToken, isAllowedOrigin, normalizeMcpOperationEnvelope } from "./http-mcp-adapter-request-validation.mjs";
 import { executeToolPayload, jsonRpcError, jsonRpcNotification, jsonRpcResult, mcpEnvelopePublic, mcpToolResult, parseRequestBody, publicMcpEnvelopeString, publicMcpEnvelopeValue } from "./http-mcp-adapter-response.mjs";
@@ -134,7 +134,7 @@ async function licoMetaResult({
       clientInstallJsonCommand: discovery.installer.clientInstallJsonCommand,
       connector,
       priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
-      supportedTargets: mcpSupportedTargetDetails(),
+      supportedTargets: mcpPublicSupportedTargetDetails(),
       sharedHub: discovery.sharedHub
     };
     if (updateAvailable) {

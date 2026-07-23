@@ -28,7 +28,7 @@ LicoMesh 以 Node.js 服务端运行，负责转发服务端配置文件声明�
 
 | 能力 | 说明 |
 | --- | --- |
-| **上游服务网关** | 通过服务端配置声明外部 HTTP/MCP 服务，并以受治理的 operation 入口对外暴露。 |
+| **上游服务网关** | 上游服务转发：通过服务端配置声明外部 HTTP/MCP 服务，并以受治理的 operation 入口对外暴露。 |
 | **下游 MCP** | 面向智能体客户端的 discovery 与受治理 gateway MCP 出口；operation 可见性由 grant 控制。 |
 | **Operation Permission** | Operation 目录、operation group、scope、grant、策略预览、审批、统一执行路径、审计与指标。 |
 | **通用标签策略** | 同一套标签模型覆盖 operation、资源、文档、智能体、上游服务、工作空间与组织对象。 |

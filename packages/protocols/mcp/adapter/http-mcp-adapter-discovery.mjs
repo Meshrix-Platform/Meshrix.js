@@ -30,6 +30,7 @@ import {
 } from "./http-mcp-adapter-constants.mjs";
 import {
   MCP_CLIENT_ADAPTER_PROTOCOL,
+  mcpPublicSupportedTargetDetails as releaseMcpPublicSupportedTargetDetails,
   mcpSupportedTargetDetails as releaseMcpSupportedTargetDetails
 } from "./mcp-release-targets.mjs";
 import { parseRequestBody } from "./http-mcp-adapter-response.mjs";
@@ -94,7 +95,7 @@ export function mcpRuntimeMetadata({ listenUrl = "", discoveryState = null } = {
     connector: mcpConnectorRuntimeMetadata(discovery, version),
     sharedHub: discovery.sharedHub,
     priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
-    supportedTargets: mcpSupportedTargetDetails()
+    supportedTargets: mcpPublicSupportedTargetDetails()
   };
 }
 
@@ -110,7 +111,7 @@ export function mcpAuthorizationErrorData({ authorization = {}, listenUrl = "", 
     authorizationRequestEndpoint: discovery.installer.authorizationRequestEndpoint,
     authorizationConsumeEndpointTemplate: discovery.installer.authorizationConsumeEndpointTemplate,
     priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
-    supportedTargets: mcpSupportedTargetDetails(),
+    supportedTargets: mcpPublicSupportedTargetDetails(),
     nextCommand,
     nextCommandZhCN,
     repairCommands: [
@@ -187,10 +188,23 @@ function mcpTargetConfigTemplate(_target, { baseUrl = "", vmBaseUrl = "" } = {})
   };
 }
 
+function mcpPublicTargetConfigTemplate(_target, { baseUrl = "", vmBaseUrl = "" } = {}) {
+  return {
+    endpoint: {
+      httpUrl: `${baseUrl}/mcp`,
+      vmHttpUrl: `${vmBaseUrl}/mcp`,
+      tokenEnv: "LICO_MCP_TOKEN"
+    }
+  };
+}
+
 function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "", githubOneLineCommand = "", githubOneLineCommandZhCN = "" } = {}) {
   const urlArgs = commandUrlArgs(baseUrl);
   return MCP_CLIENT_TARGETS.map((client) => ({
-    ...client,
+    target: client.target,
+    label: client.label,
+    priority: client.priority,
+    locations: [...client.locations],
     endpoints: {
       mcpUrl: `${baseUrl}/mcp`,
       vmMcpUrl: `${vmBaseUrl}/mcp`
@@ -206,12 +220,16 @@ function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "", githubOneLineComm
       doctor: `${githubOneLineCommand} -- doctor${urlArgs} --json`
     },
     tokenInput: "device-authorization-or-stdin-or-env",
-    configTemplate: mcpTargetConfigTemplate(client.target, { baseUrl, vmBaseUrl })
+    configTemplate: mcpPublicTargetConfigTemplate(client.target, { baseUrl, vmBaseUrl })
   }));
 }
 
 export function mcpSupportedTargetDetails() {
   return releaseMcpSupportedTargetDetails();
+}
+
+export function mcpPublicSupportedTargetDetails() {
+  return releaseMcpPublicSupportedTargetDetails();
 }
 
 export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } = {}) {
@@ -240,7 +258,7 @@ export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } 
   const discoverCommand = `${githubOneLineCommand} -- discover-local${urlArgs} --json`;
   const scanCommand = `${githubOneLineCommand} -- scan${urlArgs} --json`;
   const clientTargets = mcpClientTargetGuides({ baseUrl, vmBaseUrl, githubOneLineCommand, githubOneLineCommandZhCN });
-  const supportedTargets = mcpSupportedTargetDetails();
+  const supportedTargets = mcpPublicSupportedTargetDetails();
   return {
     schemaVersion: "v0.0.1:schema:definition-1",
     name: "LicoMesh",

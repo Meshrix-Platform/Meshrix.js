@@ -147,7 +147,7 @@ onMounted(() => {
           </span>
         </div>
       </div>
-      <ConsoleEmptyState v-if="workQueueRows.length === 0" title="暂无队列记录" description="当前没有导入、智能巡检或队列监控记录。" />
+      <ConsoleEmptyState v-if="workQueueRows.length === 0" data-ui="empty-state" title="暂无队列记录" description="当前没有导入、智能巡检或队列监控记录。" />
     </section>
   </section>
 

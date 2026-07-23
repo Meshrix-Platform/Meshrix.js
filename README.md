@@ -38,7 +38,7 @@ This English document is the normative project overview. See the
 
 | Capability | What it provides |
 | --- | --- |
-| **Upstream service gateway** | Declares external HTTP/MCP services through server-side configuration and exposes them as governed operation entry points. |
+| **Upstream service gateway** | Upstream forwarding for external HTTP/MCP services declared through server-side configuration and exposed as governed operation entry points. |
 | **Downstream MCP** | Discovery and governed gateway MCP outlets for agent clients, with operation visibility controlled by grants. |
 | **Operation Permission** | Operation catalog, groups, scopes, grants, policy preview, approval, mediated execution, audit, and metrics. |
 | **Universal tag policy** | One tag model across operations, resources, documents, agents, upstream services, workspaces, and organization objects. |

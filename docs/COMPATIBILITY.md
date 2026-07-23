@@ -43,3 +43,5 @@ only the neutral adapter protocol, package integrity/cache behavior, credential
 isolation, connector proxy, and lifecycle transaction.
 
 Optional middleware integrations become compatibility targets through code, configuration, documentation, and verifier updates.
+
+Supported connector-managed client targets in this release: OpenClaw, Codex, Claude Code, Antigravity, and OpenCode.

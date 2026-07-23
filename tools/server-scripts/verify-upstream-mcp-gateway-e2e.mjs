@@ -554,7 +554,7 @@ try {
     const pending = await createApprovalPendingOperation();
     assert.equal(approvalFixtureHitCount(), beforeHits);
 
-    const rejected = await resolvePendingOperation(pending.pendingOperationId, "rejected");
+    const rejected = await resolvePendingOperation(pending.pendingOperationId, "denied");
     assert.equal(rejected.status, 200, JSON.stringify(rejected.payload, null, 2));
     assert.equal(rejected.payload.status, "denied", JSON.stringify(rejected.payload, null, 2));
     assert.equal(rejected.payload.terminalOutcome, "denied", JSON.stringify(rejected.payload, null, 2));
@@ -595,7 +595,7 @@ try {
     assert.equal(approvalFixtureHitCount(), beforeHits, "expired approval must not reach the upstream MCP service");
     assert.equal(approvalFixtureService.fixture.state.purged, false);
 
-    const duplicate = await resolvePendingOperation(pending.pendingOperationId, "rejected");
+    const duplicate = await resolvePendingOperation(pending.pendingOperationId, "denied");
     assert.equal(duplicate.status, 409, JSON.stringify(duplicate.payload, null, 2));
     assert.equal(approvalFixtureHitCount(), beforeHits, "re-resolving an expired operation must have no upstream side effect");
 
