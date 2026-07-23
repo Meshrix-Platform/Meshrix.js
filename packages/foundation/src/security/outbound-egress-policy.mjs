@@ -1,6 +1,6 @@
 import dns from "node:dns/promises";
 import net from "node:net";
-import { Agent, request as undiciRequest } from "undici";
+import { Agent, Dispatcher1Wrapper, request as undiciRequest } from "undici";
 
 export const OUTBOUND_EGRESS_DECISION_VERSION = "v0.0.1:security:outbound-egress-decision-1";
 export const DEVELOPMENT_LOCAL_EGRESS_POLICY_PRESET = "security.development-local";
@@ -279,7 +279,7 @@ function createPinnedDnsDispatcher(decision = {}) {
   const expectedHost = normalizeHost(decision.host);
   const address = String(pinned.address || "").trim();
   const family = Number(pinned.family || net.isIP(address) || 0);
-  const dispatcher = new Agent({
+  const agent = new Agent({
     connect: {
       lookup(hostname, options = {}, callback) {
         const requestedHost = normalizeHost(hostname);
@@ -295,6 +295,7 @@ function createPinnedDnsDispatcher(decision = {}) {
       }
     }
   });
+  const dispatcher = new Dispatcher1Wrapper(agent);
   return {
     dispatcher,
     pinnedDns: {
