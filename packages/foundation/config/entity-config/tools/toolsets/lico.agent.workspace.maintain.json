@@ -1,0 +1,12 @@
+{
+  "id": "lico.agent.workspace.maintain",
+  "label": "Agent workspace maintain",
+  "requiredScopes": [
+    "workspace:read",
+    "workspace:write",
+    "workspace:maintain"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

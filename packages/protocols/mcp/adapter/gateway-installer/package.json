@@ -1,0 +1,44 @@
+{
+  "name": "lico-mcp-connector",
+  "version": "0.0.1",
+  "description": "Runtime MCP connector for LicoMesh stdio proxy and process-identity protocol support.",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "author": "LicoMesh Maintainers",
+  "homepage": "https://github.com/LicoLand/LicoMesh#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "packages/protocols/mcp/adapter/gateway-installer"
+  },
+  "bin": {
+    "lico-mcp": "bin/lico-mcp.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "LICENSE",
+    "mcp-release-targets.mjs",
+    "README.md",
+    "package.json"
+  ],
+  "keywords": [
+    "lico",
+    "mcp",
+    "codex",
+    "claude-code",
+    "antigravity",
+    "openclaw",
+    "opencode",
+    "pi"
+  ],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "dependencies": {
+    "@lico/contracts": "0.0.1"
+  },
+  "imports": {
+    "#lico/contracts/*": "@lico/contracts/*"
+  }
+}

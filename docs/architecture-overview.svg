@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 380" width="680" height="380" role="img" aria-label="LicoMesh architecture overview">
+  <title>LicoMesh architecture overview</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0a0a14"/>
+      <stop offset="100%" stop-color="#060610"/>
+    </linearGradient>
+    <linearGradient id="surface" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#16162a"/>
+      <stop offset="100%" stop-color="#10101d"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a96e"/>
+      <stop offset="50%" stop-color="#f0d28c"/>
+      <stop offset="100%" stop-color="#a8893a"/>
+    </linearGradient>
+    <linearGradient id="ice" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4fc3f7"/>
+      <stop offset="50%" stop-color="#80deea"/>
+      <stop offset="100%" stop-color="#26a8d8"/>
+    </linearGradient>
+    <linearGradient id="prism" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c9a96e" stop-opacity="0"/>
+      <stop offset="22%" stop-color="#f0d28c" stop-opacity="0.72"/>
+      <stop offset="55%" stop-color="#80deea" stop-opacity="0.76"/>
+      <stop offset="82%" stop-color="#a78bfa" stop-opacity="0.46"/>
+      <stop offset="100%" stop-color="#c9a96e" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="facet" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <style>
+      .frame { fill: none; stroke: rgba(201,169,110,0.20); stroke-width: 1; }
+      .surface { fill: url(#surface); stroke: rgba(201,169,110,0.22); stroke-width: 1; }
+      .rail { stroke: rgba(128,222,234,0.26); stroke-width: 1.1; }
+      .rule { fill: url(#prism); opacity: 0.66; }
+      .title {
+        font-family: "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 20px;
+        font-weight: 300;
+        letter-spacing: 3.5px;
+        fill: #ede6d6;
+      }
+      .label {
+        font-family: "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 12px;
+        font-weight: 650;
+        fill: #ede6d6;
+      }
+      .muted {
+        font-family: "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 10.5px;
+        fill: #9ca7b4;
+      }
+      .agent {
+        font-family: "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 11.5px;
+        fill: #b0a899;
+      }
+      .gold { fill: #f0d28c; }
+      .ice { fill: #80deea; }
+      .violet { fill: #a78bfa; }
+    </style>
+  </defs>
+
+  <rect width="680" height="380" rx="8" fill="url(#bg)"/>
+  <rect x="16" y="16" width="648" height="348" rx="7" class="frame"/>
+
+  <g opacity="0.8">
+    <path d="M58 318 L622 62" stroke="rgba(128,222,234,0.08)" stroke-width="1"/>
+    <path d="M58 62 L622 318" stroke="rgba(201,169,110,0.08)" stroke-width="1"/>
+    <path d="M340 28 V352" stroke="rgba(128,222,234,0.07)" stroke-width="1"/>
+  </g>
+
+  <g transform="translate(340,58)">
+    <polygon points="0,-24 20.8,-12 20.8,12 0,24 -20.8,12 -20.8,-12" fill="url(#facet)" stroke="url(#gold)" stroke-width="1" opacity="0.66"/>
+    <polygon points="0,-20 17.3,-10 17.3,10 0,20 -17.3,10 -17.3,-10" fill="none" stroke="url(#ice)" stroke-width="0.55" opacity="0.35" transform="rotate(30)"/>
+    <line x1="0" y1="-19" x2="0" y2="19" stroke="url(#ice)" stroke-width="0.7" opacity="0.34"/>
+    <line x1="-16.5" y1="-9.5" x2="16.5" y2="9.5" stroke="url(#ice)" stroke-width="0.7" opacity="0.28"/>
+    <line x1="-16.5" y1="9.5" x2="16.5" y2="-9.5" stroke="url(#ice)" stroke-width="0.7" opacity="0.28"/>
+    <circle r="2.4" fill="url(#gold)" opacity="0.75"/>
+  </g>
+
+  <text x="340" y="104" text-anchor="middle" class="title">LICOMESH WORKSPACE</text>
+  <rect x="166" y="122" width="348" height="1" class="rule"/>
+  <text x="340" y="145" text-anchor="middle" class="muted">Shared files and state data with governed, traceable operations.</text>
+
+  <rect x="58" y="172" width="564" height="94" rx="8" class="surface"/>
+  <rect x="84" y="172" width="512" height="1" class="rule"/>
+
+  <g transform="translate(86,198)">
+    <rect x="0" y="0" width="132" height="42" rx="6" fill="#10101d" stroke="rgba(240,210,140,0.34)" stroke-width="1"/>
+    <text x="66" y="25" text-anchor="middle" class="label gold">Ledger</text>
+  </g>
+
+  <g transform="translate(274,198)">
+    <rect x="0" y="0" width="132" height="42" rx="6" fill="#10101d" stroke="rgba(128,222,234,0.34)" stroke-width="1"/>
+    <text x="66" y="25" text-anchor="middle" class="label ice">Checkpoint</text>
+  </g>
+
+  <g transform="translate(462,198)">
+    <rect x="0" y="0" width="132" height="42" rx="6" fill="#10101d" stroke="rgba(167,139,250,0.34)" stroke-width="1"/>
+    <text x="66" y="25" text-anchor="middle" class="label violet">Policy</text>
+  </g>
+
+  <g class="rail">
+    <path d="M152 266 V306"/>
+    <path d="M246 266 V306"/>
+    <path d="M340 266 V306"/>
+    <path d="M434 266 V306"/>
+    <path d="M528 266 V306"/>
+    <path d="M152 286 H528"/>
+  </g>
+
+  <g text-anchor="middle">
+    <circle cx="152" cy="316" r="3" fill="#f0d28c" opacity="0.8"/>
+    <circle cx="246" cy="316" r="3" fill="#80deea" opacity="0.8"/>
+    <circle cx="340" cy="316" r="3" fill="#a78bfa" opacity="0.72"/>
+    <circle cx="434" cy="316" r="3" fill="#80deea" opacity="0.8"/>
+    <circle cx="528" cy="316" r="3" fill="#f0d28c" opacity="0.8"/>
+    <text x="152" y="340" class="agent">Codex</text>
+    <text x="246" y="340" class="agent">OpenCode</text>
+    <text x="340" y="340" class="agent">OpenClaw</text>
+    <text x="434" y="340" class="agent">MCP Client</text>
+    <text x="528" y="340" class="agent">Agent Runtime</text>
+  </g>
+</svg>

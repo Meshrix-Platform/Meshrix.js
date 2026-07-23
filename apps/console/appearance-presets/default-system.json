@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "default-system",
+  "label": {
+    "en": "System Default",
+    "zh-CN": "跟随系统"
+  },
+  "mode": "system",
+  "lightPresetId": "geek-light-blue",
+  "darkPresetId": "lico-crystal"
+}

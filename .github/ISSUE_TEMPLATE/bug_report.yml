@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible defect in LicoMesh.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve LicoMesh. Remove secrets, personal data, private hosts, absolute machine paths, and production payloads before submitting. Security vulnerabilities must use the private security reporting link instead of this form.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight
+      options:
+        - label: I searched existing issues for the same behavior.
+          required: true
+        - label: This report does not disclose a security vulnerability or private runtime data.
+          required: true
+        - label: I reproduced the issue on a supported Node.js version from `package.json`.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: LicoMesh version or source revision
+      placeholder: v0.0.1 or a commit identifier
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment surface
+      options:
+        - Local Node.js runtime
+        - Container runtime
+        - MCP connector
+        - Console UI
+        - Plugin runtime
+        - Other supported surface
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: List the smallest redacted sequence that reproduces the behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted evidence
+      description: Add only sanitized logs, screenshots, or test output. Never include tokens, credentials, private payloads, user identities, or local absolute paths.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include only non-sensitive OS, architecture, Node.js version, and deployment mode details.

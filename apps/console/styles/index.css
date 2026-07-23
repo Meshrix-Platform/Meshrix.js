@@ -1,0 +1,27 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   LicoMesh Design System — Modular CSS Entry Point
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Design tokens: colors, spacing, typography, shadows, z-index, motion */
+@import './tokens.css';
+
+/* Browser reset and element baselines */
+@import './reset.css';
+
+/* Element Plus component overrides */
+@import './element-plus-overrides.css';
+
+/* App shell layout: sidebar, topbar, canvas, buttons */
+@import './layout.css';
+
+/* Reusable components: cards, tables, forms, alerts, modules */
+@import './components.css';
+
+/* View-specific styles: dashboard, gateway, approvals, admin, etc. */
+@import './views.css';
+
+/* Additional feature styles and responsive breakpoints */
+@import './features.css';
+
+/* Theme overrides: system dark, forced dark/light */
+@import './themes.css';

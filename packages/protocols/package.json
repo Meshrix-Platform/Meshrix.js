@@ -1,0 +1,55 @@
+{
+  "name": "@lico/protocols",
+  "version": "0.0.1",
+  "description": "LicoMesh MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "packages/protocols"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@lico/contracts": "0.0.1",
+    "@lico/foundation": "0.0.1"
+  },
+  "imports": {
+    "#lico/client-strings": "@lico/foundation/security/client-strings",
+    "#lico/contracts/*": "@lico/contracts/*",
+    "#lico/foundation/*": "@lico/foundation/*",
+    "#lico/http-response": "@lico/foundation/http/http-response",
+    "#lico/http-utils": "./http/http-utils.mjs",
+    "#lico/local-path-boundary": "@lico/foundation/security/local-path-boundary",
+    "#lico/operation-registry": "@lico/contracts/operations/operation-registry",
+    "#lico/runtime-logger": "@lico/foundation/observability/runtime-logger",
+    "#lico/state-coordinator": "@lico/foundation/storage/state-coordinator"
+  },
+  "exports": {
+    "./mcp/*": "./mcp/*.mjs",
+    "./agent-sync/*": "./agent-sync/*.mjs",
+    "./downstream-client-aspect/*": "./downstream-client-aspect/*.mjs",
+    "./http/*": "./http/*.mjs",
+    "./pubsub/*": "./pubsub/*.mjs",
+    "./common/*": "./common/*.mjs",
+    "./*": "./common/*.mjs"
+  },
+  "files": [
+    "mcp/**/*.mjs",
+    "mcp/adapter/gateway-installer/bin/**/*",
+    "mcp/adapter/gateway-installer/lib/**/*",
+    "mcp/adapter/gateway-installer/package.json",
+    "mcp/adapter/gateway-installer/README.md",
+    "mcp/adapter/native-installer/**/*",
+    "agent-sync/**/*.mjs",
+    "downstream-client-aspect/**/*.mjs",
+    "http/**/*.mjs",
+    "pubsub/**/*.mjs",
+    "common/**/*.mjs",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

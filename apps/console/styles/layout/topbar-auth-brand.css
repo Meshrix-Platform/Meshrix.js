@@ -1,0 +1,77 @@
+/* ─── Topbar page title ─── */
+.topbar-page-title {
+  margin: 0 0 2px;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── Sidebar toggle button ─── */
+.topbar-sidebar-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--dur-fast) var(--ease-std);
+}
+
+.topbar-sidebar-toggle:hover {
+  background: transparent;
+  color: var(--brand);
+}
+
+.topbar-sidebar-toggle svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+/* ─── Auth gate brand block ─── */
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.auth-connecting {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+}
+
+.auth-language-button {
+  margin-left: auto;
+}
+
+.auth-language-button + .auth-connecting {
+  margin-left: var(--space-2);
+}
+
+.auth-spinner-icon {
+  display: block;
+  animation: spin 0.9s linear infinite;
+}
+
+.auth-brand-name {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--brand);
+  letter-spacing: -0.03em;
+}

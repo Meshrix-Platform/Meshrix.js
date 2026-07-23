@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "github-light",
+  "label": {
+    "en": "GitHub Light",
+    "zh-CN": "代码托管浅色"
+  },
+  "mode": "light",
+  "tokens": {
+    "bg-base": "#f6f8fa",
+    "bg-surface": "#ffffff",
+    "bg-subtle": "#f6f8fa",
+    "bg-inset": "#eaeef2",
+    "border-subtle": "#d0d7de",
+    "border-strong": "#8c959f",
+    "text-primary": "#1f2328",
+    "text-secondary": "#424a53",
+    "text-muted": "#57606a",
+    "text-disabled": "#8c959f",
+    "text-on-brand": "#ffffff",
+    "brand": "#0969da",
+    "brand-strong": "#0550ae",
+    "brand-subtle": "#ddf4ff",
+    "brand-muted": "#b6e3ff",
+    "info": "#0969da",
+    "info-surface": "#ddf4ff",
+    "info-border": "#54aeff",
+    "success": "#1a7f37",
+    "success-surface": "#dafbe1",
+    "success-border": "#4ac26b",
+    "warning": "#9a6700",
+    "warning-text": "#7d4e00",
+    "warning-surface": "#fff8c5",
+    "warning-border": "#d4a72c",
+    "danger": "#cf222e",
+    "danger-surface": "#ffebe9",
+    "danger-border": "#ff8182"
+  }
+}

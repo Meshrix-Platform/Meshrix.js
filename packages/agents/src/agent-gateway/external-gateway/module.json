@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "name": "ExternalGateway",
+  "version": "v0.0.1:agent:external-gateway-1",
+  "category": "agent-ingress",
+  "agentIngressKind": "external-gateway",
+  "applicationSubsystem": "agent-gateway",
+  "description": "Optional traffic gateway profile and config renderer for core ingress plus enabled plugin route contributions. Direct mode remains required so LicoMesh keeps working when the gateway is removed.",
+  "defaultLoaded": true,
+  "protocol": "v0.0.1:agent:external-gateway-1",
+  "components": {
+    "externalGateway": {
+      "path": "./index.mjs",
+      "exports": [
+        "EXTERNAL_GATEWAY_PROTOCOL_VERSION",
+        "EXTERNAL_GATEWAY_REQUIRED_CAPABILITIES",
+        "createExternalGatewayAuthority",
+        "buildExternalGatewayRouteManifest",
+        "getExternalGatewayAdapter",
+        "listExternalGatewayAdapters",
+        "normalizeExternalGatewayProfile",
+        "registerExternalGatewayAdapter",
+        "renderExternalGatewayConfig",
+        "resolveExternalGatewayRuntimePlan",
+        "validateExternalGatewayProfile"
+      ],
+      "adapters": [
+        "caddy",
+        "nginx"
+      ],
+      "routes": [
+        "/mcp",
+        "/api/mcp",
+        "/api/operation-permission/v1",
+        "/api/agent-workspaces",
+        "/api/upload-sessions",
+        "/api/agent-gateway"
+      ],
+      "directModeRequired": true,
+      "gatewayModeOptional": true,
+      "requiredScopes": [
+        "runtime:read",
+        "settings:write"
+      ],
+      "maxRisk": "safe_write",
+      "auditRequired": true
+    }
+  },
+  "verification": [
+    "node tools/server-scripts/verify-external-gateway.mjs",
+    "node tools/server-scripts/verify-composition-presets.mjs"
+  ]
+}

@@ -1,0 +1,5 @@
+{
+  "id": "gateway:maintain",
+  "label": "Maintain gateway",
+  "description": "Run gateway maintenance and traffic-control tasks."
+}

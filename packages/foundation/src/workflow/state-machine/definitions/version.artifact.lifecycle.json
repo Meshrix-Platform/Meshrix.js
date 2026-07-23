@@ -1,0 +1,234 @@
+{
+  "machineId": "version.artifact.lifecycle",
+  "entityType": "versioned_artifact",
+  "version": "v0.0.1:state-machine:version-artifact-1",
+  "description": "Lifecycle of governed versioned artifacts in the Version Registry.",
+  "initialState": "draft",
+  "states": [
+    {
+      "id": "draft",
+      "label": "Draft"
+    },
+    {
+      "id": "candidate",
+      "label": "Candidate"
+    },
+    {
+      "id": "active",
+      "label": "Active"
+    },
+    {
+      "id": "deprecated",
+      "label": "Deprecated"
+    },
+    {
+      "id": "retired",
+      "label": "Retired",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "version.propose_candidate",
+      "label": "Propose Candidate",
+      "riskLevel": "low"
+    },
+    {
+      "id": "version.activate",
+      "label": "Activate Version",
+      "riskLevel": "high"
+    },
+    {
+      "id": "version.deprecate",
+      "label": "Deprecate Version",
+      "riskLevel": "high"
+    },
+    {
+      "id": "version.retire",
+      "label": "Retire Version",
+      "riskLevel": "high"
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "draft",
+      "event": "version.propose_candidate",
+      "result": "legal_transition",
+      "to": "candidate"
+    },
+    {
+      "from": "draft",
+      "event": "version.activate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_CANDIDATE_REQUIRED"
+    },
+    {
+      "from": "draft",
+      "event": "version.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_ACTIVE_REQUIRED"
+    },
+    {
+      "from": "draft",
+      "event": "version.retire",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_DEPRECATED_REQUIRED"
+    },
+    {
+      "from": "candidate",
+      "event": "version.propose_candidate",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "candidate",
+      "event": "version.activate",
+      "result": "legal_transition",
+      "to": "active",
+      "guards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "candidate",
+      "event": "version.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_ACTIVE_REQUIRED"
+    },
+    {
+      "from": "candidate",
+      "event": "version.retire",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_DEPRECATED_REQUIRED"
+    },
+    {
+      "from": "active",
+      "event": "version.propose_candidate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_ALREADY_ACTIVE"
+    },
+    {
+      "from": "active",
+      "event": "version.activate",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "active",
+      "event": "version.deprecate",
+      "result": "legal_transition",
+      "to": "deprecated",
+      "guards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "active",
+      "event": "version.retire",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_DEPRECATED_REQUIRED"
+    },
+    {
+      "from": "deprecated",
+      "event": "version.propose_candidate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_DEPRECATED"
+    },
+    {
+      "from": "deprecated",
+      "event": "version.activate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_REACTIVATION_NOT_ALLOWED"
+    },
+    {
+      "from": "deprecated",
+      "event": "version.deprecate",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "deprecated",
+      "event": "version.retire",
+      "result": "legal_transition",
+      "to": "retired",
+      "guards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "retired",
+      "event": "version.propose_candidate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_RETIRED"
+    },
+    {
+      "from": "retired",
+      "event": "version.activate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_RETIRED"
+    },
+    {
+      "from": "retired",
+      "event": "version.deprecate",
+      "result": "illegal_transition",
+      "errorCode": "VERSION_RETIRED"
+    },
+    {
+      "from": "retired",
+      "event": "version.retire",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "SM-VERSION-001",
+    "SM-VERSION-002",
+    "SM-VERSION-003",
+    "SM-GOV-003"
+  ],
+  "proofObligations": [
+    "PO-VERSION-001",
+    "PO-VERSION-002",
+    "PO-VERSION-003",
+    "PO-VERSION-004"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-VERSION-001",
+      "method": "path_includes_state",
+      "params": {
+        "target": "active",
+        "requiredBefore": "candidate"
+      }
+    },
+    {
+      "obligationId": "PO-VERSION-002",
+      "method": "path_includes_state",
+      "params": {
+        "target": "retired",
+        "requiredBefore": "deprecated"
+      }
+    },
+    {
+      "obligationId": "PO-VERSION-003",
+      "method": "terminal_state_new_binding_blocked",
+      "params": {
+        "target": "retired"
+      }
+    },
+    {
+      "obligationId": "PO-VERSION-004",
+      "method": "guard_validation",
+      "params": {
+        "highRiskEvents": [
+          "version.activate",
+          "version.deprecate",
+          "version.retire"
+        ],
+        "requiredGuards": [
+          "policyAllowed",
+          "require_admin"
+        ]
+      }
+    }
+  ]
+}

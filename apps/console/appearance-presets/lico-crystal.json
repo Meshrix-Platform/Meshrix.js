@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "lico-crystal",
+  "label": {
+    "en": "Lico Crystal",
+    "zh-CN": "黑晶灿金"
+  },
+  "mode": "dark",
+  "tokens": {
+    "bg-base": "#070707",
+    "bg-surface": "#0d0d0d",
+    "bg-subtle": "#151515",
+    "bg-inset": "#020202",
+    "border-subtle": "#242424",
+    "border-strong": "#3a3a3a",
+    "text-primary": "#ededed",
+    "text-secondary": "#c8c8c8",
+    "text-muted": "#969696",
+    "text-disabled": "#5c5c5c",
+    "text-on-brand": "#171300",
+    "brand": "#fef100",
+    "brand-strong": "#fff75c",
+    "brand-subtle": "#2e2909",
+    "brand-muted": "#6b6117",
+    "info": "#5ed7f2",
+    "info-surface": "#062029",
+    "info-border": "#155c70",
+    "accent-gold": "#fef100",
+    "accent-gold-strong": "#fff75c",
+    "accent-gold-subtle": "#2e2909",
+    "success": "#3ddc97",
+    "success-surface": "#052a1c",
+    "success-border": "#0e6b44",
+    "warning": "#ff9e2c",
+    "warning-text": "#ffc98a",
+    "warning-surface": "#2a1a04",
+    "warning-border": "#7a4a06",
+    "danger": "#ff5a4e",
+    "danger-surface": "#2b0e0a",
+    "danger-border": "#7a211a"
+  }
+}

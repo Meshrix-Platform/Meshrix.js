@@ -1,0 +1,149 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {
+  AGENT_SESSION_THREAD_VERSION,
+  createAgentWorkspace
+} from "../../packages/agents/src/agent-workspace/index.mjs";
+import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.mjs";
+
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-session-governance-"));
+const actor = { actorUserId: "session-governance-admin" };
+
+try {
+  const workspaceRuntime = createAgentWorkspace({ userDataPath });
+  try {
+    const workspace = workspaceRuntime.createWorkspace({
+      ...actor,
+      ownerUserId: actor.actorUserId,
+      workspaceId: "session-governance-ws",
+      title: "Session Governance",
+      objective: "Verify compare, merge proposal and archive"
+    }).workspace;
+    const root = workspaceRuntime.createSession({
+      ...actor,
+      sessionId: "session-root",
+      workspaceId: workspace.workspaceId,
+      title: "Root Session",
+      objective: "Root path"
+    }).session;
+    const shared = workspaceRuntime.appendSessionEvent({
+      ...actor,
+      sessionId: root.sessionId,
+      type: "artifact_update",
+      title: "Shared baseline",
+      summary: "Baseline artifact",
+      payload: {
+        artifactId: "artifact-1",
+        value: "baseline"
+      }
+    });
+    assert.equal(shared.sessionProtocolVersion, AGENT_SESSION_THREAD_VERSION);
+
+    const forked = workspaceRuntime.forkSession({
+      ...actor,
+      sessionId: root.sessionId,
+      newSessionId: "session-branch",
+      title: "Branch Session"
+    });
+    assert.equal(forked.ok, true);
+    assert.equal(forked.session.parentSessionId, root.sessionId);
+
+    workspaceRuntime.appendSessionEvent({
+      ...actor,
+      sessionId: root.sessionId,
+      type: "artifact_update",
+      title: "Root revision",
+      summary: "Root changed artifact",
+      payload: {
+        artifactId: "artifact-1",
+        value: "root-revision"
+      }
+    });
+    workspaceRuntime.appendSessionEvent({
+      ...actor,
+      sessionId: forked.session.sessionId,
+      type: "artifact_update",
+      title: "Branch revision",
+      summary: "Branch changed artifact",
+      payload: {
+        artifactId: "artifact-1",
+        value: "branch-revision"
+      }
+    });
+
+    const comparison = workspaceRuntime.compareSessions({
+      ...actor,
+      leftSessionId: root.sessionId,
+      rightSessionId: forked.session.sessionId
+    });
+    assert.equal(comparison.ok, true);
+    assert.equal(comparison.appendOnly, true);
+    assert.equal(comparison.summary.conflictCount, 1);
+    assert.ok(comparison.summary.commonEventCount >= 2);
+    assert.equal(comparison.conflicts[0].targetId, "artifact-1");
+
+    const proposal = workspaceRuntime.createSessionMergeProposal({
+      ...actor,
+      targetSessionId: root.sessionId,
+      sourceSessionId: forked.session.sessionId,
+      resolutionHints: {
+        artifactId: "artifact-1",
+        decision: "needs_human_review"
+      }
+    });
+    assert.equal(proposal.ok, true);
+    assert.equal(proposal.proposal.autoMergeApplied, false);
+    assert.equal(proposal.proposal.requiresDecision, true);
+    assert.equal(proposal.event.type, "session_merge_proposal");
+
+    const archived = workspaceRuntime.archiveSession({
+      ...actor,
+      sessionId: forked.session.sessionId,
+      reason: "branch merged into review queue"
+    });
+    assert.equal(archived.ok, true);
+    assert.equal(archived.session.status, "archived");
+    assert.equal(archived.event.type, "session_archived");
+
+    const archivedSession = workspaceRuntime.getSession({
+      ...actor,
+      sessionId: forked.session.sessionId,
+      includeEvents: true,
+      eventLimit: 20
+    });
+    assert.equal(archivedSession.session.status, "archived");
+    assert.ok(archivedSession.events.some((event) => event.type === "session_archived"));
+
+    const operations = SERVER_API_OPERATIONS;
+    for (const operationId of [
+      "agent_sessions.compare",
+      "agent_sessions.merge_proposal",
+      "agent_sessions.archive"
+    ]) {
+      assert.ok(operations.some((operation) => operation.id === operationId), `missing operation ${operationId}`);
+    }
+
+    const toolCatalog = createToolCatalog({ operations });
+    for (const toolId of [
+      "lico.agentSession.compare",
+      "lico.agentSession.mergeProposal",
+      "lico.agentSession.archive"
+    ]) {
+      assert.ok(toolCatalog.tools.some((tool) => tool.id === toolId), `missing tool ${toolId}`);
+    }
+
+    console.log("[agent-session-governance] ok");
+  } finally {
+    workspaceRuntime.close();
+  }
+} finally {
+  if (process.env.LICO_KEEP_TEST_DATA !== "1") {
+    await fs.rm(userDataPath, { recursive: true, force: true });
+  } else {
+    console.log(`kept test data: ${userDataPath}`);
+  }
+}

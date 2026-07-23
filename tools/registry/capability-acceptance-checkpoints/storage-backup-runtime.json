@@ -1,0 +1,128 @@
+[
+  {
+    "id": "89d2124a-9cf4-40f8-8ea5-e9bf090f8496",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Implement Storage And Backup Runtime end to end.",
+    "description": "Implement storage-backup-runtime end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Backup state machine covers scheduled, snapshotting, verifying, retained, restore_previewed, restored, expired, failed.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "state-machines",
+            "report": "build/reports/state-machines/latest.json"
+          },
+          {
+            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Restore proves hashes and metadata before apply and records audit evidence after apply.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+          },
+          {
+            "acceptanceCommandId": "storage-restore",
+            "report": "build/reports/storage-production-restore-drill/latest.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Verifier fails on missing retention policy, unredacted path/secret data, or unverifiable backup manifest.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          },
+          {
+            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+          },
+          {
+            "acceptanceCommandId": "storage-restore",
+            "report": "build/reports/storage-production-restore-drill/latest.json"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete storage-backup-runtime",
+      "target": "packages/foundation/src/storage/README.md, packages/foundation/src/storage/backup-contract.mjs, packages/foundation/src/storage/backup-manifest.mjs, packages/foundation/src/storage/backup-query.mjs, packages/foundation/src/storage/backup-snapshot.mjs, packages/foundation/src/storage/restore-plan.mjs, packages/foundation/src/storage/restore-report.mjs, packages/foundation/src/storage/restore-transaction-records.mjs, packages/foundation/src/storage/restore-execution.mjs, packages/foundation/src/storage/restore-transaction.mjs, packages/foundation/src/storage/backup-retention.mjs, packages/foundation/src/storage/ops-doctor.mjs, tools/server-scripts/verify-backup-restore.mjs, tools/server-scripts/verify-storage-production-restore-drill.mjs, tools/server-scripts/lib/storage-production-restore-evidence.mjs, docs/RUNBOOK.md"
+    },
+    "next": [
+      "539d1534-b0bb-44f8-8ef4-43e4baeb65ca"
+    ]
+  },
+  {
+    "id": "539d1534-b0bb-44f8-8ef4-43e4baeb65ca",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "89d2124a-9cf4-40f8-8ea5-e9bf090f8496"
+    ],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Validate Storage And Backup Runtime closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "state-machines",
+            "report": "build/reports/state-machines/latest.json"
+          },
+          {
+            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+          },
+          {
+            "acceptanceCommandId": "storage-restore",
+            "report": "build/reports/storage-production-restore-drill/latest.json"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate storage-backup-runtime",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]
