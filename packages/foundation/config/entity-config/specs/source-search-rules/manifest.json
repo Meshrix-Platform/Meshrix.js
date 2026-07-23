@@ -1,8 +1,0 @@
-{
-  "schemaVersion": "v0.0.1:schema:definition-1",
-  "bundleType": "lico.spec.bundle",
-  "specId": "lico.source-search-rules",
-  "sourceSeed": "packages/foundation/config/default-source-search-rules.json",
-  "runtimeAuthority": "<userDataPath>/rules/source-search-rules.json",
-  "lightweightBundle": true
-}

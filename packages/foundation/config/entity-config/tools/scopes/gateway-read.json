@@ -1,5 +1,0 @@
-{
-  "id": "gateway:read",
-  "label": "Read gateway",
-  "description": "Read gateway registrations, toolsets, grants, and audit-safe routing context."
-}

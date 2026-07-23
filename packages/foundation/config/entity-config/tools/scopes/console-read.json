@@ -1,5 +1,0 @@
-{
-  "id": "console:read",
-  "label": "Read console status",
-  "description": "Read console-facing status, interface, and release baseline summaries."
-}

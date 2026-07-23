@@ -1,5 +1,0 @@
-{
-  "id": "jobs:write",
-  "label": "Operate jobs",
-  "description": "Operate job scheduling controls such as Work Queue pause, resume, drain, dispatch, retry, and rebuild."
-}

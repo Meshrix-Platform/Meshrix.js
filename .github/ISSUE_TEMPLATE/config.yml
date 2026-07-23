@@ -1,5 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Security vulnerability report
-    url: https://github.com/LicoLand/LicoMesh/security/advisories/new
-    about: Report vulnerabilities privately. Do not disclose security details in a public issue.

@@ -1,5 +1,0 @@
-{
-  "id": "maintenance:admin",
-  "label": "Administer Maintenance Agent",
-  "description": "Configure Maintenance Agent scheduler, planner mode, and runbook policy."
-}

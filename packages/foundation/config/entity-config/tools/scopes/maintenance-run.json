@@ -1,5 +1,0 @@
-{
-  "id": "maintenance:run",
-  "label": "Run Maintenance Agent",
-  "description": "Create, chat with, and cancel Maintenance Agent runbook runs."
-}

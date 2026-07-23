@@ -1,5 +1,0 @@
-{
-  "id": "agent_sync:publish",
-  "label": "Publish agent sync",
-  "description": "Publish policy-filtered agent sync events."
-}

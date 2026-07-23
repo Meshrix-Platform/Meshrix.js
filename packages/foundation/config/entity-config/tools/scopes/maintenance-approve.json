@@ -1,5 +1,0 @@
-{
-  "id": "maintenance:approve",
-  "label": "Approve Maintenance Agent runs",
-  "description": "Approve Maintenance Agent runbook runs that require operator approval."
-}

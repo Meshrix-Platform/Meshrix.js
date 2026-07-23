@@ -1,5 +1,0 @@
-{
-  "id": "maintenance:read",
-  "label": "Read Maintenance Agent state",
-  "description": "Read Maintenance Agent configuration, run list, run details, and runbook status."
-}

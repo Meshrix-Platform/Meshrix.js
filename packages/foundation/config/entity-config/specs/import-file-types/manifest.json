@@ -1,8 +1,0 @@
-{
-  "schemaVersion": "v0.0.1:schema:definition-1",
-  "bundleType": "lico.spec.bundle",
-  "specId": "lico.import-file-types",
-  "sourceSeed": "packages/foundation/config/default-import-file-types.json",
-  "runtimeAuthority": "FileProcessor import dictionary",
-  "lightweightBundle": true
-}
