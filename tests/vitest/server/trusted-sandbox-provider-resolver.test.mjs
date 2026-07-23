@@ -267,14 +267,14 @@ describe("trusted sandbox provider resolver", () => {
   it("discovers OCI providers only through fixed core adapters and redacts their location", async () => {
     const executableIdentityDigest = "d".repeat(64);
     const serviceIdentityRef = controlledRef(sandboxDigest({
-      providerId: "oci.docker.primary",
+      providerId: "oci.docker",
       engine: "docker",
       runtimeClass: "runc",
       executableIdentityDigest
     }), "sandbox-provider-service");
     const receipt = createOciProviderConformanceReceipt({
       target: {
-        id: "oci.docker.primary",
+        id: "oci.docker",
         providerClass: "docker",
         isolationClass: "hardened-oci",
         serviceIdentityRef,
@@ -301,8 +301,8 @@ describe("trusted sandbox provider resolver", () => {
     };
     const adapters = createTrustedOciProviderAdapters({
       platform: "linux",
-      conformanceReceipts: { "oci.docker.primary": receipt },
-      pathExists: (candidatePath) => candidatePath === "/usr/bin/docker",
+      conformanceReceipts: { "oci.docker": receipt },
+      pathExists: (candidatePath) => candidatePath === "docker",
       rootlessProbe: async () => false,
       executableIdentityProbe: async () => executableIdentityDigest,
       backendFactory: vi.fn(() => backend)
@@ -322,7 +322,8 @@ describe("trusted sandbox provider resolver", () => {
       providerClass: "docker",
       isolationClass: "hardened-oci"
     });
-    expect(JSON.stringify({ publicState, administrativeState })).not.toContain("/usr/bin/docker");
+    expect(administrativeState).not.toHaveProperty("binary");
+    expect(administrativeState).not.toHaveProperty("executablePath");
   });
 
   it("does not classify one OCI service as both rootless and rootful", async () => {
@@ -335,13 +336,13 @@ describe("trusted sandbox provider resolver", () => {
     };
     const adapters = createTrustedOciProviderAdapters({
       platform: "linux",
-      pathExists: (candidatePath) => candidatePath === "/usr/bin/podman",
+      pathExists: (candidatePath) => candidatePath === "podman",
       rootlessProbe: async () => true,
       executableIdentityProbe: async () => EXECUTABLE_IDENTITY_DIGEST,
       backendFactory: () => backend
     });
-    const rootless = adapters.find(({ id }) => id === "oci.rootless-podman.primary");
-    const rootful = adapters.find(({ id }) => id === "oci.podman.primary");
+    const rootless = adapters.find(({ id }) => id === "oci.rootless-podman");
+    const rootful = adapters.find(({ id }) => id === "oci.podman");
 
     expect((await rootless.probe()).healthy).toBe(true);
     expect((await rootful.probe()).healthy).toBe(false);

@@ -1,5 +1,11 @@
 #!/bin/sh
+set -eu
+
 zero_oid=0000000000000000000000000000000000000000
+repo_root="$(git rev-parse --show-toplevel)"
+updates_file="$(mktemp -t licomesh-pre-push)"
+trap 'rm -f "$updates_file"' EXIT HUP INT TERM
+cat > "$updates_file"
 
 while read local_ref local_sha remote_ref remote_sha
 do
@@ -26,10 +32,12 @@ do
 
   for commit in $outgoing_commits
   do
-    if [ -n "$(git ls-tree -r --name-only "$commit" -- docs/report)" ]; then
-      echo "Push blocked: local temporary reports are present in outgoing history." >&2
-      echo "Keep docs/report commits in local-only Git history." >&2
+    if [ -n "$(git ls-tree -r --name-only "$commit" -- docs/plans docs/reports)" ]; then
+      echo "Push blocked: local process documents are present in outgoing history." >&2
+      echo "Keep docs/plans and docs/reports outside published Git history." >&2
       exit 1
     fi
   done
-done
+done < "$updates_file"
+
+node "$repo_root/tools/scripts/verify-git-publication.mjs" --pre-push < "$updates_file"

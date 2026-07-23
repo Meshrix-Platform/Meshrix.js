@@ -126,7 +126,7 @@
       "kind": "config",
       "required": false,
       "generated": false,
-      "packageIncluded": false
+      "packageIncluded": true
     },
     {
       "name": "CONTRIBUTING.md",

@@ -31,10 +31,10 @@ async function readJson(filePath) {
 }
 
 export async function verifyControlledExecutionConvergence({ repoRoot = REPO_ROOT, writeReport = true } = {}) {
-  const dependencyMapPath = path.join(repoRoot, "docs/plan/end-to-end-release/DependencyMap.json");
-  const manifestPath = path.join(repoRoot, "docs/plan/Manifest.json");
-  const planPath = path.join(repoRoot, "docs/plan", PLAN_DIRECTORY, "Plan.md");
-  const checkpointsPath = path.join(repoRoot, "docs/plan", PLAN_DIRECTORY, "Checkpoints.json");
+  const dependencyMapPath = path.join(repoRoot, "docs/plans/end-to-end-release/DependencyMap.json");
+  const manifestPath = path.join(repoRoot, "docs/plans/Manifest.json");
+  const planPath = path.join(repoRoot, "docs/plans", PLAN_DIRECTORY, "Plan.md");
+  const checkpointsPath = path.join(repoRoot, "docs/plans", PLAN_DIRECTORY, "Checkpoints.json");
   const [dependencyMapText, manifestText, planText, checkpointsText] = await Promise.all([
     fs.readFile(dependencyMapPath, "utf8"),
     fs.readFile(manifestPath, "utf8"),

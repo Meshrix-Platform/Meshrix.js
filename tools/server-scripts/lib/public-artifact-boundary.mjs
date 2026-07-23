@@ -40,7 +40,7 @@ const TEXT_FILE_NAMES = new Set([
 const FORBIDDEN_PATH_PREFIX_RULES = Object.freeze([
   {
     ruleId: "private_process_documentation",
-    prefixes: ["docs/plan", "docs/report", "docs/decisions"]
+    prefixes: ["docs/plans", "docs/reports"]
   },
   {
     ruleId: "local_runtime_data",

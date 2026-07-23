@@ -126,25 +126,26 @@ export function createUploadWorkspaceMaterialization({
     ) {
       throw failure("materialization_governance_receipt_required", 403, "Current authorization and approval receipt is required.");
     }
-    const resolved = await uploadPort.resolveCompleted({ uploadSessionId, subject, includeContent: true });
+    const resolved = await uploadPort.resolveCompleted({ uploadSessionId, subject });
     const receiptSubject = text(resolved.receipt?.ownerSubjectId || resolved.receipt?.ownerUserId);
     if (receiptSubject !== subject.subjectId) {
       throw failure("materialization_owner_denied", 403, "Upload receipt owner does not match the authenticated subject.");
     }
     const targets = normalizeTargets(resolved.files, input);
+    const filesBySource = new Map(
+      resolved.files.map((file) => [text(file.relativePath || file.name), file])
+    );
     const immutableInputs = targets.map((target) => {
-      const file = resolved.files.find((candidate) =>
-        text(candidate.relativePath || candidate.name) === target.sourcePath
-      );
+      const file = filesBySource.get(target.sourcePath);
       if (
         !file ||
-        !Buffer.isBuffer(file.content) ||
-        file.content.length !== target.byteSize ||
-        digest(file.content) !== target.contentSha256
+        !text(file.stagedPath) ||
+        Number(file.byteSize) !== target.byteSize ||
+        text(file.sha256) !== target.contentSha256
       ) {
         throw failure("materialization_upload_digest_mismatch", 409, "Upload content no longer matches its receipt.");
       }
-      return Object.freeze({ ...target, content: file.content });
+      return Object.freeze({ ...target, stagedPath: text(file.stagedPath) });
     });
     const binding = {
       uploadReceiptDigest: digest(stableReceipt(resolved.receipt)),
@@ -240,7 +241,12 @@ export function createUploadWorkspaceMaterialization({
         const contentBySource = new Map(immutableInputs.map((file) => [file.sourcePath, file]));
         for (const target of execution.stage === "effects_committed" ? [] : record.targets) {
           const file = contentBySource.get(target.sourcePath);
-          if (!file || !Buffer.isBuffer(file.content) || file.content.length !== target.byteSize || digest(file.content) !== target.contentSha256) {
+          if (
+            !file ||
+            typeof file.contentHandle?.read !== "function" ||
+            file.byteSize !== target.byteSize ||
+            file.contentSha256 !== target.contentSha256
+          ) {
             throw failure("materialization_upload_digest_mismatch", 409, "Immutable upload custody no longer matches its receipt.");
           }
         }
@@ -271,7 +277,7 @@ export function createUploadWorkspaceMaterialization({
             ...record,
             files: record.targets.map((target) => ({
               target,
-              content: contentBySource.get(target.sourcePath).content
+              contentHandle: contentBySource.get(target.sourcePath).contentHandle
             })),
             leaseGuard: () => fence({ renew: true }),
             operationId: `${UPLOAD_WORKSPACE_MATERIALIZATION_OPERATION_ID}:${record.bindingDigest}`

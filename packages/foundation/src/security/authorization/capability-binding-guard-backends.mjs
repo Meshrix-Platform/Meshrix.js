@@ -158,38 +158,6 @@ export function createRecord({ alias = DEFAULT_ALIAS, provider = "local-file", s
   };
 }
 
-function hasExactLegacySealingKey(value) {
-  if (typeof value !== "string" || value !== text(value)) {
-    return false;
-  }
-  const decoded = Buffer.from(value, "base64");
-  return decoded.length === 32 && decoded.toString("base64") === value;
-}
-
-function isLegacyEmptyLocalRecord(record = {}, { alias = DEFAULT_ALIAS } = {}) {
-  return record.protocolVersion === CAPABILITY_BINDING_GUARD_PROTOCOL_VERSION &&
-    typeof record.alias === "string" &&
-    safeAlias(record.alias) === safeAlias(alias) &&
-    record.provider === "local-file" &&
-    record.securityMode === "degraded_file_fallback" &&
-    record.generation === 1 &&
-    !Object.prototype.hasOwnProperty.call(record, "stateRoot") &&
-    record.sealedState === null &&
-    hasExactLegacySealingKey(record.sealingKeyBase64);
-}
-
-async function localSealingKeySidecarExists({ dataDir = "", alias = DEFAULT_ALIAS } = {}) {
-  try {
-    await fs.promises.access(capabilityBindingGuardLocalSealingKeyPath({ dataDir, alias }));
-    return true;
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return false;
-    }
-    throw error;
-  }
-}
-
 export async function readLocalRecord({ dataDir = "", alias = DEFAULT_ALIAS, provider = "local-file", securityMode = "degraded_file_fallback" } = {}) {
   const filePath = capabilityBindingGuardStatePath({ dataDir, alias });
   let record;
@@ -203,22 +171,6 @@ export async function readLocalRecord({ dataDir = "", alias = DEFAULT_ALIAS, pro
   }
   if (!record || typeof record !== "object" || Array.isArray(record)) {
     throw new Error("Capability binding guard record is invalid.");
-  }
-  if (
-    isLegacyEmptyLocalRecord(record, { alias }) &&
-    !(await localSealingKeySidecarExists({ dataDir, alias }))
-  ) {
-    const migratedRecord = {
-      ...createRecord({
-        alias,
-        provider: "local-file",
-        securityMode: "degraded_file_fallback",
-        sealingKeyBase64: record.sealingKeyBase64
-      }),
-      createdAt: text(record.createdAt) || nowIso()
-    };
-    await writeLocalRecord({ dataDir, alias }, migratedRecord);
-    return migratedRecord;
   }
   if (!record.sealingKeyBase64) {
     try {
@@ -254,7 +206,7 @@ export async function readMacosRecord({ alias = DEFAULT_ALIAS } = {}) {
     throw new Error("macos-keychain capability binding guard backend is only available on macOS.");
   }
   try {
-    const raw = await runText("/usr/bin/security", [
+    const raw = await runText("security", [
       "find-generic-password",
       "-w",
       "-a",
@@ -275,7 +227,7 @@ export async function writeMacosRecord({ alias = DEFAULT_ALIAS } = {}, record = 
   if (process.platform !== "darwin") {
     throw new Error("macos-keychain capability binding guard backend is only available on macOS.");
   }
-  await runText("/usr/bin/security", [
+  await runText("security", [
     "add-generic-password",
     "-U",
     "-a",

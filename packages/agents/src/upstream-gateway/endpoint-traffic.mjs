@@ -19,8 +19,12 @@ export function createEndpointTrafficController({
     return `${trafficKey(service, operation)}::${endpoint.endpointId || "primary"}`;
   }
   function endpointsFor(service) {
-    const endpoints = asArray(service.endpoints).filter((endpoint) => endpoint && endpoint.disabled !== true);
+    const configured = asArray(service.endpoints).filter(Boolean);
+    const endpoints = configured.filter(
+      (endpoint) => endpoint.disabled !== true
+    );
     if (endpoints.length > 0) return endpoints;
+    if (configured.length > 0) return [];
     return [{
       endpointId: "primary",
       baseUrl: service.baseUrl,
@@ -200,35 +204,152 @@ export function createEndpointTrafficController({
       deniedScope
     };
   }
+  function consumeAllowedTraffic(service, operation, endpoint, traffic) {
+    const policy = normalizeTrafficPolicy(service.trafficPolicy);
+    const bucket = trafficSnapshot(service, operation, policy, {
+      commit: false
+    });
+    bucket.tokens -= 1;
+    bucket.inFlight += 1;
+    trafficBuckets.set(trafficKey(service, operation), bucket);
+    let endpointLimit = null;
+    if (endpointHasOwnTrafficPolicy(endpoint)) {
+      const endpointPolicy = normalizeTrafficPolicy(endpoint.trafficPolicy || {});
+      const endpointBucket = trafficSnapshot(
+        service,
+        operation,
+        endpointPolicy,
+        { commit: false, endpoint }
+      );
+      endpointBucket.tokens -= 1;
+      endpointBucket.inFlight += 1;
+      trafficBuckets.set(endpointKey(service, operation, endpoint), endpointBucket);
+      endpointLimit = {
+        perMinute: endpointPolicy.perMinute,
+        burst: endpointPolicy.burst,
+        maxConcurrent: endpointPolicy.maxConcurrent,
+        remainingTokens: Math.max(0, Math.floor(endpointBucket.tokens)),
+        inFlight: endpointBucket.inFlight
+      };
+    }
+    return {
+      ...traffic,
+      remainingTokens: Math.max(0, Math.floor(bucket.tokens)),
+      inFlight: bucket.inFlight,
+      serviceLimit: {
+        perMinute: policy.perMinute,
+        burst: policy.burst,
+        maxConcurrent: policy.maxConcurrent,
+        remainingTokens: Math.max(0, Math.floor(bucket.tokens)),
+        inFlight: bucket.inFlight
+      },
+      endpointLimit
+    };
+  }
+  function noEnabledEndpointTraffic(service, operation) {
+    const policy = normalizeTrafficPolicy(service.trafficPolicy);
+    const bucket = trafficSnapshot(service, operation, policy, {
+      commit: false
+    });
+    return {
+      allowed: false,
+      algorithm: policy.algorithm,
+      routingAlgorithm: policy.routingAlgorithm,
+      endpoint: null,
+      circuit: {
+        open: false,
+        consecutiveFailures: 0,
+        openedUntil: "",
+        retryAfterMs: 0
+      },
+      perMinute: policy.perMinute,
+      burst: policy.burst,
+      maxConcurrent: policy.maxConcurrent,
+      remainingTokens: Math.max(0, Math.floor(bucket.tokens)),
+      inFlight: bucket.inFlight,
+      serviceLimit: {
+        perMinute: policy.perMinute,
+        burst: policy.burst,
+        maxConcurrent: policy.maxConcurrent,
+        remainingTokens: Math.max(0, Math.floor(bucket.tokens)),
+        inFlight: bucket.inFlight
+      },
+      endpointLimit: null,
+      retryAfterMs: 0,
+      resetAt: new Date().toISOString(),
+      deniedReason: "no_enabled_endpoint",
+      deniedScope: "endpoint"
+    };
+  }
   function selectEndpointTraffic(service, operation, { consume = false } = {}) {
     const endpoints = endpointsFor(service);
     const cursorKey = trafficKey(service, operation);
-    const totalWeight = endpoints.reduce((sum, endpoint) => sum + Math.max(1, Number(endpoint.weight || 1)), 0);
-    const start = Number(endpointCursors.get(cursorKey) || 0) % Math.max(1, totalWeight);
+    if (endpoints.length === 0) {
+      if (consume) endpointCursors.delete(cursorKey);
+      return {
+        endpoint: null,
+        traffic: noEnabledEndpointTraffic(service, operation)
+      };
+    }
+    const signature = JSON.stringify(
+      endpoints.map((endpoint) => [
+        String(endpoint.endpointId || "primary"),
+        Number(endpoint.weight)
+      ])
+    );
+    const previous = endpointCursors.get(cursorKey);
+    const currentWeights =
+      previous?.signature === signature && previous.currentWeights
+        ? { ...previous.currentWeights }
+        : {};
     let fallback = null;
-    for (let offset = 0; offset < totalWeight; offset += 1) {
-      let weightedIndex = (start + offset) % totalWeight;
-      let selected = endpoints[0];
-      for (const endpoint of endpoints) {
-        weightedIndex -= Math.max(1, Number(endpoint.weight || 1));
-        if (weightedIndex < 0) {
-          selected = endpoint;
-          break;
-        }
+    let selected = null;
+    let selectedTraffic = null;
+    let selectedWeight = Number.NEGATIVE_INFINITY;
+    let eligibleWeight = 0;
+    for (const endpoint of endpoints) {
+      const traffic = trafficDecision(service, operation, {
+        consume: false,
+        endpoint
+      });
+      fallback ||= { endpoint, traffic };
+      const endpointId = String(endpoint.endpointId || "primary");
+      if (!traffic.allowed) {
+        currentWeights[endpointId] = 0;
+        continue;
       }
-      const traffic = trafficDecision(service, operation, { consume: false, endpoint: selected });
-      fallback ||= { endpoint: selected, traffic };
-      if (traffic.allowed) {
-        if (consume) {
-          endpointCursors.set(cursorKey, start + offset + 1);
-        }
-        return {
-          endpoint: selected,
-          traffic: consume
-            ? trafficDecision(service, operation, { consume: true, endpoint: selected })
-            : traffic
-        };
+      const weight = Number(endpoint.weight);
+      const nextWeight = Number(currentWeights[endpointId] || 0) + weight;
+      currentWeights[endpointId] = nextWeight;
+      eligibleWeight += weight;
+      if (nextWeight > selectedWeight) {
+        selected = endpoint;
+        selectedTraffic = traffic;
+        selectedWeight = nextWeight;
       }
+    }
+    if (selected) {
+      const selectedId = String(selected.endpointId || "primary");
+      currentWeights[selectedId] -= eligibleWeight;
+    }
+    if (consume) {
+      endpointCursors.set(cursorKey, {
+        signature,
+        currentWeights
+      });
+    }
+    if (selected) {
+      return {
+        endpoint: selected,
+        traffic: consume
+          ? consumeAllowedTraffic(
+              service,
+              operation,
+              selected,
+              selectedTraffic
+            )
+          : selectedTraffic
+      };
     }
     return fallback || {
       endpoint: endpoints[0],
@@ -237,6 +358,7 @@ export function createEndpointTrafficController({
   }
   function releaseTraffic(service, operation, endpoint = null) {
     const selectedEndpoint = endpoint || endpointsFor(service)[0];
+    if (!selectedEndpoint) return;
     const policy = normalizeTrafficPolicy(service.trafficPolicy);
     const bucket = trafficSnapshot(service, operation, policy, { commit: false });
     bucket.inFlight = Math.max(0, bucket.inFlight - 1);

@@ -154,6 +154,16 @@ describe("storage provider", () => {
     });
     expect(provider.listObjectStoragePathsByOwner("storage-provider-job"))
       .toEqual([stored.storageRelativePath]);
+    const opened = await provider.openObjectReadStream({
+      storageRelativePath: stored.storageRelativePath
+    });
+    const streamedChunks = [];
+    for await (const chunk of opened.stream) {
+      streamedChunks.push(Buffer.from(chunk));
+    }
+    expect(opened.byteSize).toBe(12);
+    expect(opened.stream.readableHighWaterMark).toBe(64 * 1024);
+    expect(Buffer.concat(streamedChunks)).toEqual(Buffer.from("stored bytes"));
     await expect(provider.readObject({ storageRelativePath: stored.storageRelativePath }))
       .resolves.toEqual(Buffer.from("stored bytes"));
     await expect(provider.statObject({ storageRelativePath: stored.storageRelativePath }))

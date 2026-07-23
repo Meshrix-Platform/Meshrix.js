@@ -1,80 +1,14 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-
-const readerState = vi.hoisted(() => ({
-  mode: "lines",
-  lines: [],
-  error: null
-}));
-
-function createMiniEmitter() {
-  const listeners = new Map();
-  return {
-    on(event, handler) {
-      if (!listeners.has(event)) {
-        listeners.set(event, new Set());
-      }
-      listeners.get(event).add(handler);
-      return this;
-    },
-    emit(event, ...args) {
-      for (const handler of [...(listeners.get(event) || [])]) {
-        handler(...args);
-      }
-      return this;
-    },
-    removeListener(event, handler) {
-      listeners.get(event)?.delete(handler);
-      return this;
-    },
-    destroy() {
-      this.emit("close");
-    },
-    close() {
-      this.emit("close");
-    }
-  };
-}
-
-const createReadStreamMock = vi.hoisted(() => vi.fn(() => createMiniEmitter()));
-
-const createInterfaceMock = vi.hoisted(() => vi.fn(() => {
-  const lines = createMiniEmitter();
-  queueMicrotask(() => {
-    if (readerState.mode === "error") {
-      lines.emit("error", readerState.error || new Error("reader failed"));
-      return;
-    }
-    for (const line of readerState.lines) {
-      lines.emit("line", line);
-    }
-    lines.emit("close");
-  });
-  return lines;
-}));
-
-vi.mock("node:fs", () => ({
-  default: {
-    createReadStream: createReadStreamMock,
-    existsSync: vi.fn(() => false),
-    readFileSync: vi.fn()
-  },
-  createReadStream: createReadStreamMock
-}));
-
-vi.mock("node:readline", () => ({
-  default: {
-    createInterface: createInterfaceMock
-  },
-  createInterface: createInterfaceMock
-}));
-
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event-bus.mjs";
+import { createSqliteProtocolEventStore } from "../../../packages/server-runtime/src/events/sqlite-protocol-event-store.mjs";
 
 async function withTempUserData(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-event-bus-focused-"));
+  const userDataPath = await fs.mkdtemp(
+    path.join(os.tmpdir(), "lico-event-bus-focused-")
+  );
   try {
     return await testCase(userDataPath);
   } finally {
@@ -90,9 +24,15 @@ function logger() {
   };
 }
 
-async function waitFor(predicate, timeoutMs = 1000) {
+function openBus(userDataPath) {
+  const eventStore = createSqliteProtocolEventStore({ userDataPath });
+  const bus = createProtocolEventBus({ eventStore, logger: logger() });
+  return { bus, eventStore };
+}
+
+async function waitFor(predicate, timeoutMs = 1_000) {
   const startedAt = Date.now();
-  while (!predicate()) {
+  while (!await predicate()) {
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error("timed out waiting for condition");
     }
@@ -101,81 +41,123 @@ async function waitFor(predicate, timeoutMs = 1000) {
 }
 
 afterEach(() => {
-  readerState.mode = "lines";
-  readerState.lines = [];
-  readerState.error = null;
-  createReadStreamMock.mockClear();
-  createInterfaceMock.mockClear();
   vi.restoreAllMocks();
 });
 
-describe("protocol event bus behavior", () => {
-  it("skips malformed JSONL lines and normalizes topic filters", async () => {
+describe("protocol event bus validation and cancellation", () => {
+  it("normalizes and deduplicates topic filters before indexed reads", async () => {
     await withTempUserData(async (userDataPath) => {
-      readerState.lines = [
-        "{not-json",
-        JSON.stringify({
-          schemaVersion: "v0.0.1:schema:definition-1",
-          offset: 2,
-          id: "event-2",
-          topic: "alpha",
-          type: "snapshot",
-          publisher: "server",
-          publishedAt: "2026-06-05T00:00:00.000Z",
-          payload: { value: 2 }
-        })
-      ];
+      const { bus, eventStore } = openBus(userDataPath);
+      try {
+        await bus.publish("alpha", { value: 1 });
+        await bus.publish("beta", { value: 2 });
+        const result = await bus.readEvents({
+          cursor: 0,
+          topics: [" alpha ", "", "alpha", "beta"],
+          limit: 10
+        });
 
-      const bus = createProtocolEventBus({ userDataPath, logger: logger() });
-      const result = await bus.readEvents({
-        cursor: 1,
-        topics: [" alpha ", "", "alpha", "beta"],
-        limit: 10
-      });
-
-      expect(result.cursor).toBe(1);
-      expect(result.nextCursor).toBe(2);
-      expect(result.topics).toEqual(["alpha", "beta"]);
-      expect(result.events).toHaveLength(1);
-      expect(result.events[0]).toMatchObject({
-        offset: 2,
-        topic: "alpha",
-        payload: { value: 2 }
-      });
+        expect(result.topics).toEqual(["alpha", "beta"]);
+        expect(result.events.map((event) => event.topic)).toEqual(["alpha", "beta"]);
+      } finally {
+        await bus.close();
+        eventStore.close();
+      }
     });
   });
 
-  it("rejects when the JSONL reader emits an unexpected error", async () => {
-    await withTempUserData(async (userDataPath) => {
-      readerState.mode = "error";
-      readerState.error = new Error("stream broke");
-
-      const bus = createProtocolEventBus({ userDataPath, logger: logger() });
-      await expect(bus.readEvents({ cursor: 0, limit: 10 })).rejects.toThrow("stream broke");
+  it("propagates storage failures and records a bounded publication failure", async () => {
+    const storageFailure = Object.assign(new Error("storage busy"), {
+      code: "protocol_event_store_busy"
     });
+    const eventStore = {
+      publish: vi.fn(async () => {
+        throw storageFailure;
+      }),
+      read: vi.fn(async () => ({ events: [], nextCursor: 0, revision: 0 })),
+      getLatest: vi.fn(async () => []),
+      getRevision: vi.fn(async () => 0),
+      getStats: vi.fn(async () => ({}))
+    };
+    const currentLogger = logger();
+    const bus = createProtocolEventBus({ eventStore, logger: currentLogger });
+
+    await expect(bus.publish("alpha", { value: 1 })).rejects.toBe(storageFailure);
+    await expect(bus.getStats()).resolves.toMatchObject({ rejectedPublishes: 1 });
+    expect(currentLogger.error).toHaveBeenCalledWith(
+      "event.publish.failed",
+      expect.objectContaining({
+        topic: "alpha",
+        reasonCode: "protocol_event_store_busy"
+      })
+    );
   });
 
   it("removes abort listeners after a waiting subscription is cancelled", async () => {
     await withTempUserData(async (userDataPath) => {
-      const bus = createProtocolEventBus({ userDataPath, logger: logger() });
+      const { bus, eventStore } = openBus(userDataPath);
       const controller = new AbortController();
       const addSpy = vi.spyOn(AbortSignal.prototype, "addEventListener");
       const removeSpy = vi.spyOn(AbortSignal.prototype, "removeEventListener");
+      try {
+        const pending = bus.subscribe({
+          cursor: 0,
+          topics: ["missing"],
+          timeoutMs: 5_000,
+          signal: controller.signal
+        });
 
-      const pending = bus.subscribe({
-        cursor: 0,
-        topics: ["missing"],
-        timeoutMs: 5000,
-        signal: controller.signal
+        await waitFor(() => addSpy.mock.calls.some(([name]) => name === "abort"));
+        controller.abort();
+
+        await expect(pending).resolves.toMatchObject({
+          events: [],
+          nextCursor: 0
+        });
+        expect(removeSpy).toHaveBeenCalledWith("abort", expect.any(Function));
+      } finally {
+        await bus.close();
+        eventStore.close();
+      }
+    });
+  });
+
+  it("rejects excess waiters without allocating another pending subscription", async () => {
+    await withTempUserData(async (userDataPath) => {
+      const eventStore = createSqliteProtocolEventStore({ userDataPath });
+      const currentLogger = logger();
+      const bus = createProtocolEventBus({
+        eventStore,
+        logger: currentLogger,
+        maxWaiters: 2,
+        pollMinMs: 5,
+        pollMaxMs: 10
       });
-
-      await waitFor(() => addSpy.mock.calls.some(([eventName]) => eventName === "abort"));
-      controller.abort();
-
-      const result = await pending;
-      expect(result.events).toEqual([]);
-      expect(result.nextCursor).toBe(0);
-      expect(removeSpy).toHaveBeenCalledWith("abort", expect.any(Function));
+      const controllers = [new AbortController(), new AbortController()];
+      try {
+        const pending = controllers.map((controller) => bus.subscribe({
+          cursor: 0,
+          topics: ["missing"],
+          timeoutMs: 5_000,
+          signal: controller.signal
+        }));
+        await waitFor(async () => (await bus.getStats()).waiters === 2);
+        await expect(bus.subscribe({
+          cursor: 0,
+          topics: ["overflow"],
+          timeoutMs: 5_000
+        })).resolves.toMatchObject({ events: [], nextCursor: 0 });
+        expect(currentLogger.warn).toHaveBeenCalledWith(
+          "event.subscribe.waiter_limit",
+          { waiters: 2, maxWaiters: 2 }
+        );
+        controllers.forEach((controller) => controller.abort());
+        await Promise.all(pending);
+      } finally {
+        controllers.forEach((controller) => controller.abort());
+        await bus.close();
+        eventStore.close();
+      }
     });
   });
 });

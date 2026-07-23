@@ -5855,47 +5855,21 @@
       "artifactId": "lico.storage.service-manifest-generation",
       "kind": "store",
       "description": "Governed version registry entry for immutable service manifest generations.",
-      "activeVersion": "v0.0.1:storage:service-manifest-generation-1",
+      "activeVersion": "v0.0.1:storage:service-manifest-generation-2",
       "versions": [
         {
-          "version": "v0.0.1:storage:service-manifest-generation-1",
-          "ref": "lico.storage.service-manifest-generation@v0.0.1:storage:service-manifest-generation-1",
+          "version": "v0.0.1:storage:service-manifest-generation-2",
+          "ref": "lico.storage.service-manifest-generation@v0.0.1:storage:service-manifest-generation-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current immutable generation schema."
+            "notes": "Current normalized SQLite-backed manifest generation schema."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-storage-service-manifest-generation-1-source",
-              "kind": "other",
-              "uri": "packages/foundation/src/storage/service-manifest-transaction.mjs"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "lico.storage.service-manifest-journal",
-      "kind": "store",
-      "description": "Governed version registry entry for service manifest commit journals.",
-      "activeVersion": "v0.0.1:storage:service-manifest-journal-1",
-      "versions": [
-        {
-          "version": "v0.0.1:storage:service-manifest-journal-1",
-          "ref": "lico.storage.service-manifest-journal@v0.0.1:storage:service-manifest-journal-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current prepared-journal schema for manifest publication recovery."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-storage-service-manifest-journal-1-source",
+              "evidenceId": "v0-0-1-storage-service-manifest-generation-2-source",
               "kind": "other",
               "uri": "packages/foundation/src/storage/service-manifest-transaction.mjs"
             }
@@ -5907,21 +5881,47 @@
       "artifactId": "lico.storage.service-manifest-pointer",
       "kind": "store",
       "description": "Governed version registry entry for the service manifest latest pointer.",
-      "activeVersion": "v0.0.1:storage:service-manifest-pointer-1",
+      "activeVersion": "v0.0.1:storage:service-manifest-pointer-2",
       "versions": [
         {
-          "version": "v0.0.1:storage:service-manifest-pointer-1",
-          "ref": "lico.storage.service-manifest-pointer@v0.0.1:storage:service-manifest-pointer-1",
+          "version": "v0.0.1:storage:service-manifest-pointer-2",
+          "ref": "lico.storage.service-manifest-pointer@v0.0.1:storage:service-manifest-pointer-2",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current compare-and-swap pointer schema."
+            "notes": "Current pointer schema for the normalized SQLite authority."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-storage-service-manifest-pointer-1-source",
+              "evidenceId": "v0-0-1-storage-service-manifest-pointer-2-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/storage/service-manifest-transaction.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.storage.service-manifest-sqlite",
+      "kind": "store",
+      "description": "Governed version registry entry for the normalized service manifest SQLite authority.",
+      "activeVersion": "v0.0.1:storage:service-manifest-sqlite-1",
+      "versions": [
+        {
+          "version": "v0.0.1:storage:service-manifest-sqlite-1",
+          "ref": "lico.storage.service-manifest-sqlite@v0.0.1:storage:service-manifest-sqlite-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current normalized manifest authority schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-storage-service-manifest-sqlite-1-source",
               "kind": "other",
               "uri": "packages/foundation/src/storage/service-manifest-transaction.mjs"
             }

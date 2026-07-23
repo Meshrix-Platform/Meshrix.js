@@ -15,6 +15,7 @@ export function createStartQueuedJob(ctx) {
     workerConcurrency: taskConcurrency,
     jobs,
     checkpointJobs,
+    jobProjectionStore,
     activeControllers,
     durableWorkflows,
     logJob,
@@ -370,10 +371,12 @@ export function createStartQueuedJob(ctx) {
           }).catch(() => null);
         }
         await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), "Job deleted.").catch(() => null);
+        jobProjectionStore.delete(currentJob.id);
         await fs.rm(getJobDirectory(userDataPath, currentJob.id), {
           recursive: true,
           force: true
         });
+        jobProjectionStore.settleDeletion(currentJob.id);
         await publishDeletedJobEvent(currentJob);
         completeQueueTask(false);
         logJob("info", "jobs.job.deleted", {

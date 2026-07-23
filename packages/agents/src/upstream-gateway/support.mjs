@@ -17,6 +17,9 @@ import {
 import { compilePayloadTransport } from "./payload-contract.mjs";
 
 export const UPSTREAM_GATEWAY_PROTOCOL_VERSION = "v0.0.1:upstream-gateway:service-registry-1";
+export const MAX_UPSTREAM_ENDPOINTS = 64;
+export const MAX_UPSTREAM_ENDPOINT_WEIGHT = 100;
+export const MAX_UPSTREAM_TOTAL_ENDPOINT_WEIGHT = 1_024;
 
 /** Retired startup config path. Ordinary runtime must not load this file. */
 
@@ -162,10 +165,22 @@ export function normalizeEndpoint(input = {}, index = 0, fallback = {}) {
   const hasServiceTrafficPolicy = hasTrafficPolicyInput(fallback);
   const hasEndpointCircuitBreaker = hasCircuitBreakerInput(source);
   const hasServiceCircuitBreaker = hasCircuitBreakerInput(fallback);
+  const requestedWeight = source.weight ?? fallback.weight ?? 1;
+  const weight = Number(requestedWeight);
+  if (
+    !Number.isSafeInteger(weight) ||
+    weight < 1 ||
+    weight > MAX_UPSTREAM_ENDPOINT_WEIGHT
+  ) {
+    throw Object.assign(
+      new Error("Upstream endpoint weight is outside the configured limit."),
+      { status: 400, code: "upstream_endpoint_weight_invalid" }
+    );
+  }
   return {
     endpointId,
     baseUrl,
-    weight: Math.max(1, Math.min(Number(source.weight || fallback.weight || 1), 100)),
+    weight,
     disabled: source.disabled === true || fallback.disabled === true,
     trafficPolicy: normalizeTrafficPolicy(
       hasEndpointTrafficPolicy
@@ -203,6 +218,12 @@ export function normalizeEndpoints(input = {}, existing = {}) {
       input.endpointPool ||
       existing.endpoints
   );
+  if (configured.length > MAX_UPSTREAM_ENDPOINTS) {
+    throw Object.assign(
+      new Error("Upstream endpoint count exceeds the configured limit."),
+      { status: 400, code: "upstream_endpoint_count_exceeded" }
+    );
+  }
   const endpoints = configured
     .map((endpoint, index) => normalizeEndpoint(endpoint, index, {
       trafficPolicy: input.trafficPolicy || existing.trafficPolicy,
@@ -210,6 +231,22 @@ export function normalizeEndpoints(input = {}, existing = {}) {
     }))
     .filter((endpoint) => endpoint.baseUrl);
   if (endpoints.length > 0) {
+    if (new Set(endpoints.map((endpoint) => endpoint.endpointId)).size !== endpoints.length) {
+      throw Object.assign(
+        new Error("Upstream endpoint identifiers must be unique."),
+        { status: 400, code: "upstream_endpoint_identity_conflict" }
+      );
+    }
+    const totalWeight = endpoints.reduce(
+      (sum, endpoint) => sum + endpoint.weight,
+      0
+    );
+    if (totalWeight > MAX_UPSTREAM_TOTAL_ENDPOINT_WEIGHT) {
+      throw Object.assign(
+        new Error("Upstream endpoint total weight exceeds the configured limit."),
+        { status: 400, code: "upstream_endpoint_total_weight_exceeded" }
+      );
+    }
     return endpoints;
   }
   return [

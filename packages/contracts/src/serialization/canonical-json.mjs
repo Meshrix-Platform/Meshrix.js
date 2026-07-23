@@ -1,8 +1,8 @@
 /**
  * Versioned canonical JSON authority for all cross-layer digests and signatures.
  *
- * The accepted value domain is deliberately JSON plus the legacy transport
- * value types Date, Buffer, Map and Set. Cycles and unsupported values fail
+ * The accepted value domain is deliberately JSON plus the explicitly governed
+ * transport value types Date, Buffer, Map and Set. Cycles and unsupported values fail
  * closed so a signature can never be computed over an ambiguous projection.
  */
 export const CANONICAL_JSON_VERSION = "v0.0.1:serialization:canonical-json-1";

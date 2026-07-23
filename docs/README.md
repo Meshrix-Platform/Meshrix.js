@@ -1,6 +1,8 @@
 # LicoMesh Documentation
 
-This directory contains the technical documentation for installing, running, operating, and verifying LicoMesh as a private-deployable open platform.
+This directory contains the formal technical documentation for installing,
+running, operating, integrating, and verifying LicoMesh as a
+private-deployable open platform.
 
 Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, and executable verification commands.
 
@@ -28,21 +30,42 @@ or shed under fixed budgets and never retain payload copies. The canonical
 architecture, security, Operation Permission, gateway, observability, runtime,
 protocol, and runbook documents below own the detailed maintenance rules.
 
+## Project Documents
+
+| Topic | Document |
+| --- | --- |
+| Product definition | [../PRODUCT.md](../PRODUCT.md) |
+| Contribution process | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
+| Code of conduct | [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
+| Security policy | [../SECURITY.md](../SECURITY.md) |
+| Changelog | [../CHANGELOG.md](../CHANGELOG.md) |
+| License | [../LICENSE](../LICENSE) |
+
 ## Core Documents
 
 | Topic | Document |
 | --- | --- |
 | Runtime operation | [RUNBOOK.md](RUNBOOK.md) |
-| Command usage | [USAGES.md](USAGES.md) |
 | Architecture | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
+| Generated system architecture | [architecture/LICOMESH-SYSTEM-ARCHITECTURE.html](architecture/LICOMESH-SYSTEM-ARCHITECTURE.html) |
+| Generated service capability architecture | [architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html](architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html) |
 | Governed execution and minimum evidence | [architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md) |
 | Execution sandbox architecture | [architecture/EXECUTION-SANDBOX.md](architecture/EXECUTION-SANDBOX.md) |
 | MCP native installer architecture | [architecture/MCP-NATIVE-INSTALLER.md](architecture/MCP-NATIVE-INSTALLER.md) |
+| Generated state machines | [architecture/STATE-MACHINES.md](architecture/STATE-MACHINES.md) |
 | Protocols | [protocols/PROTOCOLS.md](protocols/PROTOCOLS.md) |
-| State machines | [state-machine/STATE-MACHINES.md](state-machine/STATE-MACHINES.md) |
+| Plugin package format and loading | [protocols/PLUGIN-PACKAGE-AND-LOADING.md](protocols/PLUGIN-PACKAGE-AND-LOADING.md) |
 | Entity configuration | [ENTITY-CONFIG-LAYOUT.md](ENTITY-CONFIG-LAYOUT.md) |
 | Compatibility | [COMPATIBILITY.md](COMPATIBILITY.md) |
-| Local temporary report policy | [REPORTS.md](REPORTS.md) |
+| Examples | [examples/README.md](examples/README.md) |
+| Implemented decisions | [adrs/README.md](adrs/README.md) |
+
+The state-machine document is generated from
+`tools/registry/state-machines/state-machine-integrity.registry.json` by
+`node tools/generators/generate-state-machine-docs.mjs`. Do not edit the
+projection manually. The architecture HTML diagrams are projections of
+`packages/contracts/src/modules/manifest.mjs`; update their digest markers with
+`node tools/generators/generate-architecture-diagram-digests.mjs`.
 
 ## External Maintenance Framework
 
@@ -87,6 +110,7 @@ This documentation remains a factual input to that framework:
 After documentation changes, run:
 
 ```bash
+npm run verify:docs
 npm test
 npm run verify:core-platform-surface-convergence
 git diff --check

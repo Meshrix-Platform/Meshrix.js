@@ -104,6 +104,7 @@ protocolOperation({
       label: { type: "string" },
       description: { type: "string" },
       parentTagId: { type: "string" },
+      enabled: { type: "boolean" },
       scopePrerequisites: { type: "array", items: { type: "string" } },
       metadata: { type: "object" }
     })

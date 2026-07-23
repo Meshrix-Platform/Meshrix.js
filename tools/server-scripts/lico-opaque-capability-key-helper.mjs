@@ -117,7 +117,7 @@ async function readMacosRecord(input) {
     throw new Error("macos-keychain capability key lookup backend is only available on macOS.");
   }
   try {
-    const raw = await run("/usr/bin/security", [
+    const raw = await run("security", [
       "find-generic-password",
       "-w",
       "-a",
@@ -138,7 +138,7 @@ async function writeMacosRecord(input, record) {
   if (process.platform !== "darwin") {
     throw new Error("macos-keychain capability key lookup backend is only available on macOS.");
   }
-  await run("/usr/bin/security", [
+  await run("security", [
     "add-generic-password",
     "-U",
     "-a",

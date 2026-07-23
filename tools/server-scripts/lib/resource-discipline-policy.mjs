@@ -52,5 +52,25 @@ export const RESOURCE_DISCIPLINE_POLICY = deepFreeze({
     startupTimeoutMs: 30_000,
     sampleTimeoutMs: 15_000,
     shutdownTimeoutMs: 15_000
+  },
+  highRiskWorkloads: {
+    profile: "quick",
+    requiredScenarioIds: [
+      "object_stream",
+      "upload_materialization",
+      "protocol_events",
+      "job_projection",
+      "endpoint_routing",
+      "operation_audit",
+      "service_manifest",
+      "backup_snapshot"
+    ],
+    minimumProtocolEvents: 100_000,
+    minimumJobRecords: 10_000,
+    maxSettledHeapGrowthBytes: 2 * MIB,
+    maxPeakRssGrowthBytes: 192 * MIB,
+    maxPeakExternalGrowthBytes: 64 * MIB,
+    maxEventLoopDelayMs: 1_500,
+    timeoutMs: 180_000
   }
 });

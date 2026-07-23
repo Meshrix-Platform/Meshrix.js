@@ -83,11 +83,14 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
       "apps/server/runtime/**",
       "packages/**",
       "tests/vitest/server/resource-discipline-policy.test.mjs",
+      "tests/vitest/server/job-pipeline-upload-session-persistence.test.mjs",
+      "tests/vitest/server/upload-workspace-materialization.test.mjs",
       "tools/server-scripts/verify-resource-discipline.mjs",
       "tools/server-scripts/verify-runtime-memory-leaks.mjs",
       "tools/server-scripts/lib/resource-discipline-analysis.mjs",
       "tools/server-scripts/lib/resource-discipline-policy.mjs",
       "tools/server-scripts/lib/runtime-memory-profiler-preload.mjs",
+      "tools/server-scripts/lib/resource-high-risk-workload-child.mjs",
       "tools/registry/tests.registry.json"
     ], outputs: ["build/reports/runtime-resource-discipline.json"],
   },
@@ -104,7 +107,8 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
       "tools/server-scripts/verify-runtime-memory-leaks.mjs",
       "tools/server-scripts/lib/resource-discipline-analysis.mjs",
       "tools/server-scripts/lib/resource-discipline-policy.mjs",
-      "tools/server-scripts/lib/runtime-memory-profiler-preload.mjs"
+      "tools/server-scripts/lib/runtime-memory-profiler-preload.mjs",
+      "tools/server-scripts/lib/resource-high-risk-workload-child.mjs"
     ], outputs: ["build/reports/runtime-resource-discipline.json"],
   },
 
@@ -258,13 +262,13 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     scriptName: "verify:better-plan", command: "npm run verify:better-plan", category: "verifier", subsystem: "documentation",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-better-plan.mjs", "tools/registry/fact-source-authority.registry.json", "README.md", "README.zh-CN.md", "docs/README.md", "docs/RUNBOOK.md", "docs/USAGES.md", "docs/COMPATIBILITY.md", "docs/architecture/ARCHITECTURE.md", "docs/architecture/EXECUTION-SANDBOX.md", "docs/protocols/PROTOCOLS.md", "docs/functionality/**", "docs/state-machine/STATE-MACHINES.md"], outputs: ["build/reports/better-plan.json"],
+    inputs: ["tools/server-scripts/verify-better-plan.mjs", "tools/registry/fact-source-authority.registry.json", "README.md", "README.zh-CN.md", "docs/README.md", "docs/RUNBOOK.md", "docs/examples/README.md", "docs/COMPATIBILITY.md", "docs/architecture/ARCHITECTURE.md", "docs/architecture/EXECUTION-SANDBOX.md", "docs/protocols/PROTOCOLS.md", "docs/functionality/**", "docs/architecture/STATE-MACHINES.md"], outputs: ["build/reports/better-plan.json"],
   },
   "plan:next": {
     scriptName: "plan:next", command: "npm run plan:next", category: "maintenance", subsystem: "planning",
     owner: "platform", tier: "hygiene", sideEffects: "none",
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
-    inputs: ["docs/plan/Manifest.json", "docs/plan/end-to-end-release/DependencyMap.json", "docs/plan/**/Checkpoints.json", "tools/plan/*.mjs"], outputs: [],
+    inputs: ["docs/plans/Manifest.json", "docs/plans/end-to-end-release/DependencyMap.json", "docs/plans/**/Checkpoints.json", "tools/plan/*.mjs"], outputs: [],
   },
   "verify:composition-source-package": {
     scriptName: "verify:composition-source-package", command: "npm run verify:composition-source-package", category: "packaging", subsystem: "release-source",
@@ -399,7 +403,7 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     scriptName: "verify:controlled-execution-convergence", command: "npm run verify:controlled-execution-convergence", category: "verifier", subsystem: "execution-sandbox",
     owner: "platform-security", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "security", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.mjs", "tools/server-scripts/lib/controlled-execution-convergence-reducer.mjs", "tools/plan/current-plan-receipt.mjs", "docs/plan/end-to-end-release/capability-runtime/controlled-execution-convergence/**", "docs/plan/end-to-end-release/DependencyMap.json", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
+    inputs: ["tools/server-scripts/verify-controlled-execution-convergence.mjs", "tools/server-scripts/lib/controlled-execution-convergence-reducer.mjs", "tools/plan/current-plan-receipt.mjs", "docs/plans/end-to-end-release/capability-runtime/controlled-execution-convergence/**", "docs/plans/end-to-end-release/DependencyMap.json", "build/reports/controlled-execution-sandbox.json", "build/reports/execution-sandbox-oci-conformance.json", "build/reports/opaque-sandbox-custody.json", "build/reports/execution-launcher-boundary.json"], outputs: ["build/reports/controlled-execution-convergence-final.json"],
   },
   "verify:security-alert-lifecycle": {
     scriptName: "verify:security-alert-lifecycle", command: "npm run verify:security-alert-lifecycle", category: "verifier", subsystem: "security",
@@ -743,6 +747,7 @@ export const UNCLASSIFIED_ALLOWLIST = Object.freeze([
   "vitest",                   // Vitest runner
   "vitest:coverage",          // Vitest with coverage
   "repo:branch-flow",         // Branch flow verification
+  "repo:git-publication",     // Git publication privacy policy fixtures
   "server:prepare:npm-cache",  // Release packaging helper
   "test:audit",               // Audit test profile
   "test:smoke",               // Smoke test profile

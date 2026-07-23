@@ -1,13 +1,12 @@
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { atomicWriteJsonThroughState } from "#lico/product-api";
 import {
   getJobDirectory,
   getJobMetaPath,
   getJobPayloadPath,
-  getJobResultPath,
-  getJobsRootPath,
-  RECOVERY_STAGE_MESSAGE
+  getJobResultPath
 } from "./job-manager-validation.mjs";
 
 function jobPersistenceError(code, jobId, message, cause = null) {
@@ -20,15 +19,66 @@ function jobPersistenceError(code, jobId, message, cause = null) {
 
 const JOB_TERMINAL_FORMAT = "lico.job-terminal";
 const JOB_TERMINAL_SCHEMA = "job-terminal-envelope";
+const MAX_JOB_METADATA_BYTES = 256 * 1024;
+const MAX_JOB_PAYLOAD_BYTES = 64 * 1024 * 1024;
+const MAX_JOB_RESULT_BYTES = 256 * 1024 * 1024;
+const FILE_TOO_LARGE = "job_persistence_file_too_large";
 
-async function readPersistedJobTerminal(userDataPath, jobId) {
+function digestText(value) {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+async function readBoundedText(filePath, maxBytes) {
+  const handle = await fs.open(filePath, "r");
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > maxBytes) {
+      throw Object.assign(new Error("Persisted job file exceeds its byte limit."), {
+        code: FILE_TOO_LARGE
+      });
+    }
+    const content = Buffer.allocUnsafe(Number(stat.size));
+    let offset = 0;
+    while (offset < content.length) {
+      const { bytesRead } = await handle.read(
+        content,
+        offset,
+        content.length - offset,
+        offset
+      );
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    const extra = Buffer.allocUnsafe(1);
+    const { bytesRead: extraBytes } = await handle.read(extra, 0, 1, offset);
+    if (extraBytes > 0) {
+      throw Object.assign(new Error("Persisted job file exceeds its byte limit."), {
+        code: FILE_TOO_LARGE
+      });
+    }
+    return content.subarray(0, offset).toString("utf8");
+  } finally {
+    await handle.close();
+  }
+}
+
+async function readPersistedJobTerminal(
+  userDataPath,
+  jobId,
+  maxBytes = MAX_JOB_RESULT_BYTES
+) {
   let content;
   try {
-    content = await fs.readFile(getJobResultPath(userDataPath, jobId), "utf8");
+    content = await readBoundedText(
+      getJobResultPath(userDataPath, jobId),
+      maxBytes
+    );
   } catch (error) {
     if (error?.code === "ENOENT") return null;
     throw jobPersistenceError(
-      "job_persistence_terminal_unreadable",
+      error?.code === FILE_TOO_LARGE
+        ? "job_persistence_terminal_too_large"
+        : "job_persistence_terminal_unreadable",
       jobId,
       "Persisted job terminal envelope is unreadable.",
       error
@@ -60,21 +110,49 @@ async function readPersistedJobTerminal(userDataPath, jobId) {
       "Persisted job terminal envelope does not match its governed job identity."
     );
   }
+  Object.defineProperties(envelope, {
+    artifactDigest: {
+      value: digestText(content),
+      enumerable: false
+    },
+    artifactBytes: {
+      value: Buffer.byteLength(content),
+      enumerable: false
+    }
+  });
   return envelope;
 }
 
-async function readPersistedJobMeta(userDataPath, jobId) {
+export async function readPersistedJobMeta(
+  userDataPath,
+  jobId,
+  {
+    maxMetadataBytes = MAX_JOB_METADATA_BYTES,
+    maxResultBytes = MAX_JOB_RESULT_BYTES
+  } = {}
+) {
   let content;
   try {
-    content = await fs.readFile(getJobMetaPath(userDataPath, jobId), "utf8");
+    content = await readBoundedText(
+      getJobMetaPath(userDataPath, jobId),
+      maxMetadataBytes
+    );
   } catch (error) {
-    const terminal = await readPersistedJobTerminal(userDataPath, jobId);
+    const terminal = await readPersistedJobTerminal(
+      userDataPath,
+      jobId,
+      maxResultBytes
+    );
     if (terminal && error?.code === "ENOENT") {
       await persistJobMeta(userDataPath, terminal.job);
       return terminal.job;
     }
     throw jobPersistenceError(
-      error?.code === "ENOENT" ? "job_persistence_meta_missing" : "job_persistence_meta_unreadable",
+      error?.code === "ENOENT"
+        ? "job_persistence_meta_missing"
+        : error?.code === FILE_TOO_LARGE
+          ? "job_persistence_meta_too_large"
+          : "job_persistence_meta_unreadable",
       jobId,
       "Persisted job metadata is missing or unreadable.",
       error
@@ -85,7 +163,11 @@ async function readPersistedJobMeta(userDataPath, jobId) {
   try {
     parsed = JSON.parse(content);
   } catch (error) {
-    const terminal = await readPersistedJobTerminal(userDataPath, jobId);
+    const terminal = await readPersistedJobTerminal(
+      userDataPath,
+      jobId,
+      maxResultBytes
+    );
     if (terminal) {
       await persistJobMeta(userDataPath, terminal.job);
       return terminal.job;
@@ -99,7 +181,11 @@ async function readPersistedJobMeta(userDataPath, jobId) {
   }
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    const terminal = await readPersistedJobTerminal(userDataPath, jobId);
+    const terminal = await readPersistedJobTerminal(
+      userDataPath,
+      jobId,
+      maxResultBytes
+    );
     if (terminal) {
       await persistJobMeta(userDataPath, terminal.job);
       return terminal.job;
@@ -111,7 +197,11 @@ async function readPersistedJobMeta(userDataPath, jobId) {
     );
   }
   if (String(parsed.id || "") !== jobId) {
-    const terminal = await readPersistedJobTerminal(userDataPath, jobId);
+    const terminal = await readPersistedJobTerminal(
+      userDataPath,
+      jobId,
+      maxResultBytes
+    );
     if (terminal) {
       await persistJobMeta(userDataPath, terminal.job);
       return terminal.job;
@@ -133,7 +223,11 @@ async function readPersistedJobMeta(userDataPath, jobId) {
     }
   }
 
-  const terminal = await readPersistedJobTerminal(userDataPath, jobId);
+  const terminal = await readPersistedJobTerminal(
+    userDataPath,
+    jobId,
+    maxResultBytes
+  );
   if (terminal) {
     if (!isDeepStrictEqual(parsed, terminal.job)) {
       await persistJobMeta(userDataPath, terminal.job);
@@ -143,7 +237,8 @@ async function readPersistedJobMeta(userDataPath, jobId) {
   return parsed;
 }
 
-export async function persistJobMeta(userDataPath, job) {
+export async function persistJobMeta(userDataPath, job, projectionStore = null) {
+  projectionStore?.upsert(job);
   const jobDirectory = getJobDirectory(userDataPath, job.id);
   await fs.mkdir(jobDirectory, { recursive: true });
   await atomicWriteJsonThroughState(getJobMetaPath(userDataPath, job.id), job, {
@@ -154,7 +249,12 @@ export async function persistJobMeta(userDataPath, job) {
   });
 }
 
-export async function persistJobTerminal(userDataPath, job, result) {
+export async function persistJobTerminal(
+  userDataPath,
+  job,
+  result,
+  projectionStore = null
+) {
   if (!job?.id || job.status !== "completed") {
     throw jobPersistenceError(
       "job_persistence_terminal_invalid",
@@ -164,22 +264,49 @@ export async function persistJobTerminal(userDataPath, job, result) {
   }
   const jobDirectory = getJobDirectory(userDataPath, job.id);
   await fs.mkdir(jobDirectory, { recursive: true });
-  await atomicWriteJsonThroughState(getJobResultPath(userDataPath, job.id), {
+  const envelope = {
     format: JOB_TERMINAL_FORMAT,
     schema: JOB_TERMINAL_SCHEMA,
     job,
     result
-  }, {
-    trailingNewline: false,
-    ignoreMissingParent: true,
-    kind: "jobs.terminal.write",
-    metadata: { jobId: job.id }
+  };
+  const serialized = JSON.stringify(envelope, null, 2);
+  const artifact = projectionStore?.beginArtifact({
+    jobId: job.id,
+    kind: "result",
+    finalRef: `jobs/${job.id}/result.json`,
+    digest: digestText(serialized),
+    byteSize: Buffer.byteLength(serialized),
+    job
   });
-  await persistJobMeta(userDataPath, job);
+  let artifactPublished = false;
+  try {
+    await atomicWriteJsonThroughState(getJobResultPath(userDataPath, job.id), envelope, {
+      trailingNewline: false,
+      ignoreMissingParent: true,
+      kind: "jobs.terminal.write",
+      metadata: { jobId: job.id }
+    });
+    if (artifact) {
+      projectionStore.publishArtifact(artifact.journalId);
+      artifactPublished = true;
+    }
+    await persistJobMeta(userDataPath, job, projectionStore);
+    if (artifact) projectionStore.settleArtifact(artifact.journalId);
+  } catch (error) {
+    if (artifact && !artifactPublished) {
+      projectionStore.abortArtifact(artifact.journalId);
+    }
+    throw error;
+  }
 }
 
-export async function loadJobResult(userDataPath, jobId) {
-  const terminal = await readPersistedJobTerminal(userDataPath, jobId);
+export async function loadJobResult(userDataPath, jobId, projectionStore = null) {
+  const terminal = await readPersistedJobTerminal(
+    userDataPath,
+    jobId,
+    projectionStore?.policy?.maxResultBytes || MAX_JOB_RESULT_BYTES
+  );
   if (!terminal) {
     throw jobPersistenceError(
       "job_persistence_terminal_missing",
@@ -187,26 +314,90 @@ export async function loadJobResult(userDataPath, jobId) {
       "Persisted job terminal envelope is missing."
     );
   }
+  const projected = projectionStore?.get(jobId);
+  if (projected && projected.status !== "completed") {
+    throw jobPersistenceError(
+      "job_persistence_terminal_state_mismatch",
+      jobId,
+      "Persisted job terminal envelope does not match projection state."
+    );
+  }
+  const artifact = projectionStore?.getArtifactInfo(jobId);
+  if (
+    artifact?.resultDigest &&
+    (
+      artifact.resultDigest !== terminal.artifactDigest ||
+      Number(artifact.resultBytes) !== terminal.artifactBytes
+    )
+  ) {
+    throw jobPersistenceError(
+      "job_persistence_terminal_digest_mismatch",
+      jobId,
+      "Persisted job terminal envelope does not match its projection digest."
+    );
+  }
   return terminal.result;
 }
 
-export async function persistJobPayload(userDataPath, jobId, payload) {
+export async function persistJobPayload(
+  userDataPath,
+  jobId,
+  payload,
+  projectionStore = null
+) {
   const jobDirectory = getJobDirectory(userDataPath, jobId);
   await fs.mkdir(jobDirectory, { recursive: true });
-  await atomicWriteJsonThroughState(getJobPayloadPath(userDataPath, jobId), payload, {
-    trailingNewline: false,
-    ignoreMissingParent: true,
-    kind: "jobs.payload.write",
-    metadata: { jobId }
+  const serialized = JSON.stringify(payload, null, 2);
+  const artifact = projectionStore?.beginArtifact({
+    jobId,
+    kind: "payload",
+    finalRef: `jobs/${jobId}/payload.json`,
+    digest: digestText(serialized),
+    byteSize: Buffer.byteLength(serialized)
   });
+  try {
+    await atomicWriteJsonThroughState(getJobPayloadPath(userDataPath, jobId), payload, {
+      trailingNewline: false,
+      ignoreMissingParent: true,
+      kind: "jobs.payload.write",
+      metadata: { jobId }
+    });
+    if (artifact) {
+      projectionStore.publishArtifact(artifact.journalId);
+      projectionStore.settleArtifact(artifact.journalId);
+    }
+  } catch (error) {
+    if (artifact) projectionStore.abortArtifact(artifact.journalId);
+    throw error;
+  }
 }
 
-export async function loadJobPayload(userDataPath, jobId) {
+export async function loadJobPayload(userDataPath, jobId, projectionStore = null) {
   try {
-    const raw = await fs.readFile(getJobPayloadPath(userDataPath, jobId), "utf8");
+    const raw = await readBoundedText(
+      getJobPayloadPath(userDataPath, jobId),
+      projectionStore?.policy?.maxPayloadBytes || MAX_JOB_PAYLOAD_BYTES
+    );
     try {
-      return JSON.parse(raw);
+      const payload = JSON.parse(raw);
+      const projected = projectionStore?.getArtifactInfo(jobId);
+      if (
+        projected &&
+        projected.payloadDigest &&
+        (
+          projected.payloadDigest !== digestText(raw) ||
+          Number(projected.payloadBytes) !== Buffer.byteLength(raw)
+        )
+      ) {
+        throw jobPersistenceError(
+          "job_persistence_payload_digest_mismatch",
+          jobId,
+          "Persisted job payload does not match its projection digest."
+        );
+      }
+      return payload;
     } catch (error) {
+      if (error?.name === "JobPersistenceError") throw error;
       throw jobPersistenceError(
         "job_persistence_payload_invalid",
         jobId,
@@ -220,94 +411,12 @@ export async function loadJobPayload(userDataPath, jobId) {
     }
     if (error?.name === "JobPersistenceError") throw error;
     throw jobPersistenceError(
-      "job_persistence_payload_unreadable",
+      error?.code === FILE_TOO_LARGE
+        ? "job_persistence_payload_too_large"
+        : "job_persistence_payload_unreadable",
       jobId,
       "Persisted job payload is unreadable.",
       error
     );
   }
-}
-
-export async function loadPersistedJobs(userDataPath, { recoverActive = true } = {}) {
-  const rootPath = getJobsRootPath(userDataPath);
-  await fs.mkdir(rootPath, { recursive: true });
-  const directoryEntries = await fs.readdir(rootPath, {
-    withFileTypes: true
-  });
-  const jobs = [];
-  const recoverableEntries = [];
-
-  for (const directoryEntry of directoryEntries) {
-    if (!directoryEntry.isDirectory()) {
-      continue;
-    }
-
-    const parsed = await readPersistedJobMeta(userDataPath, directoryEntry.name);
-
-    if (recoverActive && (parsed.status === "queued" || parsed.status === "running")) {
-      let payload = null;
-      let payloadInvalid = false;
-      try {
-        payload = await loadJobPayload(userDataPath, directoryEntry.name);
-      } catch (error) {
-        if (error?.code !== "job_persistence_payload_invalid") throw error;
-        payloadInvalid = true;
-      }
-      const now = new Date().toISOString();
-      if (payload) {
-        parsed.status = "queued";
-        parsed.stage = RECOVERY_STAGE_MESSAGE;
-        parsed.error = "";
-        parsed.finishedAt = undefined;
-        parsed.updatedAt = now;
-        await persistJobMeta(userDataPath, parsed);
-        recoverableEntries.push({
-          jobId: parsed.id,
-          payload
-        });
-      } else {
-        parsed.status = "failed";
-        parsed.stage = "任务恢复失败";
-        parsed.error = payloadInvalid
-          ? "服务重启后任务 payload 已损坏，不能继续恢复。"
-          : "服务重启后缺少任务 payload，不能继续恢复。";
-        parsed.finishedAt = now;
-        parsed.updatedAt = now;
-        await persistJobMeta(userDataPath, parsed);
-      }
-    }
-
-    jobs.push(parsed);
-  }
-
-  jobs.sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
-  const createdAtByJobId = new Map(jobs.map((job) => [job.id, String(job.createdAt || "")]));
-  recoverableEntries.sort((left, right) => {
-    return String(createdAtByJobId.get(left.jobId) || "")
-      .localeCompare(String(createdAtByJobId.get(right.jobId) || ""));
-  });
-  return {
-    jobs,
-    recoverableEntries
-  };
-}
-
-export async function listPersistedJobMetas(userDataPath) {
-  const rootPath = getJobsRootPath(userDataPath);
-  await fs.mkdir(rootPath, { recursive: true });
-  const directoryEntries = await fs.readdir(rootPath, {
-    withFileTypes: true
-  });
-  const jobs = [];
-
-  for (const directoryEntry of directoryEntries) {
-    if (!directoryEntry.isDirectory()) {
-      continue;
-    }
-
-    jobs.push(await readPersistedJobMeta(userDataPath, directoryEntry.name));
-  }
-
-  jobs.sort((left, right) => String(right.createdAt || "").localeCompare(String(left.createdAt || "")));
-  return jobs;
 }

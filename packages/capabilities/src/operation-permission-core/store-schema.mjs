@@ -165,27 +165,6 @@ export function ensureSchema(db) {
       ON tool_grant_owner_authorities(owner_kind, owner_id)
       WHERE state IN ('active', 'retiring');
 
-    CREATE TABLE IF NOT EXISTS tool_grant_owner_migrations (
-      migration_id TEXT PRIMARY KEY,
-      migrated_count INTEGER NOT NULL,
-      revoked_count INTEGER NOT NULL,
-      receipt_digest TEXT NOT NULL,
-      completed_at TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS tool_grant_owner_migration_invalidations (
-      migration_id TEXT NOT NULL,
-      grant_id TEXT NOT NULL,
-      capability_invalidated INTEGER NOT NULL DEFAULT 0,
-      binding_invalidated INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      PRIMARY KEY (migration_id, grant_id),
-      FOREIGN KEY (grant_id) REFERENCES tool_grants(id) ON DELETE RESTRICT
-    );
-    CREATE INDEX IF NOT EXISTS idx_tool_grant_owner_migration_invalidations_pending
-      ON tool_grant_owner_migration_invalidations(migration_id, capability_invalidated, binding_invalidated, grant_id);
-
     CREATE TABLE IF NOT EXISTS tool_grant_owner_revocations (
       idempotency_key TEXT PRIMARY KEY,
       plugin_id TEXT NOT NULL,
@@ -560,13 +539,6 @@ export function ensureSchema(db) {
           CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_grant_owner_authorities_current
             ON tool_grant_owner_authorities(owner_kind, owner_id)
             WHERE state IN ('active', 'retiring');
-          CREATE TABLE IF NOT EXISTS tool_grant_owner_migrations (
-            migration_id TEXT PRIMARY KEY,
-            migrated_count INTEGER NOT NULL,
-            revoked_count INTEGER NOT NULL,
-            receipt_digest TEXT NOT NULL,
-            completed_at TEXT NOT NULL
-          );
           CREATE TABLE IF NOT EXISTS tool_grant_owner_revocations (
             idempotency_key TEXT PRIMARY KEY,
             plugin_id TEXT NOT NULL,
@@ -599,26 +571,6 @@ export function ensureSchema(db) {
           );
           CREATE INDEX IF NOT EXISTS idx_tool_grant_owner_revocation_targets_pending
             ON tool_grant_owner_revocation_targets(idempotency_key, capability_invalidated, binding_invalidated, grant_id);
-        `);
-      }
-    },
-    // version 11: retain owner-migration credential invalidation recovery state.
-    {
-      version: 11,
-      up: (db) => {
-        db.exec(`
-          CREATE TABLE IF NOT EXISTS tool_grant_owner_migration_invalidations (
-            migration_id TEXT NOT NULL,
-            grant_id TEXT NOT NULL,
-            capability_invalidated INTEGER NOT NULL DEFAULT 0,
-            binding_invalidated INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (migration_id, grant_id),
-            FOREIGN KEY (grant_id) REFERENCES tool_grants(id) ON DELETE RESTRICT
-          );
-          CREATE INDEX IF NOT EXISTS idx_tool_grant_owner_migration_invalidations_pending
-            ON tool_grant_owner_migration_invalidations(migration_id, capability_invalidated, binding_invalidated, grant_id);
         `);
       }
     }

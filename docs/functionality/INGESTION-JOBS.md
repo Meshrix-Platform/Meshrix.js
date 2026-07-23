@@ -124,6 +124,30 @@ metadata file is a recoverable projection of that envelope: startup repairs an
 interrupted projection write from the terminal envelope and does not resubmit
 the completed job.
 
+Job history is indexed by the private `jobs/jobs.sqlite` projection. Active
+memory contains only `queued` and `running` jobs; terminal history is read by a
+stable `(created_at_ms,id)` keyset cursor and is never loaded into the process
+as one collection. Owner, workspace, status, checkpoint, work-item, manifest,
+and version-family indexes serve their corresponding lookups. Status and byte
+counters are maintained by SQLite triggers, so admission and list summaries do
+not rescan job directories or deserialize all historical JSON.
+
+The projection admits at most 100,000 records, 10,000 active records, 64 MiB of
+serialized metadata, 256 KiB for one metadata record, 64 MiB for one payload,
+256 MiB for one result, and 8 GiB of payload-plus-result artifacts. Terminal
+records expire after 30 days. Admission and each maintenance tick remove at
+most 64 expired or over-capacity terminal records, journal the exact directory
+deletion before removing the projection, and keep pending-deletion bytes
+charged until physical cleanup succeeds. Prepared payload/result writes are
+also byte-reserved in the same SQLite authority, which prevents concurrent
+processes from over-admitting storage during an interrupted replace.
+
+Startup and refresh paths read only the indexed projection and never enumerate
+job-history directories. The artifact journal repairs interrupted publishes and
+deletes in bounded batches without scanning historical jobs. Artifact hashing
+uses 64 KiB chunks and validates the configured byte limit before retaining
+content.
+
 `jobs.cancel` is the governed user-visible cancellation operation for queued or
 running jobs. It first cancels the deterministic durable work item, waits for an
 external worker lease to leave the running projection when required, and only
@@ -148,16 +172,29 @@ admission. Every replay of a non-completed record repeats the canonical queue
 enqueue with the same request reference and dedupe key. This closes both queue
 backpressure and lost-acknowledgement windows without duplicating workspace
 effects; a completed replay returns its result without creating new work.
-Admission reads and verifies the completed upload exactly once, then atomically
-stores the request and digest-bound file bytes in private immutable transaction
-custody. Queue execution and restart recovery consume only that custody record,
-so upload-session expiry or staging cleanup cannot change an admitted request.
-The request projection, queue payload, audit, proof, and public result contain
-only bounded digests and references, never the retained file bytes.
-The immutable custody rows are the quarantine boundary for this no-transform
-flow. The production adapter does not expose partial per-file state roots: it
-commits all target files through the shared workspace batch transaction, whose
-preimage and state checkpoint provide compensation and restart evidence.
+Admission copies each completed upload file sequentially into private immutable
+transaction custody while verifying the receipt byte size and SHA-256 digest.
+SQLite stores only the request, digest, byte count, and private custody
+reference; it never stores the file as a BLOB. Queue execution and restart
+recovery consume opaque read handles over that custody, so upload-session expiry
+or staging cleanup cannot change an admitted request. The workspace transaction
+reads and validates one bounded file at a time without Base64 conversion or
+session-wide file buffers. The request projection, queue payload, audit, proof,
+and public result contain only bounded digests and references, never retained
+file bytes or custody paths.
+
+Materialization custody admits at most 256 files, 64 MiB per file, and 512 MiB
+per request. It retains at most 4,096 requests and 8 GiB of input bytes, limits
+active custody for one subject scope to 2 GiB, and rejects admission when active
+or protected recovery records occupy the capacity. Four queue workers and
+single-file reads bound simultaneously resident custody content to 256 MiB.
+Capacity counters are maintained transactionally instead of scanning all
+custody rows. One admission removes at most 32 eligible terminal requests,
+oldest first; terminal custody expires after seven days, and private custody
+directories are removed sequentially. The production adapter does not expose
+partial per-file state roots: it commits all target files through the shared
+workspace batch transaction, whose content-addressed preimage and state
+checkpoint provide compensation and restart evidence.
 
 `jobs.upload_workspace_materialization_cancel` is the authenticated cancellation
 surface for an admitted request. It verifies the original subject binding,
@@ -190,11 +227,16 @@ capacity, while explicit deletion removes both the index record and staging
 artifacts.
 
 Raw downloads, job deletion, and batch deletion resolve the same object and
-ownership records. Deletion writes its recovery journal before removing
-metadata or object files. Storage doctor, locate, and reconcile read only the
-canonical object, ownership, and deletion-journal tables, including on a fresh
-database; interrupted deletion resumes from that journal instead of leaving an
-untracked object.
+ownership records. A raw download completes the current owner and job access
+decision before opening the object file, then pipes a bounded file stream to
+the response with dispatch cancellation propagated to the stream. One server
+instance admits at most 32 concurrent raw-object streams and rejects excess
+downloads before opening another file. It does not materialize the complete
+object as an HTTP-controller buffer. Deletion writes its recovery journal
+before removing metadata or object files. Storage doctor, locate, and reconcile
+read only the canonical object, ownership, and deletion-journal tables,
+including on a fresh database; interrupted deletion resumes from that journal
+instead of leaving an untracked object.
 
 Job and batch deletion enter through the job workflow provider. The provider
 cancels the deterministic durable work item first. When execution belongs to an

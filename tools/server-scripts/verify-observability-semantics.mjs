@@ -36,7 +36,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const VERIFIER = "tools/server-scripts/verify-observability-semantics.mjs";
 const COMMAND_ID = "observability-semantics";
 const REPORT_SCHEMA_VERSION = "v0.0.1:observability:semantics-0.2.0";
-const PLAN_FILE = "docs/plan/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
+const PLAN_FILE = "docs/plans/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
 const REQUIREMENTS = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES = Object.freeze([
   "packages/foundation/src/observability/otel-semantic-fields.mjs",

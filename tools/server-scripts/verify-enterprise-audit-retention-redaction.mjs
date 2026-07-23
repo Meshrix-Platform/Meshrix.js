@@ -19,7 +19,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const VERIFIER = "tools/server-scripts/verify-enterprise-audit-retention-redaction.mjs";
 const COMMAND_ID = "enterprise-audit-retention-redaction";
 const REPORT_SCHEMA_VERSION = "v0.0.1:observability:audit-retention-redaction-report-1";
-const PLAN_FILE = "docs/plan/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
+const PLAN_FILE = "docs/plans/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
 const REQUIREMENTS = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES = Object.freeze([
   "packages/foundation/src/observability/sensitive-report-scan.mjs",
@@ -115,6 +115,8 @@ async function main() {
     const policy = store.setRetentionPolicy({
       retentionDays: 1,
       maxExportItems: 50,
+      cleanupBatchSize: 4,
+      maintenanceEveryAppends: 1,
       updatedBy: { userId: "auditor", authorization: bearerFixture }
     });
 
@@ -146,6 +148,32 @@ async function main() {
       redactionPolicy: exportResult.manifest.redactionPolicy
     });
 
+    const automaticRetention = store.append({
+      traceId,
+      operationId: "auth.audit.retention.automatic",
+      transport: "application",
+      actor: { type: "system" },
+      risk: "safe_write",
+      status: "ok",
+      input: {}
+    });
+    assert.equal(automaticRetention.maintenance.deletedCount >= 1, true);
+    assert.equal(
+      store.list({ limit: 100 }).some((item) => item.operationId === "jobs.create"),
+      false,
+      "append-path retention should remove the expired jobs audit row"
+    );
+    store.append({
+      traceId,
+      operationId: "audit.manual-prune.fixture",
+      transport: "application",
+      actor: { type: "system" },
+      risk: "safe_write",
+      status: "ok",
+      input: {},
+      createdAt: oldIso(3)
+    });
+
     const prune = store.pruneExpired({ retentionDays: 1 });
     store.append({
       traceId,
@@ -165,6 +193,7 @@ async function main() {
     record(report.destructiveTests, "retention policy prunes expired records and records administrative audit events", "passed", {
       retentionDays: policy.retentionDays,
       deletedCount: prune.deletedCount,
+      automaticDeletedCount: automaticRetention.maintenance.deletedCount,
       retentionSetAudited: true,
       pruneAudited: true
     });

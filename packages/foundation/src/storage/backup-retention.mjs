@@ -282,6 +282,7 @@ export async function applyStorageBackupRetention({
   signal = null,
   budget = {},
   executionContext = null,
+  maintenanceLock = null,
   now = Date.now()
 } = {}) {
   const selectedPolicy = normalizePolicy(policy);
@@ -300,7 +301,8 @@ export async function applyStorageBackupRetention({
   const selectedRoots = roots(userDataPath);
   const tracker = executionContext || createStorageWorkTracker({ signal, budget });
   tracker.assertActive();
-  const lock = await acquireStorageMaintenanceLock(selectedRoots.rootPath);
+  const lock = maintenanceLock || await acquireStorageMaintenanceLock(selectedRoots.rootPath);
+  const ownsLock = !maintenanceLock;
   let commitReady = false;
   let transactionPath = "";
   let journal = null;
@@ -386,6 +388,6 @@ export async function applyStorageBackupRetention({
     }
     throw error;
   } finally {
-    await lock.release().catch(() => {});
+    if (ownsLock) await lock.release().catch(() => {});
   }
 }

@@ -417,6 +417,20 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS = Object.freeze([
       rpc: {method:"operation_permission.policy_preview",syntheticPath:"/api/operation-permission/v1/policy/preview",body:"params"},
       cli: { command: ["tools", "policy", "preview"], usage: "tools policy preview --body preview.json" },
       requiredScopes: ["console:read"],
+      inputSchema: {
+        type: "object",
+        required: ["toolId", "input"],
+        additionalProperties: false,
+        properties: {
+          toolId: { type: "string" },
+          input: { type: "object" },
+          dryRun: { type: "boolean" },
+          grantId: { type: "string" },
+          grant: { type: "object" },
+          profileId: { type: "string" },
+          context: { type: "object" }
+        }
+      },
       safety: { risk: "read_only", requiresConfirmation: false }
     },
 {

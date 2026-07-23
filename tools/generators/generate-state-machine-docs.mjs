@@ -17,7 +17,7 @@ const INTEGRITY_REGISTRY = path.resolve(
   ROOT,
   "tools/registry/state-machines/state-machine-integrity.registry.json"
 );
-const STATE_MACHINES_DOC = path.resolve(ROOT, "docs/state-machine/STATE-MACHINES.md");
+const STATE_MACHINES_DOC = path.resolve(ROOT, "docs/architecture/STATE-MACHINES.md");
 const DEFINITIONS_README = path.resolve(
   ROOT,
   "packages/foundation/src/workflow/state-machine/definitions/README.md"
@@ -60,7 +60,7 @@ function renderDefinitionsReadme(registry) {
     "",
     "<!-- GENERATED: tools/generators/generate-state-machine-docs.mjs — DO NOT EDIT BY HAND -->",
     "",
-    "This directory holds machine-readable state-machine definition JSON. Documentation under `docs/state-machine/` is projection-only and cannot redefine these digests.",
+    "This directory holds machine-readable state-machine definition JSON. Documentation under `docs/architecture/` is projection-only and cannot redefine these digests.",
     "",
     `Integrity registry: \`tools/registry/state-machines/state-machine-integrity.registry.json\` (${registry.version}).`,
     "",

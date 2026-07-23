@@ -280,13 +280,13 @@ describe("plan receipt report digests", () => {
     const strategyPlan = path.join(
       repoRoot,
       "docs",
-      "plan",
+      "plans",
       "end-to-end-release",
       "operator-administration",
       "strategy-management",
     );
     await fs.mkdir(strategyPlan, { recursive: true });
-    await fs.writeFile(path.join(repoRoot, "docs", "plan", "Manifest.json"), "[]\n", "utf8");
+    await fs.writeFile(path.join(repoRoot, "docs", "plans", "Manifest.json"), "[]\n", "utf8");
     await fs.writeFile(path.join(strategyPlan, "Checkpoints.json"), "[]\n", "utf8");
     await fs.writeFile(path.join(strategyPlan, "Plan.md"), "# Strategy Management\n", "utf8");
     await fs.writeFile(path.join(repoRoot, "source.mjs"), "export const value = 1;\n", "utf8");
@@ -300,7 +300,7 @@ describe("plan receipt report digests", () => {
       "utf8",
     );
     await fs.writeFile(
-      path.join(repoRoot, "docs", "plan", "Manifest.json"),
+      path.join(repoRoot, "docs", "plans", "Manifest.json"),
       '[{"status":"in_progress"}]\n',
       "utf8",
     );
@@ -457,7 +457,7 @@ describe("plan receipt report digests", () => {
 
     const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "plan-receipt-containment-"));
     temporaryRoots.push(repoRoot);
-    const mapPath = path.join(repoRoot, "docs", "plan", "end-to-end-release", "DependencyMap.json");
+    const mapPath = path.join(repoRoot, "docs", "plans", "end-to-end-release", "DependencyMap.json");
     await fs.mkdir(path.dirname(mapPath), { recursive: true });
     const original = "synthetic-authority-bytes\n";
     await fs.writeFile(mapPath, original, "utf8");

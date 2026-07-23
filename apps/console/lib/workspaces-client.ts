@@ -129,11 +129,19 @@ export function getWorkspaceCheckpointTree(treeId: string) {
 }
 
 export function previewWorkspaceCheckpointRestoreRequest(payload: WorkspaceConsolePayload) {
-  return postJson<WorkspaceConsolePayload>("/api/workspace/checkpoints/restore/preview", payload);
+  return postJson<WorkspaceConsolePayload>(
+    "/api/workspace/checkpoints/restore/preview",
+    payload,
+    { safetyConfirm: true },
+  );
 }
 
 export function restoreWorkspaceCheckpointRequest(payload: WorkspaceConsolePayload) {
-  return postJson<WorkspaceConsolePayload>("/api/workspace/checkpoints/restore", payload);
+  return postJson<WorkspaceConsolePayload>(
+    "/api/workspace/checkpoints/restore",
+    payload,
+    { safetyConfirm: true },
+  );
 }
 
 export async function getWorkspaceSessionBundle(sessionId: string): Promise<WorkspaceSessionBundle> {

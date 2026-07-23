@@ -348,7 +348,7 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
       target: { controller: "system", method: "handleGetDiscoveryConfig" },
       http: { method: "GET", path: "/api/discovery/config" },
       rpc: { method: "discovery.get_config" },
-      cli: { command: ["discovery", "get"], aliases: [["discovery"]], usage: "discovery get" },
+      cli: { command: ["discovery", "get"], usage: "discovery get" },
       requiredScopes: ["console:read"]
     },
 {
@@ -380,6 +380,15 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "runtime.assembly.build", body: "params" },
       cli: { command: ["runtime", "assembly", "build"], usage: "runtime assembly build --body request.json" },
       requiredScopes: ["runtime:admin"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          selectedComponentIds: { type: "array", items: { type: "string" } },
+          componentIds: { type: "array", items: { type: "string" } },
+          components: { type: "array", items: { type: "string" } }
+        }
+      },
       safety: { risk: "safe_write", requiresConfirmation: false }
     },
 {
@@ -399,7 +408,7 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
       target: { controller: "system", method: "handleGetMounts" },
       http: { method: "GET", path: "/api/runtime/mounts" },
       rpc: { method: "runtime.mounts" },
-      cli: { command: ["runtime", "mounts"], aliases: [["mounts"]], usage: "runtime mounts" },
+      cli: { command: ["runtime", "mounts"], usage: "runtime mounts" },
       requiredScopes: ["console:read"]
     },
 {
@@ -469,7 +478,7 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
       target: { controller: "system", method: "handleGetSettings" },
       http: { method: "GET", path: "/api/settings" },
       rpc: { method: "settings.get" },
-      cli: { command: ["settings", "get"], aliases: [["settings"]], usage: "settings get" },
+      cli: { command: ["settings", "get"], usage: "settings get" },
       requiredScopes: ["console:read"]
     },
 {

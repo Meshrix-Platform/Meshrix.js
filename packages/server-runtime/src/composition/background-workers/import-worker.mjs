@@ -1,10 +1,15 @@
 import { createJobManager } from "../../jobs/jobs/job-manager.mjs";
+import { createProtocolEventRuntime } from "../../events/protocol-event-runtime.mjs";
 import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
 import { createQueuedJobWorkflowProvider } from "../queued-job-workflow-provider.mjs";
 import { createQueueApplicationPort } from "../queue-application-port.mjs";
 
 export async function createImportWorkerRuntime({ userDataPath }) {
-  const protocolEventBus = createProtocolEventBus({ userDataPath });
+  const protocolEventRuntime = await createProtocolEventRuntime({
+    userDataPath,
+    createEventBus: createProtocolEventBus
+  });
+  const { protocolEventBus } = protocolEventRuntime;
   const jobManager = createJobManager({
     userDataPath,
     processingEnabled: true,
@@ -23,7 +28,7 @@ export async function createImportWorkerRuntime({ userDataPath }) {
   } catch (error) {
     await queueApplicationPort?.close?.().catch(() => {});
     await jobManager.close().catch(() => {});
-    await protocolEventBus.close?.().catch(() => {});
+    await protocolEventRuntime.close().catch(() => {});
     throw error;
   }
 
@@ -44,7 +49,7 @@ export async function createImportWorkerRuntime({ userDataPath }) {
       await jobWorkflowProvider.close();
       await queueApplicationPort.close();
       await jobManager.close();
-      await protocolEventBus.close?.();
+      await protocolEventRuntime.close();
     }
   };
 }

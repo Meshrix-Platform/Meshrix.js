@@ -2,7 +2,7 @@
 
 <!-- GENERATED: tools/generators/generate-state-machine-docs.mjs — DO NOT EDIT BY HAND -->
 
-This directory holds machine-readable state-machine definition JSON. Documentation under `docs/state-machine/` is projection-only and cannot redefine these digests.
+This directory holds machine-readable state-machine definition JSON. Documentation under `docs/architecture/` is projection-only and cannot redefine these digests.
 
 Integrity registry: `tools/registry/state-machines/state-machine-integrity.registry.json` (v0.0.1:registry:state-machine-integrity-1).
 

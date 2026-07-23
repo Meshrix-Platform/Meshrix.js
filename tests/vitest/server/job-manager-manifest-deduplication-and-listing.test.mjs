@@ -43,6 +43,7 @@ vi.mock("#lico/product-api", async () => {
 });
 
 import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs";
+import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.mjs";
 import { serverToken } from "#lico/product-api";
 
 async function withTempUserData(callback) {
@@ -61,14 +62,25 @@ function createEventBusSpy() {
 }
 
 async function seedPersistedJob(userDataPath, jobId, meta, result = null) {
+  const currentMeta = {
+    ...meta,
+    versionGroupId: meta.versionGroupId || serverToken(
+      "parse_version_group",
+      meta.checkpointId || meta.archiveBatchId || meta.id
+    ),
+    versionNumber: meta.versionNumber || 1
+  };
+  const projectionStore = createJobProjectionStore({ userDataPath });
+  projectionStore.importJob(currentMeta);
+  projectionStore.close();
   const jobDir = path.join(userDataPath, "jobs", jobId);
   await fs.mkdir(jobDir, { recursive: true });
-  await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify(meta), "utf8");
+  await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify(currentMeta), "utf8");
   if (result !== null) {
     await fs.writeFile(path.join(jobDir, "result.json"), JSON.stringify({
       format: "lico.job-terminal",
       schema: "job-terminal-envelope",
-      job: meta,
+      job: currentMeta,
       result
     }), "utf8");
   }
@@ -150,29 +162,29 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, queuedId, {
         id: queuedId,
         status: "queued",
-        createdAt: "2026-06-05T09:00:00.000Z",
-        updatedAt: "2026-06-05T09:00:00.000Z",
+        createdAt: "2026-07-22T09:00:00.000Z",
+        updatedAt: "2026-07-22T09:00:00.000Z",
         checkpointId: serverToken("checkpoint", queuedId)
       });
       await seedPersistedJob(userDataPath, runningId, {
         id: runningId,
         status: "running",
-        createdAt: "2026-06-05T09:01:00.000Z",
-        updatedAt: "2026-06-05T09:01:30.000Z",
+        createdAt: "2026-07-22T09:01:00.000Z",
+        updatedAt: "2026-07-22T09:01:30.000Z",
         checkpointId: serverToken("checkpoint", runningId)
       });
       await seedPersistedJob(userDataPath, failedId, {
         id: failedId,
         status: "failed",
-        createdAt: "2026-06-05T09:02:00.000Z",
-        updatedAt: "2026-06-05T09:02:30.000Z",
+        createdAt: "2026-07-22T09:02:00.000Z",
+        updatedAt: "2026-07-22T09:02:30.000Z",
         checkpointId: serverToken("checkpoint", failedId)
       });
       await seedPersistedJob(userDataPath, completedId, {
         id: completedId,
         status: "completed",
-        createdAt: "2026-06-05T09:03:00.000Z",
-        updatedAt: "2026-06-05T09:03:30.000Z",
+        createdAt: "2026-07-22T09:03:00.000Z",
+        updatedAt: "2026-07-22T09:03:30.000Z",
         checkpointId: serverToken("checkpoint", completedId)
       });
 
@@ -230,9 +242,9 @@ describe("job manager behavior", () => {
         {
           id: jobId,
           status: "completed",
-          createdAt: "2026-06-05T10:00:00.000Z",
-          updatedAt: "2026-06-05T10:01:00.000Z",
-          finishedAt: "2026-06-05T10:01:00.000Z",
+          createdAt: "2026-07-22T10:00:00.000Z",
+          updatedAt: "2026-07-22T10:01:00.000Z",
+          finishedAt: "2026-07-22T10:01:00.000Z",
           checkpointId: serverToken("checkpoint", jobId)
         },
         result

@@ -920,7 +920,7 @@ describe("Core Plan execution eligibility", () => {
     const identity = {
       repoRoot: "/workspace/core",
       gitTopLevel: "/workspace/core",
-      planRoot: "/workspace/core/docs/plan",
+      planRoot: "/workspace/core/docs/plans",
       packageManifest: { name: "licomesh" },
       gitMarkerPresent: true,
     };

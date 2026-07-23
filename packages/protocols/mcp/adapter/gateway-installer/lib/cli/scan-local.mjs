@@ -9,6 +9,10 @@ import {
 } from "./constants.mjs";
 import { expandHomePath, run, shellQuote, uniqueValues } from "./connector-process.mjs";
 
+export function systemPosixPath(...segments) {
+  return path.posix.join(path.posix.sep, ...segments);
+}
+
 export async function pathExists(filePath) {
   try {
     await fs.access(filePath);
@@ -101,7 +105,11 @@ export async function detectPathCommandPaths(command, platform = detectHostOs())
   if (platform === "win32") {
     const names = executableNamesForPlatform(value, platform);
     const paths = [];
-    const whereExecutable = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "where.exe");
+    const whereExecutable = path.join(
+      process.env.SystemRoot || path.win32.join(process.env.SystemDrive || "C:", "Windows"),
+      "System32",
+      "where.exe"
+    );
     for (const executableName of names) {
       const result = await run(whereExecutable, [executableName], { allowFailure: true, timeoutMs: SCAN_COMMAND_TIMEOUT_MS });
       if (result.ok) {
@@ -132,7 +140,7 @@ export function packageSourceContext(platform = detectHostOs()) {
     userProfile,
     appData,
     localAppData,
-    programData: process.env.ProgramData || "C:\\ProgramData"
+    programData: process.env.ProgramData || path.win32.join(process.env.SystemDrive || "C:", "ProgramData")
   };
 }
 
@@ -167,13 +175,13 @@ export const POSIX_PACKAGE_DIR_SOURCES = [
   }),
   packageSource("posix-standard-dirs", PACKAGE_SOURCE_KIND.STATIC_DIRS, {
     dirs: [
-      "/opt/homebrew/bin",
-      "/opt/homebrew/sbin",
-      "/usr/local/bin",
-      "/usr/local/sbin",
-      "/opt/local/bin",
-      "/opt/local/sbin",
-      "/opt/sw/bin"
+      systemPosixPath("opt", "homebrew", "bin"),
+      systemPosixPath("opt", "homebrew", "sbin"),
+      systemPosixPath("usr", "local", "bin"),
+      systemPosixPath("usr", "local", "sbin"),
+      systemPosixPath("opt", "local", "bin"),
+      systemPosixPath("opt", "local", "sbin"),
+      systemPosixPath("opt", "sw", "bin")
     ]
   }),
   packageSource("npm-prefix", PACKAGE_SOURCE_KIND.COMMAND_DIR, {
@@ -238,17 +246,17 @@ export const PLATFORM_PACKAGE_DIR_SOURCES = {
     ...POSIX_PACKAGE_DIR_SOURCES,
     packageSource("linux-system-dirs", PACKAGE_SOURCE_KIND.STATIC_DIRS, {
       dirs: [
-        "/usr/bin",
-        "/usr/sbin",
-        "/bin",
-        "/sbin",
-        "/opt/bin"
+        systemPosixPath("usr", "bin"),
+        systemPosixPath("usr", "sbin"),
+        systemPosixPath("bin"),
+        systemPosixPath("sbin"),
+        systemPosixPath("opt", "bin")
       ]
     }),
     packageSource("linux-desktop-package-dirs", PACKAGE_SOURCE_KIND.STATIC_DIRS, {
       dirs: ({ home }) => [
-        "/snap/bin",
-        "/var/lib/flatpak/exports/bin",
+        systemPosixPath("snap", "bin"),
+        systemPosixPath("var", "lib", "flatpak", "exports", "bin"),
         path.join(home, ".local", "share", "flatpak", "exports", "bin")
       ]
     })
@@ -297,8 +305,8 @@ export const PLATFORM_PACKAGE_DIR_SOURCES = {
         path.join(localAppData, "Programs", "Python", "Scripts"),
         path.join(appData, "Python", "Scripts"),
         path.join(programData, "chocolatey", "bin"),
-        "C:\\Program Files\\nodejs",
-        "C:\\Program Files (x86)\\Nodist\\bin"
+        path.win32.join(process.env.SystemDrive || "C:", "Program Files", "nodejs"),
+        path.win32.join(process.env.SystemDrive || "C:", "Program Files (x86)", "Nodist", "bin")
       ]
     }),
     packageSource("fnm-node-versions", PACKAGE_SOURCE_KIND.VERSIONED_DIRS, {
@@ -487,10 +495,10 @@ export async function linuxDesktopExecutablePaths(command) {
     return [];
   }
   const roots = [
-    "/usr/share/applications",
-    "/usr/local/share/applications",
+    systemPosixPath("usr", "share", "applications"),
+    systemPosixPath("usr", "local", "share", "applications"),
     path.join(os.homedir(), ".local", "share", "applications"),
-    "/var/lib/flatpak/exports/share/applications",
+    systemPosixPath("var", "lib", "flatpak", "exports", "share", "applications"),
     path.join(os.homedir(), ".local", "share", "flatpak", "exports", "share", "applications")
   ];
   const paths = [];

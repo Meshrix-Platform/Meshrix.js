@@ -121,7 +121,8 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
       http: {
         method: "GET",
         path: "/api/context/build-records",
-        query: [{ name: "limit", aliases: ["limit"], type: "number" }]
+        query: [{ name: "limit", aliases: ["limit"], type: "number" }],
+        coerce: { limit: "number" }
       },
       rpc: { method: "context.build_records" },
       cli: { command: ["context", "build-records"], usage: "context build-records --limit 50" },
@@ -145,6 +146,21 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
       http: { method: "POST", path: "/api/upload-sessions", localInForwardMode: true },
       rpc: { method: "uploads.create_session", body: "params" },
       cli: { command: ["upload-session"], usage: "upload-session --body session.json" },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["checkpoint", "manifest", "files"],
+        properties: {
+          checkpoint: { type: "object" },
+          manifest: { type: "object" },
+          files: {
+            type: "array",
+            minItems: 1,
+            maxItems: 256,
+            items: { type: "object" }
+          }
+        }
+      },
       requiredScopes: ["jobs:write"]
     },
 {
@@ -210,6 +226,36 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
       http: { method: "POST", path: "/api/jobs/upload-workspace-materializations", localInForwardMode: true },
       rpc: { method: "jobs.upload_workspace_materialize", body: "params" },
       cli: { command: ["jobs", "upload-workspace-materialize"], usage: "jobs upload-workspace-materialize --body request.json" },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["uploadSessionId", "workspaceId", "expectedWorkspaceRevision"],
+        properties: {
+          uploadSessionId: { type: "string" },
+          workspaceId: { type: "string" },
+          expectedWorkspaceRevision: { type: "string" },
+          targetPrefix: { type: "string" },
+          mutation: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              files: {
+                type: "array",
+                maxItems: 256,
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["sourcePath", "targetPath"],
+                  properties: {
+                    sourcePath: { type: "string" },
+                    targetPath: { type: "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       requiredScopes: ["jobs:write", "storage:write"],
       safety: { risk: "repair_write", requiresConfirmation: true, approvalScope: "workspace:write" },
       concurrencyGroup: "workspace-materialization"
@@ -253,7 +299,7 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
         method: "jobs.list",
         params: [{ name: "limit", aliases: ["limit"], type: "number" }]
       },
-      cli: { command: ["jobs", "list"], aliases: [["jobs"]], usage: "jobs list [--limit 50]" },
+      cli: { command: ["jobs", "list"], usage: "jobs list [--limit 50]" },
       requiredScopes: ["jobs:read"]
     },
 {
@@ -302,6 +348,11 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "jobs.work_queue.pause", body: "params" },
       cli: { command: ["jobs", "work-queue", "pause"], usage: "jobs work-queue pause --body reason.json" },
       requiredScopes: ["maintenance:admin"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { reason: { type: "string" } }
+      },
       safety: { risk: "safe_write" }
     },
 {
@@ -313,6 +364,11 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "jobs.work_queue.resume", body: "params" },
       cli: { command: ["jobs", "work-queue", "resume"], usage: "jobs work-queue resume --body reason.json" },
       requiredScopes: ["maintenance:admin"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { reason: { type: "string" } }
+      },
       safety: { risk: "safe_write" }
     },
 {
@@ -324,6 +380,11 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "jobs.work_queue.drain", body: "params" },
       cli: { command: ["jobs", "work-queue", "drain"], usage: "jobs work-queue drain --body reason.json" },
       requiredScopes: ["maintenance:admin"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { reason: { type: "string" } }
+      },
       safety: { risk: "safe_write" }
     },
 {

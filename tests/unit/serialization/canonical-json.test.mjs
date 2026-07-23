@@ -81,7 +81,7 @@ describe("canonicalJson", () => {
     expect(CANONICAL_VERSION).toBe("v0.0.1:serialization:canonical-json-1");
   });
 
-  it("serializes legacy transport collections deterministically", () => {
+  it("serializes governed transport collections deterministically", () => {
     expect(canonicalJson(new Map([["z", 1], ["a", 2]]))).toBe('{"a":2,"z":1}');
     expect(canonicalJson(new Set(["z", "a"]))).toBe('["a","z"]');
     expect(canonicalJson(Buffer.from("lico", "utf8"))).toBe('"bGljbw=="');

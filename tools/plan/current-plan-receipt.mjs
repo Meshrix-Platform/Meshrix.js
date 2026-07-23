@@ -20,7 +20,7 @@ export async function loadCurrentPlanReceiptBinding({
 } = {}) {
   requireCondition(repoRoot && planDirectory, "Current Plan receipt lookup requires repoRoot and planDirectory");
   requireCondition(selectedProfile, "Current Plan receipt lookup requires selectedProfile");
-  const planRoot = path.join(repoRoot, "docs", "plan");
+  const planRoot = path.join(repoRoot, "docs", "plans");
   const resolvedPlan = resolveContainedPlanDirectory(planRoot, planDirectory);
   planDirectory = resolvedPlan.planDirectory;
   const currentDependencyMap = dependencyMap || JSON.parse(await fs.readFile(

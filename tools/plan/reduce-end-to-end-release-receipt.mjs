@@ -172,7 +172,7 @@ export async function reduceEndToEndReleaseReceipt({
   requireCondition(typeof planDirectory === "string" && planDirectory.length > 0, "--plan is required");
   requireCondition(typeof selectedProfile === "string" && selectedProfile.length > 0, "--profile is required");
   selectedProfile = requirePlatformAcceptanceProfile(selectedProfile);
-  const planRoot = path.join(repoRoot, "docs", "plan");
+  const planRoot = path.join(repoRoot, "docs", "plans");
   const resolvedPlan = resolveContainedPlanDirectory(planRoot, planDirectory);
   planDirectory = resolvedPlan.planDirectory;
   const dependencyMapPath = path.join(planRoot, "end-to-end-release", "DependencyMap.json");
@@ -238,7 +238,7 @@ export async function runReceiptReductionMutationTests({
   planDirectory = "end-to-end-release/platform-foundation/state-machine-governance",
 } = {}) {
   const results = [];
-  const planRoot = path.join(repoRoot, "docs", "plan");
+  const planRoot = path.join(repoRoot, "docs", "plans");
   const dependencyMapPath = path.join(planRoot, "end-to-end-release", "DependencyMap.json");
   const checkpointsPath = path.join(planRoot, planDirectory, "Checkpoints.json");
 

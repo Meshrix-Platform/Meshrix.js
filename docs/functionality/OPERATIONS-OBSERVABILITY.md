@@ -116,6 +116,50 @@ values; runtime identifiers, paths, payloads, and user configuration are not
 metric dimensions. Missing observability configuration remains unconfigured and
 does not inherit provider or template defaults.
 
+Protocol events use one server-runtime-owned SQLite authority. Publication
+allocates the global offset, inserts the event, updates the latest-topic
+projection, retention counters, and revision in one short WAL transaction.
+There is no per-process publication queue, JSONL compaction path, or in-memory
+event-history copy. SQLite writer admission supplies bounded cross-process
+backpressure and returns a stable capacity or busy failure instead of retaining
+caller payloads in an unbounded Promise chain. Cursor reads use the
+`topic,offset` or primary-key index; subscriptions combine immediate
+same-process wakeups with bounded adaptive revision polling for publications
+from other processes.
+
+The event authority limits each record to 2 MiB, retained history to 100,000
+records and 32 MiB, age to seven days, latest projections to 512 topics and
+16 MiB, one cleanup transaction to 256 records, one subscription to 64 topics
+and 500 returned records, aggregate response content to 8 MiB, waiters to
+1,000, and waits to 30 seconds. The runtime reads and writes only the current
+SQLite authority; no fallback reader, migration journal, or dual writer is
+retained.
+
+Operation Audit owns its retention lifecycle inside the SQLite append path.
+The default authority bounds retained evidence to 250,000 records, 256 MiB of
+logical record content, and 512 MiB of active database pages. Every 128
+appends, or immediately under count or byte pressure, one indexed transaction
+removes at most 512 expired records. Exact row and logical-byte counters are
+maintained by triggers, so admission does not scan audit history. Unexpired
+governance evidence is never evicted to admit a newer record: exhausted count,
+logical-byte, or database-page capacity fails closed with
+`operation_audit_capacity_exhausted`. WAL checkpoints and incremental vacuum
+are bounded maintenance work used after deletion so pages are reclaimed or
+reused without a full blocking vacuum.
+
+The resource-discipline gate executes synthetic data only and invokes the real
+owner paths for a 32 MiB object stream, eight-file upload materialization,
+100,000 protocol events, 10,000 indexed jobs, 64 fully rejected upstream
+endpoints, 10,000 audit appends, 1,000 service-manifest commits, and two
+16 MiB backup generations. It records only bounded numeric metrics, booleans,
+stable reason codes, and copy-method identifiers. The report includes peak and
+settled memory, event-loop delay, throughput, scale ratios, index use, capacity
+or convergence outcomes, and backup allocation facts. Setting
+`LICO_RESOURCE_LOAD_PROFILE=release` raises protocol events to 1,000,000,
+jobs and audit appends to 100,000, and service-manifest commits to 8,000.
+Controller regressions for authorization-before-open and single-file-at-a-time
+materialization are mandatory tests in the same gate.
+
 Required observability reports use the shared finalization and publication
 pipeline. The pipeline validates schema and verifier ownership, enforces report
 and scan budgets, redacts sensitive fields, performs the privacy scan, binds the

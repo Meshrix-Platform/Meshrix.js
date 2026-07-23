@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.mjs
  * Generator: tools/generators/generate-operation-artifacts.mjs
- * Hash: sha256:b41c8a5bcefdb244
+ * Hash: sha256:a37380bbbafee51f
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:b41c8a5bcefdb244";
+export const GENERATED_OPERATIONS_HASH = "sha256:a37380bbbafee51f";
 export const SERVER_API_OPERATIONS = [
   {
     "id": "readiness.baseline.status",
@@ -24,6 +24,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/readiness/baseline/status",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -148,6 +149,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/subject/resolve",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -275,6 +277,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/policy/evaluate",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -425,6 +428,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/governance",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -572,6 +576,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -740,6 +745,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/tag-management/v1/tags/:tagId",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -876,6 +882,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/tag-management/v1/tags",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -917,6 +924,9 @@ export const SERVER_API_OPERATIONS = [
         },
         "parentTagId": {
           "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
         },
         "scopePrerequisites": {
           "type": "array",
@@ -1033,6 +1043,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/tag-management/v1/tags/:tagId/archive",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -1169,6 +1180,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/tag-management/v1/tags/:tagId/restore",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -1326,6 +1338,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -1485,6 +1498,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/tag-management/v1/projections/rebuild",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -1626,6 +1640,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -1777,6 +1792,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/roles",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -1897,6 +1913,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/roles",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2017,6 +2034,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/departments",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2137,6 +2155,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/departments",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2257,6 +2276,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/teams",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2377,6 +2397,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/teams",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2497,6 +2518,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/users/policies",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2618,6 +2640,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/users/policy",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2739,6 +2762,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/agent-groups",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2859,6 +2883,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/agent-groups",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -2979,6 +3004,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/authorization/agents/bindings",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3100,6 +3126,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/agents/binding",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3243,6 +3270,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3395,6 +3423,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/approvals",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3515,6 +3544,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/authorization/approvals/:approvalId/revoke",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3664,6 +3694,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3819,6 +3850,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -3974,6 +4006,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -4124,6 +4157,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -4266,6 +4300,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/files/upload",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -4438,6 +4473,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -4639,6 +4675,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -4840,6 +4877,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5012,6 +5050,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/files/write",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5156,6 +5195,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/files/patch",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5300,6 +5340,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/submit",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5429,6 +5470,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5581,6 +5623,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5733,6 +5776,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -5876,6 +5920,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/report",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6005,6 +6050,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6149,6 +6195,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/permission/request",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6285,6 +6332,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/permission/grant",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6421,6 +6469,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/scan",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6556,6 +6605,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/review",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6691,6 +6741,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/preview",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6826,6 +6877,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/publish",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -6961,6 +7013,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/adopt",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7096,6 +7149,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/reject",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7231,6 +7285,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/request-changes",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7366,6 +7421,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/contributions/:contributionId/revoke",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7501,6 +7557,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/proposals/create",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7651,6 +7708,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/proposals/apply",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7801,6 +7859,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/policy",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -7922,6 +7981,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/permission/check",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -8043,6 +8103,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/targets/connect",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -8151,6 +8212,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -8318,6 +8382,9 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {
+        "limit": "number"
+      },
       "localInForwardMode": true
     },
     "rpc": {
@@ -8598,6 +8665,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -8831,6 +8899,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/submit",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -8938,6 +9007,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -9052,6 +9124,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/mutate",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -9159,6 +9232,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -9273,6 +9349,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/sync/plan",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -9381,6 +9458,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -9495,6 +9575,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/sync/apply",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -9603,6 +9684,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -9717,6 +9801,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/import",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -9824,6 +9909,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -9938,6 +10026,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/export",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -10045,6 +10134,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -10159,6 +10251,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/review/comment",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -10267,6 +10360,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -10381,6 +10477,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/review/request-changes",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -10489,6 +10586,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -10603,6 +10703,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/review/approve",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -10711,6 +10812,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -10825,6 +10929,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/checkpoint",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -10932,6 +11037,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -11046,6 +11154,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/lineage",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -11153,6 +11262,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -11267,6 +11379,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/receipts/get",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -11375,6 +11488,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -11489,6 +11605,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/assets/backfill",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -11596,6 +11713,9 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "dryRun": {
+          "type": "boolean"
+        },
+        "overwrite": {
           "type": "boolean"
         },
         "confirm": {
@@ -11724,6 +11844,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -11879,6 +12000,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12040,6 +12162,7 @@ export const SERVER_API_OPERATIONS = [
           ]
         }
       ],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12199,6 +12322,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "GET",
       "path": "/api/workspace/checkpoints/nodes/:treeId",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12335,6 +12459,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/checkpoints/diff",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12455,6 +12580,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/checkpoints/restore/preview",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12477,8 +12603,27 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
-      "required": []
+      "required": [
+        "treeId",
+        "nodeId"
+      ],
+      "properties": {
+        "treeId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -12512,14 +12657,22 @@ export const SERVER_API_OPERATIONS = [
       "resourceKind": "checkpoint",
       "capabilityVerb": "preview",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "checkpoint",
       "capabilityVerb": "preview",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -12576,6 +12729,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/checkpoints/restore",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12597,8 +12751,27 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
-      "required": []
+      "required": [
+        "treeId",
+        "nodeId"
+      ],
+      "properties": {
+        "treeId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -12632,14 +12805,22 @@ export const SERVER_API_OPERATIONS = [
       "resourceKind": "checkpoint",
       "capabilityVerb": "restore",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "checkpoint",
       "capabilityVerb": "restore",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -12696,6 +12877,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/checkpoints/scope/query",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12817,6 +12999,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/operations/revert/scope",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -12938,6 +13121,7 @@ export const SERVER_API_OPERATIONS = [
       "method": "POST",
       "path": "/api/workspace/operations/revert/apply",
       "query": [],
+      "coerce": {},
       "localInForwardMode": true
     },
     "rpc": {
@@ -18943,11 +19127,6 @@ export const SERVER_API_OPERATIONS = [
         "events",
         "subscribe"
       ],
-      "aliases": [
-        [
-          "events"
-        ]
-      ],
       "usage": "events subscribe [--cursor N] [--topic jobs.job] [--timeout-ms 10000] [--include-snapshot 1]"
     },
     "requiredScopes": [
@@ -19736,12 +19915,6 @@ export const SERVER_API_OPERATIONS = [
         "maintenance-agent",
         "config"
       ],
-      "aliases": [
-        [
-          "maintenance",
-          "config"
-        ]
-      ],
       "usage": "maintenance-agent config"
     },
     "requiredScopes": [
@@ -19857,13 +20030,6 @@ export const SERVER_API_OPERATIONS = [
         "config",
         "set"
       ],
-      "aliases": [
-        [
-          "maintenance",
-          "config",
-          "set"
-        ]
-      ],
       "usage": "maintenance-agent config set --body maintenance-agent.json"
     },
     "requiredScopes": [
@@ -19978,12 +20144,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "maintenance-agent",
         "chat"
-      ],
-      "aliases": [
-        [
-          "maintenance",
-          "chat"
-        ]
       ],
       "usage": "maintenance-agent chat --message MESSAGE",
       "bodyParams": [
@@ -20126,12 +20286,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "maintenance-agent",
         "run"
-      ],
-      "aliases": [
-        [
-          "maintenance",
-          "run"
-        ]
       ],
       "usage": "maintenance-agent run --runbook health_smoke",
       "bodyParams": [
@@ -20288,12 +20442,6 @@ export const SERVER_API_OPERATIONS = [
         "maintenance-agent",
         "runs"
       ],
-      "aliases": [
-        [
-          "maintenance",
-          "runs"
-        ]
-      ],
       "usage": "maintenance-agent runs [--limit 50]"
     },
     "requiredScopes": [
@@ -20422,13 +20570,6 @@ export const SERVER_API_OPERATIONS = [
         "maintenance-agent",
         "run",
         "get"
-      ],
-      "aliases": [
-        [
-          "maintenance",
-          "run",
-          "get"
-        ]
       ],
       "usage": "maintenance-agent run get --id RUN_ID",
       "pathParams": {
@@ -20567,12 +20708,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "maintenance-agent",
         "approve"
-      ],
-      "aliases": [
-        [
-          "maintenance",
-          "approve"
-        ]
       ],
       "usage": "maintenance-agent approve --id RUN_ID --plan-hash HASH",
       "pathParams": {
@@ -20736,12 +20871,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "maintenance-agent",
         "cancel"
-      ],
-      "aliases": [
-        [
-          "maintenance",
-          "cancel"
-        ]
       ],
       "usage": "maintenance-agent cancel --id RUN_ID",
       "pathParams": {
@@ -24049,11 +24178,6 @@ export const SERVER_API_OPERATIONS = [
         "discovery",
         "get"
       ],
-      "aliases": [
-        [
-          "discovery"
-        ]
-      ],
       "usage": "discovery get"
     },
     "requiredScopes": [
@@ -24392,6 +24516,31 @@ export const SERVER_API_OPERATIONS = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selectedComponentIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "componentIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": []
+    },
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -24430,12 +24579,6 @@ export const SERVER_API_OPERATIONS = [
       "changeProjection": "",
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
     },
     "audit": {
       "enabled": true,
@@ -24609,11 +24752,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "runtime",
         "mounts"
-      ],
-      "aliases": [
-        [
-          "mounts"
-        ]
       ],
       "usage": "runtime mounts"
     },
@@ -25396,11 +25534,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "settings",
         "get"
-      ],
-      "aliases": [
-        [
-          "settings"
-        ]
       ],
       "usage": "settings get"
     },
@@ -28720,6 +28853,37 @@ export const SERVER_API_OPERATIONS = [
     "requiredScopes": [
       "console:read"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toolId",
+        "input"
+      ],
+      "properties": {
+        "toolId": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "grantId": {
+          "type": "string"
+        },
+        "grant": {
+          "type": "object"
+        },
+        "profileId": {
+          "type": "string"
+        },
+        "context": {
+          "type": "object"
+        }
+      }
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -28758,12 +28922,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": true,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -40829,7 +40987,10 @@ export const SERVER_API_OPERATIONS = [
           ],
           "type": "number"
         }
-      ]
+      ],
+      "coerce": {
+        "limit": "number"
+      }
     },
     "rpc": {
       "method": "context.build_records"
@@ -41068,6 +41229,31 @@ export const SERVER_API_OPERATIONS = [
       ],
       "usage": "upload-session --body session.json"
     },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpoint",
+        "manifest",
+        "files"
+      ],
+      "properties": {
+        "checkpoint": {
+          "type": "object"
+        },
+        "manifest": {
+          "type": "object"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
     "requiredScopes": [
       "jobs:write"
     ],
@@ -41109,12 +41295,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -41596,6 +41776,55 @@ export const SERVER_API_OPERATIONS = [
       ],
       "usage": "jobs upload-workspace-materialize --body request.json"
     },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "uploadSessionId",
+        "workspaceId",
+        "expectedWorkspaceRevision"
+      ],
+      "properties": {
+        "uploadSessionId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "expectedWorkspaceRevision": {
+          "type": "string"
+        },
+        "targetPrefix": {
+          "type": "string"
+        },
+        "mutation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "sourcePath",
+                  "targetPath"
+                ],
+                "properties": {
+                  "sourcePath": {
+                    "type": "string"
+                  },
+                  "targetPath": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "requiredScopes": [
       "jobs:write",
       "storage:write"
@@ -41622,14 +41851,22 @@ export const SERVER_API_OPERATIONS = [
       "resourceKind": "jobs",
       "capabilityVerb": "upload-workspace-materialize",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "jobs",
       "resourceKind": "jobs",
       "capabilityVerb": "upload-workspace-materialize",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -41639,12 +41876,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -41861,11 +42092,6 @@ export const SERVER_API_OPERATIONS = [
       "command": [
         "jobs",
         "list"
-      ],
-      "aliases": [
-        [
-          "jobs"
-        ]
       ],
       "usage": "jobs list [--limit 50]"
     },
@@ -42258,6 +42484,16 @@ export const SERVER_API_OPERATIONS = [
     "requiredScopes": [
       "maintenance:admin"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": []
+    },
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -42296,12 +42532,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -42371,6 +42601,16 @@ export const SERVER_API_OPERATIONS = [
     "requiredScopes": [
       "maintenance:admin"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": []
+    },
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -42409,12 +42649,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -42484,6 +42718,16 @@ export const SERVER_API_OPERATIONS = [
     "requiredScopes": [
       "maintenance:admin"
     ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": []
+    },
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -42522,12 +42766,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,

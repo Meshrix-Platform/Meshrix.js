@@ -23,10 +23,19 @@ describe("priority-zero resource discipline", () => {
         toolCacheRetention: "preserve-local",
         diagnosticArtifactRetention: "temporary-private",
         gcPasses: 3
+      },
+      highRiskWorkloads: {
+        profile: "quick",
+        minimumProtocolEvents: 100_000,
+        minimumJobRecords: 10_000,
+        maxSettledHeapGrowthBytes: 2 * 1024 * 1024
       }
     });
     expect(Object.isFrozen(RESOURCE_DISCIPLINE_POLICY)).toBe(true);
     expect(Object.isFrozen(RESOURCE_DISCIPLINE_POLICY.memoryLeak)).toBe(true);
+    expect(Object.isFrozen(RESOURCE_DISCIPLINE_POLICY.highRiskWorkloads)).toBe(true);
+    expect(RESOURCE_DISCIPLINE_POLICY.highRiskWorkloads.requiredScenarioIds)
+      .toHaveLength(8);
   });
 
   it("uses a robust slope that detects sustained retention without failing on one outlier", () => {

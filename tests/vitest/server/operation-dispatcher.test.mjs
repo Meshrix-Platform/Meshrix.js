@@ -71,6 +71,152 @@ function controllers(handler) {
 }
 
 describe("operation dispatcher behavior", () => {
+  it("coerces the context build-record limit before schema validation", async () => {
+    const operation = SERVER_API_OPERATIONS.find(({ id }) => id === "context.build_records");
+    expect(operation?.http?.coerce).toEqual({ limit: "number" });
+
+    const response = createResponse();
+    const handler = vi.fn(({ input, response: innerResponse }) => {
+      expect(input.limit).toBe(20);
+      innerResponse.writeHead(200, { "Content-Type": "application/json" });
+      innerResponse.end(JSON.stringify({ records: [] }));
+    });
+
+    await expect(dispatchOperation({
+      operation,
+      controllers: {
+        system: {
+          handleContextBuildRecords: handler
+        }
+      },
+      request: {},
+      response,
+      requestBody: Buffer.alloc(0),
+      url: new URL("http://127.0.0.1/api/context/build-records?limit=20"),
+      logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    })).resolves.toMatchObject({ ok: true, statusCode: 200 });
+    expect(handler).toHaveBeenCalledOnce();
+    expect(response.json()).toEqual({ records: [] });
+  });
+
+  it("keeps the workspace asset console query and submit payload aligned with the contract", async () => {
+    const listOperation = SERVER_API_OPERATIONS.find(({ id }) => id === "workspace.asset.list");
+    const submitOperation = SERVER_API_OPERATIONS.find(({ id }) => id === "workspace.asset.submit");
+    expect(listOperation?.http?.coerce).toEqual({ limit: "number" });
+    expect(submitOperation?.inputSchema?.properties?.overwrite).toEqual({ type: "boolean" });
+
+    const response = createResponse();
+    const release = vi.fn(async () => {});
+    const lockManager = {
+      config: { defaultTtlMs: 10_000, heartbeatIntervalMs: 5_000 },
+      acquire: vi.fn(async (lockKey) => ({
+        lockKey,
+        fencingToken: "workspace-asset-submit-fixture",
+        acquiredAt: new Date(),
+        expiresAt: new Date(Date.now() + 10_000),
+        released: false,
+        heartbeat: vi.fn(async () => {}),
+        release
+      }))
+    };
+    const handler = vi.fn(({ input, response: innerResponse }) => {
+      expect(input).toMatchObject({
+        workspaceId: "workspace-demo",
+        submitKind: "file",
+        overwrite: false
+      });
+      innerResponse.writeHead(201, { "Content-Type": "application/json" });
+      innerResponse.end(JSON.stringify({ ok: true }));
+    });
+    await expect(dispatchOperation({
+      operation: submitOperation,
+      controllers: {
+        system: {
+          handleWorkspaceAssetSubmit: handler
+        }
+      },
+      request: {},
+      response,
+      lockManager,
+      input: {
+        workspaceId: "workspace-demo",
+        submitKind: "file",
+        target: { kind: "workspace", path: "demo.txt" },
+        content: { content: "synthetic" },
+        policy: {},
+        overwrite: false
+      },
+      url: new URL("http://127.0.0.1/api/workspace/assets/submit"),
+      logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    })).resolves.toMatchObject({ ok: true, statusCode: 201 });
+    expect(handler).toHaveBeenCalledOnce();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("declares the complete console checkpoint restore payload for preview and apply", () => {
+    for (const operationId of [
+      "workspace.checkpoint.restore.preview",
+      "workspace.checkpoint.restore"
+    ]) {
+      const operation = SERVER_API_OPERATIONS.find(({ id }) => id === operationId);
+      expect(operation?.inputSchema).toMatchObject({
+        required: ["treeId", "nodeId"],
+        additionalProperties: false,
+        properties: {
+          treeId: { type: "string" },
+          nodeId: { type: "string" },
+          workspaceId: { type: "string" },
+          mode: { type: "string" },
+          reason: { type: "string" }
+        }
+      });
+    }
+  });
+
+  it("keeps tag, queue control, and tool policy console payloads aligned with their contracts", () => {
+    const tagUpsert = SERVER_API_OPERATIONS.find(({ id }) => id === "tag_management.tags.upsert");
+    expect(tagUpsert?.inputSchema?.properties?.enabled).toEqual({ type: "boolean" });
+
+    for (const operationId of [
+      "jobs.work_queue.pause",
+      "jobs.work_queue.resume",
+      "jobs.work_queue.drain"
+    ]) {
+      const operation = SERVER_API_OPERATIONS.find(({ id }) => id === operationId);
+      expect(operation?.inputSchema).toMatchObject({
+        additionalProperties: false,
+        properties: { reason: { type: "string" } }
+      });
+    }
+
+    const policyPreview = SERVER_API_OPERATIONS.find(
+      ({ id }) => id === "operation_permission.policy_preview"
+    );
+    expect(policyPreview?.inputSchema).toMatchObject({
+      required: ["toolId", "input"],
+      additionalProperties: false,
+      properties: {
+        toolId: { type: "string" },
+        input: { type: "object" },
+        dryRun: { type: "boolean" },
+        grantId: { type: "string" },
+        grant: { type: "object" },
+        profileId: { type: "string" },
+        context: { type: "object" }
+      }
+    });
+
+    const assemblyBuild = SERVER_API_OPERATIONS.find(({ id }) => id === "runtime.assembly.build");
+    expect(assemblyBuild?.inputSchema).toMatchObject({
+      additionalProperties: false,
+      properties: {
+        selectedComponentIds: { type: "array", items: { type: "string" } },
+        componentIds: { type: "array", items: { type: "string" } },
+        components: { type: "array", items: { type: "string" } }
+      }
+    });
+  });
+
   it("lets write-capable operations marked concurrencySafe use their own runtime concurrency policy", async () => {
     const operation = baseOperation({
       id: "unit.concurrent.write",

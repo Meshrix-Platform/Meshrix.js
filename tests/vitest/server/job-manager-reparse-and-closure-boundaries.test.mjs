@@ -58,6 +58,7 @@ vi.mock("#lico/product-api", async () => {
 import {
   createJobManager,
 } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs";
+import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.mjs";
 import { serverToken } from "#lico/product-api";
 
 async function withTempUserData(callback) {
@@ -90,9 +91,20 @@ async function waitForJobStatus(manager, jobId, status, timeoutMs = 4000) {
 }
 
 async function seedPersistedJob(userDataPath, jobId, meta, payload = null) {
+  const currentMeta = {
+    ...meta,
+    versionGroupId: meta.versionGroupId || serverToken(
+      "parse_version_group",
+      meta.checkpointId || meta.archiveBatchId || meta.id
+    ),
+    versionNumber: meta.versionNumber || 1
+  };
+  const projectionStore = createJobProjectionStore({ userDataPath });
+  projectionStore.importJob(currentMeta);
+  projectionStore.close();
   const jobDir = path.join(userDataPath, "jobs", jobId);
   await fs.mkdir(jobDir, { recursive: true });
-  await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify(meta), "utf8");
+  await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify(currentMeta), "utf8");
   if (payload !== null) {
     await fs.writeFile(path.join(jobDir, "payload.json"), JSON.stringify(payload), "utf8");
   }
@@ -177,9 +189,9 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, "persisted-running-job", {
         id: "persisted-running-job",
         status: "running",
-        createdAt: "2026-06-05T08:10:00.000Z",
-        updatedAt: "2026-06-05T08:10:05.000Z",
-        startedAt: "2026-06-05T08:10:01.000Z",
+        createdAt: "2026-07-22T08:10:00.000Z",
+        updatedAt: "2026-07-22T08:10:05.000Z",
+        startedAt: "2026-07-22T08:10:01.000Z",
         progressPercent: 41,
         stage: "执行中",
         checkpointId: serverToken("checkpoint", "persisted-running-job")
@@ -187,10 +199,10 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, "persisted-completed-job", {
         id: "persisted-completed-job",
         status: "completed",
-        createdAt: "2026-06-05T08:09:00.000Z",
-        updatedAt: "2026-06-05T08:09:45.000Z",
-        startedAt: "2026-06-05T08:09:10.000Z",
-        finishedAt: "2026-06-05T08:09:45.000Z",
+        createdAt: "2026-07-22T08:09:00.000Z",
+        updatedAt: "2026-07-22T08:09:45.000Z",
+        startedAt: "2026-07-22T08:09:10.000Z",
+        finishedAt: "2026-07-22T08:09:45.000Z",
         progressPercent: 100,
         stage: "任务已完成",
         checkpointId: serverToken("checkpoint", "persisted-completed-job")
@@ -198,10 +210,10 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, "persisted-failed-job", {
         id: "persisted-failed-job",
         status: "failed",
-        createdAt: "2026-06-05T08:08:00.000Z",
-        updatedAt: "2026-06-05T08:08:20.000Z",
-        startedAt: "2026-06-05T08:08:05.000Z",
-        finishedAt: "2026-06-05T08:08:20.000Z",
+        createdAt: "2026-07-22T08:08:00.000Z",
+        updatedAt: "2026-07-22T08:08:20.000Z",
+        startedAt: "2026-07-22T08:08:05.000Z",
+        finishedAt: "2026-07-22T08:08:20.000Z",
         progressPercent: 18,
         stage: "执行失败",
         error: "历史任务失败",
@@ -210,8 +222,8 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, "persisted-queued-job", {
         id: "persisted-queued-job",
         status: "queued",
-        createdAt: "2026-06-05T08:07:00.000Z",
-        updatedAt: "2026-06-05T08:07:00.000Z",
+        createdAt: "2026-07-22T08:07:00.000Z",
+        updatedAt: "2026-07-22T08:07:00.000Z",
         progressPercent: 0,
         stage: "等待执行",
         checkpointId: queuedCheckpoint
@@ -297,10 +309,10 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, "reparse-source-job", {
         id: "reparse-source-job",
         status: "completed",
-        createdAt: "2026-06-05T07:50:00.000Z",
-        updatedAt: "2026-06-05T07:55:00.000Z",
-        startedAt: "2026-06-05T07:50:10.000Z",
-        finishedAt: "2026-06-05T07:55:00.000Z",
+        createdAt: "2026-07-22T07:50:00.000Z",
+        updatedAt: "2026-07-22T07:55:00.000Z",
+        startedAt: "2026-07-22T07:50:10.000Z",
+        finishedAt: "2026-07-22T07:55:00.000Z",
         progressPercent: 100,
         stage: "任务已完成",
         checkpointId
@@ -450,9 +462,9 @@ describe("job manager behavior", () => {
       await seedPersistedJob(userDataPath, completedJobId, {
         id: completedJobId,
         status: "completed",
-        createdAt: "2026-06-05T07:50:00.000Z",
-        updatedAt: "2026-06-05T07:55:00.000Z",
-        finishedAt: "2026-06-05T07:55:00.000Z",
+        createdAt: "2026-07-22T07:50:00.000Z",
+        updatedAt: "2026-07-22T07:55:00.000Z",
+        finishedAt: "2026-07-22T07:55:00.000Z",
         progressPercent: 100,
         stage: "任务已完成",
         checkpointId,
@@ -474,6 +486,7 @@ describe("job manager behavior", () => {
       await expect(manager.reparseJob(completedJobId)).rejects.toThrow(
         "历史任务没有保留可重新解析的原始文件或正文。请重新上传原文件后再解析。"
       );
+      await manager.close();
     });
   });
 

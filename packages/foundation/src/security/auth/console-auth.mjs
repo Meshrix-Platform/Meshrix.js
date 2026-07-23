@@ -252,48 +252,6 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     return null;
   }
 
-  function migrateConsoleAuditSecurityProjection() {
-    const rows = db.prepare(`
-      SELECT audit_id, user_id, username, path, target_json, error
-      FROM console_audit_log
-    `).all();
-    const pending = rows.filter((row) =>
-      (row.user_id && !SECURITY_DIGEST_PATTERN.test(row.user_id)) ||
-      (row.username && !SECURITY_DIGEST_PATTERN.test(row.username)) ||
-      (row.path && !SECURITY_DIGEST_PATTERN.test(row.path)) ||
-      !parseSecurityAuditProjection(row.target_json, "target") ||
-      !parseSecurityAuditProjection(row.error, "error")
-    );
-    if (pending.length === 0) {
-      return;
-    }
-
-    db.pragma("secure_delete = ON");
-    const update = db.prepare(`
-      UPDATE console_audit_log
-      SET user_id = ?, username = ?, path = ?, target_json = ?, error = ?
-      WHERE audit_id = ?
-    `);
-    db.transaction((items) => {
-      for (const row of items) {
-        const targetProjection = parseSecurityAuditProjection(row.target_json, "target") ||
-          securityAuditProjection(parseJson(row.target_json, {}), "target");
-        const errorProjection = parseSecurityAuditProjection(row.error, "error") ||
-          securityAuditErrorProjection(row.error);
-        update.run(
-          auditIdentityRef(row.user_id, "user-id"),
-          auditIdentityRef(row.username, "username"),
-          auditIdentityRef(row.path, "path"),
-          stringifyJson(targetProjection),
-          stringifyJson(errorProjection),
-          row.audit_id
-        );
-      }
-    })(pending);
-    db.pragma("wal_checkpoint(TRUNCATE)");
-    db.exec("VACUUM");
-  }
-
   function computeCsrfToken(rawSessionToken) {
     return "csrf_" + crypto
       .createHmac("sha256", _csrfSecret)
@@ -1049,8 +1007,6 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       oidc: getOidcConfig()
     };
   }
-
-  migrateConsoleAuditSecurityProjection();
 
   return {
     rootPath,

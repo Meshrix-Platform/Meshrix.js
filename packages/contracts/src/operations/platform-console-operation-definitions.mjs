@@ -282,7 +282,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       },
       cli: {
         command: ["events", "subscribe"],
-        aliases: [["events"]],
         usage: "events subscribe [--cursor N] [--topic jobs.job] [--timeout-ms 10000] [--include-snapshot 1]"
       }
     },
@@ -387,7 +386,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "maintenance_agent.config.get" },
       cli: {
         command: ["maintenance-agent", "config"],
-        aliases: [["maintenance", "config"]],
         usage: "maintenance-agent config"
       },
       requiredScopes: ["maintenance:read"],
@@ -404,7 +402,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "maintenance_agent.config.set", body: "params" },
       cli: {
         command: ["maintenance-agent", "config", "set"],
-        aliases: [["maintenance", "config", "set"]],
         usage: "maintenance-agent config set --body maintenance-agent.json"
       },
       requiredScopes: ["maintenance:admin"],
@@ -421,7 +418,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "maintenance_agent.chat", body: "params" },
       cli: {
         command: ["maintenance-agent", "chat"],
-        aliases: [["maintenance", "chat"]],
         usage: "maintenance-agent chat --message MESSAGE",
         bodyParams: [
           { name: "message", aliases: ["message", "question", "q"], required: true },
@@ -443,7 +439,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       rpc: { method: "maintenance_agent.runs.create", body: "params" },
       cli: {
         command: ["maintenance-agent", "run"],
-        aliases: [["maintenance", "run"]],
         usage: "maintenance-agent run --runbook health_smoke",
         bodyParams: [
           { name: "runbook", aliases: ["runbook", "intent"] },
@@ -472,7 +467,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       },
       cli: {
         command: ["maintenance-agent", "runs"],
-        aliases: [["maintenance", "runs"]],
         usage: "maintenance-agent runs [--limit 50]"
       },
       requiredScopes: ["maintenance:read"],
@@ -492,7 +486,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       },
       cli: {
         command: ["maintenance-agent", "run", "get"],
-        aliases: [["maintenance", "run", "get"]],
         usage: "maintenance-agent run get --id RUN_ID",
         pathParams: { runId: ["run-id", "runId", "id"] }
       },
@@ -514,7 +507,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       },
       cli: {
         command: ["maintenance-agent", "approve"],
-        aliases: [["maintenance", "approve"]],
         usage: "maintenance-agent approve --id RUN_ID --plan-hash HASH",
         pathParams: { runId: ["run-id", "runId", "id"] },
         bodyParams: [
@@ -539,7 +531,6 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
       },
       cli: {
         command: ["maintenance-agent", "cancel"],
-        aliases: [["maintenance", "cancel"]],
         usage: "maintenance-agent cancel --id RUN_ID",
         pathParams: { runId: ["run-id", "runId", "id"] },
         bodyParams: [{ name: "reason", aliases: ["reason"] }]

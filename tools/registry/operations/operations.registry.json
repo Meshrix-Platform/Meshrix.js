@@ -20,6 +20,7 @@
         "method": "GET",
         "path": "/api/readiness/baseline/status",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -144,6 +145,7 @@
         "method": "POST",
         "path": "/api/authorization/subject/resolve",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -271,6 +273,7 @@
         "method": "POST",
         "path": "/api/authorization/policy/evaluate",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -421,6 +424,7 @@
         "method": "GET",
         "path": "/api/authorization/governance",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -568,6 +572,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -736,6 +741,7 @@
         "method": "GET",
         "path": "/api/tag-management/v1/tags/:tagId",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -872,6 +878,7 @@
         "method": "POST",
         "path": "/api/tag-management/v1/tags",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -913,6 +920,9 @@
           },
           "parentTagId": {
             "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
           },
           "scopePrerequisites": {
             "type": "array",
@@ -1029,6 +1039,7 @@
         "method": "POST",
         "path": "/api/tag-management/v1/tags/:tagId/archive",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -1165,6 +1176,7 @@
         "method": "POST",
         "path": "/api/tag-management/v1/tags/:tagId/restore",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -1322,6 +1334,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -1481,6 +1494,7 @@
         "method": "POST",
         "path": "/api/tag-management/v1/projections/rebuild",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -1622,6 +1636,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -1773,6 +1788,7 @@
         "method": "GET",
         "path": "/api/authorization/roles",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -1893,6 +1909,7 @@
         "method": "POST",
         "path": "/api/authorization/roles",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2013,6 +2030,7 @@
         "method": "GET",
         "path": "/api/authorization/departments",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2133,6 +2151,7 @@
         "method": "POST",
         "path": "/api/authorization/departments",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2253,6 +2272,7 @@
         "method": "GET",
         "path": "/api/authorization/teams",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2373,6 +2393,7 @@
         "method": "POST",
         "path": "/api/authorization/teams",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2493,6 +2514,7 @@
         "method": "GET",
         "path": "/api/authorization/users/policies",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2614,6 +2636,7 @@
         "method": "POST",
         "path": "/api/authorization/users/policy",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2735,6 +2758,7 @@
         "method": "GET",
         "path": "/api/authorization/agent-groups",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2855,6 +2879,7 @@
         "method": "POST",
         "path": "/api/authorization/agent-groups",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -2975,6 +3000,7 @@
         "method": "GET",
         "path": "/api/authorization/agents/bindings",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3096,6 +3122,7 @@
         "method": "POST",
         "path": "/api/authorization/agents/binding",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3239,6 +3266,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3391,6 +3419,7 @@
         "method": "POST",
         "path": "/api/authorization/approvals",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3511,6 +3540,7 @@
         "method": "POST",
         "path": "/api/authorization/approvals/:approvalId/revoke",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3660,6 +3690,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3815,6 +3846,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -3970,6 +4002,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -4120,6 +4153,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -4262,6 +4296,7 @@
         "method": "POST",
         "path": "/api/workspace/files/upload",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -4434,6 +4469,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -4635,6 +4671,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -4836,6 +4873,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5008,6 +5046,7 @@
         "method": "POST",
         "path": "/api/workspace/files/write",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5152,6 +5191,7 @@
         "method": "POST",
         "path": "/api/workspace/files/patch",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5296,6 +5336,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/submit",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5425,6 +5466,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5577,6 +5619,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5729,6 +5772,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -5872,6 +5916,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/report",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6001,6 +6046,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6145,6 +6191,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/permission/request",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6281,6 +6328,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/permission/grant",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6417,6 +6465,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/scan",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6552,6 +6601,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/review",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6687,6 +6737,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/preview",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6822,6 +6873,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/publish",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -6957,6 +7009,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/adopt",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7092,6 +7145,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/reject",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7227,6 +7281,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/request-changes",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7362,6 +7417,7 @@
         "method": "POST",
         "path": "/api/workspace/contributions/:contributionId/revoke",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7497,6 +7553,7 @@
         "method": "POST",
         "path": "/api/workspace/proposals/create",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7647,6 +7704,7 @@
         "method": "POST",
         "path": "/api/workspace/proposals/apply",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7797,6 +7855,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/policy",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -7918,6 +7977,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/permission/check",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -8039,6 +8099,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/targets/connect",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -8147,6 +8208,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -8314,6 +8378,9 @@
             ]
           }
         ],
+        "coerce": {
+          "limit": "number"
+        },
         "localInForwardMode": true
       },
       "rpc": {
@@ -8594,6 +8661,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -8827,6 +8895,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/submit",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -8934,6 +9003,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -9048,6 +9120,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/mutate",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -9155,6 +9228,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -9269,6 +9345,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/sync/plan",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -9377,6 +9454,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -9491,6 +9571,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/sync/apply",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -9599,6 +9680,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -9713,6 +9797,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/import",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -9820,6 +9905,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -9934,6 +10022,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/export",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -10041,6 +10130,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -10155,6 +10247,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/review/comment",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -10263,6 +10356,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -10377,6 +10473,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/review/request-changes",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -10485,6 +10582,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -10599,6 +10699,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/review/approve",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -10707,6 +10808,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -10821,6 +10925,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/checkpoint",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -10928,6 +11033,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -11042,6 +11150,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/lineage",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -11149,6 +11258,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -11263,6 +11375,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/receipts/get",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -11371,6 +11484,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -11485,6 +11601,7 @@
         "method": "POST",
         "path": "/api/workspace/assets/backfill",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -11592,6 +11709,9 @@
             "type": "string"
           },
           "dryRun": {
+            "type": "boolean"
+          },
+          "overwrite": {
             "type": "boolean"
           },
           "confirm": {
@@ -11720,6 +11840,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -11875,6 +11996,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12036,6 +12158,7 @@
             ]
           }
         ],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12195,6 +12318,7 @@
         "method": "GET",
         "path": "/api/workspace/checkpoints/nodes/:treeId",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12331,6 +12455,7 @@
         "method": "POST",
         "path": "/api/workspace/checkpoints/diff",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12451,6 +12576,7 @@
         "method": "POST",
         "path": "/api/workspace/checkpoints/restore/preview",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12473,8 +12599,27 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {},
-        "required": []
+        "required": [
+          "treeId",
+          "nodeId"
+        ],
+        "properties": {
+          "treeId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -12508,14 +12653,22 @@
         "resourceKind": "checkpoint",
         "capabilityVerb": "preview",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "checkpoint",
         "capabilityVerb": "preview",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -12572,6 +12725,7 @@
         "method": "POST",
         "path": "/api/workspace/checkpoints/restore",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12593,8 +12747,27 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {},
-        "required": []
+        "required": [
+          "treeId",
+          "nodeId"
+        ],
+        "properties": {
+          "treeId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -12628,14 +12801,22 @@
         "resourceKind": "checkpoint",
         "capabilityVerb": "restore",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "checkpoint",
         "capabilityVerb": "restore",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -12692,6 +12873,7 @@
         "method": "POST",
         "path": "/api/workspace/checkpoints/scope/query",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12813,6 +12995,7 @@
         "method": "POST",
         "path": "/api/workspace/operations/revert/scope",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -12934,6 +13117,7 @@
         "method": "POST",
         "path": "/api/workspace/operations/revert/apply",
         "query": [],
+        "coerce": {},
         "localInForwardMode": true
       },
       "rpc": {
@@ -18939,11 +19123,6 @@
           "events",
           "subscribe"
         ],
-        "aliases": [
-          [
-            "events"
-          ]
-        ],
         "usage": "events subscribe [--cursor N] [--topic jobs.job] [--timeout-ms 10000] [--include-snapshot 1]"
       },
       "requiredScopes": [
@@ -19732,12 +19911,6 @@
           "maintenance-agent",
           "config"
         ],
-        "aliases": [
-          [
-            "maintenance",
-            "config"
-          ]
-        ],
         "usage": "maintenance-agent config"
       },
       "requiredScopes": [
@@ -19853,13 +20026,6 @@
           "config",
           "set"
         ],
-        "aliases": [
-          [
-            "maintenance",
-            "config",
-            "set"
-          ]
-        ],
         "usage": "maintenance-agent config set --body maintenance-agent.json"
       },
       "requiredScopes": [
@@ -19974,12 +20140,6 @@
         "command": [
           "maintenance-agent",
           "chat"
-        ],
-        "aliases": [
-          [
-            "maintenance",
-            "chat"
-          ]
         ],
         "usage": "maintenance-agent chat --message MESSAGE",
         "bodyParams": [
@@ -20122,12 +20282,6 @@
         "command": [
           "maintenance-agent",
           "run"
-        ],
-        "aliases": [
-          [
-            "maintenance",
-            "run"
-          ]
         ],
         "usage": "maintenance-agent run --runbook health_smoke",
         "bodyParams": [
@@ -20284,12 +20438,6 @@
           "maintenance-agent",
           "runs"
         ],
-        "aliases": [
-          [
-            "maintenance",
-            "runs"
-          ]
-        ],
         "usage": "maintenance-agent runs [--limit 50]"
       },
       "requiredScopes": [
@@ -20418,13 +20566,6 @@
           "maintenance-agent",
           "run",
           "get"
-        ],
-        "aliases": [
-          [
-            "maintenance",
-            "run",
-            "get"
-          ]
         ],
         "usage": "maintenance-agent run get --id RUN_ID",
         "pathParams": {
@@ -20563,12 +20704,6 @@
         "command": [
           "maintenance-agent",
           "approve"
-        ],
-        "aliases": [
-          [
-            "maintenance",
-            "approve"
-          ]
         ],
         "usage": "maintenance-agent approve --id RUN_ID --plan-hash HASH",
         "pathParams": {
@@ -20732,12 +20867,6 @@
         "command": [
           "maintenance-agent",
           "cancel"
-        ],
-        "aliases": [
-          [
-            "maintenance",
-            "cancel"
-          ]
         ],
         "usage": "maintenance-agent cancel --id RUN_ID",
         "pathParams": {
@@ -24045,11 +24174,6 @@
           "discovery",
           "get"
         ],
-        "aliases": [
-          [
-            "discovery"
-          ]
-        ],
         "usage": "discovery get"
       },
       "requiredScopes": [
@@ -24388,6 +24512,31 @@
       "requiredScopes": [
         "runtime:admin"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "selectedComponentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "componentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": []
+      },
       "safety": {
         "risk": "safe_write",
         "readOnly": false,
@@ -24426,12 +24575,6 @@
         "changeProjection": "",
         "lifecycle": "two-stage",
         "substrate": "operation-proof-substrate"
-      },
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
       },
       "audit": {
         "enabled": true,
@@ -24605,11 +24748,6 @@
         "command": [
           "runtime",
           "mounts"
-        ],
-        "aliases": [
-          [
-            "mounts"
-          ]
         ],
         "usage": "runtime mounts"
       },
@@ -25392,11 +25530,6 @@
         "command": [
           "settings",
           "get"
-        ],
-        "aliases": [
-          [
-            "settings"
-          ]
         ],
         "usage": "settings get"
       },
@@ -28716,6 +28849,37 @@
       "requiredScopes": [
         "console:read"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "toolId",
+          "input"
+        ],
+        "properties": {
+          "toolId": {
+            "type": "string"
+          },
+          "input": {
+            "type": "object"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "grantId": {
+            "type": "string"
+          },
+          "grant": {
+            "type": "object"
+          },
+          "profileId": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object"
+          }
+        }
+      },
       "safety": {
         "risk": "read_only",
         "readOnly": true,
@@ -28754,12 +28918,6 @@
         "substrate": "operation-proof-substrate"
       },
       "concurrencySafe": true,
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
-      },
       "audit": {
         "enabled": true,
         "recordInput": false,
@@ -40825,7 +40983,10 @@
             ],
             "type": "number"
           }
-        ]
+        ],
+        "coerce": {
+          "limit": "number"
+        }
       },
       "rpc": {
         "method": "context.build_records"
@@ -41064,6 +41225,31 @@
         ],
         "usage": "upload-session --body session.json"
       },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "checkpoint",
+          "manifest",
+          "files"
+        ],
+        "properties": {
+          "checkpoint": {
+            "type": "object"
+          },
+          "manifest": {
+            "type": "object"
+          },
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
       "requiredScopes": [
         "jobs:write"
       ],
@@ -41105,12 +41291,6 @@
         "substrate": "operation-proof-substrate"
       },
       "concurrencySafe": false,
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
-      },
       "audit": {
         "enabled": true,
         "recordInput": true,
@@ -41592,6 +41772,55 @@
         ],
         "usage": "jobs upload-workspace-materialize --body request.json"
       },
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uploadSessionId",
+          "workspaceId",
+          "expectedWorkspaceRevision"
+        ],
+        "properties": {
+          "uploadSessionId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "expectedWorkspaceRevision": {
+            "type": "string"
+          },
+          "targetPrefix": {
+            "type": "string"
+          },
+          "mutation": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "files": {
+                "type": "array",
+                "maxItems": 256,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "sourcePath",
+                    "targetPath"
+                  ],
+                  "properties": {
+                    "sourcePath": {
+                      "type": "string"
+                    },
+                    "targetPath": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "requiredScopes": [
         "jobs:write",
         "storage:write"
@@ -41618,14 +41847,22 @@
         "resourceKind": "jobs",
         "capabilityVerb": "upload-workspace-materialize",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "jobs",
         "resourceKind": "jobs",
         "capabilityVerb": "upload-workspace-materialize",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -41635,12 +41872,6 @@
         "substrate": "operation-proof-substrate"
       },
       "concurrencySafe": false,
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
-      },
       "audit": {
         "enabled": true,
         "recordInput": true,
@@ -41857,11 +42088,6 @@
         "command": [
           "jobs",
           "list"
-        ],
-        "aliases": [
-          [
-            "jobs"
-          ]
         ],
         "usage": "jobs list [--limit 50]"
       },
@@ -42254,6 +42480,16 @@
       "requiredScopes": [
         "maintenance:admin"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": []
+      },
       "safety": {
         "risk": "safe_write",
         "readOnly": false,
@@ -42292,12 +42528,6 @@
         "substrate": "operation-proof-substrate"
       },
       "concurrencySafe": false,
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
-      },
       "audit": {
         "enabled": true,
         "recordInput": true,
@@ -42367,6 +42597,16 @@
       "requiredScopes": [
         "maintenance:admin"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": []
+      },
       "safety": {
         "risk": "safe_write",
         "readOnly": false,
@@ -42405,12 +42645,6 @@
         "substrate": "operation-proof-substrate"
       },
       "concurrencySafe": false,
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
-      },
       "audit": {
         "enabled": true,
         "recordInput": true,
@@ -42480,6 +42714,16 @@
       "requiredScopes": [
         "maintenance:admin"
       ],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": []
+      },
       "safety": {
         "risk": "safe_write",
         "readOnly": false,
@@ -42518,12 +42762,6 @@
         "substrate": "operation-proof-substrate"
       },
       "concurrencySafe": false,
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [],
-        "properties": {}
-      },
       "audit": {
         "enabled": true,
         "recordInput": true,

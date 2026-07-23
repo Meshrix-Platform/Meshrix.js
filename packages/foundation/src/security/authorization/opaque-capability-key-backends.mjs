@@ -185,7 +185,7 @@ export async function readMacosKernelRecord({ alias = DEFAULT_ALIAS } = {}) {
     throw new Error("macos-keychain capability kernel backend is only available on macOS.");
   }
   try {
-    const raw = await runText("/usr/bin/security", [
+    const raw = await runText("security", [
       "find-generic-password",
       "-w",
       "-a",
@@ -206,7 +206,7 @@ export async function writeMacosKernelRecord({ alias = DEFAULT_ALIAS } = {}, rec
   if (process.platform !== "darwin") {
     throw new Error("macos-keychain capability kernel backend is only available on macOS.");
   }
-  await runText("/usr/bin/security", [
+  await runText("security", [
     "add-generic-password",
     "-U",
     "-a",

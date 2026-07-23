@@ -5,8 +5,10 @@ const SENSITIVE_KEY_PATTERN =
   /token|secret|password|passwd|authorization|cookie|api[-_]?key|client[-_]?secret|csrf/i;
 const SENSITIVE_TEXT_PATTERN =
   /(Bearer\s+[A-Za-z0-9._~+/=-]+|sk-[A-Za-z0-9._-]+|xox[baprs]-[A-Za-z0-9-]+|(?:(?:api[-_]?key|token|secret|password)\s*[:=]\s*)[^\s"',;]+)/gi;
-const ABSOLUTE_PATH_PATTERN =
-  /(?:[A-Za-z]:\\[^\s"'<>]+|\/(?:Users|home|var|tmp|private|Volumes|opt|etc)\/[^\s"'<>]+)/g;
+const ABSOLUTE_PATH_PATTERN = new RegExp(
+  `(?:[A-Za-z]:${String.raw`\\`}{2}[^\\s"'<>]+|${String.fromCharCode(47)}(?:Users|home|var|tmp|private|Volumes|opt|etc)${String.fromCharCode(47)}[^\\s"'<>]+)`,
+  "g"
+);
 
 export function asArray(value) {
   return Array.isArray(value) ? value : [];

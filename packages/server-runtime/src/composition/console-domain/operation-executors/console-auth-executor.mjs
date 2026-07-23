@@ -268,6 +268,11 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
     const policy = context.operationAuditStore.setRetentionPolicy({
       retentionDays: input.retentionDays || input["retention-days"],
       maxExportItems: input.maxExportItems || input["max-export-items"],
+      maxRecords: input.maxRecords || input["max-records"],
+      maxLogicalBytes: input.maxLogicalBytes || input["max-logical-bytes"],
+      maxDatabaseBytes: input.maxDatabaseBytes || input["max-database-bytes"],
+      cleanupBatchSize: input.cleanupBatchSize || input["cleanup-batch-size"],
+      maintenanceEveryAppends: input.maintenanceEveryAppends || input["maintenance-every-appends"],
       updatedBy: authSession?.user || {}
     });
     authProvider.audit({

@@ -28,6 +28,12 @@ Workspace filesystem governance covers path containment, mutation preview, check
 
 A workspace Host capability supplies a content-addressed immutable snapshot or an opaque read-only handle, never a live host path. An admitted workload receives read-only inputs and writes only to run-specific quarantine. Returned changes remain proposals and require Host-side preview, proposal-bound approval, revalidation, commit, and cleanup. The consumer cannot select or launch a backend and has no Host-process fallback.
 
+Batch restore validates opaque handles sequentially and reads each changed file
+only at its mutation point. It retains content-addressed preimage references
+rather than all preimage buffers, restores one preimage block at a time during
+compensation, and rejects a handle whose declared byte count or SHA-256 digest
+does not match the bytes it supplies.
+
 Production execution remains denied until explicit configuration, current authorization and admission facts, and the exact current Controlled Execution receipt are present.
 
 ## Verification

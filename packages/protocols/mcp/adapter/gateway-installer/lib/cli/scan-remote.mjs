@@ -13,7 +13,34 @@ import {
 } from "./connector-process.mjs";
 import { baseUrlWithHost, isLoopbackHost, vmBaseUrl } from "./http-json-client.mjs";
 import { mcpProbeSupported } from "./mcp-client-probe.mjs";
-import { detectHostOs, outputLines } from "./scan-local.mjs";
+import { detectHostOs, outputLines, systemPosixPath } from "./scan-local.mjs";
+
+const REMOTE_EXECUTABLE_DIRS = Object.freeze([
+  ["usr", "local", "bin"],
+  ["usr", "local", "sbin"],
+  ["usr", "bin"],
+  ["usr", "sbin"],
+  ["bin"],
+  ["sbin"],
+  ["opt", "bin"],
+  ["opt", "homebrew", "bin"],
+  ["opt", "homebrew", "sbin"],
+  ["opt", "local", "bin"],
+  ["opt", "local", "sbin"],
+  ["opt", "sw", "bin"],
+  ["var", "lib", "flatpak", "exports", "bin"],
+  ["snap", "bin"]
+].map((segments) => systemPosixPath(...segments)));
+
+const REMOTE_DESKTOP_DIRS = Object.freeze([
+  ["usr", "share", "applications"],
+  ["usr", "local", "share", "applications"],
+  ["var", "lib", "flatpak", "exports", "share", "applications"]
+].map((segments) => systemPosixPath(...segments)));
+
+function shellExpandedPaths(paths, suffix) {
+  return paths.map((directory) => `"${directory}/${suffix}"`).join(" ");
+}
 
 export async function detectOrbVms(orbBin) {
   const result = await run(orbBin, ["list"], { allowFailure: true, timeoutMs: SCAN_COMMAND_TIMEOUT_MS });
@@ -54,8 +81,7 @@ export function linuxExecutableScanScript(command) {
     "      esac",
     "    fi",
     "  done",
-    "  printf '%s\\n' \"/usr/local/bin/$command_name\" \"/usr/local/sbin/$command_name\" \"/usr/bin/$command_name\" \"/usr/sbin/$command_name\" \"/bin/$command_name\" \"/sbin/$command_name\" \"/opt/bin/$command_name\"",
-    "  printf '%s\\n' \"/opt/homebrew/bin/$command_name\" \"/opt/homebrew/sbin/$command_name\" \"/opt/local/bin/$command_name\" \"/opt/local/sbin/$command_name\" \"/opt/sw/bin/$command_name\"",
+    `  printf '%s\\n' ${shellExpandedPaths(REMOTE_EXECUTABLE_DIRS, "$command_name")}`,
     "  nvm_dir=${NVM_DIR:-$HOME/.nvm}",
     "  [ -d \"$nvm_dir/versions/node\" ] && find \"$nvm_dir/versions/node\" -maxdepth 3 -type f -path \"*/bin/$command_name\" 2>/dev/null",
     "  fnm_dir=${FNM_DIR:-$HOME/.local/share/fnm}",
@@ -69,8 +95,8 @@ export function linuxExecutableScanScript(command) {
     "  printf '%s\\n' \"${VOLTA_HOME:-$HOME/.volta}/bin/$command_name\" \"$HOME/.asdf/shims/$command_name\" \"$HOME/.local/share/mise/shims/$command_name\" \"$HOME/.mise/shims/$command_name\" \"$HOME/.nodenv/shims/$command_name\"",
     "  printf '%s\\n' \"${CARGO_HOME:-$HOME/.cargo}/bin/$command_name\" \"${GOPATH:-$HOME/go}/bin/$command_name\" \"${DENO_INSTALL:-$HOME/.deno}/bin/$command_name\"",
     "  [ -n \"${GOBIN:-}\" ] && printf '%s\\n' \"$GOBIN/$command_name\"",
-    "  printf '%s\\n' \"$HOME/.local/bin/$command_name\" \"$HOME/.rye/shims/$command_name\" \"$HOME/.pixi/bin/$command_name\" \"$HOME/.pkgx/bin/$command_name\" \"$HOME/miniconda3/bin/$command_name\" \"$HOME/anaconda3/bin/$command_name\" \"$HOME/.conda/bin/$command_name\" \"/snap/bin/$command_name\"",
-    "  printf '%s\\n' \"/var/lib/flatpak/exports/bin/$command_name\" \"$HOME/.local/share/flatpak/exports/bin/$command_name\"",
+    "  printf '%s\\n' \"$HOME/.local/bin/$command_name\" \"$HOME/.rye/shims/$command_name\" \"$HOME/.pixi/bin/$command_name\" \"$HOME/.pkgx/bin/$command_name\" \"$HOME/miniconda3/bin/$command_name\" \"$HOME/anaconda3/bin/$command_name\" \"$HOME/.conda/bin/$command_name\"",
+    "  printf '%s\\n' \"$HOME/.local/share/flatpak/exports/bin/$command_name\"",
     "  if command -v pipx >/dev/null 2>&1; then",
     "    pipx_dir=$(pipx environment --value PIPX_BIN_DIR 2>/dev/null)",
     "    [ -n \"$pipx_dir\" ] && printf '%s\\n' \"$pipx_dir/$command_name\"",
@@ -79,7 +105,7 @@ export function linuxExecutableScanScript(command) {
     "    uv_dir=$(uv tool dir --bin 2>/dev/null)",
     "    [ -n \"$uv_dir\" ] && printf '%s\\n' \"$uv_dir/$command_name\"",
     "  fi",
-    "  for desktop_root in /usr/share/applications /usr/local/share/applications \"$HOME/.local/share/applications\" /var/lib/flatpak/exports/share/applications \"$HOME/.local/share/flatpak/exports/share/applications\"; do",
+    `  for desktop_root in ${REMOTE_DESKTOP_DIRS.map(shellQuote).join(" ")} "$HOME/.local/share/applications" "$HOME/.local/share/flatpak/exports/share/applications"; do`,
     "    [ -d \"$desktop_root\" ] || continue",
     "    find \"$desktop_root\" -maxdepth 2 -name '*.desktop' -type f 2>/dev/null | while IFS= read -r desktop_file; do",
     "      exec_line=$(grep -m 1 '^Exec=' \"$desktop_file\" 2>/dev/null | sed 's/^Exec=//' | sed 's/%[fFuUdDnNickvm]//g')",
@@ -482,7 +508,11 @@ export async function remoteClientBaseUrl(context, baseUrl) {
     return baseUrlWithHost(baseUrl, "host.lima.internal");
   }
   if (context.kind === "wsl") {
-    const nameserver = await remoteLinuxShell(context, "awk '/^nameserver / { print $2; exit }' /etc/resolv.conf 2>/dev/null", { timeoutMs: SCAN_COMMAND_TIMEOUT_MS });
+    const nameserver = await remoteLinuxShell(
+      context,
+      `awk '/^nameserver / { print $2; exit }' ${systemPosixPath("etc", "resolv.conf")} 2>/dev/null`,
+      { timeoutMs: SCAN_COMMAND_TIMEOUT_MS }
+    );
     const host = nameserver.stdout.trim().split(/\s+/).find(Boolean);
     return host ? baseUrlWithHost(baseUrl, host) : baseUrl;
   }

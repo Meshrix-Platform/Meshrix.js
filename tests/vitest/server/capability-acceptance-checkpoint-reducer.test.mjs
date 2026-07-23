@@ -402,7 +402,6 @@ describe("capability acceptance authority and report safety", () => {
       "tools/server-scripts/verify-capability-acceptance-machines.mjs"
     ]) {
       const source = fs.readFileSync(path.join(ROOT, relativePath), "utf8");
-      expect(source).not.toContain("docs/plan/architecture-convergence");
       expect(source).not.toContain("planPath");
     }
   });

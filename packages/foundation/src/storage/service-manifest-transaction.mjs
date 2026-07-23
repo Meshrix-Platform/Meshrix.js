@@ -1,7 +1,10 @@
-import { randomBytes } from "node:crypto";
 import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+
+import { openSqliteDatabase } from "./sqlite-database.mjs";
+import { ensurePrivateSqliteLocation } from "./private-sqlite.mjs";
 import {
   serviceManifestError,
   sha256ManifestBytes,
@@ -11,127 +14,27 @@ import {
   validateOpaqueServiceId
 } from "./storage-ports.mjs";
 
-const PRIVATE_DIRECTORY_MODE = 0o700;
-const PRIVATE_FILE_MODE = 0o600;
-const WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES = new Set(["EACCES", "EINVAL", "ENOTSUP", "EPERM"]);
-const RECEIPT_REF_PATTERN = /^urn:lico:storage-manifest-receipt:[a-f0-9]{64}$/u;
-const TEMP_FILE_PATTERN = /^\.(?:manifest|generation|latest|journal)\.[a-f0-9]{16}\.tmp$/u;
-const IMMUTABLE_FILE_PATTERN = /^([a-f0-9]{64})\.json$/u;
-const WRITER_FENCE_OWNER_PATTERN = /^([1-9][0-9]{0,9}):([a-f0-9]{32})$/u;
+const DATABASE_SCHEMA_VERSION = 2;
+const REQUEST_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const INITIALIZATION_LOCK_STALE_MS = 60_000;
+export const SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS = 256;
+const RECEIPT_REF_PATTERN =
+  /^urn:lico:storage-manifest-receipt:[a-f0-9]{64}$/u;
+const EXPECTED_TABLES = Object.freeze([
+  "manifest_authority_meta",
+  "manifest_blobs",
+  "manifest_services",
+  "manifest_service_versions",
+  "manifest_requests"
+]);
 const EMPTY_SERVICES = Object.freeze([]);
 
-export const SERVICE_MANIFEST_POINTER_SCHEMA_VERSION = "v0.0.1:storage:service-manifest-pointer-1";
-export const SERVICE_MANIFEST_GENERATION_SCHEMA_VERSION = "v0.0.1:storage:service-manifest-generation-1";
-export const SERVICE_MANIFEST_JOURNAL_SCHEMA_VERSION = "v0.0.1:storage:service-manifest-journal-1";
-
-function isUnsupportedDirectorySync(error) {
-  return process.platform === "win32" && WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES.has(error?.code);
-}
-
-function assertExactKeys(value, expected, code, message) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw serviceManifestError(code, message);
-  }
-  const actual = Object.keys(value).sort();
-  const wanted = [...expected].sort();
-  if (actual.length !== wanted.length || actual.some((key, index) => key !== wanted[index])) {
-    throw serviceManifestError(code, message);
-  }
-  return value;
-}
-
-function signature(stat) {
-  return [
-    stat.dev,
-    stat.ino,
-    stat.size,
-    stat.mtimeNs,
-    stat.ctimeNs,
-    stat.nlink,
-    stat.uid,
-    stat.gid,
-    stat.mode
-  ]
-    .map((value) => String(value))
-    .join(":");
-}
-
-function samePointer(left, right) {
-  if (left === null || right === null) return left === right;
-  return stableManifestJson(left) === stableManifestJson(right);
-}
-
-function entryPath(directoryPath, digest) {
-  validateManifestDigest(digest);
-  return path.join(directoryPath, `${digest}.json`);
-}
-
-async function syncDirectory(directoryPath) {
-  let handle = null;
-  try {
-    handle = await fs.open(directoryPath, "r");
-    await handle.sync();
-  } catch (error) {
-    if (!isUnsupportedDirectorySync(error)) throw error;
-  } finally {
-    await handle?.close().catch(() => {});
-  }
-}
-
-async function hardenFile(filePath) {
-  try {
-    await fs.chmod(filePath, PRIVATE_FILE_MODE);
-  } catch (error) {
-    if (!isUnsupportedDirectorySync(error)) throw error;
-  }
-}
-
-async function ensurePrivateDirectory(directoryPath) {
-  const missing = [];
-  let current = path.resolve(directoryPath);
-  while (true) {
-    try {
-      const stat = await fs.lstat(current);
-      if (!stat.isDirectory() || stat.isSymbolicLink()) {
-        throw serviceManifestError(
-          "storage_manifest_directory_unsafe",
-          "Service manifest storage ancestry must contain only real directories."
-        );
-      }
-      break;
-    } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
-      missing.push(current);
-      const parent = path.dirname(current);
-      if (parent === current) throw error;
-      current = parent;
-    }
-  }
-  for (const target of missing.reverse()) {
-    try {
-      await fs.mkdir(target, { mode: PRIVATE_DIRECTORY_MODE });
-    } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-      const concurrentStat = await fs.lstat(target);
-      if (!concurrentStat.isDirectory() || concurrentStat.isSymbolicLink()) {
-        throw serviceManifestError(
-          "storage_manifest_directory_unsafe",
-          "Service manifest storage ancestry must contain only real directories."
-        );
-      }
-    }
-    await fs.chmod(target, PRIVATE_DIRECTORY_MODE);
-    await syncDirectory(path.dirname(target));
-  }
-  const finalStat = await fs.lstat(directoryPath);
-  if (!finalStat.isDirectory() || finalStat.isSymbolicLink()) {
-    throw serviceManifestError(
-      "storage_manifest_directory_unsafe",
-      "Service manifest storage directory must be a real directory."
-    );
-  }
-  await fs.chmod(directoryPath, PRIVATE_DIRECTORY_MODE);
-}
+export const SERVICE_MANIFEST_POINTER_SCHEMA_VERSION =
+  "v0.0.1:storage:service-manifest-pointer-2";
+export const SERVICE_MANIFEST_GENERATION_SCHEMA_VERSION =
+  "v0.0.1:storage:service-manifest-generation-2";
+export const SERVICE_MANIFEST_JOURNAL_SCHEMA_VERSION =
+  "v0.0.1:storage:service-manifest-sqlite-1";
 
 function combineSignals(signals) {
   const active = signals.filter(Boolean);
@@ -183,7 +86,7 @@ export function createManifestTransactionContext({
 
   function consumeRead(byteCount) {
     check();
-    readBytes += byteCount;
+    readBytes += Number(byteCount);
     if (readBytes > budget.maxReadBytes) {
       throw serviceManifestError(
         "storage_manifest_budget_exceeded",
@@ -194,7 +97,7 @@ export function createManifestTransactionContext({
 
   function consumeWrite(byteCount) {
     check();
-    writeBytes += byteCount;
+    writeBytes += Number(byteCount);
     if (writeBytes > budget.maxWriteBytes) {
       throw serviceManifestError(
         "storage_manifest_budget_exceeded",
@@ -226,399 +129,457 @@ export function createManifestTransactionContext({
   });
 }
 
-async function safeReadFile(filePath, context, { optional = false, maxBytes } = {}) {
-  context.check();
-  context.touchFile();
-  const flags = fsNative.constants.O_RDONLY | (fsNative.constants.O_NOFOLLOW || 0);
-  let handle = null;
-  try {
-    handle = await fs.open(filePath, flags);
-  } catch (error) {
-    if (optional && error?.code === "ENOENT") return null;
-    if (error?.code === "ELOOP") {
-      throw serviceManifestError(
-        "storage_manifest_file_unsafe",
-        "Service manifest storage contains an unsafe filesystem artifact.",
-        error
-      );
-    }
-    throw error;
-  }
-  try {
-    const before = await handle.stat({ bigint: true });
-    if (!before.isFile() || !Number.isSafeInteger(Number(before.size))) {
-      throw serviceManifestError(
-        "storage_manifest_file_unsafe",
-        "Service manifest storage files must be regular files."
-      );
-    }
-    const byteSize = Number(before.size);
-    if (byteSize > maxBytes) {
-      throw serviceManifestError(
-        "storage_manifest_budget_exceeded",
-        "Service manifest persisted bytes exceed the read budget."
-      );
-    }
-    const bytes = await handle.readFile();
-    context.consumeRead(bytes.length);
-    const after = await handle.stat({ bigint: true });
-    if (signature(before) !== signature(after) || bytes.length !== Number(after.size)) {
-      throw serviceManifestError(
-        "storage_manifest_file_changed",
-        "Service manifest storage changed during opened-file verification."
-      );
-    }
-    return bytes;
-  } finally {
-    await handle.close().catch(() => {});
-  }
-}
-
-function parseCanonicalJson(bytes, code, message) {
-  let parsed;
-  try {
-    parsed = JSON.parse(bytes.toString("utf8"));
-  } catch (error) {
-    throw serviceManifestError(code, message, error);
-  }
-  if (stableManifestJson(parsed) !== bytes.toString("utf8")) {
-    throw serviceManifestError(code, message);
-  }
-  return parsed;
-}
-
-async function rejectUnsafeReplacementTarget(filePath) {
-  try {
-    const stat = await fs.lstat(filePath);
-    if (!stat.isFile() || stat.isSymbolicLink()) {
-      throw serviceManifestError(
-        "storage_manifest_file_unsafe",
-        "Service manifest replacement targets must be regular files."
-      );
-    }
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-}
-
-async function writeStagedFile({ directoryPath, targetPath, kind, bytes, context }) {
-  context.check();
-  context.consumeWrite(bytes.length);
-  context.touchFile();
-  await rejectUnsafeReplacementTarget(targetPath);
-  const temporaryPath = path.join(
-    directoryPath,
-    `.${kind}.${randomBytes(8).toString("hex")}.tmp`
-  );
-  let handle = null;
-  let renamed = false;
-  try {
-    handle = await fs.open(temporaryPath, "wx", PRIVATE_FILE_MODE);
-    await handle.writeFile(bytes, { signal: context.signal });
-    context.check();
-    await handle.sync();
-    await handle.close();
-    handle = null;
-    await hardenFile(temporaryPath);
-    context.check();
-    await fs.rename(temporaryPath, targetPath);
-    renamed = true;
-    await hardenFile(targetPath);
-    await syncDirectory(directoryPath);
-  } finally {
-    await handle?.close().catch(() => {});
-    if (!renamed) await fs.rm(temporaryPath, { force: true }).catch(() => {});
-  }
-}
-
-async function writeImmutableFile({ directoryPath, digest, kind, bytes, context }) {
-  const targetPath = entryPath(directoryPath, digest);
-  const existing = await safeReadFile(targetPath, context, {
-    optional: true,
-    maxBytes: context.budget.maxReadBytes
-  });
-  if (existing) {
-    if (!existing.equals(bytes) || sha256ManifestBytes(existing) !== digest) {
-      throw serviceManifestError(
-        "storage_manifest_immutable_conflict",
-        "Service manifest immutable content does not match its digest address."
-      );
-    }
-    return targetPath;
-  }
-  await writeStagedFile({ directoryPath, targetPath, kind, bytes, context });
-  const persisted = await safeReadFile(targetPath, context, {
-    maxBytes: context.budget.maxReadBytes
-  });
-  if (!persisted.equals(bytes) || sha256ManifestBytes(persisted) !== digest) {
-    throw serviceManifestError(
-      "storage_manifest_immutable_conflict",
-      "Service manifest immutable content failed post-publication verification."
-    );
-  }
-  return targetPath;
-}
-
-function validatePointer(value) {
-  assertExactKeys(
-    value,
-    ["schemaVersion", "setRevision", "setDigest", "generationDigest"],
-    "storage_manifest_pointer_invalid",
-    "Service manifest latest pointer is invalid."
-  );
-  if (value.schemaVersion !== SERVICE_MANIFEST_POINTER_SCHEMA_VERSION) {
-    throw serviceManifestError(
-      "storage_manifest_pointer_invalid",
-      "Service manifest latest pointer schema is invalid."
-    );
-  }
-  validateManifestRevision(value.setRevision, "set revision");
-  if (value.setRevision < 1) {
-    throw serviceManifestError(
-      "storage_manifest_pointer_invalid",
-      "Service manifest latest pointer revision is invalid."
-    );
-  }
-  validateManifestDigest(value.setDigest, "set digest");
-  validateManifestDigest(value.generationDigest, "generation digest");
-  return value;
-}
-
-function validateServiceEntry(value) {
-  assertExactKeys(
-    value,
-    ["serviceId", "serviceRevision", "manifestDigest"],
-    "storage_manifest_generation_invalid",
-    "Service manifest generation contains an invalid service entry."
-  );
-  validateOpaqueServiceId(value.serviceId);
-  validateManifestRevision(value.serviceRevision, "service revision");
-  if (value.serviceRevision < 1) {
-    throw serviceManifestError(
-      "storage_manifest_generation_invalid",
-      "Service manifest generation service revision is invalid."
-    );
-  }
-  validateManifestDigest(value.manifestDigest, "manifest digest");
-  return value;
-}
-
-function validateRequestEntry(value) {
-  assertExactKeys(
-    value,
-    [
-      "requestDigest",
-      "serviceId",
-      "manifestDigest",
-      "expectedServiceRevision",
-      "expectedSetRevision",
-      "serviceRevision",
-      "setRevision",
-      "setDigest",
-      "receiptRef"
-    ],
-    "storage_manifest_generation_invalid",
-    "Service manifest generation contains an invalid request outcome."
-  );
-  validateManifestDigest(value.requestDigest, "request digest");
-  validateOpaqueServiceId(value.serviceId);
-  validateManifestDigest(value.manifestDigest, "manifest digest");
-  validateManifestRevision(value.expectedServiceRevision, "expected service revision");
-  validateManifestRevision(value.expectedSetRevision, "expected set revision");
-  validateManifestRevision(value.serviceRevision, "service revision");
-  validateManifestRevision(value.setRevision, "set revision");
-  validateManifestDigest(value.setDigest, "set digest");
-  if (value.serviceRevision < 1 || value.setRevision < 1 || !RECEIPT_REF_PATTERN.test(value.receiptRef)) {
-    throw serviceManifestError(
-      "storage_manifest_generation_invalid",
-      "Service manifest request outcome is invalid."
-    );
-  }
-  return value;
-}
-
 export function serviceManifestSetDigest(services) {
-  return sha256ManifestBytes(Buffer.from(stableManifestJson(services), "utf8"));
+  return sha256ManifestBytes(
+    Buffer.from(stableManifestJson(services), "utf8")
+  );
 }
 
-export function emptyServiceManifestGeneration() {
+const EMPTY_SET_DIGEST = serviceManifestSetDigest(EMPTY_SERVICES);
+
+function transitionSetDigest({
+  previousSetDigest,
+  setRevision,
+  serviceId,
+  serviceRevision,
+  manifestDigest
+}) {
+  return sha256ManifestBytes(Buffer.from(stableManifestJson({
+    previousSetDigest,
+    setRevision,
+    serviceId,
+    serviceRevision,
+    manifestDigest
+  }), "utf8"));
+}
+
+function requestOutcome({
+  requestDigest,
+  serviceId,
+  manifestDigest,
+  expectedServiceRevision,
+  expectedSetRevision,
+  serviceRevision,
+  setRevision,
+  setDigest
+}) {
+  const receiptDigest = sha256ManifestBytes(
+    Buffer.from(stableManifestJson({
+      requestDigest,
+      serviceId,
+      manifestDigest,
+      expectedServiceRevision,
+      expectedSetRevision,
+      serviceRevision,
+      setRevision,
+      setDigest
+    }), "utf8")
+  );
   return Object.freeze({
-    schemaVersion: SERVICE_MANIFEST_GENERATION_SCHEMA_VERSION,
-    setRevision: 0,
-    setDigest: serviceManifestSetDigest(EMPTY_SERVICES),
-    services: EMPTY_SERVICES,
-    requests: Object.freeze([])
+    requestDigest,
+    serviceId,
+    manifestDigest,
+    expectedServiceRevision,
+    expectedSetRevision,
+    serviceRevision,
+    setRevision,
+    setDigest,
+    receiptRef: `urn:lico:storage-manifest-receipt:${receiptDigest}`
   });
 }
 
-function validateGeneration(value, pointer, budget) {
-  assertExactKeys(
-    value,
-    ["schemaVersion", "setRevision", "setDigest", "services", "requests"],
-    "storage_manifest_generation_invalid",
-    "Service manifest generation is invalid."
+function metaRows(db) {
+  return Object.fromEntries(
+    db.prepare("SELECT key,value FROM manifest_authority_meta").all()
+      .map((row) => [String(row.key), String(row.value)])
   );
-  if (
-    value.schemaVersion !== SERVICE_MANIFEST_GENERATION_SCHEMA_VERSION ||
-    !Array.isArray(value.services) ||
-    !Array.isArray(value.requests)
-  ) {
+}
+
+function numberMeta(meta, key) {
+  const value = Number(meta[key]);
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw serviceManifestError(
-      "storage_manifest_generation_invalid",
-      "Service manifest generation schema is invalid."
-    );
-  }
-  validateManifestRevision(value.setRevision, "set revision");
-  validateManifestDigest(value.setDigest, "set digest");
-  if (
-    value.setRevision !== pointer.setRevision ||
-    value.setDigest !== pointer.setDigest ||
-    value.services.length > budget.maxServices ||
-    value.requests.length > budget.maxRequestRecords
-  ) {
-    throw serviceManifestError(
-      "storage_manifest_generation_invalid",
-      "Service manifest generation does not match its published pointer or resource budget."
-    );
-  }
-  let previousServiceId = "";
-  for (const entry of value.services) {
-    validateServiceEntry(entry);
-    if (entry.serviceId <= previousServiceId) {
-      throw serviceManifestError(
-        "storage_manifest_generation_invalid",
-        "Service manifest generation service entries must be unique and ordered."
-      );
-    }
-    previousServiceId = entry.serviceId;
-  }
-  let previousRequestDigest = "";
-  for (const entry of value.requests) {
-    validateRequestEntry(entry);
-    if (entry.requestDigest <= previousRequestDigest || entry.setRevision > value.setRevision) {
-      throw serviceManifestError(
-        "storage_manifest_generation_invalid",
-        "Service manifest generation request outcomes must be unique, ordered, and monotonic."
-      );
-    }
-    previousRequestDigest = entry.requestDigest;
-  }
-  if (serviceManifestSetDigest(value.services) !== value.setDigest) {
-    throw serviceManifestError(
-      "storage_manifest_generation_invalid",
-      "Service manifest generation set digest is invalid."
+      "storage_manifest_index_invalid",
+      "Service manifest index metadata is invalid."
     );
   }
   return value;
 }
 
-function validateJournal(value) {
-  assertExactKeys(
-    value,
-    ["schemaVersion", "phase", "previousPointer", "candidatePointer", "requestDigest", "serviceId", "manifestDigest", "terminalOutcome"],
-    "storage_manifest_journal_invalid",
-    "Service manifest transaction journal is invalid."
+function verifySchema(db) {
+  const expected = new Set(EXPECTED_TABLES);
+  const existing = new Set(
+    db.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type='table'
+        AND name IN (
+          'manifest_authority_meta',
+          'manifest_blobs',
+          'manifest_services',
+          'manifest_service_versions',
+          'manifest_requests'
+        )
+    `).all().map((row) => String(row.name))
   );
-  if (value.schemaVersion !== SERVICE_MANIFEST_JOURNAL_SCHEMA_VERSION || value.phase !== "prepared") {
-    throw serviceManifestError(
-      "storage_manifest_journal_invalid",
-      "Service manifest transaction journal phase is invalid."
-    );
-  }
-  if (value.previousPointer !== null) validatePointer(value.previousPointer);
-  validatePointer(value.candidatePointer);
-  validateManifestDigest(value.requestDigest, "request digest");
-  validateOpaqueServiceId(value.serviceId);
-  validateManifestDigest(value.manifestDigest, "manifest digest");
-  validateRequestEntry(value.terminalOutcome);
   if (
-    value.terminalOutcome.requestDigest !== value.requestDigest ||
-    value.terminalOutcome.serviceId !== value.serviceId ||
-    value.terminalOutcome.manifestDigest !== value.manifestDigest ||
-    value.terminalOutcome.setRevision !== value.candidatePointer.setRevision ||
-    value.terminalOutcome.setDigest !== value.candidatePointer.setDigest
+    existing.size !== 0 &&
+    (
+      existing.size !== expected.size ||
+      [...expected].some((name) => !existing.has(name))
+    )
   ) {
     throw serviceManifestError(
-      "storage_manifest_journal_invalid",
-      "Service manifest transaction journal outcome is inconsistent."
+      "storage_manifest_index_incomplete",
+      "Service manifest index schema is incomplete."
     );
   }
-  return value;
+  return existing.size === 0;
 }
 
-async function readOptionalCanonicalJson(filePath, context, code, message) {
-  const bytes = await safeReadFile(filePath, context, {
-    optional: true,
-    maxBytes: Math.min(context.budget.maxReadBytes, 16 * 1024 * 1024)
-  });
-  return bytes ? parseCanonicalJson(bytes, code, message) : null;
-}
-
-async function removeRegularFileAndSync(filePath, directoryPath) {
-  try {
-    const stat = await fs.lstat(filePath);
-    if (!stat.isFile() || stat.isSymbolicLink()) {
+function createSchema(db) {
+  const initializing = verifySchema(db);
+  if (!initializing) {
+    const expectedIndexes = new Set([
+      "idx_manifest_versions_visibility",
+      "idx_manifest_versions_digest",
+      "idx_manifest_versions_retention",
+      "idx_manifest_requests_created"
+    ]);
+    const expectedTriggers = new Set([
+      "manifest_services_insert",
+      "manifest_services_delete",
+      "manifest_requests_insert",
+      "manifest_requests_delete"
+    ]);
+    const indexes = new Set(
+      db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type='index' AND name LIKE 'idx_manifest_%'
+      `).all().map((row) => String(row.name))
+    );
+    const triggers = new Set(
+      db.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type='trigger' AND name LIKE 'manifest_%'
+      `).all().map((row) => String(row.name))
+    );
+    if (
+      [...expectedIndexes].some((name) => !indexes.has(name)) ||
+      [...expectedTriggers].some((name) => !triggers.has(name))
+    ) {
       throw serviceManifestError(
-        "storage_manifest_file_unsafe",
-        "Service manifest transaction metadata must be a regular file."
+        "storage_manifest_index_incomplete",
+        "Service manifest index schema is incomplete."
       );
     }
-    await fs.unlink(filePath);
-    await syncDirectory(directoryPath);
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
-}
-
-async function cleanupTemporaryFiles(directories, context) {
-  for (const directoryPath of directories) {
-    context.check();
-    const removable = [];
-    const handle = await fs.opendir(directoryPath);
-    for await (const entry of handle) {
-      context.inspectCleanupEntry();
-      if (!TEMP_FILE_PATTERN.test(entry.name)) continue;
-      if (!entry.isFile() || entry.isSymbolicLink()) {
+    const meta = metaRows(db);
+    for (const key of [
+      "schema_version",
+      "candidate_set_revision",
+      "candidate_set_digest",
+      "published_set_revision",
+      "published_set_digest",
+      "service_count",
+      "request_count",
+      "request_bytes"
+    ]) {
+      if (meta[key] === undefined) {
         throw serviceManifestError(
-          "storage_manifest_file_unsafe",
-          "Service manifest staging contains an unsafe filesystem artifact."
+          "storage_manifest_index_incomplete",
+          "Service manifest index metadata is incomplete."
         );
       }
-      removable.push(entry.name);
     }
-    for (const name of removable) await fs.unlink(path.join(directoryPath, name));
-    if (removable.length > 0) await syncDirectory(directoryPath);
+    if (Number(meta.schema_version) !== DATABASE_SCHEMA_VERSION) {
+      throw serviceManifestError(
+        "storage_manifest_index_unsupported",
+        "Service manifest index schema is unsupported."
+      );
+    }
+    return;
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS manifest_authority_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS manifest_blobs (
+      digest TEXT PRIMARY KEY,
+      bytes BLOB NOT NULL,
+      byte_size INTEGER NOT NULL CHECK(byte_size>=0)
+    );
+    CREATE TABLE IF NOT EXISTS manifest_services (
+      service_id TEXT PRIMARY KEY,
+      service_revision INTEGER NOT NULL CHECK(service_revision>0),
+      manifest_digest TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS manifest_service_versions (
+      service_id TEXT NOT NULL,
+      valid_from_revision INTEGER NOT NULL CHECK(valid_from_revision>0),
+      valid_to_revision INTEGER NOT NULL DEFAULT 0 CHECK(valid_to_revision>=0),
+      service_revision INTEGER NOT NULL CHECK(service_revision>0),
+      manifest_digest TEXT NOT NULL,
+      PRIMARY KEY(service_id,valid_from_revision)
+    );
+    CREATE INDEX IF NOT EXISTS idx_manifest_versions_visibility
+      ON manifest_service_versions(
+        service_id,valid_from_revision,valid_to_revision
+      );
+    CREATE INDEX IF NOT EXISTS idx_manifest_versions_digest
+      ON manifest_service_versions(manifest_digest);
+    CREATE INDEX IF NOT EXISTS idx_manifest_versions_retention
+      ON manifest_service_versions(
+        valid_to_revision,service_id,valid_from_revision
+      );
+    CREATE TABLE IF NOT EXISTS manifest_requests (
+      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_digest TEXT NOT NULL UNIQUE,
+      service_id TEXT NOT NULL,
+      manifest_digest TEXT NOT NULL,
+      expected_service_revision INTEGER NOT NULL,
+      expected_set_revision INTEGER NOT NULL,
+      service_revision INTEGER NOT NULL,
+      set_revision INTEGER NOT NULL,
+      set_digest TEXT NOT NULL,
+      receipt_ref TEXT NOT NULL,
+      created_at_ms INTEGER NOT NULL,
+      record_bytes INTEGER NOT NULL CHECK(record_bytes>=0)
+    );
+    CREATE INDEX IF NOT EXISTS idx_manifest_requests_created
+      ON manifest_requests(created_at_ms,sequence);
+  `);
+  const initial = {
+    schema_version: DATABASE_SCHEMA_VERSION,
+    candidate_set_revision: 0,
+    candidate_set_digest: EMPTY_SET_DIGEST,
+    published_set_revision: 0,
+    published_set_digest: EMPTY_SET_DIGEST,
+    service_count: 0,
+    request_count: 0,
+    request_bytes: 0
+  };
+  const insert = db.prepare(
+    "INSERT INTO manifest_authority_meta(key,value) VALUES(?,?)"
+  );
+  db.transaction(() => {
+    for (const [key, value] of Object.entries(initial)) {
+      insert.run(key, String(value));
+    }
+  })();
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS manifest_services_insert
+    AFTER INSERT ON manifest_services
+    BEGIN
+      UPDATE manifest_authority_meta
+      SET value=CAST(value AS INTEGER)+1
+      WHERE key='service_count';
+    END;
+    CREATE TRIGGER IF NOT EXISTS manifest_services_delete
+    AFTER DELETE ON manifest_services
+    BEGIN
+      UPDATE manifest_authority_meta
+      SET value=CAST(value AS INTEGER)-1
+      WHERE key='service_count';
+    END;
+    CREATE TRIGGER IF NOT EXISTS manifest_requests_insert
+    AFTER INSERT ON manifest_requests
+    BEGIN
+      UPDATE manifest_authority_meta
+      SET value=CAST(value AS INTEGER)+1
+      WHERE key='request_count';
+      UPDATE manifest_authority_meta
+      SET value=CAST(value AS INTEGER)+NEW.record_bytes
+      WHERE key='request_bytes';
+    END;
+    CREATE TRIGGER IF NOT EXISTS manifest_requests_delete
+    AFTER DELETE ON manifest_requests
+    BEGIN
+      UPDATE manifest_authority_meta
+      SET value=CAST(value AS INTEGER)-1
+      WHERE key='request_count';
+      UPDATE manifest_authority_meta
+      SET value=CAST(value AS INTEGER)-OLD.record_bytes
+      WHERE key='request_bytes';
+    END;
+  `);
+}
+
+function databasePathFor(rootPath) {
+  return path.join(rootPath, "authority.sqlite");
+}
+
+function openAuthorityDatabase(rootPath, { create = false } = {}) {
+  const databasePath = databasePathFor(rootPath);
+  let databaseExists = false;
+  try {
+    const stat = fsSyncStat(databasePath);
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw serviceManifestError(
+        "storage_manifest_file_unsafe",
+        "Service manifest index must be a regular non-symbolic-link file."
+      );
+    }
+    databaseExists = true;
+  } catch (error) {
+    if (error?.code === "ENOENT" && !create) return null;
+    if (error?.code !== "ENOENT") throw error;
+  }
+  ensurePrivateSqliteLocation(databasePath);
+  const db = openSqliteDatabase(databasePath);
+  try {
+    db.pragma("busy_timeout = 5000");
+    if (!databaseExists) db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    createSchema(db);
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
   }
 }
 
-async function cleanupImmutableOrphans({ directoryPath, retainedDigests, context }) {
-  context.check();
-  const removable = [];
-  const handle = await fs.opendir(directoryPath);
-  for await (const entry of handle) {
-    context.inspectCleanupEntry();
-    const match = IMMUTABLE_FILE_PATTERN.exec(entry.name);
-    if (!match) {
-      throw serviceManifestError(
-        "storage_manifest_file_unsafe",
-        "Service manifest immutable storage contains an unexpected filesystem artifact."
-      );
+function assertSafeDirectoryAncestry(directoryPath) {
+  let current = path.resolve(directoryPath);
+  while (true) {
+    try {
+      const stat = fsNative.lstatSync(current);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) {
+        throw serviceManifestError(
+          "storage_manifest_directory_unsafe",
+          "Service manifest storage ancestry must contain only real directories."
+        );
+      }
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
     }
-    if (!entry.isFile() || entry.isSymbolicLink()) {
-      throw serviceManifestError(
-        "storage_manifest_file_unsafe",
-        "Service manifest immutable storage must contain only regular digest-addressed files."
-      );
-    }
-    if (retainedDigests.has(match[1])) continue;
-    removable.push(entry.name);
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
-  for (const name of removable) await fs.unlink(path.join(directoryPath, name));
-  if (removable.length > 0) await syncDirectory(directoryPath);
+}
+
+function fsSyncStat(filePath) {
+  // lstat is kept behind one small lazy boundary so reader-only access can
+  // preserve an absent authority root without creating it.
+  return fsNative.lstatSync(filePath);
+}
+
+function pointerFromMeta(meta, kind) {
+  const setRevision = numberMeta(meta, `${kind}_set_revision`);
+  const setDigest = String(meta[`${kind}_set_digest`] || "");
+  validateManifestDigest(setDigest, `${kind} set digest`);
+  return Object.freeze({ setRevision, setDigest });
+}
+
+function outcomeFromRow(row) {
+  if (!row) return null;
+  return Object.freeze({
+    requestDigest: String(row.request_digest),
+    serviceId: String(row.service_id),
+    manifestDigest: String(row.manifest_digest),
+    expectedServiceRevision: Number(row.expected_service_revision),
+    expectedSetRevision: Number(row.expected_set_revision),
+    serviceRevision: Number(row.service_revision),
+    setRevision: Number(row.set_revision),
+    setDigest: String(row.set_digest),
+    receiptRef: String(row.receipt_ref)
+  });
+}
+
+function assertRequestMatches(outcome, input) {
+  if (
+    outcome.serviceId !== input.serviceId ||
+    outcome.manifestDigest !== input.manifestDigest ||
+    outcome.expectedServiceRevision !== input.expectedServiceRevision ||
+    outcome.expectedSetRevision !== input.expectedSetRevision
+  ) {
+    throw serviceManifestError(
+      "storage_manifest_replay_conflict",
+      "Service manifest request identity was reused with different canonical input."
+    );
+  }
+}
+
+function setMeta(db, key, value) {
+  db.prepare(
+    "UPDATE manifest_authority_meta SET value=? WHERE key=?"
+  ).run(String(value), key);
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function withInitializationLock(rootPath, context, action) {
+  const lockPath = path.join(rootPath, ".authority-initialize.lock");
+  const token = `${process.pid}:${randomUUID()}`;
+  await fs.mkdir(rootPath, { recursive: true, mode: 0o700 });
+  await fs.chmod(rootPath, 0o700);
+  while (true) {
+    context.check();
+    try {
+      const handle = await fs.open(lockPath, "wx", 0o600);
+      try {
+        await handle.writeFile(token, "utf8");
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      break;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const stat = await fs.stat(lockPath).catch(() => null);
+      if (
+        stat &&
+        Date.now() - stat.mtimeMs > INITIALIZATION_LOCK_STALE_MS
+      ) {
+        const owner = await fs.readFile(lockPath, "utf8").catch(() => "");
+        const ownerPid = Number(String(owner).split(":", 1)[0]);
+        let alive = Number.isSafeInteger(ownerPid) && ownerPid > 0;
+        if (alive) {
+          try {
+            process.kill(ownerPid, 0);
+          } catch (ownerError) {
+            alive = ownerError?.code !== "ESRCH";
+          }
+        }
+        if (!alive) {
+          const abandoned = `${lockPath}.abandoned-${randomUUID()}`;
+          await fs.rename(lockPath, abandoned).catch((renameError) => {
+            if (renameError?.code !== "ENOENT") throw renameError;
+          });
+          await fs.rm(abandoned, { force: true });
+          continue;
+        }
+      }
+      await delay(10);
+    }
+  }
+  const heartbeat = setInterval(() => {
+    void fs.readFile(lockPath, "utf8").then((owner) => {
+      if (owner.trim() !== token) return;
+      return fs.utimes(lockPath, new Date(), new Date());
+    }).catch(() => {});
+  }, 5_000);
+  heartbeat.unref?.();
+  try {
+    return await action();
+  } finally {
+    clearInterval(heartbeat);
+    const owner = await fs.readFile(lockPath, "utf8").catch(() => "");
+    if (owner.trim() === token) {
+      await fs.rm(lockPath, { force: true });
+    }
+  }
 }
 
 export function serviceManifestAuthorityRoot(storageRoot) {
-  if (typeof storageRoot !== "string" || !storageRoot.trim() || storageRoot.includes("\u0000")) {
+  if (
+    typeof storageRoot !== "string" ||
+    !storageRoot.trim() ||
+    storageRoot.includes("\u0000")
+  ) {
     throw serviceManifestError(
       "storage_manifest_root_invalid",
       "Service manifest storage root is required."
@@ -627,370 +588,361 @@ export function serviceManifestAuthorityRoot(storageRoot) {
   return path.join(path.resolve(storageRoot), "service-manifests");
 }
 
-export function createServiceManifestTransaction({ storageRoot }) {
+export function createServiceManifestTransaction({
+  storageRoot,
+  now = Date.now
+}) {
   const rootPath = serviceManifestAuthorityRoot(storageRoot);
-  const manifestsPath = path.join(rootPath, "manifests");
-  const generationsPath = path.join(rootPath, "generations");
-  const latestPath = path.join(rootPath, "latest.json");
-  const publishedPath = path.join(rootPath, "published.json");
-  const journalPath = path.join(rootPath, "journal.json");
-  const writerFencePath = path.join(rootPath, ".writer-fence");
+  const databasePath = databasePathFor(rootPath);
 
-  async function ensureLayout(context) {
+  async function ensureAuthority(context) {
     context.check();
-    await ensurePrivateDirectory(rootPath);
-    await ensurePrivateDirectory(manifestsPath);
-    await ensurePrivateDirectory(generationsPath);
-  }
-
-  async function readPointer(context) {
-    const raw = await readOptionalCanonicalJson(
-      latestPath,
-      context,
-      "storage_manifest_pointer_invalid",
-      "Service manifest latest pointer is invalid."
-    );
-    return raw ? validatePointer(raw) : null;
-  }
-
-  async function readPublishedPointer(context) {
-    const raw = await readOptionalCanonicalJson(
-      publishedPath,
-      context,
-      "storage_manifest_pointer_invalid",
-      "Service manifest published pointer is invalid."
-    );
-    return raw ? validatePointer(raw) : null;
-  }
-
-  async function readGeneration(pointer, context) {
-    if (!pointer) return emptyServiceManifestGeneration();
-    const bytes = await safeReadFile(entryPath(generationsPath, pointer.generationDigest), context, {
-      maxBytes: Math.min(context.budget.maxReadBytes, 16 * 1024 * 1024)
+    assertSafeDirectoryAncestry(rootPath);
+    const existing = openAuthorityDatabase(rootPath, { create: false });
+    if (existing) {
+      existing.close();
+      return;
+    }
+    await withInitializationLock(rootPath, context, async () => {
+      const db = openAuthorityDatabase(rootPath, { create: true });
+      db.close();
     });
-    if (sha256ManifestBytes(bytes) !== pointer.generationDigest) {
-      throw serviceManifestError(
-        "storage_manifest_generation_invalid",
-        "Service manifest generation digest does not match its immutable address."
-      );
+  }
+
+  async function readSnapshot(kind, context) {
+    context.check();
+    assertSafeDirectoryAncestry(rootPath);
+    let db = openAuthorityDatabase(rootPath, { create: false });
+    if (!db) {
+      return Object.freeze({
+        pointer: Object.freeze({
+          setRevision: 0,
+          setDigest: EMPTY_SET_DIGEST
+        }),
+        entries: Object.freeze([])
+      });
     }
-    const parsed = parseCanonicalJson(
-      bytes,
-      "storage_manifest_generation_invalid",
-      "Service manifest generation is invalid."
-    );
-    return validateGeneration(parsed, pointer, context.budget);
-  }
-
-  async function recover(context) {
-    const journalRaw = await readOptionalCanonicalJson(
-      journalPath,
-      context,
-      "storage_manifest_journal_invalid",
-      "Service manifest transaction journal is invalid."
-    );
-    let pointer = await readPointer(context);
-    if (journalRaw) {
-      const journal = validateJournal(journalRaw);
-      if (samePointer(pointer, journal.candidatePointer)) {
-        await readGeneration(journal.candidatePointer, context);
-        pointer = journal.candidatePointer;
-      } else if (samePointer(pointer, journal.previousPointer)) {
-        pointer = journal.previousPointer;
-      } else {
-        throw serviceManifestError(
-          "storage_manifest_recovery_conflict",
-          "Service manifest journal cannot be reconciled with the durable pointer."
-        );
-      }
-    }
-    const generation = await readGeneration(pointer, context);
-    return Object.freeze({ pointer, generation, journal: journalRaw ? validateJournal(journalRaw) : null });
-  }
-
-  async function readPublished(context) {
-    const pointer = await readPublishedPointer(context);
-    const generation = await readGeneration(pointer, context);
-    return Object.freeze({ pointer, generation });
-  }
-
-  async function readFenceOwner() {
-    let handle = null;
     try {
-      handle = await fs.open(
-        path.join(writerFencePath, "owner"),
-        fsNative.constants.O_RDONLY | (fsNative.constants.O_NOFOLLOW || 0)
-      );
-      const stat = await handle.stat();
-      if (!stat.isFile() || stat.size > 64) {
+      const meta = metaRows(db);
+      const pointer = pointerFromMeta(meta, kind);
+      if (pointer.setRevision === 0) {
+        return Object.freeze({ pointer, entries: Object.freeze([]) });
+      }
+      const rows = db.prepare(`
+        SELECT v.service_id,v.service_revision,v.manifest_digest,
+               b.bytes,b.byte_size
+        FROM manifest_service_versions AS v
+        JOIN manifest_blobs AS b ON b.digest=v.manifest_digest
+        WHERE v.valid_from_revision<=?
+          AND (v.valid_to_revision=0 OR v.valid_to_revision>?)
+        ORDER BY v.service_id ASC
+      `).all(pointer.setRevision, pointer.setRevision);
+      if (rows.length > context.budget.maxServices) {
         throw serviceManifestError(
-          "storage_manifest_file_unsafe",
-          "Service manifest writer fence owner is invalid."
+          "storage_manifest_budget_exceeded",
+          "Service manifest service count exceeds its resource budget."
         );
       }
-      return (await handle.readFile("utf8")).trim();
-    } catch (error) {
-      if (error?.code === "ENOENT") return null;
-      if (error?.code === "ELOOP") {
-        throw serviceManifestError(
-          "storage_manifest_file_unsafe",
-          "Service manifest writer fence owner is unsafe.",
-          error
-        );
-      }
-      throw error;
-    } finally {
-      await handle?.close().catch(() => {});
-    }
-  }
-
-  async function acquireWriterFence(context) {
-    const owner = `${process.pid}:${randomBytes(16).toString("hex")}`;
-    const ownerPath = path.join(writerFencePath, "owner");
-    while (true) {
-      context.check();
-      try {
-        await fs.mkdir(writerFencePath, { mode: PRIVATE_DIRECTORY_MODE });
-        await writeStagedFile({
-          directoryPath: writerFencePath,
-          targetPath: ownerPath,
-          kind: "owner",
-          bytes: Buffer.from(owner, "utf8"),
-          context
+      const entries = rows.map((row) => {
+        const bytes = Buffer.from(row.bytes);
+        context.consumeRead(bytes.length);
+        if (
+          bytes.length !== Number(row.byte_size) ||
+          sha256ManifestBytes(bytes) !== String(row.manifest_digest)
+        ) {
+          throw serviceManifestError(
+            "storage_manifest_content_invalid",
+            "Service manifest indexed content is not digest-bound."
+          );
+        }
+        return Object.freeze({
+          serviceId: String(row.service_id),
+          serviceRevision: Number(row.service_revision),
+          manifestDigest: String(row.manifest_digest),
+          manifestBytes: bytes
         });
-        await syncDirectory(rootPath);
-        break;
-      } catch (error) {
-        if (error?.code !== "EEXIST") throw error;
-        const stat = await fs.lstat(writerFencePath).catch(() => null);
-        if (stat && (!stat.isDirectory() || stat.isSymbolicLink())) {
-          throw serviceManifestError(
-            "storage_manifest_file_unsafe",
-            "Service manifest writer fence must be a real directory."
-          );
-        }
-        const persistedOwner = stat ? await readFenceOwner() : null;
-        if (stat && persistedOwner === null) {
-          await new Promise((resolve) => setTimeout(resolve, 5));
-          continue;
-        }
-        const ownerMatch = WRITER_FENCE_OWNER_PATTERN.exec(persistedOwner || "");
-        if (stat && !ownerMatch) {
-          throw serviceManifestError(
-            "storage_manifest_file_unsafe",
-            "Service manifest writer fence owner is invalid."
-          );
-        }
-        let ownerAlive = true;
-        if (ownerMatch) {
-          try {
-            process.kill(Number(ownerMatch[1]), 0);
-          } catch (ownerError) {
-            ownerAlive = ownerError?.code !== "ESRCH";
-          }
-        }
-        if (stat && ownerMatch && !ownerAlive &&
-            Date.now() - stat.mtimeMs > context.budget.maxOperationMs * 2) {
-          const quarantine = `${writerFencePath}.${randomBytes(8).toString("hex")}.stale`;
-          await fs.rename(writerFencePath, quarantine).catch((renameError) => {
-            if (renameError?.code !== "ENOENT") throw renameError;
-          });
-          await fs.rm(quarantine, { recursive: true, force: true }).catch(() => {});
-          continue;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 5));
-      }
+      });
+      return Object.freeze({
+        pointer,
+        entries: Object.freeze(entries)
+      });
+    } finally {
+      db.close();
     }
-    async function assertOwned() {
-      const persisted = await readFenceOwner();
-      if (!WRITER_FENCE_OWNER_PATTERN.test(persisted || "") || persisted !== owner) {
-        throw serviceManifestError(
-          "storage_manifest_writer_fenced",
-          "Service manifest writer lost its durable publication fence."
-        );
-      }
-    }
-    async function release() {
-      if (await readFenceOwner() !== owner) return;
-      await fs.unlink(ownerPath).catch(() => {});
-      await fs.rmdir(writerFencePath).catch(() => {});
-      await syncDirectory(rootPath).catch(() => {});
-    }
-    return Object.freeze({ assertOwned, release });
   }
 
-  async function readManifest(manifestDigest, context) {
-    validateManifestDigest(manifestDigest, "manifest digest");
-    const bytes = await safeReadFile(entryPath(manifestsPath, manifestDigest), context, {
-      maxBytes: context.budget.maxManifestBytes
-    });
-    if (sha256ManifestBytes(bytes) !== manifestDigest) {
-      throw serviceManifestError(
-        "storage_manifest_content_invalid",
-        "Service manifest content digest does not match its immutable address."
-      );
-    }
-    return bytes;
-  }
-
-  async function commit({
-    previousPointer,
-    generation,
+  async function commitManifest({
+    serviceId,
+    expectedServiceRevision,
+    expectedSetRevision,
     manifestBytes,
     manifestDigest,
-    requestDigest,
-    serviceId,
-    terminalOutcome
+    requestDigest
   }, context) {
-    context.check();
-    await ensureLayout(context);
-    const fence = await acquireWriterFence(context);
+    await ensureAuthority(context);
+    const db = openAuthorityDatabase(rootPath, { create: false });
     try {
-    validateManifestDigest(manifestDigest, "manifest digest");
-    validateManifestDigest(requestDigest, "request digest");
-    validateOpaqueServiceId(serviceId);
-    if (sha256ManifestBytes(manifestBytes) !== manifestDigest) {
-      throw serviceManifestError(
-        "storage_manifest_content_invalid",
-        "Service manifest canonical bytes do not match their digest."
-      );
-    }
-    const generationBytes = Buffer.from(stableManifestJson(generation), "utf8");
-    const generationDigest = sha256ManifestBytes(generationBytes);
-    const candidatePointer = Object.freeze({
-      schemaVersion: SERVICE_MANIFEST_POINTER_SCHEMA_VERSION,
-      setRevision: generation.setRevision,
-      setDigest: generation.setDigest,
-      generationDigest
-    });
-    validateGeneration(generation, candidatePointer, context.budget);
-    const currentPointer = await readPointer(context);
-    if (!samePointer(currentPointer, previousPointer)) {
-      throw serviceManifestError(
-        "storage_manifest_cas_stale",
-        "Service manifest durable pointer changed before publication."
-      );
-    }
-    await writeImmutableFile({
-      directoryPath: manifestsPath,
-      digest: manifestDigest,
-      kind: "manifest",
-      bytes: manifestBytes,
-      context
-    });
-    await writeImmutableFile({
-      directoryPath: generationsPath,
-      digest: generationDigest,
-      kind: "generation",
-      bytes: generationBytes,
-      context
-    });
-    const journal = {
-      schemaVersion: SERVICE_MANIFEST_JOURNAL_SCHEMA_VERSION,
-      phase: "prepared",
-      previousPointer,
-      candidatePointer,
-      requestDigest,
-      serviceId,
-      manifestDigest,
-      terminalOutcome
-    };
-    validateJournal(journal);
-    await writeStagedFile({
-      directoryPath: rootPath,
-      targetPath: journalPath,
-      kind: "journal",
-      bytes: Buffer.from(stableManifestJson(journal), "utf8"),
-      context
-    });
-    context.check();
-    await fence.assertOwned();
-    await writeStagedFile({
-      directoryPath: rootPath,
-      targetPath: latestPath,
-      kind: "latest",
-      bytes: Buffer.from(stableManifestJson(candidatePointer), "utf8"),
-      context
-    });
-
-    // The latest-pointer rename is the commit point. Journal cleanup is bounded
-    // maintenance; a retained prepared journal is reconciled on the next open.
-    await fence.assertOwned();
-    try {
-      await removeRegularFileAndSync(journalPath, rootPath);
-    } catch {
-      // A durable candidate pointer plus the prepared journal remains recoverable.
-    }
-    return candidatePointer;
+      return db.transaction(() => {
+        context.check();
+        const existingRequest = outcomeFromRow(db.prepare(`
+          SELECT * FROM manifest_requests WHERE request_digest=?
+        `).get(requestDigest));
+        const input = {
+          serviceId,
+          manifestDigest,
+          expectedServiceRevision,
+          expectedSetRevision
+        };
+        if (existingRequest) {
+          assertRequestMatches(existingRequest, input);
+          return Object.freeze({
+            outcome: existingRequest,
+            replayed: true,
+            changed: false
+          });
+        }
+        const meta = metaRows(db);
+        const candidate = pointerFromMeta(meta, "candidate");
+        const published = pointerFromMeta(meta, "published");
+        const existingService = db.prepare(`
+          SELECT service_revision,manifest_digest
+          FROM manifest_services
+          WHERE service_id=?
+        `).get(serviceId);
+        const actualServiceRevision = Number(
+          existingService?.service_revision || 0
+        );
+        if (expectedServiceRevision !== actualServiceRevision) {
+          throw serviceManifestError(
+            "storage_manifest_service_revision_stale",
+            "Service manifest expected service revision is stale."
+          );
+        }
+        if (expectedSetRevision !== candidate.setRevision) {
+          throw serviceManifestError(
+            "storage_manifest_set_revision_stale",
+            "Service manifest expected set revision is stale."
+          );
+        }
+        const unchanged =
+          String(existingService?.manifest_digest || "") === manifestDigest;
+        const serviceRevision = unchanged
+          ? actualServiceRevision
+          : actualServiceRevision + 1;
+        const setRevision = unchanged
+          ? candidate.setRevision
+          : candidate.setRevision + 1;
+        if (!existingService && !unchanged) {
+          const serviceCount = numberMeta(meta, "service_count");
+          if (serviceCount + 1 > context.budget.maxServices) {
+            throw serviceManifestError(
+              "storage_manifest_budget_exceeded",
+              "Service manifest service count exceeds its resource budget."
+            );
+          }
+        }
+        let setDigest = candidate.setDigest;
+        if (!unchanged) {
+          if (
+            candidate.setRevision - published.setRevision >=
+            SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS
+          ) {
+            throw serviceManifestError(
+              "storage_manifest_publication_backlog_exceeded",
+              "Service manifest unpublished revision backlog is exhausted."
+            );
+          }
+          setDigest = transitionSetDigest({
+            previousSetDigest: candidate.setDigest,
+            setRevision,
+            serviceId,
+            serviceRevision,
+            manifestDigest
+          });
+          const existingBlob = db.prepare(`
+            SELECT bytes,byte_size FROM manifest_blobs WHERE digest=?
+          `).get(manifestDigest);
+          if (existingBlob) {
+            const existingBytes = Buffer.from(existingBlob.bytes);
+            if (
+              existingBytes.length !== Number(existingBlob.byte_size) ||
+              !existingBytes.equals(manifestBytes)
+            ) {
+              throw serviceManifestError(
+                "storage_manifest_immutable_conflict",
+                "Service manifest indexed content conflicts with its digest."
+              );
+            }
+          } else {
+            context.consumeWrite(manifestBytes.length);
+            db.prepare(`
+              INSERT INTO manifest_blobs(digest,bytes,byte_size)
+              VALUES(?,?,?)
+            `).run(manifestDigest, manifestBytes, manifestBytes.length);
+          }
+          if (existingService) {
+            db.prepare(`
+              UPDATE manifest_service_versions
+              SET valid_to_revision=?
+              WHERE service_id=? AND valid_to_revision=0
+            `).run(setRevision, serviceId);
+          }
+          db.prepare(`
+            INSERT INTO manifest_service_versions(
+              service_id,valid_from_revision,valid_to_revision,
+              service_revision,manifest_digest
+            ) VALUES(?,?,0,?,?)
+          `).run(serviceId, setRevision, serviceRevision, manifestDigest);
+          db.prepare(`
+            INSERT INTO manifest_services(
+              service_id,service_revision,manifest_digest
+            ) VALUES(?,?,?)
+            ON CONFLICT(service_id) DO UPDATE SET
+              service_revision=excluded.service_revision,
+              manifest_digest=excluded.manifest_digest
+          `).run(serviceId, serviceRevision, manifestDigest);
+          setMeta(db, "candidate_set_revision", setRevision);
+          setMeta(db, "candidate_set_digest", setDigest);
+        }
+        const outcome = requestOutcome({
+          requestDigest,
+          serviceId,
+          manifestDigest,
+          expectedServiceRevision,
+          expectedSetRevision,
+          serviceRevision,
+          setRevision,
+          setDigest
+        });
+        const recordBytes = Buffer.byteLength(stableManifestJson(outcome));
+        if (recordBytes > context.budget.maxRequestBytes) {
+          throw serviceManifestError(
+            "storage_manifest_request_capacity_exceeded",
+            "Service manifest request record exceeds its byte budget."
+          );
+        }
+        let removed = 0;
+        const cutoff = now() - REQUEST_RETENTION_MS;
+        while (removed < context.budget.maxCleanupEntries) {
+          const currentMeta = metaRows(db);
+          const overCapacity =
+            numberMeta(currentMeta, "request_count") + 1 >
+              context.budget.maxRequestRecords ||
+            numberMeta(currentMeta, "request_bytes") + recordBytes >
+              context.budget.maxRequestBytes;
+          const oldest = db.prepare(`
+            SELECT sequence
+            FROM manifest_requests
+            WHERE ? OR created_at_ms<=?
+            ORDER BY created_at_ms ASC,sequence ASC
+            LIMIT 1
+          `).get(overCapacity ? 1 : 0, cutoff);
+          if (!oldest) break;
+          context.inspectCleanupEntry();
+          db.prepare(
+            "DELETE FROM manifest_requests WHERE sequence=?"
+          ).run(oldest.sequence);
+          removed += 1;
+        }
+        const capacity = metaRows(db);
+        if (
+          numberMeta(capacity, "request_count") + 1 >
+            context.budget.maxRequestRecords ||
+          numberMeta(capacity, "request_bytes") + recordBytes >
+            context.budget.maxRequestBytes
+        ) {
+          throw serviceManifestError(
+            "storage_manifest_request_capacity_exceeded",
+            "Service manifest request history capacity is exhausted."
+          );
+        }
+        context.consumeWrite(recordBytes);
+        db.prepare(`
+          INSERT INTO manifest_requests(
+            request_digest,service_id,manifest_digest,
+            expected_service_revision,expected_set_revision,
+            service_revision,set_revision,set_digest,receipt_ref,
+            created_at_ms,record_bytes
+          ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        `).run(
+          outcome.requestDigest,
+          outcome.serviceId,
+          outcome.manifestDigest,
+          outcome.expectedServiceRevision,
+          outcome.expectedSetRevision,
+          outcome.serviceRevision,
+          outcome.setRevision,
+          outcome.setDigest,
+          outcome.receiptRef,
+          now(),
+          recordBytes
+        );
+        return Object.freeze({
+          outcome,
+          replayed: false,
+          changed: !unchanged
+        });
+      }).immediate();
     } finally {
-      await fence.release();
+      db.close();
     }
   }
 
-  async function acknowledgePublished({ candidatePointer, candidateGeneration, publishedPointer, publishedGeneration }, context) {
-    context.check();
-    await ensureLayout(context);
-    const fence = await acquireWriterFence(context);
+  async function acknowledgePublished({ setRevision, setDigest }, context) {
+    await ensureAuthority(context);
+    const db = openAuthorityDatabase(rootPath, { create: false });
     try {
-      const durableCandidate = await readPointer(context);
-      const durablePublished = await readPublishedPointer(context);
-      if (!samePointer(durableCandidate, candidatePointer) || !samePointer(durablePublished, publishedPointer)) {
-        throw serviceManifestError(
-          "storage_manifest_cas_stale",
-          "Service manifest publication authority changed before acknowledgement."
-        );
-      }
-      await readGeneration(candidatePointer, context);
-      await fence.assertOwned();
-      await writeStagedFile({
-        directoryPath: rootPath,
-        targetPath: publishedPath,
-        kind: "latest",
-        bytes: Buffer.from(stableManifestJson(candidatePointer), "utf8"),
-        context
-      });
-      await fence.assertOwned();
-      try {
-        await cleanupTemporaryFiles([rootPath, manifestsPath, generationsPath], context);
-        const retainedGenerationDigests = new Set([candidatePointer, publishedPointer]
-          .filter(Boolean)
-          .map((pointer) => pointer.generationDigest));
-        const retainedManifestDigests = new Set([
-          ...candidateGeneration.services,
-          ...(publishedGeneration?.services || [])
-        ].map((entry) => entry.manifestDigest));
-        await cleanupImmutableOrphans({
-          directoryPath: generationsPath,
-          retainedDigests: retainedGenerationDigests,
-          context
-        });
-        await cleanupImmutableOrphans({
-          directoryPath: manifestsPath,
-          retainedDigests: retainedManifestDigests,
-          context
-        });
-        await removeRegularFileAndSync(journalPath, rootPath);
-      } catch {
-        // published.json is the acknowledgement commit point. Cleanup is retryable
-        // maintenance and cannot turn an accepted snapshot into an ambiguous error.
-      }
-      return candidatePointer;
+      return db.transaction(() => {
+        context.check();
+        const meta = metaRows(db);
+        const candidate = pointerFromMeta(meta, "candidate");
+        if (
+          candidate.setRevision !== setRevision ||
+          candidate.setDigest !== setDigest
+        ) {
+          throw serviceManifestError(
+            "storage_manifest_acknowledgement_stale",
+            "Service manifest acknowledgement does not match the current candidate."
+          );
+        }
+        setMeta(db, "published_set_revision", setRevision);
+        setMeta(db, "published_set_digest", setDigest);
+        const obsolete = db.prepare(`
+          SELECT service_id,valid_from_revision,manifest_digest
+          FROM manifest_service_versions
+          WHERE valid_to_revision<>0 AND valid_to_revision<=?
+          ORDER BY valid_to_revision ASC,service_id ASC
+          LIMIT ?
+        `).all(setRevision, context.budget.maxCleanupEntries);
+        for (const row of obsolete) {
+          context.inspectCleanupEntry();
+          db.prepare(`
+            DELETE FROM manifest_service_versions
+            WHERE service_id=? AND valid_from_revision=?
+          `).run(row.service_id, row.valid_from_revision);
+          const retained = db.prepare(`
+            SELECT 1 FROM manifest_service_versions
+            WHERE manifest_digest=?
+            LIMIT 1
+          `).get(row.manifest_digest);
+          if (!retained) {
+            db.prepare(
+              "DELETE FROM manifest_blobs WHERE digest=?"
+            ).run(row.manifest_digest);
+          }
+        }
+        return candidate;
+      }).immediate();
     } finally {
-      await fence.release();
+      db.close();
     }
   }
 
   return Object.freeze({
     rootPath,
-    manifestsPath,
-    generationsPath,
-    latestPath,
-    publishedPath,
-    journalPath,
-    recover,
-    readPublished,
-    readManifest,
-    commit,
+    databasePath,
+    readSnapshot,
+    commitManifest,
     acknowledgePublished
   });
 }

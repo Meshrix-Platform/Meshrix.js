@@ -380,7 +380,7 @@ export function macosVersionInfo(options = {}) {
   const pathExistsFn = options.pathExistsFn || pathExists;
   const commandPathFn = options.commandPathFn || commandPath;
   const runCommandFn = options.runCommandFn || runCommand;
-  const swVersPath = pathExistsFn("/usr/bin/sw_vers") ? "/usr/bin/sw_vers" : commandPathFn("sw_vers");
+  const swVersPath = commandPathFn("sw_vers");
   if (!swVersPath) {
     return {
       productName: "macOS",

@@ -50,7 +50,7 @@ if (packageJson.devDependencies?.[policy.memoryLeak.framework] !== "^5.16.0") {
 }
 if (
   packageJson.scripts?.["server:verify:resource-discipline"] !==
-  "node tools/server-scripts/verify-resource-discipline.mjs && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.mjs && node tools/server-scripts/verify-runtime-memory-leaks.mjs"
+  "node tools/server-scripts/verify-resource-discipline.mjs && npm run vitest -- tests/vitest/server/resource-discipline-policy.test.mjs tests/vitest/server/job-pipeline-upload-session-persistence.test.mjs tests/vitest/server/upload-workspace-materialization.test.mjs && node tools/server-scripts/verify-runtime-memory-leaks.mjs"
 ) {
   findings.push("package.json:resource-discipline-gate-not-canonical");
 }
@@ -145,10 +145,147 @@ const requiredRuntimeContracts = [
   {
     file: "packages/protocols/pubsub/event-bus.mjs",
     tokens: [
-      "DEFAULT_MAX_EVENT_LOG_BYTES",
-      "DEFAULT_MAX_MEMORY_EVENT_BYTES",
+      "DEFAULT_MAX_TOPICS",
+      "DEFAULT_MAX_EVENT_BYTES",
+      "DEFAULT_MAX_RESPONSE_BYTES",
+      "MAX_WAITERS",
+      "MAX_TIMEOUT_MS"
+    ]
+  },
+  {
+    file: "packages/server-runtime/src/events/sqlite-protocol-event-store.mjs",
+    tokens: [
+      "DEFAULT_MAX_RECORDS",
+      "DEFAULT_MAX_BYTES",
+      "DEFAULT_MAX_AGE_MS",
+      "DEFAULT_RETENTION_BATCH",
+      "DEFAULT_MAX_LATEST_TOPICS",
       "DEFAULT_MAX_LATEST_BYTES",
-      "DEFAULT_MAX_EVENT_BYTES"
+      "DEFAULT_MAX_EVENT_BYTES",
+      "idx_protocol_events_topic_offset",
+      "idx_protocol_events_published_offset"
+    ]
+  },
+  {
+    file: "packages/server-runtime/src/jobs/jobs/job-projection-store.mjs",
+    tokens: [
+      "DEFAULT_MAX_RECORDS",
+      "DEFAULT_MAX_ACTIVE_RECORDS",
+      "DEFAULT_MAX_METADATA_BYTES",
+      "DEFAULT_MAX_ARTIFACT_BYTES",
+      "DEFAULT_TERMINAL_RETENTION_MS",
+      "DEFAULT_CLEANUP_BATCH",
+      "idx_jobs_created_id",
+      "idx_jobs_owner_created_id",
+      "pending_delete_bytes",
+      "prepared_artifact_bytes"
+    ]
+  },
+  {
+    file: "packages/server-runtime/src/jobs/jobs/job-projection-recovery.mjs",
+    tokens: [
+      "highWaterMark: 64 * 1024",
+      "listArtifactJournal",
+      "job_projection_artifact_digest_mismatch"
+    ]
+  },
+  {
+    file: "packages/server-runtime/src/jobs/jobs/job-manager-persistence.mjs",
+    tokens: [
+      "readBoundedText",
+      "MAX_JOB_METADATA_BYTES",
+      "MAX_JOB_PAYLOAD_BYTES",
+      "MAX_JOB_RESULT_BYTES"
+    ]
+  },
+  {
+    file: "packages/agents/src/upstream-gateway/support.mjs",
+    tokens: [
+      "MAX_UPSTREAM_ENDPOINTS",
+      "MAX_UPSTREAM_ENDPOINT_WEIGHT",
+      "MAX_UPSTREAM_TOTAL_ENDPOINT_WEIGHT",
+      "upstream_endpoint_total_weight_exceeded"
+    ]
+  },
+  {
+    file: "packages/agents/src/upstream-gateway/endpoint-traffic.mjs",
+    tokens: [
+      "currentWeights",
+      "eligibleWeight",
+      "no_enabled_endpoint",
+      "consumeAllowedTraffic"
+    ]
+  },
+  {
+    file: "packages/foundation/src/storage/service-manifest-transaction.mjs",
+    tokens: [
+      "SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS",
+      "REQUEST_RETENTION_MS",
+      "manifest_services",
+      "manifest_service_versions",
+      "manifest_requests",
+      "idx_manifest_versions_retention",
+      "idx_manifest_requests_created",
+      "storage_manifest_request_capacity_exceeded",
+      "withInitializationLock"
+    ]
+  },
+  {
+    file: "packages/foundation/src/storage/storage-ports.mjs",
+    tokens: [
+      "maxRequestRecords",
+      "maxRequestBytes"
+    ]
+  },
+  {
+    file: "packages/foundation/src/security/operation-audit.mjs",
+    tokens: [
+      "DEFAULT_MAX_RECORDS",
+      "DEFAULT_MAX_LOGICAL_BYTES",
+      "DEFAULT_MAX_DATABASE_BYTES",
+      "DEFAULT_CLEANUP_BATCH_SIZE",
+      "DEFAULT_MAINTENANCE_EVERY_APPENDS",
+      "OperationAuditCapacityError",
+      "operation_audit_meta",
+      "idx_operation_audit_retention",
+      "wal_checkpoint(PASSIVE)",
+      "incremental_vacuum"
+    ]
+  },
+  {
+    file: "packages/foundation/src/storage/backup-snapshot.mjs",
+    tokens: [
+      "MINIMUM_FREE_SPACE_RESERVE_BYTES",
+      "FREE_SPACE_RESERVE_PERCENT",
+      "MAX_PENDING_BACKUP_CLEANUP",
+      "reconcilePendingBackups",
+      "estimateSnapshotBytes",
+      "assertSnapshotCapacity",
+      "fs.statfs",
+      "cloneStableRegularFile",
+      "retentionPolicy",
+      "sequentialFileConcurrency: 1"
+    ]
+  },
+  {
+    file: "packages/foundation/src/storage/storage-file-safety.mjs",
+    tokens: [
+      "COPYFILE_FICLONE_FORCE",
+      "cloneStableRegularFile",
+      "copy-on-write-page-update"
+    ]
+  },
+  {
+    file: "packages/foundation/src/storage/storage-maintenance-coordinator.mjs",
+    tokens: [
+      "STORAGE_EXECUTION_BUDGET_HARD_LIMITS",
+      "maxConcurrentMutationsPerRoot: 1",
+      "queueAllocationBytes",
+      "queuedBufferProductBytes",
+      "storage_execution_budget_limit_exceeded",
+      "storage_execution_budget_product_exceeded",
+      "storage_operation_queue_capacity_invalid",
+      "assertFits"
     ]
   },
   {
@@ -161,7 +298,26 @@ const requiredRuntimeContracts = [
       "theilSenSlope",
       "--expose-gc",
       "captureProfile",
+      "runHighRiskWorkloads",
+      "highRiskWorkloads",
+      "minimumProtocolEvents",
       "toolCacheCleanupAttempted: false"
+    ]
+  },
+  {
+    file: "tools/server-scripts/lib/resource-high-risk-workload-child.mjs",
+    tokens: [
+      "openStoredObjectReadStream",
+      "createUploadWorkspaceMaterializationTransactionStore",
+      "createSqliteProtocolEventStore",
+      "createJobProjectionStore",
+      "createEndpointTrafficController",
+      "createOperationAuditStore",
+      "createServiceManifestStore",
+      "createStorageBackup",
+      "1_000_000",
+      "100_000",
+      "syntheticDataOnly: true"
     ]
   },
   {
@@ -191,8 +347,7 @@ if (
 }
 
 const directAppendAllowlist = new Set([
-  "packages/foundation/src/observability/runtime-logger.mjs",
-  "packages/protocols/pubsub/event-bus.mjs"
+  "packages/foundation/src/observability/runtime-logger.mjs"
 ]);
 const unboundedJsonlPrimitiveAllowlist = new Set([
   "packages/agents/src/agent-memory/index.mjs",

@@ -1,11 +1,6 @@
 import { serverToken } from "#lico/product-api";
 import { cloneJob } from "./job-manager-projection.mjs";
-import {
-  loadJobPayload,
-  listPersistedJobMetas,
-  persistJobMeta,
-  loadPersistedJobs
-} from "./job-manager-persistence.mjs";
+import { persistJobMeta } from "./job-manager-persistence.mjs";
 import { normalizeArchiveBatchId, RECOVERY_STAGE_MESSAGE } from "./job-manager-validation.mjs";
 
 export function createJobManagerQueue(ctx) {
@@ -16,6 +11,7 @@ export function createJobManagerQueue(ctx) {
     dispatchingJobIds,
     jobs,
     checkpointJobs,
+    jobProjectionStore,
     durableWorkflows,
     logJob,
     state,
@@ -31,23 +27,45 @@ export function createJobManagerQueue(ctx) {
     return cloneJob(job, options);
   }
 
-  async function refreshPersistedJobs() {
-    const persistedJobs = await listPersistedJobMetas(userDataPath);
-    const knownIds = new Set(persistedJobs.map((job) => job.id).filter(Boolean));
+  async function forEachActiveProjection(visit) {
+    let cursor = "";
+    do {
+      const page = jobProjectionStore.listActive({ cursor, limit: 200 });
+      for (const job of page.items) {
+        await visit(job);
+      }
+      cursor = page.nextCursor;
+      if (page.done) break;
+    } while (cursor);
+  }
 
-    for (const job of persistedJobs) {
-      if (!job.archiveBatchId && job.id) {
-        job.archiveBatchId = normalizeArchiveBatchId(job) || serverToken("archive_batch", job.checkpointId || job.id);
-        await persistJobMeta(userDataPath, job);
-      }
-      if (!job.checkpointTreeId && job.id) {
-        job.checkpointTreeId = checkpointTreeIdForJob(job);
-        await persistJobMeta(userDataPath, job);
-      }
-      if (!job.workflowId && job.id) {
-        job.workflowId = workflowIdForJob(job);
-        await persistJobMeta(userDataPath, job);
-      }
+  async function normalizeRecoveredJob(job) {
+    let changed = false;
+    if (!job.archiveBatchId && job.id) {
+      job.archiveBatchId =
+        normalizeArchiveBatchId(job) ||
+        serverToken("archive_batch", job.checkpointId || job.id);
+      changed = true;
+    }
+    if (!job.checkpointTreeId && job.id) {
+      job.checkpointTreeId = checkpointTreeIdForJob(job);
+      changed = true;
+    }
+    if (!job.workflowId && job.id) {
+      job.workflowId = workflowIdForJob(job);
+      changed = true;
+    }
+    if (changed) {
+      await persistJobMeta(userDataPath, job, jobProjectionStore);
+    }
+    return job;
+  }
+
+  async function refreshPersistedJobs() {
+    const knownIds = new Set();
+    await forEachActiveProjection(async (projectedJob) => {
+      const job = await normalizeRecoveredJob(projectedJob);
+      knownIds.add(job.id);
       if (job.checkpointTreeId && ["queued", "running"].includes(job.status)) {
         await ensureJobCheckpointTree(job).catch(() => null);
         await updateJobCheckpointNode(job, {
@@ -74,7 +92,7 @@ export function createJobManagerQueue(ctx) {
       } else {
         forgetActiveManifestJob(job);
       }
-    }
+    });
 
     for (const jobId of [...jobs.keys()]) {
       if (!knownIds.has(jobId)) {
@@ -125,22 +143,40 @@ export function createJobManagerQueue(ctx) {
     logJob("info", "jobs.queue.recovery.started", {
       recoverActive: processingEnabled
     });
-    const { jobs: persistedJobs, recoverableEntries } = await loadPersistedJobs(userDataPath, {
-      recoverActive: processingEnabled
-    });
-
-    for (const job of persistedJobs) {
-      if (!job.archiveBatchId && job.id) {
-        job.archiveBatchId = normalizeArchiveBatchId(job) || serverToken("archive_batch", job.checkpointId || job.id);
-        await persistJobMeta(userDataPath, job);
-      }
-      if (!job.checkpointTreeId && job.id) {
-        job.checkpointTreeId = checkpointTreeIdForJob(job);
-        await persistJobMeta(userDataPath, job);
-      }
-      if (!job.workflowId && job.id) {
-        job.workflowId = workflowIdForJob(job);
-        await persistJobMeta(userDataPath, job);
+    let persistedJobCount = 0;
+    let recoverableCount = 0;
+    await forEachActiveProjection(async (projectedJob) => {
+      const job = await normalizeRecoveredJob(projectedJob);
+      persistedJobCount += 1;
+      if (processingEnabled && ["queued", "running"].includes(job.status)) {
+        let payload = null;
+        let payloadInvalid = false;
+        try {
+          payload = await ctx.loadJobPayload(job.id);
+        } catch (error) {
+          if (error?.name !== "JobPersistenceError") throw error;
+          payloadInvalid = true;
+        }
+        const recoveredAt = new Date().toISOString();
+        if (payload) {
+          job.status = "queued";
+          job.stage = RECOVERY_STAGE_MESSAGE;
+          job.error = "";
+          job.finishedAt = undefined;
+          job.updatedAt = recoveredAt;
+          await persistJobMeta(userDataPath, job, jobProjectionStore);
+          recoverableCount += 1;
+        } else {
+          job.status = "failed";
+          job.stage = "任务恢复失败";
+          job.error = payloadInvalid
+            ? "服务重启后任务 payload 已损坏，不能继续恢复。"
+            : "服务重启后缺少任务 payload，不能继续恢复。";
+          job.finishedAt = recoveredAt;
+          job.updatedAt = recoveredAt;
+          await persistJobMeta(userDataPath, job, jobProjectionStore);
+          return;
+        }
       }
       if (job.checkpointTreeId && ["queued", "running"].includes(job.status)) {
         await ensureJobCheckpointTree(job).catch(() => null);
@@ -166,13 +202,13 @@ export function createJobManagerQueue(ctx) {
           reason: "job_manager_startup_recovery"
         }).catch(() => null);
       }
-    }
+    });
 
     state.readyComplete = true;
     logJob("info", "jobs.queue.recovery.completed", {
-      persistedJobCount: persistedJobs.length,
-      recoverableCount: recoverableEntries.length,
-      recoveredQueuedCount: recoverableEntries.length
+      persistedJobCount,
+      recoverableCount,
+      recoveredQueuedCount: recoverableCount
     });
   }
 

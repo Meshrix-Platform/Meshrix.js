@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startHttpServer } from "../../apps/server/runtime/http-server.mjs";
+import { openSqliteDatabase } from "../../packages/foundation/src/storage/sqlite-database.mjs";
 import { authHeaders, installAuthenticatedFetch } from "./test-auth-helper.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -36,6 +37,22 @@ async function readRuntimeLogs(logDir) {
     records.push(...await readJsonl(path.join(logDir, entry.name)));
   }
   return records;
+}
+
+function readProtocolEventTraces(userDataPath) {
+  const database = openSqliteDatabase(
+    path.join(userDataPath, "protocol-events", "events.sqlite"),
+    { readonly: true, fileMustExist: true }
+  );
+  try {
+    return database.prepare(`
+      SELECT trace_json
+      FROM protocol_events
+      ORDER BY offset ASC
+    `).all().map((entry) => JSON.parse(String(entry.trace_json || "{}")));
+  } finally {
+    database.close();
+  }
 }
 
 async function removeTempDir(dirPath) {
@@ -83,9 +100,7 @@ async function main() {
         "Content-Type": "application/json",
         ...authHeaders(auth, { method: "POST", safetyConfirm: true })
       },
-      body: JSON.stringify({
-        defaultModelProvider: "local-model"
-      })
+      body: JSON.stringify({})
     });
     assert.equal(settings.status, 200);
     const settingsTraceId = settings.headers.get("x-licomesh-trace-id");
@@ -120,16 +135,25 @@ async function main() {
 
     const runtimeRecords = await readRuntimeLogs(logDir);
     assert.ok(
-      runtimeRecords.some((record) => record.event === "http.request.started" && record.traceId === healthTraceId),
-      "runtime logs must include HTTP traceId"
+      !runtimeRecords.some(
+        (record) =>
+          record.event === "http.request.started" &&
+          record.traceId === healthTraceId
+      ),
+      "routine health probes must not be persisted as request logs"
+    );
+    const eventTraces = readProtocolEventTraces(userDataPath);
+    assert.ok(
+      eventTraces.every((trace) => Object.hasOwn(trace, "traceId")),
+      "events must carry traceId fields"
     );
     assert.ok(
-      runtimeRecords.some((record) => record.event === "operation.http.completed" && record.traceId === settingsTraceId),
-      "operation logs must inherit request traceId"
+      eventTraces.some(
+        (trace) =>
+          trace.traceId === maintenanceTraceId ||
+          trace.traceId === settingsTraceId
+      )
     );
-    const events = await readJsonl(path.join(userDataPath, "protocol-events", "events.jsonl"));
-    assert.ok(events.every((event) => Object.hasOwn(event, "traceId")), "events must carry traceId fields");
-    assert.ok(events.some((event) => event.traceId === maintenanceTraceId || event.traceId === settingsTraceId));
   } finally {
     if (server) {
       await server.close().catch(() => {});

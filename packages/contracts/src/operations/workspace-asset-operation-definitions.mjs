@@ -8,6 +8,14 @@ import {
   workspaceAssetOperation
 } from "./protocol-operation-builders.mjs";
 
+const WORKSPACE_CHECKPOINT_RESTORE_SCHEMA = schema(["treeId", "nodeId"], {
+  treeId: { type: "string" },
+  nodeId: { type: "string" },
+  workspaceId: { type: "string" },
+  mode: { type: "string" },
+  reason: { type: "string" }
+});
+
 export const WORKSPACE_ASSET_OPERATION_DEFINITIONS = Object.freeze([
 protocolOperation({
     id: "workspace.contribution.revoke",
@@ -92,6 +100,7 @@ workspaceAssetOperation({
     method: "GET",
     path: "/api/workspace/assets",
     query: ASSET_QUERY,
+    coerce: { limit: "number" },
     scopes: ["workspace:read"],
     readOnly: true,
     inputSchema: schema([], {
@@ -303,7 +312,8 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: WORKSPACE_CHECKPOINT_RESTORE_SCHEMA
   }),
 protocolOperation({
     id: "workspace.checkpoint.restore",
@@ -314,7 +324,8 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: WORKSPACE_CHECKPOINT_RESTORE_SCHEMA
   }),
 protocolOperation({
     id: "workspace.checkpoint.scope.query",

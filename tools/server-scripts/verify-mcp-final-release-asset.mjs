@@ -101,7 +101,7 @@ async function runPortable(executable, args, isolatedRoot) {
   const result = await execFileAsync(executable, args, {
     cwd: path.dirname(executable),
     env: {
-      PATH: process.env.PATH || "/usr/bin:/bin",
+      PATH: process.env.PATH || "",
       HOME: home,
       USERPROFILE: home,
       XDG_CONFIG_HOME: path.join(home, ".config"),

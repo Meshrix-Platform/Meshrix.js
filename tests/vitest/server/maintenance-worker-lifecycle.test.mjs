@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createMaintenanceAgentServiceMock = vi.hoisted(() => vi.fn());
 const createOperationPermissionStoreMock = vi.hoisted(() => vi.fn());
 const createJobManagerMock = vi.hoisted(() => vi.fn());
-const createProtocolEventBusMock = vi.hoisted(() => vi.fn());
+const createProtocolEventRuntimeMock = vi.hoisted(() => vi.fn());
 const createServerRuntimeMock = vi.hoisted(() => vi.fn());
 const bindOperationDispatcherMock = vi.hoisted(() => vi.fn(() => vi.fn()));
 const loadSettingsMock = vi.hoisted(() => vi.fn());
@@ -23,8 +23,8 @@ vi.mock("../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs", () => 
   createJobManager: createJobManagerMock
 }));
 
-vi.mock("#lico/protocols/pubsub/event-bus", () => ({
-  createProtocolEventBus: createProtocolEventBusMock
+vi.mock("../../../packages/server-runtime/src/events/protocol-event-runtime.mjs", () => ({
+  createProtocolEventRuntime: createProtocolEventRuntimeMock
 }));
 
 vi.mock("#lico/product-api", () => ({
@@ -60,6 +60,9 @@ function createHarness({ startFailure = null } = {}) {
     })
   };
   const protocolEventBus = {
+  };
+  const protocolEventRuntime = {
+    protocolEventBus,
     close: vi.fn(async () => {
       order.push("events");
     })
@@ -96,7 +99,7 @@ function createHarness({ startFailure = null } = {}) {
   };
   createServerRuntimeMock.mockResolvedValue(runtime);
   createJobManagerMock.mockReturnValue(jobManager);
-  createProtocolEventBusMock.mockReturnValue(protocolEventBus);
+  createProtocolEventRuntimeMock.mockResolvedValue(protocolEventRuntime);
   createOperationPermissionStoreMock.mockReturnValue(operationPermissionStore);
   createMaintenanceAgentServiceMock.mockReturnValue(maintenanceAgent);
   createMaintenanceWorkQueueProviderMock.mockResolvedValue(maintenanceWorkQueue);
@@ -107,6 +110,7 @@ function createHarness({ startFailure = null } = {}) {
     runtime,
     jobManager,
     protocolEventBus,
+    protocolEventRuntime,
     operationPermissionStore,
     maintenanceAgent,
     maintenanceWorkQueue,
@@ -187,10 +191,10 @@ describe("maintenance worker lifecycle", () => {
     expect(String(failure)).not.toContain("private owner detail");
     expect(harness.jobManager.close).toHaveBeenCalledOnce();
     expect(harness.runtime.close).not.toHaveBeenCalled();
-    expect(harness.protocolEventBus.close).not.toHaveBeenCalled();
+    expect(harness.protocolEventRuntime.close).not.toHaveBeenCalled();
 
     await worker.close();
     expect(harness.runtime.close).toHaveBeenCalledOnce();
-    expect(harness.protocolEventBus.close).toHaveBeenCalledOnce();
+    expect(harness.protocolEventRuntime.close).toHaveBeenCalledOnce();
   });
 });

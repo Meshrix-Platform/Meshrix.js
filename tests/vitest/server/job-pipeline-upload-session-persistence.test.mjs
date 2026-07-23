@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { Readable, Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const checkpointMocks = vi.hoisted(() => ({
@@ -39,6 +40,27 @@ const OWNER = Object.freeze({
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function createBufferedResponse() {
+  const chunks = [];
+  const response = new Writable({
+    write(chunk, _encoding, callback) {
+      chunks.push(Buffer.from(chunk));
+      callback();
+    }
+  });
+  response.statusCode = 0;
+  response.headers = {};
+  response.writeHead = (statusCode, headers) => {
+    response.statusCode = statusCode;
+    response.headers = headers;
+  };
+  Object.defineProperty(response, "body", {
+    get: () => Buffer.concat(chunks)
+  });
+  response.json = () => JSON.parse(response.body.toString("utf8"));
+  return response;
 }
 
 async function createCompleteUploadSession(userDataPath, bytes) {
@@ -157,22 +179,16 @@ describe("job pipeline upload-session persistence", () => {
     })).resolves.toEqual(bytes);
     await expect(fs.stat(resolved.stagedPath)).resolves.toMatchObject({ size: bytes.length });
 
-    const response = {
-      statusCode: 0,
-      headers: {},
-      body: null,
-      writeHead(statusCode, headers) {
-        this.statusCode = statusCode;
-        this.headers = headers;
-      },
-      end(body) {
-        this.body = body;
-      }
+    const streamedStorageProvider = {
+      ...storageProvider,
+      openObjectReadStream: vi.fn((input) => storageProvider.openObjectReadStream(input)),
+      readObject: vi.fn((input) => storageProvider.readObject(input))
     };
+    const response = createBufferedResponse();
     const artifactHandlers = createJobArtifactHandlers({
       userDataPath,
       jobWorkflow: { getJob: vi.fn(async () => null) },
-      storageObjectProvider: storageProvider,
+      storageObjectProvider: streamedStorageProvider,
       loadNormalizedDocumentStoreRuntime: vi.fn(),
       getDiscoveryState: vi.fn(() => ({})),
       proxyApiRequest: vi.fn()
@@ -186,11 +202,133 @@ describe("job pipeline upload-session persistence", () => {
       statusCode: 200,
       headers: {
         "Content-Type": "application/octet-stream",
-        "Cache-Control": "no-store"
+        "Cache-Control": "no-store",
+        "Content-Length": bytes.length
       },
       body: bytes
     });
     expect(response.headers["Content-Disposition"]).toContain("source.bin");
+    expect(streamedStorageProvider.openObjectReadStream).toHaveBeenCalledOnce();
+    expect(streamedStorageProvider.readObject).not.toHaveBeenCalled();
+  });
+
+  it("denies raw-object access before opening the stored object stream", async () => {
+    const { userDataPath, storageProvider } = await createHarness();
+    const bytes = Buffer.from("protected canonical bytes");
+    const stored = await storageProvider.putObject({
+      objectId: "protected-raw-object",
+      namespace: "tests",
+      fileName: "protected.bin",
+      buffer: bytes,
+      metadata: {
+        ownerSubjectId: OWNER.subjectId,
+        ownerUserId: OWNER.userId
+      }
+    });
+    const guardedStorageProvider = {
+      ...storageProvider,
+      openObjectReadStream: vi.fn((input) => storageProvider.openObjectReadStream(input))
+    };
+    const artifactHandlers = createJobArtifactHandlers({
+      userDataPath,
+      jobWorkflow: { getJob: vi.fn(async () => null) },
+      storageObjectProvider: guardedStorageProvider,
+      loadNormalizedDocumentStoreRuntime: vi.fn(),
+      getDiscoveryState: vi.fn(() => ({})),
+      proxyApiRequest: vi.fn()
+    });
+    const response = createBufferedResponse();
+
+    await artifactHandlers.handleGetRawObject({
+      objectId: stored.objectId,
+      response,
+      authSession: {
+        user: {
+          subjectId: "different-subject",
+          userId: "different-user"
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({
+      error: "原始邮件不存在或不可访问。"
+    });
+    expect(guardedStorageProvider.openObjectReadStream).not.toHaveBeenCalled();
+  });
+
+  it("bounds concurrent raw-object streams and releases capacity after cancellation", async () => {
+    const storedObject = {
+      objectId: "bounded-raw-object",
+      storageRelativePath: "objects/tests/bounded.bin",
+      byteSize: 1,
+      mediaType: "application/octet-stream",
+      metadata: {}
+    };
+    const openObjectReadStream = vi.fn(async () => ({
+      byteSize: 1,
+      stream: new Readable({
+        read() {}
+      })
+    }));
+    const artifactHandlers = createJobArtifactHandlers({
+      userDataPath: "",
+      jobWorkflow: { getJob: vi.fn(async () => null) },
+      storageObjectProvider: {
+        getObject: vi.fn(() => storedObject),
+        openObjectReadStream
+      },
+      loadNormalizedDocumentStoreRuntime: vi.fn(),
+      getDiscoveryState: vi.fn(() => ({})),
+      proxyApiRequest: vi.fn()
+    });
+    const activeDownloads = Array.from({ length: 32 }, () => {
+      const abortController = new AbortController();
+      return {
+        abortController,
+        promise: artifactHandlers.handleGetRawObject({
+          objectId: storedObject.objectId,
+          response: createBufferedResponse(),
+          authSession: null,
+          signal: abortController.signal
+        })
+      };
+    });
+    await vi.waitFor(() => {
+      expect(openObjectReadStream).toHaveBeenCalledTimes(32);
+    });
+
+    const rejectedResponse = createBufferedResponse();
+    await artifactHandlers.handleGetRawObject({
+      objectId: storedObject.objectId,
+      response: rejectedResponse,
+      authSession: null
+    });
+
+    expect(rejectedResponse.statusCode).toBe(503);
+    expect(rejectedResponse.json()).toEqual({
+      error: "原始文件下载容量已满，请稍后重试。",
+      code: "raw_object_download_capacity_exceeded"
+    });
+    expect(openObjectReadStream).toHaveBeenCalledTimes(32);
+
+    for (const download of activeDownloads) {
+      download.abortController.abort();
+    }
+    await Promise.all(activeDownloads.map(({ promise }) => promise.catch(() => {})));
+
+    const resumedAbortController = new AbortController();
+    const resumedDownload = artifactHandlers.handleGetRawObject({
+      objectId: storedObject.objectId,
+      response: createBufferedResponse(),
+      authSession: null,
+      signal: resumedAbortController.signal
+    });
+    await vi.waitFor(() => {
+      expect(openObjectReadStream).toHaveBeenCalledTimes(33);
+    });
+    resumedAbortController.abort();
+    await resumedDownload.catch(() => {});
   });
 
   it("persists a verified zero-byte upload-session file into canonical storage", async () => {

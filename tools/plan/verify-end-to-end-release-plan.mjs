@@ -89,7 +89,7 @@ async function validateManifestSource(repoRoot, source) {
   requireCondition(!source.includes(":"), "Manifest local source path is unsafe");
   const normalizedSource = normalizedRelativeSource(source, "Manifest local source path is unsafe");
   requireCondition(
-    normalizedSource.startsWith("docs/plan/") ||
+    normalizedSource.startsWith("docs/plans/") ||
       normalizedSource.startsWith("tools/plan/"),
     "Manifest local source is not project-root-relative to an allowed plan authority",
   );
@@ -151,7 +151,7 @@ function assertLocalPlatformDirection(prerequisite, dependent) {
 
 function resolvePlanPaths({ repoRoot = defaultRepoRoot, planRoot, reportPath } = {}) {
   const resolvedRepoRoot = path.resolve(repoRoot);
-  const resolvedPlanRoot = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plan"));
+  const resolvedPlanRoot = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
   const resolvedReportPath = path.resolve(
     reportPath ?? path.join(resolvedRepoRoot, "build", "reports", "end-to-end-release-plan.json"),
   );
@@ -316,7 +316,7 @@ export async function verifyEndToEndReleasePlan(options = {}) {
       ...(mapPlan.children ?? []),
     ]) {
       requireCondition(
-        expectedSources.has(`docs/plan/${referencedDirectory}/Checkpoints.json`),
+        expectedSources.has(`docs/plans/${referencedDirectory}/Checkpoints.json`),
         "Manifest is missing an exact prerequisite or child checkpoint source",
       );
     }
@@ -426,7 +426,7 @@ export async function verifyEndToEndReleasePlan(options = {}) {
       "Parent integration checkpoint must remain owned by the child final platform",
     );
     requireCondition(
-      JSON.stringify(parentIntegration).includes(`docs/plan/${directory}/Checkpoints.json`),
+      JSON.stringify(parentIntegration).includes(`docs/plans/${directory}/Checkpoints.json`),
       `Parent integration checkpoint does not identify the child receipt source for ${directory}`,
     );
     requireCondition(
@@ -613,7 +613,7 @@ async function expectVerificationFailure({
 }
 
 export async function runEndToEndReleasePlanMutationTests({ repoRoot = defaultRepoRoot } = {}) {
-  const sourcePlanRoot = path.join(repoRoot, "docs", "plan");
+  const sourcePlanRoot = path.join(repoRoot, "docs", "plans");
   const workRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-e2e-plan-mutations-"));
   const results = [];
 
@@ -811,7 +811,7 @@ export async function runEndToEndReleasePlanMutationTests({ repoRoot = defaultRe
           const manifest = await readJson(manifestPath);
           const pf = manifest.find((plan) => plan.directory === "end-to-end-release/platform-foundation");
           requireCondition(pf, "platform-foundation manifest entry missing");
-          pf.source_files = [...(pf.source_files ?? []), "docs/plan/missing-source-authority.json"];
+          pf.source_files = [...(pf.source_files ?? []), "docs/plans/missing-source-authority.json"];
           await writeJson(manifestPath, manifest);
         },
       },
@@ -831,7 +831,7 @@ export async function runEndToEndReleasePlanMutationTests({ repoRoot = defaultRe
         mutate: async (planRoot) => {
           const manifestPath = path.join(planRoot, "Manifest.json");
           const manifest = await readJson(manifestPath);
-          manifest[0].source_files.push("docs/plan/../../README.md");
+          manifest[0].source_files.push("docs/plans/../../README.md");
           await writeJson(manifestPath, manifest);
         },
       },

@@ -3,6 +3,7 @@ import { hashClientString } from "#lico/client-strings";
 import { sendJson } from "#lico/http-utils";
 import {
   authSubjectFromSession,
+  canAccessAllJobs,
   canAccessJob,
   filterJobsForCaller,
   requestOwnerSubjectFromSession,
@@ -207,7 +208,26 @@ export function createJobHandlers({
     },
 
     async handleListJobs({ limit, response, authSession }) {
-      sendJson(response, 200, filterJobsForCaller(await jobWorkflow.listJobs({ limit }), authSession));
+      const subject = authSubjectFromSession(authSession);
+      const access = !subject.present || canAccessAllJobs(subject)
+        ? null
+        : {
+            principalIds: [
+              subject.subjectId,
+              subject.userId,
+              subject.username
+            ],
+            workspaceIds: subject.allowedWorkspaceIds,
+            jobIds: subject.allowedJobIds
+          };
+      sendJson(
+        response,
+        200,
+        filterJobsForCaller(
+          await jobWorkflow.listJobs({ limit, access }),
+          authSession
+        )
+      );
     },
 
     async handleGetJob({ request, requestBody, jobId, response, authSession }) {

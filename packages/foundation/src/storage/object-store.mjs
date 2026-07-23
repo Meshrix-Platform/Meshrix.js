@@ -5,6 +5,7 @@ import path from "node:path";
 import { resolveWithin } from "#lico/client-strings";
 
 const FILE_COPY_BUFFER_BYTES = 64 * 1024;
+const OBJECT_READ_STREAM_BUFFER_BYTES = 64 * 1024;
 const PRIVATE_DIRECTORY_MODE = 0o700;
 const PRIVATE_FILE_MODE = 0o600;
 const WINDOWS_UNSUPPORTED_DIRECTORY_SYNC_CODES = new Set(["EACCES", "EINVAL", "ENOTSUP", "EPERM"]);
@@ -500,6 +501,34 @@ export function recordStoredObject(db, object = {}) {
 export async function readStoredObject({ userDataPath, storageRelativePath } = {}) {
   const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
   return fs.readFile(resolvedPath);
+}
+
+export async function openStoredObjectReadStream({
+  userDataPath,
+  storageRelativePath,
+  signal
+} = {}) {
+  const resolvedPath = resolveStoredObjectPath(userDataPath, storageRelativePath);
+  const handle = await fs.open(resolvedPath, "r");
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile()) {
+      const error = new Error("Storage object is not a regular file.");
+      error.code = "storage_object_not_regular_file";
+      throw error;
+    }
+    return {
+      byteSize: stat.size,
+      stream: handle.createReadStream({
+        autoClose: true,
+        highWaterMark: OBJECT_READ_STREAM_BUFFER_BYTES,
+        signal
+      })
+    };
+  } catch (error) {
+    await handle.close().catch(() => {});
+    throw error;
+  }
 }
 
 export async function statStoredObject({ userDataPath, storageRelativePath } = {}) {

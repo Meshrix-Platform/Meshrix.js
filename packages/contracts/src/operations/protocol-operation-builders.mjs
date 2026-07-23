@@ -22,6 +22,7 @@ export function protocolOperation({
   method = "POST",
   path = "",
   query = [],
+  coerce = {},
   params = [],
   scopes = [],
   risk = "read_only",
@@ -47,7 +48,7 @@ export function protocolOperation({
     description: description || `Protocol operation for ${id}.`,
     aliases,
     target: { controller: "system", method: targetMethod },
-    http: { method: normalizedMethod, path: httpPath, query, localInForwardMode: true },
+    http: { method: normalizedMethod, path: httpPath, query, coerce, localInForwardMode: true },
     rpc: bodyBound
       ? { method: id, body: "params", params }
       : { method: id, params, query },
@@ -142,6 +143,7 @@ export const ASSET_OPERATION_SCHEMA = schema(["workspaceId"], {
   receiptRef: { type: "string" },
   idempotencyKey: { type: "string" },
   dryRun: { type: "boolean" },
+  overwrite: { type: "boolean" },
   confirm: { type: "boolean" }
 });
 

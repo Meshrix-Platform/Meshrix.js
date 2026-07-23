@@ -15,7 +15,7 @@ export function requireUploadSessionStore(provider = null) {
 export function optionalStorageObjectProvider(provider = null) {
   return (
     typeof provider?.getObject === "function" &&
-    typeof provider?.readObject === "function"
+    typeof provider?.openObjectReadStream === "function"
   ) ? provider : null;
 }
 

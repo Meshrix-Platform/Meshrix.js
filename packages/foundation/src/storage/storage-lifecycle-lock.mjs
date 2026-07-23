@@ -113,7 +113,7 @@ function posixProcessIdentity(pid) {
 }
 
 function windowsProcessIdentity(pid) {
-  const systemRoot = String(process.env.SystemRoot || "C:\\Windows");
+  const systemRoot = String(process.env.SystemRoot || "Windows");
   const executable = path.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   const command = `(Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}').CreationDate.ToUniversalTime().Ticks`;
   const result = spawnSync(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command], {

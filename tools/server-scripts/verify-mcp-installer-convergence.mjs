@@ -33,7 +33,7 @@ const STANDALONE_DOCTOR = "tools/server-scripts/mcp-doctor.mjs";
 const DOCTOR_TOKEN_ENV = "LICO_VERIFY_MCP_INSTALLER_CONVERGENCE_TOKEN";
 const VERIFIED_DOWNLOAD_GUIDANCE_FILES = [
   ".github/RELEASE_TEMPLATE.md",
-  "docs/USAGES.md",
+  "docs/architecture/MCP-NATIVE-INSTALLER.md",
   "packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.mjs",
   "packages/protocols/mcp/adapter/http-mcp-adapter-discovery.mjs",
   "packages/capabilities/src/skills/tool-skill-management-provider-local-mcp.mjs",

@@ -6,6 +6,7 @@ import { createStorageBackup } from "./backup-snapshot.mjs";
 import { reconcileStorage, runStorageDoctor } from "./ops-tools.mjs";
 import {
   getObjectRootPath,
+  openStoredObjectReadStream,
   putStoredObject,
   putStoredObjectFromFile,
   recordStoredObject,
@@ -388,6 +389,13 @@ export function createStorageProvider({
         storageRelativePath: input.storageRelativePath || input.storage_rel_path || ""
       });
     },
+    openObjectReadStream(input = {}) {
+      return openStoredObjectReadStream({
+        userDataPath,
+        storageRelativePath: input.storageRelativePath || input.storage_rel_path || "",
+        signal: input.signal
+      });
+    },
     statObject(input = {}) {
       return statStoredObject({
         userDataPath,
@@ -416,6 +424,7 @@ export function createStorageProvider({
         (executionContext) => createStorageBackup({
           userDataPath,
           label: input.label || "",
+          retentionPolicy: input.retentionPolicy || input.retention || null,
           artifactClassifiers: storageArtifactClassifiers,
           executionContext
         }),

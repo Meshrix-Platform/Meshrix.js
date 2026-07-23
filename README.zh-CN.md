@@ -1,5 +1,8 @@
 # LicoMesh
 
+本文是规范性英文项目概览的简体中文本地化版本。请参阅
+[English normative overview](README.md)。
+
 LicoMesh 是开源、私有化部署的中转网关平台。它以 Node.js 服务端运行，负责转发服务端配置文件声明的上游服务，并向下游智能体客户端提供受治理的 MCP 入口。
 
 当前状态：pre-release。源码可用和许可证状态独立于正式生产版本标签。

@@ -36,9 +36,8 @@ const PROHIBITED_PACKAGE_PATHS = Object.freeze([
 const REQUIRED_DOCKERIGNORE_ENTRIES = Object.freeze([
   ".cache",
   "**/.cache",
-  "docs/plan",
-  "docs/report",
-  "docs/decisions",
+  "docs/plans",
+  "docs/reports",
   "**/downloads",
   "packages/capabilities/runtime-modules/knowledge/runtime/jre",
   "packages/capabilities/runtime-modules/knowledge/tika",

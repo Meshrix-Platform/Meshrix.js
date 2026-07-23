@@ -1,5 +1,8 @@
 # LicoMesh
 
+This English document is the normative project overview. See the
+[Simplified Chinese localization](README.zh-CN.md).
+
 LicoMesh is an open-source, private-deployable agent gateway. It runs
 as a Node.js server that forwards server-configured upstream services and exposes
 governed downstream MCP access for agent clients.

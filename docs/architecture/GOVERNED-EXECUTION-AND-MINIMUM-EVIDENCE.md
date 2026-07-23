@@ -125,8 +125,8 @@ that a production retention objective was configured.
 
 ## Delivery And Verification
 
-Implementation is owned by the Better Plan workspace
-[`authorization-enforcement-convergence`](../plan/end-to-end-release/platform-foundation/authorization-enforcement-convergence/Plan.md).
+Non-converged implementation work remains in the ignored Better Plan workspace;
+formal documentation does not publish that process state.
 Migrate one independently acceptable surface at a time and update ingress,
 dispatcher, sink, cancellation, evidence, tests, registry, and documentation
 together. Remove the superseded path in the same closure.

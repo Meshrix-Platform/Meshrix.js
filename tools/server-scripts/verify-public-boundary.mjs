@@ -23,13 +23,16 @@ const SKIPPED_DIRS = new Set([
 ]);
 
 const PROCESS_DOCUMENTATION_PATH_PREFIXES = Object.freeze([
-  "docs/plan",
-  "docs/report",
-  "docs/decisions"
+  "docs/plans",
+  "docs/reports"
 ]);
 
 const REQUIRED_GITIGNORE_ENTRIES = Object.freeze([
-  "/licomesh-data/"
+  "/licomesh-data/",
+  "/build/",
+  "/cache/",
+  "/docs/plans/",
+  "/docs/reports/"
 ]);
 
 const TEXT_FILE_RE = /\.(?:cjs|css|html|js|json|jsx|mjs|md|svg|ts|tsx|txt|vue|yaml|yml)$/i;

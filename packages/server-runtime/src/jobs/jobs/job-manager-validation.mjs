@@ -1,4 +1,5 @@
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { resolveArchiveBatchIdentity } from "../archive-batch-id.mjs";
 import {
   isServerToken,
@@ -159,38 +160,14 @@ export function normalizeVersionGroupId(payloadOrJob, { checkpointId = "", manif
       ? explicit
       : serverToken("parse_version_group", explicit);
   }
-  const stableKey = checkpointId || manifestKey || archiveBatchId || "";
+  const stableKey =
+    checkpointId ||
+    manifestKey ||
+    archiveBatchId ||
+    String(payloadOrJob?.id || "");
   return stableKey ? serverToken("parse_version_group", stableKey) : serverToken("parse_version_group", randomUUID());
 }
 
 export function normalizeParentJobId(payloadOrJob) {
   return String(payloadOrJob?.reparseFromJobId || payloadOrJob?.parentJobId || "").trim();
-}
-
-export function jobMatchesVersionFamily(job, { versionGroupId = "", checkpointId = "", manifestKey = "" } = {}) {
-  if (!job) {
-    return false;
-  }
-  if (versionGroupId && String(job.versionGroupId || "") === versionGroupId) {
-    return true;
-  }
-  if (!job.versionGroupId && checkpointId && normalizeCheckpointId(job) === checkpointId) {
-    return true;
-  }
-  if (!job.versionGroupId && manifestKey && normalizeManifestKey(job) === manifestKey) {
-    return true;
-  }
-  return false;
-}
-
-export function nextVersionNumberForJobs(jobs, family) {
-  let maxVersion = 0;
-  for (const job of jobs.values()) {
-    if (!jobMatchesVersionFamily(job, family)) {
-      continue;
-    }
-    const version = Number(job.versionNumber || 1);
-    maxVersion = Math.max(maxVersion, Number.isFinite(version) && version > 0 ? version : 1);
-  }
-  return maxVersion + 1;
 }

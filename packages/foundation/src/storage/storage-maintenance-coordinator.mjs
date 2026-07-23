@@ -9,6 +9,19 @@ const DEFAULT_EXECUTION_BUDGET = Object.freeze({
   bufferBytes: 64 * 1024
 });
 
+export const STORAGE_EXECUTION_BUDGET_HARD_LIMITS = Object.freeze({
+  maxFiles: 1_000_000,
+  maxBytes: 4 * 1024 * 1024 * 1024 * 1024,
+  maxCleanupItems: 1_000_000,
+  maxQueueDepth: 1024,
+  maxDurationMs: 24 * 60 * 60 * 1000,
+  bufferBytes: 16 * 1024 * 1024,
+  maxConcurrentMutationsPerRoot: 1,
+  queueAllocationBytes: 64 * 1024,
+  queuedBufferProductBytes: 1024 * 1024 * 1024
+});
+
+const ARRAY_SLOT_BYTES = 8;
 const lanes = new Map();
 
 function maintenanceError(code, message) {
@@ -19,41 +32,90 @@ function maintenanceError(code, message) {
   return error;
 }
 
-function positiveInteger(value, fallback, field) {
+function boundedPositiveInteger(value, fallback, maximum, field) {
   if (value === undefined || value === null || value === "") return fallback;
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1) {
     throw maintenanceError("storage_execution_budget_invalid", `${field} must be a positive safe integer.`);
+  }
+  if (number > maximum) {
+    throw maintenanceError(
+      "storage_execution_budget_limit_exceeded",
+      `${field} exceeds the storage runtime hard limit.`
+    );
   }
   return number;
 }
 
 export function normalizeStorageExecutionBudget(value = {}) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  return Object.freeze({
-    maxFiles: positiveInteger(source.maxFiles, DEFAULT_EXECUTION_BUDGET.maxFiles, "maxFiles"),
-    maxBytes: positiveInteger(source.maxBytes, DEFAULT_EXECUTION_BUDGET.maxBytes, "maxBytes"),
-    maxCleanupItems: positiveInteger(
+  const normalized = {
+    maxFiles: boundedPositiveInteger(
+      source.maxFiles,
+      DEFAULT_EXECUTION_BUDGET.maxFiles,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxFiles,
+      "maxFiles"
+    ),
+    maxBytes: boundedPositiveInteger(
+      source.maxBytes,
+      DEFAULT_EXECUTION_BUDGET.maxBytes,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxBytes,
+      "maxBytes"
+    ),
+    maxCleanupItems: boundedPositiveInteger(
       source.maxCleanupItems,
       DEFAULT_EXECUTION_BUDGET.maxCleanupItems,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxCleanupItems,
       "maxCleanupItems"
     ),
-    maxQueueDepth: positiveInteger(
+    maxQueueDepth: boundedPositiveInteger(
       source.maxQueueDepth,
       DEFAULT_EXECUTION_BUDGET.maxQueueDepth,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth,
       "maxQueueDepth"
     ),
-    maxDurationMs: positiveInteger(
+    maxDurationMs: boundedPositiveInteger(
       source.maxDurationMs,
       DEFAULT_EXECUTION_BUDGET.maxDurationMs,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxDurationMs,
       "maxDurationMs"
     ),
-    bufferBytes: positiveInteger(source.bufferBytes, DEFAULT_EXECUTION_BUDGET.bufferBytes, "bufferBytes")
-  });
+    bufferBytes: boundedPositiveInteger(
+      source.bufferBytes,
+      DEFAULT_EXECUTION_BUDGET.bufferBytes,
+      STORAGE_EXECUTION_BUDGET_HARD_LIMITS.bufferBytes,
+      "bufferBytes"
+    )
+  };
+  const queueAllocationBytes = normalized.maxQueueDepth * ARRAY_SLOT_BYTES;
+  const queuedBufferProductBytes = normalized.maxQueueDepth * normalized.bufferBytes;
+  if (
+    !Number.isSafeInteger(queueAllocationBytes) ||
+    queueAllocationBytes > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queueAllocationBytes ||
+    !Number.isSafeInteger(queuedBufferProductBytes) ||
+    queuedBufferProductBytes > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queuedBufferProductBytes
+  ) {
+    throw maintenanceError(
+      "storage_execution_budget_product_exceeded",
+      "Storage queue and buffer capacity product exceeds the runtime allocation limit."
+    );
+  }
+  return Object.freeze(normalized);
 }
 
 class FixedRingDeque {
   constructor(capacity) {
+    if (
+      !Number.isSafeInteger(capacity) ||
+      capacity < 1 ||
+      capacity > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth ||
+      capacity * ARRAY_SLOT_BYTES > STORAGE_EXECUTION_BUDGET_HARD_LIMITS.queueAllocationBytes
+    ) {
+      throw maintenanceError(
+        "storage_operation_queue_capacity_invalid",
+        "Storage maintenance queue capacity exceeds its allocation boundary."
+      );
+    }
     this.capacity = capacity;
     this.values = new Array(capacity);
     this.head = 0;
@@ -91,21 +153,27 @@ export function createStorageWorkTracker({ signal = null, budget = {}, startedAt
     }
   }
 
-  function consume({ files = 0, bytes = 0, cleanupItems = 0 } = {}) {
+  function checkedNextCounters({ files = 0, bytes = 0, cleanupItems = 0 } = {}) {
     assertActive();
+    const next = { ...counters };
     for (const [field, amount] of Object.entries({ files, bytes, cleanupItems })) {
       if (!Number.isSafeInteger(amount) || amount < 0) {
         throw maintenanceError("storage_execution_budget_invalid", `${field} consumption must be a non-negative safe integer.`);
       }
-      counters[field] += amount;
+      next[field] += amount;
     }
     if (
-      counters.files > limits.maxFiles ||
-      counters.bytes > limits.maxBytes ||
-      counters.cleanupItems > limits.maxCleanupItems
+      next.files > limits.maxFiles ||
+      next.bytes > limits.maxBytes ||
+      next.cleanupItems > limits.maxCleanupItems
     ) {
       throw maintenanceError("storage_execution_budget_exceeded", "Storage operation exceeded its execution budget.");
     }
+    return next;
+  }
+
+  function consume(amounts = {}) {
+    Object.assign(counters, checkedNextCounters(amounts));
     return Object.freeze({ ...counters });
   }
 
@@ -114,6 +182,9 @@ export function createStorageWorkTracker({ signal = null, budget = {}, startedAt
     budget: limits,
     deadlineAt,
     assertActive,
+    assertFits(amounts = {}) {
+      return Object.freeze(checkedNextCounters(amounts));
+    },
     consume,
     snapshot() {
       return Object.freeze({ ...counters });

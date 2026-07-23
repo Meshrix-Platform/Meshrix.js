@@ -24,6 +24,30 @@ const ABSOLUTE_PATH_PATTERN =
 const MAX_JSON_BYTES = 12 * 1024;
 const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_MAX_EXPORT_ITEMS = 1000;
+const DEFAULT_MAX_RECORDS = 250_000;
+const DEFAULT_MAX_LOGICAL_BYTES = 256 * 1024 * 1024;
+const DEFAULT_MAX_DATABASE_BYTES = 512 * 1024 * 1024;
+const DEFAULT_CLEANUP_BATCH_SIZE = 512;
+const DEFAULT_MAINTENANCE_EVERY_APPENDS = 128;
+const MAX_RECORDS = 2_000_000;
+const MAX_LOGICAL_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024;
+const MAX_CLEANUP_BATCH_SIZE = 4096;
+const MAX_MAINTENANCE_EVERY_APPENDS = 4096;
+const MIN_DATABASE_BYTES = 4 * 1024 * 1024;
+const WAL_JOURNAL_SIZE_LIMIT_BYTES = 16 * 1024 * 1024;
+const AUDIT_RECORD_FIXED_BYTES = 128;
+
+export class OperationAuditCapacityError extends Error {
+  constructor(reason, limit, actual) {
+    super(`Operation audit capacity is exhausted (${reason}).`);
+    this.name = "OperationAuditCapacityError";
+    this.code = "operation_audit_capacity_exhausted";
+    this.reason = reason;
+    this.limit = limit;
+    this.actual = actual;
+  }
+}
 
 function nowIso() {
   return new Date().toISOString();
@@ -49,6 +73,14 @@ function truncateJson(value) {
 
 function asLimit(value, fallback = 100, max = 500) {
   return Math.max(1, Math.min(Number(value || fallback) || fallback, max));
+}
+
+function boundedInteger(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(number, max));
 }
 
 function firstString(...values) {
@@ -168,12 +200,85 @@ function ensureOperationAuditColumns(db) {
   if (!cols.has("risk_control_envelope_json")) {
     db.exec("ALTER TABLE operation_audit_log ADD COLUMN risk_control_envelope_json TEXT NOT NULL DEFAULT '{}'");
   }
+  if (!cols.has("record_bytes")) {
+    db.exec("ALTER TABLE operation_audit_log ADD COLUMN record_bytes INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
+function ensureOperationAuditRetentionSchema(db) {
+  db.exec(`
+    UPDATE operation_audit_log
+    SET record_bytes =
+      ${AUDIT_RECORD_FIXED_BYTES} +
+      length(CAST(audit_id AS BLOB)) +
+      length(CAST(trace_id AS BLOB)) +
+      length(CAST(request_id AS BLOB)) +
+      length(CAST(tenant_id AS BLOB)) +
+      length(CAST(operation_id AS BLOB)) +
+      length(CAST(transport AS BLOB)) +
+      length(CAST(actor_json AS BLOB)) +
+      length(CAST(risk AS BLOB)) +
+      length(CAST(status AS BLOB)) +
+      length(CAST(input_hash AS BLOB)) +
+      length(CAST(redacted_input_json AS BLOB)) +
+      length(CAST(redacted_output_summary_json AS BLOB)) +
+      length(CAST(error AS BLOB)) +
+      length(CAST(risk_control_anchor_digest AS BLOB)) +
+      length(CAST(risk_control_last_record_digest AS BLOB)) +
+      length(CAST(risk_control_envelope_json AS BLOB)) +
+      length(CAST(created_at AS BLOB))
+    WHERE record_bytes = 0;
+
+    CREATE TABLE IF NOT EXISTS operation_audit_meta (
+      singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+      row_count INTEGER NOT NULL CHECK (row_count >= 0),
+      logical_bytes INTEGER NOT NULL CHECK (logical_bytes >= 0),
+      append_count INTEGER NOT NULL CHECK (append_count >= 0),
+      last_maintenance_at TEXT NOT NULL DEFAULT ''
+    );
+
+    INSERT OR IGNORE INTO operation_audit_meta (
+      singleton, row_count, logical_bytes, append_count, last_maintenance_at
+    )
+    SELECT 1, COUNT(*), COALESCE(SUM(record_bytes), 0), COUNT(*), ''
+    FROM operation_audit_log;
+
+    DROP TRIGGER IF EXISTS operation_audit_meta_after_insert;
+    DROP TRIGGER IF EXISTS operation_audit_meta_after_delete;
+
+    CREATE TRIGGER operation_audit_meta_after_insert
+    AFTER INSERT ON operation_audit_log
+    BEGIN
+      UPDATE operation_audit_meta
+      SET row_count = row_count + 1,
+          logical_bytes = logical_bytes + NEW.record_bytes,
+          append_count = append_count + 1
+      WHERE singleton = 1;
+    END;
+
+    CREATE TRIGGER operation_audit_meta_after_delete
+    AFTER DELETE ON operation_audit_log
+    BEGIN
+      UPDATE operation_audit_meta
+      SET row_count = row_count - 1,
+          logical_bytes = logical_bytes - OLD.record_bytes
+      WHERE singleton = 1;
+    END;
+  `);
 }
 
 function ensureSchema(db) {
+  // Establish the first SQLite failure boundary before any driver-specific
+  // metadata reads so constructor unwind always preserves the schema error.
+  db.exec("PRAGMA busy_timeout = 5000;");
+  if (Number(db.pragma("user_version", { simple: true }) || 0) === 0) {
+    db.pragma("auto_vacuum = INCREMENTAL");
+  }
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
+    PRAGMA wal_autocheckpoint = 1000;
+    PRAGMA journal_size_limit = ${WAL_JOURNAL_SIZE_LIMIT_BYTES};
 
     CREATE TABLE IF NOT EXISTS operation_audit_log (
       audit_id TEXT PRIMARY KEY,
@@ -195,7 +300,8 @@ function ensureSchema(db) {
       risk_control_last_record_digest TEXT NOT NULL DEFAULT '',
       risk_control_gate_count INTEGER NOT NULL DEFAULT 0,
       risk_control_envelope_json TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      record_bytes INTEGER NOT NULL DEFAULT 0 CHECK (record_bytes >= 0)
     );
   `);
 
@@ -206,11 +312,19 @@ function ensureSchema(db) {
       up: (d) => {
         ensureOperationAuditColumns(d);
       }
+    },
+    {
+      version: 2,
+      up: (d) => {
+        ensureOperationAuditColumns(d);
+        ensureOperationAuditRetentionSchema(d);
+      }
     }
   ]);
 
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_operation_audit_created ON operation_audit_log(created_at);
+    CREATE INDEX IF NOT EXISTS idx_operation_audit_retention ON operation_audit_log(created_at, audit_id);
     CREATE INDEX IF NOT EXISTS idx_operation_audit_trace ON operation_audit_log(trace_id);
     CREATE INDEX IF NOT EXISTS idx_operation_audit_tenant ON operation_audit_log(tenant_id);
     CREATE INDEX IF NOT EXISTS idx_operation_audit_operation ON operation_audit_log(operation_id);
@@ -272,10 +386,10 @@ function openOperationAuditDatabase(rootPath) {
         audit_id, trace_id, request_id, tenant_id, operation_id, transport, actor_json, risk, read_only, status, duration_ms,
         input_hash, redacted_input_json, redacted_output_summary_json, error,
         risk_control_anchor_digest, risk_control_last_record_digest, risk_control_gate_count, risk_control_envelope_json,
-        created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        created_at, record_bytes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      return { db, insertStmt };
+      return { db, insertStmt, databasePath };
     });
   } catch (error) {
     try {
@@ -292,6 +406,155 @@ export function createOperationAuditStore({ userDataPath }) {
   ensurePrivateDir(rootPath);
   const { db, insertStmt } = openOperationAuditDatabase(rootPath);
   const retentionPolicyPath = path.join(rootPath, "audit-retention.json");
+  const deleteExpiredStmt = db.prepare(`
+    DELETE FROM operation_audit_log
+    WHERE audit_id IN (
+      SELECT audit_id
+      FROM operation_audit_log
+      WHERE created_at < ?
+      ORDER BY created_at ASC, audit_id ASC
+      LIMIT ?
+    )
+  `);
+  const readMetaStmt = db.prepare(`
+    SELECT row_count AS rowCount,
+           logical_bytes AS logicalBytes,
+           append_count AS appendCount,
+           last_maintenance_at AS lastMaintenanceAt
+    FROM operation_audit_meta
+    WHERE singleton = 1
+  `);
+  const markMaintenanceStmt = db.prepare(`
+    UPDATE operation_audit_meta
+    SET last_maintenance_at = ?
+    WHERE singleton = 1
+  `);
+
+  function normalizeRetentionPolicy(input = {}) {
+    return {
+      policyVersion: "v0.0.1:platform:audit-retention-1",
+      retentionDays: boundedInteger(input.retentionDays, DEFAULT_RETENTION_DAYS, 1, 3650),
+      maxExportItems: boundedInteger(input.maxExportItems, DEFAULT_MAX_EXPORT_ITEMS, 1, 10000),
+      maxRecords: boundedInteger(input.maxRecords, DEFAULT_MAX_RECORDS, 1, MAX_RECORDS),
+      maxLogicalBytes: boundedInteger(
+        input.maxLogicalBytes,
+        DEFAULT_MAX_LOGICAL_BYTES,
+        MAX_JSON_BYTES + AUDIT_RECORD_FIXED_BYTES,
+        MAX_LOGICAL_BYTES
+      ),
+      maxDatabaseBytes: boundedInteger(
+        input.maxDatabaseBytes,
+        DEFAULT_MAX_DATABASE_BYTES,
+        MIN_DATABASE_BYTES,
+        MAX_DATABASE_BYTES
+      ),
+      cleanupBatchSize: boundedInteger(
+        input.cleanupBatchSize,
+        DEFAULT_CLEANUP_BATCH_SIZE,
+        1,
+        MAX_CLEANUP_BATCH_SIZE
+      ),
+      maintenanceEveryAppends: boundedInteger(
+        input.maintenanceEveryAppends,
+        DEFAULT_MAINTENANCE_EVERY_APPENDS,
+        1,
+        MAX_MAINTENANCE_EVERY_APPENDS
+      ),
+      updatedAt: String(input.updatedAt || ""),
+      updatedBy: redactOperationAuditValue(input.updatedBy || {})
+    };
+  }
+
+  function readRetentionPolicy() {
+    try {
+      return normalizeRetentionPolicy(JSON.parse(fs.readFileSync(retentionPolicyPath, "utf8")));
+    } catch {
+      return normalizeRetentionPolicy();
+    }
+  }
+
+  let retentionPolicy = readRetentionPolicy();
+
+  function configureDatabaseCapacity(policy) {
+    const pageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
+    const maxPages = Math.max(1, Math.floor(policy.maxDatabaseBytes / pageSize));
+    db.pragma(`max_page_count = ${maxPages}`);
+  }
+
+  configureDatabaseCapacity(retentionPolicy);
+
+  function recordBytes(values) {
+    return AUDIT_RECORD_FIXED_BYTES + values.reduce(
+      (total, value) => total + Buffer.byteLength(String(value ?? ""), "utf8"),
+      0
+    );
+  }
+
+  function activeDatabaseBytes() {
+    const pageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
+    const pageCount = Number(db.pragma("page_count", { simple: true }) || 0);
+    const freePages = Number(db.pragma("freelist_count", { simple: true }) || 0);
+    return Math.max(0, pageCount - freePages) * pageSize;
+  }
+
+  function maintainStorageAfterDelete(deletedCount) {
+    if (deletedCount <= 0) {
+      return;
+    }
+    db.pragma("wal_checkpoint(PASSIVE)");
+    if (Number(db.pragma("auto_vacuum", { simple: true }) || 0) === 2) {
+      db.pragma(`incremental_vacuum(${Math.min(deletedCount, retentionPolicy.cleanupBatchSize)})`);
+    }
+  }
+
+  function pruneExpiredInTransaction(policy, cutoff) {
+    const result = deleteExpiredStmt.run(cutoff, policy.cleanupBatchSize);
+    markMaintenanceStmt.run(nowIso());
+    return Number(result.changes || 0);
+  }
+
+  const appendTransaction = db.transaction((record, policy) => {
+    let meta = readMetaStmt.get();
+    const exceedsCount = meta.rowCount + 1 > policy.maxRecords;
+    const exceedsLogicalBytes = meta.logicalBytes + record.recordBytes > policy.maxLogicalBytes;
+    const maintenanceDue =
+      meta.appendCount === 0 ||
+      meta.appendCount % policy.maintenanceEveryAppends === 0 ||
+      exceedsCount ||
+      exceedsLogicalBytes;
+    let deletedCount = 0;
+    if (maintenanceDue) {
+      const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+      deletedCount = pruneExpiredInTransaction(policy, cutoff);
+      meta = readMetaStmt.get();
+    }
+    if (meta.rowCount + 1 > policy.maxRecords) {
+      return {
+        deletedCount,
+        capacity: {
+          reason: "record_count",
+          limit: policy.maxRecords,
+          actual: meta.rowCount + 1
+        }
+      };
+    }
+    if (meta.logicalBytes + record.recordBytes > policy.maxLogicalBytes) {
+      return {
+        deletedCount,
+        capacity: {
+          reason: "logical_bytes",
+          limit: policy.maxLogicalBytes,
+          actual: meta.logicalBytes + record.recordBytes
+        }
+      };
+    }
+    insertStmt.run(...record.values, record.recordBytes);
+    const databaseBytes = activeDatabaseBytes();
+    if (databaseBytes > policy.maxDatabaseBytes) {
+      throw new OperationAuditCapacityError("database_bytes", policy.maxDatabaseBytes, databaseBytes);
+    }
+    return { deletedCount, capacity: null };
+  });
 
   function append(entry = {}) {
     const input = entry.input ?? {};
@@ -300,7 +563,7 @@ export function createOperationAuditStore({ userDataPath }) {
     const auditId = entry.auditId || `op_audit_${crypto.randomUUID()}`;
     const actor = actorFrom(entry.actor || {});
     const riskControl = riskControlAuditSnapshot(entry.riskControl || entry.riskControlEnvelope || null);
-    insertStmt.run(
+    const values = [
       auditId,
       String(entry.traceId || ""),
       String(entry.requestId || ""),
@@ -321,8 +584,34 @@ export function createOperationAuditStore({ userDataPath }) {
       riskControl.gateCount,
       JSON.stringify(riskControl.envelope),
       entry.createdAt || nowIso()
-    );
-    return { auditId };
+    ];
+    const bytes = recordBytes(values);
+    if (bytes > retentionPolicy.maxLogicalBytes) {
+      throw new OperationAuditCapacityError("record_bytes", retentionPolicy.maxLogicalBytes, bytes);
+    }
+    configureDatabaseCapacity(retentionPolicy);
+    let outcome = null;
+    try {
+      outcome = appendTransaction({ values, recordBytes: bytes }, retentionPolicy);
+    } catch (error) {
+      if (error?.code === "SQLITE_FULL") {
+        throw new OperationAuditCapacityError(
+          "database_bytes",
+          retentionPolicy.maxDatabaseBytes,
+          activeDatabaseBytes()
+        );
+      }
+      throw error;
+    }
+    maintainStorageAfterDelete(outcome.deletedCount);
+    if (outcome.capacity) {
+      throw new OperationAuditCapacityError(
+        outcome.capacity.reason,
+        outcome.capacity.limit,
+        outcome.capacity.actual
+      );
+    }
+    return { auditId, maintenance: { deletedCount: outcome.deletedCount } };
   }
 
   function list({
@@ -397,47 +686,48 @@ export function createOperationAuditStore({ userDataPath }) {
   }
 
   function getRetentionPolicy() {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(retentionPolicyPath, "utf8"));
-      return {
-        policyVersion: "v0.0.1:platform:audit-retention-1",
-        retentionDays: Math.max(1, Math.min(Number(parsed.retentionDays || DEFAULT_RETENTION_DAYS), 3650)),
-        maxExportItems: Math.max(1, Math.min(Number(parsed.maxExportItems || DEFAULT_MAX_EXPORT_ITEMS), 10000)),
-        updatedAt: parsed.updatedAt || "",
-        updatedBy: redactOperationAuditValue(parsed.updatedBy || {})
-      };
-    } catch {
-      return {
-        policyVersion: "v0.0.1:platform:audit-retention-1",
-        retentionDays: DEFAULT_RETENTION_DAYS,
-        maxExportItems: DEFAULT_MAX_EXPORT_ITEMS,
-        updatedAt: "",
-        updatedBy: {}
-      };
-    }
+    return {
+      ...retentionPolicy,
+      updatedBy: redactOperationAuditValue(retentionPolicy.updatedBy || {})
+    };
   }
 
   function setRetentionPolicy(input = {}) {
-    const policy = {
-      policyVersion: "v0.0.1:platform:audit-retention-1",
-      retentionDays: Math.max(1, Math.min(Number(input.retentionDays || DEFAULT_RETENTION_DAYS), 3650)),
-      maxExportItems: Math.max(1, Math.min(Number(input.maxExportItems || DEFAULT_MAX_EXPORT_ITEMS), 10000)),
+    const definedInput = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined && value !== null && value !== "")
+    );
+    const policy = normalizeRetentionPolicy({
+      ...retentionPolicy,
+      ...definedInput,
       updatedAt: nowIso(),
       updatedBy: redactOperationAuditValue(input.updatedBy || {})
-    };
+    });
     fs.writeFileSync(retentionPolicyPath, `${JSON.stringify(policy, null, 2)}\n`, { mode: 0o600 });
+    retentionPolicy = policy;
+    configureDatabaseCapacity(retentionPolicy);
     return policy;
   }
 
   function pruneExpired(input = {}) {
     const policy = input.retentionDays ? setRetentionPolicy(input) : getRetentionPolicy();
     const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    const result = db.prepare("DELETE FROM operation_audit_log WHERE created_at < ?").run(cutoff);
+    const result = db.transaction(() => {
+      const deletedCount = pruneExpiredInTransaction(policy, cutoff);
+      return { deletedCount };
+    })();
+    maintainStorageAfterDelete(result.deletedCount);
     return {
       policyVersion: policy.policyVersion,
       retentionDays: policy.retentionDays,
       cutoff,
-      deletedCount: Number(result.changes || 0)
+      deletedCount: result.deletedCount,
+      cleanupBatchSize: policy.cleanupBatchSize,
+      hasMore: Boolean(db.prepare(`
+        SELECT 1
+        FROM operation_audit_log
+        WHERE created_at < ?
+        LIMIT 1
+      `).get(cutoff))
     };
   }
 

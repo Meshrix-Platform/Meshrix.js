@@ -67,9 +67,9 @@ export function createContextProfileCandidateTemplate(): Record<string, unknown>
     outputReserveTokens: 8_192,
     toolReserveTokens: 8_192,
     fixedMemoryBudget: 4_096,
-    referenceBudget: 40_000,
-    historyBudget: 32_000,
-    recentTurnBudget: 20_000,
+    referenceBudget: 40_960,
+    historyBudget: 32_768,
+    recentTurnBudget: 20_480,
     budgetPolicy: {
       fixedMemoryRatio: 0.04,
       operatorGuidanceRatio: 0.08,

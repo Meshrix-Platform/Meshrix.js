@@ -4,9 +4,9 @@ import { deleteCheckpointTree, resolveStoredObjectPath, serverToken, summarizeFo
 import { deleteUploadSession } from "../../state/upload-session-store.mjs";
 import { getJobDirectory } from "./job-manager-validation.mjs";
 import { loadJobPayload, loadJobResult, persistJobMeta, persistJobPayload } from "./job-manager-persistence.mjs";
+import { reconcileJobProjectionArtifacts } from "./job-projection-recovery.mjs";
 import {
   canReuseJobForPayload,
-  nextVersionNumberForJobs,
   normalizeArchiveBatchId,
   normalizeCheckpointId,
   normalizeManifestKey,
@@ -17,16 +17,37 @@ import {
 
 const MAX_QUEUED_JOB_IDS_IN_SUMMARY = 200;
 
-function insertBoundedSorted(items, item, limit, compare) {
-  let low = 0;
-  let high = items.length;
-  while (low < high) {
-    const middle = (low + high) >>> 1;
-    if (compare(items[middle], item) <= 0) low = middle + 1;
-    else high = middle;
+function jobMatchesAccess(job, access) {
+  if (!access) return true;
+  const values = (input) => new Set(
+    (Array.isArray(input) ? input : []).map(String).filter(Boolean)
+  );
+  const jobIds = values(access.jobIds);
+  if (jobIds.has(String(job?.id || ""))) return true;
+  const workspaceIds = values(access.workspaceIds);
+  if (
+    workspaceIds.has(String(
+      job?.workspaceId ||
+      job?.workspace_id ||
+      job?.workspace ||
+      job?.payload?.workspaceId ||
+      ""
+    ))
+  ) {
+    return true;
   }
-  items.splice(low, 0, item);
-  if (items.length > limit) items.pop();
+  const principals = values(access.principalIds);
+  return [
+    job?.ownerSubjectId,
+    job?.ownerUserId,
+    job?.ownerUsername,
+    job?.createdBySubjectId,
+    job?.createdByUserId,
+    job?.createdBy,
+    job?.owner?.subjectId,
+    job?.owner?.userId,
+    job?.owner?.username
+  ].some((value) => principals.has(String(value || "")));
 }
 
 export function createJobManagerApi(ctx) {
@@ -36,6 +57,7 @@ export function createJobManagerApi(ctx) {
     workerConcurrency,
     jobs,
     checkpointJobs,
+    jobProjectionStore,
     activeControllers,
     durableWorkflows,
     logJob,
@@ -66,15 +88,14 @@ export function createJobManagerApi(ctx) {
         payload: summarizeForLog(payload)
       });
       await ready;
-      if (!processingEnabled) {
-        await refreshPersistedJobs();
-      }
-
       if (state.closed) {
         logJob("error", "jobs.job.create.rejected", {
           reason: "closed"
         });
         throw new Error("后台任务管理器已经关闭。");
+      }
+      if (!processingEnabled) {
+        await refreshPersistedJobs();
       }
 
       const checkpointId = normalizeCheckpointId(payload);
@@ -86,32 +107,33 @@ export function createJobManagerApi(ctx) {
         manifestKey,
         archiveBatchId
       });
-      const versionNumber = nextVersionNumberForJobs(jobs, {
-        versionGroupId,
-        checkpointId,
-        manifestKey
-      });
+      const versionNumber = 1;
       const parentJobId = normalizeParentJobId(payload);
-      const existingJobId = checkpointId ? checkpointJobs.get(checkpointId) : "";
-      if (!forceNewVersion && existingJobId) {
-        const existingJob = jobs.get(existingJobId) || null;
+      const existingCheckpointJob = checkpointId
+        ? jobs.get(checkpointJobs.get(checkpointId)) ||
+          jobProjectionStore.getByCheckpoint(checkpointId)
+        : null;
+      if (!forceNewVersion && existingCheckpointJob) {
+        const existingJob = existingCheckpointJob;
         if (canReuseJobForPayload(existingJob, payload)) {
           await publishJobEvent(existingJob, "jobs.job.reused");
           logJob("info", "jobs.job.create.reused", {
-            jobId: existingJobId,
+            jobId: existingJob.id,
             checkpointId,
             reason: "checkpoint_id"
           });
           return cloneJobForApi(existingJob);
         }
         logJob("info", "jobs.job.create.reused", {
-          jobId: existingJobId,
+          jobId: existingJob.id,
           checkpointId,
           reason: "checkpoint_id_owner_mismatch",
           reused: false
         });
       }
-      const existingManifestJob = getActiveManifestJob(manifestKey, archiveBatchId);
+      const existingManifestJob =
+        getActiveManifestJob(manifestKey, archiveBatchId) ||
+        jobProjectionStore.getActiveManifest(manifestKey, archiveBatchId);
       if (!forceNewVersion && canReuseJobForPayload(existingManifestJob, payload)) {
         if (checkpointId) {
           checkpointJobs.set(checkpointId, existingManifestJob.id);
@@ -154,8 +176,34 @@ export function createJobManagerApi(ctx) {
       job.workspaceId = String(payload?.workspaceId || payload?.workspace || "").trim();
       job.checkpointTreeId = checkpointTreeIdForJob(job);
       job.workflowId = workflowIdForJob(job);
-      await ensureJobCheckpointTree(job, payload);
-      await durableWorkflows.startWorkflow({
+      try {
+        Object.assign(job, jobProjectionStore.create(job));
+      } catch (error) {
+        const concurrent = manifestKey
+          ? jobProjectionStore.getActiveManifest(manifestKey, archiveBatchId)
+          : null;
+        if (
+          String(error?.code || "").startsWith("SQLITE_CONSTRAINT") &&
+          !forceNewVersion &&
+          canReuseJobForPayload(concurrent, payload)
+        ) {
+          await publishJobEvent(concurrent, "jobs.job.reused");
+          return cloneJobForApi(concurrent);
+        }
+        if (String(error?.code || "").startsWith("SQLITE_CONSTRAINT")) {
+          throw Object.assign(
+            new Error("An active job already owns this manifest admission."),
+            {
+              code: "job_projection_active_manifest_conflict",
+              statusCode: 409
+            }
+          );
+        }
+        throw error;
+      }
+      try {
+        await ensureJobCheckpointTree(job, payload);
+        await durableWorkflows.startWorkflow({
         workflowId: job.workflowId,
         workflowType: "import_parse_job",
         ownerKind: "import_parse_job",
@@ -169,42 +217,74 @@ export function createJobManagerApi(ctx) {
           manifestSha256: manifestKey
         },
         checkpointTreeId: job.checkpointTreeId
-      });
-      await durableWorkflows.scheduleActivity(job.workflowId, {
+        });
+        await durableWorkflows.scheduleActivity(job.workflowId, {
         activityId: "queue-wait",
         activityType: "queue_wait",
         idempotencyKey: `${job.id}:queue-wait`,
         input: {
-          queuePosition: [...jobs.values()].filter((entry) => entry.status === "queued").length + 1
+          queueDepthAtAdmission:
+            Math.max(
+              0,
+              Number(jobProjectionStore.getCounts().counts.queued || 0) - 1
+            )
         },
         retryPolicy: {
           maxAttempts: 1
         }
-      });
-      await durableWorkflows.completeActivity(job.workflowId, "queue-wait", {
-        queuedAt: now
-      });
-      await updateJobCheckpointNode(job, {
+        });
+        await durableWorkflows.completeActivity(job.workflowId, "queue-wait", {
+          queuedAt: now
+        });
+        await updateJobCheckpointNode(job, {
         nodeId: "queued",
         parentId: "import-parse-job",
         label: "等待后台任务",
         status: "running",
         cursor: {
-          queuePosition: [...jobs.values()].filter((entry) => entry.status === "queued").length + 1
+          queueDepthAtAdmission:
+            Math.max(
+              0,
+              Number(jobProjectionStore.getCounts().counts.queued || 0) - 1
+            )
         },
         metadata: {
           checkpointId,
           manifestSha256: manifestKey
         }
-      });
-
-      jobs.set(job.id, job);
-      if (checkpointId) {
-        checkpointJobs.set(checkpointId, job.id);
+        });
+        await persistJobMeta(userDataPath, job, jobProjectionStore);
+        await persistJobPayload(
+          userDataPath,
+          job.id,
+          payload,
+          jobProjectionStore
+        );
+      } catch (error) {
+        await durableWorkflows.failWorkflow(
+          job.workflowId,
+          "Job admission failed."
+        ).catch(() => null);
+        await deleteCheckpointTree({
+          userDataPath,
+          treeId: job.checkpointTreeId
+        }).catch(() => null);
+        jobProjectionStore.delete(job.id);
+        const directoryRemoved = await fs.rm(
+          getJobDirectory(userDataPath, job.id),
+          {
+          recursive: true,
+          force: true
+          }
+        ).then(() => true, () => false);
+        if (directoryRemoved) {
+          jobProjectionStore.settleDeletion(job.id);
+        }
+        throw error;
       }
+      jobs.set(job.id, job);
+      if (checkpointId) checkpointJobs.set(checkpointId, job.id);
       rememberActiveManifestJob(job);
-      await persistJobMeta(userDataPath, job);
-      await persistJobPayload(userDataPath, job.id, payload);
       await publishJobEvent(job, "jobs.job.created");
       logJob("info", "jobs.job.created", {
         jobId: job.id,
@@ -226,12 +306,16 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const sourceJob = jobs.get(jobId);
+      const sourceJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!sourceJob) {
         throw new Error("历史任务不存在，不能重新解析。");
       }
 
-      const sourcePayload = await loadJobPayload(userDataPath, sourceJob.id);
+      const sourcePayload = await loadJobPayload(
+        userDataPath,
+        sourceJob.id,
+        jobProjectionStore
+      );
       const sourceResult = sourceJob.status === "completed"
         ? await this.getJobResult(sourceJob.id).catch(() => null)
         : null;
@@ -377,7 +461,11 @@ export function createJobManagerApi(ctx) {
           reason: `status_${currentJob.status || "unknown"}`
         };
       }
-      const payload = options.payload || await loadJobPayload(userDataPath, normalizedJobId);
+      const payload = options.payload || await loadJobPayload(
+        userDataPath,
+        normalizedJobId,
+        jobProjectionStore
+      );
       if (!payload) {
         throw new Error(`任务缺少 payload，不能调度：${normalizedJobId}`);
       }
@@ -399,7 +487,9 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      return cloneJobForApi(jobs.get(jobId) || null);
+      return cloneJobForApi(
+        jobs.get(jobId) || jobProjectionStore.get(jobId)
+      );
     },
 
     async getJobWorkflow(jobId) {
@@ -407,7 +497,7 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const currentJob = jobs.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!currentJob) {
         return null;
       }
@@ -422,18 +512,12 @@ export function createJobManagerApi(ctx) {
       });
     },
 
-    async listJobOwnerships() {
+    async listJobOwnerships({ cursor = "", limit = 100 } = {}) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      return [...jobs.values()].map((job) => ({
-        jobId: job.id || "",
-        archiveBatchId: job.archiveBatchId || "",
-        ownerSubjectId: job.ownerSubjectId || job.ownerUserId || job.ownerUsername || "",
-        ownerUserId: job.ownerUserId || job.ownerSubjectId || "",
-        ownerUsername: job.ownerUsername || ""
-      }));
+      return jobProjectionStore.listOwnerships({ cursor, limit });
     },
 
     async listQueuedJobAdmissions({ cursor = "", limit = 100 } = {}) {
@@ -441,76 +525,77 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const safeLimit = Math.max(1, Math.min(200, Number(limit) || 100));
-      const normalizedCursor = String(cursor || "");
-      const page = [];
-      for (const job of jobs.values()) {
-        if (job.status !== "queued" || String(job.id || "") <= normalizedCursor) continue;
-        insertBoundedSorted(
-          page,
-          job,
-          safeLimit,
-          (left, right) => String(left.id || "").localeCompare(String(right.id || ""))
-        );
-      }
+      const page = jobProjectionStore.listQueued({ cursor, limit });
       return {
-        items: page.map((job) => cloneJobForApi(job)),
-        nextCursor: page.length === safeLimit ? String(page.at(-1)?.id || "") : "",
-        done: page.length < safeLimit
+        ...page,
+        items: page.items.map((job) => cloneJobForApi(job))
       };
     },
 
-    async listJobs({ limit = 50 } = {}) {
+    async listJobs({ cursor = "", limit = 50, access = null } = {}) {
       await ready;
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
       const safeLimit = Math.max(1, Math.min(200, Number(limit) || 50));
-      const recentJobs = [];
-      const activeJobIds = [...activeControllers.keys()];
-      const queuedJobIds = [];
-      const counts = {
-        queued: 0,
-        running: 0,
-        completed: 0,
-        failed: 0,
-        cancelled: 0
-      };
-      for (const job of jobs.values()) {
-        if (Object.hasOwn(counts, job.status)) counts[job.status] += 1;
-        if (job.status === "queued" && queuedJobIds.length < MAX_QUEUED_JOB_IDS_IN_SUMMARY) {
-          queuedJobIds.push(job.id);
-        }
-        insertBoundedSorted(
-          recentJobs,
-          job,
-          safeLimit,
-          (left, right) => {
-            const byCreatedAt = String(right.createdAt || "").localeCompare(String(left.createdAt || ""));
-            return byCreatedAt || String(right.id || "").localeCompare(String(left.id || ""));
-          }
-        );
-      }
-      const items = recentJobs.map((job) => cloneJobForApi(job));
+      const activeJobIds = [...activeControllers.keys()].filter((jobId) =>
+        jobMatchesAccess(jobs.get(jobId), access)
+      );
+      const page = jobProjectionStore.list({
+        cursor,
+        limit: safeLimit,
+        access
+      });
+      const queuedPage = jobProjectionStore.listQueued({
+        limit: MAX_QUEUED_JOB_IDS_IN_SUMMARY,
+        access
+      });
+      const projection = jobProjectionStore.getCounts();
+      const counts = access
+        ? Object.fromEntries(
+            ["queued", "running", "completed", "failed", "cancelled"].map(
+              (status) => [
+                status,
+                page.items.filter((job) => job.status === status).length
+              ]
+            )
+          )
+        : projection.counts;
+      const queuedJobIds = queuedPage.items.map((job) => job.id);
 
       return {
         summary: {
-          totalCount: jobs.size,
-          queuedCount: counts.queued,
-          runningCount: counts.running,
-          completedCount: counts.completed,
-          failedCount: counts.failed,
-          cancelledCount: counts.cancelled,
+          totalCount: access ? page.items.length : projection.totalCount,
+          queuedCount: Number(counts.queued || 0),
+          runningCount: Number(counts.running || 0),
+          completedCount: Number(counts.completed || 0),
+          failedCount: Number(counts.failed || 0),
+          cancelledCount: Number(counts.cancelled || 0),
           activeJobId: activeJobIds[0] || "",
           activeJobIds,
           workerConcurrency: processingEnabled ? workerConcurrency : 0,
           processingMode: processingEnabled ? "internal" : "external",
           schedulerMode: "platform-work-queue",
           queuedJobIds,
-          queuedJobIdsTruncated: counts.queued > queuedJobIds.length
+          queuedJobIdsTruncated:
+            access
+              ? !queuedPage.done
+              : Number(counts.queued || 0) > queuedJobIds.length
         },
-        items
+        items: page.items.map((job) => cloneJobForApi(job)),
+        nextCursor: page.nextCursor,
+        done: page.done
       };
+    },
+
+    async maintainHistory() {
+      await ready;
+      const maintenance = jobProjectionStore.maintain();
+      const reconciliation = await reconcileJobProjectionArtifacts({
+        userDataPath,
+        projectionStore: jobProjectionStore
+      });
+      return { ...maintenance, ...reconciliation };
     },
 
     async getJobByCheckpointId(checkpointId) {
@@ -518,12 +603,12 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const jobId = checkpointJobs.get(normalizeCheckpointId(checkpointId));
-      if (!jobId) {
-        return null;
-      }
-
-      return cloneJobForApi(jobs.get(jobId) || null);
+      const normalized = normalizeCheckpointId(checkpointId);
+      const activeJobId = checkpointJobs.get(normalized);
+      return cloneJobForApi(
+        jobs.get(activeJobId) ||
+        jobProjectionStore.getByCheckpoint(normalized)
+      );
     },
 
     async getJobResult(jobId) {
@@ -531,7 +616,7 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const currentJob = jobs.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
 
       if (!currentJob) {
         return null;
@@ -541,7 +626,7 @@ export function createJobManagerApi(ctx) {
         throw new Error("任务尚未完成，暂时不能读取结果。");
       }
 
-      return loadJobResult(userDataPath, jobId);
+      return loadJobResult(userDataPath, jobId, jobProjectionStore);
     },
 
     async deleteJob(jobId) {
@@ -552,7 +637,7 @@ export function createJobManagerApi(ctx) {
       if (!processingEnabled) {
         await refreshPersistedJobs();
       }
-      const currentJob = jobs.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
 
       if (!currentJob) {
         logJob("warn", "jobs.job.delete.skipped", {
@@ -604,10 +689,12 @@ export function createJobManagerApi(ctx) {
       if (currentJob.status !== "completed") {
         await durableWorkflows.failWorkflow(currentJob.workflowId || workflowIdForJob(currentJob), "Job deleted.").catch(() => null);
       }
+      jobProjectionStore.delete(jobId);
       await fs.rm(getJobDirectory(userDataPath, jobId), {
         recursive: true,
         force: true
       });
+      jobProjectionStore.settleDeletion(jobId);
       await publishDeletedJobEvent(currentJob);
       logJob("info", "jobs.job.deleted", {
         jobId,
@@ -621,7 +708,7 @@ export function createJobManagerApi(ctx) {
       logJob("warn", "jobs.job.cancel.requested", { jobId });
       await ready;
       if (!processingEnabled) await refreshPersistedJobs();
-      const currentJob = jobs.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!currentJob) return null;
       if (["completed", "failed", "cancelled"].includes(currentJob.status)) {
         return cloneJobForApi(currentJob);
@@ -651,7 +738,7 @@ export function createJobManagerApi(ctx) {
     async failJobFromQueue(jobId, { stage = "队列执行失败", reason = "Queue execution failed." } = {}) {
       await ready;
       if (!processingEnabled) await refreshPersistedJobs();
-      const currentJob = jobs.get(jobId);
+      const currentJob = jobs.get(jobId) || jobProjectionStore.get(jobId);
       if (!currentJob) return null;
       if (["completed", "failed", "cancelled"].includes(currentJob.status)) {
         return cloneJobForApi(currentJob);
@@ -668,14 +755,18 @@ export function createJobManagerApi(ctx) {
       state.closed = true;
       closePromise = (async () => {
         logJob("info", "jobs.manager.close.started", {});
-        await ready;
-        await Promise.all(
-          [...activeControllers.values()].map((activeController) =>
-            activeController.preserveForRecovery()
-          )
-        );
-        await drainBackgroundTasks();
-        logJob("info", "jobs.manager.close.completed", {});
+        try {
+          await ready;
+          await Promise.all(
+            [...activeControllers.values()].map((activeController) =>
+              activeController.preserveForRecovery()
+            )
+          );
+          await drainBackgroundTasks();
+          logJob("info", "jobs.manager.close.completed", {});
+        } finally {
+          jobProjectionStore.close();
+        }
       })().catch((error) => {
         closePromise = null;
         throw error;

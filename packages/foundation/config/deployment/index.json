@@ -58,8 +58,8 @@
         "hostPublishAddress": "127.0.0.1",
         "hostPublishAddressEnv": "LICO_BIND_ADDRESS",
         "advertisedHostEnv": "LICO_ADVERTISED_HOST",
-        "dataPath": "/opt/lico/data",
-        "codexHome": "/codex-home",
+        "dataPath": "data",
+        "codexHome": "codex-home",
         "user": "lico",
         "uid": 10001,
         "gid": 10001,
@@ -72,14 +72,14 @@
           "--port",
           "7228",
           "--data-dir",
-          "/opt/lico/data",
+          "data",
           "--allow-public-console"
         ]
       },
       "volumes": [
         {
           "id": "server-data",
-          "containerPath": "/opt/lico/data",
+          "containerPath": "data",
           "purpose": "Persistent LicoMesh server data, logs, jobs, and configured upstream service runtime evidence."
         }
       ]

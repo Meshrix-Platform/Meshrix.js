@@ -130,13 +130,32 @@ confirmation at the registered operation boundary, preserves at least one
 generation, respects protected backup identities, and records only redacted
 counts and digest prefixes.
 
+Backup creation performs a conservative `statfs` capacity preflight before the
+first snapshot file is created. The reservation includes the estimated source
+bytes and the larger of 64 MiB or ten percent free-space safety margin. Files
+are processed with concurrency one. Regular files use filesystem copy-on-write
+cloning when supported and retain the verified streaming-copy fallback;
+SQLite generations seed the online backup from the latest snapshot through a
+reflink so only rewritten pages allocate new blocks on capable filesystems.
+Configured retention runs under the same cross-process maintenance lock before
+the create lifecycle returns. Abandoned unpublished staging directories are
+removed in bounded startup batches and are never catalog-visible.
+
+The storage maintenance coordinator enforces owner-level absolute limits before
+constructing a queue or tracker: at most 1,000,000 files or cleanup items,
+4 TiB accounted bytes, 1,024 queued mutations, 24 hours, and a 16 MiB working
+buffer. Per-root mutation concurrency is exactly one. Queue slot allocation is
+limited to 64 KiB, and the queue-depth × buffer product is limited to 1 GiB.
+Individual and product overflow is rejected before `FixedRingDeque` allocates
+its backing array; caller budgets may be lower but cannot raise these limits.
+
 Durable service manifests use typed references and opaque service identities.
-The writer commits immutable digest-addressed manifest and generation files,
-a prepared journal, and a compare-and-swap latest pointer. Recovery selects the
-generation named by the durable pointer, removes interrupted journal state, and
-deletes unreferenced immutable manifests and generations within the caller's
-cleanup budget. Readers receive an immutable snapshot and never receive local
-storage paths or credential material.
+The writer commits row-local service, version, blob, and idempotency changes in
+one normalized SQLite transaction, advances the compare-and-swap candidate
+pointer, and retains only a bounded unpublished revision interval. Published
+snapshot hydration is an explicit indexed read; commits do not clone or sort
+the complete service set. Readers receive immutable snapshots and never receive
+local storage paths or credential material.
 
 Runtime startup removes a maintenance lease only when its private lock file is
 stable, structurally verifiable, and its PID plus hashed process-instance identity

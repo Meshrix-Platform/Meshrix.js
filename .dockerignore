@@ -3,9 +3,9 @@
 .DS_Store
 .env
 .env.*
-docs/plan
-docs/report
-docs/decisions
+docs/plans
+docs/reports
+cache
 licomesh-cloud-init.yaml
 .gemini
 .playwright-cli

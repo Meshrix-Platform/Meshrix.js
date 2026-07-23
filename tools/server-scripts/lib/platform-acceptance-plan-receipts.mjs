@@ -76,7 +76,7 @@ export async function verifyPlatformAcceptancePlanReceipts({
     throw new PlatformAcceptancePlanReceiptError("plan-receipt-profile-invalid", "failed");
   }
   const currentDependencyMap = dependencyMap || JSON.parse(await fs.readFile(
-    path.join(repoRoot, "docs/plan/end-to-end-release/DependencyMap.json"),
+    path.join(repoRoot, "docs/plans/end-to-end-release/DependencyMap.json"),
     "utf8",
   ));
 

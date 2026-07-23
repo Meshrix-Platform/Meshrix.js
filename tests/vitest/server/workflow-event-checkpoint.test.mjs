@@ -22,6 +22,7 @@ vi.mock("#lico/foundation/checkpoint/tree/checkpoint-tree-projection", () => ({
 }));
 
 import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event-bus.mjs";
+import { createSqliteProtocolEventStore } from "../../../packages/server-runtime/src/events/sqlite-protocol-event-store.mjs";
 import {
   appendUploadSessionChunk,
   createOrResumeUploadSession
@@ -85,11 +86,25 @@ describe("workflow-event-checkpoint behavior", () => {
   it("handles publish failures and aborted event subscriptions", async () => {
     await withTempUserData(async (userDataPath) => {
       const logger = createLogger();
-      const bus = createProtocolEventBus({ userDataPath, logger });
-      const appendSpy = vi.spyOn(fs, "appendFile").mockRejectedValueOnce(new Error("append failed"));
+      const durableStore = createSqliteProtocolEventStore({ userDataPath });
+      let failNextPublish = true;
+      const eventStore = {
+        publish(...args) {
+          if (failNextPublish) {
+            failNextPublish = false;
+            return Promise.reject(new Error("store write failed"));
+          }
+          return durableStore.publish(...args);
+        },
+        read: (...args) => durableStore.read(...args),
+        getLatest: (...args) => durableStore.getLatest(...args),
+        getRevision: (...args) => durableStore.getRevision(...args),
+        getStats: (...args) => durableStore.getStats(...args)
+      };
+      const bus = createProtocolEventBus({ eventStore, logger });
 
       await expect(bus.publish("", { nope: true })).rejects.toThrow("发布事件缺少 topic。");
-      await expect(bus.publish("alpha", { round: 1 })).rejects.toThrow("append failed");
+      await expect(bus.publish("alpha", { round: 1 })).rejects.toThrow("store write failed");
 
       const event = await bus.publish("alpha", { round: 2 }, { retain: false });
       expect(event).toMatchObject({
@@ -97,14 +112,19 @@ describe("workflow-event-checkpoint behavior", () => {
         offset: 1,
         payload: { round: 2 }
       });
-      expect(appendSpy).toHaveBeenCalledTimes(2);
       expect(logger.error).toHaveBeenCalledWith(
         "event.publish.failed",
         expect.objectContaining({ topic: "alpha" })
       );
 
       await withTempUserData(async (emptyUserDataPath) => {
-        const emptyBus = createProtocolEventBus({ userDataPath: emptyUserDataPath, logger });
+        const emptyStore = createSqliteProtocolEventStore({
+          userDataPath: emptyUserDataPath
+        });
+        const emptyBus = createProtocolEventBus({
+          eventStore: emptyStore,
+          logger
+        });
         const controller = new AbortController();
         controller.abort();
         const aborted = await emptyBus.subscribe({
@@ -116,7 +136,11 @@ describe("workflow-event-checkpoint behavior", () => {
 
         expect(aborted.events).toEqual([]);
         expect(aborted.nextCursor).toBe(0);
+        await emptyBus.close();
+        emptyStore.close();
       });
+      await bus.close();
+      durableStore.close();
     });
   });
 
@@ -367,8 +391,8 @@ describe("workflow-event-checkpoint behavior", () => {
           required: ["name"],
           properties: {
             name: { type: "string" },
-            count: { type: "string" },
-            confirm: { type: "string" }
+            count: { type: "number" },
+            confirm: { type: "boolean" }
           }
         },
       audit: {

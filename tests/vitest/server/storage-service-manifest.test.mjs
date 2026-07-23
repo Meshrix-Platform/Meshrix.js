@@ -5,7 +5,17 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServiceManifestStore } from "../../../packages/foundation/src/storage/service-manifest-store.mjs";
-import { SERVICE_MANIFEST_SCHEMA_VERSION } from "../../../packages/foundation/src/storage/storage-ports.mjs";
+import {
+  canonicalizeTypedReferenceManifest,
+  SERVICE_MANIFEST_SCHEMA_VERSION,
+  sha256ManifestBytes,
+  stableManifestJson
+} from "../../../packages/foundation/src/storage/storage-ports.mjs";
+import {
+  SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS,
+  serviceManifestSetDigest
+} from "../../../packages/foundation/src/storage/service-manifest-transaction.mjs";
+import { openSqliteDatabase } from "../../../packages/foundation/src/storage/sqlite-database.mjs";
 
 const roots = [];
 
@@ -23,10 +33,6 @@ function manifest(label, references = []) {
     },
     metadata: { source: "verified-input" }
   };
-}
-
-function injectedIoFailure() {
-  return Object.assign(new Error("injected storage phase failure"), { code: "EIO" });
 }
 
 async function tempRoot() {
@@ -192,12 +198,16 @@ describe("durable service manifest authority", () => {
     expect(currentSnapshot.getService(serviceId).manifest.payload.label).toBe("second");
 
     const authorityRoot = path.join(storageRoot, "service-manifests");
-    const manifestNames = await fs.readdir(path.join(authorityRoot, "manifests"));
-    const generationNames = await fs.readdir(path.join(authorityRoot, "generations"));
-    expect([...manifestNames, ...generationNames].some((name) => name.includes(serviceId))).toBe(false);
+    const authorityEntries = await fs.readdir(authorityRoot);
+    expect(authorityEntries).toContain("authority.sqlite");
+    expect(authorityEntries).not.toContain("manifests");
+    expect(authorityEntries).not.toContain("generations");
     if (process.platform !== "win32") {
       expect((await fs.stat(authorityRoot)).mode & 0o777).toBe(0o700);
-      expect((await fs.stat(path.join(authorityRoot, "latest.json"))).mode & 0o777).toBe(0o600);
+      expect(
+        (await fs.stat(path.join(authorityRoot, "authority.sqlite"))).mode &
+          0o777
+      ).toBe(0o600);
     }
   });
 
@@ -289,6 +299,71 @@ describe("durable service manifest authority", () => {
     expect((await store.getSnapshot())).toMatchObject({ setRevision: 1, serviceCount: 1 });
   });
 
+  it("bounds unpublished version and blob growth until acknowledgement", async () => {
+    const storageRoot = await tempRoot();
+    const serviceId = "svc_01J00000000000000000000ba";
+    const store = createServiceManifestStore({ storageRoot });
+    let current = await store.commitManifestSet({
+      serviceId,
+      expectedServiceRevision: 0,
+      expectedSetRevision: 0,
+      requestDigest: digest("backlog-1"),
+      manifest: manifest("backlog-1")
+    });
+    for (
+      let revision = 2;
+      revision <= SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS;
+      revision += 1
+    ) {
+      current = await store.commitManifestSet({
+        serviceId,
+        expectedServiceRevision: revision - 1,
+        expectedSetRevision: revision - 1,
+        requestDigest: digest(`backlog-${revision}`),
+        manifest: manifest(`backlog-${revision}`)
+      });
+    }
+    await expect(store.commitManifestSet({
+      serviceId,
+      expectedServiceRevision:
+        SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS,
+      expectedSetRevision:
+        SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS,
+      requestDigest: digest("backlog-overflow"),
+      manifest: manifest("backlog-overflow")
+    })).rejects.toMatchObject({
+      code: "storage_manifest_publication_backlog_exceeded"
+    });
+    await store.acknowledgePublished({
+      setRevision: current.setRevision,
+      setDigest: current.setDigest,
+      budget: {
+        maxCleanupEntries:
+          SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS
+      }
+    });
+    const database = openSqliteDatabase(path.join(
+      storageRoot,
+      "service-manifests",
+      "authority.sqlite"
+    ), { readonly: true, fileMustExist: true });
+    expect(database.prepare(`
+      SELECT COUNT(*) AS value FROM manifest_service_versions
+    `).get().value).toBe(1);
+    expect(database.prepare(`
+      SELECT COUNT(*) AS value FROM manifest_blobs
+    `).get().value).toBe(1);
+    const requestPlan = database.prepare(`
+      EXPLAIN QUERY PLAN
+      SELECT * FROM manifest_requests WHERE request_digest=?
+    `).all(digest("backlog-1"))
+      .map((row) => String(row.detail || "")).join(" ");
+    expect(requestPlan).toContain(
+      "sqlite_autoindex_manifest_requests_1"
+    );
+    database.close();
+  });
+
   it("fences competing writers across processes at the durable CAS boundary", async () => {
     const storageRoot = await tempRoot();
     const readyOne = path.join(storageRoot, "ready-one");
@@ -306,28 +381,80 @@ describe("durable service manifest authority", () => {
       .resolves.toMatchObject({ setRevision: 1, serviceCount: 1 });
   });
 
-  it("bounds cleanup discovery before deleting any staged entry", async () => {
+  it("evicts request history by count and age without permanent exhaustion", async () => {
     const storageRoot = await tempRoot();
-    const store = createServiceManifestStore({ storageRoot });
-    const outcome = await store.commitManifestSet({
-      serviceId: "svc_01J000000000000000000000e",
+    let clock = Date.UTC(2026, 6, 23);
+    const store = createServiceManifestStore({
+      storageRoot,
+      now: () => clock
+    });
+    const serviceId = "svc_01J000000000000000000000e";
+    const firstRequestDigest = digest("bounded-history-0");
+    await store.commitManifestSet({
+      serviceId,
       expectedServiceRevision: 0,
       expectedSetRevision: 0,
-      requestDigest: digest("bounded-cleanup"),
+      requestDigest: firstRequestDigest,
       manifest: manifest("bounded-cleanup")
     });
-    const authorityRoot = path.join(storageRoot, "service-manifests");
-    const stagedNames = Array.from({ length: 257 }, (_, index) =>
-      `.manifest.${index.toString(16).padStart(16, "0")}.tmp`);
-    await Promise.all(stagedNames.map((name) => fs.writeFile(path.join(authorityRoot, name), "staged")));
-    await store.acknowledgePublished({
-      setRevision: outcome.setRevision,
-      setDigest: outcome.setDigest,
-      budget: { maxCleanupEntries: 256 }
+    for (let index = 1; index < 5; index += 1) {
+      await store.commitManifestSet({
+        serviceId,
+        expectedServiceRevision: 1,
+        expectedSetRevision: 1,
+        requestDigest: digest(`bounded-history-${index}`),
+        manifest: manifest("bounded-cleanup"),
+        budget: {
+          maxRequestRecords: 3,
+          maxRequestBytes: 64 * 1024,
+          maxCleanupEntries: 1
+        }
+      });
+    }
+    const databasePath = path.join(
+      storageRoot,
+      "service-manifests",
+      "authority.sqlite"
+    );
+    let database = openSqliteDatabase(databasePath, {
+      readonly: true,
+      fileMustExist: true
     });
-    const remaining = new Set(await fs.readdir(authorityRoot));
-    expect(stagedNames.every((name) => remaining.has(name))).toBe(true);
-    await expect(store.getSnapshot()).resolves.toMatchObject({ setRevision: 1, serviceCount: 1 });
+    expect(database.prepare(
+      "SELECT COUNT(*) AS value FROM manifest_requests"
+    ).get().value).toBe(3);
+    database.close();
+    await expect(store.commitManifestSet({
+      serviceId,
+      expectedServiceRevision: 0,
+      expectedSetRevision: 0,
+      requestDigest: firstRequestDigest,
+      manifest: manifest("bounded-cleanup")
+    })).rejects.toMatchObject({
+      code: "storage_manifest_service_revision_stale"
+    });
+
+    clock += 8 * 24 * 60 * 60 * 1000;
+    await store.commitManifestSet({
+      serviceId,
+      expectedServiceRevision: 1,
+      expectedSetRevision: 1,
+      requestDigest: digest("bounded-history-after-expiry"),
+      manifest: manifest("bounded-cleanup"),
+      budget: {
+        maxRequestRecords: 3,
+        maxRequestBytes: 64 * 1024,
+        maxCleanupEntries: 3
+      }
+    });
+    database = openSqliteDatabase(databasePath, {
+      readonly: true,
+      fileMustExist: true
+    });
+    expect(database.prepare(
+      "SELECT COUNT(*) AS value FROM manifest_requests"
+    ).get().value).toBe(1);
+    database.close();
   });
 
   it("enforces opaque identity, typed references, and the sensitive-material boundary", async () => {
@@ -432,7 +559,7 @@ describe("durable service manifest authority", () => {
       .rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  it("recovers the previous generation when pointer publication is interrupted", async () => {
+  it("rolls back service, digest, and request rows together on capacity failure", async () => {
     const storageRoot = await tempRoot();
     const serviceId = "svc_01J0000000000000000000008";
     const store = createServiceManifestStore({ storageRoot });
@@ -444,114 +571,111 @@ describe("durable service manifest authority", () => {
       manifest: manifest("baseline")
     });
     await acknowledge(store, baseline);
-
-    const originalRename = fs.rename.bind(fs);
-    const renameSpy = vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
-      if (path.basename(String(target)) === "latest.json") {
-        const error = new Error("injected pointer publication failure");
-        error.code = "EIO";
-        throw error;
-      }
-      return originalRename(source, target);
-    });
     await expect(store.commitManifestSet({
       serviceId,
       expectedServiceRevision: 1,
       expectedSetRevision: 1,
       requestDigest: digest("interrupted-update"),
-      manifest: manifest("interrupted")
-    })).rejects.toMatchObject({ code: "EIO" });
-    renameSpy.mockRestore();
+      manifest: manifest("interrupted"),
+      budget: { maxRequestBytes: 1 }
+    })).rejects.toMatchObject({
+      code: "storage_manifest_request_capacity_exceeded"
+    });
 
+    const reopened = createServiceManifestStore({ storageRoot });
+    const candidate = await reopened.getCandidateSnapshot();
+    expect(candidate.setRevision).toBe(1);
+    expect(candidate.getService(serviceId)).toMatchObject({
+      serviceRevision: 1,
+      manifestDigest: baseline.manifestDigest
+    });
+    const database = openSqliteDatabase(path.join(
+      storageRoot,
+      "service-manifests",
+      "authority.sqlite"
+    ), { readonly: true, fileMustExist: true });
+    expect(database.prepare(
+      "SELECT COUNT(*) AS value FROM manifest_blobs"
+    ).get().value).toBe(1);
+    expect(database.prepare(
+      "SELECT COUNT(*) AS value FROM manifest_requests"
+    ).get().value).toBe(1);
+    database.close();
+  });
+
+  it("rejects a partial normalized authority schema instead of repairing it", async () => {
+    const storageRoot = await tempRoot();
     const authorityRoot = path.join(storageRoot, "service-manifests");
-    await expect(fs.stat(path.join(authorityRoot, "journal.json"))).resolves.toBeTruthy();
-    const recovered = await createServiceManifestStore({ storageRoot }).getSnapshot();
-    expect(recovered.setRevision).toBe(1);
-    expect(recovered.getService(serviceId).manifest.payload.label).toBe("baseline");
-    await expect(fs.stat(path.join(authorityRoot, "journal.json"))).resolves.toBeTruthy();
-    expect(await fs.readdir(path.join(authorityRoot, "generations"))).toHaveLength(2);
-    expect(await fs.readdir(path.join(authorityRoot, "manifests"))).toHaveLength(2);
+    await fs.mkdir(authorityRoot, { recursive: true });
+    const databasePath = path.join(authorityRoot, "authority.sqlite");
+    const database = openSqliteDatabase(databasePath);
+    database.exec("CREATE TABLE manifest_services(service_id TEXT PRIMARY KEY)");
+    database.close();
+    await expect(
+      createServiceManifestStore({ storageRoot }).getSnapshot()
+    ).rejects.toMatchObject({
+      code: "storage_manifest_index_incomplete"
+    });
   });
 
-  it("preserves the accepted snapshot across stage, sync, and journal faults", async () => {
-    const phases = ["stage", "sync", "journal"];
-    for (const phase of phases) {
-      const storageRoot = await tempRoot();
-      const serviceId = `svc_01J0000000000000000000${phase === "stage" ? "10" : phase === "sync" ? "11" : "12"}`;
-      const store = createServiceManifestStore({ storageRoot });
-      const baseline = await store.commitManifestSet({
-        serviceId,
-        expectedServiceRevision: 0,
-        expectedSetRevision: 0,
-        requestDigest: digest(`fault-${phase}-baseline`),
-        manifest: manifest("baseline")
-      });
-      await acknowledge(store, baseline);
-
-      if (phase === "journal") {
-        const originalRename = fs.rename.bind(fs);
-        vi.spyOn(fs, "rename").mockImplementation(async (source, target) => {
-          if (path.basename(String(target)) === "journal.json") throw injectedIoFailure();
-          return originalRename(source, target);
-        });
-      } else {
-        const originalOpen = fs.open.bind(fs);
-        vi.spyOn(fs, "open").mockImplementation(async (target, ...args) => {
-          const handle = await originalOpen(target, ...args);
-          const name = path.basename(String(target));
-          if (phase === "stage" && name.startsWith(".manifest.")) {
-            vi.spyOn(handle, "writeFile").mockRejectedValueOnce(injectedIoFailure());
-          }
-          if (phase === "sync" && name.startsWith(".generation.")) {
-            vi.spyOn(handle, "sync").mockRejectedValueOnce(injectedIoFailure());
-          }
-          return handle;
-        });
-      }
-
-      await expect(store.commitManifestSet({
-        serviceId,
-        expectedServiceRevision: 1,
-        expectedSetRevision: 1,
-        requestDigest: digest(`fault-${phase}-candidate`),
-        manifest: manifest(`candidate-${phase}`)
-      })).rejects.toMatchObject({ code: "EIO" });
-      vi.restoreAllMocks();
-      const snapshot = await createServiceManifestStore({ storageRoot }).getSnapshot();
-      expect(snapshot.setRevision).toBe(1);
-      expect(snapshot.getService(serviceId).manifest.payload.label).toBe("baseline");
-    }
-  });
-
-  it("keeps the new complete snapshot authoritative when post-ack cleanup fails", async () => {
+  it("publishes in O(1) pointer work and cleans obsolete versions in bounded batches", async () => {
     const storageRoot = await tempRoot();
     const serviceId = "svc_01J0000000000000000000013";
     const store = createServiceManifestStore({ storageRoot });
-    const baseline = await store.commitManifestSet({
+    let current = await store.commitManifestSet({
       serviceId,
       expectedServiceRevision: 0,
       expectedSetRevision: 0,
       requestDigest: digest("cleanup-baseline"),
       manifest: manifest("baseline")
     });
-    await acknowledge(store, baseline);
-    const candidate = await store.commitManifestSet({
-      serviceId,
-      expectedServiceRevision: 1,
-      expectedSetRevision: 1,
-      requestDigest: digest("cleanup-candidate"),
-      manifest: manifest("candidate")
+    for (let revision = 2; revision <= 4; revision += 1) {
+      current = await store.commitManifestSet({
+        serviceId,
+        expectedServiceRevision: revision - 1,
+        expectedSetRevision: revision - 1,
+        requestDigest: digest(`cleanup-candidate-${revision}`),
+        manifest: manifest(`candidate-${revision}`)
+      });
+    }
+    await store.acknowledgePublished({
+      setRevision: current.setRevision,
+      setDigest: current.setDigest,
+      budget: { maxCleanupEntries: 1 }
     });
-    const originalUnlink = fs.unlink.bind(fs);
-    vi.spyOn(fs, "unlink").mockImplementation(async (target) => {
-      if (path.dirname(String(target)).endsWith("generations")) throw injectedIoFailure();
-      return originalUnlink(target);
-    });
-    await acknowledge(store, candidate);
-    vi.restoreAllMocks();
     const snapshot = await createServiceManifestStore({ storageRoot }).getSnapshot();
-    expect(snapshot.setRevision).toBe(2);
-    expect(snapshot.getService(serviceId).manifest.payload.label).toBe("candidate");
+    expect(snapshot.setRevision).toBe(4);
+    expect(snapshot.getService(serviceId).manifest.payload.label).toBe("candidate-4");
+    const databasePath = path.join(
+      storageRoot,
+      "service-manifests",
+      "authority.sqlite"
+    );
+    let database = openSqliteDatabase(databasePath, {
+      readonly: true,
+      fileMustExist: true
+    });
+    expect(database.prepare(`
+      SELECT COUNT(*) AS value FROM manifest_service_versions
+    `).get().value).toBe(3);
+    database.close();
+
+    await store.acknowledgePublished({
+      setRevision: current.setRevision,
+      setDigest: current.setDigest,
+      budget: { maxCleanupEntries: 16 }
+    });
+    database = openSqliteDatabase(databasePath, {
+      readonly: true,
+      fileMustExist: true
+    });
+    expect(database.prepare(`
+      SELECT COUNT(*) AS value FROM manifest_service_versions
+    `).get().value).toBe(1);
+    expect(database.prepare(`
+      SELECT COUNT(*) AS value FROM manifest_blobs
+    `).get().value).toBe(1);
+    database.close();
   });
 
   it("rejects symlink or non-regular storage roots before persistence", async () => {
@@ -570,7 +694,7 @@ describe("durable service manifest authority", () => {
     })).rejects.toMatchObject({ code: "storage_manifest_directory_unsafe" });
   });
 
-  it("rejects a symlinked writer fence without advancing candidate or published authority", async () => {
+  it("rejects a symlinked SQLite authority without advancing state", async () => {
     const storageRoot = await tempRoot();
     const store = createServiceManifestStore({ storageRoot });
     const first = await store.commitManifestSet({
@@ -580,9 +704,11 @@ describe("durable service manifest authority", () => {
       requestDigest: digest("writer-fence-baseline"),
       manifest: manifest("baseline")
     });
-    const outside = path.join(await tempRoot(), "outside-fence");
-    await fs.mkdir(outside);
-    await fs.symlink(outside, path.join(storageRoot, "service-manifests", ".writer-fence"));
+    const authorityRoot = path.join(storageRoot, "service-manifests");
+    const databasePath = path.join(authorityRoot, "authority.sqlite");
+    const outside = path.join(await tempRoot(), "outside.sqlite");
+    await fs.rename(databasePath, outside);
+    await fs.symlink(outside, databasePath);
 
     await expect(store.commitManifestSet({
       serviceId: "svc_01J000000000000000000000f",
@@ -591,38 +717,12 @@ describe("durable service manifest authority", () => {
       requestDigest: digest("writer-fence-rejected"),
       manifest: manifest("rejected")
     })).rejects.toMatchObject({ code: "storage_manifest_file_unsafe" });
-    expect((await store.getCandidateSnapshot()).setRevision).toBe(first.setRevision);
+    await fs.rm(databasePath, { force: true });
+    await fs.rename(outside, databasePath);
+    expect((await store.getCandidateSnapshot()).setRevision).toBe(
+      first.setRevision
+    );
     expect((await store.getSnapshot()).setRevision).toBe(0);
   });
 
-  it("finalizes a committed generation when journal cleanup was interrupted", async () => {
-    const storageRoot = await tempRoot();
-    const serviceId = "svc_01J0000000000000000000009";
-    const store = createServiceManifestStore({ storageRoot });
-    const originalUnlink = fs.unlink.bind(fs);
-    const unlinkSpy = vi.spyOn(fs, "unlink").mockImplementation(async (target) => {
-      if (path.basename(String(target)) === "journal.json") {
-        const error = new Error("injected journal cleanup failure");
-        error.code = "EIO";
-        throw error;
-      }
-      return originalUnlink(target);
-    });
-    const committed = await store.commitManifestSet({
-      serviceId,
-      expectedServiceRevision: 0,
-      expectedSetRevision: 0,
-      requestDigest: digest("commit-before-cleanup"),
-      manifest: manifest("committed")
-    });
-    expect(committed.setRevision).toBe(1);
-    await acknowledge(store, committed);
-    unlinkSpy.mockRestore();
-
-    const authorityRoot = path.join(storageRoot, "service-manifests");
-    await expect(fs.stat(path.join(authorityRoot, "journal.json"))).resolves.toBeTruthy();
-    const recovered = await createServiceManifestStore({ storageRoot }).getSnapshot();
-    expect(recovered.getService(serviceId).manifest.payload.label).toBe("committed");
-    await expect(fs.stat(path.join(authorityRoot, "journal.json"))).resolves.toBeTruthy();
-  });
 });

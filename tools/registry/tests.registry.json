@@ -162,7 +162,7 @@
   "suites": [
     {
       "id": "runtime.resource-discipline",
-      "label": "Priority-zero bounded logging, storage, and real-service memory-leak gate",
+      "label": "Priority-zero real-service and high-risk owner-path resource gate",
       "owner": "platform",
       "package": "repo",
       "level": "integration",
@@ -180,7 +180,7 @@
         "build/reports/runtime-resource-discipline.json"
       ],
       "artifactSemantics": {
-        "build/reports/runtime-resource-discipline.json": "Compact redacted resource verdict; raw heap profiles and load data are never retained by the gate."
+        "build/reports/runtime-resource-discipline.json": "Compact synthetic owner-path resource verdict; raw heap profiles, payloads, paths, and load data are never retained by the gate."
       }
     },
     {
@@ -513,6 +513,7 @@
         "tests/vitest/server/authorization-capability-binding-guard.test.mjs",
         "tests/vitest/server/console-auth.test.mjs",
         "tests/vitest/server/runtime-logger.test.mjs",
+        "tests/vitest/server/operation-audit-retention.test.mjs",
         "tests/vitest/server/p2-security-boundaries.test.mjs",
         "tests/vitest/console/authorization-governance-card-context.test.ts"
       ],
@@ -680,6 +681,8 @@
         "tests/vitest/server/operation-dispatch-locking.test.mjs",
         "tests/vitest/server/operation-permission.test.mjs",
         "tests/vitest/server/operation-state-machine-integration.test.mjs",
+        "tests/vitest/server/protocol-event-bus-malformed-log-and-cancellation.test.mjs",
+        "tests/vitest/server/protocol-event-bus-recovery-and-backpressure.test.mjs",
         "tests/vitest/server/protocol-event-bus-subscription-and-persistence.test.mjs",
         "tests/vitest/server/server-runtime-construction-unwind.test.mjs",
         "tests/vitest/server/server-runtime-provider-construction-unwind.test.mjs",
@@ -718,6 +721,10 @@
         "tests/vitest/server/queued-job-workflow-provider.test.mjs",
         "tests/vitest/server/work-queue-restart-takeover.test.mjs",
         "tests/vitest/server/work-queue-worker-lease-fence.test.mjs",
+        "tests/vitest/server/job-manager-manifest-deduplication-and-listing.test.mjs",
+        "tests/vitest/server/job-manager-queue-authority-boundary.test.mjs",
+        "tests/vitest/server/job-manager-reparse-and-closure-boundaries.test.mjs",
+        "tests/vitest/server/job-projection-store.test.mjs",
         "tests/vitest/server/import-worker-canonical-queue.test.mjs"
       ],
       "sideEffects": "temp-files",
@@ -742,6 +749,7 @@
         "tests/vitest/server/mcp-sse-admission.test.mjs",
         "tests/vitest/server/outbound-egress-policy.test.mjs",
         "tests/vitest/server/upstream-mcp-session-manager.test.mjs",
+        "tests/vitest/server/upstream-endpoint-traffic-state.test.mjs",
         "tests/vitest/server/upstream-gateway-ssrf.test.mjs",
         "tests/vitest/server/upstream-gateway-session-cancellation.test.mjs",
         "tests/vitest/server/mcp-proxy-cancellation.test.mjs"

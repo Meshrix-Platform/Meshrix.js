@@ -1,28 +1,42 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 
 import { controlledRef, sandboxDigest } from "#lico/foundation/execution-sandbox/contracts";
 import { createOciSandboxBackend } from "./oci-backend.mjs";
 
 const FIXED_CANDIDATES = Object.freeze({
   darwin: Object.freeze([
-    { id: "oci.rootless-podman.primary", providerClass: "rootless-podman", engine: "podman", binary: "/opt/homebrew/bin/podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.rootless-podman.secondary", providerClass: "rootless-podman", engine: "podman", binary: "/usr/local/bin/podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.docker.primary", providerClass: "docker", engine: "docker", binary: "/usr/local/bin/docker", runtimeClass: "runc", rootless: false },
-    { id: "oci.docker.secondary", providerClass: "docker", engine: "docker", binary: "/opt/homebrew/bin/docker", runtimeClass: "runc", rootless: false }
+    { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman", binary: "podman", runtimeClass: "crun", rootless: true },
+    { id: "oci.docker", providerClass: "docker", engine: "docker", binary: "docker", runtimeClass: "runc", rootless: false }
   ]),
   linux: Object.freeze([
-    { id: "oci.rootless-podman.primary", providerClass: "rootless-podman", engine: "podman", binary: "/usr/bin/podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.rootless-podman.secondary", providerClass: "rootless-podman", engine: "podman", binary: "/usr/local/bin/podman", runtimeClass: "crun", rootless: true },
-    { id: "oci.podman.primary", providerClass: "podman", engine: "podman", binary: "/usr/bin/podman", runtimeClass: "crun", rootless: false },
-    { id: "oci.podman.secondary", providerClass: "podman", engine: "podman", binary: "/usr/local/bin/podman", runtimeClass: "crun", rootless: false },
-    { id: "oci.rootless-docker.primary", providerClass: "rootless-docker", engine: "docker", binary: "/usr/bin/docker", runtimeClass: "runc", rootless: true },
-    { id: "oci.rootless-docker.secondary", providerClass: "rootless-docker", engine: "docker", binary: "/usr/local/bin/docker", runtimeClass: "runc", rootless: true },
-    { id: "oci.docker.primary", providerClass: "docker", engine: "docker", binary: "/usr/bin/docker", runtimeClass: "runc", rootless: false },
-    { id: "oci.docker.secondary", providerClass: "docker", engine: "docker", binary: "/usr/local/bin/docker", runtimeClass: "runc", rootless: false }
+    { id: "oci.rootless-podman", providerClass: "rootless-podman", engine: "podman", binary: "podman", runtimeClass: "crun", rootless: true },
+    { id: "oci.podman", providerClass: "podman", engine: "podman", binary: "podman", runtimeClass: "crun", rootless: false },
+    { id: "oci.rootless-docker", providerClass: "rootless-docker", engine: "docker", binary: "docker", runtimeClass: "runc", rootless: true },
+    { id: "oci.docker", providerClass: "docker", engine: "docker", binary: "docker", runtimeClass: "runc", rootless: false }
   ])
 });
+
+function resolveExecutablePath(command, {
+  env = process.env,
+  platform = process.platform
+} = {}) {
+  if (!command) return "";
+  if (path.isAbsolute(command)) return fs.existsSync(command) ? command : "";
+  const pathValue = env.PATH || env.Path || env.path || "";
+  const extensions = platform === "win32"
+    ? String(env.PATHEXT || ".EXE;.CMD;.BAT;.COM").split(";").filter(Boolean)
+    : [""];
+  for (const directory of pathValue.split(path.delimiter).filter(Boolean)) {
+    for (const extension of extensions) {
+      const candidatePath = path.join(directory, `${command}${extension}`);
+      if (fs.existsSync(candidatePath)) return candidatePath;
+    }
+  }
+  return "";
+}
 
 function fixedRootlessProbe(candidate, { timeoutMs = 2_000 } = {}) {
   const args = candidate.engine === "podman"
@@ -41,7 +55,7 @@ function fixedRootlessProbe(candidate, { timeoutMs = 2_000 } = {}) {
     };
     try {
       child = spawn(candidate.binary, args, {
-        env: {},
+        env: { PATH: process.env.PATH || "" },
         stdio: ["ignore", "pipe", "ignore"],
         windowsHide: true
       });
@@ -78,8 +92,10 @@ function fixedRootlessProbe(candidate, { timeoutMs = 2_000 } = {}) {
 }
 
 async function fixedExecutableIdentityProbe(candidate) {
+  const executablePath = resolveExecutablePath(candidate.binary);
+  if (!executablePath) throw new Error("OCI executable is unavailable");
   const hash = crypto.createHash("sha256");
-  const stream = fs.createReadStream(candidate.binary);
+  const stream = fs.createReadStream(executablePath);
   for await (const chunk of stream) hash.update(chunk);
   return hash.digest("hex");
 }
@@ -87,7 +103,7 @@ async function fixedExecutableIdentityProbe(candidate) {
 export function createTrustedOciProviderAdapters({
   platform = process.platform,
   conformanceReceipts = {},
-  pathExists = (candidatePath) => fs.existsSync(candidatePath),
+  pathExists = (candidatePath) => Boolean(resolveExecutablePath(candidatePath, { platform })),
   rootlessProbe = fixedRootlessProbe,
   executableIdentityProbe = fixedExecutableIdentityProbe,
   backendFactory = createOciSandboxBackend
@@ -174,7 +190,7 @@ export function createTrustedOciProviderAdapters({
 
 export async function createOciBackendConformanceTarget({
   platform = process.platform,
-  pathExists = (candidatePath) => fs.existsSync(candidatePath),
+  pathExists = (candidatePath) => Boolean(resolveExecutablePath(candidatePath, { platform })),
   rootlessProbe = fixedRootlessProbe,
   executableIdentityProbe = fixedExecutableIdentityProbe,
   backendFactory = createOciSandboxBackend

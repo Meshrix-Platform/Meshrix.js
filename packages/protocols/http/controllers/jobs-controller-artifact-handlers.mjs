@@ -1,11 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { contentDispositionHeader, sendJson } from "#lico/http-utils";
 import {
   canAccessJob,
   canAccessRawObjectEntry,
   sendForbiddenJob
 } from "./jobs-controller-access.mjs";
+
+const RAW_OBJECT_DOWNLOAD_CONCURRENCY_LIMIT = 32;
 
 function shouldForwardRequest(discoveryState = {}) {
   return (
@@ -44,6 +47,8 @@ export function createJobArtifactHandlers({
   getDiscoveryState,
   proxyApiRequest
 }) {
+  let activeRawObjectDownloads = 0;
+
   return {
     async handleGetJobResult({ request, requestBody, jobId, response, authSession }) {
       const job = await jobWorkflow.getJob(jobId);
@@ -178,7 +183,7 @@ export function createJobArtifactHandlers({
       });
     },
 
-    async handleGetRawObject({ objectId, response, authSession }) {
+    async handleGetRawObject({ objectId, response, authSession, signal }) {
       if (!storageObjectProvider) {
         sendJson(response, 404, {
           error: "原始文件存储未启用。"
@@ -201,7 +206,6 @@ export function createJobArtifactHandlers({
       const rawObjectEntry = rawObject && storageRelativePath
         ? {
             rawObject,
-            buffer: await storageObjectProvider.readObject({ storageRelativePath }),
             contentType: storedObject.mediaType || "application/octet-stream",
             fileName: rawObject.originalFileName || `${id}.bin`,
             storageRelativePath
@@ -222,12 +226,37 @@ export function createJobArtifactHandlers({
         return;
       }
 
-      response.writeHead(200, {
-        "Content-Type": rawObjectEntry.contentType || "application/octet-stream",
-        "Content-Disposition": contentDispositionHeader("attachment", rawObjectEntry.fileName),
-        "Cache-Control": "no-store"
-      });
-      response.end(rawObjectEntry.buffer);
+      if (activeRawObjectDownloads >= RAW_OBJECT_DOWNLOAD_CONCURRENCY_LIMIT) {
+        sendJson(response, 503, {
+          error: "原始文件下载容量已满，请稍后重试。",
+          code: "raw_object_download_capacity_exceeded"
+        });
+        return;
+      }
+      activeRawObjectDownloads += 1;
+      let openedObject = null;
+      try {
+        openedObject = await storageObjectProvider.openObjectReadStream({
+          storageRelativePath: rawObjectEntry.storageRelativePath,
+          signal
+        });
+        response.writeHead(200, {
+          "Content-Type": rawObjectEntry.contentType || "application/octet-stream",
+          "Content-Disposition": contentDispositionHeader("attachment", rawObjectEntry.fileName),
+          "Cache-Control": "no-store",
+          "Content-Length": openedObject.byteSize
+        });
+        await pipeline(
+          openedObject.stream,
+          response,
+          signal ? { signal } : {}
+        );
+      } catch (error) {
+        openedObject?.stream.destroy();
+        throw error;
+      } finally {
+        activeRawObjectDownloads -= 1;
+      }
     }
   };
 }

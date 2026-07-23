@@ -360,7 +360,7 @@ describe("storage backup restore", () => {
       }
       expect(manifest.files.map((entry) => entry.relativePath)).toContain("metadata/runtime.sqlite");
       expect(manifest.files.some((entry) => entry.relativePath.endsWith("-wal"))).toBe(false);
-      expect(manifest.consistency.sqlite).toBe("sqlite-online-backup");
+      expect(manifest.consistency.sqlite).toBe("copy-on-write-baseline-with-sqlite-online-page-backup");
     } finally {
       liveDatabase.close();
     }
@@ -809,6 +809,51 @@ describe("storage backup restore", () => {
     await expect(createStorageBackup({ userDataPath, label: "mutation" }))
       .rejects.toMatchObject({ code: "backup_source_changed" });
     expect((await listStorageBackups({ userDataPath })).backups).toEqual([]);
+  });
+
+  it("rejects insufficient filesystem capacity before creating snapshot files", async () => {
+    const userDataPath = await tempDir("lico-backup-capacity-preflight-");
+    await writeFixture(userDataPath, "state/large.bin", "x".repeat(1024));
+    vi.spyOn(fs, "statfs").mockResolvedValue({
+      bavail: 1n,
+      bsize: 4096n
+    });
+
+    await expect(createStorageBackup({ userDataPath, label: "capacity" }))
+      .rejects.toMatchObject({ code: "storage_backup_capacity_insufficient" });
+    const backupEntries = await fs.readdir(path.join(userDataPath, "backups"));
+    expect(backupEntries.some((name) => name.endsWith(".pending"))).toBe(false);
+    expect((await listStorageBackups({ userDataPath })).backups).toEqual([]);
+  });
+
+  it("uses copy-on-write cloning when the filesystem supports reflinks", async () => {
+    const userDataPath = await tempDir("lico-backup-copy-on-write-");
+    await writeFixture(userDataPath, "state/value.bin", "stable-content");
+    const copyFile = vi.spyOn(fs, "copyFile");
+
+    const manifest = await createStorageBackup({ userDataPath, label: "copy-on-write" });
+    const entry = manifest.files.find((item) => item.relativePath === "state/value.bin");
+    expect(entry.copyMethod).toMatch(/^(copy-on-write|stream-copy)$/);
+    if (entry.copyMethod === "copy-on-write") {
+      expect(copyFile).toHaveBeenCalledWith(
+        path.join(userDataPath, "state/value.bin"),
+        backupFilePath(userDataPath, manifest.backupId, "state/value.bin"),
+        fsSync.constants.COPYFILE_FICLONE_FORCE
+      );
+    }
+  });
+
+  it("removes abandoned unpublished backup staging before the next snapshot", async () => {
+    const userDataPath = await tempDir("lico-backup-pending-recovery-");
+    const pendingPath = path.join(userDataPath, "backups", ".backup_stale.pending");
+    await fs.mkdir(pendingPath, { recursive: true });
+    await fs.writeFile(path.join(pendingPath, "partial"), "partial", "utf8");
+    await writeFixture(userDataPath, "state/value.json", "{}");
+
+    const manifest = await createStorageBackup({ userDataPath, label: "recovered" });
+    await expect(fs.stat(pendingPath)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await listStorageBackups({ userDataPath })).backups.map((item) => item.backupId))
+      .toEqual([manifest.backupId]);
   });
 
   it("verifies manifest size and digest for every selected restore file", async () => {

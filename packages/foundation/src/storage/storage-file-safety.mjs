@@ -306,16 +306,93 @@ export async function copyStableRegularFile({
   }
 }
 
-export async function snapshotSqliteDatabase({ sourcePath, targetPath, executionContext = null }) {
+const CLONE_UNSUPPORTED_CODES = new Set(["ENOSYS", "ENOTSUP", "EOPNOTSUPP", "EXDEV", "EINVAL"]);
+
+export async function cloneStableRegularFile({
+  sourcePath,
+  targetPath,
+  executionContext = null
+}) {
+  const cloneFlag = fsNative.constants.COPYFILE_FICLONE_FORCE;
+  if (!Number.isInteger(cloneFlag)) {
+    return {
+      ...(await copyStableRegularFile({ sourcePath, targetPath, executionContext })),
+      copyMethod: "stream-copy"
+    };
+  }
+  await fs.mkdir(path.dirname(targetPath), { recursive: true, mode: 0o700 });
+  const { handle, stat: before } = await openRegularFile(sourcePath);
+  try {
+    executionContext?.assertActive();
+    try {
+      await fs.copyFile(sourcePath, targetPath, cloneFlag);
+    } catch (error) {
+      if (!CLONE_UNSUPPORTED_CODES.has(error?.code)) throw error;
+      await handle.close();
+      return {
+        ...(await copyStableRegularFile({ sourcePath, targetPath, executionContext })),
+        copyMethod: "stream-copy"
+      };
+    }
+    await fs.chmod(targetPath, 0o600);
+    const after = await handle.stat({ bigint: true });
+    if (statSignature(before) !== statSignature(after)) {
+      throw storageError("backup_source_changed", "A source file changed while the backup snapshot was created.");
+    }
+    executionContext?.consume({ bytes: Number(before.size) });
+    const targetHandle = await fs.open(targetPath, "r+");
+    try {
+      await targetHandle.sync();
+    } finally {
+      await targetHandle.close();
+    }
+    await syncDirectory(path.dirname(targetPath));
+    const targetIntegrity = await inspectStableFile(targetPath, {
+      changedCode: "backup_target_changed",
+      executionContext
+    });
+    if (targetIntegrity.bytes !== Number(before.size)) {
+      throw storageError("backup_target_verification_failed", "A cloned backup file failed destination verification.");
+    }
+    return {
+      bytes: targetIntegrity.bytes,
+      sha256: targetIntegrity.sha256,
+      mtimeMs: Math.trunc(Number(before.mtimeMs)),
+      copyMethod: "copy-on-write"
+    };
+  } catch (error) {
+    await fs.rm(targetPath, { force: true }).catch(() => {});
+    throw error;
+  } finally {
+    await handle.close().catch(() => {});
+  }
+}
+
+export async function snapshotSqliteDatabase({
+  sourcePath,
+  targetPath,
+  baselinePath = "",
+  executionContext = null
+}) {
   await fs.mkdir(path.dirname(targetPath), { recursive: true, mode: 0o700 });
   let sourceDatabase = null;
   let snapshotDatabase = null;
+  let seededFromBaseline = false;
   try {
     const sourceStat = await fs.lstat(sourcePath);
     executionContext?.assertActive();
     executionContext?.consume({ bytes: Number(sourceStat.size || 0) });
     if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
       throw storageError("backup_file_type_invalid", "SQLite backup sources must be regular files.");
+    }
+    if (baselinePath && Number.isInteger(fsNative.constants.COPYFILE_FICLONE_FORCE)) {
+      try {
+        await fs.copyFile(baselinePath, targetPath, fsNative.constants.COPYFILE_FICLONE_FORCE);
+        seededFromBaseline = true;
+      } catch (error) {
+        if (!CLONE_UNSUPPORTED_CODES.has(error?.code) && error?.code !== "ENOENT") throw error;
+        await fs.rm(targetPath, { force: true }).catch(() => {});
+      }
     }
     sourceDatabase = openSqliteDatabase(sourcePath, { readonly: true, fileMustExist: true, timeout: 5_000 });
     await sourceDatabase.backup(targetPath);
@@ -341,7 +418,8 @@ export async function snapshotSqliteDatabase({ sourcePath, targetPath, execution
     });
     return {
       ...integrity,
-      mtimeMs: Math.trunc(sourceStat.mtimeMs)
+      mtimeMs: Math.trunc(sourceStat.mtimeMs),
+      copyMethod: seededFromBaseline ? "copy-on-write-page-update" : "sqlite-online-backup"
     };
   } catch (error) {
     try {

@@ -52,7 +52,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete state-machine-governance",
-      "target": "packages/foundation/src/workflow/state-machine/README.md, packages/foundation/src/workflow/state-machine/definition.mjs, packages/foundation/src/workflow/state-machine/verification/state-machine-definition-schema.mjs, packages/foundation/src/workflow/state-machine/definitions/, docs/state-machine/STATE-MACHINES.md"
+      "target": "packages/foundation/src/workflow/state-machine/README.md, packages/foundation/src/workflow/state-machine/definition.mjs, packages/foundation/src/workflow/state-machine/verification/state-machine-definition-schema.mjs, packages/foundation/src/workflow/state-machine/definitions/, docs/architecture/STATE-MACHINES.md"
     },
     "next": [
       "f98e3941-3665-486c-81f0-567134f6ff03"

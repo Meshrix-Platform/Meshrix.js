@@ -104,16 +104,21 @@ describe("agent workspace behavior", () => {
     let failReceiptConstruction = false;
     let failedCommitId = "";
     const checkpointNodes = {};
+    const contentBlocks = new Map([
+      ["cid-note", Buffer.from("restored-from-cas", "utf8")]
+    ]);
     const merkleState = {
       protocolVersion: "fixture.merkle.1",
       cas: {
-        getBlock: vi.fn(async () => ({
-          bytes: Buffer.from("restored-from-cas", "utf8")
-        })),
+        getBlock: vi.fn(async (cid) => contentBlocks.has(cid)
+          ? { bytes: Buffer.from(contentBlocks.get(cid)) }
+          : null),
         putBlock: vi.fn(async (content) => {
           const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content || "");
+          const cid = `cid-${sha256(buffer).slice(0, 16)}`;
+          contentBlocks.set(cid, Buffer.from(buffer));
           return {
-            cid: `cid-${buffer.length}`,
+            cid,
             byteLength: buffer.length,
             payloadHash: sha256(buffer.toString("utf8"))
           };
@@ -347,6 +352,53 @@ describe("agent workspace behavior", () => {
         error: "不允许恢复以 . 开头的文件。"
       });
     }, { merkleState, checkpointTreeApi });
+  });
+
+  it("validates opaque content handles sequentially", async () => {
+    await withWorkspaceRuntime(async (runtime) => {
+      const workspace = runtime.createWorkspace({ title: "Opaque Content Handle Workspace" }).workspace;
+      let activeReads = 0;
+      let maxActiveReads = 0;
+      const readCounts = new Map();
+      const contentHandle = (name, content) => ({
+        async read() {
+          activeReads += 1;
+          maxActiveReads = Math.max(maxActiveReads, activeReads);
+          readCounts.set(name, Number(readCounts.get(name) || 0) + 1);
+          await new Promise((resolve) => setTimeout(resolve, 2));
+          activeReads -= 1;
+          return Buffer.from(content);
+        }
+      });
+      const files = [
+        { path: "imports/a.txt", content: Buffer.from("alpha") },
+        { path: "imports/b.txt", content: Buffer.from("beta") },
+        { path: "imports/c.txt", content: Buffer.from("gamma") }
+      ];
+
+      const restored = await runtime.restoreWorkspaceFiles({
+        workspaceId: workspace.workspaceId,
+        operationId: "jobs.upload_workspace_materialize:opaque-handles",
+        dryRun: true,
+        files: files.map(({ path: filePath, content }) => ({
+          path: filePath,
+          exists: true,
+          contentHandle: contentHandle(filePath, content),
+          contentSha256: sha256(content),
+          byteLength: content.length,
+          encoding: "binary"
+        }))
+      });
+
+      expect(restored.ok, JSON.stringify(restored)).toBe(true);
+      expect(restored).toMatchObject({
+        ok: true,
+        dryRun: true,
+        summary: { applied: 0 }
+      });
+      expect(maxActiveReads).toBe(1);
+      expect([...readCounts.values()]).toEqual([1, 1, 1]);
+    });
   });
 
   it("starts checkpoint trees when needed and reports null session context after the workspace is removed", async () => {

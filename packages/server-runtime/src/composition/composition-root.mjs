@@ -4,6 +4,7 @@ import {
   publicFeatureRuntime,
   resolveFeatureRuntimeFromEnv
 } from "./features/feature-manifest.mjs";
+import { createProtocolEventRuntime } from "#lico/server-runtime/events/protocol-event-runtime";
 import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
 import { createCorePlatformProvider } from "#lico/server-runtime/composition/core-platform-provider";
 import { registerCorePlatformServices } from "#lico/server-runtime/composition/core-platform-register";
@@ -399,8 +400,13 @@ export async function createServerCompositionRoot({
     requestedOperationConcurrencyScope.trim() ||
     String(operationLockManager?.namespace || "").trim() ||
     "server";
-  const protocolEventBus = createProtocolEventBus({ userDataPath, logger: runtimeLogger });
-  resourceClosers.push(() => protocolEventBus.close());
+  const protocolEventRuntime = await createProtocolEventRuntime({
+    userDataPath,
+    logger: runtimeLogger,
+    createEventBus: createProtocolEventBus
+  });
+  const { protocolEventBus } = protocolEventRuntime;
+  resourceClosers.push(() => protocolEventRuntime.close());
   const queueApplicationPort = await createQueueApplicationPort({
     userDataPath,
     logger: runtimeLogger

@@ -23,7 +23,9 @@ import {
   createStorageReceipt
 } from "../../../packages/foundation/src/storage/storage-evidence.mjs";
 import {
+  STORAGE_EXECUTION_BUDGET_HARD_LIMITS,
   createStorageWorkTracker,
+  normalizeStorageExecutionBudget,
   runStorageMaintenanceMutation,
   storageMaintenanceLaneStatus
 } from "../../../packages/foundation/src/storage/storage-maintenance-coordinator.mjs";
@@ -41,6 +43,62 @@ afterEach(async () => {
 });
 
 describe("storage maintenance coordinator", () => {
+  it("rejects every execution budget above its owner hard limit", () => {
+    const fields = [
+      "maxFiles",
+      "maxBytes",
+      "maxCleanupItems",
+      "maxQueueDepth",
+      "maxDurationMs",
+      "bufferBytes"
+    ];
+    for (const field of fields) {
+      expect(() => normalizeStorageExecutionBudget({
+        [field]: STORAGE_EXECUTION_BUDGET_HARD_LIMITS[field] + 1
+      })).toThrow(expect.objectContaining({
+        code: "storage_execution_budget_limit_exceeded"
+      }));
+    }
+    expect(() => normalizeStorageExecutionBudget({ maxQueueDepth: Number.MAX_SAFE_INTEGER }))
+      .toThrow(expect.objectContaining({ code: "storage_execution_budget_limit_exceeded" }));
+  });
+
+  it("accepts individual boundary values but rejects an unsafe queue-buffer product", () => {
+    expect(normalizeStorageExecutionBudget({
+      maxFiles: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxFiles,
+      maxBytes: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxBytes,
+      maxCleanupItems: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxCleanupItems,
+      maxQueueDepth: 64,
+      maxDurationMs: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxDurationMs,
+      bufferBytes: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.bufferBytes
+    })).toMatchObject({
+      maxFiles: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxFiles,
+      maxBytes: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxBytes
+    });
+    expect(() => normalizeStorageExecutionBudget({
+      maxQueueDepth: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth,
+      bufferBytes: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.bufferBytes
+    })).toThrow(expect.objectContaining({
+      code: "storage_execution_budget_product_exceeded"
+    }));
+  });
+
+  it("rejects oversized queue construction before scheduling or proportional allocation", () => {
+    const root = path.join(os.tmpdir(), "lico-storage-oversized-queue");
+    expect(() => runStorageMaintenanceMutation(
+      root,
+      async () => null,
+      { budget: { maxQueueDepth: STORAGE_EXECUTION_BUDGET_HARD_LIMITS.maxQueueDepth + 1 } }
+    )).toThrow(expect.objectContaining({
+      code: "storage_execution_budget_limit_exceeded"
+    }));
+    expect(storageMaintenanceLaneStatus(root)).toEqual({
+      active: false,
+      fenced: false,
+      queued: 0
+    });
+  });
+
   it("serializes mutations per storage root in FIFO order", async () => {
     const root = await tempRoot();
     const order = [];
@@ -134,6 +192,27 @@ describe("storage backup retention", () => {
     expect(result.receipt.counts).toEqual({ deleted: 1, retained: 2, protected: 1 });
     expect(JSON.stringify(result.receipt)).not.toContain("state.json");
     expect(JSON.stringify(result.receipt)).not.toContain("first");
+  });
+
+  it("applies configured retention inside the backup maintenance lifecycle", async () => {
+    const root = await tempRoot();
+    await fs.writeFile(path.join(root, "state.json"), "one", "utf8");
+    const first = await createStorageBackup({ userDataPath: root, label: "first" });
+    await fs.writeFile(path.join(root, "state.json"), "two", "utf8");
+    const second = await createStorageBackup({ userDataPath: root, label: "second" });
+    await fs.writeFile(path.join(root, "state.json"), "three", "utf8");
+    const third = await createStorageBackup({
+      userDataPath: root,
+      label: "third",
+      retentionPolicy: { keepLast: 2 }
+    });
+
+    expect(third.retention).toMatchObject({
+      status: "applied",
+      deletedBackupIds: [first.backupId]
+    });
+    expect((await listStorageBackups({ userDataPath: root })).backups.map((entry) => entry.backupId))
+      .toEqual([third.backupId, second.backupId]);
   });
 
   it("rejects unsafe policy and privacy evidence instead of broadening deletion", async () => {

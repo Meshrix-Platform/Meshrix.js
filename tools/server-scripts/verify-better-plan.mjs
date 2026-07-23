@@ -65,13 +65,13 @@ const GENERATED_CAPABILITIES_PATH =
   "packages/foundation/src/security/authorization/generated-capabilities.mjs";
 
 const REQUIRED_PUBLIC_DOCS = Object.freeze([
-  "README.md", "README.zh-CN.md", "docs/README.md", "docs/RUNBOOK.md", "docs/USAGES.md",
+  "README.md", "README.zh-CN.md", "docs/README.md", "docs/RUNBOOK.md", "docs/examples/README.md",
   "docs/COMPATIBILITY.md", "docs/architecture/ARCHITECTURE.md",
   "docs/architecture/EXECUTION-SANDBOX.md", "docs/protocols/PROTOCOLS.md",
   "docs/functionality/GATEWAY.md",
   "docs/functionality/OPERATION-PERMISSION.md", "docs/functionality/SECURITY-AUTHORIZATION.md",
   "docs/functionality/SERVER-RUNTIME.md",
-  "docs/functionality/WORKSPACE-ASSETS.md", "docs/state-machine/STATE-MACHINES.md",
+  "docs/functionality/WORKSPACE-ASSETS.md", "docs/architecture/STATE-MACHINES.md",
 ]);
 
 const FACT_SOURCE_AUTHORITY_REGISTRY = "tools/registry/fact-source-authority.registry.json";
@@ -91,30 +91,30 @@ const REQUIRED_FACT_AUTHORITY_KEYS = Object.freeze({
 });
 
 const CAPABILITY_OWNERS = Object.freeze({
-  "upstream-gateway": ["agents-and-protocols", "packages/agents/src/upstream-gateway/index.mjs", "docs/plan/end-to-end-release/gateway-distribution", "10000000-0000-4000-8000-000000000172", "upstream-service-publishing"],
-  "downstream-mcp": ["agents-and-protocols", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "docs/plan/end-to-end-release/gateway-distribution/downstream-mcp", "10000000-0000-4000-8000-000000000179", "downstream-mcp-gateway"],
-  "strategy-management": ["cross-cutting-governance", "packages/server-runtime/src/composition/strategy-management-provider.mjs", "docs/plan/end-to-end-release/operator-administration", "34000000-0000-4000-8000-000000000030", "strategy-management"],
-  "enterprise-governance": ["foundation", "packages/foundation/src/security/authorization/authorization-engine.mjs", "docs/plan/end-to-end-release/platform-foundation/observability-alerts-reporting", "10000000-0000-4000-8000-000000000091", ["operation-permission-authorization", "observability-alerts-reporting"]],
-  "console-administration": ["ui-console", "apps/console/router/admin-route-registry.mjs", "docs/plan/end-to-end-release/operator-administration/console-administration", "10000000-0000-4000-8000-000000000289", "console-administration"],
-  "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plan/end-to-end-release/deployment", "34000000-0000-4000-8000-000000000040", "container-deployment-resumability"],
-  storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.mjs", "docs/plan/end-to-end-release/platform-foundation/storage-backup", "10000000-0000-4000-8000-000000000076", "storage-backup-runtime"],
-  jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.mjs", "docs/plan/end-to-end-release/platform-foundation/jobs-work-queues", "10000000-0000-4000-8000-000000000083", "jobs-work-queue-runtime"],
-  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.mjs", "docs/plan/end-to-end-release/capability-runtime/plugin-runtime", "34000000-0000-4000-8000-000000000001", "plugin-runtime-and-module-system"],
-  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.mjs", "docs/plan/end-to-end-release/operator-administration", "34000000-0000-4000-8000-000000000031", "agent-gateway-model-routing"],
-  "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.mjs", "docs/plan/end-to-end-release/capability-runtime", "34000000-0000-4000-8000-000000000020", "core-workspace-assets-governance"],
+  "upstream-gateway": ["agents-and-protocols", "packages/agents/src/upstream-gateway/index.mjs", "docs/plans/end-to-end-release/gateway-distribution", "10000000-0000-4000-8000-000000000172", "upstream-service-publishing"],
+  "downstream-mcp": ["agents-and-protocols", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "docs/plans/end-to-end-release/gateway-distribution/downstream-mcp", "10000000-0000-4000-8000-000000000179", "downstream-mcp-gateway"],
+  "strategy-management": ["cross-cutting-governance", "packages/server-runtime/src/composition/strategy-management-provider.mjs", "docs/plans/end-to-end-release/operator-administration", "34000000-0000-4000-8000-000000000030", "strategy-management"],
+  "enterprise-governance": ["foundation", "packages/foundation/src/security/authorization/authorization-engine.mjs", "docs/plans/end-to-end-release/platform-foundation/observability-alerts-reporting", "10000000-0000-4000-8000-000000000091", ["operation-permission-authorization", "observability-alerts-reporting"]],
+  "console-administration": ["ui-console", "apps/console/router/admin-route-registry.mjs", "docs/plans/end-to-end-release/operator-administration/console-administration", "10000000-0000-4000-8000-000000000289", "console-administration"],
+  "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plans/end-to-end-release/deployment", "34000000-0000-4000-8000-000000000040", "container-deployment-resumability"],
+  storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.mjs", "docs/plans/end-to-end-release/platform-foundation/storage-backup", "10000000-0000-4000-8000-000000000076", "storage-backup-runtime"],
+  jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.mjs", "docs/plans/end-to-end-release/platform-foundation/jobs-work-queues", "10000000-0000-4000-8000-000000000083", "jobs-work-queue-runtime"],
+  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.mjs", "docs/plans/end-to-end-release/capability-runtime/plugin-runtime", "34000000-0000-4000-8000-000000000001", "plugin-runtime-and-module-system"],
+  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.mjs", "docs/plans/end-to-end-release/operator-administration", "34000000-0000-4000-8000-000000000031", "agent-gateway-model-routing"],
+  "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.mjs", "docs/plans/end-to-end-release/capability-runtime", "34000000-0000-4000-8000-000000000020", "core-workspace-assets-governance"],
 });
 
 const ORGANIZATION_ROOT_FACTS = Object.freeze({
   "application-entry": ["application-entry", "apps/server/bin/lico.mjs",
-    "docs/functionality/SERVER-RUNTIME.md", "docs/plan/end-to-end-release",
+    "docs/functionality/SERVER-RUNTIME.md", "docs/plans/end-to-end-release",
     "10000000-0000-4000-8000-000000000004", "tools/server-scripts/verify-composition-source.mjs",
     "state-machine-governance"],
   "server-runtime-composition": ["runtime-composition", "packages/server-runtime/src/composition/index.mjs",
-    "docs/functionality/SERVER-RUNTIME.md", "docs/plan/end-to-end-release",
+    "docs/functionality/SERVER-RUNTIME.md", "docs/plans/end-to-end-release",
     "10000000-0000-4000-8000-000000000005", "tools/server-scripts/verify-composition-source.mjs",
     "state-machine-governance"],
   "public-contracts": ["contracts", OPERATION_REGISTRY_PATH, "docs/protocols/PROTOCOLS.md",
-    "docs/plan/end-to-end-release", "10000000-0000-4000-8000-000000000008",
+    "docs/plans/end-to-end-release", "10000000-0000-4000-8000-000000000008",
     "tools/server-scripts/verify-operation-permission-protocol-consistency.mjs",
     "operation-permission-authorization"],
 });

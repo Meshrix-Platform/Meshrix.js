@@ -8,6 +8,8 @@ import { createJobManagerQueue } from "./job-manager-queue-integration.mjs";
 import { createStartQueuedJob } from "./job-manager-lifecycle.mjs";
 import { createJobManagerApi } from "./job-manager-api.mjs";
 import { loadJobPayload } from "./job-manager-persistence.mjs";
+import { createJobProjectionStore } from "./job-projection-store.mjs";
+import { reconcileJobProjectionArtifacts } from "./job-projection-recovery.mjs";
 import { normalizeWorkerConcurrency } from "./job-manager-validation.mjs";
 
 export function createJobManager({
@@ -21,7 +23,14 @@ export function createJobManager({
   const jobs = new Map();
   const checkpointJobs = new Map();
   const activeManifestJobs = new Map();
-  const durableWorkflows = createDurableWorkflowSubstrate({ userDataPath });
+  const jobProjectionStore = createJobProjectionStore({ userDataPath });
+  let durableWorkflows;
+  try {
+    durableWorkflows = createDurableWorkflowSubstrate({ userDataPath });
+  } catch (error) {
+    jobProjectionStore.close();
+    throw error;
+  }
   const workerConcurrency = normalizeWorkerConcurrency(
     runtimeOptions?.workerConcurrency || process.env.LICO_JOB_WORKER_CONCURRENCY
   );
@@ -37,11 +46,19 @@ export function createJobManager({
     if (!logger || typeof logger[level] !== "function") {
       return;
     }
+    let queuedCount = 0;
+    try {
+      queuedCount = Number(
+        jobProjectionStore.getCounts().counts.queued || 0
+      );
+    } catch {
+      queuedCount = 0;
+    }
     logger[level](event, {
       processingEnabled,
       workerConcurrency,
       activeCount: activeControllers.size,
-      queuedCount: [...jobs.values()].filter((job) => job.status === "queued").length,
+      queuedCount,
       ...details
     });
   }
@@ -92,6 +109,7 @@ export function createJobManager({
     jobs,
     checkpointJobs,
     activeManifestJobs,
+    jobProjectionStore,
     durableWorkflows,
     workerConcurrency,
     activeControllers,
@@ -102,14 +120,26 @@ export function createJobManager({
     trackBackgroundTask,
     drainBackgroundTasks,
     resolveCurrentRuntimeOptions,
-    loadJobPayload
+    loadJobPayload: (jobId) =>
+      loadJobPayload(userDataPath, jobId, jobProjectionStore)
   };
 
   Object.assign(ctx, createActiveManifestIndex(ctx));
   Object.assign(ctx, createJobManagerArtifacts(ctx));
   Object.assign(ctx, createJobManagerQueue(ctx));
   ctx.startQueuedJob = createStartQueuedJob(ctx);
-  ctx.ready = ctx.recoverPersistedQueue();
+  ctx.ready = (async () => {
+    await reconcileJobProjectionArtifacts({
+      userDataPath,
+      projectionStore: jobProjectionStore
+    });
+    jobProjectionStore.maintain();
+    await reconcileJobProjectionArtifacts({
+      userDataPath,
+      projectionStore: jobProjectionStore
+    });
+    await ctx.recoverPersistedQueue();
+  })();
 
   return createJobManagerApi(ctx);
 }

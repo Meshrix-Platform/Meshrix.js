@@ -28,7 +28,8 @@ crash-*
 .licomesh-server-data/
 /licomesh-data/
 /.lico-agent-history/
-/build/*
+/build/
+/cache/
 /outputs/
 /reports/production-readiness/
 /.cache/
@@ -73,7 +74,7 @@ packages/capabilities/runtime-modules/knowledge/ocr/runtime/**
 # Temporary files
 *.tmp
 *.temp
-/tmp/
+tmp/
 
 # Local test source data can contain large/private documents.
 /tests/fixtures/
@@ -91,9 +92,9 @@ test-results/
 .impeccable/
 .github/skills/
 
-# Local process outputs, Better Plan state, and decision scratch. Public docs
-# remain under docs/README.md, docs/RUNBOOK.md, docs/architecture/,
-# docs/protocols/, docs/functionality/, docs/state-machine/, and
-# registry-backed fact sources.
-/docs/plan/
-/docs/decisions/
+# Local process documents. Public documentation remains under docs/README.md,
+# docs/RUNBOOK.md, docs/COMPATIBILITY.md, docs/ENTITY-CONFIG-LAYOUT.md,
+# docs/architecture/, docs/functionality/, docs/protocols/, docs/examples/,
+# and docs/adrs/.
+/docs/plans/
+/docs/reports/

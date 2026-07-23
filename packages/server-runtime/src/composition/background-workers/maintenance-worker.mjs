@@ -1,7 +1,8 @@
 import { createMaintenanceAgentService } from "#lico/agents/maintenance/index";
 import { createOperationPermissionStore } from "#lico/capabilities/operation-permission-core/store";
-import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
 import { createJobManager } from "../../jobs/jobs/job-manager.mjs";
+import { createProtocolEventRuntime } from "../../events/protocol-event-runtime.mjs";
+import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
 import { createMaintenanceWorkQueueProvider } from "../maintenance-work-queue-provider.mjs";
 import { createQueueApplicationPort } from "../queue-application-port.mjs";
 import {
@@ -24,6 +25,7 @@ export async function createMaintenanceWorkerRuntime({
   operationLockManager: injectedOperationLockManager = null
 }) {
   let protocolEventBus = null;
+  let protocolEventRuntime = null;
   let runtime = null;
   let jobManager = null;
   let operationPermissionStore = null;
@@ -57,7 +59,7 @@ export async function createMaintenanceWorkerRuntime({
       const dependencyFailures = [];
       for (const close of [
         () => runtime?.close?.(),
-        () => protocolEventBus?.close?.()
+        () => protocolEventRuntime?.close?.()
       ]) {
         try {
           await close();
@@ -76,7 +78,11 @@ export async function createMaintenanceWorkerRuntime({
   }
 
   try {
-    protocolEventBus = createProtocolEventBus({ userDataPath });
+    protocolEventRuntime = await createProtocolEventRuntime({
+      userDataPath,
+      createEventBus: createProtocolEventBus
+    });
+    protocolEventBus = protocolEventRuntime.protocolEventBus;
     runtime = await createServerRuntime({
       userDataPath,
       operationLockManager: injectedOperationLockManager
@@ -123,6 +129,7 @@ export async function createMaintenanceWorkerRuntime({
     return {
       mode: "active",
       async tick() {
+        await jobManager.maintainHistory();
         await maintenanceAgent.tickScheduler();
         const summary = await maintenanceAgent.getConsoleSummary();
         return {

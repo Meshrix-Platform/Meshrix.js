@@ -429,49 +429,120 @@ export function createAgentWorkspaceSyncApi({
     return decodeWorkspaceFileContent(entry);
   }
 
+  async function readWorkspaceSnapshotEntryContent(entry = {}) {
+    const content = entry.contentHandle && typeof entry.contentHandle.read === "function"
+      ? await entry.contentHandle.read()
+      : Buffer.isBuffer(entry.content)
+        ? entry.content
+        : await decodeWorkspaceSnapshotContent(entry);
+    if (!Buffer.isBuffer(content)) {
+      throw new Error("Workspace snapshot content handle must return a Buffer.");
+    }
+    const expectedByteLength = Number(entry.byteLength ?? entry.sizeBytes ?? content.length);
+    if (!Number.isSafeInteger(expectedByteLength) || expectedByteLength < 0) {
+      throw new Error("Workspace snapshot byte length is invalid.");
+    }
+    if (content.length !== expectedByteLength) {
+      throw new Error("Workspace snapshot content size does not match its declared byte length.");
+    }
+    const contentSha256 = sha256Buffer(content);
+    const expectedSha256 = normalizeSha256(
+      entry.contentSha256 || entry.sha256 || entry.expectedSha256 || ""
+    );
+    if (expectedSha256 && expectedSha256 !== contentSha256) {
+      throw new Error("Workspace snapshot content does not match its declared digest.");
+    }
+    return {
+      content,
+      contentSha256,
+      byteLength: content.length
+    };
+  }
+
   async function normalizeWorkspaceFileSnapshot(input = {}) {
     const snapshot = asObject(input.snapshot || input.workspaceFileSnapshot || input.fileSnapshot || input);
     const basePath = normalizeWorkspaceRelativePath(snapshot.basePath || snapshot.rootPath || input.basePath || "", { allowEmpty: true });
     const rawFiles = asArray(snapshot.files || snapshot.entries || input.files);
     const localDirectorySnapshots = asArray(snapshot.localDirectorySnapshots || snapshot.mountSnapshots);
+    const validateOpaqueContent = input.dryRun === true || input.preview === true;
+    const files = [];
+    for (const entry of rawFiles) {
+      const rawRelativePath = normalizeWorkspaceRelativePath(
+        entry.path || entry.relativePath || entry.filePath || entry.name || "",
+        { allowEmpty: false }
+      );
+      const relativePath = basePath && rawRelativePath !== basePath && !rawRelativePath.startsWith(`${basePath}/`)
+        ? joinWorkspaceRelativePath(basePath, rawRelativePath)
+        : rawRelativePath;
+      if (path.posix.basename(relativePath).startsWith(".")) {
+        throw new Error("不允许恢复以 . 开头的文件。");
+      }
+      const exists = entry.exists !== false && entry.deleted !== true && entry.tombstone !== true;
+      if (!exists) {
+        files.push({
+          relativePath,
+          exists: false,
+          content: Buffer.alloc(0),
+          contentSha256: "",
+          byteLength: 0,
+          encoding: String(entry.encoding || "base64")
+        });
+        continue;
+      }
+      const hasContentHandle = entry.contentHandle && typeof entry.contentHandle.read === "function";
+      let verified;
+      if (hasContentHandle && !validateOpaqueContent) {
+        const byteLength = Number(entry.byteLength ?? entry.sizeBytes);
+        const contentSha256 = normalizeSha256(
+          entry.contentSha256 || entry.sha256 || entry.expectedSha256 || ""
+        );
+        if (
+          !Number.isSafeInteger(byteLength) ||
+          byteLength < 0 ||
+          !contentSha256 ||
+          (
+            entry.contentHandle.byteLength !== undefined &&
+            Number(entry.contentHandle.byteLength) !== byteLength
+          ) ||
+          (
+            entry.contentHandle.contentSha256 !== undefined &&
+            normalizeSha256(entry.contentHandle.contentSha256) !== contentSha256
+          )
+        ) {
+          throw new Error("Workspace snapshot content handle metadata is invalid.");
+        }
+        assertWorkspaceFileContentPolicy({
+          relativePath,
+          contentBuffer: Buffer.alloc(0),
+          sizeBytes: byteLength
+        });
+        verified = { contentSha256, byteLength };
+      } else {
+        verified = await readWorkspaceSnapshotEntryContent(entry);
+        assertWorkspaceFileContentPolicy({
+          relativePath,
+          contentBuffer: verified.content,
+          sizeBytes: verified.byteLength
+        });
+      }
+      files.push({
+        relativePath,
+        exists: true,
+        ...(hasContentHandle
+          ? { contentHandle: entry.contentHandle }
+          : { content: verified.content }),
+        contentSha256: verified.contentSha256,
+        byteLength: verified.byteLength,
+        encoding: String(entry.encoding || "base64")
+      });
+    }
     return {
       basePath,
       stateRoot: String(snapshot.stateRoot || snapshot.workspaceRevision || ""),
       stateEventAnchor: asObject(snapshot.stateEventAnchor),
       deleteExtraneous: snapshot.deleteExtraneous === true || input.deleteExtraneous === true,
       localDirectorySnapshots,
-      files: await Promise.all(rawFiles.map(async (entry) => {
-        const rawRelativePath = normalizeWorkspaceRelativePath(
-          entry.path || entry.relativePath || entry.filePath || entry.name || "",
-          { allowEmpty: false }
-        );
-        const relativePath = basePath && rawRelativePath !== basePath && !rawRelativePath.startsWith(`${basePath}/`)
-          ? joinWorkspaceRelativePath(basePath, rawRelativePath)
-          : rawRelativePath;
-        if (path.posix.basename(relativePath).startsWith(".")) {
-          throw new Error("不允许恢复以 . 开头的文件。");
-        }
-        const exists = entry.exists !== false && entry.deleted !== true && entry.tombstone !== true;
-        const content = exists ? await decodeWorkspaceSnapshotContent(entry) : Buffer.alloc(0);
-        if (exists) {
-          assertWorkspaceFileContentPolicy({
-            relativePath,
-            contentBuffer: content
-          });
-        }
-        const contentSha256 = exists ? sha256Buffer(content) : "";
-        const expectedSha256 = normalizeSha256(entry.contentSha256 || entry.sha256 || entry.expectedSha256 || "");
-        if (expectedSha256 && expectedSha256 !== contentSha256) {
-          throw new Error(`文件快照 hash 不匹配：${relativePath}`);
-        }
-        return {
-          relativePath,
-          exists,
-          content,
-          contentSha256,
-          encoding: String(entry.encoding || "base64")
-        };
-      }))
+      files
     };
   }
 
@@ -633,11 +704,19 @@ export function createAgentWorkspaceSyncApi({
       }
       for (const action of sandboxActions) {
         await input.leaseGuard?.();
+        const entry = desiredByPath.get(action.path);
         if (action.action === "noop") {
+          if (entry?.contentHandle && typeof entry.contentHandle.read === "function") {
+            const verified = await readWorkspaceSnapshotEntryContent(entry);
+            assertWorkspaceFileContentPolicy({
+              relativePath: action.path,
+              contentBuffer: verified.content,
+              sizeBytes: verified.byteLength
+            });
+          }
           await input.leaseGuard?.();
           continue;
         }
-        const entry = desiredByPath.get(action.path);
         let resolved;
         try {
           resolved = resolveWorkspacePath(access.workspace, action.path);
@@ -650,7 +729,27 @@ export function createAgentWorkspaceSyncApi({
             try {
               const stat = await handle.stat();
               if (!stat.isFile()) throw new Error("Workspace restore target is not a regular file.");
-              sandboxPreimages.set(action.path, { exists: true, content: await handle.readFile() });
+              if (!merkleState?.cas?.putBlock) {
+                const error = new Error("Workspace restore preimage authority is unavailable.");
+                error.code = "workspace_restore_preimage_unavailable";
+                error.status = 503;
+                throw error;
+              }
+              const content = await handle.readFile();
+              const block = await merkleState.cas.putBlock(content, {
+                codec: "raw",
+                metadata: {
+                  workspaceId: access.workspace.workspaceId,
+                  relativePath: action.path,
+                  preimage: true
+                }
+              });
+              sandboxPreimages.set(action.path, {
+                exists: true,
+                contentCid: block.cid,
+                contentSha256: normalizeSha256(block.payloadHash),
+                byteLength: block.byteLength
+              });
             } finally {
               await handle.close();
             }
@@ -665,8 +764,14 @@ export function createAgentWorkspaceSyncApi({
           await input.leaseGuard?.();
           continue;
         }
+        const verified = await readWorkspaceSnapshotEntryContent(entry);
+        assertWorkspaceFileContentPolicy({
+          relativePath: action.path,
+          contentBuffer: verified.content,
+          sizeBytes: verified.byteLength
+        });
         await fsPromises.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-        await fsPromises.writeFile(resolved.absolutePath, entry.content);
+        await fsPromises.writeFile(resolved.absolutePath, verified.content);
         stripExecutableMode(resolved.absolutePath);
         sandboxApplied.push(action);
         await input.leaseGuard?.();
@@ -696,25 +801,15 @@ export function createAgentWorkspaceSyncApi({
           workspacePreimageFiles.push({ path: relativePath, exists: false });
           continue;
         }
-        if (!merkleState?.cas?.putBlock) {
-          const error = new Error("Workspace restore preimage authority is unavailable.");
-          error.code = "workspace_restore_preimage_unavailable";
-          error.status = 503;
-          throw error;
-        }
-        const block = await merkleState.cas.putBlock(preimage.content, {
-          codec: "raw",
-          metadata: { workspaceId: access.workspace.workspaceId, relativePath, preimage: true }
-        });
         workspacePreimageFiles.push({
           path: relativePath,
           exists: true,
-          contentCid: block.cid,
-          contentSha256: normalizeSha256(block.payloadHash),
-          byteLength: block.byteLength,
+          contentCid: preimage.contentCid,
+          contentSha256: preimage.contentSha256,
+          byteLength: preimage.byteLength,
           encoding: "base64"
         });
-        commitRefs.push(block.cid);
+        commitRefs.push(preimage.contentCid);
       }
       for (const action of sandboxApplied) {
         if (action.action === "delete") {
@@ -848,8 +943,17 @@ export function createAgentWorkspaceSyncApi({
           const resolved = resolveWorkspacePath(access.workspace, action.path);
           const preimage = sandboxPreimages.get(action.path);
           if (preimage?.exists) {
+            const block = await merkleState?.cas?.getBlock?.(preimage.contentCid);
+            if (
+              !block ||
+              !Buffer.isBuffer(block.bytes) ||
+              block.bytes.length !== preimage.byteLength ||
+              sha256Buffer(block.bytes) !== preimage.contentSha256
+            ) {
+              throw new Error("Workspace restore preimage content is unavailable.");
+            }
             await fsPromises.mkdir(path.dirname(resolved.absolutePath), { recursive: true });
-            await fsPromises.writeFile(resolved.absolutePath, preimage.content);
+            await fsPromises.writeFile(resolved.absolutePath, block.bytes);
             stripExecutableMode(resolved.absolutePath);
           } else {
             await fsPromises.rm(resolved.absolutePath, { recursive: true, force: true });

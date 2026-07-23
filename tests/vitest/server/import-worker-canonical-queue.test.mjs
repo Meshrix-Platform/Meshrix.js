@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createJobManagerMock = vi.hoisted(() => vi.fn());
-const createProtocolEventBusMock = vi.hoisted(() => vi.fn());
+const createProtocolEventRuntimeMock = vi.hoisted(() => vi.fn());
 const createQueuedJobWorkflowProviderMock = vi.hoisted(() => vi.fn());
 const createQueueApplicationPortMock = vi.hoisted(() => vi.fn());
 
@@ -9,8 +9,8 @@ vi.mock("../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs", () => 
   createJobManager: createJobManagerMock
 }));
 
-vi.mock("#lico/protocols/pubsub/event-bus", () => ({
-  createProtocolEventBus: createProtocolEventBusMock
+vi.mock("../../../packages/server-runtime/src/events/protocol-event-runtime.mjs", () => ({
+  createProtocolEventRuntime: createProtocolEventRuntimeMock
 }));
 
 vi.mock("../../../packages/server-runtime/src/composition/queued-job-workflow-provider.mjs", () => ({
@@ -30,7 +30,7 @@ beforeEach(() => {
 describe("external import worker canonical queue", () => {
   it("runs the worker-owned canonical queue lifecycle and reports bounded job state", async () => {
     const closeJobManager = vi.fn(async () => undefined);
-    const closeEventBus = vi.fn(async () => undefined);
+    const closeEventRuntime = vi.fn(async () => undefined);
     const closeProvider = vi.fn(async () => undefined);
     const queueApplicationPort = {
       start: vi.fn(),
@@ -38,12 +38,16 @@ describe("external import worker canonical queue", () => {
       close: vi.fn(async () => undefined)
     };
     const jobManager = { close: closeJobManager };
-    const protocolEventBus = { close: closeEventBus };
+    const protocolEventBus = {};
+    const protocolEventRuntime = {
+      protocolEventBus,
+      close: closeEventRuntime
+    };
     const provider = {
       listJobs: vi.fn(async () => ({ summary: { queuedCount: 1 } })),
       close: closeProvider
     };
-    createProtocolEventBusMock.mockReturnValue(protocolEventBus);
+    createProtocolEventRuntimeMock.mockResolvedValue(protocolEventRuntime);
     createJobManagerMock.mockReturnValue(jobManager);
     createQueueApplicationPortMock.mockResolvedValue(queueApplicationPort);
     createQueuedJobWorkflowProviderMock.mockResolvedValue(provider);
@@ -73,7 +77,7 @@ describe("external import worker canonical queue", () => {
     expect(queueApplicationPort.stop).toHaveBeenCalledOnce();
     expect(queueApplicationPort.close).toHaveBeenCalledOnce();
     expect(closeJobManager).toHaveBeenCalledOnce();
-    expect(closeEventBus).toHaveBeenCalledOnce();
+    expect(closeEventRuntime).toHaveBeenCalledOnce();
     expect(closeProvider.mock.invocationCallOrder[0]).toBeLessThan(closeJobManager.mock.invocationCallOrder[0]);
   });
 });

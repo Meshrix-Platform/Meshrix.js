@@ -28,8 +28,8 @@ const OWNED_REPORTS_INVENTORY_DIGEST = releaseEvidenceInventoryDigest(
 );
 
 export function planReceiptSourceTreeExclusions(repoRoot) {
-  const planRoot = path.join(repoRoot, "docs", "plan");
-  const exclusions = ["docs/plan/end-to-end-release/DependencyMap.json"];
+  const planRoot = path.join(repoRoot, "docs", "plans");
+  const exclusions = ["docs/plans/end-to-end-release/DependencyMap.json"];
   if (!fs.existsSync(planRoot)) return exclusions;
 
   const pendingDirectories = [planRoot];
@@ -136,7 +136,7 @@ export function planReceiptBuildContext({
   dependencyMap,
   candidateReceiptPlans = new Set()
 }) {
-  const planRoot = path.join(repoRoot, "docs", "plan");
+  const planRoot = path.join(repoRoot, "docs", "plans");
   normalizePlanDirectory(planDirectory);
   const repositoryRevision = spawnSync("git", ["rev-parse", "HEAD"], {
     cwd: repoRoot,

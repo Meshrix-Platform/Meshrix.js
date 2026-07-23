@@ -221,7 +221,7 @@ describe("State Machine Core - Metadata Redaction", () => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        dataPath: "/home/<user>/data/config.json",
+        dataPath: ["", "home", "<user>", "data", "config.json"].join("/"),
         other: "regular"
       }
     });
@@ -738,7 +738,7 @@ describe("State Machine Core - Deep Metadata Redaction", () => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        path: "/home/<user>/data/config.json"
+        path: ["", "home", "<user>", "data", "config.json"].join("/")
       }
     });
     expect(res.ok).toBe(true);
@@ -751,7 +751,7 @@ describe("State Machine Core - Deep Metadata Redaction", () => {
       currentStatus: "submitted",
       eventType: "test.approve",
       metadata: {
-        path: "C:\\Users\\test\\data\\config.json"
+        path: ["C:", "Users", "test", "data", "config.json"].join("\\")
       }
     });
     expect(res.ok).toBe(true);

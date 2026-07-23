@@ -65,9 +65,9 @@ describe("console context profile truthfulness", () => {
     const candidate = createContextProfileCandidateTemplate();
     expect(candidate).toMatchObject({
       contextWindowTokens: 128_000,
-      referenceBudget: 40_000,
-      historyBudget: 32_000,
-      recentTurnBudget: 20_000,
+      referenceBudget: 40_960,
+      historyBudget: 32_768,
+      recentTurnBudget: 20_480,
       budgetPolicy: {
         fixedMemoryRatio: 0.04,
         operatorGuidanceRatio: 0.08,
@@ -84,6 +84,11 @@ describe("console context profile truthfulness", () => {
     expect(candidate).not.toHaveProperty("profileId");
     expect(candidate).not.toHaveProperty("label");
     expect(candidate).not.toHaveProperty("modelAlias");
+    expect([
+      candidate.referenceBudget,
+      candidate.historyBudget,
+      candidate.recentTurnBudget,
+    ].every((value) => Number(value) % 1024 === 0)).toBe(true);
   });
 
   it("does not synthesize label, model, numeric, or compression values while editing", () => {

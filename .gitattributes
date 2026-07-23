@@ -1,6 +1,2 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-
-# Local temporary reports are committed for local traceability only. Keep them
-# out of archives in addition to the repository pre-push boundary.
-/docs/report/ export-ignore

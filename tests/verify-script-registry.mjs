@@ -852,7 +852,7 @@ function assertNoInternalPackFiles(packRecords = [], source = "npm pack") {
         packagePackFindings.push({
           source: `${record.name || source}:${packedPath}`,
           kind: "internal-file-packaged",
-          detail: "published tarballs must not include internal plan/report/decision docs"
+          detail: "published tarballs must not include docs/plans or docs/reports"
         });
       }
     }

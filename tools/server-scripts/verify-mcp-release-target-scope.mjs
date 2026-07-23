@@ -35,7 +35,7 @@ const ADAPTER_BOUNDARY_DOCUMENT_FILES = Object.freeze([
   ".github/RELEASE_TEMPLATE.md",
   "docs/protocols/PROTOCOLS.md",
   "docs/COMPATIBILITY.md",
-  "docs/USAGES.md",
+  "docs/architecture/MCP-NATIVE-INSTALLER.md",
   "docs/functionality/GATEWAY.md",
   "docs/functionality/AGENT-COLLABORATION.md",
   "packages/protocols/mcp/adapter/native-installer/README.md",

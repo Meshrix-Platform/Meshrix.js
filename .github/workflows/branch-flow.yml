@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -33,3 +34,7 @@ jobs:
         run: node tools/scripts/verify-branch-flow.mjs --self-test
       - name: Verify branch flow
         run: node tools/scripts/verify-branch-flow.mjs
+      - name: Verify publication policy fixtures
+        run: node tools/scripts/verify-git-publication.mjs --self-test
+      - name: Verify published tree
+        run: node tools/scripts/verify-git-publication.mjs --index

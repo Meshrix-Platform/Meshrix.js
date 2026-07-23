@@ -195,22 +195,6 @@ function synchronizeInternalDependencies(value, version) {
   }
 }
 
-function synchronizeLegacyLockDependencies(dependencies, version) {
-  if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) return;
-  for (const [name, entry] of Object.entries(dependencies)) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-    if (name.startsWith("@lico/") && typeof entry.version === "string") {
-      entry.version = version;
-    }
-    if (entry.requires && typeof entry.requires === "object") {
-      for (const dependencyName of Object.keys(entry.requires)) {
-        if (dependencyName.startsWith("@lico/")) entry.requires[dependencyName] = version;
-      }
-    }
-    synchronizeLegacyLockDependencies(entry.dependencies, version);
-  }
-}
-
 function escapedRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -417,7 +401,6 @@ function createDesiredFiles(state, version, date) {
       nodeModuleEntry.version = version;
     }
   }
-  synchronizeLegacyLockDependencies(lock.dependencies, version);
   desiredFiles.set("package-lock.json", {
     ...state.packageLock,
     value: lock,

@@ -31,16 +31,16 @@ export const SOURCE_PACKAGE_ROOTS = Object.freeze([
   "tools",
   "docs/README.md",
   "docs/RUNBOOK.md",
-  "docs/USAGES.md",
   "docs/COMPATIBILITY.md",
   "docs/ENTITY-CONFIG-LAYOUT.md",
   "docs/architecture-overview.svg",
   "docs/banner.svg",
   "docs/logo.svg",
   "docs/architecture",
+  "docs/adrs",
+  "docs/examples",
   "docs/functionality",
-  "docs/protocols",
-  "docs/state-machine"
+  "docs/protocols"
 ]);
 
 export const ROOT_SOURCE_FILES = Object.freeze([
@@ -57,10 +57,12 @@ export const ROOT_SOURCE_FILES = Object.freeze([
   ".gitignore",
   "README.md",
   "README.zh-CN.md",
+  "PRODUCT.md",
   "LICENSE",
   "CHANGELOG.md",
   "SECURITY.md",
-  "CONTRIBUTING.md"
+  "CONTRIBUTING.md",
+  "CODE_OF_CONDUCT.md"
 ]);
 
 const EXCLUDED_PATH_SEGMENTS = new Set([
@@ -83,9 +85,8 @@ const EXCLUDED_PATH_SEGMENTS = new Set([
   "test-results"
 ]);
 export const INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS = Object.freeze([
-  "docs/plan",
-  "docs/report",
-  "docs/decisions"
+  "docs/plans",
+  "docs/reports"
 ]);
 
 export function createPackagingPlan(args = {}) {

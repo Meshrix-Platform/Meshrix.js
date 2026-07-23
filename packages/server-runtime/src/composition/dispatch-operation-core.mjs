@@ -17,7 +17,12 @@ import {
   requestIdFromRequest,
   sendOperationDenied
 } from "./dispatch-operation-support.mjs";
-import { inputFromRequest, invokeRegisteredOperation, validateInputSchema } from "./dispatch-operation-input.mjs";
+import {
+  applyCoercion,
+  inputFromRequest,
+  invokeRegisteredOperation,
+  validateInputSchema
+} from "./dispatch-operation-input.mjs";
 import { withOperationLock } from "./operation-dispatch-lock.mjs";
 import { createDispatchProofLifecycle } from "./dispatch-operation-proof-lifecycle.mjs";
 import {
@@ -68,13 +73,26 @@ export async function dispatchOperation({
   setTraceContextOnRequest(request, traceContext);
 
   return runWithTraceContext(traceContext, async () => {
-    const operationInput = input || inputFromRequest({
-      operation,
-      requestBody,
-      url,
-      params,
-      applyHttpQuery
-    });
+    const suppliedOperationInput = input ?? inputFromRequest({
+        operation,
+        requestBody,
+        url,
+        params,
+        applyHttpQuery
+      });
+    const operationInput =
+      suppliedOperationInput &&
+      typeof suppliedOperationInput === "object" &&
+      !Array.isArray(suppliedOperationInput)
+        ? { ...suppliedOperationInput }
+        : suppliedOperationInput;
+    if (
+      operationInput &&
+      typeof operationInput === "object" &&
+      !Array.isArray(operationInput)
+    ) {
+      applyCoercion(operation, operationInput);
+    }
     let authSession = providedAuthSession;
     const riskControlEnvelope = createDispatcherRiskControlEnvelope({
       request,

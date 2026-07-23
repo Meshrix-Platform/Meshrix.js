@@ -5,10 +5,9 @@ import path from "node:path";
 import { serverToken } from "#lico/client-strings";
 
 import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs";
+import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.mjs";
 import { createUploadSessionConsumption } from "../../../packages/server-runtime/src/jobs/upload-session-consumption.mjs";
 import {
-  listPersistedJobMetas,
-  loadPersistedJobs,
   persistJobTerminal
 } from "../../../packages/server-runtime/src/jobs/jobs/job-manager-persistence.mjs";
 
@@ -100,6 +99,9 @@ async function waitForJobStatus(manager, jobId, status, timeoutMs = 4000) {
 }
 
 async function seedPersistedJob(userDataPath, jobId, meta, payload = null) {
+  const projectionStore = createJobProjectionStore({ userDataPath });
+  projectionStore.importJob(meta);
+  projectionStore.close();
   const jobDir = path.join(userDataPath, "jobs", jobId);
   await fs.mkdir(jobDir, { recursive: true });
   await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify(meta), "utf8");
@@ -225,43 +227,6 @@ describe("job manager extra", () => {
         job: { id: created.id, status: "completed" },
         result: COMPLETED_RESULT
       });
-    });
-  });
-
-  it("以终态信封恢复元数据写入中断，不把已完成任务重新入队", async () => {
-    await withTempUserData(async (userDataPath) => {
-      const jobId = "terminal-envelope-recovery";
-      const running = {
-        id: jobId,
-        status: "running",
-        createdAt: "2026-06-04T08:00:00.000Z",
-        updatedAt: "2026-06-04T08:01:00.000Z"
-      };
-      const completed = {
-        ...running,
-        status: "completed",
-        stage: "任务已完成",
-        finishedAt: "2026-06-04T08:02:00.000Z",
-        updatedAt: "2026-06-04T08:02:00.000Z"
-      };
-      await persistJobTerminal(userDataPath, completed, COMPLETED_RESULT);
-      await fs.writeFile(
-        path.join(userDataPath, "jobs", jobId, "meta.json"),
-        JSON.stringify(running),
-        "utf8"
-      );
-
-      const loaded = await loadPersistedJobs(userDataPath);
-      expect(loaded.jobs).toContainEqual(expect.objectContaining({
-        id: jobId,
-        status: "completed"
-      }));
-      expect(loaded.recoverableEntries).toEqual([]);
-      const repairedMeta = JSON.parse(await fs.readFile(
-        path.join(userDataPath, "jobs", jobId, "meta.json"),
-        "utf8"
-      ));
-      expect(repairedMeta).toMatchObject({ id: jobId, status: "completed" });
     });
   });
 
@@ -704,37 +669,6 @@ describe("job manager extra", () => {
       });
       expect(listed.items).toContainEqual(expect.objectContaining({ id: jobId }));
       await manager.close();
-    });
-  });
-
-  it("损坏或身份不匹配的任务元数据会阻止恢复与列举，而不是被忽略", async () => {
-    await withTempUserData(async (userDataPath) => {
-      const malformedId = "persisted-malformed-meta";
-      const malformedDirectory = path.join(userDataPath, "jobs", malformedId);
-      await fs.mkdir(malformedDirectory, { recursive: true });
-      await fs.writeFile(path.join(malformedDirectory, "meta.json"), "{invalid-json", "utf8");
-
-      await expect(loadPersistedJobs(userDataPath)).rejects.toMatchObject({
-        code: "job_persistence_meta_invalid",
-        jobId: malformedId
-      });
-      await expect(listPersistedJobMetas(userDataPath)).rejects.toMatchObject({
-        code: "job_persistence_meta_invalid",
-        jobId: malformedId
-      });
-
-      await fs.rm(malformedDirectory, { recursive: true });
-      const mismatchId = "persisted-meta-identity";
-      await seedPersistedJob(userDataPath, mismatchId, {
-        id: "different-job-id",
-        status: "completed",
-        createdAt: "2026-06-04T08:00:00.000Z",
-        updatedAt: "2026-06-04T08:00:00.000Z"
-      });
-      await expect(loadPersistedJobs(userDataPath)).rejects.toMatchObject({
-        code: "job_persistence_identity_mismatch",
-        jobId: mismatchId
-      });
     });
   });
 

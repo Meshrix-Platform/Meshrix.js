@@ -55,7 +55,7 @@
       "generator": "tools/generators/generate-state-machine-docs.mjs",
       "authorityPath": "tools/registry/state-machines/state-machine-integrity.registry.json",
       "projectionPaths": [
-        "docs/state-machine/STATE-MACHINES.md",
+        "docs/architecture/STATE-MACHINES.md",
         "packages/foundation/src/workflow/state-machine/definitions/README.md"
       ]
     },

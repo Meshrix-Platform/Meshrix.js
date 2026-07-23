@@ -87,7 +87,7 @@ docker run -d \
   --restart unless-stopped \
   --stop-timeout 90 \
   --publish 127.0.0.1:7228:7228 \
-  --mount source=licomesh-server-data,target=/opt/lico/data \
+  --mount source=licomesh-server-data,target=<container-data-dir> \
   ghcr.io/licoland/licomesh:<version>
 ```
 

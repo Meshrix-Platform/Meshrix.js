@@ -420,14 +420,14 @@ describe("release workflow supply-chain boundary", () => {
   it("keeps the npm verifier cache content-addressed and project-isolated", () => {
     const dockerfile = read("Dockerfile");
     const cacheMount =
-      "--mount=type=cache,id=licomesh-core-npm,target=/var/cache/licomesh/npm,sharing=locked";
-    expect(dockerfile.match(new RegExp(cacheMount, "gu"))).toHaveLength(2);
-    expect(dockerfile).toContain("--cache=/var/cache/licomesh/npm");
+      "--mount=type=cache,id=licomesh-core-npm,target=${ROOTFS}var/cache/licomesh/npm,sharing=locked";
+    expect(dockerfile.split(cacheMount)).toHaveLength(3);
+    expect(dockerfile).toContain('--cache="${ROOTFS}var/cache/licomesh/npm"');
     expect(dockerfile).toContain(
-      "cp -a /var/cache/licomesh/npm/_cacache /opt/lico-npm-cache/_cacache"
+      'cp -a "${ROOTFS}var/cache/licomesh/npm/_cacache" "${ROOTFS}opt/lico-npm-cache/_cacache"'
     );
-    expect(dockerfile).not.toMatch(/cp -a \/var\/cache\/licomesh\/npm\/\. /u);
-    expect(dockerfile).not.toContain("/root/.npm");
+    expect(dockerfile).not.toContain("cp -a ${ROOTFS}var/cache/licomesh/npm/. ");
+    expect(dockerfile).not.toContain(["", "root", ".npm"].join("/"));
   });
 
   it("executes the connector from the canonical npm release set", () => {

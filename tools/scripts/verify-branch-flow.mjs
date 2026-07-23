@@ -11,10 +11,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
 export const LONG_LIVED_BRANCHES = Object.freeze(["nightly", "stable", "release"]);
 const longLivedBranchSet = new Set(LONG_LIVED_BRANCHES);
+const ZERO_OID = "0".repeat(40);
+const DIRECT_UPSTREAM = Object.freeze({
+  stable: "nightly",
+  release: "stable"
+});
 
 function repositoryIdentity(payload) {
   return {
@@ -98,6 +104,84 @@ export function evaluateBranchFlow({
   }
 
   return { ok: true, message: `no branch-flow rule applies to event ${eventName || "unknown"}.` };
+}
+
+function git(args) {
+  return execFileSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  }).trim();
+}
+
+function commitParents(commit) {
+  return git(["show", "-s", "--format=%P", commit]).split(/\s+/u).filter(Boolean);
+}
+
+function isAncestor(ancestor, descendant) {
+  try {
+    execFileSync("git", ["merge-base", "--is-ancestor", ancestor, descendant], {
+      stdio: "ignore"
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveRemoteBranch(branch) {
+  for (const candidate of [`refs/remotes/origin/${branch}`, `refs/heads/${branch}`]) {
+    try {
+      return git(["rev-parse", "--verify", `${candidate}^{commit}`]);
+    } catch {
+      // Try the next canonical local projection.
+    }
+  }
+  return "";
+}
+
+export function verifyProtectedPushTopology({
+  branch,
+  before,
+  after,
+  parents = commitParents,
+  resolveBranch = resolveRemoteBranch,
+  ancestor = isAncestor
+} = {}) {
+  if (!longLivedBranchSet.has(branch)) {
+    return { ok: false, message: `protected update expected; received ${branch || "unknown branch"}.` };
+  }
+  if (!before || !after || before === ZERO_OID || after === ZERO_OID) {
+    return { ok: false, message: `${branch} must already exist and cannot be created or deleted by a push.` };
+  }
+  const afterParents = parents(after);
+  if (afterParents.length !== 2 || afterParents[0] !== before) {
+    return {
+      ok: false,
+      message: `${branch} must advance by exactly one merge commit whose first parent is the previous ${branch} tip.`
+    };
+  }
+  const mergedHead = afterParents[1];
+  if (branch === "nightly") {
+    for (const protectedBranch of LONG_LIVED_BRANCHES) {
+      const protectedTip = resolveBranch(protectedBranch);
+      if (protectedTip && ancestor(mergedHead, protectedTip)) {
+        return {
+          ok: false,
+          message: `nightly may only merge a temporary branch; the merged head belongs to ${protectedBranch}.`
+        };
+      }
+    }
+    return { ok: true, message: "nightly advanced by one temporary-branch merge." };
+  }
+  const upstream = DIRECT_UPSTREAM[branch];
+  const upstreamTip = resolveBranch(upstream);
+  if (!upstreamTip) {
+    return { ok: false, message: `cannot verify the repository-owned ${upstream} tip.` };
+  }
+  if (!ancestor(mergedHead, upstreamTip)) {
+    return { ok: false, message: `${branch} may only merge the repository-owned ${upstream} branch.` };
+  }
+  return { ok: true, message: `${branch} advanced from ${upstream}.` };
 }
 
 function readEventPayload(eventPath) {
@@ -199,7 +283,68 @@ export function runBranchFlowSelfTest() {
       throw new Error(`branch-flow fixture failed: ${fixture.label}`);
     }
   }
-  return { fixtureCount: fixtures.length };
+  const tips = {
+    nightly: "nightly-tip",
+    stable: "stable-tip",
+    release: "release-tip"
+  };
+  const graph = new Map([
+    ["feature-tip", new Set()],
+    ["nightly-source", new Set(["nightly-tip"])],
+    ["stable-source", new Set(["stable-tip"])]
+  ]);
+  const topologyFixtures = [
+    {
+      label: "temporary merge advances nightly",
+      expected: true,
+      input: { branch: "nightly", before: "old-nightly", after: "new-nightly" },
+      parents: () => ["old-nightly", "feature-tip"]
+    },
+    {
+      label: "nightly merge advances stable",
+      expected: true,
+      input: { branch: "stable", before: "old-stable", after: "new-stable" },
+      parents: () => ["old-stable", "nightly-source"]
+    },
+    {
+      label: "stable merge advances release",
+      expected: true,
+      input: { branch: "release", before: "old-release", after: "new-release" },
+      parents: () => ["old-release", "stable-source"]
+    },
+    {
+      label: "direct commit cannot advance nightly",
+      expected: false,
+      input: { branch: "nightly", before: "old-nightly", after: "direct" },
+      parents: () => ["old-nightly"]
+    },
+    {
+      label: "temporary branch cannot advance stable",
+      expected: false,
+      input: { branch: "stable", before: "old-stable", after: "new-stable" },
+      parents: () => ["old-stable", "feature-tip"]
+    },
+    {
+      label: "nightly cannot advance release",
+      expected: false,
+      input: { branch: "release", before: "old-release", after: "new-release" },
+      parents: () => ["old-release", "nightly-source"]
+    }
+  ];
+  const resolveBranch = (branch) => tips[branch] || "";
+  const ancestor = (candidate, tip) => candidate === tip || graph.get(candidate)?.has(tip) === true;
+  for (const fixture of topologyFixtures) {
+    const result = verifyProtectedPushTopology({
+      ...fixture.input,
+      parents: fixture.parents,
+      resolveBranch,
+      ancestor
+    });
+    if (result.ok !== fixture.expected) {
+      throw new Error(`branch-topology fixture failed: ${fixture.label}`);
+    }
+  }
+  return { fixtureCount: fixtures.length + topologyFixtures.length };
 }
 
 function verifyCurrentEvent() {
@@ -215,6 +360,16 @@ function verifyCurrentEvent() {
   const stream = result.ok ? console.log : console.error;
   stream(`[branch-flow] ${prefix}${result.message}`);
   if (!result.ok) process.exitCode = 1;
+  if (result.ok && process.env.GITHUB_EVENT_NAME === "push") {
+    const topology = verifyProtectedPushTopology({
+      branch: process.env.GITHUB_REF_NAME || "",
+      before: payload.before || "",
+      after: payload.after || process.env.GITHUB_SHA || ""
+    });
+    const topologyStream = topology.ok ? console.log : console.error;
+    topologyStream(`[branch-flow] ${topology.ok ? "" : "ERROR: "}${topology.message}`);
+    if (!topology.ok) process.exitCode = 1;
+  }
 }
 
 function main(argv) {

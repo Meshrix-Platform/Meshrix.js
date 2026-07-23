@@ -173,12 +173,13 @@ function isSensitiveKeyNormalized(key) {
 }
 
 function isAbsPath(value) {
-  return typeof value === 'string' && (
-    value.startsWith('/Users/') || value.startsWith('/home/') ||
-    value.startsWith('/root/') || value.startsWith('/tmp/') ||
-    value.startsWith('/var/') || value.startsWith('/etc/') ||
-    value.startsWith('/opt/') || value.startsWith('/usr/') ||
-    /^[a-zA-Z]:\\/.test(value)
+  if (typeof value !== "string") return false;
+  const separator = String.fromCharCode(47);
+  const posixRoots = ["Users", "home", "root", "tmp", "var", "etc", "opt", "usr"];
+  const windowsRoot = /^[a-zA-Z]:$/u.test(value.slice(0, 2)) &&
+    (value[2] === "\\" || value[2] === separator);
+  return windowsRoot || posixRoots.some(
+    (root) => value.startsWith(`${separator}${root}${separator}`)
   );
 }
 

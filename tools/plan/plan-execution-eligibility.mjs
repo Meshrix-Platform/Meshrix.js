@@ -677,7 +677,7 @@ export function evaluatePlanExecutionEligibility({
 
 export async function loadPlanExecutionInputs({ repoRoot = defaultRepoRoot, planRoot } = {}) {
   const resolvedRepoRoot = path.resolve(repoRoot);
-  const resolvedPlanRoot = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plan"));
+  const resolvedPlanRoot = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
   const [canonicalPlanRoot, packageText, gitStat] = await Promise.all([
     fs.realpath(resolvedPlanRoot),
     fs.readFile(path.join(resolvedRepoRoot, "package.json"), "utf8"),
@@ -742,7 +742,7 @@ export function assertRepositoryIdentity({ repoRoot, gitTopLevel, planRoot, pack
     "repository root is not the LicoMesh Core package",
   );
   requireCondition(
-    path.resolve(planRoot ?? "") === path.join(resolvedRepoRoot, "docs", "plan"),
+    path.resolve(planRoot ?? "") === path.join(resolvedRepoRoot, "docs", "plans"),
     "repository_identity_mismatch",
     "plan root is not the canonical Core Plan root",
   );

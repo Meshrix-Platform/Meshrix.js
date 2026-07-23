@@ -44,6 +44,26 @@ One governed transaction preserves safe forwarding behavior:
 
 The mutation API returns `publishing` after the durable candidate is accepted. Authenticated service reads expose a separate `publication` object: `server_published` appears only when the durable published snapshot and the gateway, catalog, audience, and protocol-delivery revision chain agree; its terminal facts include the source revision and digest plus the catalog, audience, and protocol revisions. It never asserts client adoption. A protocol timeout disconnects and fences the affected session without rolling back authoritative server publication.
 
+The service-manifest authority is a private normalized SQLite index. A service
+commit updates one service row, one version row, one content-addressed manifest
+row when content is new, and one bounded idempotency row in a single immediate
+transaction. It does not clone or sort all services, rebuild a generation
+document, or serialize all prior request outcomes. Candidate state uses a
+cryptographic transition-chain digest, so one service change updates the set
+identity in constant work. Published state is a revision pointer over indexed
+service-version intervals; acknowledgement does not copy the candidate set.
+
+Idempotency outcomes retain at most 8,192 rows and 8 MiB by default and expire
+after seven days. A new commit removes expired or oldest outcomes in a bounded
+batch before admission, so reaching the window cannot permanently disable
+publication. Candidate state may lead the published pointer by at most 256
+changed revisions; further mutation is rejected until acknowledgement, bounding
+version and manifest-blob growth. Acknowledgement deletes obsolete versions and
+their now-unreferenced blobs through indexed bounded batches. The former
+immutable-generation directory is imported once under a private cross-process
+initialization lock, committed to SQLite, and removed; normal reads and writes
+never enumerate or dual-read the retired layout.
+
 Raw secrets and certificate material never enter the publishing command or manifest. Unknown or duplicate fields, prototype-mutating keys, unsafe targets or routes, control characters, excessive sizes or nesting, symlinks, non-regular files, mode or ownership mismatches, and caller-selected storage names fail closed before publication.
 
 Configured `credentialRefs` resolve through the local `secret://` store at forwarding time. The gateway checks service, host, protocol, and required-scope metadata before applying secret material to HTTP headers or MCP headers/env, and generated reports must not contain raw credential values. A service descriptor may also include `tagPolicy`; governed services use the shared universal tag evaluator and fail closed when the tag store is unavailable.
@@ -116,6 +136,17 @@ reference shaped as `upload:<sessionId>:<fileIndex>` to a projected artifact
 argument. Successful artifact responses carry an authenticated Core URI under
 `GET /api/gateway/v1/artifacts/:artifactId`; `HEAD` and one RFC-style byte
 range are supported. Ownership is checked on every resolve and download.
+
+HTTP endpoint pools admit at most 64 configured endpoints, weight 100 for one
+endpoint, and total weight 1,024; duplicate endpoint identities and invalid
+weights fail publication. Runtime selection uses smooth weighted round robin.
+One selection evaluates each enabled endpoint at most once, so the failure
+path is `O(endpoint_count)` and does not iterate expanded weight slots.
+Unavailable endpoints are reset out of the current-weight state, preventing
+accumulated debt and a recovery burst. If all configured endpoints are
+disabled, selection fails immediately instead of routing through an implicit
+primary endpoint. The per-operation scheduler state contains one bounded
+weight value per enabled endpoint and is removed with the service.
 
 Caller cancellation is carried from the downstream MCP HTTP request or Operation Permission execution context through the console executor and gateway registry to the selected upstream transport. The downstream HTTP adapter correlates an authenticated cancellation by grant, verified client process identity, MCP session, per-proxy random correlation session, and JSON-RPC id; it aborts only the matching active request, ignores unknown or completed ids, and emits no JSON-RPC response for a cancelled request. The proxy correlation value is bounded, is used only inside the authenticated cancellation scope, and is not projected into responses or diagnostics. A cancelled in-flight upstream MCP request emits a best-effort `notifications/cancelled` message for its own JSON-RPC id and terminates only that request; initialization is not cancellation-notified. Timeout and caller cancellation use fixed public reasons and are reported separately as `504` and `499`. The traffic slot is released in the forwarding `finally` path, while other requests sharing the same upstream session continue independently.
 

@@ -9,7 +9,24 @@ import { normalizeManifestKey } from "./job-manager-validation.mjs";
 import { persistJobMeta, persistJobTerminal } from "./job-manager-persistence.mjs";
 
 export function createJobManagerArtifacts(ctx) {
-  const { userDataPath, protocolEventBus, durableWorkflows, logJob, jobs } = ctx;
+  const {
+    userDataPath,
+    protocolEventBus,
+    durableWorkflows,
+    logJob,
+    jobs,
+    checkpointJobs,
+    jobProjectionStore
+  } = ctx;
+
+  function retireTerminalJob(job) {
+    if (!job || !["completed", "failed", "cancelled"].includes(job.status)) {
+      return;
+    }
+    jobs.delete(job.id);
+    if (job.checkpointId) checkpointJobs.delete(job.checkpointId);
+    ctx.forgetActiveManifestJob(job);
+  }
 
   function checkpointTreeIdForJob(job) {
     return job?.checkpointTreeId || (job?.id ? checkpointTreeId("job", job.id) : "");
@@ -120,13 +137,14 @@ export function createJobManagerArtifacts(ctx) {
       ...jobPatch,
       updatedAt: new Date().toISOString()
     };
-    await persistJobMeta(userDataPath, nextJob);
+    await persistJobMeta(userDataPath, nextJob, jobProjectionStore);
     ctx.forgetActiveManifestJob(currentJob);
     Object.assign(currentJob, nextJob);
     if (["queued", "running"].includes(currentJob.status)) {
       ctx.rememberActiveManifestJob(currentJob);
     }
     await publishJobEvent(currentJob, eventType || "jobs.job.updated");
+    retireTerminalJob(currentJob);
     logJob("info", "jobs.job.updated", {
       jobId,
       status: currentJob.status,
@@ -148,10 +166,16 @@ export function createJobManagerArtifacts(ctx) {
       status: "completed",
       updatedAt: new Date().toISOString()
     };
-    await persistJobTerminal(userDataPath, nextJob, result);
+    await persistJobTerminal(
+      userDataPath,
+      nextJob,
+      result,
+      jobProjectionStore
+    );
     ctx.forgetActiveManifestJob(currentJob);
     Object.assign(currentJob, nextJob);
     await publishJobEvent(currentJob, eventType || "jobs.job.completed");
+    retireTerminalJob(currentJob);
     logJob("info", "jobs.job.updated", {
       jobId,
       status: currentJob.status,

@@ -21,9 +21,19 @@ const preloadPath = path.join(
   "lib",
   "runtime-memory-profiler-preload.mjs"
 );
+const highRiskWorkloadPath = path.join(
+  repoRoot,
+  "tools",
+  "server-scripts",
+  "lib",
+  "resource-high-risk-workload-child.mjs"
+);
 const reportPath = path.join(repoRoot, "build", "reports", "runtime-resource-discipline.json");
 const policy = RESOURCE_DISCIPLINE_POLICY;
 const memoryPolicy = policy.memoryLeak;
+const highRiskPolicy = policy.highRiskWorkloads;
+const selectedHighRiskProfile =
+  process.env.LICO_RESOURCE_LOAD_PROFILE === "release" ? "release" : highRiskPolicy.profile;
 const MESSAGE_KIND = "lico.resource-discipline.memory-sample";
 const MAX_CAPTURED_CHILD_OUTPUT_BYTES = 64 * 1024;
 
@@ -279,12 +289,154 @@ function createChildEnvironment(runRoot, profilePath) {
   };
 }
 
+function compactHighRiskFacts(value) {
+  const output = {};
+  for (const [key, fact] of Object.entries(value || {})) {
+    if (!/^[A-Za-z][A-Za-z0-9]{0,63}$/.test(key)) continue;
+    if (typeof fact === "boolean") {
+      output[key] = fact;
+    } else if (typeof fact === "number" && Number.isFinite(fact)) {
+      output[key] = fact;
+    } else if (
+      typeof fact === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(fact)
+    ) {
+      output[key] = fact;
+    }
+  }
+  return output;
+}
+
+function compactHighRiskResult(message) {
+  if (
+    message?.kind !== "lico.resource-discipline.high-risk-result" ||
+    message.profile !== selectedHighRiskProfile ||
+    message.syntheticDataOnly !== true ||
+    !Array.isArray(message.scenarios)
+  ) {
+    const error = new Error("High-risk workload result is invalid.");
+    error.code = "HIGH_RISK_WORKLOAD_RESULT_INVALID";
+    throw error;
+  }
+  const required = new Set(highRiskPolicy.requiredScenarioIds);
+  const scenarios = message.scenarios.map((scenario) => {
+    const id = String(scenario?.id || "");
+    if (!required.delete(id)) {
+      const error = new Error("High-risk workload scenario identity is invalid.");
+      error.code = "HIGH_RISK_WORKLOAD_SCENARIO_INVALID";
+      throw error;
+    }
+    const numeric = {};
+    for (const key of [
+      "operationCount",
+      "durationMs",
+      "operationsPerSecond",
+      "peakHeapGrowthBytes",
+      "peakRssGrowthBytes",
+      "peakExternalGrowthBytes",
+      "settledHeapGrowthBytes",
+      "eventLoopDelayMaxMs"
+    ]) {
+      const value = Number(scenario[key]);
+      if (!Number.isFinite(value) || value < 0) {
+        const error = new Error("High-risk workload metric is invalid.");
+        error.code = "HIGH_RISK_WORKLOAD_METRIC_INVALID";
+        throw error;
+      }
+      numeric[key] = value;
+    }
+    return {
+      id,
+      ...numeric,
+      facts: compactHighRiskFacts(scenario.facts)
+    };
+  });
+  if (required.size > 0 || scenarios.length !== highRiskPolicy.requiredScenarioIds.length) {
+    const error = new Error("High-risk workload coverage is incomplete.");
+    error.code = "HIGH_RISK_WORKLOAD_COVERAGE_INCOMPLETE";
+    throw error;
+  }
+  const byId = Object.fromEntries(scenarios.map((scenario) => [scenario.id, scenario]));
+  if (
+    byId.protocol_events.operationCount <
+      (selectedHighRiskProfile === "release" ? 1_000_000 : highRiskPolicy.minimumProtocolEvents) ||
+    byId.job_projection.operationCount <
+      (selectedHighRiskProfile === "release" ? 100_000 : highRiskPolicy.minimumJobRecords)
+  ) {
+    const error = new Error("High-risk workload scale is below policy.");
+    error.code = "HIGH_RISK_WORKLOAD_SCALE_INCOMPLETE";
+    throw error;
+  }
+  return {
+    profile: String(message.profile || ""),
+    syntheticDataOnly: true,
+    scenarios
+  };
+}
+
+async function runHighRiskWorkloads(runRoot) {
+  const workloadRoot = path.join(runRoot, "high-risk-workloads");
+  await fs.mkdir(workloadRoot, { recursive: true, mode: 0o700 });
+  const environment = { ...process.env };
+  delete environment.NODE_OPTIONS;
+  environment.LICO_RESOURCE_LOAD_PROFILE = selectedHighRiskProfile;
+  const workloadOutput = boundedOutputCollector();
+  highRiskChild = spawn(process.execPath, [
+    "--expose-gc",
+    highRiskWorkloadPath,
+    workloadRoot
+  ], {
+    cwd: repoRoot,
+    env: environment,
+    stdio: ["ignore", "pipe", "pipe", "ipc"]
+  });
+  highRiskChild.stdout.on("data", (chunk) => workloadOutput.push(chunk));
+  highRiskChild.stderr.on("data", (chunk) => workloadOutput.push(chunk));
+  try {
+    return await new Promise((resolve, reject) => {
+      let result = null;
+      const timeout = setTimeout(() => {
+        const error = new Error("High-risk workload timed out.");
+        error.code = "HIGH_RISK_WORKLOAD_TIMEOUT";
+        highRiskChild.kill("SIGKILL");
+        reject(error);
+      }, selectedHighRiskProfile === "release" ? 600_000 : highRiskPolicy.timeoutMs);
+      const settle = (callback) => {
+        clearTimeout(timeout);
+        callback();
+      };
+      highRiskChild.on("message", (message) => {
+        try {
+          result = compactHighRiskResult(message);
+        } catch (error) {
+          settle(() => reject(error));
+        }
+      });
+      highRiskChild.once("error", (error) => settle(() => reject(error)));
+      highRiskChild.once("exit", (code, signal) => {
+        if (code === 0 && !signal && result) {
+          settle(() => resolve(result));
+          return;
+        }
+        const error = new Error("High-risk workload process failed.");
+        error.code = "HIGH_RISK_WORKLOAD_EXITED";
+        settle(() => reject(error));
+      });
+    });
+  } finally {
+    workloadOutput.clear();
+    await stopChild(highRiskChild).catch(() => null);
+    highRiskChild = null;
+  }
+}
+
 const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-resource-discipline-"));
 const userDataPath = path.join(runRoot, "data");
 const readyFilePath = path.join(runRoot, "private-ready.json");
 const privateProfilePath = path.join(runRoot, "runtime-heap.pb.gz");
 const output = boundedOutputCollector();
 let child = null;
+let highRiskChild = null;
 
 try {
   child = spawn(process.execPath, [
@@ -336,6 +488,9 @@ try {
 
   const storageFinal = await directoryStats(userDataPath);
   const logFinal = await runtimeLogStats(userDataPath);
+  await stopChild(child);
+  child = null;
+  const highRiskWorkloads = await runHighRiskWorkloads(runRoot);
   const initial = samples[0];
   const final = samples.at(-1);
   const heapGrowthBytes = positiveGrowth(final.memory.heapUsed, initial.memory.heapUsed);
@@ -429,6 +584,32 @@ try {
   if (completedRequests !== memoryPolicy.measurementRounds * memoryPolicy.requestsPerRound) {
     violations.push("load_request_count_incomplete");
   }
+  for (const scenario of highRiskWorkloads.scenarios) {
+    addMaximumViolation(
+      violations,
+      `${scenario.id}_settled_heap_growth_exceeded`,
+      scenario.settledHeapGrowthBytes,
+      highRiskPolicy.maxSettledHeapGrowthBytes
+    );
+    addMaximumViolation(
+      violations,
+      `${scenario.id}_peak_rss_growth_exceeded`,
+      scenario.peakRssGrowthBytes,
+      highRiskPolicy.maxPeakRssGrowthBytes
+    );
+    addMaximumViolation(
+      violations,
+      `${scenario.id}_peak_external_growth_exceeded`,
+      scenario.peakExternalGrowthBytes,
+      highRiskPolicy.maxPeakExternalGrowthBytes
+    );
+    addMaximumViolation(
+      violations,
+      `${scenario.id}_event_loop_delay_exceeded`,
+      scenario.eventLoopDelayMaxMs,
+      highRiskPolicy.maxEventLoopDelayMs
+    );
+  }
 
   const report = {
     schemaVersion: "runtime-resource-discipline-report",
@@ -457,6 +638,7 @@ try {
         [...statusCounts.entries()].sort(([left], [right]) => left - right)
       )
     },
+    highRiskWorkloads,
     memory: {
       baseline: compactMemorySample(initial),
       final: compactMemorySample(final),
@@ -501,5 +683,6 @@ try {
   process.exitCode = 1;
 } finally {
   await stopChild(child).catch(() => null);
+  await stopChild(highRiskChild).catch(() => null);
   await fs.rm(runRoot, { recursive: true, force: true });
 }

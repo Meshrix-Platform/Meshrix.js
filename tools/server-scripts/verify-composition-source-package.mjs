@@ -209,9 +209,9 @@ async function stageVerifierDependencyClosure(sourceRoot) {
 
 async function verifyArtifactScannerContract() {
   const fixtureRoot = path.join(tempRoot, "artifact-scanner-contract");
-  await fs.mkdir(path.join(fixtureRoot, "docs", "plan"), { recursive: true });
+  await fs.mkdir(path.join(fixtureRoot, "docs", "plans"), { recursive: true });
   await fs.writeFile(
-    path.join(fixtureRoot, "docs", "plan", "private.md"),
+    path.join(fixtureRoot, "docs", "plans", "private.md"),
     "private process fixture\n",
     "utf8"
   );
