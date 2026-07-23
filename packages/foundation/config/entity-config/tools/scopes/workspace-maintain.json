@@ -1,0 +1,5 @@
+{
+  "id": "workspace:maintain",
+  "label": "Maintain agent workspaces",
+  "description": "Manage workspace inheritance, sharing, profiles, reviews, and governance changes."
+}

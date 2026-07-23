@@ -1,0 +1,338 @@
+{
+  "$schema": "./schema/repo-layout.schema.json",
+  "version": "v0.3.0",
+  "entries": [
+    {
+      "name": ".dockerignore",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": ".env.example",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": ".gitattributes",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": ".gitignore",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": ".npmignore",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": ".github",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "package.json",
+      "kind": "config",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "package-lock.json",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "tsconfig.json",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "vite.config.ts",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "vitest.config.ts",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "Dockerfile",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "docker-compose.yml",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "README.md",
+      "kind": "config",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "README.zh-CN.md",
+      "kind": "config",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "LICENSE",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "SECURITY.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "PRODUCT.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "CONTRIBUTING.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "CODE_OF_CONDUCT.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "CHANGELOG.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "CONTEXT.md",
+      "kind": "config",
+      "required": false,
+      "generated": false,
+      "packageIncluded": false
+    },
+    {
+      "name": "apps",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "packages",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "content",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true,
+      "description": "Packaged non-code content artifacts."
+    },
+    {
+      "name": "plugins",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true,
+      "description": "Optional plugin manifests and their schema."
+    },
+    {
+      "name": "docs",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "tests",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    },
+    {
+      "name": "tools",
+      "kind": "source-root",
+      "required": true,
+      "generated": false,
+      "packageIncluded": true
+    }
+  ],
+  "rootHygiene": {
+    "requiredEntries": [
+      "package.json",
+      "README.md",
+      "README.zh-CN.md",
+      "apps",
+      "packages",
+      "content",
+      "plugins",
+      "docs",
+      "tools",
+      "tests"
+    ]
+  },
+  "repoOrganizationAudit": {
+    "ignoredPathParts": [
+      "/node_modules/",
+      "/build/",
+      "/dist/",
+      "/coverage/",
+      "/generated/"
+    ],
+    "requiredFiles": [
+      "docs/architecture/ARCHITECTURE.md",
+      "tools/verifiers/architecture-graph.mjs",
+      "tools/registry/source-layout-manifest.mjs",
+      "tools/registry/architecture-layout-manifest.mjs",
+      "tools/registry/fact-source-authority.registry.json"
+    ],
+    "sourceFileOrganization": {
+      "canonicalDocument": "docs/architecture/ARCHITECTURE.md#source-file-organization",
+      "lineCountGate": {
+        "status": "disabled",
+        "threshold": null,
+        "releaseBlocking": false
+      },
+      "decisionBasis": [
+        "responsibility",
+        "ownership",
+        "dependency_direction",
+        "state_and_lifecycle_cohesion",
+        "test_boundary",
+        "performance_evidence"
+      ],
+      "machineEnforcedRuleIds": [
+        "required_architecture_files",
+        "runnable_entrypoint_ownership",
+        "semantic_current_boundary_names"
+      ],
+      "delegatedGateIds": [
+        "architecture.import-graph",
+        "domains.manifest",
+        "registry.consistency"
+      ],
+      "reviewOnlySignalIds": [
+        "file_length",
+        "function_length",
+        "export_count",
+        "cyclomatic_complexity",
+        "dependency_fan_in",
+        "dependency_fan_out",
+        "change_frequency"
+      ],
+      "astAdvisory": {
+        "releaseBlocking": false,
+        "analysisRoots": [
+          "apps",
+          "packages",
+          "plugins",
+          "tools"
+        ],
+        "extensions": [
+          ".cjs",
+          ".js",
+          ".mjs",
+          ".ts",
+          ".tsx",
+          ".vue"
+        ],
+        "factSourceAuthorityPath": "tools/registry/fact-source-authority.registry.json"
+      }
+    },
+    "runnableEntrypointOwnership": {
+      "roots": [
+        {
+          "path": "tools/server-scripts",
+          "owner": "platform"
+        },
+        {
+          "path": "tools/scripts",
+          "owner": "platform"
+        },
+        {
+          "path": "tests",
+          "owner": "platform"
+        }
+      ],
+      "extensions": [
+        ".mjs",
+        ".js"
+      ],
+      "sourceReferenceRoots": [
+        "apps",
+        "packages",
+        "plugins",
+        "tools",
+        "tests"
+      ],
+      "workflowRoot": ".github/workflows",
+      "testRegistryPath": "tools/registry/tests.registry.json",
+      "packageManifestPath": "package.json"
+    },
+    "currentResidue": {
+      "testRoots": [
+        "tests"
+      ],
+      "testStageMarkers": [
+        "extra",
+        "more",
+        "focused",
+        "final"
+      ],
+      "operationDefinitionRoots": [
+        "packages/contracts/src/operations"
+      ]
+    }
+  }
+}

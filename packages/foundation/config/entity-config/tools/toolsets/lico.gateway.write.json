@@ -1,0 +1,11 @@
+{
+  "id": "lico.gateway.write",
+  "label": "Gateway write",
+  "requiredScopes": [
+    "gateway:read",
+    "gateway:write"
+  ],
+  "maxRisk": "safe_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

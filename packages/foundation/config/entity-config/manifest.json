@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "entityType": "lico.entity-config-root",
+  "description": "Human-maintainable entity configuration bundles for tools, runbooks, standards, and specs.",
+  "categories": [
+    "auth",
+    "tools",
+    "runbooks",
+    "standards",
+    "specs"
+  ],
+  "lightweightBundlePolicy": {
+    "inlineSmallJson": true,
+    "heavyArtifactsUseManifestOnly": true
+  }
+}

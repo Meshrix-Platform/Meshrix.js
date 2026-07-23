@@ -1,0 +1,5 @@
+{
+  "id": "workspace:read",
+  "label": "Read agent workspaces",
+  "description": "List and read agent workspace metadata, sessions, context summaries, and workspace references."
+}

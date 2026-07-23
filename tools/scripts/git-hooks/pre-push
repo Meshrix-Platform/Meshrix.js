@@ -1,0 +1,13 @@
+#!/bin/sh
+while read local_ref local_sha remote_ref remote_sha
+do
+  case "$remote_ref" in
+    refs/heads/nightly|refs/heads/stable|refs/heads/release)
+      echo "Direct pushes to protected branches are not allowed: $remote_ref" >&2
+      echo "Push a temporary branch and open a pull request instead." >&2
+      exit 1
+      ;;
+    *)
+      ;;
+  esac
+done

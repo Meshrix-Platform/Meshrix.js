@@ -1,0 +1,14 @@
+#!/bin/sh
+branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+
+case "$branch" in
+  "")
+    echo "Commits require a named temporary branch based on nightly; detached HEAD is not allowed." >&2
+    exit 1
+    ;;
+  nightly|stable|release)
+    echo "Commits are not allowed directly on protected branches. Current branch: $branch." >&2
+    echo "Create a temporary branch from nightly, then open a pull request." >&2
+    exit 1
+    ;;
+esac

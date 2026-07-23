@@ -1,0 +1,202 @@
+{
+  "$schema": "./schema/capability-acceptance.schema.json",
+  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: tools/generators/generate-capability-acceptance-definitions.mjs and tools/registry/capability-acceptance-checkpoints/*.json",
+  "version": "v0.0.1:registry:capability-acceptance-4",
+  "generatedAt": "1970-01-01T00:00:00.000Z",
+  "entryCount": 19,
+  "entries": [
+    {
+      "capabilityId": "agent-gateway-model-routing",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/agent-gateway-model-routing.json",
+      "acceptanceMachineId": "acceptance.agent-gateway-model-routing",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/agent-gateway-model-routing.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "approval-governance",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/approval-governance.json",
+      "acceptanceMachineId": "acceptance.approval-governance",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/approval-governance.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "console-administration",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/console-administration.json",
+      "acceptanceMachineId": "acceptance.console-administration",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/console-administration.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "container-deployment-resumability",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/container-deployment-resumability.json",
+      "acceptanceMachineId": "acceptance.container-deployment-resumability",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/container-deployment-resumability.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "core-workspace-assets-governance",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/core-workspace-assets-governance.json",
+      "acceptanceMachineId": "acceptance.core-workspace-assets-governance",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/core-workspace-assets-governance.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "downstream-mcp-gateway",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/downstream-mcp-gateway.json",
+      "acceptanceMachineId": "acceptance.downstream-mcp-gateway",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/downstream-mcp-gateway.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "execution-sandbox",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/execution-sandbox.json",
+      "acceptanceMachineId": "acceptance.execution-sandbox",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/execution-sandbox.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "jobs-work-queue-runtime",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/jobs-work-queue-runtime.json",
+      "acceptanceMachineId": "acceptance.jobs-work-queue-runtime",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/jobs-work-queue-runtime.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "maintenance-agent-collaboration",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/maintenance-agent-collaboration.json",
+      "acceptanceMachineId": "acceptance.maintenance-agent-collaboration",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/maintenance-agent-collaboration.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "mcp-native-installer-process-identity",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/mcp-native-installer-process-identity.json",
+      "acceptanceMachineId": "acceptance.mcp-native-installer-process-identity",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/mcp-native-installer-process-identity.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "observability-alerts-reporting",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/observability-alerts-reporting.json",
+      "acceptanceMachineId": "acceptance.observability-alerts-reporting",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/observability-alerts-reporting.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "operation-permission-authorization",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/operation-permission-authorization.json",
+      "acceptanceMachineId": "acceptance.operation-permission-authorization",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/operation-permission-authorization.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "pactium-cryptographic-foundation",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/pactium-cryptographic-foundation.json",
+      "acceptanceMachineId": "acceptance.pactium-cryptographic-foundation",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/pactium-cryptographic-foundation.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "plugin-runtime-and-module-system",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/plugin-runtime-and-module-system.json",
+      "acceptanceMachineId": "acceptance.plugin-runtime-and-module-system",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/plugin-runtime-and-module-system.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance",
+      "pluginRuntime": {
+        "aggregate": true
+      }
+    },
+    {
+      "capabilityId": "state-machine-governance",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/state-machine-governance.json",
+      "acceptanceMachineId": "acceptance.state-machine-governance",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/state-machine-governance.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "storage-backup-runtime",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/storage-backup-runtime.json",
+      "acceptanceMachineId": "acceptance.storage-backup-runtime",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/storage-backup-runtime.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "strategy-management",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/strategy-management.json",
+      "acceptanceMachineId": "acceptance.strategy-management",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/strategy-management.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "upstream-mcp-passthrough",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/upstream-mcp-passthrough.json",
+      "acceptanceMachineId": "acceptance.upstream-mcp-passthrough",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/upstream-mcp-passthrough.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "upstream-service-publishing",
+      "releaseScope": "core-release",
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/upstream-service-publishing.json",
+      "acceptanceMachineId": "acceptance.upstream-service-publishing",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/upstream-service-publishing.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance"
+    }
+  ]
+}

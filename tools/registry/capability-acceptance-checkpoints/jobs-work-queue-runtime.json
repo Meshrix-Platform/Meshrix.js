@@ -1,0 +1,128 @@
+[
+  {
+    "id": "3085085f-d3d8-4d6a-9c6d-15080045363f",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "any",
+    "difficulty": "deep",
+    "goal": "Implement Jobs And Work Queue Runtime end to end.",
+    "description": "Implement jobs-work-queue-runtime end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Queue state machine covers queued, running, retry_wait, completed, failed, cancelled, expired, and recovered.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "work-queue-conformance",
+            "report": "build/reports/work-queue/latest.json"
+          },
+          {
+            "acceptanceCommandId": "work-queue-process-restart",
+            "report": "build/reports/work-queue-process-restart.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Verifiers prove bounded concurrency, idempotent retry, resumable upload, owner enforcement, and redacted reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "job-work-queue",
+            "report": "build/reports/job-work-queue.json"
+          },
+          {
+            "acceptanceCommandId": "job-work-queue-capacity",
+            "report": "build/reports/job-work-queue-capacity.json"
+          },
+          {
+            "acceptanceCommandId": "work-queue-conformance",
+            "report": "build/reports/work-queue/latest.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Upload-to-workspace ingestion has checkpoint and approval evidence once materialized.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upload-workspace-materialization",
+            "report": "build/reports/upload-workspace-materialization.json"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete jobs-work-queue-runtime",
+      "target": "packages/foundation/src/work-queue/README.md, packages/foundation/src/work-queue/, packages/foundation/src/workflow/state-machine/work-queue/state-machine.mjs, packages/server-runtime/src/jobs/jobs/, packages/server-runtime/src/state/upload-session-store.mjs, tools/server-scripts/verify-job-work-queue.mjs, tools/server-scripts/verify-job-work-queue-capacity.mjs, tools/server-scripts/verify-work-queue-conformance.mjs"
+    },
+    "next": [
+      "43bffce1-ff60-444c-80ba-d9d9d0a90d24"
+    ]
+  },
+  {
+    "id": "43bffce1-ff60-444c-80ba-d9d9d0a90d24",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "3085085f-d3d8-4d6a-9c6d-15080045363f"
+    ],
+    "platform": "any",
+    "difficulty": "deep",
+    "goal": "Validate Jobs And Work Queue Runtime closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "work-queue-conformance",
+            "report": "build/reports/work-queue/latest.json"
+          },
+          {
+            "acceptanceCommandId": "job-work-queue",
+            "report": "build/reports/job-work-queue.json"
+          },
+          {
+            "acceptanceCommandId": "job-work-queue-capacity",
+            "report": "build/reports/job-work-queue-capacity.json"
+          },
+          {
+            "acceptanceCommandId": "upload-workspace-materialization",
+            "report": "build/reports/upload-workspace-materialization.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate jobs-work-queue-runtime",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "id": "lico.console.read",
+  "label": "Console read",
+  "requiredScopes": [
+    "console:read"
+  ],
+  "maxRisk": "read_only",
+  "grantable": true,
+  "defaultForAgents": false
+}

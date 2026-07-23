@@ -1,0 +1,160 @@
+[
+  {
+    "id": "6b87fd0f-8b28-4984-af1c-19adbeecc8c9",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Implement Upstream Service Publishing end to end.",
+    "description": "Implement upstream-service-publishing end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Each configured operation has a deterministic capability id, tool id, risk, scopes, toolsets, approval policy, and credential binding facts.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "upstream-mcp-gateway",
+            "report": "build/reports/upstream-mcp-gateway-e2e.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Forwarding is denied or pending approval before credentials or network side effects are touched.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Authenticated publishing atomically advances the durable manifest, runtime snapshot, Operation Permission catalog, scoped audience projection, and protocol delivery revision.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-service-publishing",
+            "report": "build/reports/upstream-service-publishing.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Each config service operation produces exactly one primary dynamic capability and any declared composite tuple capabilities before runtime forwarding.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Configured credential refs are visible to authorization before secret material is resolved.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "authorization-enforcement",
+            "report": "build/reports/enterprise-authorization-enforcement.json"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete upstream-service-publishing",
+      "target": "packages/agents/src/upstream-gateway/index.mjs, packages/agents/src/upstream-gateway/support.mjs, packages/agents/src/upstream-gateway/tool-projection.mjs, packages/agents/src/upstream-gateway/credential-material.mjs, tools/server-scripts/verify-upstream-gateway-e2e.mjs"
+    },
+    "next": [
+      "690075cf-0597-407d-a720-056a517e2327"
+    ]
+  },
+  {
+    "id": "690075cf-0597-407d-a720-056a517e2327",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "6b87fd0f-8b28-4984-af1c-19adbeecc8c9"
+    ],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Validate Upstream Service Publishing closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "upstream-mcp-gateway",
+            "report": "build/reports/upstream-mcp-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          },
+          {
+            "acceptanceCommandId": "upstream-service-publishing",
+            "report": "build/reports/upstream-service-publishing.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
+          },
+          {
+            "acceptanceCommandId": "authorization-enforcement",
+            "report": "build/reports/enterprise-authorization-enforcement.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate upstream-service-publishing",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]

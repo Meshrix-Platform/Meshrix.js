@@ -1,0 +1,1066 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "updatedAt": "2026-04-30T00:00:00.000Z",
+  "description": "LicoMesh import file type dictionary. Add or remove extensions here instead of editing code.",
+  "includeUnknownReadableText": true,
+  "plainTextFallbackExtension": ".txt",
+  "readableTextDetection": {
+    "sampleBytes": 4096,
+    "maxControlRatio": 0.02
+  },
+  "binarySignatures": [
+    {
+      "extension": ".pdf",
+      "bytesHex": "255044462d"
+    },
+    {
+      "extension": ".png",
+      "bytesHex": "89504e47"
+    },
+    {
+      "extension": ".jpg",
+      "bytesHex": "ffd8ff"
+    },
+    {
+      "extension": ".gif",
+      "bytesHex": "47494638"
+    },
+    {
+      "extension": ".zip",
+      "bytesHex": "504b0304"
+    }
+  ],
+  "zipContainerDetectors": [
+    {
+      "extension": ".docx",
+      "contains": "word/"
+    },
+    {
+      "extension": ".pptx",
+      "contains": "ppt/"
+    },
+    {
+      "extension": ".xlsx",
+      "contains": "xl/"
+    }
+  ],
+  "textSniffingRules": [
+    {
+      "extension": ".eml",
+      "pattern": "^(from|subject|date|message-id|mime-version|content-type):",
+      "flags": "im"
+    },
+    {
+      "extension": ".html",
+      "pattern": "^\\s*(<!doctype\\s+html|<html|<head|<body)\\b",
+      "flags": "i"
+    }
+  ],
+  "groups": [
+    {
+      "id": "programmingLanguages",
+      "label": "Programming language source files",
+      "kind": "text",
+      "mediaType": "text/plain",
+      "entries": [
+        {
+          "label": "Ada",
+          "extensions": [
+            ".adb",
+            ".ads",
+            ".ada"
+          ]
+        },
+        {
+          "label": "Agda",
+          "extensions": [
+            ".agda",
+            ".lagda"
+          ]
+        },
+        {
+          "label": "Arduino",
+          "extensions": [
+            ".ino",
+            ".pde"
+          ]
+        },
+        {
+          "label": "Assembly",
+          "extensions": [
+            ".asm",
+            ".s",
+            ".S",
+            ".nasm"
+          ]
+        },
+        {
+          "label": "Awk",
+          "extensions": [
+            ".awk"
+          ]
+        },
+        {
+          "label": "Bash and POSIX shell",
+          "extensions": [
+            ".sh",
+            ".bash",
+            ".bats",
+            ".command",
+            ".ksh",
+            ".zsh"
+          ],
+          "fileNames": [
+            ".bashrc",
+            ".bash_profile",
+            ".zshrc",
+            ".profile"
+          ]
+        },
+        {
+          "label": "Batch and command scripts",
+          "extensions": [
+            ".bat",
+            ".cmd"
+          ]
+        },
+        {
+          "label": "C",
+          "extensions": [
+            ".c",
+            ".h",
+            ".cats",
+            ".idc"
+          ]
+        },
+        {
+          "label": "C#",
+          "extensions": [
+            ".cs",
+            ".csx"
+          ]
+        },
+        {
+          "label": "C++",
+          "extensions": [
+            ".cc",
+            ".cpp",
+            ".cxx",
+            ".c++",
+            ".hpp",
+            ".hh",
+            ".hxx",
+            ".h++",
+            ".ipp",
+            ".ixx",
+            ".tpp"
+          ]
+        },
+        {
+          "label": "CMake",
+          "extensions": [
+            ".cmake"
+          ],
+          "fileNames": [
+            "CMakeLists.txt"
+          ]
+        },
+        {
+          "label": "COBOL",
+          "extensions": [
+            ".cob",
+            ".cbl",
+            ".ccp",
+            ".cobol"
+          ]
+        },
+        {
+          "label": "CSS",
+          "extensions": [
+            ".css",
+            ".scss",
+            ".sass",
+            ".less",
+            ".styl"
+          ]
+        },
+        {
+          "label": "Clojure",
+          "extensions": [
+            ".clj",
+            ".cljs",
+            ".cljc",
+            ".edn"
+          ]
+        },
+        {
+          "label": "CoffeeScript",
+          "extensions": [
+            ".coffee",
+            ".cjsx"
+          ]
+        },
+        {
+          "label": "Common Lisp",
+          "extensions": [
+            ".lisp",
+            ".lsp",
+            ".cl",
+            ".asd",
+            ".ny",
+            ".podsl"
+          ]
+        },
+        {
+          "label": "Crystal",
+          "extensions": [
+            ".cr"
+          ]
+        },
+        {
+          "label": "D",
+          "extensions": [
+            ".d",
+            ".di"
+          ]
+        },
+        {
+          "label": "Dart",
+          "extensions": [
+            ".dart"
+          ]
+        },
+        {
+          "label": "Dockerfile",
+          "extensions": [
+            ".dockerfile"
+          ],
+          "fileNames": [
+            "Dockerfile",
+            "Containerfile"
+          ]
+        },
+        {
+          "label": "Elixir",
+          "extensions": [
+            ".ex",
+            ".exs"
+          ]
+        },
+        {
+          "label": "Elm",
+          "extensions": [
+            ".elm"
+          ]
+        },
+        {
+          "label": "Erlang",
+          "extensions": [
+            ".erl",
+            ".hrl",
+            ".app.src",
+            ".escript"
+          ]
+        },
+        {
+          "label": "F#",
+          "extensions": [
+            ".fs",
+            ".fsi",
+            ".fsx",
+            ".fsscript"
+          ]
+        },
+        {
+          "label": "Fish",
+          "extensions": [
+            ".fish"
+          ]
+        },
+        {
+          "label": "Fortran",
+          "extensions": [
+            ".f",
+            ".for",
+            ".f90",
+            ".f95",
+            ".f03",
+            ".f08"
+          ]
+        },
+        {
+          "label": "GDScript",
+          "extensions": [
+            ".gd"
+          ]
+        },
+        {
+          "label": "GLSL and shader files",
+          "extensions": [
+            ".glsl",
+            ".vert",
+            ".frag",
+            ".geom",
+            ".tesc",
+            ".tese",
+            ".comp",
+            ".shader"
+          ]
+        },
+        {
+          "label": "Go",
+          "extensions": [
+            ".go"
+          ]
+        },
+        {
+          "label": "Gradle",
+          "extensions": [
+            ".gradle"
+          ]
+        },
+        {
+          "label": "GraphQL",
+          "extensions": [
+            ".graphql",
+            ".gql"
+          ]
+        },
+        {
+          "label": "Groovy",
+          "extensions": [
+            ".groovy",
+            ".gvy",
+            ".gy",
+            ".gsh"
+          ]
+        },
+        {
+          "label": "HCL",
+          "extensions": [
+            ".hcl",
+            ".tf",
+            ".tfvars"
+          ]
+        },
+        {
+          "label": "HTML and templates",
+          "extensions": [
+            ".html",
+            ".htm",
+            ".xhtml",
+            ".shtml",
+            ".ejs",
+            ".hbs",
+            ".handlebars",
+            ".mustache",
+            ".twig",
+            ".liquid"
+          ],
+          "normalizedAdapter": "html",
+          "preserveSourceMaterial": true
+        },
+        {
+          "label": "Hack",
+          "extensions": [
+            ".hack",
+            ".hh"
+          ]
+        },
+        {
+          "label": "Haskell",
+          "extensions": [
+            ".hs",
+            ".lhs"
+          ]
+        },
+        {
+          "label": "Haxe",
+          "extensions": [
+            ".hx"
+          ]
+        },
+        {
+          "label": "IDL",
+          "extensions": [
+            ".idl",
+            ".pidl",
+            ".webidl"
+          ]
+        },
+        {
+          "label": "Java",
+          "extensions": [
+            ".java"
+          ]
+        },
+        {
+          "label": "JavaScript",
+          "extensions": [
+            ".js",
+            ".mjs",
+            ".cjs",
+            ".jsx"
+          ]
+        },
+        {
+          "label": "Jinja",
+          "extensions": [
+            ".jinja",
+            ".jinja2",
+            ".j2"
+          ]
+        },
+        {
+          "label": "Julia",
+          "extensions": [
+            ".jl"
+          ]
+        },
+        {
+          "label": "Kotlin",
+          "extensions": [
+            ".kt",
+            ".kts"
+          ]
+        },
+        {
+          "label": "LLVM",
+          "extensions": [
+            ".ll"
+          ]
+        },
+        {
+          "label": "Lean",
+          "extensions": [
+            ".lean",
+            ".hlean"
+          ]
+        },
+        {
+          "label": "Lua",
+          "extensions": [
+            ".lua",
+            ".rockspec"
+          ]
+        },
+        {
+          "label": "MATLAB and Octave",
+          "extensions": [
+            ".m",
+            ".matlab"
+          ]
+        },
+        {
+          "label": "Make",
+          "extensions": [
+            ".mk",
+            ".mak"
+          ],
+          "fileNames": [
+            "Makefile",
+            "makefile",
+            "GNUmakefile"
+          ]
+        },
+        {
+          "label": "Markdown code notebooks",
+          "extensions": [
+            ".ipynb"
+          ]
+        },
+        {
+          "label": "Nim",
+          "extensions": [
+            ".nim",
+            ".nimble"
+          ]
+        },
+        {
+          "label": "Nix",
+          "extensions": [
+            ".nix"
+          ]
+        },
+        {
+          "label": "Objective-C",
+          "extensions": [
+            ".mm",
+            ".M"
+          ]
+        },
+        {
+          "label": "OCaml",
+          "extensions": [
+            ".ml",
+            ".mli",
+            ".eliom",
+            ".eliomi",
+            ".re",
+            ".rei"
+          ]
+        },
+        {
+          "label": "Odin",
+          "extensions": [
+            ".odin"
+          ]
+        },
+        {
+          "label": "Pascal and Delphi",
+          "extensions": [
+            ".pas",
+            ".pp",
+            ".p",
+            ".inc",
+            ".lpr",
+            ".dpr"
+          ]
+        },
+        {
+          "label": "Perl",
+          "extensions": [
+            ".pl",
+            ".pm",
+            ".pod",
+            ".t"
+          ]
+        },
+        {
+          "label": "PHP",
+          "extensions": [
+            ".php",
+            ".php3",
+            ".php4",
+            ".php5",
+            ".phtml",
+            ".phps"
+          ]
+        },
+        {
+          "label": "PowerShell",
+          "extensions": [
+            ".ps1",
+            ".psm1",
+            ".psd1"
+          ]
+        },
+        {
+          "label": "Processing",
+          "extensions": [
+            ".pde"
+          ]
+        },
+        {
+          "label": "Prolog",
+          "extensions": [
+            ".pro",
+            ".prolog",
+            ".plg"
+          ]
+        },
+        {
+          "label": "Protocol Buffers",
+          "extensions": [
+            ".proto"
+          ]
+        },
+        {
+          "label": "Python",
+          "extensions": [
+            ".py",
+            ".pyw",
+            ".pyi",
+            ".pyx",
+            ".pxd",
+            ".pxi",
+            ".rpy",
+            ".wsgi"
+          ]
+        },
+        {
+          "label": "R",
+          "extensions": [
+            ".r",
+            ".R",
+            ".rmd",
+            ".qmd"
+          ]
+        },
+        {
+          "label": "Racket",
+          "extensions": [
+            ".rkt",
+            ".rktd",
+            ".rktl",
+            ".scrbl"
+          ]
+        },
+        {
+          "label": "Ruby",
+          "extensions": [
+            ".rb",
+            ".rake",
+            ".gemspec",
+            ".ru"
+          ],
+          "fileNames": [
+            "Gemfile",
+            "Rakefile",
+            "Podfile",
+            "Vagrantfile",
+            "Guardfile",
+            "Capfile",
+            "Brewfile"
+          ]
+        },
+        {
+          "label": "Rust",
+          "extensions": [
+            ".rs"
+          ]
+        },
+        {
+          "label": "SQL",
+          "extensions": [
+            ".sql",
+            ".ddl",
+            ".dml"
+          ]
+        },
+        {
+          "label": "Scala",
+          "extensions": [
+            ".scala",
+            ".sc"
+          ]
+        },
+        {
+          "label": "Scheme",
+          "extensions": [
+            ".scm",
+            ".ss",
+            ".sld"
+          ]
+        },
+        {
+          "label": "Smalltalk",
+          "extensions": [
+            ".st"
+          ]
+        },
+        {
+          "label": "Solidity and EVM",
+          "extensions": [
+            ".sol",
+            ".vy"
+          ]
+        },
+        {
+          "label": "Svelte",
+          "extensions": [
+            ".svelte"
+          ]
+        },
+        {
+          "label": "Swift",
+          "extensions": [
+            ".swift"
+          ]
+        },
+        {
+          "label": "Tcl",
+          "extensions": [
+            ".tcl",
+            ".tm"
+          ]
+        },
+        {
+          "label": "TeX",
+          "extensions": [
+            ".tex",
+            ".sty",
+            ".cls",
+            ".bib"
+          ]
+        },
+        {
+          "label": "Thrift",
+          "extensions": [
+            ".thrift"
+          ]
+        },
+        {
+          "label": "TypeScript",
+          "extensions": [
+            ".ts",
+            ".tsx",
+            ".mts",
+            ".cts"
+          ]
+        },
+        {
+          "label": "V",
+          "extensions": [
+            ".v",
+            ".vv"
+          ]
+        },
+        {
+          "label": "Verilog and SystemVerilog",
+          "extensions": [
+            ".v",
+            ".vh",
+            ".sv",
+            ".svh"
+          ]
+        },
+        {
+          "label": "VHDL",
+          "extensions": [
+            ".vhd",
+            ".vhdl"
+          ]
+        },
+        {
+          "label": "Visual Basic",
+          "extensions": [
+            ".vb",
+            ".vbs",
+            ".bas",
+            ".cls",
+            ".frm"
+          ]
+        },
+        {
+          "label": "Vue",
+          "extensions": [
+            ".vue"
+          ]
+        },
+        {
+          "label": "WebAssembly",
+          "extensions": [
+            ".wat",
+            ".wast"
+          ]
+        },
+        {
+          "label": "XML and schemas",
+          "extensions": [
+            ".xml",
+            ".xsl",
+            ".xslt",
+            ".xsd",
+            ".dtd"
+          ]
+        },
+        {
+          "label": "Zig",
+          "extensions": [
+            ".zig",
+            ".zon"
+          ]
+        },
+        {
+          "label": "Build and CI files",
+          "extensions": [
+            ".bazel",
+            ".bzl"
+          ],
+          "fileNames": [
+            "BUILD",
+            "BUILD.bazel",
+            "WORKSPACE",
+            "Jenkinsfile",
+            "Justfile",
+            "Procfile",
+            "Earthfile",
+            "Tiltfile",
+            "Snakefile"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "textDocuments",
+      "label": "Readable text documents",
+      "kind": "text",
+      "mediaType": "text/plain",
+      "entries": [
+        {
+          "label": "Plain text",
+          "extensions": [
+            ".txt",
+            ".text",
+            ".log",
+            ".out",
+            ".err"
+          ]
+        },
+        {
+          "label": "Markdown",
+          "extensions": [
+            ".md",
+            ".markdown",
+            ".mdown",
+            ".mkd"
+          ]
+        },
+        {
+          "label": "CSV and TSV",
+          "extensions": [
+            ".csv",
+            ".tsv",
+            ".tab"
+          ]
+        },
+        {
+          "label": "JSON",
+          "extensions": [
+            ".json",
+            ".jsonl",
+            ".ndjson",
+            ".geojson",
+            ".har"
+          ]
+        },
+        {
+          "label": "YAML",
+          "extensions": [
+            ".yaml",
+            ".yml"
+          ]
+        },
+        {
+          "label": "TOML",
+          "extensions": [
+            ".toml"
+          ]
+        },
+        {
+          "label": "INI and env",
+          "extensions": [
+            ".ini",
+            ".cfg",
+            ".conf",
+            ".config",
+            ".properties",
+            ".env",
+            ".editorconfig"
+          ]
+        },
+        {
+          "label": "Subtitles",
+          "extensions": [
+            ".srt",
+            ".vtt"
+          ]
+        },
+        {
+          "label": "Patch and diff",
+          "extensions": [
+            ".patch",
+            ".diff"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "officeDocuments",
+      "label": "Office and structured documents",
+      "kind": "document",
+      "preserveSourceMaterial": true,
+      "entries": [
+        {
+          "label": "PDF",
+          "extensions": [
+            ".pdf"
+          ],
+          "kind": "pdf",
+          "mediaType": "application/pdf",
+          "mediaTypes": [
+            "application/pdf"
+          ],
+          "normalizedAdapter": "pdf"
+        },
+        {
+          "label": "Word",
+          "extensions": [
+            ".doc",
+            ".docx",
+            ".dot",
+            ".dotx"
+          ],
+          "kind": "docx",
+          "mediaTypes": [
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.template"
+          ]
+        },
+        {
+          "label": "PowerPoint",
+          "extensions": [
+            ".ppt",
+            ".pptx",
+            ".pps",
+            ".ppsx"
+          ],
+          "mediaTypes": [
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          ],
+          "normalizedAdapter": "presentation"
+        },
+        {
+          "label": "Excel",
+          "extensions": [
+            ".xls",
+            ".xlsx",
+            ".xlsm"
+          ],
+          "mediaTypes": [
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ]
+        },
+        {
+          "label": "OpenDocument",
+          "extensions": [
+            ".odt",
+            ".ods",
+            ".odp"
+          ],
+          "mediaTypes": [
+            "application/vnd.oasis.opendocument.text",
+            "application/vnd.oasis.opendocument.spreadsheet",
+            "application/vnd.oasis.opendocument.presentation"
+          ]
+        },
+        {
+          "label": "Rich text",
+          "extensions": [
+            ".rtf"
+          ],
+          "mediaTypes": [
+            "application/rtf"
+          ]
+        },
+        {
+          "label": "EPUB",
+          "extensions": [
+            ".epub"
+          ],
+          "mediaType": "application/epub+zip",
+          "mediaTypes": [
+            "application/epub+zip"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "emailDocuments",
+      "label": "Email message files",
+      "kind": "email",
+      "entries": [
+        {
+          "label": "EML",
+          "extensions": [
+            ".eml"
+          ],
+          "mediaType": "message/rfc822",
+          "mediaTypes": [
+            "message/rfc822"
+          ]
+        },
+        {
+          "label": "MSG",
+          "extensions": [
+            ".msg"
+          ],
+          "mediaType": "application/vnd.ms-outlook",
+          "mediaTypes": [
+            "application/vnd.ms-outlook"
+          ]
+        },
+        {
+          "label": "MBOX",
+          "extensions": [
+            ".mbox"
+          ],
+          "mediaType": "application/mbox"
+        }
+      ]
+    },
+    {
+      "id": "imageDocuments",
+      "label": "Images with caption metadata",
+      "kind": "image",
+      "entries": [
+        {
+          "label": "PNG",
+          "extensions": [
+            ".png"
+          ],
+          "mediaType": "image/png"
+        },
+        {
+          "label": "JPEG",
+          "extensions": [
+            ".jpg",
+            ".jpeg"
+          ],
+          "mediaType": "image/jpeg"
+        },
+        {
+          "label": "WebP",
+          "extensions": [
+            ".webp"
+          ],
+          "mediaType": "image/webp"
+        },
+        {
+          "label": "GIF",
+          "extensions": [
+            ".gif"
+          ],
+          "mediaType": "image/gif"
+        },
+        {
+          "label": "BMP",
+          "extensions": [
+            ".bmp"
+          ],
+          "mediaType": "image/bmp"
+        },
+        {
+          "label": "TIFF",
+          "extensions": [
+            ".tif",
+            ".tiff"
+          ],
+          "mediaType": "image/tiff"
+        }
+      ]
+    },
+    {
+      "id": "archives",
+      "label": "Archives",
+      "kind": "archive",
+      "mediaType": "application/zip",
+      "entries": [
+        {
+          "label": "ZIP",
+          "extensions": [
+            ".zip"
+          ],
+          "mediaTypes": [
+            "application/zip",
+            "application/x-zip-compressed"
+          ]
+        }
+      ]
+    }
+  ]
+}

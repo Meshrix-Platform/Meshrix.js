@@ -1,0 +1,816 @@
+import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { createHash, randomUUID } from "node:crypto";
+import fsSync from "node:fs";
+import path from "node:path";
+import { ServerConfig } from "@lico/foundation/config/server-config";
+import {
+  createResponseProjectionUnavailableError,
+  filterStructuredValue,
+  normalizeResponseBodyFields,
+  normalizeSensitiveBodyFields,
+  redactStructuredValue
+} from "./response-policy.mjs";
+import {
+  hasCircuitBreakerInput,
+  hasTrafficPolicyInput
+} from "./policy-source.mjs";
+import { compilePayloadTransport } from "./payload-contract.mjs";
+
+export const UPSTREAM_GATEWAY_PROTOCOL_VERSION = "v0.0.1:upstream-gateway:service-registry-1";
+
+/** Retired startup config path. Ordinary runtime must not load this file. */
+
+const RUNTIME_FILE = path.join("upstream-gateway", "runtime.json");
+const SECRET_HEADER_NAMES = new Set([
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+  "x-auth-token",
+  "proxy-authorization"
+]);
+const HTTP_METHODS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
+const APPROVAL_LAYERS = new Set(["user", "team", "department", "agent"]);
+
+const REDACTED_VALUE = "[redacted]";
+
+export function nowIso() {
+  return new Date().toISOString();
+}
+
+export function text(value) {
+  return String(value ?? "").trim();
+}
+
+export function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null || value === "") return [];
+  return [value];
+}
+
+export function object(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+
+export function tryParseJson(value) {
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim();
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+export function hash(value, length = 24) {
+  return createHash("sha256").update(String(value || "")).digest("hex").slice(0, length);
+}
+
+export function stableId(prefix, value) {
+  return `${prefix}::${hash(stableJson(value))}`;
+}
+
+export function dataRoot(userDataPath = "") {
+  return userDataPath || ServerConfig.getDataDir();
+}
+
+export function runtimePath(userDataPath = "") {
+  return path.join(dataRoot(userDataPath), RUNTIME_FILE);
+}
+
+export function readJsonSync(filePath, fallback) {
+  try {
+    return JSON.parse(fsSync.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    if (error?.code === "ENOENT") return fallback;
+    throw error;
+  }
+}
+
+export function writeJsonSyncAtomic(filePath, value) {
+  fsSync.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tmpPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
+  fsSync.writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  fsSync.renameSync(tmpPath, filePath);
+}
+
+export function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+export function emptyState() {
+  return {
+    schemaVersion: "v0.0.1:schema:definition-1",
+    protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+    updatedAt: nowIso(),
+    services: {},
+    auditEvents: [],
+    metrics: {
+      totalForwardCount: 0,
+      totalFailureCount: 0,
+      byService: {},
+      byStatus: {}
+    }
+  };
+}
+
+export function normalizeState(value = {}) {
+  const fallback = emptyState();
+  return {
+    ...fallback,
+    ...object(value),
+    services: object(value.services),
+    auditEvents: asArray(value.auditEvents),
+    metrics: {
+      ...fallback.metrics,
+      ...object(value.metrics),
+      byService: object(value.metrics?.byService),
+      byStatus: object(value.metrics?.byStatus)
+    }
+  };
+}
+
+export function normalizeBaseUrl(value, { required = true } = {}) {
+  const raw = text(value).replace(/\/+$/, "");
+  if (!raw) {
+    if (!required) return "";
+    throw new Error("Upstream service baseUrl is required.");
+  }
+  const authority = raw.match(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/([^/?#]+)/u)?.[1] || "";
+  const hostPort = authority.includes("@") ? authority.slice(authority.lastIndexOf("@") + 1) : authority;
+  const hasExplicitPort = /:\d+$/u.test(hostPort);
+  const parsed = new URL(raw);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Upstream service baseUrl must use http or https.");
+  }
+  if (!hasExplicitPort) {
+    throw new Error("Upstream service baseUrl must include an explicit port.");
+  }
+  parsed.username = "";
+  parsed.password = "";
+  parsed.hash = "";
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+export function normalizeEndpoint(input = {}, index = 0, fallback = {}) {
+  const source = typeof input === "string" ? { baseUrl: input } : object(input);
+  const baseUrl = normalizeBaseUrl(source.baseUrl || source.url || source.endpoint || fallback.baseUrl);
+  const endpointId = safePublicToolSegment(source.endpointId || source.id || fallback.endpointId || `endpoint-${index + 1}`);
+  const hasEndpointTrafficPolicy = hasTrafficPolicyInput(source);
+  const hasServiceTrafficPolicy = hasTrafficPolicyInput(fallback);
+  const hasEndpointCircuitBreaker = hasCircuitBreakerInput(source);
+  const hasServiceCircuitBreaker = hasCircuitBreakerInput(fallback);
+  return {
+    endpointId,
+    baseUrl,
+    weight: Math.max(1, Math.min(Number(source.weight || fallback.weight || 1), 100)),
+    disabled: source.disabled === true || fallback.disabled === true,
+    trafficPolicy: normalizeTrafficPolicy(
+      hasEndpointTrafficPolicy
+        ? source
+        : hasServiceTrafficPolicy
+          ? fallback
+          : {}
+    ),
+    trafficPolicySource: hasEndpointTrafficPolicy
+      ? "endpoint"
+      : hasServiceTrafficPolicy
+        ? "service"
+        : "default",
+    trafficPolicyInherited: !hasEndpointTrafficPolicy,
+    circuitBreaker: normalizeCircuitBreaker(
+      hasEndpointCircuitBreaker
+        ? source.circuitBreaker || source
+        : hasServiceCircuitBreaker
+          ? fallback.circuitBreaker || fallback
+          : {}
+    ),
+    circuitBreakerSource: hasEndpointCircuitBreaker
+      ? "endpoint"
+      : hasServiceCircuitBreaker
+        ? "service"
+        : "default",
+    circuitBreakerInherited: !hasEndpointCircuitBreaker
+  };
+}
+
+export function normalizeEndpoints(input = {}, existing = {}) {
+  const configured = asArray(
+    input.endpoints ||
+      input.upstreamEndpoints ||
+      input.endpointPool ||
+      existing.endpoints
+  );
+  const endpoints = configured
+    .map((endpoint, index) => normalizeEndpoint(endpoint, index, {
+      trafficPolicy: input.trafficPolicy || existing.trafficPolicy,
+      circuitBreaker: input.circuitBreaker || existing.circuitBreaker
+    }))
+    .filter((endpoint) => endpoint.baseUrl);
+  if (endpoints.length > 0) {
+    return endpoints;
+  }
+  return [
+    normalizeEndpoint({
+      endpointId: "primary",
+      baseUrl: input.baseUrl || existing.baseUrl,
+      weight: 1
+    }, 0, {
+      trafficPolicy: input.trafficPolicy || existing.trafficPolicy,
+      circuitBreaker: input.circuitBreaker || existing.circuitBreaker
+    })
+  ];
+}
+
+export function normalizePath(value, fallback = "/") {
+  const raw = text(value || fallback) || "/";
+  const withSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const withoutSafeParameters = withSlash.replace(/\{[A-Za-z][A-Za-z0-9_]{0,63}\}/gu, "");
+  if (
+    raw.startsWith("//") ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:\/\//u.test(raw) ||
+    withSlash.startsWith("//") ||
+    withSlash.includes("\\") ||
+    withSlash.includes("..") ||
+    /[{}]/u.test(withoutSafeParameters) ||
+    /[\u0000-\u001f]/u.test(withSlash)
+  ) {
+    throw new Error("Upstream route path is invalid.");
+  }
+  return withSlash;
+}
+
+export function normalizeMethod(value, fallback = "POST") {
+  const method = text(value || fallback).toUpperCase();
+  return HTTP_METHODS.has(method) ? method : "POST";
+}
+
+export function strictMethod(value, fallback = "POST") {
+  const method = text(value || fallback).toUpperCase();
+  if (!HTTP_METHODS.has(method)) {
+    throw Object.assign(new Error("Upstream configured method is not allowed."), { status: 400 });
+  }
+  return method;
+}
+
+export function normalizeRisk(value) {
+  const risk = text(value || "safe_write");
+  return ["read_only", "safe_write", "repair_write", "destructive"].includes(risk) ? risk : "safe_write";
+}
+
+export function normalizeProtocol(value) {
+  const protocol = text(value || "http").toLowerCase();
+  return ["http", "json-rpc", "mcp"].includes(protocol) ? protocol : "http";
+}
+
+export function normalizeServiceProtocol(input = {}, existing = {}) {
+  const explicit = text(input.serviceProtocol || input.serviceKind || input.kind || input.type || input.protocol || existing.serviceProtocol).toLowerCase();
+  const transport = text(input.transport || input.mcp?.transport || input.mcp?.type).toLowerCase();
+  if (
+    explicit === "mcp" ||
+    Boolean(input.mcp) ||
+    ["stdio", "http", "https", "remote", "streamable-http", "sse"].includes(transport)
+  ) {
+    return "mcp";
+  }
+  return "http";
+}
+
+export function safePublicToolSegment(value) {
+  return text(value)
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "service";
+}
+
+export function sanitizeHeaders(headers = {}) {
+  const output = {};
+  for (const [key, value] of Object.entries(object(headers))) {
+    const name = text(key).toLowerCase();
+    if (!name || SECRET_HEADER_NAMES.has(name)) {
+      continue;
+    }
+    output[name] = text(value);
+  }
+  return output;
+}
+
+function normalizeTagEntityRefs(value = [], serviceId = "") {
+  return asArray(value)
+    .map((entry) => ({
+      entityType: text(entry?.entityType || entry?.type),
+      entityId: text(entry?.entityId || entry?.id)
+    }))
+    .filter((entry) => entry.entityType && entry.entityId);
+}
+
+export function normalizeServiceTagPolicy(input = {}, existing = {}, serviceId = "") {
+  const source = object(input.tagPolicy || input.securityTagPolicy || existing.tagPolicy);
+  if (Object.keys(source).length === 0) {
+    return null;
+  }
+  const entityRefs = normalizeTagEntityRefs(source.entityRefs || source.entities, serviceId);
+  const normalized = {
+    entityRefs: entityRefs.length > 0
+      ? entityRefs
+      : serviceId
+        ? [{ entityType: "external_services.service", entityId: serviceId }]
+        : [],
+    denyTags: asArray(source.denyTags || source.deniedTags).map(text).filter(Boolean),
+    allowTags: asArray(source.allowTags || source.allowedTags).map(text).filter(Boolean),
+    requiredTags: asArray(source.requiredTags).map(text).filter(Boolean),
+    policyRevision: source.policyRevision || source.revision || 0,
+    failOnStale: source.failOnStale === true,
+    requireFreshRevision: source.requireFreshRevision === true
+  };
+  return normalized.entityRefs.length > 0 ||
+    normalized.denyTags.length > 0 ||
+    normalized.allowTags.length > 0 ||
+    normalized.requiredTags.length > 0 ||
+    normalized.failOnStale ||
+    normalized.requireFreshRevision ||
+    Number(normalized.policyRevision || 0) > 0
+    ? normalized
+    : null;
+}
+
+export function hasInputField(input = {}, field) {
+  return Object.prototype.hasOwnProperty.call(object(input), field) && input[field] !== undefined;
+}
+
+export function callerRoutingOverrideFields(input = {}) {
+  return ["url", "baseUrl", "host", "origin", "path", "method", "headers", "rpcMethod", "methodName"]
+    .filter((field) => hasInputField(input, field));
+}
+
+export function rejectUpstreamDestinationOverrideFields(input = {}) {
+  const fields = callerRoutingOverrideFields(input);
+  if (fields.length > 0) {
+    throw Object.assign(new Error("Upstream request routing fields cannot be supplied by callers."), {
+      status: 400,
+      reasonCode: "upstream_routing_override_denied",
+      fields
+    });
+  }
+}
+
+export function configuredHttpMethod(operation = {}) {
+  return strictMethod(operation.method, "POST");
+}
+
+export function configuredRpcMethod(operation = {}) {
+  const configuredMethod = text(operation.jsonRpcMethod || operation.operationKey);
+  if (!configuredMethod) {
+    throw Object.assign(new Error("Upstream JSON-RPC method must be configured by the server descriptor."), { status: 500 });
+  }
+  return configuredMethod;
+}
+
+export function configuredHeaders(service = {}) {
+  return sanitizeHeaders(service.defaultHeaders);
+}
+
+export function redactSecretInput(input = {}) {
+  return {
+    hasRawCredentialInput: Boolean(
+      input.token ||
+        input.apiKey ||
+        input.authorization ||
+        input.password ||
+        input.secret ||
+        object(input.credentials).token ||
+        object(input.credentials).apiKey ||
+        object(input.credentials).authorization ||
+        object(input.credentials).password ||
+        object(input.credentials).secret
+    )
+  };
+}
+
+export function normalizeOperation(input = {}, index = 0, { serviceProtocol = "http" } = {}) {
+  const operationKey = text(input.operationKey || input.operationId || input.key || input.name || `operation-${index + 1}`);
+  const method = normalizeMethod(input.method, "POST");
+  const risk = normalizeRisk(input.risk);
+  const protocol = serviceProtocol === "mcp"
+    ? "mcp"
+    : normalizeProtocol(input.protocol || input.transport || input.upstreamProtocol);
+  const approvalInput = object(input.approval);
+  const requiredApprovalInput = object(input.requiredApproval || approvalInput.requiredApproval);
+  const approvalLayers = asArray(requiredApprovalInput.approvalLayers || input.approvalLayers)
+    .map((layer) => text(layer).toLowerCase())
+    .filter((layer) => APPROVAL_LAYERS.has(layer));
+  const requiredApproval = {
+    ...requiredApprovalInput,
+    ...(approvalLayers.length > 0 ? { approvalLayers: [...new Set(approvalLayers)] } : { approvalLayers: [] })
+  };
+  const payloadTransport = serviceProtocol === "mcp" ? null : compilePayloadTransport(input);
+  return {
+    operationKey,
+    label: text(input.label || operationKey),
+    protocol,
+    method,
+    path: normalizePath(input.path || input.routePath || "/", "/"),
+    requiredScopes: asArray(input.requiredScopes || (risk === "read_only" ? ["gateway:read"] : ["gateway:write"]))
+      .map(text)
+      .filter(Boolean),
+    risk,
+    requiresApproval: input.requiresApproval === true || risk === "repair_write" || risk === "destructive",
+    approvalScope: text(input.approvalScope || approvalInput.approvalScope),
+    requiredApproval,
+    timeoutMs: Math.max(100, Math.min(Number(input.timeoutMs || 3000), 30000)),
+    responseMaxBytes: payloadTransport?.response.maxBytes || 8 * 1024 * 1024,
+    jsonRpcMethod: text(input.jsonRpcMethod || input.rpcMethod || input.methodName || operationKey),
+    sensitiveBodyFields: normalizeSensitiveBodyFields(input.sensitiveBodyFields || input.redactedBodyFields),
+    publicResponseFields: normalizeResponseBodyFields(
+      input.publicResponseFields ||
+        input.responseBodyFields ||
+        input.responseFieldsAllowlist ||
+        input.allowedResponseFields
+    ),
+    requestSchema: object(input.requestSchema),
+    responseSchema: object(input.responseSchema),
+    ...(payloadTransport ? { payloadTransport } : {})
+  };
+}
+
+export function normalizeMcpTransport(value) {
+  const transport = text(value || "stdio").toLowerCase();
+  if (["http", "https", "remote", "streamable-http", "sse"].includes(transport)) {
+    return "http";
+  }
+  return transport === "stdio" ? "stdio" : transport;
+}
+
+export function normalizeMcpConfig(input = {}, existing = {}, { serviceId = "" } = {}) {
+  const source = object(input.mcp || input.upstreamMcp || input);
+  const previous = object(existing.mcp);
+  const transport = normalizeMcpTransport(source.transport || source.type || previous.transport || "stdio");
+  const rawEnv = object(source.env || previous.env);
+  const env = Object.fromEntries(Object.entries(rawEnv)
+    .map(([key, value]) => [text(key), text(value)])
+    .filter(([key]) => key));
+  const rawHeaders = object(source.headers || previous.headers);
+  const headers = Object.fromEntries(Object.entries(rawHeaders)
+    .map(([key, value]) => [text(key), text(value)])
+    .filter(([key]) => key));
+  return {
+    protocolVersion: "v0.0.1:upstream-gateway:mcp-service-1",
+    transport,
+    command: text(source.command || previous.command || ""),
+    args: asArray(source.args || previous.args).map(String),
+    env,
+    url: text(source.url || source.endpoint || source.baseUrl || previous.url || ""),
+    headers,
+    protocolVersionHint: text(source.protocolVersion || previous.protocolVersionHint || ""),
+    toolNamePrefix: safePublicToolSegment(source.toolNamePrefix || source.prefix || previous.toolNamePrefix || serviceId),
+    toolsCacheTtlMs: Math.max(0, Math.min(Number(source.toolsCacheTtlMs ?? previous.toolsCacheTtlMs ?? 30_000), 600_000)),
+    timeoutMs: Math.max(100, Math.min(Number(source.timeoutMs || previous.timeoutMs || 30_000), 300_000))
+  };
+}
+
+export function publicUrl(value = "") {
+  const raw = text(value);
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    parsed.username = "";
+    parsed.password = "";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+export function publicMcpConfig(config = {}) {
+  return {
+    protocolVersion: config.protocolVersion || "v0.0.1:upstream-gateway:mcp-service-1",
+    transport: config.transport || "stdio",
+    commandRef: config.command ? stableId("mcp-command", path.basename(config.command)) : "",
+    argCount: asArray(config.args).length,
+    envCount: Object.keys(object(config.env)).length,
+    urlRef: config.url ? stableId("mcp-url", publicUrl(config.url)) : "",
+    headerCount: Object.keys(object(config.headers)).length,
+    toolNamePrefix: config.toolNamePrefix || "",
+    toolsCacheTtlMs: Number(config.toolsCacheTtlMs || 0),
+    timeoutMs: Number(config.timeoutMs || 0)
+  };
+}
+
+export function normalizeTrafficPolicy(input = {}) {
+  const source = object(input.trafficPolicy || input.rateLimit);
+  const perMinute = Math.max(1, Math.min(Number(source.perMinute || input.perMinute || 120), 10000));
+  const burst = Math.max(1, Math.min(Number(source.burst || input.burst || 30), 10000));
+  return {
+    algorithm: "token_bucket_with_concurrency",
+    routingAlgorithm: "weighted_endpoint_round_robin_with_circuit_breaker",
+    perMinute,
+    burst,
+    maxConcurrent: Math.max(1, Math.min(Number(
+      source.maxConcurrent ||
+        source.concurrency ||
+        source.concurrent ||
+        input.maxConcurrent ||
+        input.concurrency ||
+        burst
+    ), 10000))
+  };
+}
+
+export function normalizeCircuitBreaker(input = {}) {
+  const source = object(input.circuitBreaker || input);
+  return {
+    enabled: source.enabled !== false,
+    failureThreshold: Math.max(1, Math.min(Number(
+      source.failureThreshold ||
+        source.failuresBeforeOpen ||
+        source.failureCount ||
+        3
+    ), 100)),
+    cooldownMs: Math.max(100, Math.min(Number(
+      source.cooldownMs ||
+        source.openMs ||
+        source.resetAfterMs ||
+        30_000
+    ), 3_600_000))
+  };
+}
+
+export function normalizeService(input = {}, existing = {}) {
+  const serviceId = text(input.serviceId || input.id || existing.serviceId || stableId("upstream", {
+    baseUrl: input.baseUrl,
+    label: input.label
+  }));
+  const serviceProtocol = normalizeServiceProtocol(input, existing);
+  const mcp = serviceProtocol === "mcp"
+    ? normalizeMcpConfig(input, existing, { serviceId })
+    : null;
+  const endpoints = serviceProtocol === "mcp"
+    ? []
+    : normalizeEndpoints(input, existing);
+  const operations = asArray(input.operations || input.routes || input.operation)
+    .filter((item) => item && typeof item === "object")
+    .map((item, index) => normalizeOperation(item, index, { serviceProtocol }));
+  const normalizedOperations = operations.length ? operations : [
+    normalizeOperation({
+      operationKey: serviceProtocol === "mcp" ? "tools/call" : "default",
+      method: input.method || "POST",
+      path: input.path || "/",
+      protocol: serviceProtocol === "mcp" ? "mcp" : input.protocol,
+      requiredScopes: input.requiredScopes || (serviceProtocol === "mcp" ? ["gateway:write"] : undefined)
+    }, 0, { serviceProtocol })
+  ];
+  const credentialReferences = asArray(input.credentialReferences || existing.credentialReferences)
+    .filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      type: text(entry.type),
+      reference: text(entry.reference),
+      revision: Number(entry.revision || 0),
+      use: text(entry.use),
+      operationKey: text(entry.operationKey),
+      host: text(entry.host).toLowerCase(),
+      protocol: text(entry.protocol).toLowerCase(),
+      scopes: asArray(entry.scopes).map(text).filter(Boolean)
+    }));
+  const credentialRefs = [...new Set([
+    ...asArray(input.credentialRefs),
+    ...asArray(input.credentialRef),
+    ...asArray(input.secretRefs),
+    ...asArray(input.secretRef),
+    ...credentialReferences.map((entry) => entry.reference)
+  ].map(text).filter(Boolean))];
+  const timestamp = nowIso();
+  return {
+    protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
+    serviceId,
+    serviceProtocol,
+    label: text(input.label || existing.label || serviceId),
+    description: text(input.description || existing.description || ""),
+    baseUrl: serviceProtocol === "mcp"
+      ? text(input.baseUrl || existing.baseUrl || mcp?.url || "")
+      : endpoints[0]?.baseUrl || normalizeBaseUrl(input.baseUrl || existing.baseUrl),
+    endpoints,
+    healthPath: normalizePath(input.healthPath || existing.healthPath || "/health", "/health"),
+    disabled: input.disabled === true || existing.disabled === true,
+    allowLocalNetwork: input.allowLocalNetwork === undefined
+      ? existing.allowLocalNetwork === true
+      : input.allowLocalNetwork === true,
+    visibility: text(input.visibility || existing.visibility || "private"),
+    dataClass: text(input.dataClass || existing.dataClass || "internal"),
+    ownerSubjectId: text(input.ownerSubjectId || existing.ownerSubjectId || ""),
+    tags: asArray(input.tags || existing.tags).map(text).filter(Boolean),
+    credentialRefs,
+    credentialReferences,
+    tagPolicy: normalizeServiceTagPolicy(input, existing, serviceId),
+    redactedCredentialInput: redactSecretInput(input).hasRawCredentialInput,
+    defaultHeaders: sanitizeHeaders(input.defaultHeaders || input.headers || existing.defaultHeaders),
+    ...(mcp ? { mcp } : {}),
+    trafficPolicy: normalizeTrafficPolicy(input.trafficPolicy || existing.trafficPolicy || {}),
+    circuitBreaker: normalizeCircuitBreaker(input.circuitBreaker || existing.circuitBreaker || {}),
+    operations: normalizedOperations,
+    createdAt: existing.createdAt || timestamp,
+    updatedAt: timestamp
+  };
+}
+
+export function publicService(service = {}) {
+  const {
+    credentialRefs: privateCredentialRefs,
+    credentialReferences: _privateCredentialReferences,
+    ...publicFields
+  } = service;
+  const endpointRef = service.baseUrl
+    ? stableId("upstream-endpoint", {
+        serviceId: service.serviceId,
+        serviceProtocol: service.serviceProtocol,
+        baseUrl: service.baseUrl
+      })
+    : "";
+  return {
+    ...publicFields,
+    credentialBindingIds: [...new Set(asArray(privateCredentialRefs)
+      .map((reference) => text(reference))
+      .filter(Boolean)
+      .map((reference) => `credential:${hash(reference, 16)}`))],
+    credentialReferenceCount: asArray(privateCredentialRefs).length,
+    redactedCredentialInput: service.redactedCredentialInput === true,
+    defaultHeaders: sanitizeHeaders(service.defaultHeaders),
+    baseUrl: "",
+    endpointRef,
+    endpointRedacted: Boolean(endpointRef),
+    endpoints: asArray(service.endpoints).map((endpoint) => ({
+      endpointId: endpoint.endpointId || "",
+      endpointRef: endpoint.baseUrl
+        ? stableId("upstream-endpoint", {
+            serviceId: service.serviceId,
+            endpointId: endpoint.endpointId,
+            serviceProtocol: service.serviceProtocol,
+            baseUrl: endpoint.baseUrl
+          })
+        : "",
+      endpointRedacted: Boolean(endpoint.baseUrl),
+      weight: Number(endpoint.weight || 1),
+      disabled: endpoint.disabled === true,
+      trafficPolicy: normalizeTrafficPolicy(endpoint.trafficPolicy || service.trafficPolicy || {}),
+      trafficPolicySource: endpoint.trafficPolicySource || "endpoint",
+      trafficPolicyInherited: endpoint.trafficPolicyInherited === true,
+      circuitBreaker: normalizeCircuitBreaker(endpoint.circuitBreaker || service.circuitBreaker || {}),
+      circuitBreakerSource: endpoint.circuitBreakerSource || "endpoint",
+      circuitBreakerInherited: endpoint.circuitBreakerInherited === true
+    })),
+    endpointCount: asArray(service.endpoints).length || (endpointRef ? 1 : 0),
+    ...(service.serviceProtocol === "mcp" ? { mcp: publicMcpConfig(service.mcp) } : {})
+  };
+}
+
+export function mcpToolReadOnly(tool = {}) {
+  const annotations = object(tool.annotations);
+  if (annotations.destructiveHint === true) return false;
+  if (annotations.readOnlyHint === true) return true;
+  return false;
+}
+
+export function mcpToolRisk(tool = {}) {
+  const annotations = object(tool.annotations);
+  // MCP destructiveHint means high-impact / approval-worthy work.
+  // LicoMesh "destructive" is a hard dispatcher block; map to repair_write instead.
+  if (annotations.destructiveHint === true) return "repair_write";
+  return mcpToolReadOnly(tool) ? "read_only" : "safe_write";
+}
+
+export function parsePublicUpstreamMcpToolName(name = "") {
+  const raw = text(name);
+  if (!raw.startsWith("upstream.")) return null;
+  const withoutPrefix = raw.slice("upstream.".length);
+  const dot = withoutPrefix.indexOf(".");
+  if (dot <= 0 || dot === withoutPrefix.length - 1) return null;
+  return {
+    prefix: withoutPrefix.slice(0, dot),
+    upstreamToolName: withoutPrefix.slice(dot + 1)
+  };
+}
+
+export function mcpServiceConfig(service = {}) {
+  return {
+    ...object(service.mcp),
+    protocolVersion: service.mcp?.protocolVersionHint || undefined
+  };
+}
+
+export function responseBodyForPublic(contentType, buffer, sensitiveBodyFields = [], publicResponseFields = []) {
+  const textBody = Buffer.from(buffer).toString("utf8");
+  const filteringConfigured = normalizeSensitiveBodyFields(sensitiveBodyFields).length > 0 ||
+    normalizeResponseBodyFields(publicResponseFields).length > 0;
+  if (/json/i.test(contentType)) {
+    try {
+      const redacted = redactStructuredValue(JSON.parse(textBody), sensitiveBodyFields);
+      return { json: filterStructuredValue(redacted, publicResponseFields) };
+    } catch {
+      if (filteringConfigured) {
+        throw createResponseProjectionUnavailableError("Upstream operation response body is not valid JSON.");
+      }
+      return { text: textBody };
+    }
+  }
+  if (filteringConfigured) {
+    throw createResponseProjectionUnavailableError("Upstream operation response content type is not JSON.");
+  }
+  return { text: textBody };
+}
+
+export function jsonRpcRequestBody(input = {}, operation = {}, rpcMethod = "") {
+  const fullBody = input.bodyJson !== undefined ? input.bodyJson : input.body;
+  const method = text(rpcMethod || operation.jsonRpcMethod || operation.operationKey);
+  if (fullBody && typeof fullBody === "object" && !Array.isArray(fullBody) && fullBody.jsonrpc && fullBody.method) {
+    return {
+      ...fullBody,
+      method
+    };
+  }
+  const params =
+    input.rpcParams !== undefined
+      ? input.rpcParams
+      : input.params !== undefined
+        ? input.params
+        : input.payload !== undefined
+          ? input.payload
+          : fullBody !== undefined
+            ? fullBody
+            : {};
+  return {
+    jsonrpc: "2.0",
+    id: input.rpcId || input.requestId || `upstream_jsonrpc::${randomUUID()}`,
+    method,
+    params
+  };
+}
+
+export function queryFrom(input = {}) {
+  const source = object(input.query || input.queryParams);
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(source)) {
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, String(item));
+      continue;
+    }
+    if (value !== undefined && value !== null) {
+      params.set(key, String(value));
+    }
+  }
+  return params;
+}
+
+export function safeTargetUrl(service, operation, input = {}, endpoint = null) {
+  rejectUpstreamDestinationOverrideFields(input);
+  const endpointBaseUrl = text(endpoint?.baseUrl || service.baseUrl);
+  const configuredPath = text(operation.path || "/");
+  const parameterNames = [...configuredPath.matchAll(/\{([A-Za-z][A-Za-z0-9_]{0,63})\}/gu)]
+    .map((match) => match[1]);
+  const pathParameters = object(input.pathParameters);
+  if (Object.keys(pathParameters).some((name) => !parameterNames.includes(name))) {
+    throw Object.assign(new Error("Upstream request contains an undeclared path parameter."), { status: 400 });
+  }
+  const resolvedPath = configuredPath.replace(/\{([A-Za-z][A-Za-z0-9_]{0,63})\}/gu, (_match, name) => {
+    const value = pathParameters[name];
+    const normalized = typeof value === "string" || typeof value === "number"
+      ? String(value).trim()
+      : "";
+    if (!normalized || normalized.length > 512 || /[\u0000-\u001f\u007f]/u.test(normalized)) {
+      throw Object.assign(new Error("Upstream request path parameter is missing or invalid."), { status: 400 });
+    }
+    return encodeURIComponent(normalized);
+  });
+  if (/[{}]/u.test(resolvedPath)) {
+    throw Object.assign(new Error("Upstream request path parameters are incomplete."), { status: 400 });
+  }
+  const url = new URL(resolvedPath, `${endpointBaseUrl}/`);
+  const baseUrl = new URL(`${endpointBaseUrl}/`);
+  if (url.origin !== baseUrl.origin) {
+    throw Object.assign(new Error("Upstream configured target origin is outside configured service origin."), { status: 400 });
+  }
+  const params = queryFrom(input);
+  for (const [key, value] of params.entries()) {
+    url.searchParams.append(key, value);
+  }
+  url.username = "";
+  url.password = "";
+  url.hash = "";
+  if (url.origin !== baseUrl.origin) {
+    throw Object.assign(new Error("Upstream configured target origin is outside configured service origin."), { status: 400 });
+  }
+  return url;
+}
+
+export function summarizeUrl(url) {
+  return {
+    protocol: url.protocol.replace(":", ""),
+    hostRef: stableId("upstream-host", url.host),
+    hostRedacted: true,
+    pathname: url.pathname
+  };
+}
+
+export { stableJson };

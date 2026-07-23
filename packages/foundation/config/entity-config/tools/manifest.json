@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "entityType": "lico.operation-permission.entities",
+  "description": "Human-maintainable operation permission entity configs. Runtime falls back to code defaults when this directory is absent.",
+  "groups": [
+    {
+      "kind": "scopes",
+      "count": 8
+    },
+    {
+      "kind": "toolsets",
+      "count": 17
+    },
+    {
+      "kind": "profiles",
+      "count": 7
+    }
+  ],
+  "lightweightBundle": true
+}

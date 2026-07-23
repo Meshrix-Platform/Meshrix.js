@@ -1,0 +1,48 @@
+{
+  "name": "@lico/server-runtime",
+  "version": "0.0.1",
+  "description": "LicoMesh composition root, state stores, jobs, workers, product API",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "packages/server-runtime"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@lico/agents": "0.0.1",
+    "@lico/capabilities": "0.0.1",
+    "@lico/contracts": "0.0.1",
+    "@lico/foundation": "0.0.1",
+    "@lico/protocols": "0.0.1"
+  },
+  "imports": {
+    "#lico/agents/*": "@lico/agents/*",
+    "#lico/capabilities/*": "@lico/capabilities/*",
+    "#lico/client-strings": "@lico/foundation/security/client-strings",
+    "#lico/contracts/*": "@lico/contracts/*",
+    "#lico/foundation/*": "@lico/foundation/*",
+    "#lico/http-response": "@lico/foundation/http/http-response",
+    "#lico/http-utils": "@lico/protocols/http/http-utils",
+    "#lico/operation-registry": "@lico/contracts/operations/operation-registry",
+    "#lico/product-api": "./src/composition/product-api.mjs",
+    "#lico/protocols/*": "@lico/protocols/*",
+    "#lico/runtime-logger": "@lico/foundation/observability/runtime-logger",
+    "#lico/server-config": "@lico/foundation/config/server-config",
+    "#lico/server-runtime/*": "./src/*.mjs",
+    "#lico/settings": "./src/composition/settings.mjs",
+    "#lico/state-coordinator": "@lico/foundation/storage/state-coordinator"
+  },
+  "exports": {
+    "./*": "./src/*.mjs"
+  },
+  "files": [
+    "src/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

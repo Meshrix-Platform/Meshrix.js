@@ -1,0 +1,106 @@
+.document-chunking-console {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.document-chunking-header {
+  align-items: start;
+}
+
+.document-chunking-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.12fr) minmax(300px, 0.78fr);
+  gap: var(--space-4);
+  align-items: stretch;
+  min-width: 0;
+}
+
+.document-chunking-editor,
+.document-chunking-preview,
+.document-chunking-inspector {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+}
+
+.document-chunking-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.document-chunking-history {
+  min-width: 0;
+}
+
+.document-chunking-input {
+  width: 100%;
+  min-height: 360px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: var(--text-sm);
+  line-height: 1.58;
+}
+
+.document-chunking-dropzone {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 12px;
+  border: 1px dashed color-mix(in srgb, var(--brand) 36%, var(--border-strong) 64%);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--info-surface) 68%, var(--bg-surface) 32%);
+  transition:
+    background var(--dur-fast) var(--ease-std),
+    border-color var(--dur-fast) var(--ease-std),
+    box-shadow var(--dur-fast) var(--ease-std);
+}
+
+.document-chunking-dropzone.active,
+.document-chunking-dropzone:focus-within {
+  border-color: var(--brand);
+  background: var(--info-surface);
+  box-shadow: 0 0 0 3px var(--brand-ring);
+  outline: 0;
+}
+
+.document-chunking-dropcopy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.document-chunking-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.document-chunking-dropcopy strong {
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.document-chunking-dropcopy span {
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}

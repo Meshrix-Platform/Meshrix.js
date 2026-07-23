@@ -1,0 +1,35 @@
+# Public clean-rebuild workflow registration anchor.
+name: Branch flow
+
+on:
+  push:
+    branches: ["nightly", "stable", "release"]
+  pull_request:
+    branches: ["nightly", "stable", "release"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-flow-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  branch-flow:
+    name: Branch flow policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Verify branch flow fixtures
+        run: node tools/scripts/verify-branch-flow.mjs --self-test
+      - name: Verify branch flow
+        run: node tools/scripts/verify-branch-flow.mjs

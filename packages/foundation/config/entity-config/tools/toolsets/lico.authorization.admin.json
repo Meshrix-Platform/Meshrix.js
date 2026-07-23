@@ -1,0 +1,10 @@
+{
+  "id": "lico.authorization.admin",
+  "label": "Authorization admin",
+  "requiredScopes": [
+    "auth:admin"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

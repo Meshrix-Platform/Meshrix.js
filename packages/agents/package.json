@@ -1,0 +1,30 @@
+{
+  "name": "@lico/agents",
+  "version": "0.0.1",
+  "description": "LicoMesh agent library, collaboration, relay domain, memory/context contracts",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "packages/agents"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@lico/contracts": "0.0.1",
+    "@lico/foundation": "0.0.1",
+    "@lico/protocols": "0.0.1"
+  },
+  "exports": {
+    "./workspace-contribution": "./src/workspace-contribution/index.mjs",
+    "./*": "./src/*.mjs"
+  },
+  "files": [
+    "src/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}
