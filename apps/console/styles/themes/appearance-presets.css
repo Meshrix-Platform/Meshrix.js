@@ -1,0 +1,55 @@
+/* Appearance presets are loaded from JSON config files and applied as semantic CSS variables. */
+
+:root,
+html[data-appearance-preset] {
+  --el-color-primary: var(--brand);
+  --el-color-primary-dark-2: var(--brand-strong);
+  --el-color-primary-light-3: var(--brand-border);
+  --el-color-primary-light-5: var(--brand-shadow);
+  --el-color-primary-light-7: var(--brand-ring);
+  --el-color-primary-light-8: var(--brand-tint);
+  --el-color-primary-light-9: var(--brand-subtle);
+  --el-bg-color: var(--bg-surface);
+  --el-bg-color-page: var(--bg-base);
+  --el-bg-color-overlay: var(--bg-surface);
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-primary);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-text-color-disabled: var(--text-disabled);
+  --el-border-color: var(--border-subtle);
+  --el-border-color-light: var(--border-subtle);
+  --el-border-color-lighter: var(--bg-inset);
+  --el-border-color-extra-light: var(--bg-subtle);
+  --el-border-color-dark: var(--border-strong);
+  --el-border-color-darker: var(--text-muted);
+  --el-border-color-hover: var(--brand);
+  --el-fill-color: var(--bg-subtle);
+  --el-fill-color-blank: var(--bg-surface);
+  --el-fill-color-light: var(--bg-subtle);
+  --el-fill-color-lighter: var(--bg-surface);
+  --el-fill-color-lightest: var(--bg-base);
+  --el-fill-color-dark: var(--bg-inset);
+  --el-fill-color-darker: var(--border-subtle);
+  --el-mask-color: var(--backdrop);
+  --el-overlay-color: var(--backdrop-strong);
+  --el-overlay-color-light: var(--backdrop);
+  --el-overlay-color-lighter: var(--backdrop);
+  --el-table-bg-color: var(--bg-surface);
+  --el-table-tr-bg-color: var(--bg-surface);
+  --el-table-border-color: var(--border-subtle);
+  --el-table-header-bg-color: var(--bg-subtle);
+  --el-table-header-text-color: var(--text-secondary);
+  --el-table-row-hover-bg-color: var(--bg-subtle);
+  --el-table-text-color: var(--text-primary);
+  --el-select-dropdown-bg-color: var(--bg-surface);
+  --el-select-input-color: var(--text-primary);
+  --el-input-bg-color: var(--bg-surface);
+  --el-input-text-color: var(--text-primary);
+  --el-input-placeholder-color: var(--text-muted);
+  --el-input-border-color: var(--border-subtle);
+  --el-input-hover-border-color: var(--border-strong);
+  --el-input-focus-border-color: var(--brand);
+  --el-popover-bg-color: var(--bg-surface);
+  --el-dropdown-menuItem-hover-fill: var(--brand-subtle);
+}

@@ -1,0 +1,10 @@
+{
+  "id": "lico.mount.dev",
+  "label": "Mount development",
+  "requiredScopes": [
+    "gateway:admin"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": false,
+  "defaultForAgents": false
+}

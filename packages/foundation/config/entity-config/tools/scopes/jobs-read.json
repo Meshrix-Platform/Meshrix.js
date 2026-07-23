@@ -1,0 +1,5 @@
+{
+  "id": "jobs:read",
+  "label": "Read jobs",
+  "description": "Read job lists and job details."
+}

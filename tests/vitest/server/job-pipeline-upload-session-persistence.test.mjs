@@ -1,0 +1,357 @@
+import { createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const checkpointMocks = vi.hoisted(() => ({
+  checkpointTreeId: vi.fn((kind, ...parts) => `checkpoint_tree_${kind}_${parts.filter(Boolean).join("_")}`),
+  deleteCheckpointTree: vi.fn(async () => undefined),
+  finishCheckpointTree: vi.fn(async () => undefined),
+  startCheckpointTree: vi.fn(async () => undefined),
+  upsertCheckpointNode: vi.fn(async () => undefined)
+}));
+
+vi.mock("#lico/foundation/checkpoint/tree/checkpoint-tree-projection", () => checkpointMocks);
+vi.mock("#lico/product-api", async (importOriginal) => ({
+  ...(await importOriginal()),
+  saveSettings: vi.fn(async (_userDataPath, settings = {}) => settings || {})
+}));
+
+import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.mjs";
+import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.mjs";
+import { createJobArtifactHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-artifact-handlers.mjs";
+import { createBatchDeletionCoordinator } from "../../../packages/server-runtime/src/jobs/batch-deletion-coordinator.mjs";
+import { createJobPipeline } from "../../../packages/server-runtime/src/jobs/job-pipeline.mjs";
+import {
+  appendUploadSessionChunk,
+  createOrResumeUploadSession,
+  resolveUploadSessionFiles
+} from "../../../packages/server-runtime/src/state/upload-session-store.mjs";
+
+const tempRoots = [];
+const storageKernels = [];
+const OWNER = Object.freeze({
+  subjectId: "owner-upload-pipeline",
+  userId: "owner-upload-pipeline",
+  username: "upload-owner"
+});
+
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function createCompleteUploadSession(userDataPath, bytes) {
+  const created = await createOrResumeUploadSession({
+    userDataPath,
+    checkpoint: {
+      checkpointId: "pipeline-upload-checkpoint",
+      archiveBatchId: "pipeline-upload-batch",
+      clientUid: "pipeline-client",
+      sourceType: "upload"
+    },
+    manifest: {
+      manifestDigest: sha256("pipeline-manifest"),
+      inputDigest: sha256("pipeline-input")
+    },
+    owner: OWNER,
+    files: [{
+      relativePath: "source.bin",
+      sha256: sha256(bytes),
+      byteSize: bytes.length,
+      mediaType: "application/octet-stream"
+    }]
+  });
+  if (bytes.length > 0) {
+    await appendUploadSessionChunk({
+      userDataPath,
+      sessionId: created.sessionId,
+      fileIndex: 0,
+      offset: 0,
+      buffer: bytes,
+      owner: OWNER
+    });
+  }
+  const [resolved] = await resolveUploadSessionFiles(userDataPath, created.sessionId, {
+    owner: OWNER
+  });
+  return { created, resolved };
+}
+
+async function createHarness() {
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-pipeline-upload-"));
+  tempRoots.push(userDataPath);
+  const storageKernel = createStorageKernel({ userDataPath });
+  storageKernels.push(storageKernel);
+  return {
+    userDataPath,
+    storageKernel,
+    storageProvider: createStorageProvider({ userDataPath, storageKernel })
+  };
+}
+
+function pipelineFor({ userDataPath, storageProvider, uploadSessionId }) {
+  return createJobPipeline({
+    userDataPath,
+    payload: {
+      uploadSessionId,
+      archiveBatchId: "pipeline-upload-batch",
+      ownerSubjectId: OWNER.subjectId,
+      ownerUserId: OWNER.userId,
+      ownerUsername: OWNER.username,
+      settings: {}
+    },
+    runtime: {},
+    storageProvider,
+    reportProgress: vi.fn(),
+    jobId: "pipeline-upload-job",
+    generatedAt: "2026-07-11T00:00:00.000Z"
+  });
+}
+
+afterEach(async () => {
+  for (const kernel of storageKernels.splice(0)) {
+    kernel.close();
+  }
+  await Promise.all(tempRoots.splice(0).map((root) =>
+    fs.rm(root, { recursive: true, force: true })
+  ));
+});
+
+describe("job pipeline upload-session persistence", () => {
+  it("persists an uploadSessionId-only source before issuing a cleanup-ready result", async () => {
+    const { userDataPath, storageKernel, storageProvider } = await createHarness();
+    const bytes = Buffer.from("canonical uploaded bytes");
+    const { created, resolved } = await createCompleteUploadSession(userDataPath, bytes);
+    const pipeline = pipelineFor({
+      userDataPath,
+      storageProvider,
+      uploadSessionId: created.sessionId
+    });
+
+    const result = await pipeline.run(pipeline.createContext());
+
+    expect(result).toMatchObject({
+      accepted: true,
+      gateway: {
+        sourceCount: 1,
+        uploadSessionFileCount: 1
+      },
+      uploadSessionConsumption: {
+        status: "persisted",
+        complete: true,
+        expectedFileCount: 1,
+        persistedFileCount: 1
+      },
+      sourceFiles: [{
+        kind: "stored-object",
+        rawObjectId: expect.any(String),
+        storageRelativePath: expect.stringMatching(/^objects\//u),
+        rawObjectSha256: sha256(bytes),
+        rawObjectByteSize: bytes.length
+      }]
+    });
+    expect(storageKernel.getStorageSummary().objectCount).toBe(1);
+    await expect(storageProvider.readObject({
+      storageRelativePath: result.sourceFiles[0].storageRelativePath
+    })).resolves.toEqual(bytes);
+    await expect(fs.stat(resolved.stagedPath)).resolves.toMatchObject({ size: bytes.length });
+
+    const response = {
+      statusCode: 0,
+      headers: {},
+      body: null,
+      writeHead(statusCode, headers) {
+        this.statusCode = statusCode;
+        this.headers = headers;
+      },
+      end(body) {
+        this.body = body;
+      }
+    };
+    const artifactHandlers = createJobArtifactHandlers({
+      userDataPath,
+      jobWorkflow: { getJob: vi.fn(async () => null) },
+      storageObjectProvider: storageProvider,
+      loadNormalizedDocumentStoreRuntime: vi.fn(),
+      getDiscoveryState: vi.fn(() => ({})),
+      proxyApiRequest: vi.fn()
+    });
+    await artifactHandlers.handleGetRawObject({
+      objectId: result.sourceFiles[0].rawObjectId,
+      response,
+      authSession: null
+    });
+    expect(response).toMatchObject({
+      statusCode: 200,
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "no-store"
+      },
+      body: bytes
+    });
+    expect(response.headers["Content-Disposition"]).toContain("source.bin");
+  });
+
+  it("persists a verified zero-byte upload-session file into canonical storage", async () => {
+    const { userDataPath, storageKernel, storageProvider } = await createHarness();
+    const bytes = Buffer.alloc(0);
+    const { created, resolved } = await createCompleteUploadSession(userDataPath, bytes);
+    const pipeline = pipelineFor({
+      userDataPath,
+      storageProvider,
+      uploadSessionId: created.sessionId
+    });
+
+    const result = await pipeline.run(pipeline.createContext());
+
+    expect(result).toMatchObject({
+      accepted: true,
+      uploadSessionConsumption: {
+        status: "persisted",
+        complete: true,
+        expectedFileCount: 1,
+        persistedFileCount: 1
+      },
+      sourceFiles: [{
+        kind: "stored-object",
+        rawObjectSha256: sha256(bytes),
+        rawObjectByteSize: 0
+      }]
+    });
+    expect(storageKernel.getStorageSummary().objectCount).toBe(1);
+    await expect(fs.stat(resolved.stagedPath)).resolves.toMatchObject({ size: 0 });
+    await expect(storageProvider.readObject({
+      storageRelativePath: result.sourceFiles[0].storageRelativePath
+    })).resolves.toEqual(bytes);
+  });
+
+  it("deletes the canonical objects, ownership metadata, journal, and job artifacts together", async () => {
+    const { userDataPath, storageKernel, storageProvider } = await createHarness();
+    const bytes = Buffer.from("canonical bytes to delete");
+    const { created } = await createCompleteUploadSession(userDataPath, bytes);
+    const pipeline = pipelineFor({
+      userDataPath,
+      storageProvider,
+      uploadSessionId: created.sessionId
+    });
+    const result = await pipeline.run(pipeline.createContext());
+    const [source] = result.sourceFiles;
+    const jobDirectory = path.join(userDataPath, "jobs", "pipeline-upload-job");
+    await fs.mkdir(jobDirectory, { recursive: true });
+    await fs.writeFile(path.join(jobDirectory, "result.json"), "{}", "utf8");
+    const job = {
+      id: "pipeline-upload-job",
+      archiveBatchId: "pipeline-upload-batch"
+    };
+    const jobManager = {
+      getJob: vi.fn(async (jobId) => jobId === job.id ? job : null),
+      deleteJob: vi.fn(async (jobId) => jobId === job.id ? job : null)
+    };
+    const deletionCoordinator = createBatchDeletionCoordinator({
+      userDataPath,
+      jobManager,
+      storageProvider
+    });
+
+    await expect(deletionCoordinator.deleteBatch(job.id)).resolves.toMatchObject({
+      ok: true,
+      batchId: job.archiveBatchId,
+      deletedJob: job
+    });
+    expect(jobManager.deleteJob).toHaveBeenCalledWith(job.id);
+    expect(storageProvider.getObject(source.rawObjectId)).toBeNull();
+    expect(storageProvider.findObjectOwner(job.id)).toBeNull();
+    expect(storageProvider.getDeletionOperationByOwnerId(job.archiveBatchId)).toBeNull();
+    expect(storageKernel.getStorageSummary().objectCount).toBe(0);
+    await expect(storageProvider.readObject({
+      storageRelativePath: source.storageRelativePath
+    })).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(jobDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("resumes artifact cleanup from journaled paths after metadata deletion is interrupted", async () => {
+    const { userDataPath, storageProvider } = await createHarness();
+    const job = {
+      id: "interrupted-delete-job",
+      archiveBatchId: "interrupted-delete-batch"
+    };
+    const stored = await storageProvider.putObject({
+      objectId: "interrupted-delete-object",
+      namespace: "tests",
+      fileName: "interrupted.bin",
+      buffer: Buffer.from("interrupted deletion bytes"),
+      metadata: {
+        jobId: job.id,
+        archiveBatchId: job.archiveBatchId
+      }
+    });
+    const jobDirectory = path.join(userDataPath, "jobs", job.id);
+    await fs.mkdir(jobDirectory, { recursive: true });
+    await fs.writeFile(path.join(jobDirectory, "result.json"), "{}", "utf8");
+    const jobManager = {
+      getJob: vi.fn(async (jobId) => jobId === job.id ? job : null),
+      deleteJob: vi.fn(async (jobId) => jobId === job.id ? job : null)
+    };
+    let interruptMetadataCommit = true;
+    const interruptingStorageProvider = {
+      ...storageProvider,
+      updateDeletionOperation(operationId, patch) {
+        if (interruptMetadataCommit && patch?.status === "artifact_cleanup_pending") {
+          interruptMetadataCommit = false;
+          throw new Error("simulated metadata journal interruption");
+        }
+        return storageProvider.updateDeletionOperation(operationId, patch);
+      }
+    };
+    const interruptedCoordinator = createBatchDeletionCoordinator({
+      userDataPath,
+      jobManager,
+      storageProvider: interruptingStorageProvider
+    });
+
+    await expect(interruptedCoordinator.deleteBatch(job.id))
+      .rejects.toThrow("simulated metadata journal interruption");
+    expect(storageProvider.getObject(stored.objectId)).toBeNull();
+    await expect(storageProvider.readObject({
+      storageRelativePath: stored.storageRelativePath
+    })).resolves.toEqual(Buffer.from("interrupted deletion bytes"));
+    expect(storageProvider.getDeletionOperationByOwnerId(job.archiveBatchId)).toMatchObject({
+      status: "metadata_pending",
+      state: {
+        runtimeDeleted: true,
+        metadataDeleted: false,
+        storageObjectPaths: [stored.storageRelativePath]
+      }
+    });
+
+    const resumedCoordinator = createBatchDeletionCoordinator({
+      userDataPath,
+      jobManager,
+      storageProvider
+    });
+    await resumedCoordinator.resumePendingDeletions();
+    expect(storageProvider.getDeletionOperationByOwnerId(job.archiveBatchId)).toBeNull();
+    await expect(storageProvider.readObject({
+      storageRelativePath: stored.storageRelativePath
+    })).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(fs.stat(jobDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("retains staging and leaves canonical storage empty when a completed upload is invalidated", async () => {
+    const { userDataPath, storageKernel, storageProvider } = await createHarness();
+    const bytes = Buffer.from("verified-upload");
+    const { created, resolved } = await createCompleteUploadSession(userDataPath, bytes);
+    await fs.writeFile(resolved.stagedPath, Buffer.from("tampered-upload"));
+    const pipeline = pipelineFor({
+      userDataPath,
+      storageProvider,
+      uploadSessionId: created.sessionId
+    });
+
+    await expect(pipeline.run(pipeline.createContext())).rejects.toThrow("上传会话尚未完成");
+    expect(storageKernel.getStorageSummary().objectCount).toBe(0);
+    await expect(fs.stat(resolved.stagedPath)).resolves.toBeTruthy();
+    await expect(fs.stat(path.dirname(resolved.stagedPath))).resolves.toBeTruthy();
+  });
+});

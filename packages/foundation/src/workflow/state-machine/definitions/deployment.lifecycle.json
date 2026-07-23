@@ -1,0 +1,593 @@
+{
+  "machineId": "deployment.lifecycle",
+  "entityType": "private_deployment",
+  "version": "v0.0.1:state-machine:deployment-lifecycle-1",
+  "description": "Private deployment assembly, configuration, health, degradation, resume, rollback, and failure lifecycle.",
+  "initialState": "assembled",
+  "states": [
+    {
+      "id": "assembled"
+    },
+    {
+      "id": "configured"
+    },
+    {
+      "id": "started"
+    },
+    {
+      "id": "healthy"
+    },
+    {
+      "id": "degraded"
+    },
+    {
+      "id": "resumed"
+    },
+    {
+      "id": "rollback_prepared"
+    },
+    {
+      "id": "rolled_back",
+      "terminal": true
+    },
+    {
+      "id": "failed",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "configuration_applied",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "runtime_started",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "health_confirmed",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "health_degraded",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "resume_completed",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "rollback_requested",
+      "riskLevel": "high"
+    },
+    {
+      "id": "rollback_applied",
+      "riskLevel": "high"
+    },
+    {
+      "id": "failure_detected",
+      "riskLevel": "medium"
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "assembled",
+      "event": "configuration_applied",
+      "result": "legal_transition",
+      "to": "configured"
+    },
+    {
+      "from": "assembled",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "assembled",
+      "event": "health_confirmed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "assembled",
+      "event": "health_degraded",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "assembled",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "assembled",
+      "event": "rollback_requested",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "assembled",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "assembled",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "configured",
+      "event": "configuration_applied",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "configured",
+      "event": "runtime_started",
+      "result": "legal_transition",
+      "to": "started"
+    },
+    {
+      "from": "configured",
+      "event": "health_confirmed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "configured",
+      "event": "health_degraded",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "configured",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "configured",
+      "event": "rollback_requested",
+      "result": "legal_transition",
+      "to": "rollback_prepared",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "configured",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "configured",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "started",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "started",
+      "event": "runtime_started",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "started",
+      "event": "health_confirmed",
+      "result": "legal_transition",
+      "to": "healthy"
+    },
+    {
+      "from": "started",
+      "event": "health_degraded",
+      "result": "legal_transition",
+      "to": "degraded"
+    },
+    {
+      "from": "started",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "started",
+      "event": "rollback_requested",
+      "result": "legal_transition",
+      "to": "rollback_prepared",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "started",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "started",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "healthy",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "healthy",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "healthy",
+      "event": "health_confirmed",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "healthy",
+      "event": "health_degraded",
+      "result": "legal_transition",
+      "to": "degraded"
+    },
+    {
+      "from": "healthy",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "healthy",
+      "event": "rollback_requested",
+      "result": "legal_transition",
+      "to": "rollback_prepared",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "healthy",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "healthy",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "degraded",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "degraded",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "degraded",
+      "event": "health_confirmed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "degraded",
+      "event": "health_degraded",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "degraded",
+      "event": "resume_completed",
+      "result": "legal_transition",
+      "to": "resumed"
+    },
+    {
+      "from": "degraded",
+      "event": "rollback_requested",
+      "result": "legal_transition",
+      "to": "rollback_prepared",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "degraded",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "degraded",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "resumed",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "resumed",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "resumed",
+      "event": "health_confirmed",
+      "result": "legal_transition",
+      "to": "healthy"
+    },
+    {
+      "from": "resumed",
+      "event": "health_degraded",
+      "result": "legal_transition",
+      "to": "degraded"
+    },
+    {
+      "from": "resumed",
+      "event": "resume_completed",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "resumed",
+      "event": "rollback_requested",
+      "result": "legal_transition",
+      "to": "rollback_prepared",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "resumed",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "resumed",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "health_confirmed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "health_degraded",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "rollback_requested",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "rollback_applied",
+      "result": "legal_transition",
+      "to": "rolled_back",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "rollback_prepared",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "rolled_back",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rolled_back",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rolled_back",
+      "event": "health_confirmed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rolled_back",
+      "event": "health_degraded",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rolled_back",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rolled_back",
+      "event": "rollback_requested",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "rolled_back",
+      "event": "rollback_applied",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "rolled_back",
+      "event": "failure_detected",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "configuration_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "runtime_started",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "health_confirmed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "health_degraded",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "resume_completed",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "rollback_requested",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "rollback_applied",
+      "result": "illegal_transition",
+      "errorCode": "DEPLOYMENT_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "failure_detected",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "SM-DEPLOYMENT-CONFIGURATION-BEFORE-START",
+    "SM-DEPLOYMENT-HEALTH-AFTER-START",
+    "SM-DEPLOYMENT-RESUME-AFTER-DEGRADATION",
+    "SM-DEPLOYMENT-ROLLBACK-APPLY-AFTER-PREPARE",
+    "SM-DEPLOYMENT-REPORTS-PRIVACY-SAFE"
+  ],
+  "proofObligations": [
+    "PO-DEPLOYMENT-CONTAINER-FLOW",
+    "PO-DEPLOYMENT-PLUGIN-SELECTION",
+    "PO-DEPLOYMENT-STORAGE-RESTORE",
+    "PO-DEPLOYMENT-JOB-RECOVERY",
+    "PO-DEPLOYMENT-HEALTH",
+    "PO-DEPLOYMENT-ROLLBACK-AUTHORIZATION"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-DEPLOYMENT-CONTAINER-FLOW",
+      "method": "required_report",
+      "params": {
+        "command": "npm run server:verify:deployment-flow",
+        "reportPath": "build/reports/deployment-container-flow.json"
+      }
+    },
+    {
+      "obligationId": "PO-DEPLOYMENT-PLUGIN-SELECTION",
+      "method": "required_report",
+      "params": {
+        "command": "npm run verify:plugin-runtime",
+        "reportPath": "build/reports/plugin-runtime.json"
+      }
+    },
+    {
+      "obligationId": "PO-DEPLOYMENT-STORAGE-RESTORE",
+      "method": "required_report",
+      "params": {
+        "command": "node tools/server-scripts/verify-storage-production-restore-drill.mjs",
+        "reportPath": "build/reports/storage-production-restore-drill/latest.json"
+      }
+    },
+    {
+      "obligationId": "PO-DEPLOYMENT-JOB-RECOVERY",
+      "method": "required_report",
+      "params": {
+        "command": "node tools/server-scripts/verify-work-queue-conformance.mjs",
+        "reportPath": "build/reports/work-queue/latest.json"
+      }
+    },
+    {
+      "obligationId": "PO-DEPLOYMENT-HEALTH",
+      "method": "container_health_and_mcp_probe",
+      "params": {
+        "command": "npm run server:verify:deployment-flow",
+        "reportPath": "build/reports/deployment-container-flow.json"
+      }
+    },
+    {
+      "obligationId": "PO-DEPLOYMENT-ROLLBACK-AUTHORIZATION",
+      "method": "guard_validation",
+      "params": {
+        "highRiskEvents": [
+          "rollback_requested",
+          "rollback_applied"
+        ],
+        "requiredGuards": [
+          "policyAllowed",
+          "require_admin"
+        ]
+      }
+    }
+  ]
+}

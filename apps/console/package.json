@@ -1,0 +1,37 @@
+{
+  "name": "@lico/console",
+  "version": "0.0.1",
+  "private": true,
+  "description": "LicoMesh Vue 3 server console — console workspace",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "apps/console"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
+    "@lico/contracts": "0.0.1",
+    "@lico/ui-console": "0.0.1",
+    "element-plus": "^2.13.7",
+    "marked": "^18.0.2",
+    "vue": "^3.5.32",
+    "vue-router": "^4.6.4"
+  },
+  "files": [
+    "src/**/*",
+    "views/**/*",
+    "lib/**/*",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "vite build --config ../../vite.config.ts",
+    "dev": "vite --config ../../vite.config.ts",
+    "typecheck": "vue-tsc --noEmit -p ../../tsconfig.json"
+  }
+}

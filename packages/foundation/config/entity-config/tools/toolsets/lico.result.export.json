@@ -1,0 +1,10 @@
+{
+  "id": "lico.result.export",
+  "label": "Result export",
+  "requiredScopes": [
+    "gateway:read"
+  ],
+  "maxRisk": "read_only",
+  "grantable": true,
+  "defaultForAgents": false
+}

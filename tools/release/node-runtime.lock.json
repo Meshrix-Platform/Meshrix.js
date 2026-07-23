@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "v1:node-runtime-release-lock",
+  "version": "v24.16.0",
+  "distributionBaseUrl": "https://nodejs.org/dist",
+  "checksumsFile": "SHASUMS256.txt",
+  "checksumsSha256": "e20ebbf68d33f42d196a7a11b8a91d422fa37b759c0a51aa4857977135cc5e95",
+  "checksumsSizeBytes": 2967,
+  "signatureFile": "SHASUMS256.txt.sig",
+  "signatureSha256": "cc94428d80ae6770e1bc4c36dd22e957910fc135cc33926c01ad504206a05d0d",
+  "signatureSizeBytes": 119,
+  "signer": {
+    "fingerprint": "5BE8A3F6C8A5C01D106C0AD820B1A390B168D356",
+    "releaseKeysCommit": "b28073028e6d6855cfb53bf7fa0137599c01f967",
+    "publicKeyUrl": "https://raw.githubusercontent.com/nodejs/release-keys/b28073028e6d6855cfb53bf7fa0137599c01f967/keys/5BE8A3F6C8A5C01D106C0AD820B1A390B168D356.asc",
+    "publicKeySha256": "5115095e2f8010c75da052ecb1cfb3af630e084f0f8daa93a863557b01b0f90a",
+    "publicKeySizeBytes": 924
+  },
+  "targets": {
+    "macos-arm64": {
+      "filename": "node-v24.16.0-darwin-arm64.tar.xz",
+      "sha256": "e28ad5531b2aafe0ea555a51b2412c42fdc0f91a6a53fbd03ac93e3847e91389",
+      "sizeBytes": 26982056
+    },
+    "macos-x64": {
+      "filename": "node-v24.16.0-darwin-x64.tar.xz",
+      "sha256": "6b144acbcfdbca75a1366100ff96e6bf6a4fe666b88a4bda7bfbd0299c82cca2",
+      "sizeBytes": 28574640
+    },
+    "linux-arm64": {
+      "filename": "node-v24.16.0-linux-arm64.tar.xz",
+      "sha256": "524659219d6a207a7400f2bde15d19ba060ffbe0d32a8643319ad67e3bb64c78",
+      "sizeBytes": 30390352
+    },
+    "linux-x64": {
+      "filename": "node-v24.16.0-linux-x64.tar.xz",
+      "sha256": "d804845d34eddc21dc1092b519d643ef40b1f58ec5dec5c22b1f4bd8fabde6c9",
+      "sizeBytes": 31428548
+    },
+    "windows-arm64": {
+      "filename": "node-v24.16.0-win-arm64.zip",
+      "sha256": "14834611d4c6b3c06054e7007732b90474c16e0b32f395e05b55a571ef71c6d2",
+      "sizeBytes": 33185819
+    },
+    "windows-x64": {
+      "filename": "node-v24.16.0-win-x64.zip",
+      "sha256": "edaca9bd58ec8e92037dac4e877d52f6b8f430b81c18b57e264b4e2fb111cd56",
+      "sizeBytes": 36946639
+    }
+  }
+}

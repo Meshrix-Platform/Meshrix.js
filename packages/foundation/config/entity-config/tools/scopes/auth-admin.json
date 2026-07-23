@@ -1,0 +1,5 @@
+{
+  "id": "auth:admin",
+  "label": "Administer authorization",
+  "description": "Create, revoke, inspect, and evaluate unified authorization grants and decisions."
+}

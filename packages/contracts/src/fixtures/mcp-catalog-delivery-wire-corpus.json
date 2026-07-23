@@ -1,0 +1,71 @@
+{
+  "valid": {
+    "proxySessionId": "opaque_session_value_1234",
+    "invalidation": {
+      "schemaVersion": "v0.0.1:mcp-catalog-delivery:wire-1",
+      "reasonCode": "catalog_published",
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "affectedPartitions": ["opaque-partition-a"]
+    },
+    "catalogFacts": {
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "partitionKeys": ["opaque-partition-a"]
+    },
+    "acknowledgement": {
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "partitionKeys": ["opaque-partition-a"]
+    }
+  },
+  "invalidInvalidations": [
+    {
+      "schemaVersion": "v0.0.1:mcp-catalog-delivery:wire-1",
+      "reasonCode": "catalog_published",
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "affectedPartitions": ["opaque-partition-a"],
+      "grantId": "prohibited"
+    },
+    {
+      "schemaVersion": "v0.0.1:mcp-catalog-delivery:wire-1",
+      "reasonCode": "catalog_published",
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "affectedPartitions": ["opaque-partition-a"],
+      "tools": []
+    },
+    {
+      "schemaVersion": "v0.0.1:mcp-catalog-delivery:wire-1",
+      "reasonCode": "catalog_published",
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "affectedPartitions": ["opaque-partition-a"],
+      "subject": "prohibited"
+    },
+    {
+      "schemaVersion": "v0.0.1:mcp-catalog-delivery:wire-1",
+      "reasonCode": "catalog_published",
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "affectedPartitions": ["opaque-partition-a"],
+      "credential": "prohibited"
+    },
+    {
+      "schemaVersion": "unknown",
+      "reasonCode": "catalog_published",
+      "sourceRevision": 3,
+      "catalogRevision": "opaque-catalog-revision",
+      "audienceRevision": 5,
+      "affectedPartitions": ["opaque-partition-a"]
+    }
+  ]
+}

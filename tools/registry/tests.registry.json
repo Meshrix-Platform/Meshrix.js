@@ -1,0 +1,2144 @@
+{
+  "$schema": "./schema/test-suite.schema.json",
+  "version": "0.1.0",
+  "generatedAt": "2026-07-22",
+  "profiles": {
+    "core-public": {
+      "description": "Core lightweight platform gate",
+      "suites": [
+        "runtime.resource-discipline",
+        "repo.public-boundary",
+        "security.secret-hygiene",
+        "repo.local-info-hygiene",
+        "registry.consistency",
+        "registry.version-naming",
+        "registry.version-governance",
+        "repo.root-hygiene",
+        "planning.execution-admission",
+        "repo.script-registry",
+        "repo.organization",
+        "repo.source-organization-analysis",
+        "architecture.import-graph",
+        "architecture.protocol-boundary",
+        "domains.manifest",
+        "foundation.checkpoint-tree",
+        "foundation.storage-object-lifecycle",
+        "foundation.local-secret-store",
+        "security.authorization-hardening",
+        "security.http-resource-admission",
+        "foundation.state-machine",
+        "agents.model-provider-runtime",
+        "agents.agent-workspace-schema",
+        "console.event-routing",
+        "release.acceptance-unit",
+        "release.acceptance-ledger-anchor",
+        "runtime.operation-routing",
+        "runtime.job-work-queue-recovery",
+        "runtime.operation-dispatch-lock",
+        "execution-sandbox.provider-resolution",
+        "gateway.mcp-session-lifecycle",
+        "gateway.payload-transit",
+        "gateway.performance-observation",
+        "gateway.external"
+      ],
+      "timeoutMs": 300000
+    },
+    "standard-public": {
+      "description": "Platform validation",
+      "extends": "core-public",
+      "suites": [],
+      "timeoutMs": 300000
+    },
+    "security-public": {
+      "description": "Security-focused gate",
+      "suites": [
+        "runtime.resource-discipline",
+        "repo.public-boundary",
+        "security.secret-hygiene",
+        "repo.local-info-hygiene",
+        "foundation.local-secret-store",
+        "security.authorization-hardening",
+        "security.http-resource-admission",
+        "governance.operation-permission-protocol-consistency",
+        "governance.authorization-coverage",
+        "downstream-mcp.authorization-request-filters",
+        "agents.model-provider-runtime"
+      ],
+      "timeoutMs": 300000
+    },
+    "audit-public": {
+      "description": "Audit gate",
+      "extends": "core-public",
+      "suites": [
+        "governance.tag-management",
+        "governance.operation-permission-tag-audit",
+        "governance.operation-permission-universal-tag-policy",
+        "governance.operation-permission-protocol-consistency",
+        "governance.operation-permission-tag-governed-e2e",
+        "governance.authorization-coverage",
+        "governance.enterprise-authorization-enforcement",
+        "governance.enterprise-audit-retention-redaction",
+        "governance.enterprise-observability-coverage",
+        "approval-governance",
+        "architecture.facts",
+        "governance.organization-model",
+        "governance.agent-session",
+        "runtime.trace-context",
+        "runtime.unified-registration",
+        "runtime.operation-proof-substrate",
+        "foundation.merkle-state-substrate",
+        "runtime.recovery-export-privacy",
+        "workspace.proposal-protocol",
+        "downstream-client.aspect",
+        "security-alert.lifecycle",
+        "observability.semantic-baseline",
+        "downstream-mcp.completeness-audit",
+        "downstream-mcp.authorization-request-filters",
+        "downstream-mcp.external-http-boundary",
+        "downstream-mcp.installer-convergence",
+        "downstream-mcp.release-target-scope",
+        "downstream-mcp.release-portable-assembly",
+        "downstream-mcp.client-identity-proof",
+        "downstream-mcp.process-identity-credential-store",
+        "downstream-mcp.proxy-transport",
+        "container.deployment-flow",
+        "storage.backup-restore",
+        "storage.production-restore-drill",
+        "jobs.work-queue",
+        "jobs.work-queue-capacity",
+        "jobs.work-queue-conformance",
+        "jobs.work-queue-process-restart",
+        "jobs.upload-workspace-materialization",
+        "agent-memory.runtime",
+        "workspace-asset-management.runtime",
+        "workspace-governance.runtime",
+        "communication-service.runtime",
+        "strategy-management.runtime",
+        "agent-gateway.runtime",
+        "model-routing.runtime",
+        "agent-management.runtime",
+        "maintenance-agent.runtime",
+        "execution-sandbox.controlled-runtime",
+        "execution-sandbox.convergence-final",
+        "upstream-gateway.e2e",
+        "upstream-gateway.service-publishing",
+        "upstream-gateway.mcp-e2e",
+        "workspace.core-file-ops",
+        "console.administration-coverage",
+        "console.gateway-mcp-workflows",
+        "governance.production-health-console",
+        "open-platform.documentation-convergence",
+        "open-platform.surface-convergence",
+        "open-platform.capability-audit",
+        "upstream-gateway.fixture-transit",
+        "downstream-mcp.agent-tool-loop"
+      ],
+      "timeoutMs": 5400000
+    },
+    "smoke-public": {
+      "description": "Smoke gate",
+      "extends": "core-public",
+      "suites": [
+        "smoke.start-server-defaults"
+      ],
+      "timeoutMs": 300000
+    },
+    "release-public": {
+      "description": "Release readiness gate",
+      "extends": "audit-public",
+      "suites": [
+        "release.npm-package-installability",
+        "jobs.work-queue-postgres-container",
+        "open-platform.private-deployment-e2e"
+      ],
+      "timeoutMs": 7200000
+    },
+    "changed": {
+      "description": "Tests affected by current changes",
+      "dynamic": true,
+      "timeoutMs": 120000
+    }
+  },
+  "suites": [
+    {
+      "id": "runtime.resource-discipline",
+      "label": "Priority-zero bounded logging, storage, and real-service memory-leak gate",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "server:verify:resource-discipline"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/runtime-resource-discipline.json"
+      ],
+      "artifactSemantics": {
+        "build/reports/runtime-resource-discipline.json": "Compact redacted resource verdict; raw heap profiles and load data are never retained by the gate."
+      }
+    },
+    {
+      "id": "repo.public-boundary",
+      "owner": "platform",
+      "package": "repo",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-public-boundary.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "security.secret-hygiene",
+      "owner": "platform",
+      "package": "repo",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tests/verify-secret-hygiene.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "repo.local-info-hygiene",
+      "owner": "platform",
+      "package": "repo",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/config-scanner.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/local-info-hygiene.json"
+      ]
+    },
+    {
+      "id": "registry.consistency",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/verifiers/registry-validator.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "registry.version-governance",
+      "label": "Governed version registry completeness and evidence integrity",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-version-registry.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/version-registry/latest.json"
+      ]
+    },
+    {
+      "id": "registry.version-naming",
+      "label": "Governed version naming and legacy token rejection",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-version-naming.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/version-naming/latest.json"
+      ]
+    },
+    {
+      "id": "repo.root-hygiene",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tests/verify-root-hygiene.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "repo.script-registry",
+      "label": "Package script registry coverage and consistency",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tests/verify-script-registry.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/script-registry.json"
+      ]
+    },
+    {
+      "id": "repo.organization",
+      "label": "Repository boundaries, source organization policy, and runnable entrypoint ownership",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": [
+        "run",
+        "verify:repo-organization"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/repo-organization.json"
+      ]
+    },
+    {
+      "id": "repo.source-organization-analysis",
+      "label": "Source organization AST advisory contract",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/source-organization-analysis.test.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "architecture.import-graph",
+      "label": "Workspace import resolution and layer dependency graph",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tests/architecture/import-graph.test.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/architecture-graph.json",
+        "build/reports/architecture-graph.md"
+      ]
+    },
+    {
+      "id": "planning.execution-admission",
+      "label": "Fail-closed repository, host-platform, and Plan dependency execution admission",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/plan-execution-eligibility.test.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "architecture.protocol-boundary",
+      "label": "Core protocol ownership and client-product evidence boundary",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-protocol-boundary.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/protocol-boundary.json"
+      ]
+    },
+    {
+      "id": "foundation.checkpoint-tree",
+      "label": "Foundation checkpoint tree primitive",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tests/unit/foundation/checkpoint-tree.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "foundation.storage-object-lifecycle",
+      "label": "Canonical state coordination, checkpoint projection, storage object, backup, restore, and deletion lifecycle",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/state-coordinator.test.mjs",
+        "tests/vitest/server/checkpoint-tree-projection.test.mjs",
+        "tests/vitest/server/merkle-state-substrate.test.mjs",
+        "tests/vitest/server/storage-backup-restore.test.mjs",
+        "tests/vitest/server/storage-retention-and-maintenance.test.mjs",
+        "tests/vitest/server/storage-service-manifest.test.mjs",
+        "tests/vitest/server/storage-production-restore-evidence.test.mjs",
+        "tests/vitest/server/storage-provider.test.mjs",
+        "tests/vitest/server/storage-ops-tools.test.mjs",
+        "tests/vitest/server/upload-session-store.test.mjs",
+        "tests/vitest/server/job-pipeline-upload-session-persistence.test.mjs",
+        "tests/vitest/server/pactium-provider-boundary.test.mjs",
+        "tests/vitest/server/job-manager-lifecycle-and-persistence.test.mjs",
+        "tests/vitest/server/job-runner-background-workers.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "foundation.local-secret-store",
+      "label": "Foundation local secret target and lifecycle contract",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/local-secret-store.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "security.authorization-hardening",
+      "label": "Authorization concurrency delegation replay and crash-safety regressions",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/operation-permission-grant-security.test.mjs",
+        "tests/vitest/server/delegated-mcp-parent-authority.test.mjs",
+        "tests/vitest/server/process-identity-nonce-capacity.test.mjs",
+        "tests/vitest/server/mcp-installer-device-authorization.test.mjs",
+        "tests/vitest/server/local-secret-crash-consistency.test.mjs",
+        "tests/vitest/server/plugin-mcp-outlet-visibility.test.mjs",
+        "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.mjs",
+        "tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.mjs",
+        "tests/vitest/server/authorization-capability-binding-guard.test.mjs",
+        "tests/vitest/server/console-auth.test.mjs",
+        "tests/vitest/server/runtime-logger.test.mjs",
+        "tests/vitest/server/p2-security-boundaries.test.mjs",
+        "tests/vitest/console/authorization-governance-card-context.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "security.http-resource-admission",
+      "label": "HTTP body admission, proxy trust, bounded rate limiting, and discovery capacity recovery",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "security",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/http-request-body-admission.test.mjs",
+        "tests/vitest/server/http-server-middleware-rate-limit.test.mjs",
+        "tests/vitest/server/client-registry-capacity-recovery.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "foundation.state-machine",
+      "label": "Foundation state machine primitive",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tests/unit/foundation/state-machine.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "agents.model-provider-runtime",
+      "label": "Agent model registry, settings transaction, and credential binding runtime",
+      "owner": "platform",
+      "package": "agents",
+      "level": "security",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/model-provider-runtime.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "console.event-routing",
+      "label": "Console server event routing boundary",
+      "owner": "console",
+      "package": "console",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/console/console-event-router.test.ts",
+        "tests/vitest/console/use-console-shell-integration.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "release.acceptance-unit",
+      "label": "Release acceptance reducer, evidence, and DAG contracts",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/architecture-acceptance-boundaries.test.mjs",
+        "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.mjs",
+        "tests/vitest/server/deployment-lifecycle-state-machine.test.mjs",
+        "tests/vitest/server/mcp-release-manifest.test.mjs",
+        "tests/vitest/server/plugin-runtime.test.mjs",
+        "tests/vitest/server/prepare-release.test.mjs",
+        "tests/vitest/server/operation-proof-evidence-policy.test.mjs",
+        "tests/vitest/server/platform-acceptance-ledger-anchor.test.mjs",
+        "tests/vitest/server/platform-acceptance-generation-store.test.mjs",
+        "tests/vitest/server/plan-receipt-digest.test.mjs",
+        "tests/vitest/server/publish-release-set.test.mjs",
+        "tests/vitest/server/release-authority-baseline.test.mjs",
+        "tests/vitest/server/release-command-dag-runner.test.mjs",
+        "tests/vitest/server/release-evidence-freshness.test.mjs",
+        "tests/vitest/server/release-workflow-supply-chain.test.mjs",
+        "tests/vitest/server/required-report-validator.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.operation-routing",
+      "label": "Indexed HTTP and RPC operation routing contracts",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/operation-route-index.test.mjs",
+        "tests/vitest/server/operation-dispatcher.test.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.operation-dispatch-lock",
+      "label": "Canonical operation dispatcher and lock backend contracts",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/http-server-lifecycle-lock-safety.test.mjs",
+        "tests/vitest/server/http-request-abort-propagation.test.mjs",
+        "tests/vitest/server/http-server-startup-lock-safety.test.mjs",
+        "tests/vitest/server/lock-manager.test.mjs",
+        "tests/vitest/server/maintenance-planner-config-truth.test.mjs",
+        "tests/vitest/server/maintenance-tool-registry.test.mjs",
+        "tests/vitest/server/maintenance-worker-lifecycle.test.mjs",
+        "tests/vitest/server/operation-dispatch-locking.test.mjs",
+        "tests/vitest/server/operation-permission.test.mjs",
+        "tests/vitest/server/operation-state-machine-integration.test.mjs",
+        "tests/vitest/server/protocol-event-bus-subscription-and-persistence.test.mjs",
+        "tests/vitest/server/server-runtime-construction-unwind.test.mjs",
+        "tests/vitest/server/server-runtime-provider-construction-unwind.test.mjs",
+        "tests/vitest/server/sqlite-constructor-unwind.test.mjs",
+        "tests/vitest/server/sqlite-owned-constructor-failure.test.mjs",
+        "tests/vitest/server/sqlite-owned-store-lifecycle.test.mjs",
+        "tests/vitest/server/upstream-gateway-console-provider-wiring.test.mjs",
+        "tests/vitest/server/upstream-gateway-manifest-compiler.test.mjs",
+        "tests/vitest/server/upstream-gateway-manifest-observer.test.mjs",
+        "tests/vitest/server/upstream-gateway-owned-resource-lifecycle.test.mjs",
+        "tests/vitest/server/upstream-publishing-application.test.mjs",
+        "tests/vitest/server/upstream-publishing-http-integration.test.mjs",
+        "tests/vitest/console/upstream-service-publish-client.test.ts",
+        "tests/vitest/console/upstream-service-publish-view.test.ts",
+        "tests/vitest/server/upstream-mcp-gateway.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.job-work-queue-recovery",
+      "label": "Queue application ownership, job workflow, and durable recovery contracts",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/work-queue-application-port.test.mjs",
+        "tests/vitest/server/queued-job-workflow-provider.test.mjs",
+        "tests/vitest/server/work-queue-restart-takeover.test.mjs",
+        "tests/vitest/server/work-queue-worker-lease-fence.test.mjs",
+        "tests/vitest/server/import-worker-canonical-queue.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "gateway.mcp-session-lifecycle",
+      "label": "Managed upstream MCP session and cancellation contracts",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/http-mcp-adapter-cancellation.test.mjs",
+        "tests/vitest/server/mcp-sse-admission.test.mjs",
+        "tests/vitest/server/outbound-egress-policy.test.mjs",
+        "tests/vitest/server/upstream-mcp-session-manager.test.mjs",
+        "tests/vitest/server/upstream-gateway-ssrf.test.mjs",
+        "tests/vitest/server/upstream-gateway-session-cancellation.test.mjs",
+        "tests/vitest/server/mcp-proxy-cancellation.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "gateway.payload-transit",
+      "label": "Representation-neutral upstream streaming and owner-bound artifact transit",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/upstream-payload-contract.test.mjs",
+        "tests/vitest/server/upstream-payload-transit.test.mjs",
+        "tests/vitest/server/upstream-artifact-transit.test.mjs",
+        "tests/vitest/server/upstream-artifact-mcp-projection.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "gateway.performance-observation",
+      "label": "Bounded runtime observation and non-certifying gateway performance reduction",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/gateway-performance-observation.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "gateway.external",
+      "label": "External Gateway policy, lifecycle, server, and console contracts",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "server:verify:external-gateway"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "smoke.start-server-defaults",
+      "label": "Default server startup health and RPC smoke",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "smoke",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-start-server-defaults.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "domains.manifest",
+      "label": "Domains feature-manifest registration and validation",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/feature-manifest.test.mjs",
+        "tests/contract/domains/domain-manifest.test.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "agent-memory.runtime",
+      "label": "Agent memory persistence and compaction verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-agent-memory.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "agents.agent-workspace-schema",
+      "label": "Agent workspace current schema and atomic initialization contracts",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/agent-workspace-schema.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "workspace-asset-management.runtime",
+      "label": "Workspace asset registry and operation projection verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-workspace-asset-management.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "workspace-governance.runtime",
+      "label": "Workspace governance policy and persistence tests",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/workspace-governance.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "communication-service.runtime",
+      "label": "Communication service provider and protocol projection verifier",
+      "owner": "platform",
+      "package": "capabilities",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-communication-service.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "open-platform.capability-audit",
+      "label": "Open platform capability matrix and gap audit",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/verifiers/core-platform-gap-audit.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/core-platform-gap-audit.json"
+      ]
+    },
+    {
+      "id": "open-platform.surface-convergence",
+      "label": "Open platform feature operation protocol console and verifier convergence",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-core-platform-surface-convergence.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/core-platform-surface-convergence.json"
+      ]
+    },
+    {
+      "id": "open-platform.documentation-convergence",
+      "label": "Open platform documentation and verifier command convergence",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-core-platform-documentation-convergence.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/core-platform-documentation-convergence.json"
+      ]
+    },
+    {
+      "id": "open-platform.private-deployment-e2e",
+      "label": "Private deployment open platform aggregate E2E verifier",
+      "owner": "platform",
+      "package": "repo",
+      "level": "e2e",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/private-deployment-open-platform-e2e.json"
+      ]
+    },
+    {
+      "id": "workspace.core-file-ops",
+      "label": "Core workspace file operations verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-workspace-file-ops.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "strategy-management.runtime",
+      "label": "Strategy Management registry, policy, dispatch, and catalog verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-strategy-management.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "agent-gateway.runtime",
+      "label": "Agent Gateway registry, catalog, and controlled-call verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-agent-gateway.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "model-routing.runtime",
+      "label": "Model Routing registry, ledger, and health verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-model-routing.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "agent-management.runtime",
+      "label": "Agent Management registry, catalog, and model-library CRUD verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-agent-management.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "maintenance-agent.runtime",
+      "label": "Maintenance Agent registry, catalog, and runbook verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-maintenance-agent.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "execution-sandbox.provider-resolution",
+      "label": "Controlled execution sandbox trusted provider resolution",
+      "owner": "platform-security",
+      "package": "server-runtime",
+      "level": "security",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/trusted-sandbox-provider-resolver.test.mjs",
+        "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.mjs",
+        "tests/vitest/server/oci-sandbox-backend.test.mjs",
+        "tests/vitest/server/sandbox-configured-workload.test.mjs",
+        "tests/vitest/server/sandbox-streaming-input.test.mjs",
+        "tests/vitest/server/opaque-sandbox-custody.test.mjs",
+        "tests/vitest/server/execution-launcher-boundary.test.mjs",
+        "tests/vitest/server/controlled-execution-sandbox.test.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "execution-sandbox.controlled-runtime",
+      "label": "Controlled execution sandbox default-deny and lifecycle verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-controlled-execution-sandbox.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "standard",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/controlled-execution-sandbox.json",
+        "build/reports/execution-sandbox-oci-conformance.json",
+        "build/reports/opaque-sandbox-custody.json",
+        "build/reports/execution-launcher-boundary.json"
+      ]
+    },
+    {
+      "id": "execution-sandbox.convergence-final",
+      "label": "Controlled Execution Convergence final reducer",
+      "owner": "platform-security",
+      "package": "server-runtime",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-controlled-execution-convergence.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/controlled-execution-convergence-final.json"
+      ]
+    },
+    {
+      "id": "upstream-gateway.e2e",
+      "label": "Upstream Gateway registration, MCP forwarding, and destructive-input verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upstream-gateway-e2e.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/upstream-gateway-e2e.json"
+      ]
+    },
+    {
+      "id": "upstream-gateway.service-publishing",
+      "label": "Upstream Service Publishing production composition and neutral protocol peer verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upstream-service-publishing.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/upstream-service-publishing.json"
+      ]
+    },
+    {
+      "id": "upstream-gateway.external-compatibility",
+      "label": "Optional upstream gateway real external HTTPS compatibility probe (opt in with LICO_UPSTREAM_EXTERNAL_COMPAT=1)",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upstream-gateway-external-compatibility.mjs"
+      ],
+      "sideEffects": "network-service",
+      "timeoutClass": "standard",
+      "requiredServices": [
+        "external-https-endpoint"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/upstream-gateway-external-compatibility.json"
+      ]
+    },
+    {
+      "id": "upstream-gateway.mcp-e2e",
+      "label": "Upstream MCP Gateway stdio-to-downstream-MCP verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/upstream-mcp-gateway-e2e.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.completeness-audit",
+      "label": "Downstream MCP operation projection completeness audit",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/verifiers/downstream-mcp-completeness-audit.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/downstream-mcp-completeness-audit.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.authorization-request-filters",
+      "label": "Downstream MCP authorization request filter verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-authorization-request-filters.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-authorization-request-filters.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.external-http-boundary",
+      "label": "Operation Permission external HTTP grant-token boundary verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-operation-permission-external-http-boundary.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/operation-permission-external-http-boundary.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.installer-convergence",
+      "label": "Downstream MCP installer and doctor convergence verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-installer-convergence.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-installer-convergence.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.release-target-scope",
+      "label": "Downstream MCP release target scope verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-release-target-scope.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-release-target-scope.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.release-portable-assembly",
+      "label": "Downstream MCP release portable assembly verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-release-portable-assembly.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-release-portable-assembly.json"
+      ]
+    },
+    {
+      "id": "architecture.facts",
+      "label": "Canonical architecture fact registry verifier",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-architecture-facts.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "governance.organization-model",
+      "label": "Organization model governance verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-organization-model.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "governance.agent-session",
+      "label": "Agent session governance verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-agent-session-governance.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.trace-context",
+      "label": "Trace context propagation verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-trace-context.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.unified-registration",
+      "label": "Unified runtime registration verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-unified-registration.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "release.acceptance-ledger-anchor",
+      "label": "Release acceptance proof-substrate ledger anchor verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-acceptance-ledger-anchor.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.operation-proof-substrate",
+      "label": "Operation proof substrate verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-operation-proof-substrate.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "foundation.merkle-state-substrate",
+      "label": "Foundation Merkle state substrate verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-merkle-state-substrate.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.recovery-export-privacy",
+      "label": "Runtime recovery export secret-exclusion verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-runtime-recovery-export.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "workspace.proposal-protocol",
+      "label": "Workspace proposal protocol verifier",
+      "owner": "platform",
+      "package": "agents",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-workspace-proposal-protocol.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "downstream-client.aspect",
+      "label": "Downstream client aspect assembly verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-downstream-client-aspect.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "jobs.work-queue-postgres-container",
+      "label": "PostgreSQL work queue container conformance verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-work-queue-postgres-container.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "release.npm-package-installability",
+      "label": "npm release-set clean-install, CLI, and headless runtime verifier",
+      "owner": "platform",
+      "package": "root",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-npm-package-installability.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker",
+        "npm-registry"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/npm-package-installability.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.client-identity-proof",
+      "label": "Downstream MCP client process identity proof verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-client-identity-proof.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-client-identity-proof.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.process-identity-credential-store",
+      "label": "Downstream MCP process identity credential store verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-process-identity-credential-store.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.proxy-transport",
+      "label": "Downstream MCP real proxy stdio transport verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-mcp-proxy-transport.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/mcp-proxy-transport.json"
+      ]
+    },
+    {
+      "id": "upstream-gateway.fixture-transit",
+      "label": "Self-contained upstream fixture REST and MCP transit verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upstream-fixture-transit.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/upstream-fixture-transit.json"
+      ]
+    },
+    {
+      "id": "downstream-mcp.agent-tool-loop",
+      "label": "Deterministic downstream agent tool loop over real proxy client targets verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-downstream-agent-tool-loop.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/downstream-agent-tool-loop.json"
+      ]
+    },
+    {
+      "id": "container.deployment-flow",
+      "label": "Container compose build, startup, MCP baseline, and cleanup verifier",
+      "owner": "platform",
+      "package": "deployment",
+      "level": "e2e",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-deployment-container-flow.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/deployment-container-flow.json",
+        "build/reports/npm-artifact-cache.json"
+      ]
+    },
+    {
+      "id": "storage.backup-restore",
+      "label": "Storage backup and restore operation verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-backup-restore.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "storage.production-restore-drill",
+      "label": "Storage production restore drill verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-storage-production-restore-drill.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/storage-production-restore-drill/latest.json"
+      ]
+    },
+    {
+      "id": "jobs.work-queue",
+      "label": "Queued job workflow and work queue verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-job-work-queue.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "jobs.work-queue-capacity",
+      "label": "Job work queue capacity and slow-consumer verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-job-work-queue-capacity.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/job-work-queue-capacity.json"
+      ]
+    },
+    {
+      "id": "jobs.work-queue-conformance",
+      "label": "Work queue state machine and conformance verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-work-queue-conformance.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "jobs.work-queue-process-restart",
+      "label": "Work queue fresh-process restart and lease takeover verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-work-queue-process-restart.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/work-queue-process-restart.json"
+      ]
+    },
+    {
+      "id": "jobs.upload-workspace-materialization",
+      "label": "Governed upload session to workspace materialization verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upload-workspace-materialization.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/upload-workspace-materialization.json"
+      ]
+    },
+    {
+      "id": "governance.tag-management",
+      "label": "Tag management migration, store, catalog, and audit verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-tag-management.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "governance.operation-permission-tag-audit",
+      "label": "Operation Permission and tag governance boundary audit",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-operation-permission-tag-governance-audit.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/operation-permission-tag-governance-audit.json"
+      ]
+    },
+    {
+      "id": "governance.operation-permission-universal-tag-policy",
+      "label": "Operation Permission universal tag policy verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-operation-permission-universal-tag-policy.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/operation-permission-universal-tag-policy.json"
+      ]
+    },
+    {
+      "id": "governance.operation-permission-protocol-consistency",
+      "label": "Operation Permission HTTP RPC MCP and console consistency verifier",
+      "owner": "platform",
+      "package": "protocols",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-operation-permission-protocol-consistency.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/operation-permission-protocol-consistency.json"
+      ]
+    },
+    {
+      "id": "governance.operation-permission-tag-governed-e2e",
+      "label": "Operation Permission tag-governed product capability E2E verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-operation-permission-tag-governed-e2e.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/operation-permission-tag-governed-e2e.json"
+      ]
+    },
+    {
+      "id": "governance.authorization-coverage",
+      "label": "Enterprise authorization governance coverage verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-authorization-governance.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/enterprise-governance-coverage.json"
+      ]
+    },
+    {
+      "id": "governance.enterprise-authorization-enforcement",
+      "label": "Enterprise authorization approval and grant enforcement verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-enterprise-authorization-enforcement.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/enterprise-authorization-enforcement.json"
+      ]
+    },
+    {
+      "id": "governance.enterprise-audit-retention-redaction",
+      "label": "Enterprise audit retention export prune and redaction verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-enterprise-audit-retention-redaction.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/enterprise-audit-retention-redaction.json"
+      ]
+    },
+    {
+      "id": "governance.enterprise-observability-coverage",
+      "label": "Enterprise metrics health trace observability verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-enterprise-observability-coverage.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/enterprise-observability-coverage.json"
+      ]
+    },
+    {
+      "id": "security-alert.lifecycle",
+      "label": "Security alert lifecycle redaction and retention verifier",
+      "owner": "platform-security",
+      "package": "foundation",
+      "level": "security",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-security-alert-lifecycle.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/security-alert-lifecycle.json"
+      ]
+    },
+    {
+      "id": "console.administration-coverage",
+      "label": "Console administration workflow coverage verifier",
+      "owner": "console",
+      "package": "console",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-console-administration-coverage.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/console-administration-coverage.json"
+      ]
+    },
+    {
+      "id": "console.gateway-mcp-workflows",
+      "label": "Console gateway and MCP workflow verifier",
+      "owner": "console",
+      "package": "console",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-console-gateway-mcp-workflows.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/console-gateway-mcp-workflows.json"
+      ]
+    },
+    {
+      "id": "governance.production-health-console",
+      "label": "Production health operation and console wiring verifier",
+      "owner": "platform",
+      "package": "console",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-production-health-console.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "observability.semantic-baseline",
+      "label": "Observability semantic convention baseline verifier",
+      "owner": "platform",
+      "package": "foundation",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-observability-semantics.mjs"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/observability-semantics.json"
+      ]
+    },
+    {
+      "id": "approval-governance",
+      "label": "Approval governance terminal-outcome verifier",
+      "owner": "platform",
+      "package": "capabilities",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-approval-governance.mjs"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/approval-governance.json"
+      ]
+    }
+  ]
+}

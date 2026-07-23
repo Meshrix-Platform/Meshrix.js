@@ -1,0 +1,29 @@
+{
+  "name": "@lico/capabilities",
+  "version": "0.0.1",
+  "description": "LicoMesh operation permission and runtime capabilities",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "packages/capabilities"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@lico/contracts": "0.0.1",
+    "@lico/foundation": "0.0.1",
+    "@lico/protocols": "0.0.1"
+  },
+  "exports": {
+    "./*": "./src/*.mjs"
+  },
+  "files": [
+    "src/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}
