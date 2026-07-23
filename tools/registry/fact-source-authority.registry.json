@@ -364,7 +364,7 @@
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [
         "build/reports/controlled-execution-convergence-final.json",
-        "docs/plans/end-to-end-release/capability-runtime/controlled-execution-convergence/Checkpoints.json"
+        "docs/plans/end-to-end-release/current-baseline/Checkpoints.json"
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-controlled-execution-convergence.mjs",

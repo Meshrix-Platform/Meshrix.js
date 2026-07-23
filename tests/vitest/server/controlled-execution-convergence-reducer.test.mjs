@@ -29,7 +29,8 @@ function binding(plan, finalNodeId = "fixture-final") {
     repositoryTreeDigest: treeDigest,
     proofProvider: "pactium.operation-proof-substrate",
     proofVerified: true,
-    privacySafe: true
+    privacySafe: true,
+    profiles: ["local", "ha", "scale", "regional-dr"],
   };
 }
 
@@ -55,13 +56,13 @@ function fixture() {
     generatedAt: "2026-01-01T00:00:00.000Z",
     sourceContext: sourceContext(),
     plan: {
-      finalNodeId: "31000000-0000-4000-8000-000000000047",
+      directory: "end-to-end-release/current-baseline",
+      finalNodeId: "fixture-final",
       status: "completed",
-      requirements: Array.from({ length: 10 }, (_, index) => `REQ-${index}`),
+      requirements: Array.from({ length: 11 }, (_, index) => `REQ-${index}`),
       criteriaChecked: true
     },
-    planReceipt: binding("controlled", "31000000-0000-4000-8000-000000000047"),
-    prerequisiteReceipts: Array.from({ length: 7 }, (_, index) => binding(`prerequisite-${index}`)),
+    planReceipt: binding("end-to-end-release/current-baseline"),
     leafReports: Object.fromEntries(CONTROLLED_EXECUTION_LEAF_SPECS.map((spec) => [spec.key, leaf(spec)]))
   };
 }
@@ -71,7 +72,7 @@ describe("controlled execution convergence reducer", () => {
     const report = reduceControlledExecutionConvergence(fixture());
     expect(report.summary).toEqual({
       controlledExecutionConvergenceReady: true,
-      prerequisiteReceiptCount: 7,
+      baselineReceiptProfileCount: 4,
       leafReportCount: 4,
       reportLeakScan: true
     });
@@ -85,7 +86,7 @@ describe("controlled execution convergence reducer", () => {
     ["privacy unsafe", (input) => {
       input.leafReports.custody.privatePath = ["", "Users", "example", "private"].join("/");
     }, "privacy-unsafe"],
-    ["missing proof", (input) => { input.prerequisiteReceipts[0].proofVerified = false; }, "is not current"],
+    ["missing proof", (input) => { input.planReceipt.proofVerified = false; }, "is not current"],
     ["non-Linux provider", (input) => { input.leafReports.oci.checks.linuxRuntime = false; }, "not verified on Linux"],
     ["incomplete cleanup", (input) => { input.leafReports.oci.checks.independentInstancesDestroyed = false; }, "cleanup is incomplete"]
   ]) {

@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,6 +18,15 @@ import {
   assertReceiptPlanCurrent,
   canonicalDigest
 } from "./plan-final-receipt.mjs";
+import {
+  acceptedFinalReceipt,
+  acceptedFinalReceiptEntries,
+  assertCurrentDependencyMapShape,
+  finalValidationBinding,
+  normalizePlanProfiles,
+  planReceiptKey,
+  profilesContain,
+} from "./plan-dependency-map.mjs";
 
 const COMMAND_DAG_DIGEST = reportPayloadDigest({
   commands: PLATFORM_ACCEPTANCE_COMMANDS.map(({ id, dependsOn, ownedReports, resourceLocks, timeoutMs }) => ({
@@ -48,8 +58,17 @@ export function planReceiptSourceTreeExclusions(repoRoot) {
 }
 
 export function planReceiptSourceTreeDigest(repoRoot) {
+  const committedTree = spawnSync("git", ["ls-tree", "-r", "-z", "--full-tree", "HEAD"], {
+    cwd: repoRoot,
+    encoding: "buffer",
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (committedTree.status === 0) {
+    return `sha256:${crypto.createHash("sha256").update(committedTree.stdout).digest("hex")}`;
+  }
   return currentSourceTreeDigest(repoRoot, {
-    exclude: planReceiptSourceTreeExclusions(repoRoot)
+    exclude: planReceiptSourceTreeExclusions(repoRoot),
   });
 }
 
@@ -132,38 +151,28 @@ export function planReceiptBuildContext({
   planText,
   checkpointsText,
   finalNode,
-  selectedProfile,
   dependencyMap,
-  candidateReceiptPlans = new Set()
+  candidateReceiptKeys = new Set()
 }) {
   const planRoot = path.join(repoRoot, "docs", "plans");
   normalizePlanDirectory(planDirectory);
+  assertCurrentDependencyMapShape(dependencyMap);
+  const targetBinding = finalValidationBinding(mapPlan, finalNode?.id);
   const repositoryRevision = spawnSync("git", ["rev-parse", "HEAD"], {
     cwd: repoRoot,
     encoding: "utf8",
     windowsHide: true
   }).stdout?.trim() || "";
   const repositoryTreeDigest = planReceiptSourceTreeDigest(repoRoot);
-  const prerequisiteReceiptsByPlan = Object.fromEntries(
-    dependencyMap.plans.map((plan) => [plan.directory, plan.accepted_final_receipt || null])
+  const prerequisiteReceiptsByKey = Object.fromEntries(
+    dependencyMap.plans.flatMap((plan) =>
+      acceptedFinalReceiptEntries(plan)
+        .filter(({ receipt }) => receipt)
+        .map(({ binding, receipt }) => [
+          planReceiptKey(plan.directory, binding.node_id),
+          receipt,
+        ]))
   );
-  const prerequisiteContractReceiptsByKey = Object.fromEntries(
-    (mapPlan.prerequisite_receipts || [])
-      .filter((receipt) => receipt.kind === "contract")
-      .map((receipt) => {
-        const { planPath: prerequisitePath } = resolveContainedPlanDirectory(planRoot, receipt.plan);
-        const checkpoints = JSON.parse(fs.readFileSync(path.join(prerequisitePath, "Checkpoints.json"), "utf8"));
-        const node = checkpoints.find((candidate) => candidate.id === receipt.node_id);
-        const key = `${receipt.plan}\u0000${receipt.node_id}\u0000${receipt.kind}`;
-        return [key, createPlanContractReceipt({
-          plan: receipt.plan,
-          nodeId: receipt.node_id,
-          node
-        })];
-      })
-  );
-  const validatedFinalPlans = new Set();
-  const validatingFinalPlans = new Set();
   const contractReceiptsFor = (plan) => Object.fromEntries(
     (plan.prerequisite_receipts || [])
       .filter((entry) => entry.kind === "contract")
@@ -171,27 +180,38 @@ export function planReceiptBuildContext({
         const { planPath: contractPath } = resolveContainedPlanDirectory(planRoot, entry.plan);
         const contractNode = JSON.parse(fs.readFileSync(path.join(contractPath, "Checkpoints.json"), "utf8"))
           .find((node) => node.id === entry.node_id);
-        return [`${entry.plan}\u0000${entry.node_id}\u0000${entry.kind}`, createPlanContractReceipt({ plan: entry.plan, nodeId: entry.node_id, node: contractNode })];
+        return [planReceiptKey(entry.plan, entry.node_id, entry.kind),
+          createPlanContractReceipt({ plan: entry.plan, nodeId: entry.node_id, node: contractNode })];
       })
   );
-  const validateFinalPlan = (directory) => {
-    if (validatedFinalPlans.has(directory)) return;
-    if (validatingFinalPlans.has(directory)) throw new Error("Prerequisite final receipt graph contains a cycle");
-    validatingFinalPlans.add(directory);
+  const prerequisiteContractReceiptsByKey = contractReceiptsFor(mapPlan);
+  const validatedFinalReceipts = new Set();
+  const validatingFinalReceipts = new Set();
+  const validateFinalReceipt = (directory, finalNodeId) => {
+    const key = planReceiptKey(directory, finalNodeId);
+    if (validatedFinalReceipts.has(key)) return;
+    if (validatingFinalReceipts.has(key)) throw new Error("Prerequisite final receipt graph contains a cycle");
+    validatingFinalReceipts.add(key);
     const provider = dependencyMap.plans.find((plan) => plan.directory === directory);
     if (!provider) throw new Error("Prerequisite final receipt Plan is missing from DependencyMap");
+    const providerBinding = finalValidationBinding(provider, finalNodeId);
     for (const receipt of provider.prerequisite_receipts || []) {
-      if (receipt.kind === "final_validation") validateFinalPlan(receipt.plan);
+      const profiles = normalizePlanProfiles(receipt.profiles, "Prerequisite receipt profiles are invalid");
+      if (!profiles.some((profile) => providerBinding.profiles.includes(profile))) continue;
+      if (!profilesContain(providerBinding.profiles, profiles)) {
+        throw new Error("Prerequisite receipt spans more than one final-validation profile owner");
+      }
+      if (receipt.kind === "final_validation") validateFinalReceipt(receipt.plan, receipt.node_id);
     }
-    const accepted = provider.accepted_final_receipt;
+    const accepted = acceptedFinalReceipt(provider, finalNodeId);
     if (!accepted) throw new Error("Prerequisite final receipt is missing");
     const { planPath: prerequisitePath } = resolveContainedPlanDirectory(planRoot, directory);
     const prerequisitePlanText = loadPlanAuthorityTextSync(planRoot, directory);
     const prerequisiteCheckpointsText = fs.readFileSync(path.join(prerequisitePath, "Checkpoints.json"), "utf8");
     const prerequisiteFinalNode = JSON.parse(prerequisiteCheckpointsText)
-      .find((node) => node.id === provider.final_validation_node_id);
+      .find((node) => node.id === finalNodeId);
     if (!prerequisiteFinalNode) throw new Error("Prerequisite final receipt node is missing");
-    const assertion = candidateReceiptPlans.has(directory)
+    const assertion = candidateReceiptKeys.has(key)
       ? assertReceiptCandidateCurrent
       : assertReceiptPlanCurrent;
     assertion(accepted, {
@@ -200,20 +220,24 @@ export function planReceiptBuildContext({
       planText: prerequisitePlanText,
       checkpointsText: prerequisiteCheckpointsText,
       finalNode: prerequisiteFinalNode,
-      selectedProfile: accepted.selected_profile,
       repositoryRevision,
       repositoryTreeDigest,
       commandDagDigest: COMMAND_DAG_DIGEST,
       ownedReportsInventoryDigest: OWNED_REPORTS_INVENTORY_DIGEST,
-      prerequisiteReceiptsByPlan,
+      prerequisiteReceiptsByKey,
       prerequisiteContractReceiptsByKey: contractReceiptsFor(provider),
-      candidateReceiptPlans
+      candidateReceiptKeys
     });
-    validatingFinalPlans.delete(directory);
-    validatedFinalPlans.add(directory);
+    validatingFinalReceipts.delete(key);
+    validatedFinalReceipts.add(key);
   };
   for (const receipt of mapPlan.prerequisite_receipts || []) {
-    if (receipt.kind === "final_validation") validateFinalPlan(receipt.plan);
+    const profiles = normalizePlanProfiles(receipt.profiles, "Prerequisite receipt profiles are invalid");
+    if (!profiles.some((profile) => targetBinding.profiles.includes(profile))) continue;
+    if (!profilesContain(targetBinding.profiles, profiles)) {
+      throw new Error("Prerequisite receipt spans more than one final-validation profile owner");
+    }
+    if (receipt.kind === "final_validation") validateFinalReceipt(receipt.plan, receipt.node_id);
   }
   return {
     planDirectory,
@@ -221,13 +245,12 @@ export function planReceiptBuildContext({
     planText,
     checkpointsText,
     finalNode,
-    selectedProfile,
     repositoryRevision,
     repositoryTreeDigest,
     commandDagDigest: COMMAND_DAG_DIGEST,
     ownedReportsInventoryDigest: OWNED_REPORTS_INVENTORY_DIGEST,
-    prerequisiteReceiptsByPlan,
+    prerequisiteReceiptsByKey,
     prerequisiteContractReceiptsByKey,
-    candidateReceiptPlans
+    candidateReceiptKeys
   };
 }

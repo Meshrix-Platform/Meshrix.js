@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { verifyEndToEndReleasePlan } from "../plan/verify-end-to-end-release-plan.mjs";
 import { verifyOrganizationClosure } from "../plan/verify-organization-closure.mjs";
+import { validateCanonicalBetterPlanWorkspace } from "../plan/canonical-better-plan-validator.mjs";
 import { assertNoLeak as assertNoSensitiveLeak } from "./lib/report-evidence-safety.mjs";
 
 const modulePath = fileURLToPath(import.meta.url);
@@ -91,30 +92,30 @@ const REQUIRED_FACT_AUTHORITY_KEYS = Object.freeze({
 });
 
 const CAPABILITY_OWNERS = Object.freeze({
-  "upstream-gateway": ["agents-and-protocols", "packages/agents/src/upstream-gateway/index.mjs", "docs/plans/end-to-end-release/gateway-distribution", "10000000-0000-4000-8000-000000000172", "upstream-service-publishing"],
-  "downstream-mcp": ["agents-and-protocols", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "docs/plans/end-to-end-release/gateway-distribution/downstream-mcp", "10000000-0000-4000-8000-000000000179", "downstream-mcp-gateway"],
-  "strategy-management": ["cross-cutting-governance", "packages/server-runtime/src/composition/strategy-management-provider.mjs", "docs/plans/end-to-end-release/operator-administration", "34000000-0000-4000-8000-000000000030", "strategy-management"],
-  "enterprise-governance": ["foundation", "packages/foundation/src/security/authorization/authorization-engine.mjs", "docs/plans/end-to-end-release/platform-foundation/observability-alerts-reporting", "10000000-0000-4000-8000-000000000091", ["operation-permission-authorization", "observability-alerts-reporting"]],
-  "console-administration": ["ui-console", "apps/console/router/admin-route-registry.mjs", "docs/plans/end-to-end-release/operator-administration/console-administration", "10000000-0000-4000-8000-000000000289", "console-administration"],
-  "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plans/end-to-end-release/deployment", "34000000-0000-4000-8000-000000000040", "container-deployment-resumability"],
-  storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.mjs", "docs/plans/end-to-end-release/platform-foundation/storage-backup", "10000000-0000-4000-8000-000000000076", "storage-backup-runtime"],
-  jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.mjs", "docs/plans/end-to-end-release/platform-foundation/jobs-work-queues", "10000000-0000-4000-8000-000000000083", "jobs-work-queue-runtime"],
-  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.mjs", "docs/plans/end-to-end-release/capability-runtime/plugin-runtime", "34000000-0000-4000-8000-000000000001", "plugin-runtime-and-module-system"],
-  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.mjs", "docs/plans/end-to-end-release/operator-administration", "34000000-0000-4000-8000-000000000031", "agent-gateway-model-routing"],
-  "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.mjs", "docs/plans/end-to-end-release/capability-runtime", "34000000-0000-4000-8000-000000000020", "core-workspace-assets-governance"],
+  "upstream-gateway": ["agents-and-protocols", "packages/agents/src/upstream-gateway/index.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-UPSTREAM-GATEWAY", "upstream-service-publishing"],
+  "downstream-mcp": ["agents-and-protocols", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-DOWNSTREAM-MCP", "downstream-mcp-gateway"],
+  "strategy-management": ["cross-cutting-governance", "packages/server-runtime/src/composition/strategy-management-provider.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-STRATEGY-MANAGEMENT", "strategy-management"],
+  "enterprise-governance": ["foundation", "packages/foundation/src/security/authorization/authorization-engine.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-ENTERPRISE-GOVERNANCE", ["operation-permission-authorization", "observability-alerts-reporting"]],
+  "console-administration": ["ui-console", "apps/console/router/admin-route-registry.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-CONSOLE-ADMINISTRATION", "console-administration"],
+  "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-CONTAINER-DEPLOYMENT", "container-deployment-resumability"],
+  storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-STORAGE", "storage-backup-runtime"],
+  jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-JOBS", "jobs-work-queue-runtime"],
+  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING", "plugin-runtime-and-module-system"],
+  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING", "agent-gateway-model-routing"],
+  "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.mjs", "docs/plans/end-to-end-release/current-baseline", "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE", "core-workspace-assets-governance"],
 });
 
 const ORGANIZATION_ROOT_FACTS = Object.freeze({
   "application-entry": ["application-entry", "apps/server/bin/lico.mjs",
     "docs/functionality/SERVER-RUNTIME.md", "docs/plans/end-to-end-release",
-    "10000000-0000-4000-8000-000000000004", "tools/server-scripts/verify-composition-source.mjs",
+    "REQ-REL-BASELINE", "tools/server-scripts/verify-composition-source.mjs",
     "state-machine-governance"],
   "server-runtime-composition": ["runtime-composition", "packages/server-runtime/src/composition/index.mjs",
     "docs/functionality/SERVER-RUNTIME.md", "docs/plans/end-to-end-release",
-    "10000000-0000-4000-8000-000000000005", "tools/server-scripts/verify-composition-source.mjs",
+    "REQ-REL-BASELINE", "tools/server-scripts/verify-composition-source.mjs",
     "state-machine-governance"],
   "public-contracts": ["contracts", OPERATION_REGISTRY_PATH, "docs/protocols/PROTOCOLS.md",
-    "docs/plans/end-to-end-release", "10000000-0000-4000-8000-000000000008",
+    "docs/plans/end-to-end-release", "REQ-REL-BASELINE",
     "tools/server-scripts/verify-operation-permission-protocol-consistency.mjs",
     "operation-permission-authorization"],
 });
@@ -204,6 +205,11 @@ function authorityTextContainsIdentity(texts, identity) {
   return texts.some((text) => textContainsIdentity(text, identity));
 }
 
+function checkpointForSelector(checkpoints, selector) {
+  return checkpoints.find((checkpoint) =>
+    checkpoint?.id === selector || checkpoint?.requirements?.includes(selector));
+}
+
 function safeResult(result) {
   if (!result || result.schema_version !== VALIDATION_SCHEMA || typeof result.checks !== "object") return null;
   const checks = Object.fromEntries(CHECK_NAMES.map((name) => [name, result.checks[name] === true]));
@@ -266,8 +272,9 @@ async function organizationClosure({ repoRoot, matrix, readRepositoryFile, enume
       source_digest: `${matrix.schemaVersion}:${capability}`,
     });
     const checkpoints = parseRepositoryJson(await readRepositoryFile(`${planOwner}/Checkpoints.json`));
-    planFacts.push(checkpoints.some((checkpoint) => checkpoint?.id === planNode)
-      ? { capability, plan_owner: planOwner, plan_node: planNode }
+    const checkpoint = checkpointForSelector(checkpoints, planNode);
+    planFacts.push(checkpoint
+      ? { capability, plan_owner: planOwner, plan_node: checkpoint.id }
       : { capability, plan_node: planNode });
     registries.push({ capability, registry_identities: [CAPABILITY_MATRIX_PATH] });
   }
@@ -343,8 +350,9 @@ async function organizationClosure({ repoRoot, matrix, readRepositoryFile, enume
     });
     const checkpoints = await readRepositoryFile(`${planOwner}/Checkpoints.json`)
       .then(parseRepositoryJson).catch(() => []);
-    planFacts.push(checkpoints.some((checkpoint) => checkpoint?.id === planNode)
-      ? { capability: entry.id, plan_owner: planOwner, plan_node: planNode }
+    const checkpoint = checkpointForSelector(checkpoints, planNode);
+    planFacts.push(checkpoint
+      ? { capability: entry.id, plan_owner: planOwner, plan_node: checkpoint.id }
       : { capability: entry.id, plan_node: planNode });
     registries.push({
       capability: entry.id,
@@ -382,10 +390,24 @@ async function defaultCustomValidator({ repoRoot, readRepositoryFile, enumerateP
   return { schema_version: VALIDATION_SCHEMA, accepted: checksAccepted(checks), checks, closure };
 }
 
-async function defaultCanonicalValidator({ repoRoot, writeReport = false, requireCompletedReceipts = false }) {
-  await verifyEndToEndReleasePlan({ repoRoot, writeReport, requireCompletedReceipts });
-  const checks = Object.fromEntries(CHECK_NAMES.map((name) => [name, true]));
-  return { schema_version: VALIDATION_SCHEMA, accepted: true, checks };
+async function defaultCanonicalValidator({ repoRoot, writeReport = false, requireCompletedReceipts = true }) {
+  const workspace = await validateCanonicalBetterPlanWorkspace({ repoRoot });
+  let graphAccepted = false;
+  try {
+    await verifyEndToEndReleasePlan({ repoRoot, writeReport, requireCompletedReceipts });
+    graphAccepted = true;
+  } catch {
+    graphAccepted = false;
+  }
+  const checks = {
+    ...workspace.checks,
+    graph: workspace.checks.graph && graphAccepted,
+  };
+  return {
+    schema_version: VALIDATION_SCHEMA,
+    accepted: Object.values(checks).every(Boolean),
+    checks,
+  };
 }
 
 async function defaultReadLocalInfoHygieneReport(relativePath, repoRoot) {
@@ -430,12 +452,13 @@ export async function verifyBetterPlan(options = {}) {
     ((relativePath) => defaultReadLocalInfoHygieneReport(relativePath, repoRoot));
   const now = options.now ?? Date.now;
   const maxAgeMs = options.localInfoHygieneMaxAgeMs ?? DEFAULT_LOCAL_INFO_HYGIENE_MAX_AGE_MS;
+  const requireCompletedReceipts = options.requireCompletedReceipts !== false;
   const observedNow = Number(now());
 
   const outcomes = await Promise.allSettled([
-    customValidator({ repoRoot, writeReport: false, requireCompletedReceipts: false,
+    customValidator({ repoRoot, writeReport: false, requireCompletedReceipts,
       readRepositoryFile, enumeratePublicSourceRoots }),
-    canonicalValidator({ repoRoot, writeReport: false, requireCompletedReceipts: false }),
+    canonicalValidator({ repoRoot, writeReport: false, requireCompletedReceipts }),
     readLocalInfoHygieneReport(LOCAL_INFO_HYGIENE_REPORT_PATH),
   ]);
   const rawCustom = outcomes[0].status === "fulfilled" ? outcomes[0].value : null;

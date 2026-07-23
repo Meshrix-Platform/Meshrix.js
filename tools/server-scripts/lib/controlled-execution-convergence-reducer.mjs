@@ -53,20 +53,23 @@ export function reduceControlledExecutionConvergence({
   plan,
   sourceContext,
   planReceipt,
-  prerequisiteReceipts,
   leafReports
 } = {}) {
-  requireCondition(plan?.finalNodeId === "31000000-0000-4000-8000-000000000047", "Controlled execution final node is mismatched");
+  requireCondition(
+    plan?.directory === "end-to-end-release/current-baseline" &&
+      plan?.finalNodeId === planReceipt?.finalNodeId,
+    "Current Baseline final node is mismatched",
+  );
   requireCondition(plan?.status === "completed", "Controlled execution final node is not completed");
-  requireCondition(Array.isArray(plan.requirements) && plan.requirements.length === 10, "Controlled execution requirements are incomplete");
+  requireCondition(Array.isArray(plan.requirements) && plan.requirements.length === 11,
+    "Current Baseline requirements are incomplete");
   requireCondition(plan.criteriaChecked === true, "Controlled execution acceptance criteria are incomplete");
   requireCondition(planReceipt?.finalNodeId === plan.finalNodeId && planReceipt?.proofVerified === true, "Controlled execution Plan receipt is not current");
   requireCondition(planReceipt?.privacySafe === true, "Controlled execution Plan receipt is privacy-unsafe");
-  requireCondition(Array.isArray(prerequisiteReceipts) && prerequisiteReceipts.length === 7, "Controlled execution prerequisite receipt set is incomplete");
-  for (const binding of prerequisiteReceipts) {
-    requireCondition(binding?.proofVerified === true && binding?.privacySafe === true, `Prerequisite receipt ${binding?.plan || "unknown"} is not current`);
-    requireCondition(/^[a-f0-9]{64}$/u.test(String(binding.receiptDigest || "")), "Prerequisite receipt digest is invalid");
-  }
+  requireCondition(
+    Array.isArray(planReceipt?.profiles) && planReceipt.profiles.includes("local"),
+    "Current Baseline local profile receipt is missing",
+  );
   const leafEvidence = [];
   for (const spec of CONTROLLED_EXECUTION_LEAF_SPECS) {
     const report = leafReports?.[spec.key];
@@ -96,12 +99,11 @@ export function reduceControlledExecutionConvergence({
     generatedAt: String(generatedAt || ""),
     sourceContext,
     plan,
-    planReceipt,
-    prerequisiteReceipts: [...prerequisiteReceipts],
+    baselineReceipt: planReceipt,
     leafEvidence,
     summary: {
       controlledExecutionConvergenceReady: true,
-      prerequisiteReceiptCount: prerequisiteReceipts.length,
+      baselineReceiptProfileCount: planReceipt.profiles.length,
       leafReportCount: leafEvidence.length,
       reportLeakScan: true
     }

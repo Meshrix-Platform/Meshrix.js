@@ -40,33 +40,45 @@ function planFixture() {
     { directory: "release/windows", checkpoints: "release/windows/Checkpoints.json" },
   ];
   const dependencyMap = {
+    schema_version: 3,
     plans: [
       {
         directory: "release",
         parent: null,
         parent_contract_node_id: null,
-        parent_integration_node_id: null,
-        final_validation_node_id: "root-final",
+        parent_integrations: [],
+        final_validations: [{ node_id: "root-final", profiles: ["ha", "local", "regional-dr", "scale"] }],
         prerequisite_receipts: [],
         children: ["release/macos", "release/windows"],
+        accepted_final_receipts: {},
       },
       {
         directory: "release/macos",
         parent: "release",
         parent_contract_node_id: "root-contract",
-        parent_integration_node_id: "root-integrate-macos",
-        final_validation_node_id: "mac-final",
+        parent_integrations: [{
+          child_final_node_id: "mac-final",
+          parent_node_id: "root-integrate-macos",
+          profiles: ["ha", "local", "regional-dr", "scale"],
+        }],
+        final_validations: [{ node_id: "mac-final", profiles: ["ha", "local", "regional-dr", "scale"] }],
         prerequisite_receipts: [],
         children: [],
+        accepted_final_receipts: {},
       },
       {
         directory: "release/windows",
         parent: "release",
         parent_contract_node_id: "root-contract",
-        parent_integration_node_id: "root-integrate-windows",
-        final_validation_node_id: "win-final",
+        parent_integrations: [{
+          child_final_node_id: "win-final",
+          parent_node_id: "root-integrate-windows",
+          profiles: ["ha", "local", "regional-dr", "scale"],
+        }],
+        final_validations: [{ node_id: "win-final", profiles: ["ha", "local", "regional-dr", "scale"] }],
         prerequisite_receipts: [],
         children: [],
+        accepted_final_receipts: {},
       },
     ],
   };
@@ -200,25 +212,28 @@ function node(fixture, planDirectory, nodeId) {
 
 function acceptedFinalReceipt(fixture, planDirectory) {
   const mapPlan = fixture.dependencyMap.plans.find((plan) => plan.directory === planDirectory);
-  const finalNode = node(fixture, planDirectory, mapPlan.final_validation_node_id);
+  const finalBinding = mapPlan.final_validations[0];
+  const finalNode = node(fixture, planDirectory, finalBinding.node_id);
+  const parentIntegration = mapPlan.parent_integrations[0]?.parent_node_id ?? null;
   const facts = {
-    schema_version: "licomesh.plan-final-receipt.v3",
+    schema_version: "licomesh.plan-final-receipt.v4",
     plan: planDirectory,
     final_node_id: finalNode.id,
     parent_contract_node_id: mapPlan.parent_contract_node_id,
-    parent_integration_node_id: mapPlan.parent_integration_node_id,
+    parent_integration_node_id: parentIntegration,
     status: "completed",
     role: "final_validation",
     platform: finalNode.platform,
+    profiles: [...finalBinding.profiles],
     privacy_safe: true,
   };
   const receiptDigest = canonicalDigest(facts);
-  mapPlan.accepted_final_receipt = {
+  mapPlan.accepted_final_receipts[finalNode.id] = {
     ...facts,
     receipt_digest: receiptDigest,
     proof_anchor: { verified: true, receipt_digest: receiptDigest },
   };
-  return mapPlan.accepted_final_receipt;
+  return mapPlan.accepted_final_receipts[finalNode.id];
 }
 
 function selectionContract(target, scope = "focused") {
@@ -229,6 +244,68 @@ function selectionContract(target, scope = "focused") {
     commands: ["npm test -- focused"],
     criteria: [0],
     paths: ["tools/plan"],
+  };
+}
+
+function profileFixture() {
+  const checkpoints = {
+    release: [
+      checkpoint({
+        id: "shared-work",
+        status: "pending",
+        role: "implementation",
+        prerequisites: [],
+        next: ["ha-work", "scale-work"],
+      }),
+      checkpoint({
+        id: "ha-work",
+        status: "pending",
+        role: "implementation",
+        prerequisites: ["shared-work"],
+        next: ["ha-final"],
+      }),
+      checkpoint({
+        id: "scale-work",
+        status: "pending",
+        role: "implementation",
+        prerequisites: ["shared-work"],
+        next: ["scale-final"],
+      }),
+      checkpoint({
+        id: "ha-final",
+        status: "pending",
+        role: "final_validation",
+        prerequisites: ["ha-work"],
+        next: [],
+      }),
+      checkpoint({
+        id: "scale-final",
+        status: "pending",
+        role: "final_validation",
+        prerequisites: ["scale-work"],
+        next: [],
+      }),
+    ],
+  };
+  return {
+    manifest: [{ directory: "release", checkpoints: "release/Checkpoints.json" }],
+    dependencyMap: {
+      schema_version: 3,
+      plans: [{
+        directory: "release",
+        parent: null,
+        parent_contract_node_id: null,
+        parent_integrations: [],
+        final_validations: [
+          { node_id: "ha-final", profiles: ["ha"] },
+          { node_id: "scale-final", profiles: ["scale"] },
+        ],
+        prerequisite_receipts: [],
+        children: [],
+        accepted_final_receipts: {},
+      }],
+    },
+    checkpoints,
   };
 }
 
@@ -618,6 +695,52 @@ describe("Core Plan execution eligibility", () => {
       .toContain("platform_mismatch");
   });
 
+  it("selects shared work without a profile and requires a profile after branches diverge", () => {
+    const fixture = profileFixture();
+    selectionContract(node(fixture, "release", "shared-work"));
+    selectionContract(node(fixture, "release", "ha-work"));
+    selectionContract(node(fixture, "release", "scale-work"));
+
+    const shared = boundedSelectionOutput(evaluatePlanExecutionEligibility({
+      ...fixture,
+      hostPlatform: "linux",
+    }), fixture.checkpoints);
+    expect(shared.selected).toMatchObject({
+      node_id: "shared-work",
+      profiles: ["ha", "scale"],
+    });
+
+    node(fixture, "release", "shared-work").status = "completed";
+    const branched = evaluatePlanExecutionEligibility({ ...fixture, hostPlatform: "linux" });
+    expect(() => boundedSelectionOutput(branched, fixture.checkpoints))
+      .toThrow("profile_selection_required");
+    expect(evaluatePlanExecutionEligibility({
+      ...fixture,
+      hostPlatform: "linux",
+      selectedProfile: "ha",
+    }).eligible.map((candidate) => candidate.nodeId)).toEqual(["ha-work"]);
+  });
+
+  it("rejects a cross-profile final receipt dependency", () => {
+    const fixture = planFixture();
+    const macPlan = fixture.dependencyMap.plans.find((plan) => plan.directory === "release/macos");
+    const windowsPlan = fixture.dependencyMap.plans.find((plan) => plan.directory === "release/windows");
+    macPlan.final_validations[0].profiles = ["ha"];
+    macPlan.parent_integrations[0].profiles = ["ha"];
+    windowsPlan.final_validations[0].profiles = ["scale"];
+    windowsPlan.parent_integrations[0].profiles = ["scale"];
+    windowsPlan.prerequisite_receipts = [{
+      plan: "release/macos",
+      node_id: "mac-final",
+      kind: "final_validation",
+      profiles: ["scale"],
+    }];
+
+    expect(() => evaluate(fixture)).toThrow(
+      "invalid_graph: final-validation receipt profile coverage is invalid",
+    );
+  });
+
   it("keeps Windows integration Windows-owned without blocking platform-neutral macOS work", () => {
     const fixture = planFixture();
     const macosAdmission = evaluate(fixture);
@@ -749,7 +872,12 @@ describe("Core Plan execution eligibility", () => {
   it("requires an exact accepted receipt for a completed final-validation cross-Plan dependency", () => {
     const fixture = planFixture();
     fixture.dependencyMap.plans.find((plan) => plan.directory === "release/windows").prerequisite_receipts = [
-      { plan: "release/macos", node_id: "mac-final", kind: "final_validation" },
+      {
+        plan: "release/macos",
+        node_id: "mac-final",
+        kind: "final_validation",
+        profiles: ["ha", "local", "regional-dr", "scale"],
+      },
     ];
     node(fixture, "release/macos", "mac-implementation").status = "completed";
     node(fixture, "release/macos", "mac-final").status = "completed";
@@ -795,7 +923,12 @@ describe("Core Plan execution eligibility", () => {
   it("fails closed for a malformed cross-Plan receipt reference", () => {
     const fixture = planFixture();
     fixture.dependencyMap.plans.find((plan) => plan.directory === "release/windows").prerequisite_receipts = [
-      { plan: "release/macos", node_id: "missing-final", kind: "final_validation" },
+      {
+        plan: "release/macos",
+        node_id: "missing-final",
+        kind: "final_validation",
+        profiles: ["ha", "local", "regional-dr", "scale"],
+      },
     ];
 
     expect(() => evaluate(fixture)).toThrow("unknown_reference: unknown cross-Plan receipt node reference");
