@@ -274,7 +274,7 @@
     "@lico/protocols": "0.0.1",
     "@lico/server-runtime": "0.0.1",
     "@lico/ui-console": "0.0.1",
-    "better-sqlite3": "^12.9.0",
+    "better-sqlite3": "^13.0.1",
     "element-plus": "^2.13.7",
     "es-module-lexer": "^2.1.0",
     "fflate": "^0.8.2",
