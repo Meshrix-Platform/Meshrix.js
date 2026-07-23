@@ -96,5 +96,4 @@ test-results/
 # docs/protocols/, docs/functionality/, docs/state-machine/, and
 # registry-backed fact sources.
 /docs/plan/
-/docs/report/
 /docs/decisions/

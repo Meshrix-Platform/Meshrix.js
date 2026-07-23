@@ -1,4 +1,6 @@
 #!/bin/sh
+zero_oid=0000000000000000000000000000000000000000
+
 while read local_ref local_sha remote_ref remote_sha
 do
   case "$remote_ref" in
@@ -10,4 +12,24 @@ do
     *)
       ;;
   esac
+
+  # A deleted remote ref has no outgoing local history to inspect.
+  if [ "$local_sha" = "$zero_oid" ]; then
+    continue
+  fi
+
+  if [ "$remote_sha" = "$zero_oid" ]; then
+    outgoing_commits=$(git rev-list "$local_sha") || exit 1
+  else
+    outgoing_commits=$(git rev-list "$local_sha" "^$remote_sha") || exit 1
+  fi
+
+  for commit in $outgoing_commits
+  do
+    if [ -n "$(git ls-tree -r --name-only "$commit" -- docs/report)" ]; then
+      echo "Push blocked: local temporary reports are present in outgoing history." >&2
+      echo "Keep docs/report commits in local-only Git history." >&2
+      exit 1
+    fi
+  done
 done
