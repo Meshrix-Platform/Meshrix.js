@@ -246,10 +246,11 @@ async function linkWorkspaceNodeModules(repoRoot, workspace) {
   const scopeSource = path.join(sourceRoot, WORKSPACE_PACKAGE_SCOPE);
   const scopeTarget = path.join(targetRoot, WORKSPACE_PACKAGE_SCOPE);
   await fs.mkdir(scopeTarget, { recursive: true, mode: 0o700 });
-  const [scopeEntries, localEntries] = await Promise.all([
-    fs.readdir(scopeSource),
-    fs.readdir(localPackages).catch(() => []),
-  ]);
+  const scopeEntries = await fs.readdir(scopeSource).catch((error) => {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  });
+  const localEntries = await fs.readdir(localPackages).catch(() => []);
   const localNames = new Set(localEntries);
   await Promise.all(scopeEntries.map(async (entry) => {
     const localPackage = path.join(localPackages, entry);
