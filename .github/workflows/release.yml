@@ -1,0 +1,1317 @@
+# Publishes immutable tag assets only after the canonical release authority passes.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify release authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Validate tag and atomic package release state
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
+      - name: Verify tag commit belongs to the canonical release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show-ref --verify --quiet refs/remotes/origin/release
+          tag_commit="$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          release_commit="$(git rev-parse "refs/remotes/origin/release^{commit}")"
+          git merge-base --is-ancestor "$tag_commit" "$release_commit"
+      - name: Install dependencies
+        run: npm ci
+      - name: Core repository gate
+        run: npm run verify
+      - name: Full Vitest suite
+        run: npm run vitest
+      - name: Audit profile
+        run: npm run test:audit
+      - name: Dependency vulnerability gate
+        run: npm audit --audit-level=high
+      - name: Require repository immutable-release enforcement
+        env:
+          RELEASE_IMMUTABLE_ENABLED: ${{ vars.RELEASE_IMMUTABLE_ENABLED }}
+        run: test "$RELEASE_IMMUTABLE_ENABLED" = "true"
+
+  npm-package-portability:
+    name: npm package portability (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    continue-on-error: true
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            node: "24"
+          - os: windows-latest
+            node: "24"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: "npm"
+      - name: Run the supplementary clean-host package probe
+        run: npm run verify:npm-package-installability -- --host-platform-probe
+
+  npm-package-node22:
+    name: Required npm install and start probe (Linux, Node 22)
+    needs: [verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - name: Install the packed release set and start the headless server
+        run: >-
+          npm run verify:npm-package-installability -- --required-host-probe
+          --report-path build/reports/npm-package-installability-node22.json
+
+  platform-acceptance:
+    name: Canonical platform acceptance
+    needs: [verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 395
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Canonical platform acceptance authority
+        env:
+          LICO_RELEASE_PARALLELISM: "4"
+        run: npm run verify:acceptance
+
+  assemble-release-assets:
+    name: Assemble release assets without publication credentials
+    needs: [verify, platform-acceptance]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install dependencies without publication credentials
+        run: npm ci --ignore-scripts
+      - name: Assemble verified portable connector assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel="stable"
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then channel="next"; fi
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          node tools/server-scripts/mcp-release.mjs \
+            --output-dir build/release/mcp \
+            --channel "$channel" \
+            --source-date-epoch "$source_date_epoch"
+      - name: Materialize pinned Node runtime source evidence
+        run: npm run release:prepare-node-runtime-source-evidence
+      - name: Generate and verify release SBOM
+        run: |
+          node tools/generators/generate-supply-chain-artifacts.mjs --output build/release/supply-chain
+          node tools/verifiers/verify-supply-chain-artifacts.mjs --input build/release/supply-chain
+      - name: Transfer immutable release inputs to the verification job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-inputs-${{ github.sha }}
+          path: |
+            build/release/mcp/
+            build/release/node-runtime-source/
+            build/release/supply-chain/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  verify-release-inputs:
+    name: Verify and render immutable release inputs
+    needs: [verify, assemble-release-assets]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install verifier dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Download the assembled release inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-inputs-${{ github.sha }}
+          path: build/release
+      - name: Reverify supply-chain and runtime-source evidence
+        run: node tools/verifiers/verify-supply-chain-artifacts.mjs --input build/release/supply-chain
+      - name: Reverify MCP release assets and pinned runtime sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel="stable"
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then channel="next"; fi
+          source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
+          node tools/server-scripts/verify-mcp-release-assets.mjs \
+            --input-dir build/release/mcp \
+            --node-runtime-source-dir build/release/node-runtime-source \
+            --expected-channel "$channel" \
+            --expected-source-date-epoch "$source_date_epoch"
+      - name: Render release notes from the canonical template
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit_subjects="$RUNNER_TEMP/release-commit-subjects.bin"
+          previous_tag="$(git describe --tags --match 'v[0-9]*' --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          if [[ -n "$previous_tag" ]]; then
+            git log --first-parent --format='%s%x00' "${previous_tag}..${GITHUB_REF_NAME}" > "$commit_subjects"
+          else
+            git log --first-parent --format='%s%x00' "$GITHUB_REF_NAME" > "$commit_subjects"
+          fi
+          RELEASE_VERSION="${GITHUB_REF_NAME#v}" \
+          RELEASE_REPOSITORY="$GITHUB_REPOSITORY" \
+          RELEASE_COMMIT_SUBJECTS="$commit_subjects" \
+          RELEASE_RENDERED_NOTES="build/release/RELEASE_NOTES.md" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const marker = "<!-- GENERATED_RELEASE_NOTES -->";
+          const template = fs.readFileSync(".github/RELEASE_TEMPLATE.md", "utf8");
+          if (!template.includes(marker)) throw new Error("release_notes_marker_missing");
+          const subjects = fs.readFileSync(process.env.RELEASE_COMMIT_SUBJECTS)
+            .toString("utf8")
+            .split("\0")
+            .map((subject) => subject.replace(/[\u0001-\u001f\u007f]/gu, " ").trim())
+            .filter(Boolean);
+          const generated = subjects.length > 0
+            ? subjects.map((subject) => `- ${subject}`).join("\n")
+            : "- No user-visible changes were recorded.";
+          const rendered = template
+            .replaceAll("<VERSION>", process.env.RELEASE_VERSION)
+            .replaceAll("<REPOSITORY>", process.env.RELEASE_REPOSITORY)
+            .replace(marker, generated);
+          if (rendered.includes("<VERSION>") || rendered.includes("<REPOSITORY>") || rendered.includes(marker)) {
+            throw new Error("release_notes_template_not_fully_rendered");
+          }
+          fs.writeFileSync(process.env.RELEASE_RENDERED_NOTES, rendered, { flag: "wx" });
+          NODE
+      - name: Transfer only verified release inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verified-release-inputs-${{ github.sha }}
+          path: |
+            build/release/mcp/
+            build/release/node-runtime-source/
+            build/release/supply-chain/
+            build/release/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  verify-macos-mcp-final-asset:
+    name: Execute the final MCP asset on macOS arm64
+    needs: [verify-release-inputs]
+    runs-on: macos-15
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Download the final verified release input assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-release-inputs-${{ github.sha }}
+          path: build/release
+      - name: Execute the bundled runtime, launcher, installer delegation, and no-scan path
+        run: npm run verify:mcp-final-release-asset
+
+  npm-registry-preflight:
+    name: Preflight the complete npm release set before remote container mutation
+    needs: [verify, platform-acceptance, npm-package-node22]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install release tooling without lifecycle scripts or publication credentials
+        run: npm ci --ignore-scripts
+      - name: Read and validate all npm package versions and dist-tags without publication
+        run: npm run release:publish-npm -- --preflight
+
+  build-release-image:
+    name: Build or resolve the unsigned release image authority
+    needs: [verify-release-inputs, verify-macos-mcp-final-asset, npm-registry-preflight]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Authenticate to the GitHub container registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Resolve or stage the immutable multi-platform container
+        id: release-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/licomesh"
+          version="${GITHUB_REF_NAME#v}"
+          target="${image}:${version}"
+          candidate_tag="candidate-${GITHUB_SHA}"
+          inspect_digest() {
+            local manifest raw platforms
+            manifest="$(docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null)" || return 1
+            raw="$(docker buildx imagetools inspect "$1" --raw)"
+            platforms="$(jq -c '[.manifests[]?.platform | select(.os != "unknown") | "\(.os)/\(.architecture)"] | unique | sort' <<<"$raw")"
+            test "$platforms" = '["linux/amd64","linux/arm64"]' || {
+              echo "release_image_platform_set_mismatch" >&2
+              return 2
+            }
+            jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))' <<<"$manifest"
+          }
+          if docker buildx imagetools inspect "$target" >/dev/null 2>&1; then
+            digest="$(inspect_digest "$target")"
+            jq -n --arg digest "$digest" '{"containerimage.digest": $digest}' \
+              > "$RUNNER_TEMP/lico-image-metadata.json"
+            echo "reused=true" >> "$GITHUB_OUTPUT"
+          else
+            docker buildx create --name licomesh-release --driver docker-container --use
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              --target runtime-ui \
+              --build-arg "LICO_SOURCE_REPOSITORY=${GITHUB_REPOSITORY}" \
+              --build-arg "LICO_SOURCE_REF=${GITHUB_REF}" \
+              --build-arg "LICO_SOURCE_COMMIT=${GITHUB_SHA}" \
+              --provenance=mode=max,version=v0.2 \
+              --sbom=true \
+              --metadata-file "$RUNNER_TEMP/lico-image-metadata.json" \
+              --tag "${image}:${candidate_tag}" \
+              --push .
+            digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' \
+              "$RUNNER_TEMP/lico-image-metadata.json")"
+            resolved_digest="$(inspect_digest "${image}@${digest}")"
+            test "$resolved_digest" = "$digest"
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+          echo "candidate=${image}:${candidate_tag}" >> "$GITHUB_OUTPUT"
+      - name: Reject actionable high-severity amd64 container vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/amd64
+        with:
+          image-ref: ${{ steps.release-image.outputs.image }}@${{ steps.release-image.outputs.digest }}
+          scan-type: image
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          timeout: 10m0s
+          version: v0.69.3
+      - name: Reject actionable high-severity arm64 container vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_PLATFORM: linux/arm64
+        with:
+          image-ref: ${{ steps.release-image.outputs.image }}@${{ steps.release-image.outputs.digest }}
+          scan-type: image
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          timeout: 10m0s
+          version: v0.69.3
+      - name: Build the unsigned canonical image authority and state
+        shell: bash
+        env:
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+          IMAGE_NAME: ${{ steps.release-image.outputs.image }}
+          IMAGE_TARGET: ${{ steps.release-image.outputs.target }}
+          IMAGE_CANDIDATE: ${{ steps.release-image.outputs.candidate }}
+          IMAGE_REUSED: ${{ steps.release-image.outputs.reused }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/release/image build/release/control
+          provenance_file="$RUNNER_TEMP/lico-image-provenance.json"
+          sbom_file="$RUNNER_TEMP/lico-image-sbom.json"
+          manifest_file="$RUNNER_TEMP/lico-image-manifest.json"
+          manifest_descriptor_file="$RUNNER_TEMP/lico-image-manifest-descriptor.json"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --format '{{json .Provenance}}' > "$provenance_file"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --format '{{json .SBOM}}' > "$sbom_file"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --format '{{json .Manifest}}' > "$manifest_descriptor_file"
+          docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
+            --raw > "$manifest_file"
+          node tools/server-scripts/create-release-image-authority.mjs \
+            --image "$IMAGE_NAME" \
+            --digest "$IMAGE_DIGEST" \
+            --target "$IMAGE_TARGET" \
+            --candidate "$IMAGE_CANDIDATE" \
+            --reused "$IMAGE_REUSED" \
+            --repository "$GITHUB_REPOSITORY" \
+            --source-ref "$GITHUB_REF" \
+            --source-commit "$GITHUB_SHA" \
+            --workflow-ref "$GITHUB_WORKFLOW_REF" \
+            --manifest-descriptor "$manifest_descriptor_file" \
+            --manifest "$manifest_file" \
+            --provenance "$provenance_file" \
+            --sbom "$sbom_file" \
+            --authority-output build/release/image/RELEASE_IMAGE.json \
+            --state-output build/release/control/RELEASE_IMAGE_STATE.json
+      - name: Transfer the unsigned image authority and state
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: unsigned-release-image-${{ github.sha }}
+          path: |
+            build/release/image/RELEASE_IMAGE.json
+            build/release/control/RELEASE_IMAGE_STATE.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+  sign-finalize-release:
+    name: Sign and finalize immutable release assets
+    needs: [verify-release-inputs, build-release-image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Download verified release inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: verified-release-inputs-${{ github.sha }}
+          path: build/release
+      - name: Download unsigned image authority
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: unsigned-release-image-${{ github.sha }}
+          path: build/release
+      - name: Authenticate to the GitHub container registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Install the verified Cosign release
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Validate image state and expose canonical coordinates
+        id: release-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/licomesh" \
+          IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
+          IMAGE_STATE="build/release/control/RELEASE_IMAGE_STATE.json" \
+          node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          const authorityText = fs.readFileSync(process.env.IMAGE_AUTHORITY, "utf8");
+          const authority = JSON.parse(authorityText);
+          const state = JSON.parse(fs.readFileSync(process.env.IMAGE_STATE, "utf8"));
+          const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+          if (
+            authority.schemaVersion !== "v0.0.1:release:image-authority-2"
+            || state.schemaVersion !== "v0.0.1:release:image-state-1"
+            || authority.repository !== process.env.GITHUB_REPOSITORY
+            || authority.sourceCommit !== process.env.GITHUB_SHA
+            || authority.sourceRef !== process.env.GITHUB_REF
+            || authority.workflowRef !== process.env.GITHUB_WORKFLOW_REF
+            || authority.image !== process.env.EXPECTED_IMAGE
+            || !/^sha256:[a-f0-9]{64}$/u.test(authority.digest)
+            || JSON.stringify(authority.platforms) !== JSON.stringify(["linux/amd64", "linux/arm64"])
+            || !Array.isArray(authority.platformEvidence)
+            || authority.platformEvidence.length !== 2
+            || authority.platformEvidence.some((entry) => (
+              !["linux/amd64", "linux/arm64"].includes(entry?.platform)
+              || !/^sha256:[a-f0-9]{64}$/u.test(entry?.subjectDigest || "")
+              || !/^sha256:[a-f0-9]{64}$/u.test(entry?.attestationDigest || "")
+            ))
+            || authority.provenancePredicateType !== "https://slsa.dev/provenance/v0.2"
+            || authority.provenanceBuildType !== "https://mobyproject.org/buildkit@v1"
+            || authority.sbomFormat !== "SPDX-2"
+            || [
+              authority.manifestDescriptorSha256,
+              authority.manifestSha256,
+              authority.provenanceSha256,
+              authority.sbomSha256
+            ].some((value) => !/^[a-f0-9]{64}$/u.test(value || ""))
+            || authority.provenanceVerified !== true
+            || authority.sbomVerified !== true
+            || state.repository !== authority.repository
+            || state.sourceCommit !== authority.sourceCommit
+            || state.sourceRef !== authority.sourceRef
+            || state.workflowRef !== authority.workflowRef
+            || state.image !== authority.image
+            || state.digest !== authority.digest
+            || state.target !== `${authority.image}:${process.env.GITHUB_REF_NAME.slice(1)}`
+            || state.candidate !== `${authority.image}:candidate-${process.env.GITHUB_SHA}`
+            || typeof state.reused !== "boolean"
+            || state.authoritySha256 !== sha256(authorityText)
+          ) {
+            throw new Error("release_image_state_authority_mismatch");
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, [
+            `image=${authority.image}`,
+            `digest=${authority.digest}`,
+            `reused=${state.reused}`,
+            ""
+          ].join("\n"));
+          NODE
+      - name: Reverify the byte-identical validated image evidence before signing
+        shell: bash
+        env:
+          IMAGE: ${{ steps.release-image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          provenance_file="$RUNNER_TEMP/lico-image-provenance.json"
+          sbom_file="$RUNNER_TEMP/lico-image-sbom.json"
+          manifest_file="$RUNNER_TEMP/lico-image-manifest.json"
+          manifest_descriptor_file="$RUNNER_TEMP/lico-image-manifest-descriptor.json"
+          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" \
+            --format '{{json .Provenance}}' > "$provenance_file"
+          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" \
+            --format '{{json .SBOM}}' > "$sbom_file"
+          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" \
+            --format '{{json .Manifest}}' > "$manifest_descriptor_file"
+          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" \
+            --raw > "$manifest_file"
+          IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
+          IMAGE_PROVENANCE="$provenance_file" \
+          IMAGE_SBOM="$sbom_file" \
+          IMAGE_MANIFEST="$manifest_file" \
+          IMAGE_MANIFEST_DESCRIPTOR="$manifest_descriptor_file" \
+          node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          const authority = JSON.parse(fs.readFileSync(process.env.IMAGE_AUTHORITY, "utf8"));
+          const provenanceText = fs.readFileSync(process.env.IMAGE_PROVENANCE, "utf8").trim();
+          const sbomText = fs.readFileSync(process.env.IMAGE_SBOM, "utf8").trim();
+          const manifestText = fs.readFileSync(process.env.IMAGE_MANIFEST, "utf8").trim();
+          const manifestDescriptorText = fs.readFileSync(
+            process.env.IMAGE_MANIFEST_DESCRIPTOR,
+            "utf8"
+          ).trim();
+          JSON.parse(provenanceText);
+          JSON.parse(sbomText);
+          JSON.parse(manifestText);
+          const manifestDescriptor = JSON.parse(manifestDescriptorText);
+          const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+          if (
+            manifestDescriptor.digest !== authority.digest
+            || authority.manifestDescriptorSha256 !== sha256(manifestDescriptorText)
+            || authority.manifestSha256 !== sha256(manifestText)
+            || authority.provenanceSha256 !== sha256(provenanceText)
+            || authority.sbomSha256 !== sha256(sbomText)
+          ) {
+            throw new Error("release_image_evidence_authority_mismatch");
+          }
+          NODE
+      - name: Resolve an exact resumable signed asset set
+        id: signed-assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/resumable-release.json"
+          resolution="$RUNNER_TEMP/resumable-release-state"
+          remote_assets="$RUNNER_TEMP/resumable-release-assets"
+          if ! gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            > "$release_json" 2>/dev/null; then
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          RELEASE_JSON="$release_json" \
+          RELEASE_RESOLUTION="$resolution" \
+          RELEASE_NOTES="build/release/RELEASE_NOTES.md" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const release = JSON.parse(fs.readFileSync(process.env.RELEASE_JSON, "utf8"));
+          const expectedPrerelease = process.env.GITHUB_REF_NAME.slice(1).includes("-");
+          const roots = ["build/release/mcp", "build/release/supply-chain", "build/release/image"];
+          const deterministicNames = roots.flatMap((root) =>
+            fs.readdirSync(root, { withFileTypes: true }).map((entry) => {
+              if (!entry.isFile() || entry.isSymbolicLink() || /\s/u.test(entry.name)) {
+                throw new Error("release_asset_entry_invalid");
+              }
+              return entry.name;
+            })
+          );
+          const expectedNames = [
+            ...deterministicNames,
+            "RELEASE_IMAGE.sigstore.json",
+            "RELEASE_SHA256SUMS",
+            "RELEASE_SHA256SUMS.sigstore.json"
+          ].sort();
+          if (new Set(expectedNames).size !== expectedNames.length) {
+            throw new Error("release_asset_flat_name_invalid");
+          }
+          const assets = release.assets || [];
+          const actualNames = assets.map(({ name }) => name).sort();
+          const releaseMetadataMatches =
+            release.tag_name === process.env.GITHUB_REF_NAME
+            && release.name === `LicoMesh ${process.env.GITHUB_REF_NAME}`
+            && release.body === fs.readFileSync(process.env.RELEASE_NOTES, "utf8")
+            && release.prerelease === expectedPrerelease
+            && (release.draft === true || release.immutable === true);
+          const assetSetMatches = JSON.stringify(actualNames) === JSON.stringify(expectedNames);
+          if (!releaseMetadataMatches || !assetSetMatches) {
+            if (release.draft === true) {
+              fs.writeFileSync(process.env.RELEASE_RESOLUTION, "fresh\n", { flag: "wx" });
+              process.exit(0);
+            }
+            throw new Error("published_release_resume_authority_mismatch");
+          }
+          fs.writeFileSync(process.env.RELEASE_RESOLUTION, "reuse\n", { flag: "wx" });
+          NODE
+          if [[ "$(cat "$resolution")" == "fresh" ]]; then
+            echo "reused=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir "$remote_assets"
+          gh release download "$GITHUB_REF_NAME" --dir "$remote_assets"
+          RELEASE_JSON="$release_json" \
+          REMOTE_ASSETS="$remote_assets" \
+          node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          const release = JSON.parse(fs.readFileSync(process.env.RELEASE_JSON, "utf8"));
+          const remoteEntries = fs.readdirSync(process.env.REMOTE_ASSETS, { withFileTypes: true });
+          if (remoteEntries.some((entry) => !entry.isFile() || entry.isSymbolicLink())) {
+            throw new Error("remote_release_asset_entry_invalid");
+          }
+          const metadata = new Map((release.assets || []).map((asset) => [asset.name, asset]));
+          const remoteNames = remoteEntries.map(({ name }) => name).sort();
+          if (
+            metadata.size !== remoteNames.length
+            || remoteNames.some((name) => !metadata.has(name))
+          ) {
+            throw new Error("remote_release_asset_set_mismatch");
+          }
+          const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
+          for (const name of remoteNames) {
+            const remotePath = path.join(process.env.REMOTE_ASSETS, name);
+            const bytes = fs.readFileSync(remotePath);
+            const asset = metadata.get(name);
+            if (asset.size !== bytes.length || asset.digest !== `sha256:${sha256(bytes)}`) {
+              throw new Error("remote_release_asset_digest_mismatch");
+            }
+          }
+          const deterministicRoots = [
+            "build/release/mcp",
+            "build/release/supply-chain",
+            "build/release/image"
+          ];
+          for (const root of deterministicRoots) {
+            for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+              if (!entry.isFile() || entry.isSymbolicLink()) {
+                throw new Error("release_asset_entry_invalid");
+              }
+              const localBytes = fs.readFileSync(path.join(root, entry.name));
+              const remoteBytes = fs.readFileSync(path.join(process.env.REMOTE_ASSETS, entry.name));
+              if (sha256(localBytes) !== sha256(remoteBytes)) {
+                throw new Error("resumable_release_deterministic_asset_mismatch");
+              }
+            }
+          }
+          const generatedFiles = [
+            ["RELEASE_IMAGE.sigstore.json", "build/release/image/RELEASE_IMAGE.sigstore.json"],
+            ["RELEASE_SHA256SUMS", "build/release/RELEASE_SHA256SUMS"],
+            ["RELEASE_SHA256SUMS.sigstore.json", "build/release/RELEASE_SHA256SUMS.sigstore.json"]
+          ];
+          for (const [name, destination] of generatedFiles) {
+            fs.copyFileSync(
+              path.join(process.env.REMOTE_ASSETS, name),
+              destination,
+              fs.constants.COPYFILE_EXCL
+            );
+          }
+          NODE
+          echo "reused=true" >> "$GITHUB_OUTPUT"
+      - name: Sign the staged digest or reverify a resumable version
+        shell: bash
+        env:
+          IMAGE: ${{ steps.release-image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+          IMAGE_REUSED: ${{ steps.release-image.outputs.reused }}
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
+          if [[ "$IMAGE_REUSED" == "false" ]]; then
+            cosign sign --yes "${IMAGE}@${IMAGE_DIGEST}"
+          fi
+          cosign verify \
+            --certificate-identity="$identity" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+            "${IMAGE}@${IMAGE_DIGEST}" >/dev/null
+      - name: Sign and verify the canonical image authority
+        shell: bash
+        env:
+          SIGNED_ASSETS_REUSED: ${{ steps.signed-assets.outputs.reused }}
+        run: |
+          set -euo pipefail
+          authority_file="build/release/image/RELEASE_IMAGE.json"
+          bundle_file="build/release/image/RELEASE_IMAGE.sigstore.json"
+          if [[ "$SIGNED_ASSETS_REUSED" != "true" ]]; then
+            cosign sign-blob --yes --bundle "$bundle_file" "$authority_file"
+          fi
+          cosign verify-blob "$authority_file" \
+            --bundle "$bundle_file" \
+            --certificate-identity="https://github.com/${GITHUB_WORKFLOW_REF}" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" >/dev/null
+      - name: Build, sign, and verify the flattened checksum authority
+        shell: bash
+        env:
+          SIGNED_ASSETS_REUSED: ${{ steps.signed-assets.outputs.reused }}
+        run: |
+          set -euo pipefail
+          checksum_file="build/release/RELEASE_SHA256SUMS"
+          bundle_file="build/release/RELEASE_SHA256SUMS.sigstore.json"
+          if [[ "$SIGNED_ASSETS_REUSED" != "true" ]]; then
+            CHECKSUM_FILE="$checksum_file" node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          const roots = ["build/release/mcp", "build/release/supply-chain", "build/release/image"];
+          const byName = new Map();
+          for (const root of roots) {
+            const rootStat = fs.lstatSync(root);
+            if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) throw new Error("release_asset_directory_invalid");
+            for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+              if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("release_asset_entry_invalid");
+              if (/\s/u.test(entry.name) || byName.has(entry.name)) {
+                throw new Error("release_asset_flat_name_invalid");
+              }
+              byName.set(entry.name, path.join(root, entry.name));
+            }
+          }
+          if (byName.size === 0) throw new Error("release_checksum_assets_missing");
+          const lines = [...byName.keys()].sort().map((name) => {
+            const digest = crypto.createHash("sha256").update(fs.readFileSync(byName.get(name))).digest("hex");
+            return `${digest}  ${name}`;
+          });
+          fs.writeFileSync(process.env.CHECKSUM_FILE, `${lines.join("\n")}\n`, { flag: "wx", mode: 0o644 });
+          NODE
+            cosign sign-blob --yes --bundle "$bundle_file" "$checksum_file"
+          fi
+          CHECKSUM_FILE="$checksum_file" node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          const roots = ["build/release/mcp", "build/release/supply-chain", "build/release/image"];
+          const byName = new Map();
+          for (const root of roots) {
+            for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+              if (!entry.isFile() || entry.isSymbolicLink() || byName.has(entry.name)) {
+                throw new Error("release_asset_entry_invalid");
+              }
+              byName.set(entry.name, path.join(root, entry.name));
+            }
+          }
+          const lines = fs.readFileSync(process.env.CHECKSUM_FILE, "utf8").trimEnd().split("\n");
+          if (lines.length !== byName.size) throw new Error("release_checksum_file_set_mismatch");
+          const seen = new Set();
+          for (const line of lines) {
+            const match = line.match(/^([a-f0-9]{64})  ([^\s]+)$/u);
+            if (!match || seen.has(match[2]) || !byName.has(match[2])) {
+              throw new Error("release_checksum_entry_invalid");
+            }
+            seen.add(match[2]);
+            const digest = crypto.createHash("sha256").update(fs.readFileSync(byName.get(match[2]))).digest("hex");
+            if (digest !== match[1]) throw new Error("release_checksum_digest_mismatch");
+          }
+          NODE
+          cosign verify-blob "$checksum_file" \
+            --bundle "$bundle_file" \
+            --certificate-identity="https://github.com/${GITHUB_WORKFLOW_REF}" \
+            --certificate-oidc-issuer="https://token.actions.githubusercontent.com" >/dev/null
+      - name: Build the exact GitHub release asset authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_ASSET_MANIFEST="build/release/control/RELEASE_ASSETS.json" node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          const roots = ["build/release/mcp", "build/release/supply-chain", "build/release/image"];
+          const files = roots.flatMap((root) => fs.readdirSync(root, { withFileTypes: true }).map((entry) => {
+            if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("release_asset_entry_invalid");
+            return path.join(root, entry.name);
+          }));
+          files.push(
+            "build/release/RELEASE_SHA256SUMS",
+            "build/release/RELEASE_SHA256SUMS.sigstore.json"
+          );
+          const seen = new Set();
+          const assets = files.map((file) => {
+            const name = path.basename(file);
+            if (seen.has(name) || /\s/u.test(name)) throw new Error("release_asset_flat_name_invalid");
+            seen.add(name);
+            const bytes = fs.readFileSync(file);
+            return {
+              name,
+              size: bytes.length,
+              digest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`
+            };
+          }).sort((left, right) => left.name.localeCompare(right.name));
+          fs.writeFileSync(process.env.RELEASE_ASSET_MANIFEST, `${JSON.stringify(assets, null, 2)}\n`, { flag: "wx" });
+          NODE
+      - name: Transfer finalized signed release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: finalized-release-${{ github.sha }}
+          path: |
+            build/release/mcp/
+            build/release/supply-chain/
+            build/release/image/
+            build/release/control/
+            build/release/RELEASE_SHA256SUMS
+            build/release/RELEASE_SHA256SUMS.sigstore.json
+            build/release/RELEASE_NOTES.md
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: true
+
+  prepare-release-draft:
+    name: Prepare and verify the private release draft
+    needs: [sign-finalize-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      advance: ${{ steps.release-order.outputs.advance }}
+      published: ${{ steps.release-state.outputs.published }}
+    steps:
+      - name: Download finalized signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: finalized-release-${{ github.sha }}
+          path: build/release
+      - name: Verify the local exact release asset set
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_ASSET_MANIFEST="build/release/control/RELEASE_ASSETS.json" node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          const expected = JSON.parse(fs.readFileSync(process.env.RELEASE_ASSET_MANIFEST, "utf8"));
+          const roots = ["build/release/mcp", "build/release/supply-chain", "build/release/image"];
+          const files = roots.flatMap((root) => fs.readdirSync(root, { withFileTypes: true }).map((entry) => {
+            if (!entry.isFile() || entry.isSymbolicLink()) throw new Error("release_asset_entry_invalid");
+            return path.join(root, entry.name);
+          }));
+          files.push("build/release/RELEASE_SHA256SUMS", "build/release/RELEASE_SHA256SUMS.sigstore.json");
+          const seen = new Set();
+          const actual = files.map((file) => {
+            const name = path.basename(file);
+            if (seen.has(name) || /\s/u.test(name)) throw new Error("release_asset_flat_name_invalid");
+            seen.add(name);
+            const bytes = fs.readFileSync(file);
+            return {
+              name,
+              size: bytes.length,
+              digest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`
+            };
+          }).sort((left, right) => left.name.localeCompare(right.name));
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error("local_release_asset_authority_mismatch");
+          }
+          NODE
+      - name: Prepare or resume the private GitHub release draft
+        id: release-state
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/existing-release.json"
+          prerelease="false"
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then prerelease="true"; fi
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" > "$release_json" 2>/dev/null; then
+            if [[ "$(jq -r '.draft' "$release_json")" == "false" ]]; then
+              echo "published=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            release_id="$(jq -er '.id' "$release_json")"
+            gh release edit "$GITHUB_REF_NAME" \
+              --latest=false \
+              --prerelease="$prerelease" \
+              --title "LicoMesh ${GITHUB_REF_NAME}" \
+              --notes-file build/release/RELEASE_NOTES.md
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" --jq '.[].id' \
+              | while IFS= read -r asset_id; do
+                  [[ -z "$asset_id" ]] || gh api --method DELETE \
+                    "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}"
+                done
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --draft \
+              --latest=false \
+              --prerelease="$prerelease" \
+              --verify-tag \
+              --title "LicoMesh ${GITHUB_REF_NAME}" \
+              --notes-file build/release/RELEASE_NOTES.md
+          fi
+          echo "published=false" >> "$GITHUB_OUTPUT"
+      - name: Upload the complete asset set to the private draft
+        if: steps.release-state.outputs.published != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            build/release/mcp/* \
+            build/release/supply-chain/* \
+            build/release/image/* \
+            build/release/RELEASE_SHA256SUMS* \
+            --clobber
+      - name: Verify the exact remote release asset set
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            > "$RUNNER_TEMP/remote-release.json"
+          EXPECTED_RELEASE_ASSETS="build/release/control/RELEASE_ASSETS.json" \
+          REMOTE_RELEASE="$RUNNER_TEMP/remote-release.json" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const expected = JSON.parse(fs.readFileSync(process.env.EXPECTED_RELEASE_ASSETS, "utf8"));
+          const release = JSON.parse(fs.readFileSync(process.env.REMOTE_RELEASE, "utf8"));
+          const actual = (release.assets || []).map(({ name, size, digest }) => ({ name, size, digest }))
+            .sort((left, right) => left.name.localeCompare(right.name));
+          if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+            throw new Error("remote_release_asset_authority_mismatch");
+          }
+          NODE
+      - name: Determine monotonic release ordering
+        id: release-order
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if [[ "$version" == *-* ]]; then
+            echo "advance=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name' \
+            > "$RUNNER_TEMP/published-stable-tags.txt"
+          advance="$(CURRENT_TAG="$GITHUB_REF_NAME" \
+            PUBLISHED_TAGS="$RUNNER_TEMP/published-stable-tags.txt" \
+            node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const parse = (tag) => {
+            const match = String(tag).match(/^v(\d+)\.(\d+)\.(\d+)$/u);
+            return match ? match.slice(1).map(BigInt) : null;
+          };
+          const compare = (left, right) => {
+            for (let index = 0; index < 3; index += 1) {
+              if (left[index] !== right[index]) return left[index] > right[index] ? 1 : -1;
+            }
+            return 0;
+          };
+          const current = parse(process.env.CURRENT_TAG);
+          if (!current) throw new Error("stable_release_tag_invalid");
+          const published = fs.readFileSync(process.env.PUBLISHED_TAGS, "utf8")
+            .split(/\r?\n/u).map(parse).filter(Boolean);
+          const highest = published.reduce(
+            (best, candidate) => !best || compare(candidate, best) > 0 ? candidate : best,
+            null
+          );
+          console.log(!highest || compare(current, highest) >= 0 ? "true" : "false");
+          NODE
+          )"
+          echo "advance=$advance" >> "$GITHUB_OUTPUT"
+
+  publish-container-version:
+    name: Publish the immutable container version
+    needs: [sign-finalize-release, prepare-release-draft]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download finalized signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: finalized-release-${{ github.sha }}
+          path: build/release
+      - name: Install the verified Cosign release
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Authenticate to the GitHub container registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Verify finalized asset and image coordinates
+        id: release-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/licomesh" \
+          IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
+          CHECKSUM_FILE="build/release/RELEASE_SHA256SUMS" \
+          ASSET_MANIFEST="build/release/control/RELEASE_ASSETS.json" \
+          node --input-type=module <<'NODE'
+          import crypto from "node:crypto";
+          import fs from "node:fs";
+          import path from "node:path";
+          const authority = JSON.parse(fs.readFileSync(process.env.IMAGE_AUTHORITY, "utf8"));
+          if (
+            authority.repository !== process.env.GITHUB_REPOSITORY
+            || authority.sourceCommit !== process.env.GITHUB_SHA
+            || authority.sourceRef !== process.env.GITHUB_REF
+            || authority.workflowRef !== process.env.GITHUB_WORKFLOW_REF
+            || authority.image !== process.env.EXPECTED_IMAGE
+            || !/^sha256:[a-f0-9]{64}$/u.test(authority.digest)
+          ) throw new Error("release_image_authority_mismatch");
+          const roots = ["build/release/mcp", "build/release/supply-chain", "build/release/image"];
+          const byName = new Map();
+          for (const root of roots) {
+            for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+              if (!entry.isFile() || entry.isSymbolicLink() || byName.has(entry.name)) {
+                throw new Error("release_asset_flat_name_invalid");
+              }
+              byName.set(entry.name, path.join(root, entry.name));
+            }
+          }
+          const lines = fs.readFileSync(process.env.CHECKSUM_FILE, "utf8").trimEnd().split("\n");
+          if (lines.length !== byName.size) throw new Error("release_checksum_file_set_mismatch");
+          const names = new Set();
+          for (const line of lines) {
+            const match = line.match(/^([a-f0-9]{64})  ([^\s]+)$/u);
+            if (!match || names.has(match[2]) || !byName.has(match[2])) {
+              throw new Error("release_checksum_entry_invalid");
+            }
+            names.add(match[2]);
+            const actual = crypto.createHash("sha256").update(fs.readFileSync(byName.get(match[2]))).digest("hex");
+            if (actual !== match[1]) throw new Error("release_checksum_digest_mismatch");
+          }
+          const expectedAssets = JSON.parse(fs.readFileSync(process.env.ASSET_MANIFEST, "utf8"));
+          const assetFiles = [
+            ...byName.values(),
+            process.env.CHECKSUM_FILE,
+            "build/release/RELEASE_SHA256SUMS.sigstore.json"
+          ];
+          const actualAssets = assetFiles.map((file) => {
+            const bytes = fs.readFileSync(file);
+            return {
+              name: path.basename(file),
+              size: bytes.length,
+              digest: `sha256:${crypto.createHash("sha256").update(bytes).digest("hex")}`
+            };
+          }).sort((left, right) => left.name.localeCompare(right.name));
+          if (JSON.stringify(actualAssets) !== JSON.stringify(expectedAssets)) {
+            throw new Error("release_asset_authority_mismatch");
+          }
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, [
+            `image=${authority.image}`,
+            `digest=${authority.digest}`,
+            ""
+          ].join("\n"));
+          NODE
+      - name: Verify all release signatures before publication
+        shell: bash
+        env:
+          IMAGE: ${{ steps.release-image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign verify \
+            --certificate-identity="$identity" \
+            --certificate-oidc-issuer="$issuer" \
+            "${IMAGE}@${IMAGE_DIGEST}" >/dev/null
+          cosign verify-blob build/release/image/RELEASE_IMAGE.json \
+            --bundle build/release/image/RELEASE_IMAGE.sigstore.json \
+            --certificate-identity="$identity" \
+            --certificate-oidc-issuer="$issuer" >/dev/null
+          cosign verify-blob build/release/RELEASE_SHA256SUMS \
+            --bundle build/release/RELEASE_SHA256SUMS.sigstore.json \
+            --certificate-identity="$identity" \
+            --certificate-oidc-issuer="$issuer" >/dev/null
+      - name: Publish the immutable container version tag
+        shell: bash
+        env:
+          IMAGE: ${{ steps.release-image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          target="${IMAGE}:${version}"
+          inspect_digest() {
+            local manifest
+            manifest="$(docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null)" || return 1
+            jq -er '.digest | select(test("^sha256:[a-f0-9]{64}$"))' <<<"$manifest"
+          }
+          existing_digest="$(inspect_digest "$target" || true)"
+          if [[ -n "$existing_digest" && "$existing_digest" != "$IMAGE_DIGEST" ]]; then
+            echo "The immutable version tag already names a different manifest digest." >&2
+            exit 1
+          fi
+          if [[ -z "$existing_digest" ]]; then
+            docker buildx imagetools create --tag "$target" "${IMAGE}@${IMAGE_DIGEST}"
+          fi
+          [[ "$(inspect_digest "$target")" == "$IMAGE_DIGEST" ]]
+
+  publish-npm-release-set:
+    name: Publish or reverify the npm release set
+    needs: [platform-acceptance, sign-finalize-release, prepare-release-draft, publish-container-version]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Validate the tag and atomic package release state
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run release:prepare -- --check --tag "$RELEASE_TAG"
+      - name: Install publication dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Publish missing tarballs or reverify immutable versions
+        run: npm run release:publish-npm
+
+  publish-github-release:
+    name: Publish the verified immutable GitHub release
+    needs: [prepare-release-draft, publish-container-version, publish-npm-release-set]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Download finalized signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: finalized-release-${{ github.sha }}
+          path: build/release
+      - name: Publish the verified GitHub release draft
+        if: needs.prepare-release-draft.outputs.published != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ADVANCE: ${{ needs.prepare-release-draft.outputs.advance }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prerelease="false"
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then prerelease="true"; fi
+          gh release edit "$GITHUB_REF_NAME" \
+            --draft=false \
+            --latest="$RELEASE_ADVANCE" \
+            --prerelease="$prerelease"
+      - name: Require immutable publication with exact assets and body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_ADVANCE: ${{ needs.prepare-release-draft.outputs.advance }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" \
+            > "$RUNNER_TEMP/published-release.json"
+          EXPECTED_RELEASE_ASSETS="build/release/control/RELEASE_ASSETS.json" \
+          EXPECTED_RELEASE_NOTES="build/release/RELEASE_NOTES.md" \
+          PUBLISHED_RELEASE="$RUNNER_TEMP/published-release.json" \
+          EXPECTED_TAG="$GITHUB_REF_NAME" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const expectedAssets = JSON.parse(fs.readFileSync(process.env.EXPECTED_RELEASE_ASSETS, "utf8"));
+          const expectedBody = fs.readFileSync(process.env.EXPECTED_RELEASE_NOTES, "utf8");
+          const release = JSON.parse(fs.readFileSync(process.env.PUBLISHED_RELEASE, "utf8"));
+          const expectedPrerelease = process.env.EXPECTED_TAG.slice(1).includes("-");
+          const actualAssets = (release.assets || []).map(({ name, size, digest }) => ({ name, size, digest }))
+            .sort((left, right) => left.name.localeCompare(right.name));
+          if (
+            release.tag_name !== process.env.EXPECTED_TAG
+            || release.name !== `LicoMesh ${process.env.EXPECTED_TAG}`
+            || release.body !== expectedBody
+            || release.draft !== false
+            || release.prerelease !== expectedPrerelease
+            || release.immutable !== true
+            || JSON.stringify(actualAssets) !== JSON.stringify(expectedAssets)
+          ) {
+            throw new Error("published_release_authority_mismatch");
+          }
+          NODE
+          latest_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+          if [[ "$RELEASE_ADVANCE" == "true" ]]; then
+            test "$latest_tag" = "$GITHUB_REF_NAME"
+          else
+            test "$latest_tag" != "$GITHUB_REF_NAME"
+          fi
+
+  advance-container-latest:
+    name: Advance the stable container tag monotonically
+    needs: [prepare-release-draft, publish-container-version, publish-github-release]
+    if: ${{ needs.prepare-release-draft.outputs.advance == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download finalized signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: finalized-release-${{ github.sha }}
+          path: build/release
+      - name: Install the verified Cosign release
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Authenticate to the GitHub container registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Resolve the signed image authority
+        id: release-image
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/licomesh" \
+          IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          const authority = JSON.parse(fs.readFileSync(process.env.IMAGE_AUTHORITY, "utf8"));
+          if (
+            authority.repository !== process.env.GITHUB_REPOSITORY
+            || authority.sourceCommit !== process.env.GITHUB_SHA
+            || authority.sourceRef !== process.env.GITHUB_REF
+            || authority.workflowRef !== process.env.GITHUB_WORKFLOW_REF
+            || authority.image !== process.env.EXPECTED_IMAGE
+            || !/^sha256:[a-f0-9]{64}$/u.test(authority.digest)
+          ) throw new Error("release_image_authority_mismatch");
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, [
+            `image=${authority.image}`,
+            `digest=${authority.digest}`,
+            ""
+          ].join("\n"));
+          NODE
+      - name: Verify the signed image authority
+        env:
+          IMAGE: ${{ steps.release-image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_WORKFLOW_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign verify \
+            --certificate-identity="$identity" \
+            --certificate-oidc-issuer="$issuer" \
+            "${IMAGE}@${IMAGE_DIGEST}" >/dev/null
+          cosign verify-blob build/release/image/RELEASE_IMAGE.json \
+            --bundle build/release/image/RELEASE_IMAGE.sigstore.json \
+            --certificate-identity="$identity" \
+            --certificate-oidc-issuer="$issuer" >/dev/null
+      - name: Verify immutable publication and advance the stable container tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.release-image.outputs.image }}
+          IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$RUNNER_TEMP/published-release.json"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" > "$release_json"
+          jq -e '.draft == false and .prerelease == false and .immutable == true' "$release_json" >/dev/null
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name')" = "$GITHUB_REF_NAME"
+          version="${GITHUB_REF_NAME#v}"
+          version_digest="$(docker buildx imagetools inspect "${IMAGE}:${version}" \
+            --format '{{json .Manifest}}' | jq -er '.digest')"
+          test "$version_digest" = "$IMAGE_DIGEST"
+          docker buildx imagetools create --tag "${IMAGE}:latest" "${IMAGE}@${IMAGE_DIGEST}"
+          latest_digest="$(docker buildx imagetools inspect "${IMAGE}:latest" \
+            --format '{{json .Manifest}}' | jq -er '.digest')"
+          test "$latest_digest" = "$IMAGE_DIGEST"

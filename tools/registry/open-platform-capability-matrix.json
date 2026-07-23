@@ -1,0 +1,401 @@
+{
+  "$schema": "./schema/open-platform-capability-matrix.schema.json",
+  "schemaVersion": "v0.0.1:registry:open-platform-capability-matrix-1",
+  "description": "Machine-readable evidence matrix for open platform release capability audits. Paths are repository-relative and contain no runtime-local data.",
+  "statusEnum": [
+    "implemented",
+    "partial",
+    "missing",
+    "disconnected",
+    "non_current",
+    "non_runnable"
+  ],
+  "capabilities": [
+    {
+      "id": "upstream-gateway",
+      "title": "Governed Upstream Service Gateway",
+      "docs": [
+        "README.md",
+        "docs/functionality/GATEWAY.md",
+        "docs/protocols/PROTOCOLS.md"
+      ],
+      "requirementRows": [
+        "Gateway Requirements",
+        "Governed Upstream Service Gateway"
+      ],
+      "requiredRuntimePrefixes": [
+        "gateway.",
+        "external_services."
+      ],
+      "knownProtocolPrefixes": [
+        "gateway.",
+        "external_services."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "admin.upstream-services",
+        "admin.gateway-routes"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-external-gateway.mjs",
+        "tools/server-scripts/verify-upstream-gateway-e2e.mjs",
+        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.mjs",
+        "tools/server-scripts/verify-upstream-fixture-transit.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "mcpOutlet",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "downstream-mcp",
+      "title": "Downstream MCP Gateway Completeness",
+      "docs": [
+        "README.md",
+        "docs/protocols/PROTOCOLS.md",
+        "packages/protocols/mcp/adapter/native-installer/README.md"
+      ],
+      "requirementRows": [
+        "MCP Requirements",
+        "Downstream MCP Gateway Completeness"
+      ],
+      "requiredRuntimePrefixes": [
+        "operation_permission."
+      ],
+      "mcpOutlets": [
+        "lico.discovery",
+        "lico.gateway"
+      ],
+      "allowedMcpTargets": "$MCP_SUPPORTED_TARGETS",
+      "expectedConsoleFeatures": [
+        "admin.operation-permission-governance"
+      ],
+      "verifierScripts": [
+        "tools/verifiers/downstream-mcp-completeness-audit.mjs",
+        "tools/server-scripts/mcp-doctor.mjs",
+        "tools/server-scripts/verify-mcp-installer-convergence.mjs",
+        "tools/server-scripts/verify-mcp-release-target-scope.mjs",
+        "tools/server-scripts/verify-mcp-client-identity-proof.mjs",
+        "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs",
+        "tools/server-scripts/verify-mcp-release-portable-assembly.mjs",
+        "tools/server-scripts/verify-downstream-agent-tool-loop.mjs",
+        "tools/server-scripts/verify-mcp-proxy-transport.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "mcpOutlet",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "strategy-management",
+      "title": "Strategy Management Policy Preview",
+      "docs": [
+        "docs/functionality/STRATEGY-MANAGEMENT.md",
+        "docs/protocols/PROTOCOLS.md"
+      ],
+      "requirementRows": [
+        "Strategy Management Requirements",
+        "Strategy Management Policy Preview"
+      ],
+      "requiredRuntimePrefixes": [
+        "strategy."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "admin.strategy-management"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-strategy-management.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "mcpOutlet",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "enterprise-governance",
+      "title": "Enterprise Governance And Observability",
+      "docs": [
+        "docs/functionality/SECURITY-AUTHORIZATION.md",
+        "docs/functionality/OPERATIONS-OBSERVABILITY.md"
+      ],
+      "requirementRows": [
+        "Operation Permission Requirements",
+        "Tag Policy Requirements",
+        "Observability Requirements",
+        "Enterprise Governance Observability"
+      ],
+      "requiredRuntimePrefixes": [
+        "authorization.",
+        "tag_management.",
+        "security_alerts.",
+        "production.",
+        "operation_permission.metrics_"
+      ],
+      "knownProtocolPrefixes": [
+        "tag_management."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "admin.tag-management",
+        "admin.production-health",
+        "admin.ops-monitor"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-tag-management.mjs",
+        "tools/server-scripts/verify-security-alert-lifecycle.mjs",
+        "tools/server-scripts/verify-production-health-console.mjs",
+        "tools/server-scripts/verify-observability-semantics.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "mcpOutlet",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "console-administration",
+      "title": "Console Administration Workflows",
+      "docs": [
+        "apps/console/router/admin-route-registry.mjs",
+        "packages/foundation/config/frontend-feature-registry.yaml"
+      ],
+      "requirementRows": [
+        "Console Administration Workflows"
+      ],
+      "requiredRuntimePrefixes": [
+        "operation_permission.",
+        "tag_management.",
+        "gateway."
+      ],
+      "expectedConsoleFeatures": [
+        "admin.operation-permission-governance",
+        "admin.tag-management",
+        "admin.upstream-services",
+        "admin.gateway-routes",
+        "admin.storage-control",
+        "admin.jobs-control"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-production-health-console.mjs",
+        "tests/verify-frontend-route-registry.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "container-deployment",
+      "title": "Container Deployment Resumability",
+      "docs": [
+        "Dockerfile",
+        "docker-compose.yml",
+        "docs/RUNBOOK.md"
+      ],
+      "requirementRows": [
+        "Container Deployment Resumability"
+      ],
+      "requiredFiles": [
+        "Dockerfile",
+        "docker-compose.yml",
+        "package-lock.json",
+        "tools/server-scripts/prepare-npm-artifact-cache.mjs"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/prepare-npm-artifact-cache.mjs",
+        "tools/server-scripts/verify-deployment-container-flow.mjs"
+      ],
+      "requiredEdges": [
+        "sourceFiles",
+        "verifier"
+      ]
+    },
+    {
+      "id": "storage",
+      "title": "Storage And Backup Runtime",
+      "docs": [
+        "packages/foundation/src/storage/README.md",
+        "docs/RUNBOOK.md"
+      ],
+      "requirementRows": [
+        "Core Platform Release Convergence"
+      ],
+      "requiredRuntimePrefixes": [
+        "storage."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "admin.storage-control"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-backup-restore.mjs",
+        "tools/server-scripts/verify-storage-production-restore-drill.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "jobs",
+      "title": "Jobs And Work Queue Runtime",
+      "docs": [
+        "docs/functionality/INGESTION-JOBS.md",
+        "packages/foundation/src/work-queue/README.md"
+      ],
+      "requirementRows": [
+        "Core Platform Release Convergence"
+      ],
+      "requiredRuntimePrefixes": [
+        "jobs."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "admin.jobs-control"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-job-work-queue.mjs",
+        "tools/server-scripts/verify-job-work-queue-capacity.mjs",
+        "tools/server-scripts/verify-work-queue-conformance.mjs",
+        "tools/server-scripts/verify-work-queue-process-restart.mjs",
+        "tools/server-scripts/verify-upload-workspace-materialization.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "external-plugin-packaging-loading",
+      "title": "External Plugin Packaging And Loading",
+      "docs": [
+        "docs/protocols/PLUGIN-PACKAGE-AND-LOADING.md",
+        "docs/functionality/SERVER-RUNTIME.md"
+      ],
+      "requirementRows": [
+        "External Plugin Packaging And Loading"
+      ],
+      "requiredFiles": [
+        "packages/foundation/src/module-system/plugin-runtime.mjs",
+        "packages/foundation/src/module-system/plugin-registry.mjs",
+        "packages/foundation/src/module-system/mount-manager.mjs"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-plugin-runtime.mjs"
+      ],
+      "requiredEdges": [
+        "sourceFiles",
+        "verifier"
+      ]
+    },
+    {
+      "id": "agent-gateway-model-routing",
+      "title": "Agent Gateway And Model Routing",
+      "docs": [
+        "docs/functionality/AGENT-GATEWAY.md",
+        "docs/protocols/PROTOCOLS.md"
+      ],
+      "requirementRows": [
+        "Agent Gateway And Model Routing"
+      ],
+      "requiredRuntimePrefixes": [
+        "agent_gateway."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "admin.agent-config",
+        "admin.agent-assignment",
+        "admin.context-management"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-agent-gateway.mjs",
+        "tools/server-scripts/verify-model-routing.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "mcpOutlet",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    },
+    {
+      "id": "core-workspace-assets-governance",
+      "title": "Core Workspace Assets And Governance",
+      "docs": [
+        "docs/functionality/WORKSPACE-ASSETS.md",
+        "docs/protocols/PROTOCOLS.md"
+      ],
+      "requirementRows": [
+        "Core Workspace Assets And Governance"
+      ],
+      "requiredRuntimePrefixes": [
+        "workspace.file.",
+        "workspace_governance.",
+        "workspace.checkpoint.",
+        "workspace.operation.",
+        "workspace.audit."
+      ],
+      "knownProtocolPrefixes": [
+        "workspace.file.",
+        "workspace.checkpoint.",
+        "workspace.operation.",
+        "workspace.audit."
+      ],
+      "mcpOutlets": [
+        "lico.gateway"
+      ],
+      "expectedConsoleFeatures": [
+        "workspace.navigation",
+        "workspace.gateway-context"
+      ],
+      "verifierScripts": [
+        "tools/server-scripts/verify-workspace-asset-management.mjs"
+      ],
+      "requiredEdges": [
+        "serverOperations",
+        "toolCatalog",
+        "mcpOutlet",
+        "httpRoutes",
+        "console",
+        "verifier"
+      ]
+    }
+  ]
+}

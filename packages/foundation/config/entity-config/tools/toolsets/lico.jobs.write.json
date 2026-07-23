@@ -1,0 +1,11 @@
+{
+  "id": "lico.jobs.write",
+  "label": "Jobs operate",
+  "requiredScopes": [
+    "jobs:read",
+    "jobs:write"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.licomesh.example/registry/schema/dependency-rule.schema.json",
+  "title": "Dependency Rules Registry",
+  "description": "Cross-layer dependency constraints and exceptions.",
+  "type": "object",
+  "required": ["$schema", "version", "layers", "constraints", "exceptions"],
+  "properties": {
+    "$schema": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^v\\d+\\.\\d+\\.\\d+$" },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "directory", "allowedDependsOn", "forbiddenDependsOn"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "name": { "type": "string", "minLength": 1 },
+          "directory": { "type": "string", "pattern": "^(?:apps|packages|tools|plugins)(?:/(?:[a-z0-9._-]+|\\*{1,2}))*$" },
+          "allowedDependsOn": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "forbiddenDependsOn": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "fromPattern", "forbiddenTargets"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "description": { "type": "string", "minLength": 1 },
+          "fromPattern": { "type": "string", "minLength": 1 },
+          "excludedFromPatterns": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "fromLayers": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "specifierKinds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "enum": ["relative", "package", "package-import"] }
+          },
+          "forbiddenTargets": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "severity": { "type": "string", "enum": ["error", "warning"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "exceptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "from", "to", "reason", "owner", "reviewBy"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "owner": { "type": "string", "minLength": 1 },
+          "reviewBy": { "type": "string", "format": "date" },
+          "integrationContract": { "type": "string", "minLength": 1 },
+          "testCoverage": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

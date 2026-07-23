@@ -1,0 +1,27 @@
+{
+  "$schema": "./schema/mcp-connector.schema.json",
+  "version": "0.1.0",
+  "generatedAt": "2026-06-30",
+  "directory": "packages/protocols/mcp/adapter/native-installer/",
+  "packageScripts": [
+    "mcp:install",
+    "mcp:doctor",
+    "server:mcp:register"
+  ],
+  "verifierScripts": [
+    "tools/server-scripts/verify-mcp-client-identity-proof.mjs",
+    "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs",
+    "tools/server-scripts/verify-node-runtime-supply-chain.mjs",
+    "tools/server-scripts/verify-mcp-release-portable-assembly.mjs",
+    "tools/server-scripts/verify-mcp-proxy-transport.mjs",
+    "tools/server-scripts/verify-downstream-agent-tool-loop.mjs"
+  ],
+  "evidenceReports": [
+    "build/reports/mcp-client-identity-proof.json",
+    "build/reports/mcp-process-identity-credential-store.json",
+    "build/reports/node-runtime-supply-chain.json",
+    "build/reports/mcp-release-portable-assembly.json",
+    "build/reports/mcp-proxy-transport.json",
+    "build/reports/downstream-agent-tool-loop.json"
+  ]
+}

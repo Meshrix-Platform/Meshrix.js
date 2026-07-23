@@ -1,0 +1,101 @@
+{
+  "$schema": "../../tools/registry/schema/domain-module.schema.json",
+  "id": "agents",
+  "kind": "domain",
+  "owner": "platform",
+  "directory": "packages/agents",
+  "description": "Agent configuration, gateway, workspace, collaboration, and maintenance features.",
+  "publicApi": [
+    "#lico/agents/*"
+  ],
+  "dependsOn": [
+    "contracts",
+    "foundation",
+    "protocols"
+  ],
+  "sourceOwnership": [
+    {
+      "feature": "agent-configuration",
+      "path": "src/agent-configs",
+      "fileCount": 4,
+      "testSuites": [
+        "agent-management.runtime"
+      ]
+    },
+    {
+      "feature": "agent-gateway",
+      "path": "src/agent-gateway",
+      "fileCount": 14,
+      "testSuites": [
+        "agent-gateway.runtime",
+        "model-routing.runtime"
+      ]
+    },
+    {
+      "feature": "agent-memory",
+      "path": "src/agent-memory",
+      "fileCount": 1,
+      "testSuites": [
+        "agent-memory.runtime"
+      ]
+    },
+    {
+      "feature": "agent-runtime",
+      "path": "src/agent-runtime-provider.mjs",
+      "fileCount": 1,
+      "testSuites": [
+        "agent-management.runtime"
+      ]
+    },
+    {
+      "feature": "agent-workspace",
+      "path": "src/agent-workspace",
+      "fileCount": 19,
+      "testSuites": [
+        "agents.agent-workspace-schema"
+      ]
+    },
+    {
+      "feature": "maintenance-agent",
+      "path": "src/maintenance",
+      "fileCount": 13,
+      "testSuites": [
+        "maintenance-agent.runtime"
+      ]
+    },
+    {
+      "feature": "upstream-gateway",
+      "path": "src/upstream-gateway",
+      "fileCount": 21,
+      "testSuites": [
+        "upstream-gateway.e2e",
+        "upstream-gateway.service-publishing",
+        "runtime.operation-dispatch-lock"
+      ]
+    },
+    {
+      "feature": "workspace-assets",
+      "path": "src/workspace-asset-registry",
+      "fileCount": 2,
+      "testSuites": [
+        "workspace-asset-management.runtime"
+      ]
+    },
+    {
+      "feature": "workspace-contribution",
+      "path": "src/workspace-contribution",
+      "fileCount": 8,
+      "testSuites": [
+        "runtime.operation-dispatch-lock"
+      ]
+    },
+    {
+      "feature": "workspace-governance",
+      "path": "src/workspace-governance",
+      "fileCount": 1,
+      "testSuites": [
+        "workspace-governance.runtime"
+      ]
+    }
+  ]
+}

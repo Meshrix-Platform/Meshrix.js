@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "dracula",
+  "label": {
+    "en": "Dracula",
+    "zh-CN": "盛夜古堡"
+  },
+  "mode": "dark",
+  "tokens": {
+    "bg-base": "#282a36",
+    "bg-surface": "#303241",
+    "bg-subtle": "#44475a",
+    "bg-inset": "#21222c",
+    "border-subtle": "#6272a4",
+    "border-strong": "#7b8cc8",
+    "text-primary": "#f8f8f2",
+    "text-secondary": "#d9def7",
+    "text-muted": "#c2c9ea",
+    "text-disabled": "#8c98c9",
+    "text-on-brand": "#282a36",
+    "brand": "#bd93f9",
+    "brand-strong": "#ff79c6",
+    "brand-subtle": "#3b3150",
+    "brand-muted": "#4c4268",
+    "info": "#8be9fd",
+    "info-surface": "#173946",
+    "info-border": "#4aaec2",
+    "success": "#50fa7b",
+    "success-surface": "#153d24",
+    "success-border": "#2fa85a",
+    "warning": "#ffb86c",
+    "warning-text": "#ffd7a3",
+    "warning-surface": "#3f2d1d",
+    "warning-border": "#b57a3e",
+    "danger": "#ff5555",
+    "danger-surface": "#441c24",
+    "danger-border": "#b53a49"
+  }
+}

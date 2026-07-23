@@ -1,0 +1,16 @@
+{
+  "id": "lico.admin",
+  "label": "LicoMesh admin",
+  "requiredScopes": [
+    "console:read",
+    "gateway:admin",
+    "storage:read",
+    "jobs:read",
+    "runtime:admin",
+    "agent_sync:publish",
+    "auth:admin"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": false,
+  "defaultForAgents": false
+}

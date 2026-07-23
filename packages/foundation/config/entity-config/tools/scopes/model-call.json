@@ -1,0 +1,5 @@
+{
+  "id": "model:call",
+  "label": "Call configured models",
+  "description": "Invoke configured model providers through explicit model-assisted allowlisted functions."
+}

@@ -1,0 +1,10 @@
+{
+  "id": "lico.storage.read",
+  "label": "Storage read",
+  "requiredScopes": [
+    "storage:read"
+  ],
+  "maxRisk": "read_only",
+  "grantable": true,
+  "defaultForAgents": true
+}

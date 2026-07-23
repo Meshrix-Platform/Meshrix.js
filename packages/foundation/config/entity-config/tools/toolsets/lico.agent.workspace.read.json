@@ -1,0 +1,10 @@
+{
+  "id": "lico.agent.workspace.read",
+  "label": "Agent workspace read",
+  "requiredScopes": [
+    "workspace:read"
+  ],
+  "maxRisk": "read_only",
+  "grantable": true,
+  "defaultForAgents": true
+}

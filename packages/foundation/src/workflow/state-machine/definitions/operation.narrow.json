@@ -1,0 +1,674 @@
+{
+  "machineId": "operation.narrow",
+  "entityType": "operation",
+  "version": "v0.0.1:state-machine:operation-narrow-1",
+  "description": "Narrow path state machine for LicoMesh operations.",
+  "initialState": "received",
+  "states": [
+    {
+      "id": "received"
+    },
+    {
+      "id": "normalized"
+    },
+    {
+      "id": "policy_checked"
+    },
+    {
+      "id": "policy_denied",
+      "terminal": true
+    },
+    {
+      "id": "proof_started"
+    },
+    {
+      "id": "executing"
+    },
+    {
+      "id": "checkpoint_recorded"
+    },
+    {
+      "id": "audit_recorded"
+    },
+    {
+      "id": "completed",
+      "terminal": true
+    },
+    {
+      "id": "failed",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "operation.normalize",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.policy_allow",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.policy_deny",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.proof_start",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.execute_start",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.checkpoint_record",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.audit_record",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.complete",
+      "riskLevel": "low"
+    },
+    {
+      "id": "operation.fail",
+      "riskLevel": "low"
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "received",
+      "event": "operation.normalize",
+      "result": "legal_transition",
+      "to": "normalized"
+    },
+    {
+      "from": "received",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "received",
+      "event": "operation.fail",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.policy_allow",
+      "result": "legal_transition",
+      "to": "policy_checked"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.policy_deny",
+      "result": "legal_transition",
+      "to": "policy_denied"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "normalized",
+      "event": "operation.fail",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.proof_start",
+      "result": "legal_transition",
+      "to": "proof_started"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_checked",
+      "event": "operation.fail",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.policy_deny",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "policy_denied",
+      "event": "operation.fail",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.execute_start",
+      "result": "legal_transition",
+      "to": "executing"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "proof_started",
+      "event": "operation.fail",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.checkpoint_record",
+      "result": "legal_transition",
+      "to": "checkpoint_recorded"
+    },
+    {
+      "from": "executing",
+      "event": "operation.audit_record",
+      "result": "legal_transition",
+      "to": "audit_recorded"
+    },
+    {
+      "from": "executing",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "executing",
+      "event": "operation.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.audit_record",
+      "result": "legal_transition",
+      "to": "audit_recorded"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "checkpoint_recorded",
+      "event": "operation.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.complete",
+      "result": "legal_transition",
+      "to": "completed"
+    },
+    {
+      "from": "audit_recorded",
+      "event": "operation.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "completed",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "completed",
+      "event": "operation.complete",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "completed",
+      "event": "operation.fail",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.normalize",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.policy_allow",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.policy_deny",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.proof_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.execute_start",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.checkpoint_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.audit_record",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.complete",
+      "result": "illegal_transition",
+      "errorCode": "OPERATION_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "operation.fail",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "SM-GOV-001",
+    "SM-GOV-002",
+    "SM-GOV-003",
+    "SM-GOV-006",
+    "SM-GOV-007",
+    "SM-GOV-012"
+  ],
+  "proofObligations": [
+    "PO-OP-001",
+    "PO-OP-002",
+    "PO-OP-003",
+    "PO-OP-004",
+    "PO-OP-005"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-OP-001",
+      "method": "path_includes_state",
+      "params": {
+        "target": "executing",
+        "requiredBefore": "policy_checked"
+      }
+    },
+    {
+      "obligationId": "PO-OP-002",
+      "method": "path_includes_state",
+      "params": {
+        "target": "executing",
+        "requiredBefore": "proof_started"
+      }
+    },
+    {
+      "obligationId": "PO-OP-003",
+      "method": "path_includes_state",
+      "params": {
+        "target": "policy_denied"
+      }
+    },
+    {
+      "obligationId": "PO-OP-004",
+      "method": "path_includes_state",
+      "params": {
+        "target": "completed",
+        "requiredBefore": "audit_recorded"
+      }
+    },
+    {
+      "obligationId": "PO-OP-005",
+      "method": "path_includes_state",
+      "params": {
+        "target": "failed"
+      }
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+[
+  {
+    "id": "b4e3dd16-c818-48f6-963e-a8fb2e57ca29",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Implement Maintenance Agent And Collaboration end to end.",
+    "description": "Implement maintenance-agent-collaboration end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Every maintenance-agent action has assigned identity, allowed context sources, workspace permissions, an audit event, and a terminal outcome.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "maintenance-agent"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Maintenance actions are governed by role/tag/capability policy before side effects.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "maintenance-agent"
+          },
+          {
+            "acceptanceCommandId": "enterprise-governance-coverage",
+            "report": "build/reports/enterprise-governance-coverage.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Console and MCP surfaces expose the same governed operations.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "maintenance-agent"
+          },
+          {
+            "acceptanceCommandId": "downstream-mcp-audit",
+            "report": "build/reports/downstream-mcp-completeness-audit.json"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete maintenance-agent-collaboration",
+      "target": "docs/functionality/MAINTENANCE-AGENT.md, docs/functionality/AGENT-COLLABORATION.md, docs/functionality/AGENT-GATEWAY.md, packages/agents/src/maintenance/, apps/console/views/admin/AgentAssignmentView.vue, apps/console/views/admin/AgentConfigView.vue, apps/console/views/admin/ContextManagementView.vue"
+    },
+    "next": [
+      "1018efe5-d12e-469e-a05b-4f89c2170e26"
+    ]
+  },
+  {
+    "id": "1018efe5-d12e-469e-a05b-4f89c2170e26",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "b4e3dd16-c818-48f6-963e-a8fb2e57ca29"
+    ],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Validate Maintenance Agent And Collaboration closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "maintenance-agent"
+          },
+          {
+            "acceptanceCommandId": "enterprise-governance-coverage",
+            "report": "build/reports/enterprise-governance-coverage.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "downstream-mcp-audit",
+            "report": "build/reports/downstream-mcp-completeness-audit.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate maintenance-agent-collaboration",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]

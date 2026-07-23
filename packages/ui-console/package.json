@@ -1,0 +1,41 @@
+{
+  "name": "@lico/ui-console",
+  "version": "0.0.1",
+  "description": "LicoMesh reusable console components, typed API clients, route registry",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "directory": "packages/ui-console"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.32"
+  },
+  "exports": {
+    "./bridge-http": "./src/bridge-http.ts",
+    "./page-refresh": "./src/page-refresh.ts",
+    "./rpc-client": "./src/rpc-client.ts",
+    "./error-message": "./src/error-message.ts",
+    "./binary-checkbox": "./src/BinaryCheckbox.vue",
+    "./workspaces-view-context": "./src/workspaces-view-context.ts",
+    "./server-console-shell-context": "./src/server-console-shell-context.ts",
+    "./console-format-utils": "./src/console-format-utils.ts",
+    "./console-client-display-utils": "./src/console-client-display-utils.ts",
+    "./option-bar": "./src/OptionBar.vue",
+    "./status-pill": "./src/StatusPill.vue",
+    "./*": "./src/*.ts"
+  },
+  "files": [
+    "src/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

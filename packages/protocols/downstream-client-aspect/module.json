@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "name": "DownstreamClientAspect",
+  "version": "v0.0.1:agent:downstream-client-aspect-1",
+  "category": "agent-client-protocol",
+  "agentCommunicationKind": "mcp",
+  "applicationSubsystem": "downstream-mcp",
+  "description": "Facing-agent downstream client aspect that assembles MCP framework adapter projections at service startup.",
+  "defaultLoaded": true,
+  "protocol": "v0.0.1:agent:downstream-client-aspect-1",
+  "adapterLayers": [
+    {
+      "layerId": "mcp",
+      "protocol": "mcp",
+      "adapterKind": "agent-framework-mcp-adapter-layer",
+      "boundary": "agent-to-lico"
+    }
+  ],
+  "components": {
+    "downstreamClientAspect": {
+      "path": "./index.mjs",
+      "factory": "createDownstreamClientAspectService",
+      "exports": [
+        "DOWNSTREAM_CLIENT_ASPECT_PROTOCOL_VERSION",
+        "DOWNSTREAM_CLIENT_ASPECT_SERVICE_KIND",
+        "DOWNSTREAM_CLIENT_ASPECT_ROUTE_TARGETS",
+        "DownstreamClientAspectService",
+        "McpAgentFrameworkAdapterLayer",
+        "assembleDownstreamClientAspect",
+        "createDefaultDownstreamClientAspectLayers",
+        "createDownstreamClientAspectService",
+        "defaultDownstreamClientFrameworks",
+        "normalizeFrameworkDefinition",
+        "resolveCommandCandidate"
+      ],
+      "requiredScopes": [
+        "gateway:read"
+      ],
+      "maxRisk": "read_only",
+      "auditRequired": true
+    }
+  },
+  "verification": [
+    "node tools/server-scripts/verify-downstream-client-aspect.mjs"
+  ]
+}

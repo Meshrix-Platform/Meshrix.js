@@ -1,0 +1,101 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.kilo/
+*.swp
+*.swo
+__pycache__/
+*.py[cod]
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local
+licomesh-cloud-init.yaml
+.venv/
+.venv-pdf/
+.venv-paddleocr/
+
+# Logs / crash dumps
+*.log
+hs_err_pid*
+replay_pid*
+crash-*
+
+# App local data and generated workspace outputs
+.licomesh-server-data/
+/licomesh-data/
+/.lico-agent-history/
+/build/
+/cache/
+/outputs/
+/reports/production-readiness/
+/.cache/
+
+# Java / Rust / Node build outputs
+node_modules/
+target/
+apps/desktop/.dart_tool/
+apps/desktop/.flutter-plugins
+apps/desktop/.flutter-plugins-dependencies
+apps/desktop/build/
+client-gui/.dart_tool/
+client-gui/.flutter-plugins
+client-gui/.flutter-plugins-dependencies
+client-gui/build/
+
+# Generated archives / binaries
+*.app
+*.AppImage
+*.asar
+*.dmg
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.tar.xz
+*.rar
+
+# Local module runtimes and heavy assets
+packages/capabilities/runtime-modules/knowledge/runtime/jre/**
+!packages/capabilities/runtime-modules/knowledge/runtime/jre/
+!packages/capabilities/runtime-modules/knowledge/runtime/jre/.gitkeep
+packages/capabilities/runtime-modules/knowledge/tika/*
+!packages/capabilities/runtime-modules/knowledge/tika/
+!packages/capabilities/runtime-modules/knowledge/tika/.gitkeep
+packages/capabilities/runtime-modules/knowledge/ocr/runtime/**
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/README.md
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/**/
+!packages/capabilities/runtime-modules/knowledge/ocr/runtime/**/.gitkeep
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# Local test source data can contain large/private documents.
+/tests/fixtures/
+/tests/email-corpus/
+
+# Local browser/test artifacts
+.playwright-cli/
+output/
+test-results/
+
+# Local AI assistant skill/runtime artifacts
+CLAUDE.md
+.claude/
+.codex-research/
+.gemini/
+.impeccable/
+.github/skills/
+
+# Local process documents. Public documentation remains under docs/README.md,
+# docs/RUNBOOK.md, docs/COMPATIBILITY.md, docs/ENTITY-CONFIG-LAYOUT.md,
+# docs/architecture/, docs/functionality/, docs/protocols/, docs/examples/,
+# and docs/adrs/.
+/docs/plans/
+/docs/reports/

@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "v0.0.1:lico-console:role-policy-1",
+  "description": "Console roles are configuration-only scope bundles. Feature-owned scope grants are projected only while their feature is active.",
+  "featureScopeGrants": {},
+  "roles": [
+    {
+      "roleId": "owner",
+      "label": "Owner",
+      "scopes": ["$all"]
+    },
+    {
+      "roleId": "admin",
+      "label": "Admin",
+      "scopes": [
+        "console:read",
+        "gateway:read",
+        "workspace:read",
+        "storage:read",
+        "gateway:write",
+        "workspace:write",
+        "storage:write",
+        "gateway:maintain",
+        "workspace:maintain",
+        "gateway:admin",
+        "jobs:read",
+        "jobs:write",
+        "maintenance:read",
+        "maintenance:run",
+        "maintenance:approve",
+        "maintenance:admin",
+        "repo:read",
+        "repo:write",
+        "repo:review",
+        "repo:approve",
+        "repo:maintain",
+        "model:call"
+      ]
+    },
+    {
+      "roleId": "operator",
+      "label": "Operator",
+      "scopes": [
+        "console:read",
+        "gateway:read",
+        "workspace:read",
+        "storage:read",
+        "gateway:write",
+        "workspace:write",
+        "storage:write",
+        "gateway:maintain",
+        "workspace:maintain",
+        "jobs:read",
+        "jobs:write",
+        "maintenance:read",
+        "maintenance:run",
+        "maintenance:approve",
+        "model:call"
+      ]
+    },
+    {
+      "roleId": "viewer",
+      "label": "Viewer",
+      "scopes": [
+        "console:read",
+        "gateway:read",
+        "workspace:read",
+        "storage:read",
+        "jobs:read"
+      ]
+    }
+  ]
+}
