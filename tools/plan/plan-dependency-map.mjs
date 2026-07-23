@@ -8,6 +8,26 @@ const LEGACY_PLAN_FIELDS = Object.freeze([
   "parent_integration_node_id",
 ]);
 
+export const PLAN_SHARED_STATE_AUTHORITY = Object.freeze({
+  id: "plan-shared-state-authority",
+  authority: Object.freeze({
+    dependencyMap: "end-to-end-release/DependencyMap.json",
+    checkpointOwner: "per-plan Checkpoints.json",
+  }),
+  transactional: Object.freeze({
+    writeMode: "atomic-rename",
+    receiptBinding: "final-node-key",
+  }),
+  multiReplica: Object.freeze({
+    profileIsolation: "exact-receipt-match",
+    crossProfilePromotion: "forbidden",
+  }),
+  migration: Object.freeze({
+    legacyFields: LEGACY_PLAN_FIELDS,
+    supersededPaths: "removed-in-same-closure",
+  }),
+});
+
 function requireCondition(condition, message) {
   if (!condition) throw new Error(message);
 }

@@ -1,7 +1,9 @@
 export const PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS = 12 * 60 * 1000;
 export const PLATFORM_ACCEPTANCE_PARALLELISM = 4;
 export const PLATFORM_ACCEPTANCE_PROFILES = Object.freeze({
-  core: Object.freeze({ id: "core" })
+  core: Object.freeze({ id: "core" }),
+  ha: Object.freeze({ id: "ha" }),
+  scale: Object.freeze({ id: "scale" }),
 });
 
 export function requirePlatformAcceptanceProfile(value) {

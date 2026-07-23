@@ -18,6 +18,30 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function isRetriableToolFailure(result) {
+  if (!isRecord(result)) {
+    return false;
+  }
+  if (result.status === 137) {
+    return true;
+  }
+  return result.status === null && result.signal === "SIGKILL";
+}
+
+async function invokeTool(runTool, request, { maxAttempts = 2, retryDelayMs = 50 } = {}) {
+  let lastResult;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    lastResult = runTool(request);
+    if (!isRetriableToolFailure(lastResult) || attempt === maxAttempts) {
+      return lastResult;
+    }
+    if (retryDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
+  }
+  return lastResult;
+}
+
 function parseJsonOutput(result, code) {
   if (!isRecord(result) || result.status !== 0 || typeof result.stdout !== "string") {
     throw new CanonicalBetterPlanToolError(code);
@@ -71,6 +95,7 @@ function defaultRunTool({ repoRoot, toolPath, args, env = process.env }) {
   );
   return {
     status: result.status,
+    signal: result.signal,
     stdout: result.stdout ?? "",
   };
 }
@@ -107,13 +132,13 @@ export async function validateCanonicalBetterPlanWorkspace({
     throw new CanonicalBetterPlanToolError("canonical_better_plan_repo_root_missing");
   }
   const toolPath = await resolveCanonicalBetterPlanTool(toolOptions);
-  const validation = parseJsonOutput(runTool({
+  const validation = parseJsonOutput(await invokeTool(runTool, {
     repoRoot,
     toolPath,
     args: ["validate", planRoot, "--check-sources", "--no-git", "--json"],
     env: toolOptions.env,
   }), "canonical_better_plan_validation_unreadable");
-  const labels = parseJsonOutput(runTool({
+  const labels = parseJsonOutput(await invokeTool(runTool, {
     repoRoot,
     toolPath,
     args: ["check-labels", planRoot, "--json"],

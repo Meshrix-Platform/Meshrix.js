@@ -65,6 +65,7 @@ function resolveReportPath(value) {
 function createChildEnvironment(runRoot, intervalMs) {
   const environment = { ...process.env };
   delete environment.NODE_OPTIONS;
+  delete environment.ELECTRON_RUN_AS_NODE;
   return {
     ...environment,
     NO_COLOR: "1",

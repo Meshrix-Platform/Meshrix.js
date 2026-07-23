@@ -130,19 +130,22 @@ const RULES = [
     id: "developer-macos-home-path",
     severity: "warning",
     message: "Use <user-home>, <repo-root>, <input-file>, or another placeholder instead of a macOS user home path.",
-    pattern: /\/Users\/[^/\s`'")]+(?:\/[^\s`'")]*)?/g
+    pattern: /\/Users\/[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_$-])?(?=\/|$|[\s`'"),;:\]}>!?])(?:\/[^\s`'")]*)?/g,
+    inspectPlaceholderContainingMatch: true
   },
   {
     id: "developer-linux-home-path",
     severity: "warning",
     message: "Use <user-home>, <repo-root>, <input-file>, or another placeholder instead of a Linux user home path.",
-    pattern: /\/home\/(?!lico\b)[^/\s`'")]+(?:\/[^\s`'")]*)?/g
+    pattern: /\/home\/(?!lico(?=\/|$|[\s`'"),;:\]}>!?]))[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_$-])?(?=\/|$|[\s`'"),;:\]}>!?])(?:\/[^\s`'")]*)?/g,
+    inspectPlaceholderContainingMatch: true
   },
   {
     id: "windows-user-profile-path",
     severity: "warning",
     message: "Use <user-home>, <repo-root>, <input-file>, or another placeholder instead of a Windows user profile path.",
-    pattern: /\b[A-Za-z]:[\\/]Users[\\/][^\s`'")]+/g
+    pattern: /\b[A-Za-z]:[\\/]Users[\\/][A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_$-])?(?=[\\/]|$|[\s`'"),;:\]}>!?])(?:[\\/][^\s`'")]*)?/gi,
+    inspectPlaceholderContainingMatch: true
   },
   {
     id: "private-network-service-url",
@@ -400,7 +403,7 @@ export function scanText(relativePath, text, fingerprintKey = MATCH_FINGERPRINT_
       continue;
     }
     for (const match of text.matchAll(rule.pattern)) {
-      if (/<[^>\r\n]+>/u.test(match[0])) {
+      if (!rule.inspectPlaceholderContainingMatch && /<[^>\r\n]+>/u.test(match[0])) {
         continue;
       }
       if (typeof rule.shouldReport === "function" && !rule.shouldReport({ match: match[0], relativePath, text })) {

@@ -40,6 +40,31 @@ const SAFE_ROLE = /^[a-z][a-z0-9_]*$/u;
 const MAX_DIRECTORY_LENGTH = 512;
 const MAX_NODE_ID_LENGTH = 256;
 const MAX_REPOSITORY_LENGTH = 256;
+const MAX_PLAN_COUNT = 256;
+const MAX_CHECKPOINT_COUNT = 4096;
+const MAX_EDGE_COUNT = 16_384;
+
+export const PLAN_EXECUTION_RESOURCE_DISCIPLINE = Object.freeze({
+  id: "plan-execution-eligibility",
+  bounds: Object.freeze({
+    maxDirectoryLength: MAX_DIRECTORY_LENGTH,
+    maxNodeIdLength: MAX_NODE_ID_LENGTH,
+    maxRepositoryLength: MAX_REPOSITORY_LENGTH,
+    maxPlanCount: MAX_PLAN_COUNT,
+    maxCheckpointCount: MAX_CHECKPOINT_COUNT,
+    maxEdgeCount: MAX_EDGE_COUNT,
+  }),
+  scheduling: Object.freeze({
+    statusPriority: Object.freeze(["in_progress", "pending"]),
+  }),
+  caching: Object.freeze({
+    receiptValidation: "once-per-evaluation",
+  }),
+  lockOwnership: Object.freeze({
+    graphState: "evaluation-local",
+    inputMutation: "forbidden",
+  }),
+});
 
 export class PlanExecutionPolicyError extends Error {
   constructor(code, message) {
@@ -647,6 +672,22 @@ export function evaluatePlanExecutionEligibility({
   }
 
   assertAcyclic(outgoing, incoming);
+
+  requireCondition(
+    planStates.size <= MAX_PLAN_COUNT,
+    "graph_budget_exceeded",
+    "Plan count exceeds the execution eligibility budget",
+  );
+  requireCondition(
+    globalNodeMetadata.size <= MAX_CHECKPOINT_COUNT,
+    "graph_budget_exceeded",
+    "checkpoint count exceeds the execution eligibility budget",
+  );
+  requireCondition(
+    edgeKinds.size <= MAX_EDGE_COUNT,
+    "graph_budget_exceeded",
+    "checkpoint edge count exceeds the execution eligibility budget",
+  );
 
   for (const [nodeId, metadata] of globalNodeMetadata) {
     if (metadata.node.status !== "completed") {

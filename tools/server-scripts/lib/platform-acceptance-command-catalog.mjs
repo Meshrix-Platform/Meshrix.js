@@ -44,7 +44,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS = Object.freeze([
       "foundation-public-gate"
     ]
   }),
-  command("better-plan", "Public source documentation boundary", "foundation", npmRun("verify:better-plan"), "build/reports/better-plan.json", ["documentation", "public-boundary", "release-state"]),
+  command("better-plan", "Public source documentation boundary", "foundation", npmRun("verify:better-plan"), "build/reports/better-plan.json", ["documentation", "public-boundary", "release-state"], { dependsOn: ["foundation-tests"] }),
   command("composition-source-package", "Self-contained composition source package", "foundation", npmRun("verify:composition-source-package"), "build/reports/composition-source-package.json", ["source-package", "offline-release", "composition"]),
   command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { resourceLocks: ["container-runtime"], timeoutMs: NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS }),
   command("security-alert-lifecycle", "Security alert lifecycle", "foundation", npmRun("verify:security-alert-lifecycle"), "build/reports/security-alert-lifecycle.json", ["security-alerts", "redaction"]),

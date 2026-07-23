@@ -106,4 +106,30 @@ describe("canonical Better Plan workspace adapter", () => {
       code: "canonical_better_plan_validation_unreadable",
     }));
   });
+
+  it("retries once when manifest_tool is SIGKILL'd before returning JSON", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "canonical-better-plan-retry-"));
+    temporaryRoots.push(root);
+    const toolPath = path.join(root, "manifest_tool.py");
+    await fs.writeFile(toolPath, "# synthetic fixture\n", "utf8");
+    const attempts = [];
+    const passingPayload = (command) => JSON.stringify(
+      command === "validate" ? { ok: true, issues: [] } : { errors: 0, warnings: 0 },
+    );
+
+    const result = await validateCanonicalBetterPlanWorkspace({
+      repoRoot: root,
+      manifestToolPath: toolPath,
+      runTool: ({ args }) => {
+        attempts.push(args[0]);
+        if (attempts.length === 1) {
+          return { status: null, signal: "SIGKILL", stdout: "" };
+        }
+        return { status: 0, stdout: passingPayload(args[0]) };
+      },
+    });
+
+    expect(result.accepted).toBe(true);
+    expect(attempts).toEqual(["validate", "validate", "check-labels"]);
+  });
 });

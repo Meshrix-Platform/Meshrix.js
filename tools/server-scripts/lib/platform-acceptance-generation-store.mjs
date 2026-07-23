@@ -214,13 +214,49 @@ async function withPublicationLock(root, action) {
 }
 
 function workspaceCopyFilter(repoRoot) {
-  const excluded = new Set([".git", "build", "node_modules"]);
+  const excludedTopLevel = new Set([".git", "node_modules"]);
+  const allowedBuildPrefixes = ["build/plan-proof-ledger"];
   return (sourcePath) => {
     const relativePath = path.relative(repoRoot, sourcePath);
     if (!relativePath) return true;
+    const normalized = relativePath.split(path.sep).join("/");
     const [firstSegment] = relativePath.split(path.sep);
-    return !excluded.has(firstSegment);
+    if (excludedTopLevel.has(firstSegment)) return false;
+    if (firstSegment === "build") {
+      if (normalized === "build") return true;
+      return allowedBuildPrefixes.some((prefix) =>
+        normalized === prefix || normalized.startsWith(`${prefix}/`));
+    }
+    return true;
   };
+}
+
+const WORKSPACE_PACKAGE_SCOPE = "@lico";
+
+async function linkWorkspaceNodeModules(repoRoot, workspace) {
+  const sourceRoot = path.join(repoRoot, "node_modules");
+  const targetRoot = path.join(workspace, "node_modules");
+  const localPackages = path.join(workspace, "packages");
+  await fs.mkdir(targetRoot, { recursive: true, mode: 0o700 });
+  const entries = await fs.readdir(sourceRoot);
+  for (const entry of entries) {
+    if (entry === WORKSPACE_PACKAGE_SCOPE) continue;
+    await fs.symlink(path.join(sourceRoot, entry), path.join(targetRoot, entry), "junction");
+  }
+  const scopeSource = path.join(sourceRoot, WORKSPACE_PACKAGE_SCOPE);
+  const scopeTarget = path.join(targetRoot, WORKSPACE_PACKAGE_SCOPE);
+  await fs.mkdir(scopeTarget, { recursive: true, mode: 0o700 });
+  const [scopeEntries, localEntries] = await Promise.all([
+    fs.readdir(scopeSource),
+    fs.readdir(localPackages).catch(() => []),
+  ]);
+  const localNames = new Set(localEntries);
+  await Promise.all(scopeEntries.map(async (entry) => {
+    const localPackage = path.join(localPackages, entry);
+    const stats = localNames.has(entry) ? await fs.stat(localPackage).catch(() => null) : null;
+    const source = stats?.isDirectory() ? localPackage : path.join(scopeSource, entry);
+    await fs.symlink(source, path.join(scopeTarget, entry), "junction");
+  }));
 }
 
 export async function createAcceptanceGenerationWorkspace(repoRoot, { id } = {}) {
@@ -240,7 +276,8 @@ export async function createAcceptanceGenerationWorkspace(repoRoot, { id } = {})
     const dependencyRoot = path.join(repoRoot, "node_modules");
     const stats = await fs.stat(dependencyRoot);
     if (!stats.isDirectory()) throw new Error("not a directory");
-    await fs.symlink(dependencyRoot, path.join(paths.workspace, "node_modules"), "junction");
+    await linkWorkspaceNodeModules(repoRoot, paths.workspace);
+    await fs.symlink(path.join(repoRoot, ".git"), path.join(paths.workspace, ".git"), "junction");
   } catch (error) {
     await fs.rm(paths.workspace, { recursive: true, force: true });
     if (error?.message === "not a directory" || error?.code === "ENOENT") {

@@ -13,7 +13,11 @@ import {
 } from "../../plan/plan-dependency-map.mjs";
 
 const RELEASE_ACCEPTANCE_PLAN = "end-to-end-release/release-acceptance";
-const ACCEPTANCE_TO_PLAN_PROFILE = Object.freeze({ core: "local" });
+const ACCEPTANCE_TO_PLAN_PROFILE = Object.freeze({
+  core: "local",
+  ha: "ha",
+  scale: "scale",
+});
 
 export class PlatformAcceptancePlanReceiptError extends Error {
   constructor(code, classification = "blocked") {

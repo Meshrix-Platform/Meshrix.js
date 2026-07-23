@@ -10,6 +10,158 @@ This runbook covers local startup, container startup, verification, and operatio
 
 The default runtime is self-contained. Optional middleware integrations are enabled explicitly for deployment-specific extensions.
 
+## Private-Deployment Dependency Admission
+
+LicoMesh is delivered to enterprises for private deployment. Dependency
+admission therefore protects an operator's continuing right to install,
+redistribute, operate, maintain, back up, restore, modify, and upgrade the
+delivered system without an unexpected third-party commercial condition.
+Source availability, popularity, or current zero-cost use is not sufficient
+evidence of acceptability.
+
+This gate applies to:
+
+- direct and transitive source dependencies;
+- bundled libraries, binaries, base images, containers, and downloaded tools;
+- Operators, charts, deployment templates, installers, and release assets;
+- default, optional, example, development, test, and observability components
+  that enter a source or release candidate; and
+- a new version, edition, module, plugin, or distribution of an already
+  admitted project.
+
+A generic protocol adapter is not an adoption of every compatible product only
+when LicoMesh does not bundle, download, require, select by default, or make a
+licensing claim for the operator-supplied service.
+
+### Authority and maturity baseline
+
+License compliance is necessary but does not establish technical authority.
+Default enterprise profiles must use established projects with durable public
+governance, current security maintenance, broad production evidence, and an
+operational ecosystem appropriate to the workload. Repository popularity,
+vendor marketing, a single large deployment, protocol compatibility, or an
+open-source license alone is not sufficient.
+
+A baseline dependency must satisfy every applicable condition:
+
+1. it has a current supported release line, a published security contact and
+   update process, immutable release artifacts, and documented upgrade and
+   rollback procedures;
+2. its governance, release authority, trademarks, and maintainer continuity
+   are public and are not subject to an unresolved single-vendor or ownership
+   dispute;
+3. independent organizations have documented production operation, including
+   failure, recovery, backup or replay, observability, and capacity behavior
+   relevant to the selected role;
+4. its standard protocol and data format permit replacement without moving
+   LicoMesh governance or business authority into the dependency; and
+5. the exact artifact passes LicoMesh conformance, failure injection,
+   migration, resource-bound, and private-deployment tests.
+
+In addition, a default dependency needs at least one authority anchor:
+
+- an Apache Software Foundation Top-Level Project, not an incubating project;
+- a CNCF Graduated project or a direct subproject governed by one;
+- a neutrally governed Linux Foundation project with active maintainers and
+  production users from multiple independent organizations;
+- PostgreSQL Global Development Group ownership or an active, long-lived
+  PostgreSQL community project listed by the PostgreSQL project; or
+- a documented de facto industry standard with multiple independent
+  production adopters, at least five years of maintained releases, a public
+  security process, and no unresolved control or relicensing risk.
+
+CNCF Sandbox projects, Apache Incubator projects, personal projects, and
+single-vendor open-core components do not enter a default profile. A CNCF
+Incubating project may be evaluated only as a non-default extension when no
+Graduated or Top-Level alternative meets the capability, and it still requires
+independent production evidence and a tested replacement path. If no candidate
+passes both the license and authority gates, the capability remains unselected;
+maintainers must not lower either gate merely to fill a matrix cell.
+
+### License baseline
+
+The initial license allowlist is intentionally narrow:
+
+- Apache License 2.0;
+- BSD 2-Clause and BSD 3-Clause;
+- MIT;
+- GNU GPL version 2 or version 3; and
+- the PostgreSQL License as an explicit project exception after an exact
+  permissive-license review.
+
+AGPL and LGPL are distinct license families and are not admitted as GPL by
+name similarity. A dual-licensed artifact must have one explicitly selected
+allowlisted option. A mixed-license artifact must pass for every component
+that is distributed. GPL code must remain process- or service-separated unless
+an explicit compatibility review permits linkage, and every distribution must
+satisfy the applicable source, notice, and modification obligations.
+
+An allowlisted license is necessary but not sufficient. Reject a candidate
+when any of the following is true:
+
+- source-available, proprietary, custom, trial, or delayed-conversion terms
+  restrict production use, field of use, revenue, organization size, cluster
+  size, user count, geography, resale, hosting, managed service, competition,
+  or redistribution;
+- production operation, security maintenance, or a required capability needs
+  a license key, account registration, mandatory telemetry, paid entitlement,
+  recurring renewal, or commercial edition;
+- dual, mixed, or edition-specific licensing leaves the rights of the exact
+  source, binary, container, chart, Operator, plugin, or management component
+  unclear;
+- a material licensing, copyright, trademark, project-control, or governance
+  dispute creates a credible redistribution, operation, upgrade, or
+  maintenance-continuity risk;
+- the maintainers withdraw supported community artifacts, archive the required
+  repository, stop a usable security-update path, or direct production users
+  to a separately licensed product;
+- the release artifact, its source, its license and notice files, and its SBOM
+  cannot be bound to the same immutable version and digest; or
+- approval would require an enterprise customer to obtain a separate license,
+  accept new third-party terms, disclose unrelated source, or assume an
+  unresolved interpretation.
+
+Unknown, conflicting, or incomplete evidence is a rejection. Maintainers must
+not use a disclaimer, an optional-install label, a customer-supplied image, or
+an instruction to contact the vendor as a substitute for admission.
+Existing presence is not approval or grandfathering: an artifact that has not
+passed this gate must be removed, replaced, or admitted before it can enter the
+next release candidate.
+
+### Admission and upgrade evidence
+
+Before a dependency enters a change or release candidate, record and review:
+
+1. the exact upstream owner, repository, version, source revision, artifact,
+   image digest, and selected edition;
+2. the authoritative license text, SPDX expression, notices, bundled
+   third-party inventory, and release-candidate SBOM;
+3. production, redistribution, hosting, trademark, support, security-update,
+   registration, telemetry, and renewal terms;
+4. current maintenance and governance status, including public relicensing or
+   ownership disputes; and
+5. an offline private-deployment path that does not require vendor approval or
+   a vendor control plane.
+
+Review a fixed artifact, never a floating tag. Every upgrade or distribution
+change is a new admission decision. A scanner may collect evidence but cannot
+resolve ambiguous legal or commercial terms; ambiguity remains denied until a
+competent review records a safe conclusion.
+
+If an admitted upstream later changes its terms or develops a material
+commercial or governance risk:
+
+1. stop upgrades and prevent the affected artifact from entering a new release
+   candidate;
+2. preserve the immutable source, license, notices, SBOM, and digest that prove
+   the rights of the last admitted artifact;
+3. select and verify a risk-free replacement behind the existing Core-owned
+   port or protocol boundary;
+4. migrate once, remove the affected implementation and product-specific
+   defaults, and verify that no release surface still installs it; and
+5. do not require existing private-deployment users to purchase a license or
+   accept the upstream's new terms as the migration path.
+
 ## Local Startup
 
 ```bash

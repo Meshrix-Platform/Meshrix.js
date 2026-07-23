@@ -19,16 +19,16 @@ vi.mock("#lico/product-api", async (importOriginal) => ({
   saveSettings: vi.fn(async (_userDataPath, settings = {}) => settings || {})
 }));
 
-import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.mjs";
-import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.mjs";
-import { createJobArtifactHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-artifact-handlers.mjs";
-import { createBatchDeletionCoordinator } from "../../../packages/server-runtime/src/jobs/batch-deletion-coordinator.mjs";
-import { createJobPipeline } from "../../../packages/server-runtime/src/jobs/job-pipeline.mjs";
+import { createStorageKernel } from "#lico/foundation/storage/storage-kernel.mjs";
+import { createStorageProvider } from "#lico/foundation/storage/storage-provider.mjs";
+import { createJobArtifactHandlers } from "#lico/protocols/http/controllers/jobs-controller-artifact-handlers.mjs";
+import { createBatchDeletionCoordinator } from "#lico/server-runtime/jobs/batch-deletion-coordinator.mjs";
+import { createJobPipeline } from "#lico/server-runtime/jobs/job-pipeline.mjs";
 import {
   appendUploadSessionChunk,
   createOrResumeUploadSession,
   resolveUploadSessionFiles
-} from "../../../packages/server-runtime/src/state/upload-session-store.mjs";
+} from "#lico/server-runtime/state/upload-session-store.mjs";
 
 const tempRoots = [];
 const storageKernels = [];

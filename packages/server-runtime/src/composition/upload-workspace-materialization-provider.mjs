@@ -121,6 +121,92 @@ function fenced(message = "materialization_fenced") {
   return Object.assign(new Error(message), { code: "materialization_fenced" });
 }
 
+function ensureMaterializationRequestColumns(db) {
+  const columns = new Set(
+    db.prepare("PRAGMA table_info(materialization_requests)").all().map((row) => row.name)
+  );
+  if (!columns.has("scope_ref")) {
+    db.exec("ALTER TABLE materialization_requests ADD COLUMN scope_ref TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has("input_bytes")) {
+    db.exec("ALTER TABLE materialization_requests ADD COLUMN input_bytes INTEGER NOT NULL DEFAULT 0");
+  }
+}
+
+function backfillMaterializationRequestInputBytes(db) {
+  db.exec(`
+    UPDATE materialization_requests
+    SET input_bytes = (
+      SELECT COALESCE(SUM(byte_size), 0)
+      FROM materialization_inputs
+      WHERE request_ref = materialization_requests.request_ref
+    )
+    WHERE input_bytes = 0
+      AND EXISTS (
+        SELECT 1
+        FROM materialization_inputs
+        WHERE request_ref = materialization_requests.request_ref
+      )
+  `);
+}
+
+function ensureMaterializationInputColumns(db, custodyRoot) {
+  const columns = new Set(
+    db.prepare("PRAGMA table_info(materialization_inputs)").all().map((row) => row.name)
+  );
+  if (!columns.has("custody_rel_path")) {
+    db.exec("ALTER TABLE materialization_inputs ADD COLUMN custody_rel_path TEXT NOT NULL DEFAULT ''");
+  }
+  if (!columns.has("content")) {
+    return;
+  }
+  const rows = db.prepare(`
+    SELECT request_ref, source_path, content_sha256, byte_size, content, custody_rel_path
+    FROM materialization_inputs
+  `).all();
+  const updateCustodyPath = db.prepare(`
+    UPDATE materialization_inputs
+    SET custody_rel_path = ?
+    WHERE request_ref = ? AND source_path = ?
+  `);
+  for (const row of rows) {
+    if (String(row.custody_rel_path || "").trim()) {
+      continue;
+    }
+    const buffer = Buffer.isBuffer(row.content) ? row.content : Buffer.from(row.content || "");
+    const input = {
+      sourcePath: row.source_path,
+      contentSha256: row.content_sha256,
+      byteSize: row.byte_size
+    };
+    const relativePath = custodyRelativePath(row.request_ref, input);
+    const absolutePath = resolveCustodyPath(custodyRoot, relativePath);
+    ensurePrivateDir(path.dirname(absolutePath));
+    if (!fsNative.existsSync(absolutePath)) {
+      fsNative.writeFileSync(absolutePath, buffer, { mode: 0o600 });
+    }
+    updateCustodyPath.run(relativePath, row.request_ref, row.source_path);
+  }
+  db.exec(`
+    CREATE TABLE materialization_inputs_migrated (
+      request_ref TEXT NOT NULL,
+      source_path TEXT NOT NULL,
+      content_sha256 TEXT NOT NULL,
+      byte_size INTEGER NOT NULL,
+      custody_rel_path TEXT NOT NULL,
+      PRIMARY KEY(request_ref, source_path),
+      FOREIGN KEY(request_ref) REFERENCES materialization_requests(request_ref) ON DELETE CASCADE
+    );
+    INSERT INTO materialization_inputs_migrated (
+      request_ref, source_path, content_sha256, byte_size, custody_rel_path
+    )
+    SELECT request_ref, source_path, content_sha256, byte_size, custody_rel_path
+    FROM materialization_inputs;
+    DROP TABLE materialization_inputs;
+    ALTER TABLE materialization_inputs_migrated RENAME TO materialization_inputs;
+  `);
+}
+
 export function createUploadWorkspaceMaterializationTransactionStore({
   userDataPath,
   leaseMs = DEFAULT_LEASE_MS,
@@ -143,6 +229,7 @@ export function createUploadWorkspaceMaterializationTransactionStore({
     workspace_revision TEXT NOT NULL DEFAULT '', checkpoint_refs_json TEXT NOT NULL DEFAULT '[]',
     scope_ref TEXT NOT NULL DEFAULT '', input_bytes INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL)`);
+  ensureMaterializationRequestColumns(db);
   db.exec(`CREATE TABLE IF NOT EXISTS materialization_inputs (
     request_ref TEXT NOT NULL,
     source_path TEXT NOT NULL,
@@ -152,6 +239,8 @@ export function createUploadWorkspaceMaterializationTransactionStore({
     PRIMARY KEY(request_ref, source_path),
     FOREIGN KEY(request_ref) REFERENCES materialization_requests(request_ref) ON DELETE CASCADE
   )`);
+  ensureMaterializationInputColumns(db, custodyRoot);
+  backfillMaterializationRequestInputBytes(db);
   db.exec(`CREATE TABLE IF NOT EXISTS materialization_capacity (
     singleton INTEGER PRIMARY KEY CHECK(singleton=1),
     request_count INTEGER NOT NULL CHECK(request_count>=0),

@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "lico.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-07-20",
+  "updatedAt": "2026-07-24",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".licomesh-server-data/artifacts",
@@ -2018,6 +2018,32 @@
               "evidenceId": "v0-0-1-observability-monitor-alert-state-1-source-1",
               "kind": "other",
               "uri": "packages/server-runtime/src/composition/devops/monitor-alerts.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.observability.pipeline",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for lico.observability.pipeline.",
+      "activeVersion": "v0.0.1:observability:pipeline-1",
+      "versions": [
+        {
+          "version": "v0.0.1:observability:pipeline-1",
+          "ref": "lico.observability.pipeline@v0.0.1:observability:pipeline-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-observability-pipeline-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/observability/observability-pipeline-provider.mjs"
             }
           ]
         }
@@ -4414,6 +4440,32 @@
       ]
     },
     {
+      "artifactId": "lico.runtime.roles-elasticity",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for lico.runtime.roles-elasticity.",
+      "activeVersion": "v0.0.1:runtime:roles-elasticity-1",
+      "versions": [
+        {
+          "version": "v0.0.1:runtime:roles-elasticity-1",
+          "ref": "lico.runtime.roles-elasticity@v0.0.1:runtime:roles-elasticity-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-runtime-roles-elasticity-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/runtime/runtime-roles-elasticity-provider.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "lico.repository.layout-audit",
       "kind": "platform",
       "description": "Governed version registry entry for lico.repository.layout-audit.",
@@ -4922,6 +4974,32 @@
               "evidenceId": "v0-0-1-security-alerts-1-source-1",
               "kind": "other",
               "uri": "packages/foundation/src/security/security-alerts.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.security.gateway-valkey",
+      "kind": "runtime_capability",
+      "description": "Governed version registry entry for lico.security.gateway-valkey.",
+      "activeVersion": "v0.0.1:security:gateway-valkey-1",
+      "versions": [
+        {
+          "version": "v0.0.1:security:gateway-valkey-1",
+          "ref": "lico.security.gateway-valkey@v0.0.1:security:gateway-valkey-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-security-gateway-valkey-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/gateway-valkey-provider.mjs"
             }
           ]
         }
@@ -7884,6 +7962,162 @@
               "evidenceId": "v0-0-1-serialization-canonical-json-1-test",
               "kind": "test",
               "uri": "tests/unit/serialization/canonical-json.test.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.ha.profile-capacity-child",
+      "kind": "schema",
+      "description": "Governed version registry entry for lico.ha.profile-capacity-child.",
+      "activeVersion": "v0.0.1:ha:ha-profile-capacity-child-1",
+      "versions": [
+        {
+          "version": "v0.0.1:ha:ha-profile-capacity-child-1",
+          "ref": "lico.ha.profile-capacity-child@v0.0.1:ha:ha-profile-capacity-child-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current HA profile capacity child report schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-ha-profile-capacity-child-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/lib/ha-profile-capacity-child.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.ha.profile-fault-child",
+      "kind": "schema",
+      "description": "Governed version registry entry for lico.ha.profile-fault-child.",
+      "activeVersion": "v0.0.1:ha:ha-profile-fault-child-1",
+      "versions": [
+        {
+          "version": "v0.0.1:ha:ha-profile-fault-child-1",
+          "ref": "lico.ha.profile-fault-child@v0.0.1:ha:ha-profile-fault-child-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current HA profile fault child report schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-ha-profile-fault-child-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/lib/ha-profile-fault-child.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.ha.profile-memory-child",
+      "kind": "schema",
+      "description": "Governed version registry entry for lico.ha.profile-memory-child.",
+      "activeVersion": "v0.0.1:ha:ha-profile-memory-child-1",
+      "versions": [
+        {
+          "version": "v0.0.1:ha:ha-profile-memory-child-1",
+          "ref": "lico.ha.profile-memory-child@v0.0.1:ha:ha-profile-memory-child-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current HA profile memory child report schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-ha-profile-memory-child-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/lib/ha-profile-memory-child.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.scale.profile-capacity-child",
+      "kind": "schema",
+      "description": "Governed version registry entry for lico.scale.profile-capacity-child.",
+      "activeVersion": "v0.0.1:scale:scale-profile-capacity-child-1",
+      "versions": [
+        {
+          "version": "v0.0.1:scale:scale-profile-capacity-child-1",
+          "ref": "lico.scale.profile-capacity-child@v0.0.1:scale:scale-profile-capacity-child-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scale profile capacity child report schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-scale-profile-capacity-child-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/lib/scale-profile-capacity-child.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.scale.profile-fault-child",
+      "kind": "schema",
+      "description": "Governed version registry entry for lico.scale.profile-fault-child.",
+      "activeVersion": "v0.0.1:scale:scale-profile-fault-child-1",
+      "versions": [
+        {
+          "version": "v0.0.1:scale:scale-profile-fault-child-1",
+          "ref": "lico.scale.profile-fault-child@v0.0.1:scale:scale-profile-fault-child-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scale profile fault child report schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-scale-profile-fault-child-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/lib/scale-profile-fault-child.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "lico.scale.profile-memory-child",
+      "kind": "schema",
+      "description": "Governed version registry entry for lico.scale.profile-memory-child.",
+      "activeVersion": "v0.0.1:scale:scale-profile-memory-child-1",
+      "versions": [
+        {
+          "version": "v0.0.1:scale:scale-profile-memory-child-1",
+          "ref": "lico.scale.profile-memory-child@v0.0.1:scale:scale-profile-memory-child-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scale profile memory child report schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-scale-profile-memory-child-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/lib/scale-profile-memory-child.mjs"
             }
           ]
         }

@@ -21,7 +21,7 @@ const OBSERVABILITY_SEMANTICS_REPORT = "build/reports/observability-semantics.js
 const VERIFIER = "tools/server-scripts/verify-enterprise-observability-coverage.mjs";
 const COMMAND_ID = "enterprise-observability-coverage";
 const REPORT_SCHEMA_VERSION = "v0.0.1:observability:enterprise-coverage-report-1";
-const PLAN_FILE = "docs/plans/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
+const PLAN_FILE = "docs/plans/end-to-end-release/current-baseline/Plan.md";
 const REQUIREMENTS = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES = Object.freeze([
   "packages/capabilities/src/operation-permission-core/catalog.mjs",

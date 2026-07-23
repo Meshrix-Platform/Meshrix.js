@@ -30,6 +30,17 @@ or shed under fixed budgets and never retain payload copies. The canonical
 architecture, security, Operation Permission, gateway, observability, runtime,
 protocol, and runbook documents below own the detailed maintenance rules.
 
+Dependency admission for private deployment is governed by
+[Private-Deployment Dependency Admission](RUNBOOK.md#private-deployment-dependency-admission).
+It is fail-closed: a direct, transitive, bundled, optional, example, image, or
+deployment dependency is rejected whenever its licensing, redistribution,
+production-use, maintenance-continuity, or project-governance risk cannot be
+resolved from primary evidence. A customer must never be required to absorb a
+third-party commercial risk in order to deploy or operate LicoMesh privately.
+License compliance alone is not admission: a production dependency must also
+pass the Runbook's authority, maturity, multi-organization adoption, security
+maintenance, operational evidence, and workload-conformance gates.
+
 ## Project Documents
 
 | Topic | Document |

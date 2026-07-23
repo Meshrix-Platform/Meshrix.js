@@ -193,11 +193,22 @@ function transportInputSchema(operation = {}) {
 
 function normalizeInputSchema(inputSchema = {}, operation = {}) {
   const transportSchema = transportInputSchema(operation);
+  const safety = normalizeOperationSafety(operation.safety || {}, operation);
+  const confirmationProperties = safety.readOnly
+    ? {}
+    : {
+        confirm: { type: "boolean" },
+        safetyConfirm: { type: "boolean" }
+      };
   if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
     return {
       type: "object",
       additionalProperties: false,
-      ...transportSchema
+      ...transportSchema,
+      properties: {
+        ...transportSchema.properties,
+        ...confirmationProperties
+      }
     };
   }
   return {
@@ -207,6 +218,7 @@ function normalizeInputSchema(inputSchema = {}, operation = {}) {
     required: uniqueStrings([...(inputSchema.required || []), ...transportSchema.required]),
     properties: {
       ...transportSchema.properties,
+      ...confirmationProperties,
       ...(inputSchema.properties || {})
     }
   };

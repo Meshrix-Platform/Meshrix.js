@@ -1,6 +1,6 @@
 import dns from "node:dns/promises";
 import net from "node:net";
-import { Agent, request as undiciRequest } from "undici";
+import { Agent, fetch as undiciFetch, request as undiciRequest } from "undici";
 
 export const OUTBOUND_EGRESS_DECISION_VERSION = "v0.0.1:security:outbound-egress-decision-1";
 export const DEVELOPMENT_LOCAL_EGRESS_POLICY_PRESET = "security.development-local";
@@ -373,7 +373,7 @@ export async function fetchWithPinnedDns({
   policies = {},
   init = {},
   lookup = defaultDnsLookup,
-  fetchImpl = globalThis.fetch
+  fetchImpl
 } = {}) {
   const decision = await assertOutboundRuntimeEgressAllowed({
     url,
@@ -383,8 +383,9 @@ export async function fetchWithPinnedDns({
     lookup
   });
   const pinned = createPinnedDnsDispatcher(decision);
+  const resolvedFetchImpl = fetchImpl ?? (pinned.dispatcher ? undiciFetch : globalThis.fetch);
   try {
-    const response = await fetchImpl(url, {
+    const response = await resolvedFetchImpl(url, {
       ...asObject(init),
       ...(pinned.dispatcher ? { dispatcher: pinned.dispatcher } : {})
     });

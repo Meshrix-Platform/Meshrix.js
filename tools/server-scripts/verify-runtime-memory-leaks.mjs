@@ -264,6 +264,7 @@ function createChildEnvironment(runRoot, profilePath) {
   const environment = { ...process.env };
   for (const key of [
     "NODE_OPTIONS",
+    "ELECTRON_RUN_AS_NODE",
     "LICO_EDITION",
     "LICO_FEATURE_PROFILE",
     "LICO_RUNTIME_CONFIG",

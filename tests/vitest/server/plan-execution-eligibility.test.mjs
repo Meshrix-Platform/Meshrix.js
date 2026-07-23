@@ -7,9 +7,14 @@ import { describe, expect, it } from "vitest";
 import { createReport as createLocalInfoHygieneReport } from "../../../tools/config-scanner.mjs";
 import {
   PlanExecutionPolicyError,
+  PLAN_EXECUTION_RESOURCE_DISCIPLINE,
   assertRepositoryIdentity,
   evaluatePlanExecutionEligibility,
 } from "../../../tools/plan/plan-execution-eligibility.mjs";
+import {
+  PLAN_SHARED_STATE_AUTHORITY,
+  assertCurrentDependencyMapShape,
+} from "../../../tools/plan/plan-dependency-map.mjs";
 import {
   assertSelectionContract,
   boundedSelectionError,
@@ -18,6 +23,49 @@ import {
 } from "../../../tools/plan/select-next-plan-node.mjs";
 import { canonicalDigest } from "../../../tools/plan/plan-final-receipt.mjs";
 import { verifyBetterPlan } from "../../../tools/server-scripts/verify-better-plan.mjs";
+import {
+  GOVERNED_OBJECT_STORAGE_DISCIPLINE,
+  assertGovernedObjectStorageCapabilities,
+} from "../../../packages/foundation/src/storage/governed-object-storage.mjs";
+import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.mjs";
+import {
+  GATEWAY_VALKEY_DISCIPLINE,
+  assertGatewayValkeyCapabilities,
+} from "../../../packages/foundation/src/security/gateway-valkey-discipline.mjs";
+import { createGatewayValkeyProvider } from "../../../packages/foundation/src/security/gateway-valkey-provider.mjs";
+import {
+  RUNTIME_ROLES_ELASTICITY_DISCIPLINE,
+  assertRuntimeRolesElasticityBoundaries,
+  assertRuntimeRolesElasticityCapabilities,
+} from "../../../packages/foundation/src/runtime/runtime-roles-elasticity-discipline.mjs";
+import { createRuntimeRolesElasticityProvider } from "../../../packages/foundation/src/runtime/runtime-roles-elasticity-provider.mjs";
+import {
+  OBSERVABILITY_PIPELINE_DISCIPLINE,
+  assertObservabilityPipelineBoundaries,
+  assertObservabilityPipelineCapabilities,
+} from "../../../packages/foundation/src/observability/observability-pipeline-discipline.mjs";
+import { createObservabilityPipelineProvider } from "../../../packages/foundation/src/observability/observability-pipeline-provider.mjs";
+import {
+  DURABLE_EVENT_DELIVERY_DISCIPLINE,
+  assertDurableEventDeliveryBoundaries,
+  assertOutboxTransitionMethods,
+} from "../../../packages/foundation/src/workflow/durable-event-delivery.mjs";
+import { createQueuePushDispatcher } from "../../../packages/foundation/src/work-queue/push-dispatcher.mjs";
+import { WORK_QUEUE_STORE_ADAPTER_METHODS } from "../../../packages/foundation/src/work-queue/store-adapter-contract.mjs";
+import {
+  M7_HA_DISCIPLINE,
+  assertM7HaReportShape,
+} from "../../../packages/foundation/src/scale/m7-ha-discipline.mjs";
+import {
+  M7_SCALE_DISCIPLINE,
+  assertM7ScaleReportShape,
+} from "../../../packages/foundation/src/scale/m7-scale-discipline.mjs";
+import {
+  M7_REGIONAL_DR_DISCIPLINE,
+  M7_REGIONAL_DR_ENVIRONMENT_VAR,
+  assertM7RegionalDrEnvironmentReceipt,
+  assertM7RegionalDrReportShape,
+} from "../../../packages/foundation/src/scale/m7-regional-dr-discipline.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -1067,5 +1115,676 @@ describe("Core Plan execution eligibility", () => {
     expect(() => assertRepositoryIdentity({ ...identity, planRoot: "/workspace/core/plan" })).toThrow(
       "repository_identity_mismatch: plan root is not the canonical Core Plan root",
     );
+  });
+});
+
+describe("Algorithmic Resource Discipline", () => {
+  it("declares bounded validation, scheduling, caching, and lock ownership", () => {
+    expect(PLAN_EXECUTION_RESOURCE_DISCIPLINE).toMatchObject({
+      id: "plan-execution-eligibility",
+      bounds: {
+        maxDirectoryLength: 512,
+        maxNodeIdLength: 256,
+        maxRepositoryLength: 256,
+        maxPlanCount: 256,
+        maxCheckpointCount: 4096,
+        maxEdgeCount: 16_384,
+      },
+      scheduling: {
+        statusPriority: ["in_progress", "pending"],
+      },
+      caching: {
+        receiptValidation: "once-per-evaluation",
+      },
+      lockOwnership: {
+        graphState: "evaluation-local",
+        inputMutation: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(PLAN_EXECUTION_RESOURCE_DISCIPLINE)).toBe(true);
+  });
+
+  it("rejects checkpoint identifiers that exceed the memory budget", () => {
+    const fixture = profileFixture();
+    selectionContract(node(fixture, "release", "shared-work"));
+    node(fixture, "release", "shared-work").id =
+      "n".repeat(PLAN_EXECUTION_RESOURCE_DISCIPLINE.bounds.maxNodeIdLength + 1);
+
+    expect(() => evaluatePlanExecutionEligibility({
+      ...fixture,
+      hostPlatform: "linux",
+    })).toThrow("invalid_checkpoints: checkpoint node id is missing");
+  });
+
+  it("schedules resumable work before pending work deterministically", () => {
+    const result = evaluate(planFixture());
+    expect(result.eligible.map((candidate) => candidate.nodeId)).toEqual([
+      "root-resume-first",
+      "root-resume-second",
+      "mac-implementation",
+      "root-pending",
+    ]);
+  });
+
+  it("evaluates the production plan graph within declared budgets", async () => {
+    const { loadPlanExecutionInputs } = await import("../../../tools/plan/plan-execution-eligibility.mjs");
+    const inputs = await loadPlanExecutionInputs({ repoRoot: REPO_ROOT });
+    const result = evaluatePlanExecutionEligibility({ ...inputs, hostPlatform: "macos" });
+    expect(result.graph.planCount).toBeLessThanOrEqual(
+      PLAN_EXECUTION_RESOURCE_DISCIPLINE.bounds.maxPlanCount,
+    );
+    expect(result.graph.nodeCount).toBeLessThanOrEqual(
+      PLAN_EXECUTION_RESOURCE_DISCIPLINE.bounds.maxCheckpointCount,
+    );
+    expect(result.graph.edgeCount).toBeLessThanOrEqual(
+      PLAN_EXECUTION_RESOURCE_DISCIPLINE.bounds.maxEdgeCount,
+    );
+  });
+
+  it("returns identical eligible ordering across repeated evaluations", () => {
+    const fixture = planFixture();
+    selectionContract(node(fixture, "release", "root-resume-first"));
+    const first = evaluate(fixture).eligible.map((candidate) => candidate.nodeId);
+    const second = evaluate(fixture).eligible.map((candidate) => candidate.nodeId);
+    expect(second).toEqual(first);
+  });
+});
+
+describe("M1 Shared State Authority And Migration", () => {
+  it("declares one DependencyMap authority with transactional multi-replica isolation", () => {
+    expect(PLAN_SHARED_STATE_AUTHORITY).toMatchObject({
+      id: "plan-shared-state-authority",
+      authority: {
+        dependencyMap: "end-to-end-release/DependencyMap.json",
+        checkpointOwner: "per-plan Checkpoints.json",
+      },
+      transactional: {
+        writeMode: "atomic-rename",
+        receiptBinding: "final-node-key",
+      },
+      multiReplica: {
+        profileIsolation: "exact-receipt-match",
+        crossProfilePromotion: "forbidden",
+      },
+      migration: {
+        legacyFields: [
+          "accepted_final_receipt",
+          "final_validation_node_id",
+          "parent_integration_node_id",
+        ],
+        supersededPaths: "removed-in-same-closure",
+      },
+    });
+    expect(Object.isFrozen(PLAN_SHARED_STATE_AUTHORITY)).toBe(true);
+  });
+
+  it("rejects superseded DependencyMap fields during shared state validation", () => {
+    const fixture = planFixture();
+    const mapPlan = fixture.dependencyMap.plans[0];
+    mapPlan.accepted_final_receipt = { schema_version: "legacy" };
+
+    expect(() => assertCurrentDependencyMapShape(fixture.dependencyMap)).toThrow(
+      "DependencyMap retains a superseded single-final field",
+    );
+  });
+
+  it("requires keyed final receipts for every current DependencyMap Plan entry", async () => {
+    const { loadPlanExecutionInputs } = await import("../../../tools/plan/plan-execution-eligibility.mjs");
+    const inputs = await loadPlanExecutionInputs({ repoRoot: REPO_ROOT });
+    const dependencyMap = assertCurrentDependencyMapShape(inputs.dependencyMap);
+
+    for (const mapPlan of dependencyMap.plans) {
+      expect(mapPlan.accepted_final_receipts).toBeTypeOf("object");
+      expect(Array.isArray(mapPlan.accepted_final_receipts)).toBe(false);
+      expect(mapPlan.final_validations.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("M2 Object Storage", () => {
+  it("declares governed byte storage separate from ownership authority", () => {
+    expect(GOVERNED_OBJECT_STORAGE_DISCIPLINE).toMatchObject({
+      id: "governed-object-storage",
+      byteStore: {
+        capabilityId: "object-store",
+        kind: "blob-store",
+        operations: [
+          "putObject",
+          "putObjectsFromFiles",
+          "getObject",
+          "readObject",
+          "statObject",
+          "resolveStoredObjectPath",
+        ],
+      },
+      ownershipAuthority: {
+        capabilityId: "storage-object-ownership",
+        kind: "metadata",
+        operations: [
+          "findObjectOwner",
+          "listObjectStoragePathsByOwner",
+          "deleteObjectRecordsByOwner",
+          "getDeletionOperationByOwnerId",
+          "upsertDeletionOperation",
+          "updateDeletionOperation",
+          "deleteDeletionOperation",
+          "listPendingDeletionOperations",
+        ],
+      },
+      separation: {
+        sharedObjectBytes: "object-store",
+        ownershipRecords: "storage-object-ownership",
+        ownershipMutationViaByteStore: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(GOVERNED_OBJECT_STORAGE_DISCIPLINE)).toBe(true);
+  });
+
+  it("keeps shared object bytes behind governed object-store capabilities", () => {
+    const storageKernel = {
+      databasePath: "/data/metadata/lico.sqlite",
+      objectRootPath: "/data/objects",
+      getStorageSummary: () => ({
+        databasePath: "/data/metadata/lico.sqlite",
+        objectRootPath: "/data/objects",
+        objectCount: 0,
+      }),
+    };
+    const provider = createStorageProvider({
+      userDataPath: "/data",
+      storageKernel,
+    });
+    const { capabilities } = provider.listCapabilities();
+
+    expect(assertGovernedObjectStorageCapabilities(capabilities)).toBe(true);
+    expect(capabilities.find((entry) => entry.id === "object-store")?.kind).toBe("blob-store");
+    expect(capabilities.find((entry) => entry.id === "storage-object-ownership")?.kind).toBe("metadata");
+  });
+
+  it("rejects capability drift that would merge byte and ownership authority", () => {
+    expect(() => assertGovernedObjectStorageCapabilities([
+      {
+        id: "object-store",
+        kind: "metadata",
+        operations: [...GOVERNED_OBJECT_STORAGE_DISCIPLINE.byteStore.operations],
+      },
+      {
+        id: "storage-object-ownership",
+        kind: "metadata",
+        operations: [...GOVERNED_OBJECT_STORAGE_DISCIPLINE.ownershipAuthority.operations],
+      },
+    ])).toThrow("Shared object bytes must remain behind the governed object-store capability.");
+  });
+});
+
+describe("M4 Gateway And Valkey", () => {
+  it("declares edge traffic governance separate from non-authoritative distributed caching", () => {
+    expect(GATEWAY_VALKEY_DISCIPLINE).toMatchObject({
+      id: "gateway-valkey",
+      edgeTrafficGovernance: {
+        capabilityId: "edge-traffic-governance",
+        kind: "gateway",
+        operations: [
+          "gateway.policy.preview",
+          "gateway.forward",
+          "gateway.payload.transit",
+          "gateway.artifacts.get",
+          "gateway.audit",
+          "gateway.metrics",
+        ],
+      },
+      distributedCache: {
+        capabilityId: "distributed-cache",
+        kind: "cache",
+        operations: [
+          "getCacheEntry",
+          "setCacheEntry",
+          "deleteCacheEntry",
+          "invalidateCacheNamespace",
+        ],
+      },
+      separation: {
+        trafficDecisions: "edge-traffic-governance",
+        cacheLayer: "distributed-cache",
+        cachePromotionToAuthority: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(GATEWAY_VALKEY_DISCIPLINE)).toBe(true);
+  });
+
+  it("keeps edge traffic governance and distributed cache behind governed capabilities", () => {
+    const provider = createGatewayValkeyProvider();
+    const { capabilities } = provider.listCapabilities();
+
+    expect(assertGatewayValkeyCapabilities(capabilities)).toBe(true);
+    expect(capabilities.find((entry) => entry.id === "edge-traffic-governance")?.kind).toBe("gateway");
+    expect(capabilities.find((entry) => entry.id === "distributed-cache")?.kind).toBe("cache");
+  });
+
+  it("rejects capability drift that would promote cache to state authority", () => {
+    expect(() => assertGatewayValkeyCapabilities([
+      {
+        id: "edge-traffic-governance",
+        kind: "cache",
+        operations: [...GATEWAY_VALKEY_DISCIPLINE.edgeTrafficGovernance.operations],
+      },
+      {
+        id: "distributed-cache",
+        kind: "cache",
+        operations: [...GATEWAY_VALKEY_DISCIPLINE.distributedCache.operations],
+      },
+    ])).toThrow("Edge traffic governance must remain behind the governed gateway capability.");
+  });
+});
+
+describe("M3 Durable Event Delivery", () => {
+  function mockStoreAdapter() {
+    return Object.fromEntries(
+      WORK_QUEUE_STORE_ADAPTER_METHODS.map((method) => [method, async () => ({})]),
+    );
+  }
+
+  it("declares transactional outbox separate from bounded durable delivery", () => {
+    expect(DURABLE_EVENT_DELIVERY_DISCIPLINE).toMatchObject({
+      id: "durable-event-delivery",
+      outbox: {
+        journal: "work_queue_transition_journal",
+        storeMethods: [
+          "enqueue",
+          "claim",
+          "complete",
+          "retry",
+          "recover",
+        ],
+        writeMode: "transactional-journal",
+      },
+      delivery: {
+        dispatcherId: "queue-push-dispatcher",
+        claimBeforeDispatch: true,
+        boundedInFlight: "credit-limit",
+        operations: [
+          "dispatchOnce",
+          "status",
+          "drain",
+          "cancel",
+        ],
+      },
+      separation: {
+        intentPersistence: "work-queue-store",
+        handlerExecution: "queue-worker-runtime",
+        dispatchWithoutClaim: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(DURABLE_EVENT_DELIVERY_DISCIPLINE)).toBe(true);
+  });
+
+  it("keeps asynchronous work behind outbox persistence and bounded dispatch", () => {
+    const store = mockStoreAdapter();
+    const dispatcher = createQueuePushDispatcher({
+      store,
+      workerRuntime: {
+        workerId: "test-worker",
+        runLeased: async () => ({ action: "completed" }),
+      },
+      queueDefinitionId: "queue.jobs.test",
+    });
+
+    expect(assertDurableEventDeliveryBoundaries({ store, dispatcher })).toBe(true);
+    expect(assertOutboxTransitionMethods(DURABLE_EVENT_DELIVERY_DISCIPLINE.outbox.storeMethods)).toBe(true);
+  });
+
+  it("rejects delivery drift that would bypass transactional outbox claim", () => {
+    expect(() => assertDurableEventDeliveryBoundaries({
+      store: { enqueue: async () => ({}) },
+      dispatcher: { dispatchOnce: async () => ({}) },
+    })).toThrow("Transactional outbox requires a work queue store with claim.");
+
+    const partialStore = Object.fromEntries(
+      WORK_QUEUE_STORE_ADAPTER_METHODS.slice(0, 3).map((method) => [method, async () => ({})]),
+    );
+    expect(() => assertDurableEventDeliveryBoundaries({
+      store: partialStore,
+      dispatcher: { dispatchOnce: async () => ({}) },
+    })).toThrow("Transactional outbox store adapter is incomplete.");
+
+    expect(() => assertOutboxTransitionMethods([
+      "enqueue",
+      "claim",
+      "complete",
+    ])).toThrow("Transactional outbox transition methods changed without updating the delivery contract.");
+  });
+});
+
+describe("M5 Runtime Roles And Elasticity", () => {
+  function mockRoleBoundaries() {
+    return {
+      control: {
+        previewElasticityBounds: async () => ({ maxReplicas: 4, currentReplicas: 1 }),
+      },
+      data: {
+        writeRolePartition: async () => ({ committed: true }),
+      },
+      workerRuntime: {
+        claimWorkerLease: async () => ({ leaseId: "lease-1" }),
+        reportWorkerCapacity: async () => ({ inFlight: 0, ceiling: 4 }),
+      },
+    };
+  }
+
+  it("declares control, data, and worker roles with fenced bounded elasticity", () => {
+    expect(RUNTIME_ROLES_ELASTICITY_DISCIPLINE).toMatchObject({
+      id: "runtime-roles-elasticity",
+      controlRole: {
+        capabilityId: "runtime-control",
+        kind: "control",
+        operations: [
+          "admitRoleWorkload",
+          "scheduleRoleTopology",
+          "previewElasticityBounds",
+          "enforceRoleFence",
+          "reportRoleTopology",
+        ],
+      },
+      dataRole: {
+        capabilityId: "runtime-data",
+        kind: "data",
+        operations: [
+          "readRolePartition",
+          "writeRolePartition",
+          "commitRoleCheckpoint",
+          "listRolePartitions",
+        ],
+      },
+      workerRole: {
+        capabilityId: "runtime-worker",
+        kind: "worker",
+        operations: [
+          "claimWorkerLease",
+          "releaseWorkerLease",
+          "reportWorkerCapacity",
+          "drainWorkerRole",
+        ],
+      },
+      elasticity: {
+        scaleDecisionOwner: "runtime-control",
+        maxReplicas: "configured-ceiling",
+        workerSelfPromotion: "forbidden",
+        unboundedScale: "forbidden",
+      },
+      separation: {
+        orchestrationDecisions: "runtime-control",
+        stateAuthority: "runtime-data",
+        executionLayer: "runtime-worker",
+        workerPromotionToAuthority: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(RUNTIME_ROLES_ELASTICITY_DISCIPLINE)).toBe(true);
+  });
+
+  it("keeps control, data, and worker roles behind governed capabilities", () => {
+    const provider = createRuntimeRolesElasticityProvider();
+    const { capabilities } = provider.listCapabilities();
+
+    expect(assertRuntimeRolesElasticityCapabilities(capabilities)).toBe(true);
+    expect(capabilities.find((entry) => entry.id === "runtime-control")?.kind).toBe("control");
+    expect(capabilities.find((entry) => entry.id === "runtime-data")?.kind).toBe("data");
+    expect(capabilities.find((entry) => entry.id === "runtime-worker")?.kind).toBe("worker");
+    expect(assertRuntimeRolesElasticityBoundaries(mockRoleBoundaries())).toBe(true);
+  });
+
+  it("rejects capability drift that would promote workers to state authority", () => {
+    expect(() => assertRuntimeRolesElasticityCapabilities([
+      {
+        id: "runtime-control",
+        kind: "control",
+        operations: [...RUNTIME_ROLES_ELASTICITY_DISCIPLINE.controlRole.operations],
+      },
+      {
+        id: "runtime-data",
+        kind: "worker",
+        operations: [...RUNTIME_ROLES_ELASTICITY_DISCIPLINE.dataRole.operations],
+      },
+      {
+        id: "runtime-worker",
+        kind: "worker",
+        operations: [...RUNTIME_ROLES_ELASTICITY_DISCIPLINE.workerRole.operations],
+      },
+    ])).toThrow("Runtime data must remain behind the governed data-plane capability.");
+
+    expect(() => assertRuntimeRolesElasticityBoundaries({
+      control: { previewElasticityBounds: async () => ({}) },
+      data: { readRolePartition: async () => ({}) },
+      workerRuntime: { claimWorkerLease: async () => ({}) },
+    })).toThrow("Runtime data authority requires a data plane with writeRolePartition.");
+  });
+});
+
+describe("M6 Observability Pipeline", () => {
+  function mockPipelineBoundaries() {
+    return {
+      telemetryExport: {
+        exportMetricBatch: async () => ({ recorded: 1 }),
+        exportTraceBatch: async () => ({ exported: 0 }),
+        listExportPartitions: async () => [],
+        finalizeExportBatch: async (batch) => ({ ...batch, finalized: true }),
+      },
+      evidenceStorage: {
+        storeEvidenceReport: async (report) => report,
+        readEvidenceReport: async () => ({}),
+        listEvidenceReports: async () => [],
+        finalizeSensitiveReport: (report) => report,
+      },
+      alertLifecycle: {
+        createAlertRecord: () => ({ alertId: "alert-1", lifecycleStatus: "rule_loaded" }),
+        transitionAlertRecord: (record) => record,
+        activateAlertRecord: (signal) => ({ ...signal, active: true }),
+        alertLifecycleDefinition: () => ({ states: [] }),
+      },
+    };
+  }
+
+  it("declares telemetry export, evidence storage, and alerts with privacy-safe separation", () => {
+    expect(OBSERVABILITY_PIPELINE_DISCIPLINE).toMatchObject({
+      id: "observability-pipeline",
+      telemetryExport: {
+        capabilityId: "telemetry-export",
+        kind: "telemetry",
+        operations: [
+          "exportMetricBatch",
+          "exportTraceBatch",
+          "listExportPartitions",
+          "finalizeExportBatch",
+        ],
+      },
+      operationalEvidence: {
+        capabilityId: "operational-evidence",
+        kind: "evidence",
+        operations: [
+          "storeEvidenceReport",
+          "readEvidenceReport",
+          "listEvidenceReports",
+          "finalizeSensitiveReport",
+        ],
+      },
+      operationalAlerts: {
+        capabilityId: "operational-alerts",
+        kind: "alerts",
+        operations: [
+          "createAlertRecord",
+          "transitionAlertRecord",
+          "activateAlertRecord",
+          "alertLifecycleDefinition",
+        ],
+      },
+      separation: {
+        telemetryExport: "telemetry-export",
+        evidenceStorage: "operational-evidence",
+        alertLifecycle: "operational-alerts",
+        rawEvidencePromotion: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(OBSERVABILITY_PIPELINE_DISCIPLINE)).toBe(true);
+  });
+
+  it("keeps telemetry export, evidence storage, and alerts behind governed capabilities", () => {
+    const provider = createObservabilityPipelineProvider();
+    const { capabilities } = provider.listCapabilities();
+
+    expect(assertObservabilityPipelineCapabilities(capabilities)).toBe(true);
+    expect(capabilities.find((entry) => entry.id === "telemetry-export")?.kind).toBe("telemetry");
+    expect(capabilities.find((entry) => entry.id === "operational-evidence")?.kind).toBe("evidence");
+    expect(capabilities.find((entry) => entry.id === "operational-alerts")?.kind).toBe("alerts");
+    expect(assertObservabilityPipelineBoundaries(provider.resolveBoundaries())).toBe(true);
+  });
+
+  it("rejects capability drift that would promote raw evidence without privacy scanning", () => {
+    expect(() => assertObservabilityPipelineCapabilities([
+      {
+        id: "telemetry-export",
+        kind: "evidence",
+        operations: [...OBSERVABILITY_PIPELINE_DISCIPLINE.telemetryExport.operations],
+      },
+      {
+        id: "operational-evidence",
+        kind: "evidence",
+        operations: [...OBSERVABILITY_PIPELINE_DISCIPLINE.operationalEvidence.operations],
+      },
+      {
+        id: "operational-alerts",
+        kind: "alerts",
+        operations: [...OBSERVABILITY_PIPELINE_DISCIPLINE.operationalAlerts.operations],
+      },
+    ])).toThrow("Bounded telemetry export must remain behind the governed telemetry capability.");
+
+    expect(() => assertObservabilityPipelineBoundaries({
+      telemetryExport: { exportMetricBatch: async () => ({}) },
+      evidenceStorage: { storeEvidenceReport: async () => ({}) },
+      alertLifecycle: { createAlertRecord: () => ({}) },
+    })).toThrow("Bounded telemetry export requires finalizeExportBatch.");
+
+    expect(() => assertObservabilityPipelineBoundaries({
+      telemetryExport: {
+        exportMetricBatch: async () => ({}),
+        finalizeExportBatch: async () => ({}),
+      },
+      evidenceStorage: { storeEvidenceReport: async () => ({}) },
+      alertLifecycle: { createAlertRecord: () => ({}) },
+    })).toThrow("Privacy-safe evidence requires finalizeSensitiveReport.");
+
+    expect(() => assertObservabilityPipelineBoundaries(mockPipelineBoundaries())).not.toThrow();
+  });
+});
+
+describe("M7 ha Capacity And Fault Acceptance", () => {
+  it("declares profile-scoped capacity, memory, and fault reports with fresh-process isolation", () => {
+    expect(M7_HA_DISCIPLINE).toMatchObject({
+      id: "m7-ha-capacity-fault",
+      profile: "ha",
+      requirement: "REQ-SCALE-M7-HA",
+      processIsolation: {
+        capacity: "fresh-process",
+        memory: "fresh-process",
+        fault: "fresh-process",
+        crossReportReuse: "forbidden",
+        crossProfilePromotion: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(M7_HA_DISCIPLINE)).toBe(true);
+    expect(M7_HA_DISCIPLINE.reports.capacity.path).toBe("build/reports/m7-ha/capacity.json");
+    expect(M7_HA_DISCIPLINE.reports.memory.path).toBe("build/reports/m7-ha/memory.json");
+    expect(M7_HA_DISCIPLINE.reports.fault.path).toBe("build/reports/m7-ha/fault.json");
+  });
+
+  it("rejects reports produced by the parent acceptance process", () => {
+    expect(() => assertM7HaReportShape({
+      schema_version: M7_HA_DISCIPLINE.reports.capacity.schemaVersion,
+      profile: "ha",
+      claim: "capacity_profile",
+      processPid: process.pid,
+      accepted: true,
+    }, "capacity")).toThrow("must not be produced by the parent acceptance process");
+  });
+});
+
+describe("M7 scale Capacity And Fault Acceptance", () => {
+  it("declares profile-scoped capacity, memory, and fault reports with fresh-process isolation", () => {
+    expect(M7_SCALE_DISCIPLINE).toMatchObject({
+      id: "m7-scale-capacity-fault",
+      profile: "scale",
+      requirement: "REQ-SCALE-M7-SCALE",
+      processIsolation: {
+        capacity: "fresh-process",
+        memory: "fresh-process",
+        fault: "fresh-process",
+        crossReportReuse: "forbidden",
+        crossProfilePromotion: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(M7_SCALE_DISCIPLINE)).toBe(true);
+    expect(M7_SCALE_DISCIPLINE.reports.capacity.path).toBe("build/reports/m7-scale/capacity.json");
+    expect(M7_SCALE_DISCIPLINE.reports.memory.path).toBe("build/reports/m7-scale/memory.json");
+    expect(M7_SCALE_DISCIPLINE.reports.fault.path).toBe("build/reports/m7-scale/fault.json");
+  });
+
+  it("rejects reports produced by the parent acceptance process", () => {
+    expect(() => assertM7ScaleReportShape({
+      schema_version: M7_SCALE_DISCIPLINE.reports.capacity.schemaVersion,
+      profile: "scale",
+      claim: "capacity_profile",
+      processPid: process.pid,
+      accepted: true,
+    }, "capacity")).toThrow("must not be produced by the parent acceptance process");
+  });
+});
+
+describe("M7 regional-dr Capacity And Fault Acceptance", () => {
+  it("declares profile-scoped capacity, memory, and fault reports with fresh-process isolation", () => {
+    expect(M7_REGIONAL_DR_DISCIPLINE).toMatchObject({
+      id: "m7-regional-dr-capacity-fault",
+      profile: "regional-dr",
+      requirement: "REQ-SCALE-M7-REGIONAL-DR",
+      environment: {
+        variable: M7_REGIONAL_DR_ENVIRONMENT_VAR,
+      },
+      processIsolation: {
+        capacity: "fresh-process",
+        memory: "fresh-process",
+        fault: "fresh-process",
+        crossReportReuse: "forbidden",
+        crossProfilePromotion: "forbidden",
+      },
+    });
+    expect(Object.isFrozen(M7_REGIONAL_DR_DISCIPLINE)).toBe(true);
+    expect(M7_REGIONAL_DR_DISCIPLINE.reports.capacity.path).toBe("build/reports/m7-regional-dr/capacity.json");
+    expect(M7_REGIONAL_DR_DISCIPLINE.reports.memory.path).toBe("build/reports/m7-regional-dr/memory.json");
+    expect(M7_REGIONAL_DR_DISCIPLINE.reports.fault.path).toBe("build/reports/m7-regional-dr/fault.json");
+  });
+
+  it("requires a declared regional-DR environment receipt for capacity and memory claims", () => {
+    expect(() => assertM7RegionalDrEnvironmentReceipt({
+      schema_version: "licomesh.m7-regional-dr-environment.v1",
+      profile: "regional-dr",
+      classification: "declared-regional-dr",
+      primary: { serviceUrl: "<service-url>" },
+      secondary: { serviceUrl: "<service-url>" },
+    })).not.toThrow();
+
+    expect(() => assertM7RegionalDrEnvironmentReceipt({
+      schema_version: "licomesh.m7-regional-dr-environment.v1",
+      profile: "ha",
+      classification: "declared-regional-dr",
+      primary: { serviceUrl: "<service-url>" },
+      secondary: { serviceUrl: "<service-url>" },
+    })).toThrow("Regional-DR M7 environment receipt profile must be regional-dr.");
+  });
+
+  it("rejects reports produced by the parent acceptance process", () => {
+    expect(() => assertM7RegionalDrReportShape({
+      schema_version: M7_REGIONAL_DR_DISCIPLINE.reports.capacity.schemaVersion,
+      profile: "regional-dr",
+      claim: "capacity_profile",
+      processPid: process.pid,
+      accepted: true,
+    }, "capacity")).toThrow("must not be produced by the parent acceptance process");
   });
 });
