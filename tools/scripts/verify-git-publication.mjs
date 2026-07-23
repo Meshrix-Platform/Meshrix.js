@@ -19,9 +19,9 @@ const PRIVATE_PATH_PREFIXES = Object.freeze([
 const PRIVATE_FILE_PATTERN = /(?:^|\/)(?:\.env(?:\.|$)|[^/]+\.(?:db|dump|har|heapsnapshot|log|mbox|pem|pfx|p12|prof|sqlite3?|trace))$/iu;
 const MACHINE_IDENTITY_PATH_PATTERN = new RegExp([
   "(?:^|[\\s\"'`=(,:])(?:",
-  ["", "Users", "[^/\\s\"'`]+", ""].join("/"),
+  ["", "Users", "[A-Za-z0-9._-]+", ""].join("/"),
   "|",
-  ["", "home", "[^/\\s\"'`]+", ""].join("/"),
+  ["", "home", "[A-Za-z0-9._-]+", ""].join("/"),
   "|",
   ["", "private", "var", "folders", ""].join("/"),
   "|[A-Za-z]:[\\\\/]Users[\\\\/][^\\\\/\\s\"'`]+[\\\\/]",
@@ -241,6 +241,11 @@ export function runSelfTest() {
       label: "developer home",
       bytes: Buffer.from(["", "Users", "developer", "workspace"].join("/")),
       expected: ["machine-identity-path"]
+    },
+    {
+      label: "documented home placeholder",
+      bytes: Buffer.from(["", "home", "<user>", "workspace"].join("/")),
+      expected: []
     },
     {
       label: "private runtime file",
