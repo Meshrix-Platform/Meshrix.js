@@ -6,23 +6,23 @@ export const OPERATION_PERMISSION_TAG_GOVERNED_E2E = Object.freeze({
   allowTag: "governance:e2e-allow",
   denyTag: "governance:e2e-deny",
   serviceId: verifierOpaqueServiceId("verify-tag-governed-external-service"),
-  approvalTool: "lico.tagManagement.tags.upsert",
+  approvalTool: "meshrix.tagManagement.tags.upsert",
   docId: "verify-tag-governed-document",
   workspaceFileId: "verify-tag-governed-workspace-file",
   consoleResourceId: "verify-tag-governed-console",
   requiredPublicOperations: Object.freeze([
-    "lico.gateway.forward",
-    "lico.gateway.audit",
-    "lico.gateway.metrics",
-    "lico.workspace.create",
-    "lico.workspace.file.upload",
-    "lico.workspace.file.download",
-    "lico.tagManagement.tags.list",
-    "lico.tagManagement.tags.upsert",
-    "lico.operationPermission.audit",
-    "lico.operationPermission.metricsSummary",
-    "lico.operationPermission.pendingOperations.list",
-    "lico.operationPermission.pendingOperations.resolve"
+    "meshrix.gateway.forward",
+    "meshrix.gateway.audit",
+    "meshrix.gateway.metrics",
+    "meshrix.workspace.create",
+    "meshrix.workspace.file.upload",
+    "meshrix.workspace.file.download",
+    "meshrix.tagManagement.tags.list",
+    "meshrix.tagManagement.tags.upsert",
+    "meshrix.operationPermission.audit",
+    "meshrix.operationPermission.metricsSummary",
+    "meshrix.operationPermission.pendingOperations.list",
+    "meshrix.operationPermission.pendingOperations.resolve"
   ])
 });
 

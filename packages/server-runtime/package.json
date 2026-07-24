@@ -1,11 +1,11 @@
 {
-  "name": "@lico/server-runtime",
+  "name": "@meshrix/server-runtime",
   "version": "0.0.1",
-  "description": "LicoMesh composition root, state stores, jobs, workers, product API",
+  "description": "Meshrix composition root, state stores, jobs, workers, product API",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "packages/server-runtime"
   },
   "engines": {
@@ -13,28 +13,28 @@
   },
   "type": "module",
   "dependencies": {
-    "@lico/agents": "0.0.1",
-    "@lico/capabilities": "0.0.1",
-    "@lico/contracts": "0.0.1",
-    "@lico/foundation": "0.0.1",
-    "@lico/protocols": "0.0.1"
+    "@meshrix/agents": "0.0.1",
+    "@meshrix/capabilities": "0.0.1",
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
   },
   "imports": {
-    "#lico/agents/*": "@lico/agents/*",
-    "#lico/capabilities/*": "@lico/capabilities/*",
-    "#lico/client-strings": "@lico/foundation/security/client-strings",
-    "#lico/contracts/*": "@lico/contracts/*",
-    "#lico/foundation/*": "@lico/foundation/*",
-    "#lico/http-response": "@lico/foundation/http/http-response",
-    "#lico/http-utils": "@lico/protocols/http/http-utils",
-    "#lico/operation-registry": "@lico/contracts/operations/operation-registry",
-    "#lico/product-api": "./src/composition/product-api.mjs",
-    "#lico/protocols/*": "@lico/protocols/*",
-    "#lico/runtime-logger": "@lico/foundation/observability/runtime-logger",
-    "#lico/server-config": "@lico/foundation/config/server-config",
-    "#lico/server-runtime/*": "./src/*.mjs",
-    "#lico/settings": "./src/composition/settings.mjs",
-    "#lico/state-coordinator": "@lico/foundation/storage/state-coordinator"
+    "#meshrix/agents/*": "@meshrix/agents/*",
+    "#meshrix/capabilities/*": "@meshrix/capabilities/*",
+    "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
+    "#meshrix/contracts/*": "@meshrix/contracts/*",
+    "#meshrix/foundation/*": "@meshrix/foundation/*",
+    "#meshrix/http-response": "@meshrix/foundation/http/http-response",
+    "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
+    "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
+    "#meshrix/product-api": "./src/composition/product-api.mjs",
+    "#meshrix/protocols/*": "@meshrix/protocols/*",
+    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/server-config": "@meshrix/foundation/config/server-config",
+    "#meshrix/server-runtime/*": "./src/*.mjs",
+    "#meshrix/settings": "./src/composition/settings.mjs",
+    "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
     "./*": "./src/*.mjs"

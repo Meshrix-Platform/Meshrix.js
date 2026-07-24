@@ -8,7 +8,7 @@ import { installAuthenticatedFetch, authHeaders } from "./test-auth-helper.mjs";
 const b64 = (s) => Buffer.from(s).toString("base64");
 
 let server;
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-ws-ops-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-ws-ops-"));
 try { server = await startHttpServer({ userDataPath, distPath: "", port: 0, runtimeOptions: { profile: "minimal" } }); }
 catch (e) { console.error("FAIL: start:", e.message); process.exit(1); }
 

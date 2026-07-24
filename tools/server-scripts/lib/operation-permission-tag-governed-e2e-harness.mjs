@@ -45,7 +45,7 @@ function parseSseBlock(block = "") {
 }
 
 export async function createOperationPermissionTagGovernedE2eHarness() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-permission-tag-e2e-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-permission-tag-e2e-"));
   const fixtureState = createTagGovernedFixtureState();
   const createdGrantIds = [];
   const mcpIdentityByToken = new Map();
@@ -152,17 +152,17 @@ export async function createOperationPermissionTagGovernedE2eHarness() {
         )],
         allowedServiceIds: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId],
         toolsets: [
-          "lico.gateway.admin",
-          "lico.gateway.write",
-          "lico.gateway.read",
-          "lico.agent.workspace.read",
-          "lico.agent.workspace",
-          "lico.agent.workspace.maintain",
-          "lico.storage.read",
-          "lico.storage.write",
-          "lico.runtime.maintain",
-          "lico.authorization.admin",
-          "lico.console.read"
+          "meshrix.gateway.admin",
+          "meshrix.gateway.write",
+          "meshrix.gateway.read",
+          "meshrix.agent.workspace.read",
+          "meshrix.agent.workspace",
+          "meshrix.agent.workspace.maintain",
+          "meshrix.storage.read",
+          "meshrix.storage.write",
+          "meshrix.runtime.maintain",
+          "meshrix.authorization.admin",
+          "meshrix.console.read"
         ],
         processIdentity: verifierIdentity.request,
         ...input
@@ -206,7 +206,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() {
         body: "",
         url,
         extraHeaders: {
-          "X-LicoMesh-Mcp-Proxy-Session": "taggovernede2esession"
+          "X-Meshrix-Mcp-Proxy-Session": "taggovernede2esession"
         }
       }),
       signal: controller.signal
@@ -288,12 +288,12 @@ export async function createOperationPermissionTagGovernedE2eHarness() {
   }
 
   async function callMcp(operation, input = {}, id = 1, expectedStatuses = [200]) {
-    const toolName = operationOutletByName.get(operation) || "lico.discovery";
+    const toolName = operationOutletByName.get(operation) || "meshrix.discovery";
     return callMcpWithToolName(mcpToken, toolName, operation, input, id, expectedStatuses);
   }
 
   async function capabilitiesForToken(token, id = 1) {
-    const payload = await callMcpWithToolName(token, "lico.discovery", "lico.capabilities.list", {}, id);
+    const payload = await callMcpWithToolName(token, "meshrix.discovery", "meshrix.capabilities.list", {}, id);
     assertMcpOk(payload, "capabilities");
     return mcpPayload(payload);
   }
@@ -387,12 +387,12 @@ export async function createOperationPermissionTagGovernedE2eHarness() {
   }
 
   async function refreshCapabilities() {
-    const payload = await callMcp("lico.capabilities.list", {}, 10);
+    const payload = await callMcp("meshrix.capabilities.list", {}, 10);
     assertMcpOk(payload, "capabilities");
     const capabilities = mcpPayload(payload);
     operationOutletByName = new Map((capabilities.operations || []).map((operation) => [
       String(operation.name || ""),
-      String(operation?._meta?.mcpOutlet || "lico.discovery")
+      String(operation?._meta?.mcpOutlet || "meshrix.discovery")
     ]));
     const missing = OPERATION_PERMISSION_TAG_GOVERNED_E2E.requiredPublicOperations
       .filter((operation) => !operationOutletByName.has(operation));

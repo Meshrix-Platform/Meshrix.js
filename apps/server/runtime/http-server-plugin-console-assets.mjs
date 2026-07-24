@@ -1,4 +1,4 @@
-import { sendJson } from "#lico/http-utils";
+import { sendJson } from "#meshrix/http-utils";
 
 const CONSOLE_ASSET_PREFIX = "/api/plugins/v1/console-assets/";
 const MAX_CONSOLE_ASSET_BYTES = 4 * 1024 * 1024;

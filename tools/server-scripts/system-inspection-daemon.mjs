@@ -7,7 +7,7 @@ import {
 } from "../../packages/server-runtime/src/composition/devops/monitor-alerts.mjs";
 import { getBackgroundProcessStatus } from "../../packages/foundation/src/observability/background-process-status.mjs";
 import { recoverBackgroundSupervisor } from "../../packages/server-runtime/src/composition/devops/supervisor-recovery.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 function parseArgs(argv) {
   const args = {};
@@ -61,7 +61,7 @@ const projectRoot =
   args.projectRoot ||
   path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const dataDir = path.resolve(
-  String(args.dataDir || process.env.LICO_SERVER_DATA_DIR || ServerConfig.getDataDir())
+  String(args.dataDir || process.env.MESHRIX_SERVER_DATA_DIR || ServerConfig.getDataDir())
 );
 let lastSupervisorRecoveryAt = 0;
 let lastSupervisorRecovery = null;
@@ -104,7 +104,7 @@ async function recoverSupervisorIfNeeded(config) {
   lastSupervisorRecoveryAt = nowMs;
   lastSupervisorRecovery = await recoverBackgroundSupervisor({
     backgroundStatus,
-    serviceLabel: "dev.lico.background-supervisor"
+    serviceLabel: "dev.meshrix.background-supervisor"
   });
   if (lastSupervisorRecovery.ok) {
     await sleep(normalizeInteger(recoveryConfig.startupWaitMs, 1200, 0, 60000));

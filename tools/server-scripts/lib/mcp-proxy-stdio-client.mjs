@@ -24,7 +24,7 @@ export function mcpClientProbeProfile(target = "") {
     observedClientVersion: "",
     protocolVersion: "2025-06-18",
     capabilities: {},
-    clientInfo: { name: "licomesh-neutral-mcp-peer", version: "1" },
+    clientInfo: { name: "meshrix-neutral-mcp-peer", version: "1" },
     initializedParamsOmitted: true,
     toolsListParams: undefined
   });
@@ -93,7 +93,7 @@ export function createMcpProxyStdioClient({
   connectorScript,
   target,
   baseUrl,
-  tokenEnvName = "LICO_MCP_TOKEN",
+  tokenEnvName = "MESHRIX_MCP_TOKEN",
   env = {},
   cwd = process.cwd(),
   timeoutMs = 10000,
@@ -296,7 +296,7 @@ export function createMcpProxyStdioClient({
         });
       });
     }
-    if (stderr.trim() && process.env.LICO_VERIFY_VERBOSE) {
+    if (stderr.trim() && process.env.MESHRIX_VERIFY_VERBOSE) {
       process.stderr.write(redactText(stderr));
     }
     return {

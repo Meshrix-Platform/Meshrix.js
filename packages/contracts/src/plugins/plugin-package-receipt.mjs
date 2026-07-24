@@ -27,7 +27,7 @@ export function createPluginPackageReceipt({
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: receipt recordedAt is invalid");
   }
   return Object.freeze({
-    schemaVersion: "licomesh.plugin-package.receipt.v1",
+    schemaVersion: "v0.0.1:meshrix:plugin-package-receipt-1",
     pluginId: pluginId.trim(),
     state,
     reasonCode: reasonCode ?? null,

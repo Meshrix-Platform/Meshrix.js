@@ -29,7 +29,7 @@ describe("release evidence freshness and report drift", () => {
   });
 
   it("detects only current-run unregistered report files by content hash", async () => {
-    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-release-drift-"));
+    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-drift-"));
     const reportsDir = path.join(repoRoot, "build", "reports");
     await fs.mkdir(reportsDir, { recursive: true });
     await fs.writeFile(path.join(reportsDir, "baseline.json"), JSON.stringify({ generatedAt: "2026-01-01T00:00:00.000Z" }));

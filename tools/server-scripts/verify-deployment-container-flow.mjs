@@ -20,12 +20,12 @@ import {
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REPORT_PATH = "build/reports/deployment-container-flow.json";
-const CACHE_DIR = ".cache/lico/npm-artifacts";
+const CACHE_DIR = ".cache/meshrix/npm-artifacts";
 const MCP_INTERFACE_VERSION = "v0.0.1:mcp:interface-1";
 const TOOLSETS = Object.freeze([
-  "lico.storage.read",
-  "lico.console.read",
-  "lico.gateway.read"
+  "meshrix.storage.read",
+  "meshrix.console.read",
+  "meshrix.gateway.read"
 ]);
 const SENSITIVE_EVIDENCE_KEYS = new Set([
   "token",
@@ -51,7 +51,7 @@ const report = {
     dependencyCache: "package-lock resolved artifact URLs are cached with HTTP Range resume and SRI integrity verification.",
     sourcePackage: "The canonical reproducible server source archive is expanded into an isolated temporary build context.",
     dockerBuild: "Docker BuildKit builds the expanded source archive with cache mounts for apt and npm dependency stores.",
-    runtimeProbe: "docker compose builds and starts the real licomesh-server container, proves optional plugins are absent by default, then verifies the Core health, discovery, and MCP behavior.",
+    runtimeProbe: "docker compose builds and starts the real meshrix-server container, proves optional plugins are absent by default, then verifies the Core health, discovery, and MCP behavior.",
     destructiveChecks: "Malformed MCP JSON and unauthenticated tools/list must fail without crashing the container."
   },
   tests: [],
@@ -87,10 +87,10 @@ function redactText(value = "") {
   }
   text = text.replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
   text = text.replace(/"token"\s*:\s*"[^"]+"/gi, "\"token\":\"[redacted]\"");
-  text = text.replace(/lico_[A-Za-z0-9_-]{12,}/g, "lico_[redacted]");
+  text = text.replace(/meshrix_[A-Za-z0-9_-]{12,}/g, "meshrix_[redacted]");
   text = text.replace(/127\.0\.0\.1:\d+/g, "127.0.0.1:[redacted-port]");
   text = text.replace(/localhost:\d+/g, "localhost:[redacted-port]");
-  text = text.replace(/\/opt\/lico\/data[^\s"']*/g, "/opt/lico/data/[redacted]");
+  text = text.replace(/\/opt\/meshrix\/data[^\s"']*/g, "/opt/meshrix/data/[redacted]");
   return text;
 }
 
@@ -114,7 +114,7 @@ function assertNoLeakText(text = "", label = "text") {
   }
   assert.equal(/Bearer\s+(?!\[redacted\])\S+/i.test(value), false, `${label} leaked bearer token`);
   assert.equal(/"token"\s*:\s*"(?!\[redacted\])[^"]+"/i.test(value), false, `${label} leaked token field`);
-  assert.equal(/lico_[A-Za-z0-9_-]{12,}/.test(value), false, `${label} leaked token-like value`);
+  assert.equal(/meshrix_[A-Za-z0-9_-]{12,}/.test(value), false, `${label} leaked token-like value`);
   assert.equal(/127\.0\.0\.1:\d+/.test(value), false, `${label} leaked verifier port`);
   assert.equal(/localhost:\d+/.test(value), false, `${label} leaked verifier port`);
 }
@@ -192,9 +192,9 @@ function run(command, args = [], options = {}) {
       ...process.env,
       DOCKER_BUILDKIT: "1",
       COMPOSE_DOCKER_CLI_BUILD: "1",
-      LICO_HOST_PORT: String(hostPort || ""),
-      LICO_CONTAINER_NAME: containerName,
-      LICO_IMAGE_NAME: imageName,
+      MESHRIX_HOST_PORT: String(hostPort || ""),
+      MESHRIX_CONTAINER_NAME: containerName,
+      MESHRIX_IMAGE_NAME: imageName,
       ...options.env
     }
   });
@@ -223,9 +223,9 @@ function runRaw(command, args = [], options = {}) {
       ...process.env,
       DOCKER_BUILDKIT: "1",
       COMPOSE_DOCKER_CLI_BUILD: "1",
-      LICO_HOST_PORT: String(hostPort || ""),
-      LICO_CONTAINER_NAME: containerName,
-      LICO_IMAGE_NAME: imageName,
+      MESHRIX_HOST_PORT: String(hostPort || ""),
+      MESHRIX_CONTAINER_NAME: containerName,
+      MESHRIX_IMAGE_NAME: imageName,
       ...options.env
     }
   });
@@ -290,7 +290,7 @@ async function waitForServerReady(timeoutMs = 150_000) {
       const response = await fetch(`${baseUrl}/api/mcp/discovery`, { headers: { "Cache-Control": "no-store" } });
       if (response.status === 200) {
         const payload = await response.json();
-        if (payload?.server?.name === "LicoMesh" || payload?.name === "LicoMesh" || payload?.mcpUrl) {
+        if (payload?.server?.name === "Meshrix" || payload?.name === "Meshrix" || payload?.mcpUrl) {
           return { ready: true, waitedMs: Date.now() - started };
         }
       }
@@ -330,7 +330,7 @@ async function sha256File(filePath) {
 }
 
 async function preparePackagedDeploymentSource() {
-  const temporaryPrefix = path.join(os.tmpdir(), "lico-deployment-source-");
+  const temporaryPrefix = path.join(os.tmpdir(), "meshrix-deployment-source-");
   sourcePackageTempRoot = await fs.mkdtemp(temporaryPrefix);
   trackSecret(sourcePackageTempRoot);
   const outputDirectory = path.join(sourcePackageTempRoot, "package");
@@ -402,7 +402,7 @@ async function createContainerHostDeviceGrant() {
   assert.match(authorizationRequestId, /^mcp_auth_req_[a-z0-9_]+$/u);
   const script = `
 import fs from "node:fs/promises";
-const content = await fs.readFile("/opt/lico/data/auth/initial-credentials.txt", "utf8");
+const content = await fs.readFile("/app/data/auth/initial-credentials.txt", "utf8");
 const username = content.match(/^Username\\s*:\\s*(.+)$/m)?.[1]?.trim() || "owner";
 const password = content.match(/^Password\\s*:\\s*(.+)$/m)?.[1]?.trim() || "";
 if (!password) throw new Error("missing_initial_owner_password");
@@ -418,7 +418,7 @@ if (login.status !== 200) {
 }
 const cookie = (typeof login.headers.getSetCookie === "function"
   ? login.headers.getSetCookie()
-  : String(login.headers.get("set-cookie") || "").split(/,(?=\\s*lico_)/).filter(Boolean))
+  : String(login.headers.get("set-cookie") || "").split(/,(?=\\s*meshrix_)/).filter(Boolean))
   .map((item) => item.split(";")[0])
   .join("; ");
 const response = await fetch("http://127.0.0.1:7228/api/console/mcp/authorization/requests/${authorizationRequestId}/resolve", {
@@ -426,8 +426,8 @@ const response = await fetch("http://127.0.0.1:7228/api/console/mcp/authorizatio
   headers: {
     "Content-Type": "application/json",
     "Cookie": cookie,
-    "x-lico-csrf": loginPayload.csrfToken || "",
-    "x-lico-safety-confirm": "true"
+    "x-meshrix-csrf": loginPayload.csrfToken || "",
+    "x-meshrix-safety-confirm": "true"
   },
   body: JSON.stringify({ resolution: "approved" })
 });
@@ -444,7 +444,7 @@ console.log(JSON.stringify({ status: response.status, payload }));
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-lico-authorization-claim": claimToken
+        "x-meshrix-authorization-claim": claimToken
       },
       body: "{}"
     }
@@ -535,7 +535,7 @@ async function cleanupCompose() {
   } else {
     report.cleanup.composeDown = true;
   }
-  const temporaryPrefix = path.join(os.tmpdir(), "lico-deployment-source-");
+  const temporaryPrefix = path.join(os.tmpdir(), "meshrix-deployment-source-");
   if (!sourcePackageTempRoot) {
     report.cleanup.sourcePackageWorkspace = true;
   } else if (sourcePackageTempRoot.startsWith(temporaryPrefix)) {
@@ -585,16 +585,16 @@ try {
   const index = await loadDeploymentIndex({ cwd: repoRoot });
   const runId = String(Date.now());
   hostPort = await freePort();
-  projectName = `lico-container-${runId}`;
-  containerName = `lico-container-${runId}`;
-  imageName = `licomesh-server:container-${runId}`;
+  projectName = `meshrix-container-${runId}`;
+  containerName = `meshrix-container-${runId}`;
+  imageName = `meshrix-server:container-${runId}`;
   baseUrl = `http://127.0.0.1:${hostPort}`;
   trackSecret(projectName, containerName, imageName, String(hostPort), baseUrl);
 
   console.log("\n=== Container Deployment Flow: resumable cache, BuildKit, compose, MCP ===\n");
 
   await test("deployment index docker preset points at the authoritative container flow", async () => {
-    assert.equal(index.kind, "lico.deployment.entry-index");
+    assert.equal(index.kind, "meshrix.deployment.entry-index");
     assert.equal(index.dockerPresets?.mainService?.dockerfile, "Dockerfile");
     assert.equal(index.dockerPresets?.mainService?.runtime?.command?.[0], "node");
     assert.equal(
@@ -618,36 +618,37 @@ try {
   await test("Dockerfile and compose use stable cache and isolated runtime controls", async () => {
     const dockerfile = await fs.readFile(path.join(deploymentRoot, "Dockerfile"), "utf8");
     const compose = await fs.readFile(path.join(deploymentRoot, "docker-compose.yml"), "utf8");
+    const rootfsTarget = String.raw`(?:\/|\$\{ROOTFS\})`;
     assert.doesNotMatch(dockerfile, /^# syntax=docker\/dockerfile:/m);
-    assert.match(dockerfile, /--mount=type=cache,target=\/var\/cache\/apt/);
-    assert.match(dockerfile, /--mount=type=cache,target=\/var\/lib\/apt\/lists/);
+    assert.match(dockerfile, new RegExp(String.raw`--mount=type=cache,target=${rootfsTarget}var/cache/apt`));
+    assert.match(dockerfile, new RegExp(String.raw`--mount=type=cache,target=${rootfsTarget}var/lib/apt/lists`));
     assert.match(
       dockerfile,
-      /--mount=type=cache,id=licomesh-core-npm,target=\/var\/cache\/licomesh\/npm,sharing=locked/
+      new RegExp(String.raw`--mount=type=cache,id=meshrix-core-npm,target=${rootfsTarget}var/cache/meshrix/npm,sharing=locked`)
     );
-    assert.match(dockerfile, /--cache=\/var\/cache\/licomesh\/npm/);
-    assert.match(dockerfile, /COPY plugins \.\/plugins/);
-    assert.match(dockerfile, /--from=build \/app\/plugins \.\/plugins/);
+    assert.match(dockerfile, new RegExp(String.raw`--cache=(?:\"|\")?${rootfsTarget}var/cache/meshrix/npm(?:\"|\")?`));
+    assert.doesNotMatch(dockerfile, /COPY plugins \.\/plugins/);
+    assert.doesNotMatch(dockerfile, /--from=build \/app\/plugins \.\/plugins/);
     assert.match(
       dockerfile,
-      /cp -a \/var\/cache\/licomesh\/npm\/_cacache \/opt\/lico-npm-cache\/_cacache/
+      new RegExp(String.raw`cp -a (?:\"|\")?${rootfsTarget}var/cache/meshrix/npm/_cacache(?:\"|\")? (?:\"|\")?${rootfsTarget}opt/meshrix-npm-cache/_cacache(?:\"|\")?`)
     );
-    assert.doesNotMatch(dockerfile, /cp -a \/var\/cache\/licomesh\/npm\/\. /);
-    assert.match(compose, /\$\{LICO_BIND_ADDRESS:-127\.0\.0\.1\}:\$\{LICO_HOST_PORT:-7228\}:7228/);
+    assert.doesNotMatch(dockerfile, new RegExp(String.raw`cp -a ${rootfsTarget}var/cache/meshrix/npm/\. `));
+    assert.match(compose, /\$\{MESHRIX_BIND_ADDRESS:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}:7228/);
     assert.match(compose, /stop_grace_period: 90s/);
-    assert.match(compose, /target: \$\{LICO_BUILD_TARGET:-runtime\}/);
-    assert.match(compose, /LICO_SERVER_WITH_UI: "\$\{LICO_SERVER_WITH_UI:-0\}"/);
+    assert.match(compose, /target: \$\{MESHRIX_BUILD_TARGET:-runtime\}/);
+    assert.match(compose, /MESHRIX_SERVER_WITH_UI: "\$\{MESHRIX_SERVER_WITH_UI:-0\}"/);
     assert.match(compose, /^\s+healthcheck:$/m);
-    assert.match(compose, /LICO_BOOTSTRAP_URL: http:\/\/\$\{LICO_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{LICO_HOST_PORT:-7228\}/);
-    assert.match(compose, /LICO_ADVERTISED_BASE_URL: http:\/\/\$\{LICO_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{LICO_HOST_PORT:-7228\}/);
-    assert.match(compose, /LICO_ACTIVE_SERVICE_URL: http:\/\/\$\{LICO_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{LICO_HOST_PORT:-7228\}/);
-    assert.match(compose, /\$\{LICO_CONTAINER_NAME:-licomesh-server\}/);
-    assert.match(compose, /\$\{LICO_IMAGE_NAME:-licomesh-server:local\}/);
-    assert.match(compose, /LICO_RUNTIME_CONFIG: \$\{LICO_RUNTIME_CONFIG:-\}/);
+    assert.match(compose, /MESHRIX_BOOTSTRAP_URL: http:\/\/\$\{MESHRIX_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}/);
+    assert.match(compose, /MESHRIX_ADVERTISED_BASE_URL: http:\/\/\$\{MESHRIX_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}/);
+    assert.match(compose, /MESHRIX_ACTIVE_SERVICE_URL: http:\/\/\$\{MESHRIX_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}/);
+    assert.match(compose, /\$\{MESHRIX_CONTAINER_NAME:-meshrix-server\}/);
+    assert.match(compose, /\$\{MESHRIX_IMAGE_NAME:-meshrix-server:local\}/);
+    assert.match(compose, /MESHRIX_RUNTIME_CONFIG: \$\{MESHRIX_RUNTIME_CONFIG:-\}/);
     return {
       buildKitAptCache: true,
       buildKitNpmCache: true,
-      pluginSourcesPackaged: true,
+      pluginSourcesPackaged: false,
       composePortOverride: true,
       composeBindAddressOverride: true,
       composeAdvertisedPortOverride: true,
@@ -668,13 +669,13 @@ try {
       error.dockerDaemonAttempts = daemon.attempts;
       throw error;
     }
-    const build = run("docker", ["compose", "-p", projectName, "build", "licomesh-server"], {
+    const build = run("docker", ["compose", "-p", projectName, "build", "meshrix-server"], {
       cwd: deploymentRoot,
-      env: { LICO_RUNTIME_CONFIG: "" }
+      env: { MESHRIX_RUNTIME_CONFIG: "" }
     });
-    const up = run("docker", ["compose", "-p", projectName, "up", "-d", "licomesh-server"], {
+    const up = run("docker", ["compose", "-p", projectName, "up", "-d", "meshrix-server"], {
       cwd: deploymentRoot,
-      env: { LICO_RUNTIME_CONFIG: "" }
+      env: { MESHRIX_RUNTIME_CONFIG: "" }
     });
     const readiness = await waitForServerReady();
     const containerHealth = waitForContainerHealthy();
@@ -683,7 +684,7 @@ try {
       capabilities: {},
       clientInfo: { name: "verify-deployment-container-flow", version: "0.0.0" }
     }, { id: 1 });
-    assert.equal(initialize.result?.serverInfo?.name, "LicoMesh");
+    assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
     return {
       dockerDaemonReady: true,
       dockerDaemonWaitMs: daemon.waitedMs,
@@ -702,12 +703,12 @@ try {
     const toolsList = await mcp("tools/list", {}, { token, id: 2 });
     const tools = toolsList.result?.tools || [];
     const toolNames = new Set(tools.map((tool) => tool.name));
-    for (const expected of ["lico.discovery", "lico.gateway"]) {
+    for (const expected of ["meshrix.discovery", "meshrix.gateway"]) {
       assert.equal(toolNames.has(expected), true, `missing MCP outlet ${expected}`);
     }
-    const capabilities = await mcpToolCall(token, "lico.discovery", "lico.capabilities.list", {}, 3);
+    const capabilities = await mcpToolCall(token, "meshrix.discovery", "meshrix.capabilities.list", {}, 3);
     assert.equal(Array.isArray(capabilities.operations), true);
-    const health = await mcpToolCall(token, "lico.discovery", "system.health", {}, 4);
+    const health = await mcpToolCall(token, "meshrix.discovery", "system.health", {}, 4);
     assert.equal(health.payload?.ok, true, JSON.stringify(safeEvidence(health)));
     return {
       toolCount: tools.length,

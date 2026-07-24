@@ -30,7 +30,7 @@ const [SECRET_REF, RAW_TOKEN, RESOLVED_SECRET_TOKEN, BAD_SECRET, BODY_SECRET] = 
 ];
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-gateway-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-gateway-"));
 const gatewayFixture = createUpstreamGatewayFixture({
   resolvedSecretToken: RESOLVED_SECRET_TOKEN
 });
@@ -78,7 +78,7 @@ function safeEvidence(value = {}) {
     if (child.includes(SECRET_REF)) {
       return "[redacted-secret-ref]";
     }
-    if (/Bearer\s+\S+/i.test(child) || /lico_[a-z0-9_-]+=/i.test(child)) {
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[a-z0-9_-]+=/i.test(child)) {
       return "[redacted-secret]";
     }
     return child;
@@ -96,7 +96,7 @@ function assertNoLeak(value, label = "payload") {
     assert.equal(needle ? serialized.includes(needle) : false, false, `${label} leaked dynamic secret`);
   }
   assert.equal(/Bearer\s+\S+/i.test(serialized), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[a-z0-9_-]+=/i.test(serialized), false, `${label} leaked cookie`);
+  assert.equal(/meshrix_[a-z0-9_-]+=/i.test(serialized), false, `${label} leaked cookie`);
 }
 
 async function writeReport() {
@@ -116,7 +116,7 @@ async function writeReport() {
     outcomes.get("endpoint pools share the service-level aggregate traffic policy") === "passed";
   report.summary.downstreamMcpDistributionVerified =
     outcomes.get("configured upstream operations are projected as MCP tools and execute through Operation Permission") === "passed";
-  report.summary.downstreamMcpDistributionOperation = "lico.gateway.forward";
+  report.summary.downstreamMcpDistributionOperation = "meshrix.gateway.forward";
   report.summary.concurrentMcpForwardingVerified =
     outcomes.get("concurrent MCP forwarding is isolated and counted") === "passed";
   report.summary.releaseReady = report.summary.failedCount === 0;
@@ -475,37 +475,37 @@ try {
   });
 
   await test("MCP discovery exposes gateway operations and read grants hide writes", async () => {
-    const writeToken = await createGrant("verify-gateway-write", ["lico.gateway.read", "lico.gateway.write", "lico.gateway.maintain"]);
-    const capabilitiesPayload = await callMcp(writeToken, "lico.discovery", "lico.capabilities.list", {}, 1001);
+    const writeToken = await createGrant("verify-gateway-write", ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.gateway.maintain"]);
+    const capabilitiesPayload = await callMcp(writeToken, "meshrix.discovery", "meshrix.capabilities.list", {}, 1001);
     const capabilities = capabilitiesPayload.result?.structuredContent || {};
     const names = gatewayOperationNames(capabilities);
-    assert.equal(names.has("lico.gateway.forward"), true);
-    assert.equal(names.has("lico.gateway.externalServices.health"), true);
-    const forward = (capabilities.operations || []).find((operation) => operation.name === "lico.gateway.forward");
-    assert.equal(forward?._meta?.mcpOutlet, "lico.gateway");
+    assert.equal(names.has("meshrix.gateway.forward"), true);
+    assert.equal(names.has("meshrix.gateway.externalServices.health"), true);
+    const forward = (capabilities.operations || []).find((operation) => operation.name === "meshrix.gateway.forward");
+    assert.equal(forward?._meta?.mcpOutlet, "meshrix.gateway");
 
-    const readToken = await createGrant("verify-gateway-read", ["lico.gateway.read"]);
-    const readCapabilitiesPayload = await callMcp(readToken, "lico.discovery", "lico.capabilities.list", {}, 1002);
+    const readToken = await createGrant("verify-gateway-read", ["meshrix.gateway.read"]);
+    const readCapabilitiesPayload = await callMcp(readToken, "meshrix.discovery", "meshrix.capabilities.list", {}, 1002);
     const readNames = gatewayOperationNames(readCapabilitiesPayload.result?.structuredContent || {});
-    assert.equal(readNames.has("lico.gateway.metrics"), true);
-    assert.equal(readNames.has("lico.gateway.forward"), false);
+    assert.equal(readNames.has("meshrix.gateway.metrics"), true);
+    assert.equal(readNames.has("meshrix.gateway.forward"), false);
     return {
       gatewayOperationCount: names.size,
-      readForwardHidden: !readNames.has("lico.gateway.forward"),
+      readForwardHidden: !readNames.has("meshrix.gateway.forward"),
       outlet: forward?._meta?.mcpOutlet
     };
   });
 
   await destructiveTest("gateway forwarding cannot be called through the wrong MCP outlet", async () => {
-    const token = await createGrant("verify-gateway-outlet-mismatch", ["lico.gateway.read", "lico.gateway.write"]);
-    const payload = await callMcp(token, "lico.discovery", "lico.gateway.forward", {
+    const token = await createGrant("verify-gateway-outlet-mismatch", ["meshrix.gateway.read", "meshrix.gateway.write"]);
+    const payload = await callMcp(token, "meshrix.discovery", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       body: { message: "wrong-outlet" }
     }, 1006);
     assert.ok(payload.error, JSON.stringify(payload, null, 2));
     assert.equal(payload.error.data?.code, "operation_outlet_mismatch");
-    assert.equal(payload.error.data?.expectedTool, "lico.gateway");
+    assert.equal(payload.error.data?.expectedTool, "meshrix.gateway");
     assertNoLeak(payload, "wrong outlet response");
     return {
       denied: true,
@@ -515,9 +515,9 @@ try {
   });
 
   await test("MCP gateway forwarding reaches fixture and records audit metrics", async () => {
-    const token = await createGrant("verify-gateway-forward", ["lico.gateway.read", "lico.gateway.write", "lico.gateway.maintain"]);
+    const token = await createGrant("verify-gateway-forward", ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.gateway.maintain"]);
     const before = fixtureState.echoCount;
-    const mcpPayload = await callMcp(token, "lico.gateway", "lico.gateway.forward", {
+    const mcpPayload = await callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       body: { message: "mcp-forward" }
@@ -551,9 +551,9 @@ try {
   });
 
   await test("MCP gateway can call JSON-RPC upstream with sensitive body redaction", async () => {
-    const token = await createGrant("verify-gateway-json-rpc", ["lico.gateway.read", "lico.gateway.write"]);
+    const token = await createGrant("verify-gateway-json-rpc", ["meshrix.gateway.read", "meshrix.gateway.write"]);
     const before = fixtureState.jsonRpcCount;
-    const mcpPayload = await callMcp(token, "lico.gateway", "lico.gateway.forward", {
+    const mcpPayload = await callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "json-rpc-echo",
       rpcParams: {
@@ -586,7 +586,7 @@ try {
     assertNoLeak(audit.payload, "json-rpc audit payload");
     const toolAudit = await api("GET", "/api/operation-permission/v1/audit?limit=20");
     assert.equal(toolAudit.status, 200, JSON.stringify(toolAudit.payload, null, 2));
-    const gatewayExecutions = (toolAudit.payload.items || []).filter((item) => item.toolId === "lico.gateway.forward");
+    const gatewayExecutions = (toolAudit.payload.items || []).filter((item) => item.toolId === "meshrix.gateway.forward");
     assert.equal(gatewayExecutions.length >= 1, true);
     assert.equal(
       gatewayExecutions.some((item) =>
@@ -669,8 +669,8 @@ try {
   });
 
   await destructiveTest("unauthorized MCP read grant cannot call forwarding", async () => {
-    const token = await createGrant("verify-gateway-read-deny", ["lico.gateway.read"]);
-    const payload = await callMcp(token, "lico.gateway", "lico.gateway.forward", {
+    const token = await createGrant("verify-gateway-read-deny", ["meshrix.gateway.read"]);
+    const payload = await callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       body: { message: "deny" }
@@ -760,10 +760,10 @@ try {
   });
 
   await destructiveTest("concurrent MCP forwarding is isolated and counted", async () => {
-    const token = await createGrant("verify-gateway-concurrent", ["lico.gateway.read", "lico.gateway.write"]);
+    const token = await createGrant("verify-gateway-concurrent", ["meshrix.gateway.read", "meshrix.gateway.write"]);
     const before = fixtureState.concurrentCount;
     const calls = Array.from({ length: 32 }, (_, index) =>
-      callMcp(token, "lico.gateway", "lico.gateway.forward", {
+      callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
         serviceId: SERVICE_ID,
         operationKey: "concurrent",
         query: { i: String(index) }

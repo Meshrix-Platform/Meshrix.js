@@ -3,6 +3,12 @@ import path from "node:path";
 
 import { assertPlanReceiptProofAnchorCurrent, assertReceiptCurrent } from "./plan-final-receipt.mjs";
 import {
+  acceptedFinalReceipt,
+  assertCurrentDependencyMapShape,
+  finalValidationBinding,
+  finalValidationBindingForProfile,
+} from "./plan-dependency-map.mjs";
+import {
   loadPlanAuthorityText,
   planReceiptBuildContext,
   resolveContainedPlanDirectory
@@ -16,10 +22,15 @@ export async function loadCurrentPlanReceiptBinding({
   repoRoot,
   planDirectory,
   dependencyMap,
-  selectedProfile
+  finalNodeId,
+  planProfile,
 } = {}) {
   requireCondition(repoRoot && planDirectory, "Current Plan receipt lookup requires repoRoot and planDirectory");
-  requireCondition(selectedProfile, "Current Plan receipt lookup requires selectedProfile");
+  requireCondition(
+    (typeof finalNodeId === "string" && finalNodeId.length > 0) !==
+      (typeof planProfile === "string" && planProfile.length > 0),
+    "Current Plan receipt lookup requires exactly one of finalNodeId or planProfile",
+  );
   const planRoot = path.join(repoRoot, "docs", "plans");
   const resolvedPlan = resolveContainedPlanDirectory(planRoot, planDirectory);
   planDirectory = resolvedPlan.planDirectory;
@@ -27,13 +38,17 @@ export async function loadCurrentPlanReceiptBinding({
     path.join(planRoot, "end-to-end-release", "DependencyMap.json"),
     "utf8"
   ));
+  assertCurrentDependencyMapShape(currentDependencyMap);
   const mapPlan = currentDependencyMap.plans.find((plan) => plan.directory === planDirectory);
   requireCondition(mapPlan, `DependencyMap does not contain Plan ${planDirectory}`);
+  const finalBinding = finalNodeId
+    ? finalValidationBinding(mapPlan, finalNodeId)
+    : finalValidationBindingForProfile(mapPlan, planProfile);
   const [planText, checkpointsText] = await Promise.all([
     loadPlanAuthorityText(planRoot, planDirectory),
     fs.readFile(path.join(resolvedPlan.planPath, "Checkpoints.json"), "utf8")
   ]);
-  const finalNode = JSON.parse(checkpointsText).find((node) => node.id === mapPlan.final_validation_node_id);
+  const finalNode = JSON.parse(checkpointsText).find((node) => node.id === finalBinding.node_id);
   requireCondition(finalNode, `Plan ${planDirectory} has no mapped final node`);
   const context = planReceiptBuildContext({
     repoRoot,
@@ -42,17 +57,16 @@ export async function loadCurrentPlanReceiptBinding({
     planText,
     checkpointsText,
     finalNode,
-    selectedProfile,
     dependencyMap: currentDependencyMap
   });
-  assertReceiptCurrent(mapPlan.accepted_final_receipt, context);
-  const receipt = mapPlan.accepted_final_receipt;
+  const receipt = acceptedFinalReceipt(mapPlan, finalBinding.node_id);
+  assertReceiptCurrent(receipt, context);
   await assertPlanReceiptProofAnchorCurrent({ repoRoot, receipt });
   return Object.freeze({
     plan: planDirectory,
     finalNodeId: receipt.final_node_id,
     platform: receipt.platform,
-    selectedProfile: receipt.selected_profile,
+    profiles: Object.freeze([...receipt.profiles]),
     requirements: Object.freeze([...receipt.requirements]),
     receiptDigest: receipt.receipt_digest,
     checkpointDigest: receipt.checkpoint_digest,

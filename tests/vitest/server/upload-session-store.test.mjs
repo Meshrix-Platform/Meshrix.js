@@ -15,7 +15,7 @@ const checkpointTreeIdMock = vi.hoisted(() => vi.fn((kind, ...parts) => {
   return `checkpoint_tree_${kind}_${suffix}`;
 }));
 
-vi.mock("#lico/foundation/checkpoint/tree/checkpoint-tree-projection", () => ({
+vi.mock("#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection", () => ({
   checkpointTreeId: checkpointTreeIdMock,
   deleteCheckpointTree: deleteCheckpointTreeMock,
   finishCheckpointTree: finishCheckpointTreeMock,
@@ -71,7 +71,7 @@ const ADMIN_OWNER = {
 };
 
 async function withTempUserData(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upload-session-store-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upload-session-store-extra-"));
   try {
     return await testCase(userDataPath);
   } finally {

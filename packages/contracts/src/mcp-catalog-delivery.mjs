@@ -1,8 +1,8 @@
 export const MCP_CATALOG_DELIVERY_SCHEMA_VERSION = "v0.0.1:mcp-catalog-delivery:wire-1";
 export const MCP_CATALOG_LIST_CHANGED_CAPABILITY = "upstream.catalog.list_changed";
 export const MCP_CATALOG_LIST_CHANGED_METHOD = "notifications/tools/list_changed";
-export const MCP_CATALOG_ACKNOWLEDGE_METHOD = "lico/catalog/acknowledge";
-export const MCP_PROXY_SESSION_HEADER = "X-LicoMesh-Mcp-Proxy-Session";
+export const MCP_CATALOG_ACKNOWLEDGE_METHOD = "meshrix/catalog/acknowledge";
+export const MCP_PROXY_SESSION_HEADER = "X-Meshrix-Mcp-Proxy-Session";
 export const MCP_PROXY_SESSION_HEADER_LOWER = MCP_PROXY_SESSION_HEADER.toLowerCase();
 export const MCP_PROXY_SESSION_MAX_BYTES = 64;
 

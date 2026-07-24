@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { createGitHubReleasePluginPackageSource } from "@lico/contracts/plugins/plugin-package-source";
+import { createGitHubReleasePluginPackageSource } from "@meshrix/contracts/plugins/plugin-package-source";
 import { setBoundedMapEntry } from "../storage/state-coordinator.mjs";
 import {
   evaluateOutboundEgressUrl,
@@ -224,7 +224,7 @@ export function createGitHubReleasePluginPackageAcquisition({
     const metadataUrl = `${apiRoot}/repos/${source.repository}/releases/tags/${encodeURIComponent(source.release)}`;
     const headers = {
       Accept: "application/vnd.github+json",
-      "User-Agent": "licomesh-plugin-package-acquisition",
+      "User-Agent": "meshrix-plugin-package-acquisition",
       "X-GitHub-Api-Version": "2022-11-28"
     };
     if (authorization) headers.Authorization = `Bearer ${authorization}`;
@@ -277,7 +277,7 @@ export function createGitHubReleasePluginPackageAcquisition({
   async function downloadAsset(assetUrl, authorization, policy, signal) {
     const headers = {
       Accept: "application/octet-stream",
-      "User-Agent": "licomesh-plugin-package-acquisition"
+      "User-Agent": "meshrix-plugin-package-acquisition"
     };
     if (authorization) headers.Authorization = `Bearer ${authorization}`;
     let attempt = 0;

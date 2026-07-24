@@ -1,14 +1,14 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { ensurePrivateDir } from "../../storage/private-file-atomic.mjs";
 
 export const CAPABILITY_BINDING_GUARD_PROTOCOL_VERSION = "v0.0.1:risk-control:capability-binding-guard-1";
 export const CAPABILITY_BINDING_GUARD_STATE_VERSION = 1;
 
-export const DEFAULT_ALIAS = "lico-tool-bindings";
+export const DEFAULT_ALIAS = "meshrix-tool-bindings";
 export const DEFAULT_NAMESPACE = "operation-permission";
 const VALID_STATUSES = Object.freeze(["valid", "invalid"]);
 export const RECOVERY_PACKAGE_VERSION = "v0.0.1:risk-control:capability-binding-guard-recovery-1";

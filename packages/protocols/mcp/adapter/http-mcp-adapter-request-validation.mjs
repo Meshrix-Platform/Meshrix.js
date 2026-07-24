@@ -38,8 +38,8 @@ export function hasMcpAuthToken(request = null) {
   const authorization = String(request?.headers?.authorization || "").trim();
   return Boolean(
     /^Bearer\s+.+/i.test(authorization) ||
-      String(request?.headers?.["x-lico-tool-token"] || "").trim() ||
-      String(request?.headers?.["x-licomesh-api-key"] || "").trim()
+      String(request?.headers?.["x-meshrix-tool-token"] || "").trim() ||
+      String(request?.headers?.["x-meshrix-api-key"] || "").trim()
   );
 }
 
@@ -71,7 +71,7 @@ export function normalizeMcpOperationEnvelope(input, authorization) {
   if (apiVersion !== MCP_INTERFACE_VERSION) {
     return {
       ok: false,
-      error: jsonRpcError(null, -32602, `Unsupported LicoMesh MCP apiVersion: ${apiVersion}`, {
+      error: jsonRpcError(null, -32602, `Unsupported Meshrix MCP apiVersion: ${apiVersion}`, {
         expectedApiVersion: MCP_INTERFACE_VERSION,
         toolsetVersion: MCP_TOOLSET_VERSION,
         upgrade: mcpVersionInfo()
@@ -82,7 +82,7 @@ export function normalizeMcpOperationEnvelope(input, authorization) {
   if (!operation) {
     return {
       ok: false,
-      error: jsonRpcError(null, -32602, "LicoMesh MCP outlet calls require arguments.operation.", {
+      error: jsonRpcError(null, -32602, "Meshrix MCP outlet calls require arguments.operation.", {
         expectedApiVersion: MCP_INTERFACE_VERSION
       })
     };

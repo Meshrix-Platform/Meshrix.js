@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 
-import { SANDBOX_DENIAL_REASONS } from "#lico/foundation/execution-sandbox/contracts";
+import { SANDBOX_DENIAL_REASONS } from "#meshrix/foundation/execution-sandbox/contracts";
 
 const ENFORCED_RESTRICTIONS = Object.freeze([
   "filesystem",
@@ -36,7 +36,7 @@ function containerIdentity(runId, backendNonce) {
     .update(`${backendNonce}\0${normalizedRunId}`, "utf8")
     .digest("hex");
   return Object.freeze({
-    name: `lico-sandbox-${digest.slice(0, 32)}`,
+    name: `meshrix-sandbox-${digest.slice(0, 32)}`,
     digest
   });
 }
@@ -251,8 +251,8 @@ export function createOciSandboxBackend({
       "create",
       "--name", name,
       "--hostname", "sandbox",
-      "--label", "lico.sandbox.managed=true",
-      "--label", `lico.sandbox.run-digest=${identity.digest}`,
+      "--label", "meshrix.sandbox.managed=true",
+      "--label", `meshrix.sandbox.run-digest=${identity.digest}`,
       "--pull", "never",
       ...runtimeCreateArguments(selectedEngine, selectedRuntimeClass),
       "--network", "none",

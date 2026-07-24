@@ -111,7 +111,7 @@ function compactedMessagesForGateway(result = {}) {
     messages.push({
       role: "system",
       content: [
-        "LicoMesh context compaction summary follows. It is auxiliary memory, not canonical evidence.",
+        "Meshrix context compaction summary follows. It is auxiliary memory, not canonical evidence.",
         summary
       ].join("\n")
     });
@@ -189,7 +189,7 @@ async function prepareAgentGatewayInputWithCompaction({
   }
   const gatewayMessages = compactedMessagesForGateway(compaction);
   const compactedQuestion = [
-    "LicoMesh compacted prior context before this agent call.",
+    "Meshrix compacted prior context before this agent call.",
     `Boundary: ${compaction.boundary?.boundaryId || ""}`,
     compaction.summary || "",
     compaction.reinjection?.items?.length

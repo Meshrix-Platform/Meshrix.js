@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { normalizeMcpProxySessionId } from "#lico/contracts/mcp-catalog-delivery";
+import { normalizeMcpProxySessionId } from "#meshrix/contracts/mcp-catalog-delivery";
 
 export const MCP_SSE_CONNECTION_LIMITS = Object.freeze({
   total: 256,

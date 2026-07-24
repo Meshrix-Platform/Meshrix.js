@@ -12,7 +12,7 @@ const storeRoots = new WeakMap();
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))); });
 
 async function store(options = {}) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-materialization-test-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-materialization-test-"));
   roots.push(userDataPath);
   const transactionStore = createUploadWorkspaceMaterializationTransactionStore({ userDataPath, ...options });
   storeRoots.set(transactionStore, userDataPath);

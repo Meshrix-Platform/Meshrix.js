@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
-import { createOperationRouteIndex } from "#lico/server-runtime/routing/operation-route-index";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
+import { createOperationRouteIndex } from "#meshrix/server-runtime/routing/operation-route-index";
 import {
   RadixPathTrie,
   ROUTE_PARAMETER_MAX_BYTES,
   ROUTE_WILDCARD_MAX_BYTES,
-} from "#lico/server-runtime/routing/radix-path-trie";
+} from "#meshrix/server-runtime/routing/radix-path-trie";
 import {
   findHttpOperation,
   findProxyRegisteredApiRequest,
   findRpcOperation,
-} from "#lico/server-runtime/composition/dispatch-operation";
-import { createCorePlatformProvider } from "#lico/server-runtime/composition/core-platform-provider";
+} from "#meshrix/server-runtime/composition/dispatch-operation";
+import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
 
 function operation(id, method, path, rpcMethod = id) {
   return {

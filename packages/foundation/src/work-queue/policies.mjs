@@ -17,7 +17,7 @@ export const DEFAULT_QUEUE_POLICY = Object.freeze({
     multiplier: 2,
     maxDelayMs: 300_000,
     jitter: "deterministic_sha256",
-    retrySeed: "lico-work-queue-retry",
+    retrySeed: "meshrix-work-queue-retry",
     maxJitterBps: 2000
   }),
   fallbackRetry: Object.freeze({

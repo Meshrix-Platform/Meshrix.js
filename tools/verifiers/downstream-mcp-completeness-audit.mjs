@@ -176,7 +176,7 @@ async function callMcpCapabilitiesList({ catalog }) {
       name: MCP_DISCOVERY_TOOL_NAME,
       arguments: {
         apiVersion: MCP_INTERFACE_VERSION,
-        operation: "lico.capabilities.list",
+        operation: "meshrix.capabilities.list",
         input: {}
       }
     }
@@ -506,7 +506,7 @@ async function writeReport(reportPath, report) {
   const absoluteReportPath = repoPath(relativeReportPath);
   await fs.mkdir(path.dirname(absoluteReportPath), { recursive: true });
   const absolutePathPattern = /(?:^|["\s])(?:\/Users\/|\/home\/|\/var\/folders\/|[A-Za-z]:\\)/u;
-  const secretPattern = /(?:bearer\s+[a-z0-9._-]+|x-lico-tool-token|client_secret|private_key|password)/iu;
+  const secretPattern = /(?:bearer\s+[a-z0-9._-]+|x-meshrix-tool-token|client_secret|private_key|password)/iu;
   const assertSafe = () => {
     const text = `${JSON.stringify(report, null, 2)}\n`;
     if (absolutePathPattern.test(text)) {

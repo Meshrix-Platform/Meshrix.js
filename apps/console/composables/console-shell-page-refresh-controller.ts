@@ -1,5 +1,5 @@
 import { computed, ref, type ComputedRef } from "vue";
-import { collectPageRefreshTasks } from "@lico/ui-console/page-refresh";
+import { collectPageRefreshTasks } from "@meshrix/ui-console/page-refresh";
 
 type MaybePromise<T> = T | Promise<T>;
 

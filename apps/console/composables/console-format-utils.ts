@@ -1,5 +1,5 @@
 import type { SplitJobStatus } from "../lib/types";
-export { formatCompactDate } from "@lico/ui-console/console-format-utils";
+export { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 
 export function parseFilterDate(value: string, boundary: "start" | "end") {
   if (!value) {

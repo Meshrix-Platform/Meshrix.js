@@ -1,6 +1,6 @@
 # Protocol Packages
 
-`@lico/protocols` owns transport boundaries, protocol negotiation, normalization,
+`@meshrix/protocols` owns transport boundaries, protocol negotiation, normalization,
 notifications, and protocol-local ports.
 
 ## Protocol Families
@@ -11,7 +11,7 @@ notifications, and protocol-local ports.
 - `agent-sync/` and `downstream-client-aspect/` — Client/agent sync and shared aspect helpers.
 
 Product-specific protocol implementations are delivered by verified plugin packages and are not
-compiled or exported by `@lico/protocols`.
+compiled or exported by `@meshrix/protocols`.
 
 ## Boundaries
 

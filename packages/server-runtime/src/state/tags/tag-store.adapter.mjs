@@ -9,7 +9,7 @@
  * solely through the TagStoreProvider port, never through runtime state.
  *
  * @module tag-store-adapter
- * @package @lico/server-runtime
+ * @package @meshrix/server-runtime
  * @layer server-runtime/state/tags
  */
 
@@ -22,7 +22,7 @@ import { createTagManagementStore } from "../tag-management-store.mjs";
  *
  * @param {object} options
  * @param {string} options.userDataPath - User data directory path for the SQLite database
- * @returns {import("#lico/foundation/security/authorization/tag-store.port.mjs").TagStoreProvider}
+ * @returns {import("#meshrix/foundation/security/authorization/tag-store.port.mjs").TagStoreProvider}
  */
 export function createTagStoreAdapter({ userDataPath = "" } = {}) {
   if (!userDataPath) {

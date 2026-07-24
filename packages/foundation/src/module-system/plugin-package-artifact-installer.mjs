@@ -1,8 +1,8 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { PLUGIN_BUNDLE_MANIFEST_FILENAME } from "@lico/contracts/plugins/plugin-bundle-manifest";
+import { PLUGIN_BUNDLE_MANIFEST_FILENAME } from "@meshrix/contracts/plugins/plugin-bundle-manifest";
 import { admitPluginPackageArchive } from "./plugin-package-validator.mjs";
 import { normalizePluginManifest } from "./plugin-registry.mjs";
 
@@ -151,7 +151,7 @@ export async function installPluginPackageArchive({
       expectedCurrent
     });
     return Object.freeze({
-      schemaVersion: "licomesh.plugin-package-installation-receipt.v1",
+      schemaVersion: "v0.0.1:meshrix:plugin-package-installation-receipt-1",
       pluginId,
       version: runtimeManifest.version,
       packageDigest: verifiedPackage.packageDigest,

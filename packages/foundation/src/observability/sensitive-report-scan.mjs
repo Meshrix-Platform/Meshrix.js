@@ -1,4 +1,4 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import { atomicWriteFile } from "../storage/state-coordinator.mjs";
 import { OBSERVABILITY_BUDGETS, ObservabilityBudgetError, throwIfObservabilityAborted } from "./observability-budgets.mjs";
@@ -84,7 +84,7 @@ export function redactReportText(value = "", { dynamicNeedles = [] } = {}) {
   text = text.replace(/\b(?:gh[pousr]_|github_pat_|sk-)[A-Za-z0-9._-]{8,}\b/gu, "[redacted-secret]");
   text = text.replace(/upstream-secret-value/gu, "[redacted-secret]");
   text = text.replace(/"(?:token|secret|password|authorization|apiKey|privateKey)"\s*:\s*"[^"]+"/giu, (entry) => `${entry.slice(0, entry.indexOf(":"))}:"[redacted]"`);
-  text = text.replace(/lico_[A-Za-z0-9_-]{12,}/gu, "lico_[redacted]");
+  text = text.replace(/meshrix_[A-Za-z0-9_-]{12,}/gu, "meshrix_[redacted]");
   text = text.replace(/\bgrant_[a-z0-9]{6,}_[a-f0-9]{8,}\b/giu, "grant_[redacted]");
   text = text.replace(/\b(?:tool_exec|pending_op|delegated_mcp)_[A-Za-z0-9_-]{8,}\b/gu, "[redacted-runtime-id]");
   text = text.replace(/\btrace_[A-Fa-f0-9]{8,}\b/gu, "trace_[redacted]");
@@ -247,7 +247,7 @@ export async function finalizeAndPublishSensitiveReport(value, {
     requirements: [...new Set(requirements.map(String))].sort(),
     checkpointDigest: String(checkpointDigest || ""),
     privacyFinalization: {
-      finalizer: "licomesh-core-observability",
+      finalizer: "meshrix-core-observability",
       redactionApplied: true,
       privacyScanPassed: true,
       atomicPublication: true

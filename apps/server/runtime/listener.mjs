@@ -1,5 +1,5 @@
 /**
- * LicoMesh server HTTP listener lifecycle.
+ * Meshrix server HTTP listener lifecycle.
  *
  * Thin wrappers around the Node.js HTTP server listen / close lifecycle.
  * Used by bootstrap.mjs for a clear separation between server setup and

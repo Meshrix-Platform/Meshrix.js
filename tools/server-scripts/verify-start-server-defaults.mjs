@@ -20,7 +20,7 @@ assert.equal(
 const startServerPath = requestedEntrypoint
   ? path.resolve(requestedEntrypoint)
   : path.join(repoRoot, "tools", "server-scripts", "start-server.mjs");
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-start-server-defaults-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-start-server-defaults-"));
 const readyFilePath = path.join(userDataPath, "private-ready.json");
 const queryNeedle = "private-query-value-73f1";
 const userAgentNeedle = "private-user-agent-91c4";
@@ -115,8 +115,8 @@ async function assertFilesExclude(rootPath, values) {
 }
 
 const env = { ...process.env };
-delete env.LICO_EDITION;
-delete env.LICO_FEATURE_PROFILE;
+delete env.MESHRIX_EDITION;
+delete env.MESHRIX_FEATURE_PROFILE;
 
 const outputChunks = [];
 const output = {
@@ -180,7 +180,7 @@ try {
     headers: { "User-Agent": userAgentNeedle }
   });
   assert.equal(health.status, 200);
-  assert.ok(health.headers.get("x-licomesh-trace-id"));
+  assert.ok(health.headers.get("x-meshrix-trace-id"));
 
   const bootstrap = await requestJson(`${serverUrl}/api/bootstrap`);
   assert.equal(bootstrap.status, 200);

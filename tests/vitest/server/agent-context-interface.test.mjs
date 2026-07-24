@@ -40,12 +40,12 @@ const agentContextInterface = await import("../../../packages/server-runtime/src
 
 describe("agent context interface", () => {
   it("exposes protocol versions and sorted default method metadata", () => {
-    expect(agentContextInterface.AGENT_CONTEXT_INTERFACE_PROTOCOL_VERSION).toBe("lico.agent_context.interface.v1");
+    expect(agentContextInterface.AGENT_CONTEXT_INTERFACE_PROTOCOL_VERSION).toBe("meshrix.agent_context.interface.v1");
     expect(agentContextInterface.CONTEXT_RUNTIME_PROTOCOL_VERSION).toBe("context-runtime-test.v1");
     expect(agentContextInterface.CONTEXT_COMPACTION_PROTOCOL_VERSION).toBe("context-compaction-test.v1");
 
     const registry = agentContextInterface.getAgentContextInterface();
-    expect(registry.protocolVersion).toBe("lico.agent_context.interface.v1");
+    expect(registry.protocolVersion).toBe("meshrix.agent_context.interface.v1");
     expect(registry.has(" context.createRuntime ")).toBe(true);
     expect(registry.has("missing.method")).toBe(false);
     expect(registry.listMethods()).toEqual([...registry.listMethods()].sort());

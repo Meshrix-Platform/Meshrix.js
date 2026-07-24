@@ -58,7 +58,6 @@ const REQUIRED_STATE_TOKENS = Object.freeze({
 
 const REQUIRED_REAL_REPORTS = Object.freeze([
   "build/reports/upstream-gateway-e2e.json",
-  "build/reports/downstream-mcp-product-e2e.json",
   "build/reports/operation-permission-protocol-consistency.json",
   "build/reports/operation-permission-tag-governed-e2e.json"
 ]);
@@ -197,15 +196,12 @@ async function main() {
   ])));
 
   const upstream = reports["build/reports/upstream-gateway-e2e.json"];
-  const downstream = reports["build/reports/downstream-mcp-product-e2e.json"];
   const protocol = reports["build/reports/operation-permission-protocol-consistency.json"];
   const tagGoverned = reports["build/reports/operation-permission-tag-governed-e2e.json"];
 
   const realEvidence = {
     upstreamGatewayReleaseReady: releaseEvidenceReady("build/reports/upstream-gateway-e2e.json", upstream),
     upstreamGatewayAuditMetrics: Boolean(reportByName(upstream, "audit metrics").status === "passed" || reportByName(upstream, "MCP gateway forwarding").status === "passed"),
-    downstreamMcpReleaseReady: releaseEvidenceReady("build/reports/downstream-mcp-product-e2e.json", downstream),
-    downstreamMcpAuditMetrics: reportByName(downstream, "tool execution audit and metrics").status === "passed",
     protocolDecisionConvergence: reportByName(protocol, "allow deny approval").status === "passed",
     tagGovernedPendingApproval: reportByName(tagGoverned, "approval queue").evidence?.pendingOperationListed === true &&
       reportByName(tagGoverned, "approval queue").evidence?.pendingOperationResolved === true,

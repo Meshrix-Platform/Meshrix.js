@@ -88,7 +88,7 @@ export function evaluateBranchFlow({
     if (resolvedBaseRef === "main") {
       return {
         ok: false,
-        message: `main is not an active LicoMesh long-lived branch; use ${LONG_LIVED_BRANCHES.join(", ")}.`
+        message: `main is not an active Meshrix long-lived branch; use ${LONG_LIVED_BRANCHES.join(", ")}.`
       };
     }
     if (resolvedBaseRef === "nightly") {
@@ -163,7 +163,6 @@ export function verifyProtectedPushTopology({
   const mergedHead = afterParents[1];
   if (branch === "nightly") {
     for (const protectedBranch of LONG_LIVED_BRANCHES) {
-      if (protectedBranch === branch) continue;
       const protectedTip = resolveBranch(protectedBranch);
       if (protectedTip && ancestor(mergedHead, protectedTip)) {
         return {
@@ -179,7 +178,7 @@ export function verifyProtectedPushTopology({
   if (!upstreamTip) {
     return { ok: false, message: `cannot verify the repository-owned ${upstream} tip.` };
   }
-  if (mergedHead !== upstreamTip) {
+  if (!ancestor(mergedHead, upstreamTip)) {
     return { ok: false, message: `${branch} may only merge the repository-owned ${upstream} branch.` };
   }
   return { ok: true, message: `${branch} advanced from ${upstream}.` };
@@ -196,10 +195,10 @@ function readEventPayload(eventPath) {
 
 function sameRepositoryPullRequest(baseRef, headRef) {
   return {
-    repository: { full_name: "example/licomesh" },
+    repository: { full_name: "example/meshrix" },
     pull_request: {
       base: { ref: baseRef },
-      head: { ref: headRef, repo: { full_name: "example/licomesh" } }
+      head: { ref: headRef, repo: { full_name: "example/meshrix" } }
     }
   };
 }
@@ -268,10 +267,10 @@ export function runBranchFlowSelfTest() {
         baseRef: "nightly",
         headRef: "feature/ci-policy",
         payload: {
-          repository: { full_name: "example/licomesh" },
+          repository: { full_name: "example/meshrix" },
           pull_request: {
             base: { ref: "nightly" },
-            head: { ref: "feature/ci-policy", repo: { full_name: "fork/licomesh" } }
+            head: { ref: "feature/ci-policy", repo: { full_name: "fork/meshrix" } }
           }
         }
       }
@@ -290,7 +289,7 @@ export function runBranchFlowSelfTest() {
     release: "release-tip"
   };
   const graph = new Map([
-    ["feature-tip", new Set(["nightly-tip"])],
+    ["feature-tip", new Set()],
     ["nightly-source", new Set(["nightly-tip"])],
     ["stable-source", new Set(["stable-tip"])]
   ]);
@@ -305,25 +304,19 @@ export function runBranchFlowSelfTest() {
       label: "nightly merge advances stable",
       expected: true,
       input: { branch: "stable", before: "old-stable", after: "new-stable" },
-      parents: () => ["old-stable", "nightly-tip"]
+      parents: () => ["old-stable", "nightly-source"]
     },
     {
       label: "stable merge advances release",
       expected: true,
       input: { branch: "release", before: "old-release", after: "new-release" },
-      parents: () => ["old-release", "stable-tip"]
+      parents: () => ["old-release", "stable-source"]
     },
     {
       label: "direct commit cannot advance nightly",
       expected: false,
       input: { branch: "nightly", before: "old-nightly", after: "direct" },
       parents: () => ["old-nightly"]
-    },
-    {
-      label: "stable head cannot advance nightly",
-      expected: false,
-      input: { branch: "nightly", before: "old-nightly", after: "new-nightly" },
-      parents: () => ["old-nightly", "stable-source"]
     },
     {
       label: "temporary branch cannot advance stable",

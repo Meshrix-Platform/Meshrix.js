@@ -1,9 +1,9 @@
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { evaluateUniversalTagPolicy, hasUniversalTagPolicyRules } from "@lico/foundation/security/authorization/universal-tag-policy";
-import { createSecurityAlertStore } from "@lico/foundation/security/security-alerts";
-import { fetchWithPinnedDns, requestWithPinnedDns } from "@lico/foundation/security/outbound-egress-policy";
-import { createUpstreamMcpSessionManager } from "@lico/protocols/mcp/upstream-mcp-client";
+import { evaluateUniversalTagPolicy, hasUniversalTagPolicyRules } from "@meshrix/foundation/security/authorization/universal-tag-policy";
+import { createSecurityAlertStore } from "@meshrix/foundation/security/security-alerts";
+import { fetchWithPinnedDns, requestWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
+import { createUpstreamMcpSessionManager } from "@meshrix/protocols/mcp/upstream-mcp-client";
 import {
   UPSTREAM_GATEWAY_PROTOCOL_VERSION,
   asArray,
@@ -501,7 +501,7 @@ export function createUpstreamGatewayRegistry({
       ...credentials.headers,
       ...(source?.contentType ? { "content-type": source.contentType } : {}),
       ...(Number.isSafeInteger(source?.contentLength) ? { "content-length": String(source.contentLength) } : {}),
-      "x-licomesh-gateway-service": service.serviceId
+      "x-meshrix-gateway-service": service.serviceId
     };
     const requestBodyMetadata = bodyMetadata(
       source?.structuredValue,
@@ -1231,7 +1231,7 @@ export function createUpstreamGatewayRegistry({
           ...(hasRequestBody && declaredLength !== null && Number.isSafeInteger(declaredLength) && declaredLength >= 0
             ? { "content-length": String(declaredLength) }
             : {}),
-          "x-licomesh-gateway-service": service.serviceId
+          "x-meshrix-gateway-service": service.serviceId
         };
         const startedAt = Date.now();
         const abortContext = createForwardAbortContext(options.signal || null, timeoutFor(operation, options));
@@ -1473,7 +1473,7 @@ export function createUpstreamGatewayRegistry({
           ...configuredHeaders(service),
           ...credentials.headers,
           "content-type": "application/json",
-          "x-licomesh-gateway-service": service.serviceId
+          "x-meshrix-gateway-service": service.serviceId
         };
         const rpcMethod = operation.protocol === "json-rpc"
           ? configuredRpcMethod(operation)

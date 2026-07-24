@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
 
-import { createJobsController } from "#lico/protocols/http/controllers/jobs-controller";
+import { createJobsController } from "#meshrix/protocols/http/controllers/jobs-controller";
 import { createUploadWorkspaceMaterializationProvider } from "./upload-workspace-materialization-provider.mjs";
-import { createSystemController } from "#lico/protocols/http/controllers/system-controller";
+import { createSystemController } from "#meshrix/protocols/http/controllers/system-controller";
 import { requirePlatformInterface } from "./platform-registry.mjs";
 import { createBatchDeletionCoordinator } from "../jobs/batch-deletion-coordinator.mjs";
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.mjs";
@@ -35,7 +35,7 @@ function writeInitialOwnerCredentials({ userDataPath, initialOwner, runtimeLogge
   const credentialsPath = path.join(userDataPath, "auth", "initial-credentials.txt");
   fs.mkdirSync(path.dirname(credentialsPath), { recursive: true, mode: 0o700 });
   const content = [
-    "LicoMesh Console Initial Credentials",
+    "Meshrix Console Initial Credentials",
     "=====================================",
     `Username : ${initialOwner.username}`,
     `Password : ${initialOwner.password}`,
@@ -369,8 +369,8 @@ export async function createHttpApplicationAssembly({
   jobWorkflowProvider = await createQueuedJobWorkflowProvider({
     jobManager,
     queueApplicationPort,
-    autoStart: process.env.LICO_IMPORT_WORKER_EXTERNAL !== "1",
-    consumerEnabled: process.env.LICO_IMPORT_WORKER_EXTERNAL !== "1",
+    autoStart: process.env.MESHRIX_IMPORT_WORKER_EXTERNAL !== "1",
+    consumerEnabled: process.env.MESHRIX_IMPORT_WORKER_EXTERNAL !== "1",
     logger: runtimeLogger
   });
   const deletionCoordinator = createBatchDeletionCoordinator({

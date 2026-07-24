@@ -1,5 +1,5 @@
 import { computed, onMounted, ref } from "vue";
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import {
   getUpstreamGatewayMetrics,
   listUpstreamGatewayAudit,

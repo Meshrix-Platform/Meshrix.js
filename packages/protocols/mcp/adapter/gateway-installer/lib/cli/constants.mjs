@@ -16,7 +16,7 @@ export const packageJson = JSON.parse(await fs.readFile(new URL("../../package.j
 
 // Literal field names used in MCP gateway instrumentation.
 export const MCP_OTEL_ATTRIBUTES = Object.freeze({
-  "service.name": "licomesh-server",
+  "service.name": "meshrix-server",
   "service.version": "0.0.1",
   "mcp.method.name": null,
 });
@@ -48,21 +48,21 @@ export function msg(en, zh) {
   return isChinese ? zh : en;
 }
 
-export const DEFAULT_TOKEN_ENV = "LICO_MCP_TOKEN";
-export const MCP_SERVER_NAME = "lico";
-export const MCP_STABLE_TOOL_NAME = "lico.discovery";
+export const DEFAULT_TOKEN_ENV = "MESHRIX_MCP_TOKEN";
+export const MCP_SERVER_NAME = "meshrix";
+export const MCP_STABLE_TOOL_NAME = "meshrix.discovery";
 export const MCP_INTERFACE_VERSION = "v0.0.1:mcp:interface-1";
-export const BOOTSTRAP_INSTALL_SCRIPT = "lico-mcp-install.sh";
-export const BOOTSTRAP_INSTALL_SCRIPT_ZH_CN = "lico-mcp-install.zh-CN.sh";
+export const BOOTSTRAP_INSTALL_SCRIPT = "meshrix-mcp-install.sh";
+export const BOOTSTRAP_INSTALL_SCRIPT_ZH_CN = "meshrix-mcp-install.zh-CN.sh";
 export const HTTP_TIMEOUT_MS = 300000;
 export const SUPPORTED_TARGETS = MCP_SUPPORTED_TARGETS;
 export const PRIORITY_INSTALL_TARGETS = MCP_PRIORITY_INSTALL_TARGETS;
 export const PRIORITY_INSTALL_TARGET = MCP_PRIORITY_INSTALL_TARGET;
-export const LICO_MCP_URL_ENV = "LICO_MCP_URL";
-export const LICO_MCP_DISCOVERY_URL_ENV = "LICO_MCP_DISCOVERY_URL";
-export const LICO_MCP_DISCOVERY_FILE_ENV = "LICO_MCP_DISCOVERY_FILE";
-export const DEFAULT_DISCOVERY_REGISTRY = path.join(os.homedir(), ".lico", "mcp", "servers.json");
-export const PROCESS_IDENTITY_CANONICAL_REQUEST_VERSION = "LICO-PROCESS-IDENTITY-V1";
+export const MESHRIX_MCP_URL_ENV = "MESHRIX_MCP_URL";
+export const MESHRIX_MCP_DISCOVERY_URL_ENV = "MESHRIX_MCP_DISCOVERY_URL";
+export const MESHRIX_MCP_DISCOVERY_FILE_ENV = "MESHRIX_MCP_DISCOVERY_FILE";
+export const DEFAULT_DISCOVERY_REGISTRY = path.join(os.homedir(), ".meshrix", "mcp", "servers.json");
+export const PROCESS_IDENTITY_CANONICAL_REQUEST_VERSION = "MESHRIX-PROCESS-IDENTITY-V1";
 export const CLIENT_FINGERPRINT_VERSION = "v0.0.1:client:fingerprint-1";
 export const DEFAULT_SCAN_PORTS = [7228, 7229, 7230, 7231, 7232, 7233, 7234, 7235, 7236, 7237];
 export const TARGET_ALIASES = new Map([
@@ -73,7 +73,7 @@ export const TARGET_INSTALL_MODES = MCP_TARGET_INSTALL_MODES;
 export const TARGET_LOCATIONS = MCP_TARGET_LOCATIONS;
 export const SCAN_COMMAND_TIMEOUT_MS = 3000;
 export const REMOTE_SCAN_COMMAND_TIMEOUT_MS = 8000;
-export const INSTALL_COMMAND_TIMEOUT_MS = positiveIntegerEnv("LICO_MCP_INSTALL_COMMAND_TIMEOUT_MS", 120000);
+export const INSTALL_COMMAND_TIMEOUT_MS = positiveIntegerEnv("MESHRIX_MCP_INSTALL_COMMAND_TIMEOUT_MS", 120000);
 export const PACKAGE_MANAGER_DISCOVERY_ENV = Object.freeze({
   HOMEBREW_NO_AUTO_UPDATE: "1",
   HOMEBREW_NO_ANALYTICS: "1",

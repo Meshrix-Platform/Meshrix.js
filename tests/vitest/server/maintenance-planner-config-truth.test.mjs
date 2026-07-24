@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createMaintenancePlanner } from "#lico/agents/maintenance/planner";
+import { createMaintenancePlanner } from "#meshrix/agents/maintenance/planner";
 
 function createToolRegistry() {
   const tools = [

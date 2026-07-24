@@ -10,8 +10,8 @@ import {
 import { WORK_QUEUE_STATES } from "../../packages/foundation/src/workflow/state-machine/work-queue/state-machine.mjs";
 
 const runId = `${process.pid}-${Date.now()}`;
-const containerName = `lico-work-queue-postgres-${runId}`;
-const image = process.env.LICO_WORK_QUEUE_POSTGRES_IMAGE || "postgres:16-alpine";
+const containerName = `meshrix-work-queue-postgres-${runId}`;
+const image = process.env.MESHRIX_WORK_QUEUE_POSTGRES_IMAGE || "postgres:16-alpine";
 
 function run(command, args = [], options = {}) {
   return new Promise((resolve, reject) => {
@@ -83,12 +83,12 @@ async function main() {
   const port = await freePort();
   const connectionString = [
     "postgresql://",
-    "lico",
+    "meshrix",
     ":",
-    "lico",
+    "meshrix",
     "@127.0.0.1:",
     String(port),
-    "/lico"
+    "/meshrix"
   ].join("");
   let started = false;
   let store = null;
@@ -96,9 +96,9 @@ async function main() {
     await docker([
       "run", "-d",
       "--name", containerName,
-      "-e", "POSTGRES_USER=lico",
-      "-e", "POSTGRES_PASSWORD=lico",
-      "-e", "POSTGRES_DB=lico",
+      "-e", "POSTGRES_USER=meshrix",
+      "-e", "POSTGRES_PASSWORD=meshrix",
+      "-e", "POSTGRES_DB=meshrix",
       "-p", `${port}:5432`,
       image
     ], { timeoutMs: 120000 });

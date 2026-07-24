@@ -5,7 +5,7 @@ import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import * as openpgp from "openpgp";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   connectorRoot,
   PRIORITY_INSTALL_TARGET,
@@ -52,7 +52,7 @@ export function resolveNodeRuntimeCacheDirectory({
   environment = process.env,
   dataDir
 } = {}) {
-  const override = String(environment?.LICO_MCP_NODE_RUNTIME_CACHE_DIR || "").trim();
+  const override = String(environment?.MESHRIX_MCP_NODE_RUNTIME_CACHE_DIR || "").trim();
   if (override) {
     return path.resolve(override);
   }
@@ -541,7 +541,7 @@ export async function createPortableBundle({
     ...packageJson,
     imports: {
       ...packageJson.imports,
-      "#lico/contracts/*": "./vendor/contracts/*.mjs"
+      "#meshrix/contracts/*": "./vendor/contracts/*.mjs"
     }
   };
   await fs.writeFile(
@@ -550,7 +550,7 @@ export async function createPortableBundle({
       private: true,
       type: "module",
       imports: {
-        "#lico/contracts/*": "./app/vendor/contracts/*.mjs"
+        "#meshrix/contracts/*": "./app/vendor/contracts/*.mjs"
       }
     }, null, 2)}\n`,
     "utf8"
@@ -567,12 +567,16 @@ export async function createPortableBundle({
     path.join(appRoot, "mcp-release-targets.mjs")
   );
   await fs.copyFile(
-    path.join(connectorRoot, "..", "mcp-identity.mjs"),
+    path.join(connectorRoot, "mcp-identity.mjs"),
+    path.join(appRoot, "mcp-identity.mjs")
+  );
+  await fs.copyFile(
+    path.join(connectorRoot, "mcp-identity.mjs"),
     path.join(stagingRoot, "mcp-identity.mjs")
   );
   await fs.copyFile(
-    path.join(connectorRoot, "bin", "lico-mcp.mjs"),
-    path.join(appRoot, "bin", "lico-mcp.mjs")
+    path.join(connectorRoot, "bin", "meshrix-mcp.mjs"),
+    path.join(appRoot, "bin", "meshrix-mcp.mjs")
   );
   await fs.cp(path.join(connectorRoot, "lib"), path.join(appRoot, "lib"), { recursive: true });
   const portableContractsRoot = path.join(appRoot, "vendor", "contracts");
@@ -598,8 +602,8 @@ export async function createPortableBundle({
   );
   const nativeInstallerRoot = path.join(connectorRoot, "..", "native-installer");
   const nativeInstallerFiles = windowsBundle
-    ? ["lico-mcp-install.ps1", "lico-mcp-uninstall.ps1"]
-    : ["lico-mcp-install.sh", "lico-mcp-uninstall.sh"];
+    ? ["meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]
+    : ["meshrix-mcp-install.sh", "meshrix-mcp-uninstall.sh"];
   for (const filename of nativeInstallerFiles) {
     const destination = path.join(stagingRoot, filename);
     await fs.copyFile(path.join(nativeInstallerRoot, filename), destination);
@@ -626,21 +630,21 @@ export async function createPortableBundle({
   ].join("\n"));
 
   if (windowsBundle) {
-    await writeExecutable(path.join(stagingRoot, "lico-mcp.ps1"), [
+    await writeExecutable(path.join(stagingRoot, "meshrix-mcp.ps1"), [
       "$ErrorActionPreference = 'Stop'",
       "$DIR = Split-Path -Parent $MyInvocation.MyCommand.Path",
-      "$env:LICO_MCP_CONNECTOR_COMMAND = Join-Path $DIR 'lico-mcp.ps1'",
-      `& (Join-Path $DIR 'runtime\\${runtimeExecutableName}') (Join-Path $DIR 'app\\bin\\lico-mcp.mjs') @args`,
+      "$env:MESHRIX_MCP_CONNECTOR_COMMAND = Join-Path $DIR 'meshrix-mcp.ps1'",
+      `& (Join-Path $DIR 'runtime\\${runtimeExecutableName}') (Join-Path $DIR 'app\\bin\\meshrix-mcp.mjs') @args`,
       "exit $LASTEXITCODE",
       ""
     ].join("\r\n"));
   } else {
-    await writeExecutable(path.join(stagingRoot, "lico-mcp"), [
+    await writeExecutable(path.join(stagingRoot, "meshrix-mcp"), [
       "#!/usr/bin/env sh",
       "set -e",
       "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "export LICO_MCP_CONNECTOR_COMMAND=\"$DIR/lico-mcp\"",
-      `exec "$DIR/runtime/${runtimeExecutableName}" "$DIR/app/bin/lico-mcp.mjs" "$@"`,
+      "export MESHRIX_MCP_CONNECTOR_COMMAND=\"$DIR/meshrix-mcp\"",
+      `exec "$DIR/runtime/${runtimeExecutableName}" "$DIR/app/bin/meshrix-mcp.mjs" "$@"`,
       ""
     ].join("\n"));
   }
@@ -649,7 +653,7 @@ export async function createPortableBundle({
       "#!/usr/bin/env sh",
       "set -e",
       "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/lico-mcp-install.sh\" install",
+      "\"$DIR/meshrix-mcp-install.sh\" install",
       "printf '\\nDone. Press Enter to close.'",
       "IFS= read -r _",
       ""
@@ -658,7 +662,7 @@ export async function createPortableBundle({
       "#!/usr/bin/env sh",
       "set -e",
       "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/lico-mcp-uninstall.sh\"",
+      "\"$DIR/meshrix-mcp-uninstall.sh\"",
       "printf '\\nDone. Press Enter to close.'",
       "IFS= read -r _",
       ""
@@ -667,7 +671,7 @@ export async function createPortableBundle({
       "#!/usr/bin/env sh",
       "set -e",
       "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "\"$DIR/lico-mcp-install.sh\" doctor",
+      "\"$DIR/meshrix-mcp-install.sh\" doctor",
       "printf '\\nDone. Press Enter to close.'",
       "IFS= read -r _",
       ""
@@ -676,56 +680,56 @@ export async function createPortableBundle({
   const usageLines = windowsBundle
     ? [
         "Windows PowerShell install:",
-        "  powershell -ExecutionPolicy Bypass -File .\\lico-mcp-install.ps1 -Command install -Target auto -Json",
+        "  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp-install.ps1 -Command install -Target auto -Json",
         "",
         "Windows PowerShell uninstall:",
-        `  powershell -ExecutionPolicy Bypass -File .\\lico-mcp-uninstall.ps1 -Target ${PRIORITY_INSTALL_TARGET} -Json`
+        `  powershell -ExecutionPolicy Bypass -File .\\meshrix-mcp-uninstall.ps1 -Target ${PRIORITY_INSTALL_TARGET} -Json`
       ]
     : [
         "Command-line hub registration:",
-        "  ./lico-mcp-install.sh register",
+        "  ./meshrix-mcp-install.sh register",
         "",
         "Discover the local shared hub:",
-        "  ./lico-mcp-install.sh discover-local --json",
+        "  ./meshrix-mcp-install.sh discover-local --json",
         "",
         "Connect clients interactively:",
-        "  ./lico-mcp-install.sh install",
+        "  ./meshrix-mcp-install.sh install",
         "",
         "Connect every detected client from a script:",
-        "  ./lico-mcp-install.sh install --target auto --json",
+        "  ./meshrix-mcp-install.sh install --target auto --json",
         "",
         "Connect a known client from a script:",
-        "  ./lico-mcp-install.sh install --target <client> --json",
+        "  ./meshrix-mcp-install.sh install --target <client> --json",
         "",
         "Connect the priority agent clients from a script:",
-        `  ./lico-mcp-install.sh install --target ${PRIORITY_INSTALL_TARGET} --json`,
+        `  ./meshrix-mcp-install.sh install --target ${PRIORITY_INSTALL_TARGET} --json`,
         "",
         "Use --token-stdin only when installing with a pre-issued custom grant token:",
-        "  printf '%s\\n' '<issued-token>' | ./lico-mcp-install.sh install --target auto --token-stdin --json",
+        "  printf '%s\\n' '<issued-token>' | ./meshrix-mcp-install.sh install --target auto --token-stdin --json",
         "",
         "Uninstall:",
-        "  ./lico-mcp-uninstall.sh",
+        "  ./meshrix-mcp-uninstall.sh",
         "",
         "Uninstall priority clients from a script:",
-        `  ./lico-mcp-uninstall.sh --target ${PRIORITY_INSTALL_TARGET}`
+        `  ./meshrix-mcp-uninstall.sh --target ${PRIORITY_INSTALL_TARGET}`
       ];
   await fs.writeFile(path.join(stagingRoot, "README.txt"), [
-    "LicoMesh MCP Connector Portable Package",
+    "Meshrix MCP Connector Portable Package",
     "",
     "This package includes its own Node.js runtime. The target machine does not need Node.js, npm, npx, or a package manager.",
     "",
     "Licenses:",
-    "  LicoMesh: LICENSE",
+    "  Meshrix: LICENSE",
     "  Node.js and bundled Node.js notices: licenses/node/",
     "  Third-party notice index: THIRD_PARTY_NOTICES.txt",
     "",
     ...usageLines,
     "",
-    "The connector scans local LicoMesh candidates and verifies the MCP identity signature before using a URL.",
+    "The connector scans local Meshrix candidates and verifies the MCP identity signature before using a URL.",
     ...(macosBundle ? [
       "",
       "macOS double-click flow:",
-      "  Open install.command, choose one or more clients. The connector requests a local LicoMesh grant automatically."
+      "  Open install.command, choose one or more clients. The connector requests a local Meshrix grant automatically."
     ] : []),
     "",
     `Platform: ${platform}`,
@@ -759,7 +763,7 @@ export async function createPortableBundle({
     zipSha256,
     zipSizeBytes,
     rootName,
-    executable: windowsBundle ? "lico-mcp.ps1" : unixExecutableName("lico-mcp"),
+    executable: windowsBundle ? "meshrix-mcp.ps1" : unixExecutableName("meshrix-mcp"),
     includesNodeRuntime: true,
     bundledNodeVersion: lockedVersion,
     projectLicensePath: "LICENSE",

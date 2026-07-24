@@ -3,12 +3,12 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
-import { getRuntimeLogger } from "@lico/foundation/observability/runtime-logger";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
+import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
 import {
   assertExistingLocalDirectoryWithinControlledRootsSync,
   assertPathWithinRootSync
-} from "@lico/foundation/security/local-path-boundary";
+} from "@meshrix/foundation/security/local-path-boundary";
 import {
   AGENT_SESSION_THREAD_VERSION,
   AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION,

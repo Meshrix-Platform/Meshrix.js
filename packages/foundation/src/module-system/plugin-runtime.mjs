@@ -1,4 +1,4 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
 import {
@@ -10,7 +10,7 @@ import { createPluginVerifierHooks } from "./plugin-verifier-runner.mjs";
 
 export const PLUGIN_ACTIVATION_EXPORT = "activatePlugin";
 export const PLUGIN_LIFECYCLE_RECOVERY_EXPORT = "recoverPluginLifecycle";
-const PLUGIN_LIFECYCLE_LEDGER_SCHEMA = "licomesh.plugin-lifecycle-ledger/1";
+const PLUGIN_LIFECYCLE_LEDGER_SCHEMA = "meshrix.plugin-lifecycle-ledger/1";
 const PLUGIN_LIFECYCLE_LEDGER_FIELDS = new Set([
   "schemaVersion", "pluginId", "state", "operation", "idempotencyKey", "requestDigest", "generation"
 ]);
@@ -548,6 +548,10 @@ export async function activatePluginDeployment({
         });
       }
       delete pluginContext.pluginOutboundEgressAuthority;
+      if (pluginContext.configuration && Object.hasOwn(pluginContext.configuration, "hostCapabilities")) {
+        const { hostCapabilities: _hostCapabilities, ...pluginConfiguration } = pluginContext.configuration;
+        pluginContext.configuration = Object.freeze(pluginConfiguration);
+      }
       const exposedContext = Object.freeze(pluginContext);
       const persistedState = String(ledger?.state || "active");
       if (persistedState === "uninstalled") {

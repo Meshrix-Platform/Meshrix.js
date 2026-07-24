@@ -49,7 +49,7 @@ export const BACKGROUND_PROCESS_DEFINITIONS = [
 export const SERVER_PROCESS_DEFINITIONS = [
   {
     role: "server-main",
-    label: "LicoMesh 服务端",
+    label: "Meshrix 服务端",
     description: "承载控制台、HTTP API、JSON-RPC、CLI 转发和本地运行时的主服务进程。",
     processType: "service",
     responsibility: "运行服务端主调用面和控制台 API。",
@@ -89,7 +89,7 @@ const ROLE_FEATURE_IDS = Object.freeze({
 });
 
 function activeConsoleFeatureIdsFromEnv() {
-  const explicit = String(process.env.LICO_FEATURES || "").trim();
+  const explicit = String(process.env.MESHRIX_FEATURES || "").trim();
   if (!explicit) {
     return null;
   }

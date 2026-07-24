@@ -1,9 +1,9 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
-import { serverToken } from "#lico/client-strings";
+import { ServerConfig } from "#meshrix/server-config";
+import { serverToken } from "#meshrix/client-strings";
 
 export const DURABLE_WORKFLOW_SUBSTRATE_PROTOCOL_VERSION = "v0.0.1:workflow:core-1";
 

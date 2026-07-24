@@ -5,7 +5,7 @@ import {
   requireStorageProvider,
   result
 } from "./shared.mjs";
-import { buildConsoleStorageSummary } from "@lico/protocols/http/api-facade";
+import { buildConsoleStorageSummary } from "@meshrix/protocols/http/api-facade";
 
 const STORAGE_DOCTOR_SUMMARY_FIELDS = Object.freeze([
   "objectCount",

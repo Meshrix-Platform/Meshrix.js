@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   assertArtifactTransitPort,
   parseArtifactTransitReference
-} from "#lico/foundation/storage/artifact-transit-port";
+} from "#meshrix/foundation/storage/artifact-transit-port";
 
 const ARTIFACT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024 * 1024;
@@ -244,7 +244,7 @@ export async function createArtifactTransitProvider({
     const baseUrl = String(getListenUrl() || "").replace(/\/+$/u, "");
     const uri = baseUrl
       ? `${baseUrl}/api/gateway/v1/artifacts/${encodeURIComponent(transaction.id)}`
-      : `licomesh://artifact/${transaction.id}`;
+      : `meshrix://artifact/${transaction.id}`;
     return Object.freeze({
       reference: `artifact:${transaction.id}`,
       uri,

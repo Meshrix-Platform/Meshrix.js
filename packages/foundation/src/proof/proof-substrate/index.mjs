@@ -21,7 +21,7 @@ import {
   verifyProofBundle,
   verifyProofEnvelope
 } from "pactium";
-import { serverToken } from "#lico/client-strings";
+import { serverToken } from "#meshrix/client-strings";
 import {
   normalizeLicoPactiumRuntime,
   resolveLicoPactiumDataDir
@@ -36,17 +36,17 @@ export const OPERATION_PROOF_SUBSTRATE_MODES = Object.freeze({
 });
 
 const DEFAULT_EVIDENCE_POLICY = "development";
-const LICOMESH_ASPECT_PROTOCOL = "pactium.v0.3.licomesh-aspect";
-const LICOMESH_POLICY_EXTENSION = "licomesh.policy";
-const LICOMESH_WORKSPACE_EFFECT_EXTENSION = "licomesh.workspaceEffect";
-const LICOMESH_SIGNATURE_EXTENSION = "licomesh.signature";
-const LICOMESH_CRITICAL_EXTENSIONS = Object.freeze([
-  LICOMESH_POLICY_EXTENSION,
-  LICOMESH_WORKSPACE_EFFECT_EXTENSION
+const MESHRIX_ASPECT_PROTOCOL = "pactium.v0.3.meshrix-aspect";
+const MESHRIX_POLICY_EXTENSION = "meshrix.policy";
+const MESHRIX_WORKSPACE_EFFECT_EXTENSION = "meshrix.workspaceEffect";
+const MESHRIX_SIGNATURE_EXTENSION = "meshrix.signature";
+const MESHRIX_CRITICAL_EXTENSIONS = Object.freeze([
+  MESHRIX_POLICY_EXTENSION,
+  MESHRIX_WORKSPACE_EFFECT_EXTENSION
 ]);
-const LICOMESH_SUPPORTED_CRITICAL_EXTENSIONS = Object.freeze([
-  ...LICOMESH_CRITICAL_EXTENSIONS,
-  LICOMESH_SIGNATURE_EXTENSION
+const MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS = Object.freeze([
+  ...MESHRIX_CRITICAL_EXTENSIONS,
+  MESHRIX_SIGNATURE_EXTENSION
 ]);
 
 function nowIso() {
@@ -77,9 +77,9 @@ function publicKeyFromPrivateKey(privateKey) {
   return createPublicKey(privateKey).export({ type: "spki", format: "pem" });
 }
 
-function createLicoMeshSigner({
-  signerId = "licomesh-local",
-  secret = "licomesh-development-signer",
+function createMeshrixSigner({
+  signerId = "meshrix-local",
+  secret = "meshrix-development-signer",
   algorithm = "",
   privateKey = "",
   publicKey = ""
@@ -88,13 +88,13 @@ function createLicoMeshSigner({
   if (resolvedAlgorithm === "ed25519") {
     const verifierPublicKey = publicKey || publicKeyFromPrivateKey(privateKey);
     return Object.freeze({
-      protocol: LICOMESH_ASPECT_PROTOCOL,
+      protocol: MESHRIX_ASPECT_PROTOCOL,
       signerId,
       algorithm: "ed25519",
       publicKey: verifierPublicKey,
       async sign(message) {
         if (!privateKey) {
-          throw new Error("Ed25519 LicoMesh signer requires a privateKey for signing.");
+          throw new Error("Ed25519 Meshrix signer requires a privateKey for signing.");
         }
         return `ed25519:${signWithKey(
           null,
@@ -116,10 +116,10 @@ function createLicoMeshSigner({
     });
   }
   if (resolvedAlgorithm !== "hmac-sha256") {
-    throw new Error(`Unsupported LicoMesh signer algorithm: ${resolvedAlgorithm}`);
+    throw new Error(`Unsupported Meshrix signer algorithm: ${resolvedAlgorithm}`);
   }
   return Object.freeze({
-    protocol: LICOMESH_ASPECT_PROTOCOL,
+    protocol: MESHRIX_ASPECT_PROTOCOL,
     signerId,
     algorithm: "hmac-sha256",
     async sign(message) {
@@ -155,7 +155,7 @@ function runtimeOperationProofOptions(runtimeOptions = {}) {
 
 function resolveMode({ mode = "", runtimeOptions = {} } = {}) {
   const options = runtimeOperationProofOptions(runtimeOptions);
-  return normalizeMode(mode || options.mode || env("LICO_OPERATION_PROOF_MODE"));
+  return normalizeMode(mode || options.mode || env("MESHRIX_OPERATION_PROOF_MODE"));
 }
 
 function resolveEvidencePolicy({ evidencePolicy = "", runtimeOptions = {} } = {}) {
@@ -163,7 +163,7 @@ function resolveEvidencePolicy({ evidencePolicy = "", runtimeOptions = {} } = {}
   return text(
     evidencePolicy ||
     options.evidencePolicy ||
-    env("LICO_OPERATION_PROOF_EVIDENCE_POLICY") ||
+    env("MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY") ||
     DEFAULT_EVIDENCE_POLICY,
     DEFAULT_EVIDENCE_POLICY
   );
@@ -174,7 +174,7 @@ function resolveSignerSecret({ signerSecret = "", runtimeOptions = {} } = {}) {
   return text(
     signerSecret ||
     options.signerSecret ||
-    env("LICO_OPERATION_PROOF_SIGNER_SECRET")
+    env("MESHRIX_OPERATION_PROOF_SIGNER_SECRET")
   );
 }
 
@@ -242,12 +242,12 @@ function normalizeEntry(input = {}, envelope) {
     assetRef: text(input.assetRef),
     targetKind: text(input.targetKind),
     targetRef: asObject(input.targetRef),
-    subjectDigest: text(storedSubject.subjectDigest) || protocolHash("licomesh.subject", cleanValue(storedSubject)),
-    riskDigest: text(storedRisk.riskDigest) || protocolHash("licomesh.risk", cleanValue(storedRisk)),
+    subjectDigest: text(storedSubject.subjectDigest) || protocolHash("meshrix.subject", cleanValue(storedSubject)),
+    riskDigest: text(storedRisk.riskDigest) || protocolHash("meshrix.risk", cleanValue(storedRisk)),
     idempotencyKey: normalizeIdempotencyKey(input),
-    inputDigest: text(storedInput.inputDigest) || protocolHash("licomesh.operation-input", cleanValue(storedInput)),
+    inputDigest: text(storedInput.inputDigest) || protocolHash("meshrix.operation-input", cleanValue(storedInput)),
     policyDigest: text(storedPolicy.policyDigest) || protocolHash(
-      "licomesh.policy-evidence",
+      "meshrix.policy-evidence",
       cleanValue(storedPolicy)
     ),
     warnings: asArray(input.warnings).map((warning) => cleanValue(warning)),
@@ -260,7 +260,7 @@ function normalizeEntry(input = {}, envelope) {
     proof: {
       mode: OPERATION_PROOF_SUBSTRATE_MODES.PACTIUM,
       lifecycle: "two-stage",
-      aspect: LICOMESH_ASPECT_PROTOCOL,
+      aspect: MESHRIX_ASPECT_PROTOCOL,
       productionVerifiable: false
     },
     pactium: {
@@ -301,7 +301,7 @@ function normalizeReceiptEntry(input = {}, envelope) {
       mode: OPERATION_PROOF_SUBSTRATE_MODES.PACTIUM,
       lifecycle: "single-terminal",
       profile: text(input.profile, "receipt"),
-      aspect: LICOMESH_ASPECT_PROTOCOL,
+      aspect: MESHRIX_ASPECT_PROTOCOL,
       terminal: true
     },
     pactium: {
@@ -472,7 +472,7 @@ function receiptResultFor(input = {}, status = "succeeded") {
     statusCode: Number(input.statusCode || 0),
     auditId: text(input.auditId),
     receiptRefs: asArray(input.receiptRefs).map(String).filter(Boolean).slice(0, 64),
-    errorDigest: input.error ? protocolHash("licomesh.operation-error", text(input.error)) : "",
+    errorDigest: input.error ? protocolHash("meshrix.operation-error", text(input.error)) : "",
     ...(input.commitment === undefined ? {} : { commitment: cleanValue(input.commitment) })
   });
 }
@@ -593,26 +593,26 @@ async function resolveMaterialBlock({ core, cid, bundleResolver }) {
   return bundleResolver?.get(cid) || core.resolveBlock(cid);
 }
 
-function materializeLicoMeshEvidenceExtension({ name, evidence, metadata = {} }) {
+function materializeMeshrixEvidenceExtension({ name, evidence, metadata = {} }) {
   const normalizedEvidence = cleanValue(evidence || {});
   return {
     name,
     critical: true,
     value: {
-      protocol: LICOMESH_ASPECT_PROTOCOL,
+      protocol: MESHRIX_ASPECT_PROTOCOL,
       evidenceType: name,
       evidenceVersion: "v2",
       evidence: normalizedEvidence,
-      evidenceHash: protocolHash("licomesh.critical-evidence", normalizedEvidence),
+      evidenceHash: protocolHash("meshrix.critical-evidence", normalizedEvidence),
       metadata: cleanValue(asObject(metadata))
     },
     metadata: {
-      evidenceHash: protocolHash("licomesh.critical-evidence", normalizedEvidence)
+      evidenceHash: protocolHash("meshrix.critical-evidence", normalizedEvidence)
     }
   };
 }
 
-function licoMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome" }) {
+function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome" }) {
   const rawPolicyEvidence = input.policyEvidence ||
     input.policyDecision ||
     (entry?.policyDigest ? { policyDigest: entry.policyDigest } : null) ||
@@ -623,7 +623,7 @@ function licoMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome
     workspaceId: normalizeWorkspaceId(input),
     decision: text(rawPolicyEvidence?.decision || rawPolicyEvidence?.status),
     reasonCode: text(rawPolicyEvidence?.reasonCode || rawPolicyEvidence?.reason),
-    policyDigest: protocolHash("licomesh.policy-evidence", cleanValue(rawPolicyEvidence))
+    policyDigest: protocolHash("meshrix.policy-evidence", cleanValue(rawPolicyEvidence))
   });
   const rawWorkspaceEffectEvidence = input.workspaceEffectEvidence ||
     input.effectEvidence ||
@@ -639,10 +639,10 @@ function licoMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome
     workspaceId: normalizeWorkspaceId(input),
     status: text(input.status || entry?.status),
     receiptRefs: asArray(input.receiptRefs).map(String).filter(Boolean).slice(0, 64),
-    effectDigest: protocolHash("licomesh.workspace-effect-evidence", cleanValue(rawWorkspaceEffectEvidence))
+    effectDigest: protocolHash("meshrix.workspace-effect-evidence", cleanValue(rawWorkspaceEffectEvidence))
   });
-  const policyExtension = materializeLicoMeshEvidenceExtension({
-      name: LICOMESH_POLICY_EXTENSION,
+  const policyExtension = materializeMeshrixEvidenceExtension({
+      name: MESHRIX_POLICY_EXTENSION,
       evidence: policyEvidence,
       metadata: {
         workspaceId: normalizeWorkspaceId(input)
@@ -651,8 +651,8 @@ function licoMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome
   if (phase === "intent") return [policyExtension];
   return [
     policyExtension,
-    materializeLicoMeshEvidenceExtension({
-      name: LICOMESH_WORKSPACE_EFFECT_EXTENSION,
+    materializeMeshrixEvidenceExtension({
+      name: MESHRIX_WORKSPACE_EFFECT_EXTENSION,
       evidence: workspaceEffectEvidence,
       metadata: {
         workspaceId: normalizeWorkspaceId(input)
@@ -661,26 +661,26 @@ function licoMeshEvidenceExtensions({ input = {}, entry = null, phase = "outcome
   ];
 }
 
-function licoMeshEnvelopeSigningHash(envelope) {
+function meshrixMeshEnvelopeSigningHash(envelope) {
   return envelopeSigningHash({
     ...envelope,
     extensions: asArray(envelope?.extensions).filter(
-      (extension) => extension?.name !== LICOMESH_SIGNATURE_EXTENSION
+      (extension) => extension?.name !== MESHRIX_SIGNATURE_EXTENSION
     )
   });
 }
 
-function finalizeLicoMeshEnvelopeExtensions(signer) {
+function finalizeMeshrixEnvelopeExtensions(signer) {
   if (!signer) return null;
   return async (envelope) => {
-    const signedEnvelopeHash = licoMeshEnvelopeSigningHash(envelope);
+    const signedEnvelopeHash = meshrixMeshEnvelopeSigningHash(envelope);
     const signature = await signer.sign(signedEnvelopeHash);
     return [{
-      name: LICOMESH_SIGNATURE_EXTENSION,
+      name: MESHRIX_SIGNATURE_EXTENSION,
       critical: false,
       value: {
-        protocol: LICOMESH_ASPECT_PROTOCOL,
-        signerId: signer.signerId || "licomesh-signer",
+        protocol: MESHRIX_ASPECT_PROTOCOL,
+        signerId: signer.signerId || "meshrix-signer",
         algorithm: signer.algorithm || "hmac-sha256",
         signedEnvelopeHash,
         signature
@@ -689,7 +689,7 @@ function finalizeLicoMeshEnvelopeExtensions(signer) {
   };
 }
 
-function createLicoMeshAspect({
+function createMeshrixAspect({
   pactium: core,
   storage,
   evidencePolicy = "production",
@@ -697,19 +697,19 @@ function createLicoMeshAspect({
   signerSecret = ""
 } = {}) {
   if (!core || !storage) {
-    throw new Error("LicoMesh proof aspect requires Pactium core and storage ports.");
+    throw new Error("Meshrix proof aspect requires Pactium core and storage ports.");
   }
   const hasExplicitSignerSecret = text(signerSecret) !== "";
   const resolvedSigner = signer === false
     ? null
     : signer || (hasExplicitSignerSecret || evidencePolicy !== "production"
-      ? createLicoMeshSigner({ secret: signerSecret || "licomesh-development-signer" })
+      ? createMeshrixSigner({ secret: signerSecret || "meshrix-development-signer" })
       : null);
   const genericRepairPlanner = createRepairPlanner();
 
   function assertProductionReady() {
     if (evidencePolicy === "production" && !resolvedSigner) {
-      throw new Error("LicoMesh production evidence policy requires an explicit signer or signerSecret.");
+      throw new Error("Meshrix production evidence policy requires an explicit signer or signerSecret.");
     }
   }
 
@@ -718,10 +718,10 @@ function createLicoMeshAspect({
     const policyEvidence = input.policyEvidence ?? input.policy;
     const effectEvidence = input.workspaceEffectEvidence ?? input.effectEvidence ?? input.workspaceEffect;
     if (evidencePolicy === "production" && !policyEvidence) {
-      throw new Error("LicoMesh production evidence policy requires policy evidence.");
+      throw new Error("Meshrix production evidence policy requires policy evidence.");
     }
     if (evidencePolicy === "production" && !effectEvidence) {
-      throw new Error("LicoMesh production evidence policy requires workspace effect evidence.");
+      throw new Error("Meshrix production evidence policy requires workspace effect evidence.");
     }
     assertProductionReady();
     const compactInput = {
@@ -730,8 +730,8 @@ function createLicoMeshAspect({
       policyEvidence: policyEvidence || { missing: true, policy: "opportunistic" },
       workspaceEffectEvidence: effectEvidence || { missing: true, policy: "opportunistic" }
     };
-    const intentEvidenceExtensions = licoMeshEvidenceExtensions({ input: compactInput, phase: "intent" });
-    const outcomeEvidenceExtensions = licoMeshEvidenceExtensions({ input: compactInput, phase: "outcome" });
+    const intentEvidenceExtensions = meshrixMeshEvidenceExtensions({ input: compactInput, phase: "intent" });
+    const outcomeEvidenceExtensions = meshrixMeshEvidenceExtensions({ input: compactInput, phase: "outcome" });
     const batch = await core.recordOperations([{
       operationId: normalizeOperationId(input),
       workspaceId,
@@ -739,13 +739,13 @@ function createLicoMeshAspect({
       outcomeIdempotencyKey: text(input.outcomeIdempotencyKey),
       status: outcomeStatus(input),
       input: {
-        inputDigest: protocolHash("licomesh.operation-input", cleanValue(input.input ?? input.payload ?? {}))
+        inputDigest: protocolHash("meshrix.operation-input", cleanValue(input.input ?? input.payload ?? {}))
       },
       subject: {
-        subjectDigest: protocolHash("licomesh.subject", cleanValue(asObject(input.subject)))
+        subjectDigest: protocolHash("meshrix.subject", cleanValue(asObject(input.subject)))
       },
       result: {
-        resultDigest: protocolHash("licomesh.operation-result", cleanValue(input.result ?? input.output ?? {}))
+        resultDigest: protocolHash("meshrix.operation-result", cleanValue(input.result ?? input.output ?? {}))
       },
       causalityRefs: asArray(input.causalityRefs),
       hostEvidenceRefs: asArray(input.hostEvidenceRefs),
@@ -758,13 +758,13 @@ function createLicoMeshAspect({
       returnIntentReplay: input.returnIntentReplay === true,
       extensions: [...intentEvidenceExtensions, ...asArray(input.intentExtensions)],
       outcomeExtensions: [...outcomeEvidenceExtensions, ...asArray(input.outcomeExtensions || input.extensions)],
-      finalizeEnvelopeExtensions: finalizeLicoMeshEnvelopeExtensions(resolvedSigner),
+      finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(resolvedSigner),
       stateMutations: input.stateMutations || input.state?.mutations || []
     }]);
     return batch.envelopes[0];
   }
 
-  async function verifyLicoMeshEnvelope(envelope, options = {}) {
+  async function verifyMeshrixEnvelope(envelope, options = {}) {
     const bundleResolver = createPortableBundleBlockResolver(options.bundle, options);
     const decodedMaterial = new Map();
     async function resolveDecodedMaterial(cid) {
@@ -791,7 +791,7 @@ function createLicoMeshAspect({
     const coreResult = options.coreEnvelopeResult || await verifyProofEnvelope(envelope, {
       storage: { getBlock: (cid) => core.resolveBlock(cid) },
       bundle: options.bundle || null,
-      supportedCriticalExtensions: LICOMESH_SUPPORTED_CRITICAL_EXTENSIONS,
+      supportedCriticalExtensions: MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS,
       proofVerifiers: options.proofVerifiers || {},
       requireAllProofs: options.requireAllProofs !== false,
       verifierManifest: options.verifierManifest || null,
@@ -809,48 +809,48 @@ function createLicoMeshAspect({
     const criticalNames = new Set(asArray(envelope?.criticalExtensions).map(String));
 
     const requiredCriticalExtensions = envelope?.envelopeKind === "operation-intent"
-      ? [LICOMESH_POLICY_EXTENSION]
-      : LICOMESH_CRITICAL_EXTENSIONS;
+      ? [MESHRIX_POLICY_EXTENSION]
+      : MESHRIX_CRITICAL_EXTENSIONS;
     for (const required of requiredCriticalExtensions) {
       const extension = extensionIndex.get(required)?.[0] || null;
       if (!extension) {
         failures.push(createVerificationFailure({
-          layer: "licomesh",
+          layer: "meshrix",
           code: `missing_${required.replace(/\W+/gu, "_")}`,
-          message: `LicoMesh Proof Envelope is missing required critical extension ${required}.`,
+          message: `Meshrix Proof Envelope is missing required critical extension ${required}.`,
           evidenceRef: envelope?.envelopeId || "",
           repairable: evidencePolicy !== "production"
         }));
       } else if (extension.critical !== true || !criticalNames.has(required)) {
         failures.push(createVerificationFailure({
-          layer: "licomesh",
+          layer: "meshrix",
           code: "noncritical_required_extension",
-          message: `LicoMesh required extension ${required} must be critical and listed in criticalExtensions.`,
+          message: `Meshrix required extension ${required} must be critical and listed in criticalExtensions.`,
           evidenceRef: envelope?.envelopeId || "",
           repairable: true
         }));
       }
     }
 
-    for (const name of [LICOMESH_POLICY_EXTENSION, LICOMESH_WORKSPACE_EFFECT_EXTENSION]) {
+    for (const name of [MESHRIX_POLICY_EXTENSION, MESHRIX_WORKSPACE_EFFECT_EXTENSION]) {
       for (const extension of asArray(extensionIndex.get(name))) {
         const { value } = await resolveDecodedMaterial(extension.valueRef);
         const evidence = asObject(value?.evidence, null);
         const evidenceHash = text(value?.evidenceHash || extension.metadata?.evidenceHash);
         const expectedEvidenceHash = evidence
-          ? protocolHash("licomesh.critical-evidence", cleanValue(evidence))
+          ? protocolHash("meshrix.critical-evidence", cleanValue(evidence))
           : "";
-        if (value?.protocol !== LICOMESH_ASPECT_PROTOCOL || value?.evidenceVersion !== "v2" ||
+        if (value?.protocol !== MESHRIX_ASPECT_PROTOCOL || value?.evidenceVersion !== "v2" ||
             value?.evidenceType !== name || !evidence || !evidenceHash) {
           failures.push(createVerificationFailure({
-            layer: "licomesh.evidence",
+            layer: "meshrix.evidence",
             code: "malformed_evidence",
             evidenceRef: extension.valueRef,
             repairable: true
           }));
         } else if (evidenceHash !== expectedEvidenceHash) {
           failures.push(createVerificationFailure({
-            layer: "licomesh.evidence",
+            layer: "meshrix.evidence",
             code: "bad_evidence_hash",
             evidenceRef: extension.valueRef
           }));
@@ -858,21 +858,21 @@ function createLicoMeshAspect({
       }
     }
 
-    const signatureExtension = extensionIndex.get(LICOMESH_SIGNATURE_EXTENSION)?.[0] || null;
+    const signatureExtension = extensionIndex.get(MESHRIX_SIGNATURE_EXTENSION)?.[0] || null;
     if (evidencePolicy === "production" && !resolvedSigner) {
       failures.push(createVerificationFailure({
-        layer: "licomesh.signing",
+        layer: "meshrix.signing",
         code: "missing_signature_verifier",
-        message: "LicoMesh production verification requires an explicit signer or signerSecret.",
+        message: "Meshrix production verification requires an explicit signer or signerSecret.",
         evidenceRef: envelope?.envelopeId || "",
         repairable: true
       }));
     }
     if (!signatureExtension) {
       failures.push(createVerificationFailure({
-        layer: "licomesh.signing",
+        layer: "meshrix.signing",
         code: "missing_signature",
-        message: "LicoMesh signing is enabled by default and no signature extension was found.",
+        message: "Meshrix signing is enabled by default and no signature extension was found.",
         evidenceRef: envelope?.envelopeId || "",
         repairable: evidencePolicy !== "production"
       }));
@@ -880,40 +880,40 @@ function createLicoMeshAspect({
       const { value } = await resolveDecodedMaterial(signatureExtension.valueRef);
       if (!value) {
         failures.push(createVerificationFailure({
-          layer: "licomesh.signing",
+          layer: "meshrix.signing",
           code: "missing_signature_material",
           evidenceRef: signatureExtension.valueRef,
           repairable: true
         }));
-      } else if (value.signedEnvelopeHash !== licoMeshEnvelopeSigningHash(envelope)) {
+      } else if (value.signedEnvelopeHash !== meshrixMeshEnvelopeSigningHash(envelope)) {
         failures.push(createVerificationFailure({
-          layer: "licomesh.signing",
+          layer: "meshrix.signing",
           code: "bad_signed_envelope_hash",
           evidenceRef: signatureExtension.valueRef
         }));
-      } else if (resolvedSigner && value.signerId !== (resolvedSigner.signerId || "licomesh-signer")) {
+      } else if (resolvedSigner && value.signerId !== (resolvedSigner.signerId || "meshrix-signer")) {
         failures.push(createVerificationFailure({
-          layer: "licomesh.signing",
+          layer: "meshrix.signing",
           code: "bad_signature_signer",
           evidenceRef: signatureExtension.valueRef
         }));
       } else if (resolvedSigner && value.algorithm !== (resolvedSigner.algorithm || "hmac-sha256")) {
         failures.push(createVerificationFailure({
-          layer: "licomesh.signing",
+          layer: "meshrix.signing",
           code: "bad_signature_algorithm",
           evidenceRef: signatureExtension.valueRef
         }));
       } else if (!resolvedSigner) {
         failures.push(createVerificationFailure({
-          layer: "licomesh.signing",
+          layer: "meshrix.signing",
           code: "signature_verifier_unconfigured",
-          message: "LicoMesh signature material cannot be verified without an explicit signer or signerSecret.",
+          message: "Meshrix signature material cannot be verified without an explicit signer or signerSecret.",
           evidenceRef: signatureExtension.valueRef,
           repairable: true
         }));
       } else if (!(await resolvedSigner.verify(value.signedEnvelopeHash, value.signature))) {
         failures.push(createVerificationFailure({
-          layer: "licomesh.signing",
+          layer: "meshrix.signing",
           code: "bad_signature",
           evidenceRef: signatureExtension.valueRef
         }));
@@ -922,9 +922,9 @@ function createLicoMeshAspect({
 
     if (evidencePolicy === "production" && !options.trustedManifest) {
       failures.push(createVerificationFailure({
-        layer: "licomesh.trust",
+        layer: "meshrix.trust",
         code: "untrusted_verification",
-        message: "LicoMesh production verification requires a caller-supplied trusted manifest.",
+        message: "Meshrix production verification requires a caller-supplied trusted manifest.",
         evidenceRef: envelope?.envelopeId || "",
         repairable: true
       }));
@@ -932,7 +932,7 @@ function createLicoMeshAspect({
 
     return {
       protocol: PACTIUM_PROTOCOL,
-      aspect: LICOMESH_ASPECT_PROTOCOL,
+      aspect: MESHRIX_ASPECT_PROTOCOL,
       envelopeId: envelope?.envelopeId || "",
       ok: failures.filter((failure) => failure.severity !== "warning").length === 0,
       proofStructurallyValid: coreResult.proofStructurallyValid,
@@ -943,20 +943,20 @@ function createLicoMeshAspect({
       failures,
       checked: [
         ...asArray(coreResult.checked),
-        "licomesh-critical-policy-extension",
-        ...(requiredCriticalExtensions.includes(LICOMESH_WORKSPACE_EFFECT_EXTENSION)
-          ? ["licomesh-critical-workspace-effect-extension"]
+        "meshrix-critical-policy-extension",
+        ...(requiredCriticalExtensions.includes(MESHRIX_WORKSPACE_EFFECT_EXTENSION)
+          ? ["meshrix-critical-workspace-effect-extension"]
           : []),
-        "licomesh-signature",
-        "licomesh-workspace-projection"
+        "meshrix-signature",
+        "meshrix-workspace-projection"
       ]
     };
   }
 
-  async function verifyLicoMeshBundle(bundle, options = {}) {
+  async function verifyMeshrixBundle(bundle, options = {}) {
     const supportedCriticalExtensions = [
       ...new Set([
-        ...LICOMESH_SUPPORTED_CRITICAL_EXTENSIONS,
+        ...MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS,
         ...asArray(options.supportedCriticalExtensions)
       ])
     ];
@@ -968,7 +968,7 @@ function createLicoMeshAspect({
       trustPolicy,
       supportedCriticalExtensions
     });
-    const envelopeResult = await verifyLicoMeshEnvelope(bundle?.envelope || {}, {
+    const envelopeResult = await verifyMeshrixEnvelope(bundle?.envelope || {}, {
       ...options,
       trustPolicy,
       bundle,
@@ -976,7 +976,7 @@ function createLicoMeshAspect({
     });
     return {
       protocol: PACTIUM_PROTOCOL,
-      aspect: LICOMESH_ASPECT_PROTOCOL,
+      aspect: MESHRIX_ASPECT_PROTOCOL,
       ok: bundleResult.ok && envelopeResult.ok,
       failures: [...asArray(bundleResult.failures), ...asArray(envelopeResult.failures)],
       bundle: bundleResult,
@@ -990,8 +990,8 @@ function createLicoMeshAspect({
       ...plan,
       tasks: asArray(plan.tasks).map((task, index) => {
         const failure = asArray(failures)[index] || {};
-        return String(failure.layer || "").startsWith("licomesh") ||
-          String(failure.code || "").startsWith("missing_licomesh_")
+        return String(failure.layer || "").startsWith("meshrix") ||
+          String(failure.code || "").startsWith("missing_meshrix_")
           ? { ...task, action: "request-host-evidence" }
           : task;
       })
@@ -999,20 +999,20 @@ function createLicoMeshAspect({
   }
 
   return Object.freeze({
-    protocol: LICOMESH_ASPECT_PROTOCOL,
+    protocol: MESHRIX_ASPECT_PROTOCOL,
     core,
     evidencePolicy,
     workspaceProjectionDefault: true,
-    criticalExtensions: LICOMESH_CRITICAL_EXTENSIONS,
-    supportedCriticalExtensions: LICOMESH_SUPPORTED_CRITICAL_EXTENSIONS,
+    criticalExtensions: MESHRIX_CRITICAL_EXTENSIONS,
+    supportedCriticalExtensions: MESHRIX_SUPPORTED_CRITICAL_EXTENSIONS,
     signer: resolvedSigner,
     assertProductionReady,
     recordWorkspaceOperation,
     recordOperation: recordWorkspaceOperation,
-    verifyLicoMeshEnvelope,
-    verifyEnvelope: verifyLicoMeshEnvelope,
-    verifyLicoMeshBundle,
-    verifyBundle: verifyLicoMeshBundle,
+    verifyMeshrixEnvelope,
+    verifyEnvelope: verifyMeshrixEnvelope,
+    verifyMeshrixBundle,
+    verifyBundle: verifyMeshrixBundle,
     planRepair,
     getWorkspaceProjection: core.getWorkspaceProjection,
     proveWorkspaceMembership: core.proveWorkspaceMembership,
@@ -1042,7 +1042,7 @@ export function createOperationProofSubstrate({
   });
   const core = runtime.core;
   const storage = runtime.storage;
-  const aspect = createLicoMeshAspect({
+  const aspect = createMeshrixAspect({
     pactium: core,
     storage,
     evidencePolicy: resolvedEvidencePolicy,
@@ -1063,7 +1063,7 @@ export function createOperationProofSubstrate({
     const operationId = normalizeOperationId(input);
     const workspaceId = normalizeWorkspaceId(input);
     const idempotencyKey = normalizeIdempotencyKey(input);
-    const evidenceExtensions = licoMeshEvidenceExtensions({
+    const evidenceExtensions = meshrixMeshEvidenceExtensions({
       input: {
         ...input,
         operationId,
@@ -1077,10 +1077,10 @@ export function createOperationProofSubstrate({
       workspaceId,
       idempotencyKey,
       input: {
-        inputDigest: protocolHash("licomesh.operation-input", cleanValue(input.input ?? input.payload ?? {}))
+        inputDigest: protocolHash("meshrix.operation-input", cleanValue(input.input ?? input.payload ?? {}))
       },
       subject: {
-        subjectDigest: protocolHash("licomesh.subject", cleanValue(asObject(input.subject)))
+        subjectDigest: protocolHash("meshrix.subject", cleanValue(asObject(input.subject)))
       },
       causalityRefs: asArray(input.causalityRefs),
       appendCondition: input.appendCondition,
@@ -1089,7 +1089,7 @@ export function createOperationProofSubstrate({
         ...evidenceExtensions,
         ...asArray(input.extensions)
       ],
-      finalizeEnvelopeExtensions: finalizeLicoMeshEnvelopeExtensions(aspect.signer)
+      finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)
     });
     if (envelope.replayed) {
       const existing = await loadProjectedEntry(core, envelope.factRef?.ledgerEventId);
@@ -1121,7 +1121,7 @@ export function createOperationProofSubstrate({
       throw new Error("operation proof intent missing");
     }
     const status = outcomeStatus(input);
-    const evidenceExtensions = licoMeshEvidenceExtensions({
+    const evidenceExtensions = meshrixMeshEvidenceExtensions({
       input: {
         ...input,
         status
@@ -1134,11 +1134,11 @@ export function createOperationProofSubstrate({
       status,
       outcomeIdempotencyKey: input.outcomeIdempotencyKey || input.idempotencyKey || `${entry.idempotencyKey}:outcome`,
       result: cleanValue({
-        resultDigest: protocolHash("licomesh.operation-result", cleanValue(input.result ?? input.output ?? {})),
-        assetRefDigest: protocolHash("licomesh.asset-ref", text(input.assetRef, entry.assetRef || "")),
-        receiptSetDigest: protocolHash("licomesh.receipt-set", asArray(input.receiptRefs).map(String)),
-        auditDigest: protocolHash("licomesh.audit-ref", text(input.auditId)),
-        errorDigest: input.error ? protocolHash("licomesh.operation-error", text(input.error)) : "",
+        resultDigest: protocolHash("meshrix.operation-result", cleanValue(input.result ?? input.output ?? {})),
+        assetRefDigest: protocolHash("meshrix.asset-ref", text(input.assetRef, entry.assetRef || "")),
+        receiptSetDigest: protocolHash("meshrix.receipt-set", asArray(input.receiptRefs).map(String)),
+        auditDigest: protocolHash("meshrix.audit-ref", text(input.auditId)),
+        errorDigest: input.error ? protocolHash("meshrix.operation-error", text(input.error)) : "",
         outcomeKind: text(input.outcomeKind, status)
       }),
       hostEvidenceRefs: asArray(input.receiptRefs),
@@ -1150,7 +1150,7 @@ export function createOperationProofSubstrate({
         ...evidenceExtensions,
         ...asArray(input.extensions)
       ],
-      finalizeEnvelopeExtensions: finalizeLicoMeshEnvelopeExtensions(aspect.signer)
+      finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)
     });
     return mergeCompletion(entry, { ...input, status }, envelope, input.failed === true || status === "failed");
   }
@@ -1161,7 +1161,7 @@ export function createOperationProofSubstrate({
     const workspaceId = normalizeWorkspaceId(input);
     const profile = text(input.profile, "receipt");
     const status = outcomeStatus(input);
-    const evidenceExtensions = licoMeshEvidenceExtensions({
+    const evidenceExtensions = meshrixMeshEvidenceExtensions({
       input: { ...input, operationId, workspaceId, status },
       phase: "receipt"
     });
@@ -1175,11 +1175,11 @@ export function createOperationProofSubstrate({
       idempotencyKey: normalizeIdempotencyKey(input),
       status,
       subject: {
-        subjectDigest: protocolHash("licomesh.subject", cleanValue(asObject(input.subject)))
+        subjectDigest: protocolHash("meshrix.subject", cleanValue(asObject(input.subject)))
       },
       result: receiptResult,
       extensions: [...evidenceExtensions, ...asArray(input.extensions)],
-      finalizeEnvelopeExtensions: finalizeLicoMeshEnvelopeExtensions(aspect.signer)
+      finalizeEnvelopeExtensions: finalizeMeshrixEnvelopeExtensions(aspect.signer)
     });
     if (envelope.disposition === "unchanged") {
       return {
@@ -1258,7 +1258,7 @@ export function createOperationProofSubstrate({
     provider: OPERATION_PROOF_SUBSTRATE_PROVIDER,
     providerProtocolVersion: PACTIUM_PROTOCOL,
     providerPackageVersion: PACTIUM_PACKAGE_VERSION,
-    aspectProtocolVersion: LICOMESH_ASPECT_PROTOCOL,
+    aspectProtocolVersion: MESHRIX_ASPECT_PROTOCOL,
     dataDir: resolvedDataDir,
     mode: resolvedMode,
     evidencePolicy: resolvedEvidencePolicy,
@@ -1448,8 +1448,8 @@ export function createOperationProofSubstrate({
             operations: ["planRecovery", "doctor", "health"]
           },
           {
-            id: "licomesh-aspect-record",
-            kind: "pactium-licomesh-aspect",
+            id: "meshrix-aspect-record",
+            kind: "pactium-meshrix-aspect",
             operations: ["recordWorkspaceOperation", "recordAcceptanceEvidence"]
           }
         ]

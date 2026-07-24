@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-export const STORAGE_RECEIPT_SCHEMA = "licomesh.storage.receipt";
+export const STORAGE_RECEIPT_SCHEMA = "meshrix.storage.receipt";
 
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 const SAFE_STATUS = new Set(["verified", "applied", "not_configured", "cancelled", "failed", "replayed"]);

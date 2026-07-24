@@ -20,7 +20,7 @@ function request(headers = {}) {
 
 describe("process identity nonce capacity", () => {
   it("never evicts an unexpired nonce to admit a new signed request", async () => {
-    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-nonce-capacity-"));
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-nonce-capacity-"));
     const capabilityKeyProvider = createMemoryOpaqueCapabilityKeyProvider();
     const capabilityBindingGuard = createMemoryCapabilityBindingGuard();
     const serviceOptions = {
@@ -99,7 +99,7 @@ describe("process identity nonce capacity", () => {
 
 describe("local MCP process identity rollback", () => {
   it("invalidates an issued package without requiring the untrusted client to authorize rollback", async () => {
-    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-identity-rollback-"));
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-identity-rollback-"));
     const capabilityKeyProvider = createMemoryOpaqueCapabilityKeyProvider();
     const capabilityBindingGuard = createMemoryCapabilityBindingGuard();
     const service = createProcessIdentityService({

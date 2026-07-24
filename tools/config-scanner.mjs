@@ -40,6 +40,7 @@ const IGNORED_DIRECTORIES = new Set([
 ]);
 
 const IGNORED_RELATIVE_PATHS = new Set([
+  ".git",
   "tools/config-scanner.mjs"
 ]);
 
@@ -101,7 +102,7 @@ const RULES = [
     id: "deployment-public-hostname",
     severity: "high-risk",
     message: "Production deployment files must not name real public domains or hosts. Use placeholders such as <public-api-host>, <app-domain>, or <public-website-domain>.",
-    pattern: /\b(?:https?:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?::\d+)?|(?:LICO_DOMAIN|LICO_PUBLIC_BASE_URL|hostname|Domain|Hostname equals)\s*[:=]\s*(?:https?:\/\/)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?::\d+)?)\b/gi,
+    pattern: /\b(?:https?:\/\/(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?::\d+)?|(?:MESHRIX_DOMAIN|MESHRIX_PUBLIC_BASE_URL|hostname|Domain|Hostname equals)\s*[:=]\s*(?:https?:\/\/)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?::\d+)?)\b/gi,
     appliesTo: (relativePath) => relativePath.startsWith("ops/private-production/"),
     shouldReport: ({ match }) => isDeploymentPublicHostname(match)
   },
@@ -130,19 +131,22 @@ const RULES = [
     id: "developer-macos-home-path",
     severity: "warning",
     message: "Use <user-home>, <repo-root>, <input-file>, or another placeholder instead of a macOS user home path.",
-    pattern: /\/Users\/[^/\s`'")]+(?:\/[^\s`'")]*)?/g
+    pattern: /\/Users\/[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_$-])?(?=\/|$|[\s`'"),;:\]}>!?])(?:\/[^\s`'")]*)?/g,
+    inspectPlaceholderContainingMatch: true
   },
   {
     id: "developer-linux-home-path",
     severity: "warning",
     message: "Use <user-home>, <repo-root>, <input-file>, or another placeholder instead of a Linux user home path.",
-    pattern: /\/home\/(?!lico\b)[^/\s`'")]+(?:\/[^\s`'")]*)?/g
+    pattern: /\/home\/(?!meshrix(?=\/|$|[\s`'"),;:\]}>!?]))[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_$-])?(?=\/|$|[\s`'"),;:\]}>!?])(?:\/[^\s`'")]*)?/g,
+    inspectPlaceholderContainingMatch: true
   },
   {
     id: "windows-user-profile-path",
     severity: "warning",
     message: "Use <user-home>, <repo-root>, <input-file>, or another placeholder instead of a Windows user profile path.",
-    pattern: /\b[A-Za-z]:[\\/]Users[\\/][^\s`'")]+/g
+    pattern: /\b[A-Za-z]:[\\/]Users[\\/][A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_$-])?(?=[\\/]|$|[\s`'"),;:\]}>!?])(?:[\\/][^\s`'")]*)?/gi,
+    inspectPlaceholderContainingMatch: true
   },
   {
     id: "private-network-service-url",
@@ -386,7 +390,7 @@ function lineAndColumn(text, index) {
 
 function fingerprintMatch(ruleId, value, key = MATCH_FINGERPRINT_KEY) {
   return createHmac("sha256", key)
-    .update("licomesh-local-info-finding\0", "utf8")
+    .update("meshrix-local-info-finding\0", "utf8")
     .update(String(ruleId || ""), "utf8")
     .update("\0", "utf8")
     .update(String(value || ""), "utf8")
@@ -400,7 +404,7 @@ export function scanText(relativePath, text, fingerprintKey = MATCH_FINGERPRINT_
       continue;
     }
     for (const match of text.matchAll(rule.pattern)) {
-      if (/<[^>\r\n]+>/u.test(match[0])) {
+      if (!rule.inspectPlaceholderContainingMatch && /<[^>\r\n]+>/u.test(match[0])) {
         continue;
       }
       if (typeof rule.shouldReport === "function" && !rule.shouldReport({ match: match[0], relativePath, text })) {

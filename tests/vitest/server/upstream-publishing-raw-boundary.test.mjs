@@ -41,8 +41,8 @@ async function login(baseUrl, username, password) {
     write: {
       cookie,
       "content-type": "application/json",
-      "x-lico-csrf": payload.csrfToken,
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-csrf": payload.csrfToken,
+      "x-meshrix-safety-confirm": "true"
     }
   };
 }
@@ -63,7 +63,7 @@ async function startFixture() {
 async function startProductionServer() {
   const restoreKernel = useIsolatedCapabilityKernelForVerifier();
   resources.push(async () => restoreKernel());
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-raw-boundary-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-raw-boundary-"));
   resources.push(() => fs.rm(userDataPath, { recursive: true, force: true }));
   const tagStore = createTagStoreAdapter({ userDataPath });
   const auth = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });

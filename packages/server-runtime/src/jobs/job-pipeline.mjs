@@ -1,7 +1,7 @@
 import {
   saveSettings
-} from "#lico/product-api";
-import { serverToken } from "#lico/client-strings";
+} from "#meshrix/product-api";
+import { serverToken } from "#meshrix/client-strings";
 import { resolveUploadSessionFiles } from "../state/upload-session-store.mjs";
 import { resolveArchiveBatchIdentity } from "./archive-batch-id.mjs";
 import { createUploadSessionConsumption } from "./upload-session-consumption.mjs";

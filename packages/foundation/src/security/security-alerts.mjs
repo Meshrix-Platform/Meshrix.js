@@ -402,7 +402,7 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }) {
       jsonl: items.map((item) => JSON.stringify(item)).join("\n")
     }, {
       provenance: {
-        producer: "licomesh-core-security-alerts",
+        producer: "meshrix-core-security-alerts",
         commandId: "security_alerts.export",
         sourceRevision: SECURITY_ALERTS_PROTOCOL_VERSION
       }

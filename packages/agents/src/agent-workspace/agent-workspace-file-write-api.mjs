@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { getRuntimeLogger } from "@lico/foundation/observability/runtime-logger";
+import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
 import {
   AGENT_WORKSPACE_PROTOCOL_VERSION,
   applyReplacementHunks,

@@ -61,7 +61,7 @@ jobs:
         run: npm ci
       - name: Platform acceptance authority
         env:
-          LICO_RELEASE_PARALLELISM: "4"
+          MESHRIX_RELEASE_PARALLELISM: "4"
         run: npm run verify:acceptance
 
   node-22-compatibility:
@@ -140,9 +140,9 @@ jobs:
       - name: Verify PowerShell launcher syntax, delegation, and fail-closed inputs
         shell: pwsh
         run: |
-          $installer = (Resolve-Path "packages/protocols/mcp/adapter/native-installer/lico-mcp-install.ps1").Path
-          $connector = (Resolve-Path "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs").Path
-          $env:LICO_MCP_CONNECTOR = $connector
+          $installer = (Resolve-Path "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1").Path
+          $connector = (Resolve-Path "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs").Path
+          $env:MESHRIX_MCP_CONNECTOR = $connector
 
           $tokens = $null
           $parseErrors = $null
@@ -154,7 +154,7 @@ jobs:
             $start.UseShellExecute = $false
             $start.RedirectStandardOutput = $true
             $start.RedirectStandardError = $true
-            $start.Environment["LICO_MCP_CONNECTOR"] = $connector
+            $start.Environment["MESHRIX_MCP_CONNECTOR"] = $connector
             $start.ArgumentList.Add("-NoLogo")
             $start.ArgumentList.Add("-NoProfile")
             $start.ArgumentList.Add("-File")
@@ -168,7 +168,7 @@ jobs:
           }
 
           $version = Invoke-InstallerProcess -Arguments @("-Command", "version", "-Json")
-          if ($version.ExitCode -ne 0 -or $version.Output -notmatch '"packageName":"lico-mcp-connector"') {
+          if ($version.ExitCode -ne 0 -or $version.Output -notmatch '"packageName":"meshrix-mcp-connector"') {
             throw "PowerShell installer did not delegate to the repository connector"
           }
 
@@ -178,7 +178,7 @@ jobs:
             throw "PowerShell installer did not reject and redact a raw token argument"
           }
 
-          $canary = Join-Path $env:RUNNER_TEMP "lico-token-env-injection-canary"
+          $canary = Join-Path $env:RUNNER_TEMP "meshrix-token-env-injection-canary"
           Remove-Item -LiteralPath $canary -Force -ErrorAction SilentlyContinue
           $invalidEnv = Invoke-InstallerProcess -Arguments @("-Command", "doctor", "-Json", "-TokenEnv", "BAD;New-Item $canary")
           if ($invalidEnv.ExitCode -eq 0 -or (Test-Path -LiteralPath $canary)) {

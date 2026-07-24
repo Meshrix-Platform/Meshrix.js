@@ -227,11 +227,11 @@ export function resolveDelegatedMcpGrantExpiry({
   nowMs = Date.now()
 } = {}) {
   const defaultTtlMs = positiveInteger(
-    input.defaultTtlMs ?? process.env.LICO_DELEGATED_MCP_GRANT_TTL_MS,
+    input.defaultTtlMs ?? process.env.MESHRIX_DELEGATED_MCP_GRANT_TTL_MS,
     DEFAULT_DELEGATED_MCP_GRANT_TTL_MS
   );
   const maxTtlMs = positiveInteger(
-    input.maxTtlMs ?? process.env.LICO_DELEGATED_MCP_GRANT_MAX_TTL_MS,
+    input.maxTtlMs ?? process.env.MESHRIX_DELEGATED_MCP_GRANT_MAX_TTL_MS,
     MAX_DELEGATED_MCP_GRANT_TTL_MS
   );
   const requestedTtlMs = positiveInteger(input.ttlMs, 0);

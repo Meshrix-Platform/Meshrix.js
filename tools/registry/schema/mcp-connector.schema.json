@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/mcp-connector.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/mcp-connector.schema.json",
   "title": "MCP Connector Registry",
   "description": "Canonical location, package names, and package scripts for the MCP gateway connector.",
   "type": "object",

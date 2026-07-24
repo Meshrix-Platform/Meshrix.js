@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const bridge = vi.hoisted(() => ({ getJson: vi.fn(), sendJson: vi.fn() }));
 
-vi.mock("@lico/ui-console/bridge-http", () => bridge);
+vi.mock("@meshrix/ui-console/bridge-http", () => bridge);
 
 import {
   createUpstreamService,

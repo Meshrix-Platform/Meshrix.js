@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const MODEL_ENV_KEYS = [
-  "LICO_DEFAULT_MODEL",
-  "LICO_DEFAULT_MODEL_PROVIDER",
+  "MESHRIX_DEFAULT_MODEL",
+  "MESHRIX_DEFAULT_MODEL_PROVIDER",
 ];
 
 afterEach(() => vi.unstubAllEnvs());
@@ -56,8 +56,8 @@ describe("user configuration truth", () => {
   });
 
   it("lets explicit empty settings override configured process environment", async () => {
-    vi.stubEnv("LICO_DEFAULT_MODEL_PROVIDER", "deepseek");
-    vi.stubEnv("LICO_DEFAULT_MODEL", "environment-model");
+    vi.stubEnv("MESHRIX_DEFAULT_MODEL_PROVIDER", "deepseek");
+    vi.stubEnv("MESHRIX_DEFAULT_MODEL", "environment-model");
     vi.resetModules();
     const { normalizeSettings } = await import(
       "../../../packages/server-runtime/src/composition/platform-core/settings-normalizers.mjs"
@@ -150,13 +150,13 @@ describe("user configuration truth", () => {
     expect(emptySettings.moduleIntelligence).toEqual({});
 
     const envExample = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
-    expect(envExample).toContain("LICO_DEFAULT_MODEL_PROVIDER=\n");
-    expect(envExample).toContain("LICO_DEFAULT_MODEL=\n");
-    expect(envExample).not.toMatch(/LICO_DEFAULT_MODEL(?:_PROVIDER)?=\S+/u);
+    expect(envExample).toContain("MESHRIX_DEFAULT_MODEL_PROVIDER=\n");
+    expect(envExample).toContain("MESHRIX_DEFAULT_MODEL=\n");
+    expect(envExample).not.toMatch(/MESHRIX_DEFAULT_MODEL(?:_PROVIDER)?=\S+/u);
   });
 
   it("keeps discovery identity, URLs, mode, and polling intervals empty before configuration", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lico-discovery-empty-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-discovery-empty-"));
     try {
       const { loadDiscoveryConfig, resolveDiscoveryState } = await import(
         "../../../packages/server-runtime/src/composition/discovery-config.mjs"

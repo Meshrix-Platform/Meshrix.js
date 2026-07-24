@@ -1,5 +1,5 @@
 import { createJobPipeline } from "../job-pipeline.mjs";
-import { createServerRuntime } from "#lico/product-api";
+import { createServerRuntime } from "#meshrix/product-api";
 
 function noop() {}
 

@@ -4,7 +4,7 @@ import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
 import PublishServiceListPanel from "./upstream-service-publish/PublishServiceListPanel.vue";
 import PublishServiceForm from "./upstream-service-publish/PublishServiceForm.vue";
 import PortableServiceImportPanel from "./upstream-service-publish/PortableServiceImportPanel.vue";
-import type { PortableUpstreamServiceImport } from "@lico/contracts/upstream-service-publishing";
+import type { PortableUpstreamServiceImport } from "@meshrix/contracts/upstream-service-publishing";
 import type { PublishDescriptorForm } from "./upstream-service-publish/publish-form-model";
 import { confirmConsoleAction } from "../../composables/console-browser-effects";
 import {

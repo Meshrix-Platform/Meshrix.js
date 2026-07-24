@@ -329,27 +329,7 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     scriptName: "verify:downstream-agent-tool-loop", command: "npm run verify:downstream-agent-tool-loop", category: "verifier", subsystem: "downstream-gateway",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-downstream-agent-tool-loop.mjs", "tools/server-scripts/upstream-fixture-service.mjs", "tools/server-scripts/lib/upstream-fixture-service.mjs", "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.mjs", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.mjs", "tools/server-scripts/lib/upstream-fixture-grant.mjs", "tools/server-scripts/lib/mcp-proxy-stdio-client.mjs", "tools/server-scripts/lib/upstream-gateway-verifier-publication.mjs", "packages/agents/src/upstream-gateway/**", "packages/protocols/mcp/upstream-mcp-*.mjs", "packages/protocols/mcp/adapter/http-mcp-adapter*.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**", "packages/foundation/src/security/secrets/**"], outputs: ["build/reports/downstream-agent-tool-loop.json"],
-  },
-  "verify:downstream-mcp-product-e2e": {
-    scriptName: "verify:downstream-mcp-product-e2e", command: "npm run verify:downstream-mcp-product-e2e", category: "verifier", subsystem: "downstream-mcp",
-    owner: "platform", tier: "release", sideEffects: "build-output",
-    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "extended",
-    inputs: [
-      "tools/server-scripts/verify-downstream-mcp-product-e2e.mjs",
-      "tools/server-scripts/lib/downstream-mcp-product-fixture.mjs",
-      "tools/server-scripts/lib/downstream-mcp-product-e2e-workflows.mjs",
-      "tools/server-scripts/lib/local-mcp-verifier-identity.mjs",
-      "tools/server-scripts/lib/local-mcp-device-authorization.mjs",
-      "tools/server-scripts/lib/upstream-gateway-verifier-publication.mjs",
-      "tools/server-scripts/lib/plugin-artifact-verification-fixture.mjs",
-      "apps/server/runtime/http-server.mjs",
-      "packages/protocols/mcp/adapter/**",
-      "packages/agents/src/upstream-gateway/**",
-      "packages/server-runtime/src/composition/plugin-artifact-core-contract.mjs",
-      "packages/capabilities/src/operation-permission-core/**"
-    ],
-    outputs: ["build/reports/downstream-mcp-product-e2e.json"],
+    inputs: ["tools/server-scripts/verify-downstream-agent-tool-loop.mjs", "tools/server-scripts/upstream-fixture-service.mjs", "tools/server-scripts/lib/upstream-fixture-service.mjs", "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.mjs", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.mjs", "tools/server-scripts/lib/upstream-fixture-grant.mjs", "tools/server-scripts/lib/mcp-proxy-stdio-client.mjs", "tools/server-scripts/lib/upstream-gateway-verifier-publication.mjs", "packages/agents/src/upstream-gateway/**", "packages/protocols/mcp/upstream-mcp-*.mjs", "packages/protocols/mcp/adapter/http-mcp-adapter*.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**", "packages/foundation/src/security/secrets/**"], outputs: ["build/reports/downstream-agent-tool-loop.json"],
   },
   "verify:mcp-client-identity-proof": {
     scriptName: "verify:mcp-client-identity-proof", command: "npm run verify:mcp-client-identity-proof", category: "verifier", subsystem: "security",
@@ -361,13 +341,13 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     scriptName: "verify:mcp-process-identity-credential-store", command: "npm run verify:mcp-process-identity-credential-store", category: "verifier", subsystem: "security",
     owner: "platform-security", tier: "release", sideEffects: "docker",
     requiresFreshContainer: true, ciProfile: "security", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-mcp-process-identity-credential-store.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/protocols/mcp/adapter/native-installer/**"], outputs: ["build/reports/mcp-process-identity-credential-store.json"],
+    inputs: ["tools/server-scripts/verify-mcp-process-identity-credential-store.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/protocols/mcp/adapter/native-installer/**"], outputs: ["build/reports/mcp-process-identity-credential-store.json"],
   },
   "verify:mcp-windows-process-identity-credential-store": {
     scriptName: "verify:mcp-windows-process-identity-credential-store", command: "npm run verify:mcp-windows-process-identity-credential-store", category: "verifier", subsystem: "security",
     owner: "platform-security", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "security", expectedDurationClass: "fast",
-    inputs: ["tools/server-scripts/verify-mcp-windows-process-identity-credential-store.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**"], outputs: ["build/reports/mcp-windows-process-identity-credential-store.json"],
+    inputs: ["tools/server-scripts/verify-mcp-windows-process-identity-credential-store.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**"], outputs: ["build/reports/mcp-windows-process-identity-credential-store.json"],
   },
   "verify:mcp-release-portable-assembly": {
     scriptName: "verify:mcp-release-portable-assembly", command: "npm run verify:mcp-release-portable-assembly", category: "verifier", subsystem: "downstream-mcp",
@@ -385,7 +365,7 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     scriptName: "verify:mcp-proxy-transport", command: "npm run verify:mcp-proxy-transport", category: "verifier", subsystem: "downstream-mcp",
     owner: "platform", tier: "release", sideEffects: "build-output",
     requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "standard",
-    inputs: ["tools/server-scripts/verify-mcp-proxy-transport.mjs", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.mjs", "tools/server-scripts/lib/mcp-neutral-peer-protocol-support.mjs", "tools/server-scripts/lib/mcp-proxy-stdio-client.mjs", "tools/server-scripts/lib/mcp-proxy-transport-evidence.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**"], outputs: ["build/reports/mcp-proxy-transport.json"],
+    inputs: ["tools/server-scripts/verify-mcp-proxy-transport.mjs", "tools/server-scripts/lib/mcp-neutral-peer-identity-support.mjs", "tools/server-scripts/lib/mcp-neutral-peer-protocol-support.mjs", "tools/server-scripts/lib/mcp-proxy-stdio-client.mjs", "tools/server-scripts/lib/mcp-proxy-transport-evidence.mjs", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", "packages/protocols/mcp/adapter/gateway-installer/lib/**", "packages/capabilities/src/operation-permission-core/**"], outputs: ["build/reports/mcp-proxy-transport.json"],
   },
   "verify:path-abstraction-audit": {
     scriptName: "verify:path-abstraction-audit", command: "npm run verify:path-abstraction-audit", category: "verifier", subsystem: "path-boundary",

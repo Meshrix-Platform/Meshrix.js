@@ -112,7 +112,7 @@ onMounted(() => {
                     <div
                       class="ws-copyable-wrapper"
                       data-split-toggle-ignore
-                      :data-lico-tooltip="ws.workspaceId"
+                      :data-meshrix-tooltip="ws.workspaceId"
                       @click.stop="copyToClipboard($event, ws.workspaceId)"
                     >
                       <code class="ws-copyable-code">{{ ws.workspaceId }}</code>
@@ -283,13 +283,13 @@ onMounted(() => {
   cursor: copy;
 }
 .ws-copyable-wrapper::after {
-  content: attr(data-lico-tooltip);
+  content: attr(data-meshrix-tooltip);
   position: absolute;
   top: -28px;
   left: 0;
-  background: var(--lico-copy-popover-bg);
-  color: var(--lico-copy-popover-fg);
-  border: 1px solid var(--lico-copy-popover-border);
+  background: var(--meshrix-copy-popover-bg);
+  color: var(--meshrix-copy-popover-fg);
+  border: 1px solid var(--meshrix-copy-popover-border);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -299,7 +299,7 @@ onMounted(() => {
   transform: translateY(4px);
   transition: opacity 0.1s ease-out, transform 0.1s ease-out;
   z-index: 100;
-  box-shadow: var(--lico-copy-popover-shadow);
+  box-shadow: var(--meshrix-copy-popover-shadow);
 }
 .ws-copyable-wrapper:hover::after {
   opacity: 1;
@@ -319,7 +319,7 @@ onMounted(() => {
   color: var(--bg-surface);
 }
 .ws-card-expanded-slot { margin-top: 0; }
-.lico-modal-overlay {
+.meshrix-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.4);
@@ -330,7 +330,7 @@ onMounted(() => {
   backdrop-filter: blur(2px);
   animation: fade-in 0.2s ease-out;
 }
-.lico-modal {
+.meshrix-modal {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-l);

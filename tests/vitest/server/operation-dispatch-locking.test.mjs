@@ -7,16 +7,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LockManagerDestroyedError,
   MemoryLockManager
-} from "#lico/foundation/concurrency/lock-manager";
-import { createStorageKernel } from "#lico/foundation/storage/storage-kernel";
-import { createCorePlatformProvider } from "#lico/server-runtime/composition/core-platform-provider";
-import { createServerCompositionRoot } from "#lico/server-runtime/composition/composition-root";
+} from "#meshrix/foundation/concurrency/lock-manager";
+import { createStorageKernel } from "#meshrix/foundation/storage/storage-kernel";
+import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
+import { createServerCompositionRoot } from "#meshrix/server-runtime/composition/composition-root";
 import {
   bindOperationDispatcher,
   dispatchOperation
-} from "#lico/server-runtime/composition/dispatch-operation";
-import { OperationLockError } from "#lico/server-runtime/composition/operation-dispatch-lock";
-import { createServerRuntime } from "#lico/server-runtime/module-runtime/server-runtime";
+} from "#meshrix/server-runtime/composition/dispatch-operation";
+import { OperationLockError } from "#meshrix/server-runtime/composition/operation-dispatch-lock";
+import { createServerRuntime } from "#meshrix/server-runtime/module-runtime/server-runtime";
 import { createSystemControllerFoundationHandlers } from "../../../packages/protocols/http/controllers/system-controller-foundation-handlers.mjs";
 import { createToolCatalog } from "../../../packages/capabilities/src/operation-permission-core/catalog.mjs";
 import { runWithAbortableTimeout } from "../../../packages/capabilities/src/operation-permission-core/runtime-transport.mjs";
@@ -34,7 +34,7 @@ afterEach(async () => {
 });
 
 async function createRuntimeWithCanonicalArtifacts({ userDataPath, ...options }) {
-  const sourcePluginRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-runtime-empty-plugins-"));
+  const sourcePluginRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-runtime-empty-plugins-"));
   tempRoots.push(sourcePluginRoot);
   const fixture = await stagePluginArtifactFixture({ sourcePluginRoot, lifecycleDataRoot: userDataPath });
   artifactFixtures.push(fixture);
@@ -498,7 +498,7 @@ describe("canonical operation dispatcher locking", () => {
   });
 
   it("owns a SQLite manager in the server runtime and destroys it before storage closes", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-lock-runtime-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-lock-runtime-"));
     tempRoots.push(userDataPath);
     const runtime = await createRuntimeWithCanonicalArtifacts({ userDataPath });
     expect(runtime.operationLockManager.config.backend).toBe("sqlite");
@@ -508,7 +508,7 @@ describe("canonical operation dispatcher locking", () => {
   });
 
   it("closes the SQLite handle when storage schema initialization fails", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-init-unwind-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-init-unwind-"));
     tempRoots.push(userDataPath);
     let openedDatabase = null;
 
@@ -525,7 +525,7 @@ describe("canonical operation dispatcher locking", () => {
   });
 
   it("reverse-unwinds the runtime lock manager after a real mid-composition startup failure", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-composition-init-unwind-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-composition-init-unwind-"));
     tempRoots.push(userDataPath);
     await fs.mkdir(path.join(userDataPath, "security", "operation-audit.sqlite"), { recursive: true });
     const operationLockManager = new MemoryLockManager();
@@ -541,7 +541,7 @@ describe("canonical operation dispatcher locking", () => {
   });
 
   it("rejects an explicit non-conforming runtime lock manager instead of defaulting it", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-invalid-operation-lock-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-invalid-operation-lock-"));
     tempRoots.push(userDataPath);
     await expect(createServerRuntime({
       userDataPath,
@@ -550,7 +550,7 @@ describe("canonical operation dispatcher locking", () => {
   });
 
   it("closes runtime storage even when lock-manager shutdown fails", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-lock-close-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-lock-close-"));
     tempRoots.push(userDataPath);
     const operationLockManager = {
       acquire: vi.fn(),
@@ -567,7 +567,7 @@ describe("canonical operation dispatcher locking", () => {
   });
 
   it("retries only failed runtime resources after a partial close", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-lock-close-retry-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-lock-close-retry-"));
     tempRoots.push(userDataPath);
     let destroyAttempts = 0;
     const operationLockManager = {

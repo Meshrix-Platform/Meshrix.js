@@ -5,7 +5,7 @@ single bundled connector runtime.
 
 ## Decision
 
-LicoMesh ships POSIX and PowerShell launchers as the canonical user entrypoints.
+Meshrix ships POSIX and PowerShell launchers as the canonical user entrypoints.
 They validate security-sensitive arguments, select the connector included in a
 verified portable release, and delegate without evaluating shell text. The
 connector is the only implementation of signed local-hub discovery, handshake
@@ -14,8 +14,8 @@ Maintaining those protocols independently in shell and PowerShell is forbidden.
 
 | Platform | Install | Uninstall |
 | --- | --- | --- |
-| macOS/Linux | `packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh` | `packages/protocols/mcp/adapter/native-installer/lico-mcp-uninstall.sh` |
-| Windows | `packages/protocols/mcp/adapter/native-installer/lico-mcp-install.ps1` | `packages/protocols/mcp/adapter/native-installer/lico-mcp-uninstall.ps1` |
+| macOS/Linux | `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh` | `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-uninstall.sh` |
+| Windows | `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1` | `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-uninstall.ps1` |
 
 Windows supports PowerShell only. `.cmd` installer entrypoints are not part of
 the release surface.
@@ -76,7 +76,7 @@ authorization begins. Their absence is recorded through the release support
 matrix instead of issuing an unusable grant.
 
 All formal client targets use client-specific packages published from
-LicoMesh-Plugins. The installer verifies and reuses its local package cache,
+Meshrix-Plugins. The installer verifies and reuses its local package cache,
 invokes the adapter through bounded JSON-stdio, writes only non-secret connector
 metadata, and keeps process credentials in the Core-managed operating-system
 credential store. Core contains no client-specific adapter implementation.
@@ -103,7 +103,7 @@ numeric ownership, stable modes, and deterministic compression metadata. A
 second assembly from the same source tree and locked runtime must produce the
 same archive digest.
 
-Every LicoMesh release includes `RELEASE_SHA256SUMS` and its Sigstore bundle.
+Every Meshrix release includes `RELEASE_SHA256SUMS` and its Sigstore bundle.
 Users verify the checksum bundle against the exact release workflow identity
 and GitHub Actions issuer before using the basename-keyed checksum to verify a
 versioned archive. Only then do they extract the archive and run the local
@@ -114,7 +114,7 @@ discovery metadata must not recommend piping a network response into a shell.
 ## Verification
 
 ```bash
-sh -n packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh
+sh -n packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh
 npm test -- --suite downstream-mcp.installer-convergence
 npm run verify:mcp-release-portable-assembly
 npm run verify:node-runtime-supply-chain

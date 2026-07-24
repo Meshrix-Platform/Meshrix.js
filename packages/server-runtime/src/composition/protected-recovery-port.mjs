@@ -178,7 +178,7 @@ export function createPluginProtectedRecoveryAuthority({
         const usage = await sweepExpired();
         const recoveryRef = `recovery_${crypto.randomUUID()}`;
         const base = {
-          schemaVersion: "licomesh.protected-recovery.v1",
+          schemaVersion: "v0.0.1:meshrix:protected-recovery-1",
           recoveryRef,
           ...binding,
           expiresAt: new Date(expiresMs).toISOString()

@@ -96,13 +96,13 @@ export function assertMaintenanceAgentContracts() {
     activeFeatureIds: enabledRuntime.activeFeatureIds
   });
   const toolsByOperation = new Map(catalog.tools.map((tool) => [tool.operationId, tool]));
-  assert.equal(toolsByOperation.get("maintenance_agent.config.get")?.id, "lico.maintenanceAgent.config.get");
+  assert.equal(toolsByOperation.get("maintenance_agent.config.get")?.id, "meshrix.maintenanceAgent.config.get");
   assert.deepEqual(toolsByOperation.get("maintenance_agent.config.get")?.requiredScopes, ["maintenance:read"]);
-  assert.ok(toolsByOperation.get("maintenance_agent.config.get")?.toolsets.includes("lico.maintenance.read"));
+  assert.ok(toolsByOperation.get("maintenance_agent.config.get")?.toolsets.includes("meshrix.maintenance.read"));
   assert.deepEqual(toolsByOperation.get("maintenance_agent.config.set")?.requiredScopes, ["maintenance:admin"]);
-  assert.ok(toolsByOperation.get("maintenance_agent.config.set")?.toolsets.includes("lico.maintenance.maintain"));
+  assert.ok(toolsByOperation.get("maintenance_agent.config.set")?.toolsets.includes("meshrix.maintenance.maintain"));
   assert.deepEqual(toolsByOperation.get("maintenance_agent.runs.approve")?.requiredScopes, ["maintenance:approve"]);
-  assert.ok(toolsByOperation.get("maintenance_agent.runs.approve")?.toolsets.includes("lico.maintenance.maintain"));
+  assert.ok(toolsByOperation.get("maintenance_agent.runs.approve")?.toolsets.includes("meshrix.maintenance.maintain"));
   assert.deepEqual(toolsByOperation.get("maintenance_agent.runs.create")?.requiredScopes, ["maintenance:run"]);
-  assert.ok(toolsByOperation.get("maintenance_agent.runs.create")?.toolsets.includes("lico.maintenance.run"));
+  assert.ok(toolsByOperation.get("maintenance_agent.runs.create")?.toolsets.includes("meshrix.maintenance.run"));
 }

@@ -32,7 +32,7 @@ function argValue(name, fallback = "") {
 }
 
 function numberOption(name, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
-  const value = Number(argValue(name, process.env[name.replace(/^--/, "LICO_STRESS_").replace(/-/g, "_").toUpperCase()] || fallback));
+  const value = Number(argValue(name, process.env[name.replace(/^--/, "MESHRIX_STRESS_").replace(/-/g, "_").toUpperCase()] || fallback));
   if (!Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
 }
@@ -47,7 +47,7 @@ const options = {
 };
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-load-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-load-"));
 let server = null;
 let fixture = null;
 let fixtureUrl = "";
@@ -179,8 +179,8 @@ function mcpHeaders({ body = "" } = {}) {
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
-    "X-LicoMesh-Api-Key": token,
-    "X-Lico-MCP-Target": "codex",
+    "X-Meshrix-Api-Key": token,
+    "X-Meshrix-MCP-Target": "codex",
     ...createProcessIdentityRequestHeaders({
       privateKeyPem: processIdentityKeyPair?.privateKeyPem || "",
       method: "POST",
@@ -226,7 +226,7 @@ async function createLocalGrant() {
       targets: ["codex"],
       label: "stress-mcp-gateway",
       connectorVersion: "stress-mcp-gateway",
-      toolsets: ["lico.gateway.read", "lico.gateway.write", "lico.storage.read"],
+      toolsets: ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.storage.read"],
       dynamicCapabilities: [upstreamOperationCapabilityId(
         { serviceId: SERVICE_ID },
         { operationKey: "echo" }
@@ -288,9 +288,9 @@ function createSafetyMonitor() {
   };
 }
 
-async function runPhase(name, makeBody, safetyMonitor) {
+async function runPhase(name, makeBody, safetyMonitor, { durationMs: phaseDurationMs = options.durationMs } = {}) {
   const startedAt = performance.now();
-  const deadline = startedAt + options.durationMs;
+  const deadline = startedAt + phaseDurationMs;
   const latencies = [];
   const stats = {
     name,
@@ -413,17 +413,18 @@ try {
   const safetyMonitor = createSafetyMonitor();
   const healthPhase = await runPhase(
     "downstream-mcp-system-health",
-    (id) => mcpRequest(id, "lico.discovery", "system.health", {}),
+    (id) => mcpRequest(id, "meshrix.discovery", "system.health", {}),
     safetyMonitor
   );
   const gatewayPhase = await runPhase(
     "upstream-gateway-forward-through-mcp",
-    (id) => mcpRequest(id + options.requests, "lico.gateway", "lico.gateway.forward", {
+    (id) => mcpRequest(id + options.requests, "meshrix.gateway", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       query: { i: String(id) }
     }),
-    safetyMonitor
+    safetyMonitor,
+    { durationMs: Math.max(options.durationMs, 15000) }
   );
 
   const phases = [healthPhase, gatewayPhase];

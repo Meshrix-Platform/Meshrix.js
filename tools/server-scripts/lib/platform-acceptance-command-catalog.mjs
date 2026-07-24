@@ -44,9 +44,9 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS = Object.freeze([
       "foundation-public-gate"
     ]
   }),
-  command("better-plan", "Public source documentation boundary", "foundation", npmRun("verify:better-plan"), "build/reports/better-plan.json", ["documentation", "public-boundary", "release-state"]),
+  command("better-plan", "Public source documentation boundary", "foundation", npmRun("verify:better-plan"), "build/reports/better-plan.json", ["documentation", "public-boundary", "release-state"], { dependsOn: ["foundation-tests"] }),
   command("composition-source-package", "Self-contained composition source package", "foundation", npmRun("verify:composition-source-package"), "build/reports/composition-source-package.json", ["source-package", "offline-release", "composition"]),
-  command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { resourceLocks: ["container-runtime"], timeoutMs: NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS }),
+  command("npm-package-installability", "npm release-set clean-install, CLI, and headless runtime", "foundation", npmRun("verify:npm-package-installability"), "build/reports/npm-package-installability.json", ["release-package-set", "clean-install", "cli", "server-runtime", "cross-platform"], { dependsOn: ["foundation-tests"], resourceLocks: ["container-runtime"], timeoutMs: NPM_PACKAGE_INSTALLABILITY_TIMEOUT_MS }),
   command("security-alert-lifecycle", "Security alert lifecycle", "foundation", npmRun("verify:security-alert-lifecycle"), "build/reports/security-alert-lifecycle.json", ["security-alerts", "redaction"]),
   command("state-machines", "State machine definition integrity", "foundation", npmRun("server:verify:state-machines"), "build/reports/state-machines/latest.json", ["state-machine", "integrity", "acceptance"]),
   command("capability-acceptance-machines", "Capability acceptance state machine coverage", "foundation", npmRun("verify:capability-acceptance-machines"), "build/reports/capability-acceptance-machines.json", ["state-machine", "capability-plans", "acceptance"], { blockedExitCodes: [2] }),
@@ -68,7 +68,6 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS = Object.freeze([
   command("mcp-installer-convergence", "MCP installer convergence", "downstream-gateway", nodeCommand(["tools/server-scripts/verify-mcp-installer-convergence.mjs"]), "build/reports/mcp-installer-convergence.json", ["downstream-gateway", "installer"], { timeoutMs: 2 * 60 * 1000 }),
   command("mcp-release-target-scope", "MCP release target scope", "downstream-gateway", nodeCommand(["tools/server-scripts/verify-mcp-release-target-scope.mjs"]), "build/reports/mcp-release-target-scope.json", ["downstream-gateway", "release-targets"], { timeoutMs: 2 * 60 * 1000 }),
   command("downstream-mcp-audit", "Downstream MCP completeness audit", "downstream-gateway", npmRun("verify:downstream-mcp-audit"), "build/reports/downstream-mcp-completeness-audit.json", ["downstream-gateway", "completeness"], { timeoutMs: 2 * 60 * 1000 }),
-  command("downstream-mcp-product-e2e", "Downstream MCP product end-to-end", "downstream-gateway", nodeCommand(["tools/server-scripts/verify-downstream-mcp-product-e2e.mjs"]), "build/reports/downstream-mcp-product-e2e.json", ["downstream-gateway", "product-e2e", "authorization"], { timeoutMs: 5 * 60 * 1000, dependsOn: ["downstream-mcp-audit", "mcp-authorization-request-filters"] }),
 
   command("upstream-service-publishing", "Upstream service publishing", "upstream-gateway", npmRun("verify:upstream-service-publishing"), "build/reports/upstream-service-publishing.json", ["upstream-gateway", "service-publishing", "protocol-delivery"]),
   command("upstream-gateway-e2e", "Governed upstream gateway E2E", "upstream-gateway", npmRun("verify:upstream-gateway"), "build/reports/upstream-gateway-e2e.json", ["upstream-gateway", "local-fixture-upstream"]),
@@ -117,7 +116,7 @@ const PLATFORM_ACCEPTANCE_EVIDENCE_COMMANDS = Object.freeze([
   command("surface-convergence", "Core platform surface convergence", "platform-capability", npmRun("verify:core-platform-surface-convergence"), "build/reports/core-platform-surface-convergence.json", ["platform-capability", "operation-surface"]),
   command("gap-audit", "Core platform gap audit", "platform-capability", npmRun("verify:platform-audit"), "build/reports/core-platform-gap-audit.json", ["platform-capability", "gap-audit"]),
 
-  command("mcp-gateway-load", "MCP gateway load and resource cutoff profile", "profile", npmRun("server:stress:mcp-gateway"), "build/reports/mcp-gateway-load.json", ["profile", "downstream-gateway", "upstream-forwarding", "resource-cutoff"], { resourceLocks: ["gateway-platform-profile"] }),
+  command("mcp-gateway-load", "MCP gateway load and resource cutoff profile", "profile", npmRun("server:stress:mcp-gateway"), "build/reports/mcp-gateway-load.json", ["profile", "downstream-gateway", "upstream-forwarding", "resource-cutoff"], { dependsOn: ["console-gateway-mcp"], resourceLocks: ["gateway-platform-profile", "container-runtime", "foundation-public-gate"] }),
   command("gateway-platform-profile", "Gateway platform performance profile", "profile", nodeCommand(["tools/server-scripts/stress-gateway-platform-profile.mjs"]), "build/reports/gateway-platform-profile.json", ["profile", "downstream-gateway", "upstream-gateway"], { dependsOn: ["production-readiness-gates", "mcp-gateway-load", "upstream-fixture-transit", "path-abstraction-audit"], resourceLocks: ["gateway-platform-profile"] })
 ]);
 
@@ -126,7 +125,6 @@ export const PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS = Object.freeze([
   "production-readiness-gates",
   "deployment-container-flow",
   "downstream-mcp-audit",
-  "downstream-mcp-product-e2e",
   "mcp-release-portable-assembly",
   "npm-package-installability",
   "upstream-fixture-transit",

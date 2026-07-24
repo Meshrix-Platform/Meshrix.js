@@ -3,7 +3,7 @@ import { Transform } from "node:stream";
 import {
   isUpstreamRequestRepresentationMode,
   isUpstreamResponseRepresentationMode
-} from "@lico/contracts/upstream-service-publishing";
+} from "@meshrix/contracts/upstream-service-publishing";
 
 const MAX_PAYLOAD_BYTES = 2 * 1024 * 1024 * 1024;
 const MEDIA_TYPE = /^[A-Za-z0-9!#$&^_.+-]+\/(?:\*|[A-Za-z0-9!#$&^_.+-]+)$/u;

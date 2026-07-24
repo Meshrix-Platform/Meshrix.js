@@ -6,7 +6,7 @@ import {
 import {
   appendBoundedJsonLine,
   readJsonlTail
-} from "@lico/foundation/storage/bounded-jsonl";
+} from "@meshrix/foundation/storage/bounded-jsonl";
 
 const MAINTENANCE_AUDIT_MAX_BYTES = 16 * 1024 * 1024;
 const MAINTENANCE_RUNS_MAX_BYTES = 8 * 1024 * 1024;

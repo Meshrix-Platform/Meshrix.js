@@ -1,4 +1,4 @@
-import { redactOperationAuditValue } from "@lico/foundation/security/operation-audit";
+import { redactOperationAuditValue } from "@meshrix/foundation/security/operation-audit";
 import { OPERATION_PERMISSION_API_PREFIX } from "./catalog.mjs";
 
 export function parseJsonBody(requestBody) {

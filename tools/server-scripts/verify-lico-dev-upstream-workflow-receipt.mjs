@@ -64,7 +64,7 @@ export function verifyLicoDevUpstreamWorkflowReceipt(receipt) {
   assertExactKeys(receipt.externalTest.command, ["executable", "args"], "externalTest.command");
   assertExactKeys(receipt.privacy, ["rawOutputIncluded", "localInformationIncluded"], "privacy");
 
-  assert.equal(receipt.schemaVersion, "v1:licomesh:lico-dev-upstream-workflow-receipt", "schema version is malformed");
+  assert.equal(receipt.schemaVersion, "v1:meshrix:lico-dev-upstream-workflow-receipt", "schema version is malformed");
   assert.equal(receipt.receiptId, "lico-dev:core.upstream-service-publishing", "receipt identity is substituted");
   assert.equal(receipt.source.repository, "lico-dev", "source repository is substituted");
   assert.match(receipt.source.revision, GIT_SHA1, "source revision is malformed");

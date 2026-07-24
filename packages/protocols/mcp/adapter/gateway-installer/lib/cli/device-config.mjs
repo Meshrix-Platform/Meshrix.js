@@ -1,9 +1,9 @@
 import {
   BOOTSTRAP_INSTALL_SCRIPT_ZH_CN,
   DEFAULT_TOKEN_ENV,
-  LICO_MCP_DISCOVERY_FILE_ENV,
-  LICO_MCP_DISCOVERY_URL_ENV,
-  LICO_MCP_URL_ENV,
+  MESHRIX_MCP_DISCOVERY_FILE_ENV,
+  MESHRIX_MCP_DISCOVERY_URL_ENV,
+  MESHRIX_MCP_URL_ENV,
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
@@ -64,30 +64,30 @@ export function buildDeviceHubManifest({
     discovery: {
       strategy: "shared-device-hub",
       localEntry: {
-        type: "lico-mcp-discover-local",
+        type: "meshrix-mcp-discover-local",
         command: discoverCommand,
         registryFile: discoveryPath
       },
-      preferredHttpDiscoveryUrl: `${baseUrl}/.well-known/lico/mcp.json`,
+      preferredHttpDiscoveryUrl: `${baseUrl}/.well-known/meshrix/mcp.json`,
       preferredApiDiscoveryUrl: `${baseUrl}/api/mcp/discovery`,
       registryFile: discoveryPath,
       localFiles: [discoveryPath],
       env,
       lookupOrder: [
-        "lico-mcp discover-local --json",
-        "LICO_MCP_URL",
-        "LICO_MCP_DISCOVERY_URL",
-        "LICO_MCP_DISCOVERY_FILE",
+        "meshrix-mcp discover-local --json",
+        "MESHRIX_MCP_URL",
+        "MESHRIX_MCP_DISCOVERY_URL",
+        "MESHRIX_MCP_DISCOVERY_FILE",
         "signed local port scan"
       ]
     },
     servers: {
       [MCP_SERVER_NAME]: {
-        name: "LicoMesh",
+        name: "Meshrix",
         transport: "streamable-http",
         httpUrl: mcpUrl,
         vmHttpUrl: vmMcpUrl,
-        discoveryUrl: `${baseUrl}/.well-known/lico/mcp.json`,
+        discoveryUrl: `${baseUrl}/.well-known/meshrix/mcp.json`,
         apiDiscoveryUrl: `${baseUrl}/api/mcp/discovery`,
         stableToolName: MCP_STABLE_TOOL_NAME,
         sharedHub: sharedHubContract({ mcpUrl, vmMcpUrl }),
@@ -149,7 +149,7 @@ export function buildDeviceHubManifest({
         },
         auth: {
           type: "device-authorization-or-provided-token",
-          acceptedHeaders: ["Authorization: Bearer <token>", "X-LicoMesh-Api-Key", "X-Lico-MCP-Target"],
+          acceptedHeaders: ["Authorization: Bearer <token>", "X-Meshrix-Api-Key", "X-Meshrix-MCP-Target"],
           tokenEnv
         },
         targets
@@ -313,7 +313,7 @@ export async function resetServerConfig({ options, publishEnv = true }) {
     discovery: {
       strategy: "shared-device-hub",
       localEntry: {
-        type: "lico-mcp-discover-local",
+        type: "meshrix-mcp-discover-local",
         command: `npx ${packageJson.name}@${packageJson.version} discover-local --json`,
         registryFile: discoveryPath
       },
@@ -321,7 +321,7 @@ export async function resetServerConfig({ options, publishEnv = true }) {
       localFiles: [discoveryPath],
       env: {},
       lookupOrder: [
-        "lico-mcp discover-local --json",
+        "meshrix-mcp discover-local --json",
         "signed local port scan"
       ]
     },
@@ -335,9 +335,9 @@ export async function resetServerConfig({ options, publishEnv = true }) {
   };
   await writeJson(discoveryPath, resetManifest);
   if (publishEnv && process.platform === "darwin") {
-    await run("launchctl", ["unsetenv", LICO_MCP_URL_ENV], { allowFailure: true });
-    await run("launchctl", ["unsetenv", LICO_MCP_DISCOVERY_URL_ENV], { allowFailure: true });
-    await run("launchctl", ["unsetenv", LICO_MCP_DISCOVERY_FILE_ENV], { allowFailure: true });
+    await run("launchctl", ["unsetenv", MESHRIX_MCP_URL_ENV], { allowFailure: true });
+    await run("launchctl", ["unsetenv", MESHRIX_MCP_DISCOVERY_URL_ENV], { allowFailure: true });
+    await run("launchctl", ["unsetenv", MESHRIX_MCP_DISCOVERY_FILE_ENV], { allowFailure: true });
   }
   return {
     ok: true,
@@ -368,7 +368,7 @@ export async function serverConfigCommand(options) {
     }
     const discovered = await discoverLicoHub({ ...options, url });
     if (!discovered.ok) {
-      throw new Error(`Failed to verify LicoMesh MCP server at ${url}: ${discovered.reason}`);
+      throw new Error(`Failed to verify Meshrix MCP server at ${url}: ${discovered.reason}`);
     }
     return writeServerConfigProfile({
       options,
@@ -382,11 +382,11 @@ export async function serverConfigCommand(options) {
     const manifest = await readJson(discoveryPath, {});
     const profile = manifest?.serverConfig?.profiles?.[name];
     if (!profile?.baseUrl) {
-      throw new Error(`No LicoMesh MCP server profile named ${name}.`);
+      throw new Error(`No Meshrix MCP server profile named ${name}.`);
     }
     const discovered = await discoverLicoHub({ ...options, url: profile.baseUrl });
     if (!discovered.ok) {
-      throw new Error(`Failed to verify LicoMesh MCP server profile ${name}: ${discovered.reason}`);
+      throw new Error(`Failed to verify Meshrix MCP server profile ${name}: ${discovered.reason}`);
     }
     return writeServerConfigProfile({
       options,

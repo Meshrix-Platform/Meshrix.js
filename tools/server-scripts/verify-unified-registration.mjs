@@ -27,7 +27,7 @@ assert.throws(
 
 const processRegistration = new ProcessUnifiedRegistration({
   role: "server-main",
-  label: "LicoMesh 服务端",
+  label: "Meshrix 服务端",
   status: "running",
   processType: "service",
   pid: process.pid,
@@ -99,7 +99,7 @@ assert.equal(composed.summary.monitorCount, 1);
 assert.equal(composed.summary.alertCount, 1);
 assert.equal(composed.registrations.length, 5);
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-unified-registration-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-unified-registration-"));
 const queueObservation = projectQueueObservation({
   stateCounts: [{ state: "failed", count: 1 }],
   items: [{

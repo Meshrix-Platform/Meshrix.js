@@ -82,7 +82,7 @@ export async function createMultipartBodyStream({
   maxBytes
 } = {}) {
   const input = plainObject(fields);
-  const boundary = `lico-${randomBytes(18).toString("hex")}`;
+  const boundary = `meshrix-${randomBytes(18).toString("hex")}`;
   const parts = [];
   for (const declaration of mapping.scalarFields || []) {
     const value = input[declaration.argument];

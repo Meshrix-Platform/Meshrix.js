@@ -46,8 +46,8 @@ export function compileUpstreamOperationCapability(service = {}, operation = {},
     risk,
     requiredScopes: unique(asArray(operation.requiredScopes)),
     toolsets: unique([
-      ...(risk === "read_only" ? ["lico.gateway.read"] : ["lico.gateway.write"]),
-      risk === "repair_write" || risk === "destructive" ? "lico.gateway.maintain" : "",
+      ...(risk === "read_only" ? ["meshrix.gateway.read"] : ["meshrix.gateway.write"]),
+      risk === "repair_write" || risk === "destructive" ? "meshrix.gateway.maintain" : "",
       `upstream:${serviceId}`
     ]),
     approvalPolicy: {

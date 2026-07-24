@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { writePrivateFileAtomic } from "@lico/foundation/storage/private-file-atomic";
+import { writePrivateFileAtomic } from "@meshrix/foundation/storage/private-file-atomic";
 
-export const MODEL_CREDENTIAL_MASTER_KEY_ENV = "LICO_MODEL_CREDENTIAL_MASTER_KEY";
+export const MODEL_CREDENTIAL_MASTER_KEY_ENV = "MESHRIX_MODEL_CREDENTIAL_MASTER_KEY";
 
 const SCHEMA_VERSION = "v0.0.1:agent:model-credential-envelope-1";
 

@@ -155,7 +155,7 @@ endpoints, 10,000 audit appends, 1,000 service-manifest commits, and two
 stable reason codes, and copy-method identifiers. The report includes peak and
 settled memory, event-loop delay, throughput, scale ratios, index use, capacity
 or convergence outcomes, and backup allocation facts. Setting
-`LICO_RESOURCE_LOAD_PROFILE=release` raises protocol events to 1,000,000,
+`MESHRIX_RESOURCE_LOAD_PROFILE=release` raises protocol events to 1,000,000,
 jobs and audit appends to 100,000, and service-manifest commits to 8,000.
 Controller regressions for authorization-before-open and single-file-at-a-time
 materialization are mandatory tests in the same gate.

@@ -3,10 +3,10 @@
   "label": "Admin Operator",
   "agentType": "operator",
   "toolsets": [
-    "lico.admin",
-    "lico.gateway.admin",
-    "lico.runtime.maintain",
-    "lico.authorization.admin"
+    "meshrix.admin",
+    "meshrix.gateway.admin",
+    "meshrix.runtime.maintain",
+    "meshrix.authorization.admin"
   ],
   "toolAllow": [],
   "toolDeny": [],

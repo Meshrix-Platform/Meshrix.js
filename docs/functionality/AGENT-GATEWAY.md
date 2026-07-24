@@ -4,10 +4,10 @@ Agent Gateway is the standard-edition model-call surface for invoking configured
 
 ## Current Boundary
 
-- `agent_gateway.call` is exposed over HTTP/RPC and as `lico.agentGateway.call` in the Operation Permission catalog.
+- `agent_gateway.call` is exposed over HTTP/RPC and as `meshrix.agentGateway.call` in the Operation Permission catalog.
 - `agent_gateway.call` requires `model:call` and is `safe_write` because it can send user-provided prompts to a configured model provider through an allowlisted egress source.
-- `model_routing.health` is exposed as `lico.agentGateway.modelRouting.health`, requires `console:read`, and reads local routing state plus recent cost-ledger entries.
-- `agent-management` is default-disabled. When enabled, `agents.list/create/update/delete` maintain local model-library entries through `lico.agentManagement.*` catalog tools.
+- `model_routing.health` is exposed as `meshrix.agentGateway.modelRouting.health`, requires `console:read`, and reads local routing state plus recent cost-ledger entries.
+- `agent-management` is default-disabled. When enabled, `agents.list/create/update/delete` maintain local model-library entries through `meshrix.agentManagement.*` catalog tools.
 - `agents.create`, `agents.update`, and `agents.delete` require `runtime:admin`, use `repair_write`, share the `agent_management.model_library` concurrency group, and redact configured token fields in audit projections.
 - Runtime configuration ownership remains with `settings.*` and `agents.*`. The stale `agent_gateway.config.*` surface is retired.
 

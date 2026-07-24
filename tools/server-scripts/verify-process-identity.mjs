@@ -58,7 +58,7 @@ function clientFingerprint(suffix) {
 }
 
 async function verifyServiceFlow() {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-process-identity-service-"));
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-process-identity-service-"));
   const service = createProcessIdentityService({
     dataDir,
     claimToken: "claim-token-service",
@@ -161,7 +161,7 @@ async function verifyServiceFlow() {
       body: rotateBody,
       nonce: "service-bad-fingerprint"
     });
-    badFingerprintHeaders["x-lico-runtime-instance-id"] = "runtime-copy";
+    badFingerprintHeaders["x-meshrix-runtime-instance-id"] = "runtime-copy";
     const wrongFingerprint = await service.verifySignedRequest({
       request: localRequest(badFingerprintHeaders),
       requestBody: Buffer.from(rotateBody),
@@ -262,9 +262,9 @@ async function verifyServiceFlow() {
 }
 
 async function verifyHttpFlow() {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-process-identity-http-"));
-  const previousToken = process.env.LICO_PROCESS_IDENTITY_CLAIM_TOKEN;
-  process.env.LICO_PROCESS_IDENTITY_CLAIM_TOKEN = "claim-token-http";
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-process-identity-http-"));
+  const previousToken = process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN;
+  process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN = "claim-token-http";
   const server = await startHttpServer({
     userDataPath: dataDir,
     runtimeOptions: { profile: "minimal" }
@@ -360,9 +360,9 @@ async function verifyHttpFlow() {
   } finally {
     await server.close();
     if (previousToken === undefined) {
-      delete process.env.LICO_PROCESS_IDENTITY_CLAIM_TOKEN;
+      delete process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN;
     } else {
-      process.env.LICO_PROCESS_IDENTITY_CLAIM_TOKEN = previousToken;
+      process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN = previousToken;
     }
     await fs.rm(dataDir, { recursive: true, force: true });
   }

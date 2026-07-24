@@ -19,7 +19,7 @@ function workspaceFolderPath(userDataPath, workspaceId) {
 }
 
 async function withWorkspaceRuntime(fn, options = {}) {
-  const root = await tempDir("lico-agent-workspace-final-sixth-extra-");
+  const root = await tempDir("meshrix-agent-workspace-final-sixth-extra-");
   const runtime = createAgentWorkspace({
     userDataPath: root,
     defaultCanAccessAll: true,

@@ -16,11 +16,11 @@ const artifactLifecycleRelativePath = "packages/foundation/src/workflow/state-ma
 const transitionLifecycleRelativePath = "packages/foundation/src/workflow/state-machine/definitions/version.transition.lifecycle.json";
 const reportRelativePath = "build/reports/version-registry/latest.json";
 
-const ARTIFACT_ID_PATTERN = /^lico(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+const ARTIFACT_ID_PATTERN = /^meshrix(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
 const VERSION_NAME_PATTERN = /^(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?$/;
 const VERSION_SUBSECTION_PATTERN = /^(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?-[0-9]+(\.[0-9]+)*$/;
 const ARTIFACT_REF_PATTERN = new RegExp(
-  `^lico(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+@${GOVERNED_VERSION_PATTERN.source.slice(1, -1)}$`
+  `^meshrix(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+@${GOVERNED_VERSION_PATTERN.source.slice(1, -1)}$`
 );
 const ABSOLUTE_PATH_PATTERNS = [
   /\/Users\//i,
@@ -82,7 +82,7 @@ function assertRefShape(ref, label, platformVersionBaseline) {
 }
 
 function assertArtifactId(value, label) {
-  assert.match(value, ARTIFACT_ID_PATTERN, `${label} must be a stable dotted lico.* identity`);
+  assert.match(value, ARTIFACT_ID_PATTERN, `${label} must be a stable dotted meshrix.* identity`);
 }
 
 function assertGovernedVersion(value, label, platformVersionBaseline = "v0.0.1") {
@@ -121,7 +121,7 @@ function verifierOwnedVersion(version = "") {
 
 function assertActiveVersionAuthority(artifact, versionRecord) {
   assert.equal(
-    artifact.artifactId.startsWith("lico.test."),
+    artifact.artifactId.startsWith("meshrix.test."),
     false,
     `${artifact.artifactId} must not register test-fixture identity as a governed artifact`
   );
@@ -147,7 +147,7 @@ async function assertReferenceExists(uri, label) {
   assert.equal(typeof uri, "string", `${label} uri must be a string`);
   assert.equal(uri.startsWith("/"), false, `${label} must not use an absolute path`);
   assert.equal(uri.includes(".."), false, `${label} must not escape its declared boundary`);
-  if (!uri.startsWith(".licomesh-server-data/")) {
+  if (!uri.startsWith(".meshrix-server-data/")) {
     await fs.access(path.join(repoRoot, uri));
   }
 }
@@ -162,11 +162,11 @@ async function verifyEvidenceRefs(refs, label) {
     assert.equal(seen.has(ref.evidenceId), false, `${label} duplicate evidenceId: ${ref.evidenceId}`);
     seen.add(ref.evidenceId);
     await assertReferenceExists(ref.uri, `${label} evidenceRef ${ref.evidenceId}`);
-    if (ref.uri.startsWith(".licomesh-server-data/")) {
+    if (ref.uri.startsWith(".meshrix-server-data/")) {
       assert.equal(
-        ref.uri.startsWith(".licomesh-server-data/artifacts/"),
+        ref.uri.startsWith(".meshrix-server-data/artifacts/"),
         true,
-        `${label} runtime evidence must stay under .licomesh-server-data/artifacts`
+        `${label} runtime evidence must stay under .meshrix-server-data/artifacts`
       );
     }
   }
@@ -182,9 +182,9 @@ function verifyArtifactRefs(refs, label) {
     assert.equal(seen.has(ref.refId), false, `${label} duplicate refId: ${ref.refId}`);
     seen.add(ref.refId);
     assert.equal(
-      ref.uri.startsWith(".licomesh-server-data/artifacts/"),
+      ref.uri.startsWith(".meshrix-server-data/artifacts/"),
       true,
-      `${label} artifact payload uri must stay under .licomesh-server-data/artifacts`
+      `${label} artifact payload uri must stay under .meshrix-server-data/artifacts`
     );
     assert.equal(ref.uri.includes(".."), false, `${label} artifact payload uri must not escape artifact store`);
   }
@@ -200,7 +200,7 @@ async function verifyRegistry() {
 
   assertNoSensitiveStrings(registry);
 
-  assert.equal(schema.$id, "https://lico.local/packages/foundation/src/version-control/version-registry.schema.json");
+  assert.equal(schema.$id, "https://meshrix.local/packages/foundation/src/version-control/version-registry.schema.json");
   assert.deepEqual(
     sorted(schema.$defs.artifactLifecycle.enum),
     sorted(artifactLifecycleDef.states.map((state) => state.id)),
@@ -220,13 +220,13 @@ async function verifyRegistry() {
   assert.equal(registry.$schema, "./version-registry.schema.json");
   assert.equal(registry.schemaVersion, "v0.0.1:version-governance:registry-schema-1");
   assertGovernedVersion(registry.schemaVersion, "Version Registry schemaVersion");
-  assert.equal(registry.registryId, "lico.version-registry");
+  assert.equal(registry.registryId, "meshrix.version-registry");
   assert.equal(registry.protocolVersion, "v0.0.1:version-governance:protocol-1");
   assertGovernedVersion(registry.protocolVersion, "Version Registry protocolVersion");
   assert.match(registry.updatedAt, /^\d{4}-\d{2}-\d{2}$/);
   assert.deepEqual(registry.authority, {
     mode: "source-controlled-singleton",
-    artifactStoreRoot: ".licomesh-server-data/artifacts",
+    artifactStoreRoot: ".meshrix-server-data/artifacts",
     platformVersionBaseline: "v0.0.1",
     governedVersionFormat: "v<platform-version>:<domain>:<subsection>-<version>"
   });

@@ -41,9 +41,9 @@ import { pathToFileURL } from "node:url";
 
 const repoRoot = process.cwd();
 const OTEL_LAYOUT_AUDIT_SEMANTICS = Object.freeze({
-  "service.name": "licomesh-layout-audit",
+  "service.name": "meshrix-layout-audit",
   "service.version": "v0.0.1:repository:layout-audit-0.2.0",
-  "vcs.repository.url": "git+https://github.com/LicoLand/LicoMesh.git",
+  "vcs.repository.url": "git+https://github.com/LicoLand/Meshrix.git",
   "vcs.ref.head.name": process.env.GITHUB_REF_NAME || "",
   "vcs.ref.head.revision": process.env.GITHUB_SHA || ""
 });
@@ -247,7 +247,7 @@ async function main() {
       }
     }
     for (const specifier of Object.keys(imports)) {
-      if (specifier.startsWith("#lico/") && !arch.PUBLIC_FACADES.find((f) => f.importSpecifier === specifier)) {
+      if (specifier.startsWith("#meshrix/") && !arch.PUBLIC_FACADES.find((f) => f.importSpecifier === specifier)) {
         extraImports.push(specifier);
       }
     }
@@ -419,7 +419,7 @@ async function main() {
 
   if (reportFormat === "markdown") {
     const lines = [
-      "# LicoMesh Layout Audit Report",
+      "# Meshrix Layout Audit Report",
       `Generated: ${report.generatedAt}`,
       `Mode: ${report.mode}`,
       "",

@@ -21,9 +21,9 @@ const RELEASE_TARGETS = MCP_SUPPORTED_TARGETS;
 const RELEASE_LABELS = Object.freeze(RELEASE_TARGETS.map((target) => MCP_TARGET_LABELS[target]));
 const PUBLIC_SCOPE_FILES = Object.freeze([
   "packages/protocols/mcp/adapter/http-mcp-adapter.mjs",
-  "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs",
-  "packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh",
-  "packages/protocols/mcp/adapter/native-installer/lico-mcp-install.ps1",
+  "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs",
+  "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh",
+  "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1",
   "tools/server-scripts/mcp-install.mjs",
   ".github/RELEASE_TEMPLATE.md",
   "packages/protocols/mcp/adapter/gateway-installer/package.json",
@@ -43,7 +43,7 @@ const ADAPTER_BOUNDARY_DOCUMENT_FILES = Object.freeze([
 ]);
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-release-target-scope-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-release-target-scope-"));
 const report = {
   schemaVersion: "v0.0.1:mcp:release-target-scope-report-1",
   verifier: "tools/server-scripts/verify-mcp-release-target-scope.mjs",
@@ -61,7 +61,7 @@ function safeEvidence(value = {}) {
     if (child.includes(userDataPath) || child.includes(os.homedir()) || child.includes(process.cwd())) {
       return "[redacted-local-path]";
     }
-    if (/Bearer\s+\S+/i.test(child) || /lico_[a-z0-9_-]+=/i.test(child)) {
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[a-z0-9_-]+=/i.test(child)) {
       return "[redacted-secret]";
     }
     return child;
@@ -74,7 +74,7 @@ function assertNoLeakText(text = "", label = "text") {
   assert.equal(value.includes(os.homedir()), false, `${label} leaked user home path`);
   assert.equal(value.includes(process.cwd()), false, `${label} leaked workspace path`);
   assert.equal(/Bearer\s+\S+/i.test(value), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[a-z0-9_-]+=/i.test(value), false, `${label} leaked cookie`);
+  assert.equal(/meshrix_[a-z0-9_-]+=/i.test(value), false, `${label} leaked cookie`);
 }
 
 function assertNoHostPathText(text = "", label = "text") {
@@ -225,7 +225,7 @@ try {
     for (const filePath of ADAPTER_BOUNDARY_DOCUMENT_FILES) {
       const source = await fs.readFile(filePath, "utf8");
       assertNoHostPathText(source, filePath);
-      assert.equal(/LicoMesh-Plugins|external (?:client-)?adapter|external plugin/iu.test(source), true, `${filePath} does not declare the external adapter boundary`);
+      assert.equal(/Meshrix-Plugins|external (?:client-)?adapter|external plugin/iu.test(source), true, `${filePath} does not declare the external adapter boundary`);
     }
     return {
       filesChecked: ADAPTER_BOUNDARY_DOCUMENT_FILES.length,
@@ -259,16 +259,16 @@ try {
   });
 
   await test("installer CLI help, discovery, and scan output expose only release targets", async () => {
-    const help = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", ["help"]);
+    const help = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", ["help"]);
     assert.equal(help.status, 0);
     assert.equal(RELEASE_TARGETS.every((target) => help.stdout.includes(target)), true);
 
-    const discover = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", ["discover", "--url", server.url, "--json"]);
+    const discover = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", ["discover", "--url", server.url, "--json"]);
     assert.equal(discover.status, 0);
     const discoverPayload = parseJsonOutput(discover.stdout, "installer discover");
     assertReleaseTargets(targetIds(discoverPayload.installer?.supportedTargets || []), "installer discover supportedTargets");
 
-    const scan = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs", ["scan", "--url", server.url, "--no-scan", "--json"]);
+    const scan = await runNode("packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs", ["scan", "--url", server.url, "--no-scan", "--json"]);
     assert.equal(scan.status, 0);
     const scanPayload = parseJsonOutput(scan.stdout, "installer scan");
     assertReleaseTargets(targetIds(scanPayload.candidates || []), "installer scan candidates");

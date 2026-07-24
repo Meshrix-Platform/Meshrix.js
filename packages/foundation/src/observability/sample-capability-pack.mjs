@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 export const SAMPLE_CAPABILITY_PACK_PROTOCOL_VERSION = "v0.0.1:platform:sample-capability-pack-1";
 
@@ -118,7 +118,7 @@ const SAMPLE_PACKS = Object.freeze([
         content: () => [
           "# Gateway Forwarding Pilot",
           "",
-          "本样例用于验证 LicoMesh 对上游 API 注册、策略预览、审批和流控的整合能力。",
+          "本样例用于验证 Meshrix 对上游 API 注册、策略预览、审批和流控的整合能力。",
           "",
           "## 检查项",
           "",

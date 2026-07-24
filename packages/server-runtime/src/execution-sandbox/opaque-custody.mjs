@@ -9,8 +9,8 @@ import {
   SANDBOX_CUSTODY_ENVELOPE_SCHEMA,
   normalizeCustodyHandle,
   normalizeCustodyPromotionRequest
-} from "#lico/foundation/execution-sandbox/custody-contracts";
-import { sandboxDigest } from "#lico/foundation/execution-sandbox/contracts";
+} from "#meshrix/foundation/execution-sandbox/custody-contracts";
+import { sandboxDigest } from "#meshrix/foundation/execution-sandbox/contracts";
 
 const CHUNK_BYTES = 64 * 1024;
 const MAX_CUSTODY_BYTES = 256 * 1024 * 1024;
@@ -260,7 +260,7 @@ export function createOpaqueSandboxCustodyRuntime({ userDataPath, storageKernel,
         sourcePath: temporaryPath,
         namespace: "execution-sandbox-custody",
         fileName: "opaque-envelope.custody",
-        mediaType: "application/vnd.licomesh.opaque-custody",
+        mediaType: "application/vnd.meshrix.opaque-custody",
         objectId,
         metadata: {
           ownerSubjectId: subjectRef

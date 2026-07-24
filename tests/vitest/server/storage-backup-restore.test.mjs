@@ -25,8 +25,8 @@ import { executeStorageOperation } from "../../../packages/server-runtime/src/co
 import {
   classifyProtocolSubstrateStorageArtifact,
   PROTOCOL_SUBSTRATE_STORAGE_CATEGORY
-} from "#lico/foundation/checkpoint/tree/data-structure-substrate";
-import { createLicoPactiumRuntime } from "#lico/foundation/checkpoint/tree/pactium-substrate-preflight";
+} from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
+import { createLicoPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
 
 const tempRoots = [];
 
@@ -58,7 +58,7 @@ async function terminatedProcessPid() {
 }
 
 async function currentProcessLeaseIdentity() {
-  const userDataPath = await tempDir("lico-storage-process-identity-");
+  const userDataPath = await tempDir("meshrix-storage-process-identity-");
   const lease = acquireStorageRuntimeLease(userDataPath);
   try {
     const record = JSON.parse(await fs.readFile(
@@ -109,7 +109,7 @@ afterEach(async () => {
 
 describe("storage backup restore", () => {
   it("createStorageBackup skips excluded top-level directories and classifies files", async () => {
-    const userDataPath = await tempDir("lico-backup-classify-");
+    const userDataPath = await tempDir("meshrix-backup-classify-");
     await writeFixture(userDataPath, "auth/token.json", JSON.stringify({ token: "abc" }));
     await writeFixture(userDataPath, "jobs/queue.json", JSON.stringify({ state: "queued" }));
     await writeFixture(userDataPath, "objects/index.dat", "objects");
@@ -164,7 +164,7 @@ describe("storage backup restore", () => {
   });
 
   it("listStorageBackups returns empty for missing backup root and ignores malformed entries", async () => {
-    const userDataPath = await tempDir("lico-backup-list-missing-");
+    const userDataPath = await tempDir("meshrix-backup-list-missing-");
     const emptyListing = await listStorageBackups({ userDataPath });
     expect(emptyListing).toEqual({
       schemaVersion: "v0.0.1:schema:definition-1",
@@ -201,7 +201,7 @@ describe("storage backup restore", () => {
   });
 
   it("restoreStorageBackup validates backupId and include path constraints", async () => {
-    const userDataPath = await tempDir("lico-backup-restore-validate-");
+    const userDataPath = await tempDir("meshrix-backup-restore-validate-");
     const manifest = await createStorageBackup({ userDataPath, label: "validated" });
 
     await expect(
@@ -222,7 +222,7 @@ describe("storage backup restore", () => {
   });
 
   it("restoreStorageBackup dry-run classifies create, replace and noop actions with include filtering", async () => {
-    const userDataPath = await tempDir("lico-backup-restore-dryrun-");
+    const userDataPath = await tempDir("meshrix-backup-restore-dryrun-");
     await writeFixture(userDataPath, "scope/keep.txt", "same-content");
     await writeFixture(userDataPath, "scope/replace.txt", "old-content");
     await writeFixture(userDataPath, "scope/create.txt", "will-be-removed");
@@ -266,7 +266,7 @@ describe("storage backup restore", () => {
   });
 
   it("restoreStorageBackup marks blocked entries when backup files are missing", async () => {
-    const userDataPath = await tempDir("lico-backup-restore-blocked-");
+    const userDataPath = await tempDir("meshrix-backup-restore-blocked-");
     await writeFixture(userDataPath, "scope/blocked.txt", "missing-backup-file");
 
     const manifest = await createStorageBackup({ userDataPath, label: "blocked" });
@@ -301,7 +301,7 @@ describe("storage backup restore", () => {
   });
 
   it("restoreStorageBackup apply branch writes report and performs target updates", async () => {
-    const userDataPath = await tempDir("lico-backup-restore-apply-");
+    const userDataPath = await tempDir("meshrix-backup-restore-apply-");
     await writeFixture(userDataPath, "restore/keep.txt", "stable");
     await writeFixture(userDataPath, "restore/replace.txt", "old-content");
     await writeFixture(userDataPath, "restore/create.txt", "will be recreated");
@@ -339,7 +339,7 @@ describe("storage backup restore", () => {
   });
 
   it("creates a verified online SQLite snapshot without copying transient WAL sidecars", async () => {
-    const userDataPath = await tempDir("lico-backup-sqlite-online-");
+    const userDataPath = await tempDir("meshrix-backup-sqlite-online-");
     const databasePath = path.join(userDataPath, "metadata", "runtime.sqlite");
     await fs.mkdir(path.dirname(databasePath), { recursive: true });
     const liveDatabase = new Database(databasePath);
@@ -367,7 +367,7 @@ describe("storage backup restore", () => {
   });
 
   it("replaces a byte-identical SQLite main file when recovery sidecars contain post-backup state", async () => {
-    const userDataPath = await tempDir("lico-backup-sqlite-sidecar-restore-");
+    const userDataPath = await tempDir("meshrix-backup-sqlite-sidecar-restore-");
     const databasePath = path.join(userDataPath, "metadata", "runtime.sqlite");
     await fs.mkdir(path.dirname(databasePath), { recursive: true });
     const liveDatabase = new Database(databasePath);
@@ -436,7 +436,7 @@ describe("storage backup restore", () => {
   });
 
   it("uses SQLite online backup and sidecar-safe restore for nested auth and Pactium databases", async () => {
-    const userDataPath = await tempDir("lico-backup-nested-sqlite-");
+    const userDataPath = await tempDir("meshrix-backup-nested-sqlite-");
     const databasePaths = [
       path.join(userDataPath, "auth", "sessions.sqlite"),
       path.join(userDataPath, "pactium.sqlite")
@@ -518,7 +518,7 @@ describe("storage backup restore", () => {
   });
 
   it("uses replacement semantics for full restore and overlay semantics for filtered restore", async () => {
-    const userDataPath = await tempDir("lico-backup-replacement-");
+    const userDataPath = await tempDir("meshrix-backup-replacement-");
     await writeFixture(userDataPath, "scope/baseline.txt", "backup-scope");
     await writeFixture(userDataPath, "other/baseline.txt", "backup-other");
     const manifest = await createStorageBackup({ userDataPath, label: "replacement" });
@@ -566,7 +566,7 @@ describe("storage backup restore", () => {
   });
 
   it("rejects malformed includePaths without expanding to replacement semantics", async () => {
-    const userDataPath = await tempDir("lico-backup-invalid-include-paths-");
+    const userDataPath = await tempDir("meshrix-backup-invalid-include-paths-");
     await writeFixture(userDataPath, "scope/baseline.txt", "backup-scope");
     const manifest = await createStorageBackup({ userDataPath, label: "invalid-include-paths" });
     await writeFixture(userDataPath, "outside/post-backup.txt", "must-survive");
@@ -586,8 +586,8 @@ describe("storage backup restore", () => {
   it.runIf(process.platform !== "win32")(
     "fails closed when replacement restore encounters an ungoverned symlink or FIFO",
     async () => {
-      const userDataPath = await tempDir("lico-backup-special-artifact-");
-      const outsideRoot = await tempDir("lico-backup-special-target-");
+      const userDataPath = await tempDir("meshrix-backup-special-artifact-");
+      const outsideRoot = await tempDir("meshrix-backup-special-target-");
       await writeFixture(userDataPath, "scope/baseline.txt", "backup-generation");
       const manifest = await createStorageBackup({ userDataPath, label: "special-artifact" });
       const outsidePath = await writeFixture(outsideRoot, "external.json", "external-generation");
@@ -617,7 +617,7 @@ describe("storage backup restore", () => {
   );
 
   it("recovers a SIGKILL-interrupted restore before the storage kernel opens", async () => {
-    const userDataPath = await tempDir("lico-backup-crash-recovery-");
+    const userDataPath = await tempDir("meshrix-backup-crash-recovery-");
     await writeFixture(userDataPath, "scope/a.txt", "backup-a");
     await writeFixture(userDataPath, "scope/b.txt", "backup-b");
     const manifest = await createStorageBackup({ userDataPath, label: "crash-recovery" });
@@ -698,7 +698,7 @@ describe("storage backup restore", () => {
   }, 15_000);
 
   it("finalizes a durable committed generation after SIGKILL before receipt publication", async () => {
-    const userDataPath = await tempDir("lico-backup-commit-recovery-");
+    const userDataPath = await tempDir("meshrix-backup-commit-recovery-");
     await writeFixture(userDataPath, "scope/value.txt", "backup-generation");
     const manifest = await createStorageBackup({ userDataPath, label: "commit-recovery" });
     await fs.writeFile(path.join(userDataPath, "scope/value.txt"), "active-generation", "utf8");
@@ -786,7 +786,7 @@ describe("storage backup restore", () => {
   }, 15_000);
 
   it("fails the entire unpublished backup when a source mutates during its copy", async () => {
-    const userDataPath = await tempDir("lico-backup-concurrent-mutation-");
+    const userDataPath = await tempDir("meshrix-backup-concurrent-mutation-");
     const sourcePath = await writeFixture(userDataPath, "state/live.json", JSON.stringify({ generation: 1 }));
     const originalOpen = fs.open.bind(fs);
     vi.spyOn(fs, "open").mockImplementation(async (filePath, ...args) => {
@@ -812,7 +812,7 @@ describe("storage backup restore", () => {
   });
 
   it("rejects insufficient filesystem capacity before creating snapshot files", async () => {
-    const userDataPath = await tempDir("lico-backup-capacity-preflight-");
+    const userDataPath = await tempDir("meshrix-backup-capacity-preflight-");
     await writeFixture(userDataPath, "state/large.bin", "x".repeat(1024));
     vi.spyOn(fs, "statfs").mockResolvedValue({
       bavail: 1n,
@@ -827,7 +827,7 @@ describe("storage backup restore", () => {
   });
 
   it("uses copy-on-write cloning when the filesystem supports reflinks", async () => {
-    const userDataPath = await tempDir("lico-backup-copy-on-write-");
+    const userDataPath = await tempDir("meshrix-backup-copy-on-write-");
     await writeFixture(userDataPath, "state/value.bin", "stable-content");
     const copyFile = vi.spyOn(fs, "copyFile");
 
@@ -844,7 +844,7 @@ describe("storage backup restore", () => {
   });
 
   it("removes abandoned unpublished backup staging before the next snapshot", async () => {
-    const userDataPath = await tempDir("lico-backup-pending-recovery-");
+    const userDataPath = await tempDir("meshrix-backup-pending-recovery-");
     const pendingPath = path.join(userDataPath, "backups", ".backup_stale.pending");
     await fs.mkdir(pendingPath, { recursive: true });
     await fs.writeFile(path.join(pendingPath, "partial"), "partial", "utf8");
@@ -857,7 +857,7 @@ describe("storage backup restore", () => {
   });
 
   it("verifies manifest size and digest for every selected restore file", async () => {
-    const userDataPath = await tempDir("lico-backup-tamper-");
+    const userDataPath = await tempDir("meshrix-backup-tamper-");
     await writeFixture(userDataPath, "scope/hash.txt", "original");
     await writeFixture(userDataPath, "scope/size.txt", "stable");
     const manifest = await createStorageBackup({ userDataPath, label: "tamper" });
@@ -888,7 +888,7 @@ describe("storage backup restore", () => {
   });
 
   it("rejects online restore with a safe API reason code while leaving active state untouched", async () => {
-    const userDataPath = await tempDir("lico-backup-online-restore-");
+    const userDataPath = await tempDir("meshrix-backup-online-restore-");
     await writeFixture(userDataPath, "settings.json", "baseline");
     const manifest = await createStorageBackup({ userDataPath, label: "offline-boundary" });
     await fs.writeFile(path.join(userDataPath, "settings.json"), "active", "utf8");
@@ -914,7 +914,7 @@ describe("storage backup restore", () => {
   });
 
   it("keeps the shared runtime lease until every standalone Pactium runtime closes", async () => {
-    const userDataPath = await tempDir("lico-backup-pactium-shared-lease-");
+    const userDataPath = await tempDir("meshrix-backup-pactium-shared-lease-");
     const seedRuntime = createLicoPactiumRuntime({ dataDir: userDataPath, storageBackend: "sqlite" });
     await seedRuntime.storage.putProtocolObject("test", "generation", { value: "backup" });
     await seedRuntime.close();
@@ -953,7 +953,7 @@ describe("storage backup restore", () => {
   });
 
   it("rejects confirmed restore while a standalone Pactium runtime is open in another process", async () => {
-    const userDataPath = await tempDir("lico-backup-pactium-process-lease-");
+    const userDataPath = await tempDir("meshrix-backup-pactium-process-lease-");
     const seedRuntime = createLicoPactiumRuntime({ dataDir: userDataPath, storageBackend: "sqlite" });
     await seedRuntime.storage.putProtocolObject("test", "generation", { value: "backup" });
     await seedRuntime.close();
@@ -1029,7 +1029,7 @@ describe("storage backup restore", () => {
   }, 15_000);
 
   it("rolls back every committed file when a later atomic install fails", async () => {
-    const userDataPath = await tempDir("lico-backup-rollback-");
+    const userDataPath = await tempDir("meshrix-backup-rollback-");
     await writeFixture(userDataPath, "scope/a.txt", "backup-a");
     await writeFixture(userDataPath, "scope/b.txt", "backup-b");
     const manifest = await createStorageBackup({ userDataPath, label: "rollback" });
@@ -1068,7 +1068,7 @@ describe("storage backup restore", () => {
   });
 
   it("cleans only a verifiable stale maintenance lease during runtime startup", async () => {
-    const userDataPath = await tempDir("lico-storage-stale-maintenance-");
+    const userDataPath = await tempDir("meshrix-storage-stale-maintenance-");
     const lockRoot = path.join(userDataPath, "locks");
     const maintenancePath = path.join(lockRoot, "storage-backup-restore.lock");
     const runtimePath = path.join(lockRoot, "storage-runtime.lease");
@@ -1125,7 +1125,7 @@ describe("storage backup restore", () => {
   });
 
   it("does not remove a replacement runtime lease during stale-owner cleanup", async () => {
-    const userDataPath = await tempDir("lico-storage-runtime-lease-race-");
+    const userDataPath = await tempDir("meshrix-storage-runtime-lease-race-");
     const lockRoot = path.join(userDataPath, "locks");
     const runtimePath = path.join(lockRoot, "storage-runtime.lease");
     await fs.mkdir(lockRoot, { recursive: true, mode: 0o700 });
@@ -1170,7 +1170,7 @@ describe("storage backup restore", () => {
   });
 
   it("treats a reused PID with a different process-start identity as stale", async () => {
-    const userDataPath = await tempDir("lico-storage-runtime-pid-reuse-");
+    const userDataPath = await tempDir("meshrix-storage-runtime-pid-reuse-");
     const lockRoot = path.join(userDataPath, "locks");
     const runtimePath = path.join(lockRoot, "storage-runtime.lease");
     await fs.mkdir(lockRoot, { recursive: true, mode: 0o700 });

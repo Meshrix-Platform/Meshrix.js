@@ -42,7 +42,7 @@
  * forbids direct imports from runtime/tag-state in foundation/security files.
  *
  * @module tag-store-port
- * @package @lico/foundation
+ * @package @meshrix/foundation
  * @layer foundation/security
  */
 

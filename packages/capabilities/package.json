@@ -1,11 +1,11 @@
 {
-  "name": "@lico/capabilities",
+  "name": "@meshrix/capabilities",
   "version": "0.0.1",
-  "description": "LicoMesh operation permission and runtime capabilities",
+  "description": "Meshrix operation permission and runtime capabilities",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "packages/capabilities"
   },
   "engines": {
@@ -13,9 +13,9 @@
   },
   "type": "module",
   "dependencies": {
-    "@lico/contracts": "0.0.1",
-    "@lico/foundation": "0.0.1",
-    "@lico/protocols": "0.0.1"
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
   },
   "exports": {
     "./*": "./src/*.mjs"

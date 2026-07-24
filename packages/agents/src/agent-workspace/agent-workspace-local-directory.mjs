@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { assertPathWithinRootSync } from "@lico/foundation/security/local-path-boundary";
+import { assertPathWithinRootSync } from "@meshrix/foundation/security/local-path-boundary";
 import {
   AGENT_WORKSPACE_PROTOCOL_VERSION,
   asArray,

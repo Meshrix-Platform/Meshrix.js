@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { serverToken } from "#lico/client-strings";
+import { serverToken } from "#meshrix/client-strings";
 
 import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs";
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.mjs";
@@ -46,8 +46,8 @@ vi.mock("../../../packages/server-runtime/src/jobs/jobs/job-runner.mjs", () => {
   };
 });
 
-vi.mock("#lico/product-api", async () => {
-  const actual = await vi.importActual("#lico/product-api");
+vi.mock("#meshrix/product-api", async () => {
+  const actual = await vi.importActual("#meshrix/product-api");
   return {
     ...actual,
     getRuntimeLogger: vi.fn(() => loggerMock),
@@ -70,7 +70,7 @@ const COMPLETED_RESULT = {
 };
 
 async function withTempUserData(callback) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-manager-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-manager-extra-"));
   try {
     return await callback(userDataPath);
   } finally {
@@ -222,7 +222,7 @@ describe("job manager extra", () => {
       const resultPath = path.join(userDataPath, "jobs", created.id, "result.json");
       const persisted = JSON.parse(await fs.readFile(resultPath, "utf8"));
       expect(persisted).toMatchObject({
-        format: "lico.job-terminal",
+        format: "meshrix.job-terminal",
         schema: "job-terminal-envelope",
         job: { id: created.id, status: "completed" },
         result: COMPLETED_RESULT

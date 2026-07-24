@@ -1,4 +1,4 @@
-# LicoMesh Tools
+# Meshrix Tools
 
 The `tools/` directory contains repository scripts for startup, packaging, registry generation, verification, hygiene checks, and operational diagnostics.
 

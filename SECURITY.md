@@ -1,6 +1,6 @@
 # Security Policy
 
-LicoMesh is designed for private deployment. Security reporting, authorization behavior, and audit evidence must be handled as operational facts, not public claims.
+Meshrix is designed for private deployment. Security reporting, authorization behavior, and audit evidence must be handled as operational facts, not public claims.
 
 ## Supported State
 

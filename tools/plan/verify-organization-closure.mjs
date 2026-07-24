@@ -211,7 +211,7 @@ export function verifyOrganizationClosure(sourceFacts, planFacts, registries) {
     pending: uniquePending,
   };
   return {
-    schema_version: "licomesh.organization-closure.v1",
+    schema_version: "v0.0.1:meshrix:organization-closure-1",
     accepted: uniquePending.length === 0,
     layers: [...LAYERS],
     mapped,

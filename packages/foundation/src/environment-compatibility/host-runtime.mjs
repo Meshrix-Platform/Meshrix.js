@@ -228,7 +228,7 @@ export function privilegedCommand(command, args = [], options = {}) {
 
 export function nativePythonInstallPlans(options = {}) {
   const platform = options.platform || process.platform;
-  if (options.disableNativeRuntimeInstall === true || process.env.LICO_DISABLE_NATIVE_RUNTIME_INSTALL === "1") {
+  if (options.disableNativeRuntimeInstall === true || process.env.MESHRIX_DISABLE_NATIVE_RUNTIME_INSTALL === "1") {
     return [];
   }
   const commandPathFn = options.commandPathFn || commandPath;
@@ -266,7 +266,7 @@ export function nativePythonInstallPlans(options = {}) {
 
 export function nativeNodeInstallerToolPlans(options = {}) {
   const platform = options.platform || process.platform;
-  if (options.disableNativeRuntimeInstall === true || process.env.LICO_DISABLE_NATIVE_RUNTIME_INSTALL === "1") {
+  if (options.disableNativeRuntimeInstall === true || process.env.MESHRIX_DISABLE_NATIVE_RUNTIME_INSTALL === "1") {
     return [];
   }
   const commandPathFn = options.commandPathFn || commandPath;
@@ -308,7 +308,7 @@ export function nativeNodeInstallerToolPlans(options = {}) {
 export function nativeHostPackageInstallPlans({
   packageName = "",
   platform = process.platform,
-  disableNativeRuntimeInstall = process.env.LICO_DISABLE_NATIVE_RUNTIME_INSTALL === "1",
+  disableNativeRuntimeInstall = process.env.MESHRIX_DISABLE_NATIVE_RUNTIME_INSTALL === "1",
   commandPathFn = commandPath,
   darwinPackageName = packageName,
   aptPackageName = packageName,

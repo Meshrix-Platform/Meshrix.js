@@ -1,20 +1,20 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   normalizeKernelCapabilities,
   normalizeRegisteredToolCapabilities,
   unknownKernelCapabilities
-} from "#lico/authorization-engine";
+} from "#meshrix/authorization-engine";
 import { stringsFrom, uniqueStrings } from "./authorization-engine-common.mjs";
 import { ensurePrivateDir } from "../../storage/private-file-atomic.mjs";
 
 export const OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION = "v0.0.1:risk-control:opaque-capability-key-1";
 
-export const DEFAULT_ALIAS = "lico-opaque-capability-key";
+export const DEFAULT_ALIAS = "meshrix-opaque-capability-key";
 export const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 const VALID_STATUSES = Object.freeze(["valid", "invalid"]);
 const KERNEL_STATE_VERSION = 1;
@@ -26,7 +26,7 @@ export function repoRoot() {
 }
 
 export function helperScriptPath() {
-  return path.join(repoRoot(), "server", "scripts", "lico-opaque-capability-key-helper.mjs");
+  return path.join(repoRoot(), "server", "scripts", "meshrix-opaque-capability-key-helper.mjs");
 }
 
 export function nowIso() {
@@ -278,7 +278,7 @@ export function randomBase64(bytes = 32) {
 }
 
 export function keychainService(alias = DEFAULT_ALIAS) {
-  return `com.licomesh.capability-kernel.${safeAlias(alias)}`;
+  return `com.meshrix.capability-kernel.${safeAlias(alias)}`;
 }
 
 export function createEmptyKernelState({ provider = "memory", securityMode = "memory", runtimeLookupKeyBase64 = "" } = {}) {

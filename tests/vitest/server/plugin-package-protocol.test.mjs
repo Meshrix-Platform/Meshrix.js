@@ -8,18 +8,18 @@ import {
   PLUGIN_BUNDLE_MANIFEST_FILENAME,
   PLUGIN_BUNDLE_MANIFEST_SCHEMA,
   normalizePluginBundleManifest
-} from "#lico/contracts/plugins/plugin-bundle-manifest";
-import { createBytesPluginPackageSource } from "#lico/contracts/plugins/plugin-package-source";
-import { assertPluginPackageTransition, PLUGIN_PACKAGE_STATES } from "#lico/contracts/plugins/plugin-package-state";
-import { createPluginPackageCustody } from "#lico/foundation/module-system/plugin-package-custody";
-import { createPluginPackageLifecycle } from "#lico/foundation/module-system/plugin-package-lifecycle";
-import { createPluginPackageAcquisitionPort } from "#lico/foundation/module-system/plugin-package-acquisition-port";
+} from "#meshrix/contracts/plugins/plugin-bundle-manifest";
+import { createBytesPluginPackageSource } from "#meshrix/contracts/plugins/plugin-package-source";
+import { assertPluginPackageTransition, PLUGIN_PACKAGE_STATES } from "#meshrix/contracts/plugins/plugin-package-state";
+import { createPluginPackageCustody } from "#meshrix/foundation/module-system/plugin-package-custody";
+import { createPluginPackageLifecycle } from "#meshrix/foundation/module-system/plugin-package-lifecycle";
+import { createPluginPackageAcquisitionPort } from "#meshrix/foundation/module-system/plugin-package-acquisition-port";
 import {
   computePluginPackagePayloadDigest,
   validatePluginPackageArchive
-} from "#lico/foundation/module-system/plugin-package-validator";
-import { createPluginPackageTarGz, extractPluginPackageTarGz, sha256Digest } from "#lico/foundation/module-system/plugin-package-tar";
-import { beginPluginContributionTransaction } from "#lico/server-runtime/composition/plugin-contribution-transaction";
+} from "#meshrix/foundation/module-system/plugin-package-validator";
+import { createPluginPackageTarGz, extractPluginPackageTarGz, sha256Digest } from "#meshrix/foundation/module-system/plugin-package-tar";
+import { beginPluginContributionTransaction } from "#meshrix/server-runtime/composition/plugin-contribution-transaction";
 
 function buildBundle({
   pluginId = "sample-plugin",
@@ -151,7 +151,7 @@ describe("plugin package protocol", () => {
     }
     assert.throws(() => assertPluginPackageTransition("declared", "active"), /cannot move/);
 
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-package-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
     try {
       const bundle = buildBundle();
       const lifecycle = createPluginPackageLifecycle({
@@ -204,7 +204,7 @@ describe("plugin package protocol", () => {
   });
 
   it("discards contribution generation on activation failure", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-package-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
     try {
       const bundle = buildBundle();
       let discarded = false;
@@ -241,7 +241,7 @@ describe("plugin package protocol", () => {
   });
 
   it("recovers staged digest-bound work across restart and keeps empty configuration empty", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-package-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
     try {
       const bundle = buildBundle();
       const custody = createPluginPackageCustody({ rootDir: path.join(root, "custody") });
@@ -265,7 +265,7 @@ describe("plugin package protocol", () => {
   });
 
   it("serializes concurrent writers per plugin identity", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-package-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-package-"));
     try {
       const bundle = buildBundle();
       const lifecycle = createPluginPackageLifecycle({

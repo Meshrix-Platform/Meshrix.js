@@ -60,12 +60,16 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS = Object.freeze([
       safety: { risk: "repair_write" },
       inputSchema: {
         type: "object",
-        required: ["requestId", "resolution"],
+        required: ["resolution"],
         additionalProperties: false,
         properties: {
           requestId: { type: "string" },
           resolution: { type: "string", enum: ["approved", "denied"] },
-          reason: { type: "string" }
+          reason: { type: "string" },
+          clientName: { type: "string" },
+          scopes: { type: "array", items: { type: "string" } },
+          toolsets: { type: "array", items: { type: "string" } },
+          toolAllow: { type: "array", items: { type: "string" } }
         }
       }
     },
@@ -129,7 +133,14 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS = Object.freeze([
       cli: { command: ["storage", "backup"], usage: "storage backup --body backup.json" },
       requiredScopes: ["runtime:admin"],
       aspects: ["backup-restore", "storage"],
-      safety: { risk: "safe_write" }
+      safety: { risk: "safe_write" },
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          label: { type: "string" }
+        }
+      }
     },
 {
       id: "storage.backups.retention",
@@ -165,7 +176,16 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS = Object.freeze([
       readOnly: true,
       concurrencySafe: false,
       aspects: ["backup-restore", "storage"],
-      safety: { risk: "read_only" }
+      safety: { risk: "read_only" },
+      inputSchema: {
+        type: "object",
+        required: ["backupId"],
+        additionalProperties: false,
+        properties: {
+          backupId: { type: "string" },
+          includePaths: { type: "array", items: { type: "string" } }
+        }
+      }
     },
 {
       id: "storage.backups.restore",
@@ -177,7 +197,17 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS = Object.freeze([
       cli: { command: ["storage", "restore"], usage: "storage restore --body restore.json" },
       requiredScopes: ["runtime:admin"],
       aspects: ["backup-restore", "storage"],
-      safety: { risk: "repair_write", requiresConfirmation: true, approvalScope: "storage:restore" }
+      safety: { risk: "repair_write", requiresConfirmation: true, approvalScope: "storage:restore" },
+      inputSchema: {
+        type: "object",
+        required: ["backupId"],
+        additionalProperties: false,
+        properties: {
+          backupId: { type: "string" },
+          includePaths: { type: "array", items: { type: "string" } },
+          confirm: { type: "boolean" }
+        }
+      }
     },
 {
       id: "system.background_processes",

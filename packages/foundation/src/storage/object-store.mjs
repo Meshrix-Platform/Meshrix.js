@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { resolveWithin } from "#lico/client-strings";
+import { resolveWithin } from "#meshrix/client-strings";
 
 const FILE_COPY_BUFFER_BYTES = 64 * 1024;
 const OBJECT_READ_STREAM_BUFFER_BYTES = 64 * 1024;

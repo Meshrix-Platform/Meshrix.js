@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createOperationProofSubstrate } from "#lico/foundation/proof/proof-substrate/index";
+import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
 import { verifyPlanReceiptProofAnchor } from "../../../tools/plan/plan-final-receipt.mjs";
 import {
   anchorAcceptanceEvidence,
@@ -13,7 +13,7 @@ describe("platform acceptance ledger anchoring", () => {
   const evidenceContext = Object.freeze({
     sourceRevision: "a".repeat(40),
     sourceTreeDigest: `sha256:${"f".repeat(64)}`,
-    selectedProfile: "core",
+    selectedProfile: "enterprise-single-node",
     commandDagDigest: `sha256:${"b".repeat(64)}`,
     ownedReportsInventoryDigest: `sha256:${"c".repeat(64)}`,
     planReceiptSetDigest: `sha256:${"d".repeat(64)}`,
@@ -21,7 +21,7 @@ describe("platform acceptance ledger anchoring", () => {
   });
 
   it("anchors report digests and verifies them against the ledger head", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-acceptance-anchor-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-anchor-"));
     const reportPath = path.join(root, "sample-report.json");
     await fs.writeFile(reportPath, `${JSON.stringify({
       schemaVersion: "v0.0.1:acceptance:platform-report-2",
@@ -78,7 +78,7 @@ describe("platform acceptance ledger anchoring", () => {
   });
 
   it("anchors an exact Plan receipt digest and verifies the Pactium bundle", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plan-receipt-anchor-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plan-receipt-anchor-"));
     const proofSubstrate = createOperationProofSubstrate({ dataDir: path.join(root, "proof") });
     try {
       const receiptDigest = "e".repeat(64);
@@ -142,7 +142,7 @@ describe("platform acceptance ledger anchoring", () => {
   });
 
   it("rejects unreadable reports and report-set drift", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-acceptance-anchor-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-anchor-"));
     const proofSubstrate = createOperationProofSubstrate({ dataDir: path.join(root, "proof") });
     try {
       const missing = await anchorAcceptanceEvidence({

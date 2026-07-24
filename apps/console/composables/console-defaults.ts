@@ -4,9 +4,9 @@ import type {
   DiscoveryConfig,
   SplitJobStatus,
 } from "../lib/types";
-import { clientAlignmentStateLabels } from "@lico/ui-console/console-client-display-utils";
+import { clientAlignmentStateLabels } from "@meshrix/ui-console/console-client-display-utils";
 import type { AdminView, AppView, CloudProvider } from "../types/app";
-import { MODEL_USAGE_DEFINITIONS } from "@lico/contracts/modules/model-usage";
+import { MODEL_USAGE_DEFINITIONS } from "@meshrix/contracts/modules/model-usage";
 
 export const modelLibraryProviderDefinitions: Array<{
   id: CloudProvider;

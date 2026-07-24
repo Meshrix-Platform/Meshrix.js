@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ServerConfig } from "@lico/foundation/config/server-config";
+import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import {
   appendBoundedJsonLine,
   readJsonlTail
-} from "@lico/foundation/storage/bounded-jsonl";
+} from "@meshrix/foundation/storage/bounded-jsonl";
 import {
   releaseModelRoutingTrafficSlot,
   reserveModelRoutingTrafficSlot

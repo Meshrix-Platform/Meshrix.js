@@ -85,7 +85,7 @@ function baseCapacity(overrides = {}) {
 
 async function createFixture({ capacity = {}, retention = {}, label = "capacity" } = {}) {
   fixtureCounter += 1;
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-capacity-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-capacity-"));
   roots.push(userDataPath);
   const queueDefinitionId = `queue.capacity.${label}.${fixtureCounter}`;
   const registry = createQueueDefinitionRegistry();
@@ -516,7 +516,7 @@ async function removeRoots() {
 
 async function writeReport(report) {
   const provenance = {
-    producer: "licomesh-core-job-work-queue-capacity",
+    producer: "meshrix-core-job-work-queue-capacity",
     commandId: COMMAND_ID,
     sourceRevision: await computeVerifierSourceRevision(REPO_ROOT, SOURCE_FILES)
   };

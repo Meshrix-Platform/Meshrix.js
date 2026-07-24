@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
-import { ServerConfig } from "#lico/server-config";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   assertTagParentChangeAllowed,
   effectiveScopePrerequisitesForTag
-} from "#lico/foundation/security/authorization/tag-tree";
+} from "#meshrix/foundation/security/authorization/tag-tree";
 import {
   ACTIVE_STATUS,
   ARCHIVED_STATUS,

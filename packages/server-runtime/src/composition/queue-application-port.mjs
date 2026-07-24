@@ -6,7 +6,7 @@ import {
   createQueueWorkerRuntime,
   createSqliteWorkQueueStore,
   resolveQueueMaxInFlight
-} from "@lico/foundation/work-queue/index";
+} from "@meshrix/foundation/work-queue/index";
 
 function toText(value) {
   return String(value ?? "").trim();
@@ -130,12 +130,12 @@ function projectRebuildResult(result = {}) {
 
 async function createDefaultStore({ userDataPath, store = null } = {}) {
   if (store) return store;
-  const storeKind = toText(process.env.LICO_WORK_QUEUE_STORE || "sqlite").toLowerCase();
+  const storeKind = toText(process.env.MESHRIX_WORK_QUEUE_STORE || "sqlite").toLowerCase();
   if (storeKind === "postgres" || storeKind === "postgresql") {
     return createPostgresWorkQueueStore({
-      connectionString: process.env.LICO_WORK_QUEUE_POSTGRES_URL || process.env.DATABASE_URL || "",
+      connectionString: process.env.MESHRIX_WORK_QUEUE_POSTGRES_URL || process.env.DATABASE_URL || "",
       poolOptions: {
-        max: Number(process.env.LICO_WORK_QUEUE_POSTGRES_POOL_MAX || 10)
+        max: Number(process.env.MESHRIX_WORK_QUEUE_POSTGRES_POOL_MAX || 10)
       }
     });
   }
@@ -146,8 +146,8 @@ export async function createQueueApplicationPort({
   userDataPath,
   store = null,
   logger = null,
-  dispatchIntervalMs = Number(process.env.LICO_WORK_QUEUE_DISPATCH_INTERVAL_MS || 500),
-  maxGlobalInFlight = Number(process.env.LICO_WORK_QUEUE_GLOBAL_MAX_IN_FLIGHT || 8192)
+  dispatchIntervalMs = Number(process.env.MESHRIX_WORK_QUEUE_DISPATCH_INTERVAL_MS || 500),
+  maxGlobalInFlight = Number(process.env.MESHRIX_WORK_QUEUE_GLOBAL_MAX_IN_FLIGHT || 8192)
 } = {}) {
   const queueStore = await createDefaultStore({ userDataPath, store });
   const ownsStore = !store;

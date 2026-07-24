@@ -1,18 +1,18 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
-import { apiCapabilityId } from "#lico/authorization-engine";
+import { ServerConfig } from "#meshrix/server-config";
+import { apiCapabilityId } from "#meshrix/authorization-engine";
 import { createCapabilityBindingGuard } from "../authorization/capability-binding-guard.mjs";
 import { createOpaqueCapabilityKeyProvider } from "../authorization/opaque-capability-key.mjs";
-import { clientIpFromRequest, isLocalHttpHost, isLoopbackAddress } from "#lico/trusted-client-ip";
+import { clientIpFromRequest, isLocalHttpHost, isLoopbackAddress } from "#meshrix/trusted-client-ip";
 import { runtimeStateDir as hostRuntimeStateDir } from "../../environment-compatibility/index.mjs";
 import { writePrivateFileAtomic } from "../../storage/private-file-atomic.mjs";
 
 export const PROCESS_IDENTITY_PROTOCOL_VERSION = "v0.0.1:risk-control:process-identity-1";
 export const CLIENT_IDENTITY_PACKAGE_VERSION = "v0.0.1:process-identity:client-package-1";
-export const PROCESS_IDENTITY_CANONICAL_REQUEST_VERSION = "LICO-PROCESS-IDENTITY-V1";
+export const PROCESS_IDENTITY_CANONICAL_REQUEST_VERSION = "MESHRIX-PROCESS-IDENTITY-V1";
 export const CLIENT_FINGERPRINT_VERSION = "v0.0.1:client:fingerprint-1";
 
 export const STATE_VERSION = 2;
@@ -22,7 +22,7 @@ const CURRENT_STATE_FIELDS = new Set([
   "clients", "ownerProcessBindings", "retiredOwnerProcessBindingGenerations", "usedNonces", "createdAt", "updatedAt"
 ]);
 export const AEAD_ALGORITHM = "aes-256-gcm";
-export const DEFAULT_ALIAS = "lico-process-identity";
+export const DEFAULT_ALIAS = "meshrix-process-identity";
 export const DEFAULT_NONCE_TTL_MS = 5 * 60 * 1000;
 export const MAX_NONCE_CACHE = 4096;
 const VALID_CLIENT_STATUSES = new Set(["valid", "rotated", "revoked"]);
@@ -630,7 +630,7 @@ export function headerValue(headers = {}, name = "") {
 }
 
 export function capabilityKeyFromHeaders(headers = {}) {
-  const explicit = headerValue(headers, "x-lico-capability-key");
+  const explicit = headerValue(headers, "x-meshrix-capability-key");
   if (explicit) {
     return explicit;
   }
@@ -641,11 +641,11 @@ export function capabilityKeyFromHeaders(headers = {}) {
 
 export function clientFingerprintFromHeaders(headers = {}) {
   const candidate = {
-    fingerprintId: headerValue(headers, "x-lico-client-fingerprint-id"),
-    machineInstanceId: headerValue(headers, "x-lico-machine-instance-id"),
-    appInstanceId: headerValue(headers, "x-lico-app-instance-id"),
-    runtimeInstanceId: headerValue(headers, "x-lico-runtime-instance-id"),
-    fingerprintHash: headerValue(headers, "x-lico-client-fingerprint-hash")
+    fingerprintId: headerValue(headers, "x-meshrix-client-fingerprint-id"),
+    machineInstanceId: headerValue(headers, "x-meshrix-machine-instance-id"),
+    appInstanceId: headerValue(headers, "x-meshrix-app-instance-id"),
+    runtimeInstanceId: headerValue(headers, "x-meshrix-runtime-instance-id"),
+    fingerprintHash: headerValue(headers, "x-meshrix-client-fingerprint-hash")
   };
   return normalizeClientFingerprint(candidate, { required: false });
 }
@@ -751,19 +751,19 @@ export function createProcessIdentityRequestHeaders({
   });
   const signature = crypto.sign(null, Buffer.from(canonical, "utf8"), privateKeyFromPem(privateKeyPem)).toString("base64url");
   return {
-    "x-lico-client-id": packageObject.clientId,
-    "x-lico-identity-package-id": packageObject.packageId,
-    "x-lico-process-key-id": processKey.processKeyId,
-    "x-lico-timestamp": timestamp,
-    "x-lico-nonce": nonce,
-    "x-lico-body-sha256": bodyHash,
-    "x-lico-client-fingerprint-id": clientFingerprint.fingerprintId || "",
-    "x-lico-machine-instance-id": clientFingerprint.machineInstanceId || "",
-    "x-lico-app-instance-id": clientFingerprint.appInstanceId || "",
-    "x-lico-runtime-instance-id": clientFingerprint.runtimeInstanceId || "",
-    "x-lico-client-fingerprint-hash": clientFingerprint.fingerprintHash || "",
-    "x-lico-signature": signature,
-    "x-lico-capability-key": asObject(packageObject.capability).key
+    "x-meshrix-client-id": packageObject.clientId,
+    "x-meshrix-identity-package-id": packageObject.packageId,
+    "x-meshrix-process-key-id": processKey.processKeyId,
+    "x-meshrix-timestamp": timestamp,
+    "x-meshrix-nonce": nonce,
+    "x-meshrix-body-sha256": bodyHash,
+    "x-meshrix-client-fingerprint-id": clientFingerprint.fingerprintId || "",
+    "x-meshrix-machine-instance-id": clientFingerprint.machineInstanceId || "",
+    "x-meshrix-app-instance-id": clientFingerprint.appInstanceId || "",
+    "x-meshrix-runtime-instance-id": clientFingerprint.runtimeInstanceId || "",
+    "x-meshrix-client-fingerprint-hash": clientFingerprint.fingerprintHash || "",
+    "x-meshrix-signature": signature,
+    "x-meshrix-capability-key": asObject(packageObject.capability).key
   };
 }
 

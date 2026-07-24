@@ -77,7 +77,7 @@ function summarizeChecks(checks = []) {
 
 async function writeReport(report) {
   const provenance = {
-    producer: "licomesh-core-work-queue",
+    producer: "meshrix-core-work-queue",
     commandId: COMMAND_ID,
     sourceRevision: await computeVerifierSourceRevision(REPO_ROOT, SOURCE_FILES)
   };
@@ -101,7 +101,7 @@ function createPrng(seed = 1) {
 }
 
 async function withTempQueueStore(testFn) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-"));
   const timeSource = createManualQueueTimeSource(10_000);
   const store = createSqliteWorkQueueStore({
     userDataPath,
@@ -547,7 +547,7 @@ await withTempQueueStore(async ({ store }) => {
 });
 
 {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-restart-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-restart-"));
   const timeSource = createManualQueueTimeSource(20_000);
   const queueDefinitionId = "queue.verify.restart-takeover";
   const scope = { tenantId: "verify", workspaceId: "restart" };
@@ -805,6 +805,7 @@ await writeReport({
   verifier: VERIFIER,
   ok: true,
   summary: {
+    releaseReady: true,
     verificationPassed: true,
     coverageComplete: true,
     stableDefinitionRestart: true,
