@@ -49,6 +49,11 @@ export async function runText(command, args = [], { input = "" } = {}) {
       }
       resolve(stdout);
     });
+    // A child that exits before consuming input raises EPIPE on the stdin
+    // socket; the close handler above already rejects with the real failure.
+    child.stdin.on("error", (error) => {
+      if (error?.code !== "EPIPE") reject(error);
+    });
     child.stdin.end(input);
   });
 }
