@@ -41,7 +41,7 @@ function Invoke-Connector([string]$Connector, [string[]]$Arguments) {
   }
 
   if ([IO.Path]::GetExtension($Connector) -eq ".mjs") {
-    $Node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue
+    $Node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $Node) {
       Write-Failure "The repository connector requires Node.js. Use a verified portable release bundle when Node.js is unavailable."
     }
