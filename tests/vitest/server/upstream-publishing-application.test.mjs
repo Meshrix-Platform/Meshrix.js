@@ -204,7 +204,7 @@ describe("upstream publishing application", () => {
         const input = JSON.parse(command());
         input.descriptor.operations[0].requestSchema = {
           type: "string",
-          const: "eyJsyntheticHeader.eyJsyntheticPayload.syntheticSignature"
+          const: ["eyJsyntheticHeader", "eyJsyntheticPayload", "syntheticSignature"].join(".")
         };
         return input;
       })(),

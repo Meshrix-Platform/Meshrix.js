@@ -56,9 +56,9 @@ async function main() {
     for (let index = 0; index < 32; index += 1) {
       await store.enqueue({
         queueDefinitionId: definition.queueDefinitionId,
-        tenantId: "tenant-scale",
+        tenantId: "tenant-scale-sample",
         workspaceId: "workspace-scale",
-        projectId: "project-scale",
+        projectId: "project-scale-sample",
         payloadRef: { iteration: index },
       });
       await dispatcher.dispatchOnce();
