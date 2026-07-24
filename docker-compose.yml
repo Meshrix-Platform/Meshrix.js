@@ -1,0 +1,47 @@
+# ==============================================================================
+# Meshrix Docker Compose
+#
+# Usage:
+#   docker compose up -d
+#   MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --build
+#
+# The default build remains API-only. Select runtime-ui explicitly to build and
+# serve the Vue Console. The service binds to 127.0.0.1.
+#
+# For production, place this behind a TLS-terminating reverse proxy and apply
+# network isolation. See README.md for full guidance.
+# ==============================================================================
+services:
+  meshrix-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${MESHRIX_BUILD_TARGET:-runtime}
+    image: ${MESHRIX_IMAGE_NAME:-meshrix-server:local}
+    container_name: ${MESHRIX_CONTAINER_NAME:-meshrix-server}
+    restart: unless-stopped
+    stop_grace_period: 90s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7228/api/healthz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    ports:
+      - "${MESHRIX_BIND_ADDRESS:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}:7228"
+    environment:
+      MESHRIX_SERVER_HOST: 0.0.0.0
+      MESHRIX_SERVER_PORT: 7228
+      MESHRIX_SERVER_DATA_DIR: data
+      MESHRIX_SERVER_WITH_UI: "${MESHRIX_SERVER_WITH_UI:-0}"
+      MESHRIX_RUNTIME_CONFIG: ${MESHRIX_RUNTIME_CONFIG:-}
+      MESHRIX_BOOTSTRAP_URL: http://${MESHRIX_ADVERTISED_HOST:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}
+      MESHRIX_ADVERTISED_BASE_URL: http://${MESHRIX_ADVERTISED_HOST:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}
+      MESHRIX_ACTIVE_SERVICE_URL: http://${MESHRIX_ADVERTISED_HOST:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}
+    volumes:
+      - meshrix-server-data:/app/data
+      # Optional, read-only host Codex configuration:
+      # - ${HOME}/.codex:/codex-home:ro
+
+volumes:
+  meshrix-server-data:

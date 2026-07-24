@@ -1,0 +1,93 @@
+.path-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-top);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--backdrop);
+}
+
+.path-picker-dialog {
+  position: relative;
+  width: min(980px, 100%);
+  max-height: min(780px, 92vh);
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, auto) auto;
+  align-content: start;
+  gap: var(--space-3);
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.agent-evidence-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-toast);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--backdrop);
+}
+
+.agent-evidence-preview-dialog {
+  position: relative;
+  width: min(1120px, 100%);
+  max-height: min(820px, 92vh);
+  display: grid;
+  grid-template-rows: auto minmax(260px, 1fr) auto;
+  gap: var(--space-3);
+  padding: 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.agent-evidence-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-right: 58px;
+}
+
+.agent-evidence-preview-header h3 {
+  margin: 0;
+  color: var(--brand);
+  font-size: var(--text-xl);
+}
+
+.agent-evidence-preview-header span {
+  display: block;
+  max-width: min(760px, 72vw);
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-evidence-preview-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.evidence-preview-error {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.evidence-preview-error span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--danger);
+}

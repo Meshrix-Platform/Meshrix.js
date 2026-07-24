@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/registry/schema/repo-layout.schema.json",
+  "title": "Repo Layout Registry",
+  "description": "Canonical description of every top-level repository entry and its classification.",
+  "type": "object",
+  "required": ["$schema", "version", "entries"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "pattern": "^v\\d+\\.\\d+\\.\\d+$" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "kind", "required", "packageIncluded"],
+        "properties": {
+          "name": { "type": "string" },
+          "kind": {
+            "type": "string",
+            "enum": ["source-root", "config"]
+          },
+          "required": { "type": "boolean" },
+          "generated": { "type": "boolean" },
+          "packageIncluded": { "type": "boolean" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "rootHygiene": {
+      "type": "object",
+      "required": ["requiredEntries"],
+      "properties": {
+        "requiredEntries": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "repoOrganizationAudit": {
+      "type": "object",
+      "required": ["ignoredPathParts", "requiredFiles", "sourceFileOrganization", "runnableEntrypointOwnership", "currentResidue"],
+      "properties": {
+        "ignoredPathParts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "requiredFiles": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "sourceFileOrganization": {
+          "type": "object",
+          "required": ["canonicalDocument", "lineCountGate", "decisionBasis", "machineEnforcedRuleIds", "delegatedGateIds", "reviewOnlySignalIds", "astAdvisory"],
+          "properties": {
+            "canonicalDocument": {
+              "type": "string",
+              "pattern": "^docs/[a-zA-Z0-9_./-]+\\.md#[a-z0-9-]+$"
+            },
+            "lineCountGate": {
+              "type": "object",
+              "required": ["status", "threshold", "releaseBlocking"],
+              "properties": {
+                "status": { "const": "disabled" },
+                "threshold": { "type": "null" },
+                "releaseBlocking": { "const": false }
+              },
+              "additionalProperties": false
+            },
+            "decisionBasis": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+            },
+            "machineEnforcedRuleIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+            },
+            "delegatedGateIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[a-z][a-z0-9.-]*$" }
+            },
+            "reviewOnlySignalIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" }
+            },
+            "astAdvisory": {
+              "type": "object",
+              "required": ["releaseBlocking", "analysisRoots", "extensions", "factSourceAuthorityPath"],
+              "properties": {
+                "releaseBlocking": { "const": false },
+                "analysisRoots": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 }
+                },
+                "extensions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "pattern": "^\\.[a-z0-9]+$" }
+                },
+                "factSourceAuthorityPath": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "runnableEntrypointOwnership": {
+          "type": "object",
+          "required": ["roots", "extensions", "sourceReferenceRoots", "workflowRoot", "testRegistryPath", "packageManifestPath"],
+          "properties": {
+            "roots": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["path", "owner"],
+                "properties": {
+                  "path": { "type": "string", "minLength": 1 },
+                  "owner": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+              }
+            },
+            "extensions": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^\\.[a-z0-9]+$" }
+            },
+            "sourceReferenceRoots": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "workflowRoot": { "type": "string", "minLength": 1 },
+            "testRegistryPath": { "type": "string", "minLength": 1 },
+            "packageManifestPath": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "currentResidue": {
+          "type": "object",
+          "required": ["testRoots", "testStageMarkers", "operationDefinitionRoots"],
+          "properties": {
+            "testRoots": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "testStageMarkers": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+            },
+            "operationDefinitionRoots": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

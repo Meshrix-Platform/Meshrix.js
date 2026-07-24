@@ -1,0 +1,24 @@
+{
+  "$schema": "../../tools/registry/schema/module.schema.json",
+  "id": "foundation",
+  "kind": "foundation",
+  "owner": "platform",
+  "directory": "packages/foundation",
+  "publicApi": [
+    "#meshrix/foundation/security/*",
+    "#meshrix/foundation/config/*",
+    "#meshrix/foundation/storage/*",
+    "#meshrix/foundation/proof/*",
+    "#meshrix/foundation/checkpoint/*",
+    "#meshrix/foundation/workflow/*",
+    "#meshrix/foundation/observability/*",
+    "#meshrix/foundation/module-system/*"
+  ],
+  "operations": ["security.*", "proof.*", "checkpoint.*", "workflow.*", "storage.*", "config.*", "observability.*"],
+  "stateStores": [],
+  "protocolAdapters": [],
+  "runtimeProviders": [],
+  "featureProfiles": ["full", "minimal"],
+  "contracts": [],
+  "testSuites": []
+}

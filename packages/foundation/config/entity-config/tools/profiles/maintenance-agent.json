@@ -1,0 +1,25 @@
+{
+  "id": "maintenance-agent",
+  "label": "Maintenance Agent",
+  "agentType": "maintenance",
+  "toolsets": [
+    "meshrix.runtime.read",
+    "meshrix.storage.read",
+    "meshrix.jobs.read",
+    "meshrix.maintenance.read",
+    "meshrix.maintenance.run",
+    "meshrix.maintenance.maintain",
+    "meshrix.gateway.maintain"
+  ],
+  "toolAllow": [],
+  "toolDeny": [
+    "meshrix.admin"
+  ],
+  "maxRisk": "repair_write",
+  "approvalPolicy": "confirm_repair",
+  "concurrencyLimit": 1,
+  "sandboxPolicy": "server-runtime",
+  "auditTags": [
+    "maintenance-agent"
+  ]
+}

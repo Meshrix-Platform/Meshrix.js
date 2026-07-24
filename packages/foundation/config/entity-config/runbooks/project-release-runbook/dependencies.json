@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "dependencyType": "meshrix.runbook.dependencies",
+  "runtimeModules": [],
+  "requiredTools": [
+    {
+      "toolId": "meshrix.terminal.execute",
+      "reason": "Run local candidate verification and inspect the canonical acceptance result"
+    },
+    {
+      "toolId": "meshrix.fs.read",
+      "reason": "Read package.json files to bump version"
+    },
+    {
+      "toolId": "meshrix.fs.write",
+      "reason": "Prepare reviewed version metadata changes without publishing or mutating remote state"
+    }
+  ],
+  "heavyDependencies": [],
+  "manifestOnlyDependencies": []
+}

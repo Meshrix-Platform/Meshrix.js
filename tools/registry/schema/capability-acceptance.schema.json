@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.local/schema/capability-acceptance.schema.json",
+  "title": "Capability Acceptance Registry",
+  "type": "object",
+  "required": ["$schema", "$comment", "version", "generatedAt", "entryCount", "entries"],
+  "properties": {
+    "$schema": { "const": "./schema/capability-acceptance.schema.json" },
+    "$comment": { "type": "string", "minLength": 1 },
+    "version": { "const": "v0.0.1:registry:capability-acceptance-4" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "entryCount": { "type": "integer", "minimum": 1 },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "capabilityId",
+          "releaseScope",
+          "checkpointPath",
+          "acceptanceMachineId",
+          "definitionPath",
+          "verifier",
+          "reportPath",
+          "platformReducerCommand"
+        ],
+        "properties": {
+          "capabilityId": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "releaseScope": {
+            "enum": ["core-release", "optional-support-matrix"]
+          },
+          "checkpointPath": {
+            "type": "string",
+            "pattern": "^tools/registry/capability-acceptance-checkpoints/[a-z0-9]+(?:-[a-z0-9]+)*\\.json$"
+          },
+          "acceptanceMachineId": {
+            "type": "string",
+            "pattern": "^acceptance\\.[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "definitionPath": {
+            "type": "string",
+            "pattern": "^packages/foundation/src/workflow/state-machine/definitions/acceptance/[a-z0-9]+(?:-[a-z0-9]+)*\\.json$"
+          },
+          "verifier": {
+            "const": "tools/server-scripts/verify-capability-acceptance-machines.mjs"
+          },
+          "reportPath": {
+            "const": "build/reports/capability-acceptance-machines.json"
+          },
+          "platformReducerCommand": {
+            "const": "npm run verify:acceptance"
+          },
+          "pluginRuntime": {
+            "type": "object",
+            "properties": {
+              "aggregate": { "const": true },
+              "pluginIds": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                }
+              }
+            },
+            "oneOf": [
+              {
+                "required": ["aggregate"],
+                "not": { "required": ["pluginIds"] }
+              },
+              {
+                "required": ["pluginIds"],
+                "not": { "required": ["aggregate"] }
+              }
+            ],
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

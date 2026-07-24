@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/schemas/release-authority-baseline.schema.json",
+  "title": "Release Authority Baseline Registry",
+  "type": "object",
+  "required": [
+    "$schema",
+    "version",
+    "policy",
+    "catalogAuthorities",
+    "generatorOwnership",
+    "migrationInventory"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "minLength": 1 },
+    "policy": {
+      "type": "object",
+      "required": [
+        "inspectAuthoritiesDirectly",
+        "neverImportGeneratedReportStatus",
+        "placeholderReportsCannotSatisfyReleaseFacts",
+        "doNotDeleteLockdownBeforePositivePath"
+      ],
+      "properties": {
+        "inspectAuthoritiesDirectly": { "const": true },
+        "neverImportGeneratedReportStatus": { "const": true },
+        "placeholderReportsCannotSatisfyReleaseFacts": { "const": true },
+        "doNotDeleteLockdownBeforePositivePath": { "const": true },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "catalogAuthorities": {
+      "type": "object",
+      "required": [
+        "commands",
+        "reports",
+        "capabilities",
+        "checkpoints",
+        "reducerInputs",
+        "requiredReportSpecs",
+        "generatedProjections",
+        "sourceAuthorities"
+      ],
+      "properties": {
+        "commands": { "type": "string", "minLength": 1 },
+        "reports": { "type": "string", "minLength": 1 },
+        "capabilities": { "type": "string", "minLength": 1 },
+        "checkpoints": { "type": "string", "minLength": 1 },
+        "reducerInputs": { "type": "string", "minLength": 1 },
+        "requiredReportSpecs": { "type": "string", "minLength": 1 },
+        "generatedProjections": { "type": "string", "minLength": 1 },
+        "sourceAuthorities": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "generatorOwnership": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "generator", "authorityPath", "projectionPaths"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "generator": { "type": "string", "minLength": 1 },
+          "authorityPath": { "type": "string", "minLength": 1 },
+          "projectionPaths": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "migrationInventory": {
+      "type": "object",
+      "required": ["retainedPositiveForwarding", "removeLaterLockdownOrStaticOnly"],
+      "properties": {
+        "retainedPositiveForwarding": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "classification", "description", "authorityPaths", "assertions"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "classification": { "const": "retained-positive-forwarding" },
+              "description": { "type": "string", "minLength": 1 },
+              "authorityPaths": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1
+              },
+              "assertions": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "removeLaterLockdownOrStaticOnly": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "classification",
+              "description",
+              "authorityPaths",
+              "consumers",
+              "replacementAuthority",
+              "status",
+              "liveCommandIds",
+              "liveReportPaths"
+            ],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "classification": { "enum": ["lockdown", "static-only"] },
+              "description": { "type": "string", "minLength": 1 },
+              "authorityPaths": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1
+              },
+              "consumers": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "minItems": 1
+              },
+              "replacementAuthority": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["present-must-remove-after-positive-path"] },
+              "liveCommandIds": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "liveReportPaths": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,10 @@
+{
+  "id": "meshrix.runtime.maintain",
+  "label": "Runtime maintain",
+  "requiredScopes": [
+    "runtime:admin"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

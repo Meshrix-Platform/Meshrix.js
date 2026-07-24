@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "id": "monokai",
+  "label": {
+    "en": "Monokai",
+    "zh-CN": "绿野仙踪"
+  },
+  "mode": "dark",
+  "tokens": {
+    "bg-base": "#272822",
+    "bg-surface": "#2d2e28",
+    "bg-subtle": "#3e3d32",
+    "bg-inset": "#1e1f1c",
+    "border-subtle": "#5a594d",
+    "border-strong": "#75715e",
+    "text-primary": "#f8f8f2",
+    "text-secondary": "#e6db74",
+    "text-muted": "#cfcfc2",
+    "text-disabled": "#8f8b75",
+    "text-on-brand": "#11130c",
+    "brand": "#a6e22e",
+    "brand-strong": "#66d9ef",
+    "brand-subtle": "#263b14",
+    "brand-muted": "#3f5a1f",
+    "info": "#66d9ef",
+    "info-surface": "#12383d",
+    "info-border": "#2f7b86",
+    "success": "#a6e22e",
+    "success-surface": "#20340f",
+    "success-border": "#5f8d20",
+    "warning": "#fd971f",
+    "warning-text": "#ffdca6",
+    "warning-surface": "#3d260d",
+    "warning-border": "#a86517",
+    "danger": "#f92672",
+    "danger-surface": "#421327",
+    "danger-border": "#a61b4d"
+  }
+}

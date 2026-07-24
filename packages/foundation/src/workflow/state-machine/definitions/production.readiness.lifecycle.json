@@ -1,0 +1,737 @@
+{
+  "machineId": "production.readiness.lifecycle",
+  "entityType": "production_readiness_gate",
+  "version": "v0.0.1:state-machine:production-readiness-lifecycle-1",
+  "description": "Production Readiness Gate State Machine.",
+  "initialState": "not_started",
+  "states": [
+    {
+      "id": "not_started"
+    },
+    {
+      "id": "collecting_evidence"
+    },
+    {
+      "id": "running_checks"
+    },
+    {
+      "id": "passed",
+      "terminal": true
+    },
+    {
+      "id": "failed",
+      "terminal": true
+    },
+    {
+      "id": "blocked",
+      "terminal": true
+    },
+    {
+      "id": "waiver_requested"
+    },
+    {
+      "id": "waiver_approved"
+    },
+    {
+      "id": "waiver_rejected",
+      "terminal": true
+    },
+    {
+      "id": "release_candidate",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "gate.start",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.collect_evidence",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.run_checks",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.pass",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.fail",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.block",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.waiver_request",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.waiver_approve",
+      "riskLevel": "high"
+    },
+    {
+      "id": "gate.waiver_reject",
+      "riskLevel": "low"
+    },
+    {
+      "id": "gate.release_candidate",
+      "riskLevel": "high"
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "not_started",
+      "event": "gate.start",
+      "result": "legal_transition",
+      "to": "collecting_evidence"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.collect_evidence",
+      "result": "legal_transition",
+      "to": "collecting_evidence"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.run_checks",
+      "result": "legal_transition",
+      "to": "running_checks"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.block",
+      "result": "legal_transition",
+      "to": "blocked"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.waiver_request",
+      "result": "legal_transition",
+      "to": "waiver_requested"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "not_started",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.start",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.collect_evidence",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.run_checks",
+      "result": "legal_transition",
+      "to": "running_checks"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.block",
+      "result": "legal_transition",
+      "to": "blocked"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.waiver_request",
+      "result": "legal_transition",
+      "to": "waiver_requested"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "collecting_evidence",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.start",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.run_checks",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.pass",
+      "result": "legal_transition",
+      "to": "passed"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.fail",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.block",
+      "result": "legal_transition",
+      "to": "blocked"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.waiver_request",
+      "result": "legal_transition",
+      "to": "waiver_requested"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "running_checks",
+      "event": "gate.release_candidate",
+      "result": "legal_transition",
+      "to": "release_candidate",
+      "guards": [
+        "require_p0_passed_or_waived"
+      ]
+    },
+    {
+      "from": "passed",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.pass",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "passed",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.block",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.waiver_request",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "passed",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.fail",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "failed",
+      "event": "gate.block",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.waiver_request",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.block",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.waiver_request",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "blocked",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.block",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.waiver_request",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.waiver_approve",
+      "result": "legal_transition",
+      "to": "waiver_approved",
+      "guards": [
+        "require_architect_approval"
+      ]
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.waiver_reject",
+      "result": "legal_transition",
+      "to": "waiver_rejected"
+    },
+    {
+      "from": "waiver_requested",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.block",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.waiver_request",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.waiver_approve",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_approved",
+      "event": "gate.release_candidate",
+      "result": "legal_transition",
+      "to": "release_candidate",
+      "guards": [
+        "require_p0_passed_or_waived"
+      ]
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.block",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.waiver_request",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.waiver_reject",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "waiver_rejected",
+      "event": "gate.release_candidate",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.start",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.collect_evidence",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.run_checks",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.pass",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.fail",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.block",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.waiver_request",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.waiver_approve",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.waiver_reject",
+      "result": "illegal_transition",
+      "errorCode": "GATE_INVALID_TRANSITION"
+    },
+    {
+      "from": "release_candidate",
+      "event": "gate.release_candidate",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "SM-GOV-008"
+  ],
+  "guardRegistryRefs": [
+    "require_p0_passed_or_waived"
+  ],
+  "proofObligations": [
+    "PO-READY-001",
+    "PO-READY-002",
+    "PO-READY-003",
+    "PO-READY-004"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-READY-001",
+      "method": "path_includes_state",
+      "params": {
+        "target": "release_candidate"
+      }
+    },
+    {
+      "obligationId": "PO-READY-002",
+      "method": "schema_test",
+      "params": {
+        "target": "waiver_requested"
+      }
+    },
+    {
+      "obligationId": "PO-READY-003",
+      "method": "docs_verifier",
+      "params": {
+        "target": "production-ready-claim"
+      }
+    },
+    {
+      "obligationId": "PO-READY-004",
+      "method": "report_verifier",
+      "params": {
+        "target": "live_evidence"
+      }
+    },
+    {
+      "obligationId": "PO-READY-001",
+      "method": "guard_validation_by_risk",
+      "params": {
+        "guardId": "require_p0_passed_or_waived",
+        "highRiskEvent": "gate.release_candidate",
+        "requiredGuardIfHighRisk": "require_p0_passed_or_waived"
+      }
+    }
+  ]
+}

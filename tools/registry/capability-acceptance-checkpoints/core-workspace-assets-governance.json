@@ -1,0 +1,67 @@
+[
+  {
+    "id": "34000000-0000-4000-8000-000000000020",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "any",
+    "difficulty": "deep",
+    "goal": "Close Core workspace asset and governance contracts.",
+    "description": "Validate Core-owned workspace assets, contribution lifecycle, governed operations, proof records, and fail-closed side-effect ordering.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Workspace asset and contribution registries expose only authorized Core-owned operations and current protocol projections.",
+        "evidence": [
+          { "acceptanceCommandId": "workspace-asset-management" }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Governed mutations fail before downstream side effects when proof or authorization authority is unavailable.",
+        "evidence": [
+          { "acceptanceCommandId": "workspace-asset-management" }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: close core workspace assets governance",
+      "target": "packages/agents/src/workspace-asset-registry, workspace-governance, workspace-contribution, and focused verifier"
+    },
+    "next": ["34000000-0000-4000-8000-000000000021"]
+  },
+  {
+    "id": "34000000-0000-4000-8000-000000000021",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": ["34000000-0000-4000-8000-000000000020"],
+    "platform": "any",
+    "difficulty": "deep",
+    "goal": "Validate Core workspace assets and governance closed-loop acceptance.",
+    "description": "Produce current focused evidence for platform reduction without making a platform-readiness claim.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "The workspace asset management verifier passes against current operation, governance, proof, and protocol boundaries.",
+        "evidence": [
+          { "acceptanceCommandId": "workspace-asset-management" }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Repository tests and local-information hygiene pass before platform reduction.",
+        "evidence": [
+          { "acceptanceCommandId": "foundation-tests" },
+          { "acceptanceCommandId": "foundation-tests", "report": "build/reports/local-info-hygiene.json" }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate core workspace assets governance",
+      "target": "current verifier evidence"
+    },
+    "next": []
+  }
+]

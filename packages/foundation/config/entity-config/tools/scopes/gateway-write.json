@@ -1,0 +1,5 @@
+{
+  "id": "gateway:write",
+  "label": "Write gateway proposals",
+  "description": "Submit non-admin gateway routing and grant updates."
+}

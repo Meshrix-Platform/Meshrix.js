@@ -1,0 +1,5 @@
+{
+  "id": "workspace:write",
+  "label": "Write agent workspaces",
+  "description": "Create workspaces and write non-admin workspace state such as locks and session events."
+}

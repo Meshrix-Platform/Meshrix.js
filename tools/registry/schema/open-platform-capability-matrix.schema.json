@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/registry/schema/open-platform-capability-matrix.schema.json",
+  "title": "Open Platform Capability Matrix",
+  "description": "Machine-readable evidence matrix for open platform capability audits.",
+  "type": "object",
+  "required": ["$schema", "schemaVersion", "description", "statusEnum", "capabilities"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string" },
+    "description": { "type": "string" },
+    "statusEnum": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "docs", "requirementRows", "requiredEdges"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "title": { "type": "string", "minLength": 1 },
+          "pluginId": { "type": "string", "minLength": 1 },
+          "docs": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requirementRows": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requiredRuntimePrefixes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "knownProtocolPrefixes": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "mcpOutlets": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "allowedMcpTargets": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": { "type": "string" },
+                "minItems": 1,
+                "uniqueItems": true
+              },
+              {
+                "type": "string",
+                "const": "$MCP_SUPPORTED_TARGETS",
+                "description": "Projection-only reference to packages/protocols/mcp/adapter/mcp-release-targets.mjs#MCP_SUPPORTED_TARGETS."
+              }
+            ]
+          },
+          "expectedConsoleFeatures": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "verifierScripts": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requiredFiles": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "requiredEdges": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "serverOperations",
+                "toolCatalog",
+                "mcpOutlet",
+                "httpRoutes",
+                "console",
+                "verifier",
+                "sourceFiles"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

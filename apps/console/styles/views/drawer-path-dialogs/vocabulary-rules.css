@@ -1,0 +1,131 @@
+.vocabulary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.vocabulary-meta span {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.vocabulary-table-shell {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.vocabulary-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.vocabulary-filter {
+  display: grid;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.vocabulary-filter span {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.vocabulary-table {
+  width: 100%;
+  min-width: 1020px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.vocabulary-table th:nth-child(1),
+.vocabulary-table td:nth-child(1) {
+  width: 18%;
+}
+
+.vocabulary-table th:nth-child(2),
+.vocabulary-table td:nth-child(2) {
+  width: 21%;
+}
+
+.vocabulary-table th:nth-child(3),
+.vocabulary-table td:nth-child(3) {
+  width: 19%;
+}
+
+.vocabulary-table th:nth-child(4),
+.vocabulary-table td:nth-child(4) {
+  width: 112px;
+}
+
+.vocabulary-table th:nth-child(5),
+.vocabulary-table td:nth-child(5) {
+  width: 18%;
+}
+
+.vocabulary-table th:nth-child(6),
+.vocabulary-table td:nth-child(6) {
+  width: 72px;
+}
+
+.vocabulary-table th,
+.vocabulary-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+  text-align: left;
+}
+
+.vocabulary-table th {
+  color: var(--text-secondary);
+  background: var(--bg-subtle);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.vocabulary-table input,
+.vocabulary-table select,
+.vocabulary-table textarea {
+  min-width: 130px;
+  padding: 8px;
+  font-size: var(--text-sm);
+}
+
+.vocabulary-table textarea {
+  min-height: 66px;
+  resize: vertical;
+}
+
+.vocabulary-table .el-select {
+  min-width: 96px;
+}
+
+.vocabulary-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.rules-json-panel .rules-editor {
+  min-height: 360px;
+  margin-top: 0;
+}

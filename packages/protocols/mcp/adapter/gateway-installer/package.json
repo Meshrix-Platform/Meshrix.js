@@ -1,0 +1,45 @@
+{
+  "name": "meshrix-mcp-connector",
+  "version": "0.0.1",
+  "description": "Runtime MCP connector for Meshrix stdio proxy and process-identity protocol support.",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "author": "Meshrix Maintainers",
+  "homepage": "https://meshrix.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
+    "directory": "packages/protocols/mcp/adapter/gateway-installer"
+  },
+  "bin": {
+    "meshrix-mcp": "bin/meshrix-mcp.mjs"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "LICENSE",
+    "mcp-identity.mjs",
+    "mcp-release-targets.mjs",
+    "README.md",
+    "package.json"
+  ],
+  "keywords": [
+    "meshrix",
+    "mcp",
+    "codex",
+    "claude-code",
+    "antigravity",
+    "openclaw",
+    "opencode",
+    "pi"
+  ],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "dependencies": {
+    "@meshrix/contracts": "0.0.1"
+  },
+  "imports": {
+    "#meshrix/contracts/*": "@meshrix/contracts/*"
+  }
+}

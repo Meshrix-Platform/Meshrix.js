@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/registry/schema/capability.schema.json",
+  "title": "Capability Registry",
+  "description": "Canonical operation capability registry generated from the operation registry.",
+  "type": "object",
+  "required": ["$schema", "version", "capabilities"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string" },
+    "generatedAt": { "type": "string" },
+    "canonicalSource": { "type": "boolean" },
+    "description": { "type": "string" },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "operationId", "kind", "risk"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^cap:[a-z0-9_-]+:.+" },
+          "operationId": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["api"] },
+          "risk": {
+            "type": "string",
+            "enum": ["read_only", "safe_write", "repair_write", "destructive"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "toolCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "toolId", "kind", "risk"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^cap:tool:.+:execute$" },
+          "toolId": { "type": "string", "minLength": 1 },
+          "kind": { "type": "string", "enum": ["tool"] },
+          "risk": {
+            "type": "string",
+            "enum": ["read_only", "safe_write", "repair_write", "destructive"]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "wildcards": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "policyRules": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "canonicalSourcePath": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

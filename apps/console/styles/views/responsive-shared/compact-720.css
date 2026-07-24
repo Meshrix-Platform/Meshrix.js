@@ -1,0 +1,206 @@
+@media (max-width: 720px) {
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .view-content {
+    padding: 16px;
+  }
+
+  .topbar {
+    position: static;
+    grid-template-columns: 1fr;
+    align-items: start;
+    min-height: auto;
+    max-height: none;
+    height: auto;
+    flex: 0 0 auto;
+    padding: 10px 16px;
+  }
+
+  .identity-row {
+    flex-wrap: wrap;
+  }
+
+  .topbar-tools {
+    justify-content: flex-start;
+  }
+
+  .section-header,
+  .module-card-meta,
+  .permission-card,
+  .table-toolbar,
+  .toolbar-left {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .section-tags,
+  .toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  .configuration-alert-item {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    align-items: start;
+    gap: var(--space-2);
+  }
+
+  .configuration-alert-category {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .configuration-alert-item strong {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .configuration-alert-item > span:not(.configuration-alert-category) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .configuration-alert-item em {
+    grid-column: auto;
+    grid-row: auto;
+    justify-self: start;
+    margin: 0;
+  }
+
+  .configuration-alert-actions {
+    grid-column: auto;
+    grid-row: auto;
+    align-self: stretch;
+    justify-content: flex-end;
+  }
+
+  .search-input,
+  .filter-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .clients-card .filter-select {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .jobs-table:not(.clients-table) th:nth-child(4),
+  .jobs-table:not(.clients-table) td:nth-child(4) {
+    display: none;
+  }
+
+  .job-table-header,
+  .job-row,
+  .audit-table .job-table-header,
+  .audit-table .job-row,
+  .maintenance-run-table .job-table-header,
+  .maintenance-run-table .job-row,
+  .maintenance-schedule-table .job-table-header,
+  .maintenance-schedule-table .job-row,
+  .ops-process-table .job-table-header,
+  .ops-process-table .job-row,
+  .work-queue-table .job-table-header,
+  .work-queue-table .job-row,
+  .tool-list-table .job-table-header,
+  .tool-list-table .job-row,
+  .tool-stats-table .job-table-header,
+  .tool-stats-table .job-row,
+  .tool-audit-table .job-table-header,
+  .tool-audit-table .job-row,
+  .permission-tool-rule-table .job-table-header,
+  .permission-tool-rule-table .job-row,
+  .grant-tool-rule-table .job-table-header,
+  .grant-tool-rule-table .job-row,
+  .monitor-alert-table .job-table-header,
+  .monitor-alert-table .job-row,
+  .source-client-chart-row,
+  .maintenance-agent-grid {
+    grid-template-columns: 1fr;
+    min-width: 0;
+  }
+
+	  .ingest-upload-grid,
+	  .path-field,
+  .data-source-dialog-header,
+  .data-source-dialog-actions,
+  .path-picker-toolbar,
+  .ingest-panel {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .data-source-dialog-header,
+  .data-source-dialog-actions {
+    flex-direction: column;
+  }
+
+  .data-source-dialog-actions > button {
+    width: 100%;
+  }
+
+  .path-picker-entry {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .path-picker-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .path-picker-toolbar > input,
+  .path-picker-toolbar > label {
+    grid-column: 1 / -1;
+  }
+
+  .path-picker-entry-actions {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-self: center;
+    justify-content: center;
+  }
+
+  .path-picker-backdrop {
+    padding: 10px;
+  }
+
+  .agent-evidence-preview-backdrop {
+    padding: 10px;
+  }
+
+  .path-picker-dialog {
+    max-height: 94vh;
+  }
+
+  .agent-evidence-preview-dialog {
+    max-height: 94vh;
+  }
+
+  .path-picker-header,
+  .path-picker-footer,
+  .agent-evidence-preview-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .path-picker-header,
+  .agent-evidence-preview-header {
+    padding-right: 52px;
+  }
+  .source-progress > div {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ingest-queue-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ingest-queue-meta {
+    flex-wrap: wrap;
+  }
+}
