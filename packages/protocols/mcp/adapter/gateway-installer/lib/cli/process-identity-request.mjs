@@ -101,18 +101,18 @@ export function processIdentityHeaders({ method = "POST", url, body = "", identi
     createPrivateKey(identity.privateKeyPem)
   ).toString("base64url");
   return {
-    "x-lico-client-id": packageObject.clientId || "",
-    "x-lico-identity-package-id": packageObject.packageId || "",
-    "x-lico-process-key-id": processKey.processKeyId || "",
-    "x-lico-timestamp": timestamp,
-    "x-lico-nonce": nonce,
-    "x-lico-body-sha256": bodySha256,
-    "x-lico-client-fingerprint-id": fingerprint.fingerprintId || "",
-    "x-lico-machine-instance-id": fingerprint.machineInstanceId || "",
-    "x-lico-app-instance-id": fingerprint.appInstanceId || "",
-    "x-lico-runtime-instance-id": fingerprint.runtimeInstanceId || "",
-    "x-lico-client-fingerprint-hash": fingerprint.fingerprintHash || "",
-    "x-lico-signature": signature,
-    "x-lico-capability-key": packageObject.capability?.key || ""
+    "x-meshrix-client-id": packageObject.clientId || "",
+    "x-meshrix-identity-package-id": packageObject.packageId || "",
+    "x-meshrix-process-key-id": processKey.processKeyId || "",
+    "x-meshrix-timestamp": timestamp,
+    "x-meshrix-nonce": nonce,
+    "x-meshrix-body-sha256": bodySha256,
+    "x-meshrix-client-fingerprint-id": fingerprint.fingerprintId || "",
+    "x-meshrix-machine-instance-id": fingerprint.machineInstanceId || "",
+    "x-meshrix-app-instance-id": fingerprint.appInstanceId || "",
+    "x-meshrix-runtime-instance-id": fingerprint.runtimeInstanceId || "",
+    "x-meshrix-client-fingerprint-hash": fingerprint.fingerprintHash || "",
+    "x-meshrix-signature": signature,
+    "x-meshrix-capability-key": packageObject.capability?.key || ""
   };
 }

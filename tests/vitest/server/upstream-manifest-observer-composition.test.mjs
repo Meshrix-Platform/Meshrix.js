@@ -17,7 +17,7 @@ import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-s
 const roots = [];
 
 async function temporaryRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-observer-composition-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-observer-composition-"));
   roots.push(root);
   return root;
 }

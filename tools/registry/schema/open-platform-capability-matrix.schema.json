@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/open-platform-capability-matrix.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/open-platform-capability-matrix.schema.json",
   "title": "Open Platform Capability Matrix",
   "description": "Machine-readable evidence matrix for open platform capability audits.",
   "type": "object",

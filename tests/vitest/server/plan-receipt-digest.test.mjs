@@ -25,6 +25,7 @@ import {
   normalizePlanDirectory,
   planReceiptSourceTreeDigest
 } from "../../../tools/plan/plan-receipt-context.mjs";
+import { planReceiptKey } from "../../../tools/plan/plan-dependency-map.mjs";
 
 const temporaryRoots = [];
 const RECORDED_AT = "2026-07-19T00:00:00.000Z";
@@ -46,7 +47,24 @@ function finalNode(evidenceRef = { type: "file", path: "build/reports/example.js
 }
 
 function buildReceipt(options) {
-  return buildPlanFinalReceipt({ ...options, selectedProfile: "core" });
+  return buildPlanFinalReceipt(options);
+}
+
+function currentMapPlan(directory = "end-to-end-release/example", {
+  finalNodeId = "final-node",
+  profiles = ["enterprise-single-node"],
+  prerequisiteReceipts = [],
+} = {}) {
+  return {
+    directory,
+    parent: null,
+    parent_contract_node_id: null,
+    parent_integrations: [],
+    final_validations: [{ node_id: finalNodeId, profiles }],
+    prerequisite_receipts: prerequisiteReceipts,
+    children: [],
+    accepted_final_receipts: {},
+  };
 }
 
 function evidenceNode(...evidenceRefs) {
@@ -152,18 +170,13 @@ describe("plan receipt report digests", () => {
   });
 
   it("keeps historical environment facts immutable while requiring current Plan authority", () => {
-    const mapPlan = {
-      directory: "end-to-end-release/example",
-      final_validation_node_id: "final-node",
-      prerequisite_receipts: [],
-    };
+    const mapPlan = currentMapPlan();
     const context = {
       planDirectory: mapPlan.directory,
       mapPlan,
       planText: "Plan.md\ncurrent\n",
       checkpointsText: "current-checkpoints",
       finalNode: finalNode(),
-      selectedProfile: "core",
       repositoryRevision: "old-revision",
       repositoryTreeDigest: "sha256:old-tree",
       commandDagDigest: "sha256:old-command-dag",
@@ -195,35 +208,33 @@ describe("plan receipt report digests", () => {
     })).toThrow("facts are absent or stale");
   });
 
-  it("requires callers to bind every final receipt to an explicit acceptance profile", () => {
-    const mapPlan = {
-      directory: "end-to-end-release/example",
-      final_validation_node_id: "final-node",
-      prerequisite_receipts: [],
-    };
-
-    expect(() => buildPlanFinalReceipt({
+  it("binds v4 receipts to the enterprise profile and rejects the superseded single-final shape", () => {
+    const mapPlan = currentMapPlan("end-to-end-release/example", {
+      profiles: ["enterprise-single-node"],
+    });
+    const receipt = buildPlanFinalReceipt({
       planDirectory: mapPlan.directory,
       mapPlan,
       checkpointsText: "[]",
       finalNode: finalNode(),
-    })).toThrow("Selected profile is missing");
+    });
+    expect(receipt.profiles).toEqual(["enterprise-single-node"]);
+    expect(receipt).not.toHaveProperty("selected_profile");
 
     expect(() => buildPlanFinalReceipt({
       planDirectory: mapPlan.directory,
-      mapPlan,
+      mapPlan: {
+        directory: mapPlan.directory,
+        final_validation_node_id: "final-node",
+        prerequisite_receipts: [],
+      },
       checkpointsText: "[]",
       finalNode: finalNode(),
-      selectedProfile: "any",
-    })).toThrow("Unknown platform acceptance profile");
+    })).toThrow("Plan final-validations are missing");
   });
 
   it("reverifies the proof entry and its complete receipt context instead of trusting a boolean", async () => {
-    const mapPlan = {
-      directory: "end-to-end-release/example",
-      final_validation_node_id: "final-node",
-      prerequisite_receipts: [],
-    };
+    const mapPlan = currentMapPlan();
     const draft = buildReceipt({
       planDirectory: mapPlan.directory,
       mapPlan,
@@ -292,6 +303,12 @@ describe("plan receipt report digests", () => {
     await fs.writeFile(path.join(repoRoot, "source.mjs"), "export const value = 1;\n", "utf8");
     const initialized = spawnSync("git", ["init", "--quiet"], { cwd: repoRoot });
     expect(initialized.status).toBe(0);
+    expect(spawnSync("git", ["add", "."], { cwd: repoRoot }).status).toBe(0);
+    expect(spawnSync("git", [
+      "-c", "user.name=Plan Receipt Test",
+      "-c", "user.email=plan-receipt@example.invalid",
+      "commit", "--quiet", "-m", "initial",
+    ], { cwd: repoRoot }).status).toBe(0);
 
     const initialDigest = planReceiptSourceTreeDigest(repoRoot);
     await fs.writeFile(
@@ -307,13 +324,18 @@ describe("plan receipt report digests", () => {
     expect(planReceiptSourceTreeDigest(repoRoot)).toBe(initialDigest);
 
     await fs.writeFile(path.join(repoRoot, "source.mjs"), "export const value = 2;\n", "utf8");
+    expect(planReceiptSourceTreeDigest(repoRoot)).toBe(initialDigest);
+    expect(spawnSync("git", ["add", "source.mjs"], { cwd: repoRoot }).status).toBe(0);
+    expect(spawnSync("git", [
+      "-c", "user.name=Plan Receipt Test",
+      "-c", "user.email=plan-receipt@example.invalid",
+      "commit", "--quiet", "-m", "change source",
+    ], { cwd: repoRoot }).status).toBe(0);
     expect(planReceiptSourceTreeDigest(repoRoot)).not.toBe(initialDigest);
 
-    const mapPlan = {
-      directory: "end-to-end-release/operator-administration/strategy-management",
-      final_validation_node_id: "final-node",
-      prerequisite_receipts: [],
-    };
+    const mapPlan = currentMapPlan(
+      "end-to-end-release/operator-administration/strategy-management",
+    );
     const stableTreeDigest = planReceiptSourceTreeDigest(repoRoot);
     const firstReceipt = buildReceipt({
       planDirectory: mapPlan.directory,
@@ -381,7 +403,7 @@ describe("plan receipt report digests", () => {
     });
 
     expect(completed).toMatchObject({
-      schema_version: "licomesh.plan-contract-receipt.v1",
+      schema_version: "v0.0.1:meshrix:plan-contract-receipt-1",
       kind: "contract",
       status: "completed"
     });
@@ -397,43 +419,44 @@ describe("plan receipt report digests", () => {
 
     expect(() => buildReceipt({
       planDirectory: "end-to-end-release/consumer",
-      mapPlan: {
-        final_validation_node_id: "final-node",
-        prerequisite_receipts: [{
+      mapPlan: currentMapPlan("end-to-end-release/consumer", {
+        prerequisiteReceipts: [{
           plan: "end-to-end-release/provider",
           node_id: "provider-final",
-          kind: "final_validation"
-        }]
-      },
+          kind: "final_validation",
+          profiles: ["enterprise-single-node"],
+        }],
+      }),
       checkpointsText: "[]",
       finalNode: finalNode()
     })).toThrow("Prerequisite final_validation receipt is missing");
 
     const providerReceipt = buildReceipt({
       planDirectory: "end-to-end-release/provider",
-      mapPlan: { directory: "end-to-end-release/provider", final_validation_node_id: "final-node", prerequisite_receipts: [] },
+      mapPlan: currentMapPlan("end-to-end-release/provider"),
       checkpointsText: "[]",
       finalNode: finalNode()
     });
     expect(() => buildReceipt({
       planDirectory: "end-to-end-release/consumer",
-      mapPlan: {
-        directory: "end-to-end-release/consumer",
-        final_validation_node_id: "final-node",
-        prerequisite_receipts: [{
+      mapPlan: currentMapPlan("end-to-end-release/consumer", {
+        prerequisiteReceipts: [{
           plan: "end-to-end-release/provider",
           node_id: "final-node",
-          kind: "final_validation"
-        }]
-      },
+          kind: "final_validation",
+          profiles: ["enterprise-single-node"],
+        }],
+      }),
       checkpointsText: "[]",
       finalNode: finalNode(),
-      prerequisiteReceiptsByPlan: { "end-to-end-release/provider": providerReceipt }
+      prerequisiteReceiptsByKey: {
+        [planReceiptKey("end-to-end-release/provider", "final-node")]: providerReceipt,
+      },
     })).toThrow("Prerequisite receipt is not verified");
   });
 
   it("accepts only digest-bound command evidence and never retains command text", () => {
-    const mapPlan = { final_validation_node_id: "final-node", prerequisite_receipts: [] };
+    const mapPlan = currentMapPlan();
     expect(() => buildReceipt({
       planDirectory: "end-to-end-release/example",
       mapPlan,
@@ -465,7 +488,7 @@ describe("plan receipt report digests", () => {
     await expect(reduceEndToEndReleaseReceipt({
       repoRoot,
       planDirectory: "end-to-end-release/../outside",
-      selectedProfile: "core",
+      planProfile: "enterprise-single-node",
       write: true
     })).rejects.toThrow("canonical contained Plan path");
     await expect(fs.readFile(mapPath, "utf8")).resolves.toBe(original);

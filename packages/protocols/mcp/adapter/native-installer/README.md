@@ -1,11 +1,11 @@
-# LicoMesh MCP Native Installer
+# Meshrix MCP Native Installer
 
 This directory owns the user-device MCP installer entrypoints.
 
 After the release gate passes, the user entrypoints are platform-native:
 
-- macOS and Linux use `lico-mcp-install.sh` and `lico-mcp-uninstall.sh`.
-- Windows uses `lico-mcp-install.ps1` and `lico-mcp-uninstall.ps1`.
+- macOS and Linux use `meshrix-mcp-install.sh` and `meshrix-mcp-uninstall.sh`.
+- Windows uses `meshrix-mcp-install.ps1` and `meshrix-mcp-uninstall.ps1`.
 - Windows entrypoints use the PowerShell scripts exclusively.
 
 The scripts are narrow launchers. They reject token arguments, validate token
@@ -15,7 +15,7 @@ agent search, grants, batch install, interactive selection, client config, and
 uninstall. Shell and PowerShell remain narrow launchers for that connector-owned
 workflow.
 
-Supported targets are backed by pinned external client-adapter packages from LicoMesh-Plugins. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
+Supported targets are backed by pinned external client-adapter packages from Meshrix-Plugins. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
 
 This release installs local connector-managed clients only. OrbStack and
 remote-Linux direct HTTP client modes are outside the published support matrix
@@ -31,16 +31,16 @@ authority. Never pipe a remote response to a shell.
 ## POSIX
 
 ```bash
-packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh
-packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh --target auto --json
-packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh --target openclaw,codex,claude-code,antigravity,opencode,pi --json
-packages/protocols/mcp/adapter/native-installer/lico-mcp-uninstall.sh --target openclaw,codex,claude-code,antigravity,opencode,pi
+packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh
+packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target auto --json
+packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target openclaw,codex,claude-code,antigravity,opencode,pi --json
+packages/protocols/mcp/adapter/native-installer/meshrix-mcp-uninstall.sh --target openclaw,codex,claude-code,antigravity,opencode,pi
 ```
 
 ## Windows
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\lico-mcp-install.ps1 -Command install
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\lico-mcp-install.ps1 -Command install -Target auto -Json
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\lico-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi
+powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-install.ps1 -Command install
+powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-install.ps1 -Command install -Target auto -Json
+powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi
 ```

@@ -27,7 +27,7 @@ export async function main(argv = process.argv.slice(2)) {
     commands: SERVER_VERIFY_COMMANDS,
     groupId: "server-verify",
     reportPath: "build/reports/server-runtime-verification.json",
-    schemaVersion: "licomesh.server-runtime-verification.report.v1",
+    schemaVersion: "v0.0.1:meshrix:server-runtime-verification-report-1",
     verifier: "tools/server-scripts/verify-server-runtime.mjs",
   });
 }

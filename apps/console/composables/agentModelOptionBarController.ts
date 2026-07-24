@@ -40,7 +40,7 @@ export type AgentModelOptionBarEmits = {
   (event: "change", value: AgentOptionValue): void;
 };
 
-export const EMPTY_MODEL_LIBRARY_ACTION = "__lico_empty_model_library_action__";
+export const EMPTY_MODEL_LIBRARY_ACTION = "__meshrix_empty_model_library_action__";
 
 function normalizedValue(option: AgentOption) {
   return option.agentUid ?? option.value ?? "";

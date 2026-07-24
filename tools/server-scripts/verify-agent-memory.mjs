@@ -8,7 +8,7 @@ import {
 } from "../../packages/agents/src/agent-memory/index.mjs";
 import { createContextRuntime } from "../../packages/server-runtime/src/state/interface/index.mjs";
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-agent-memory-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-agent-memory-"));
 const CONTEXT_PROFILE_ID = "memory-verifier-profile";
 const CONTEXT_PROFILE = Object.freeze({
   profileId: CONTEXT_PROFILE_ID,

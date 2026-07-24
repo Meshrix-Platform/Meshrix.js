@@ -36,7 +36,7 @@ function validPreset(id = "agent-preview") {
 }
 
 beforeEach(async () => {
-  userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-appearance-presets-"));
+  userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-appearance-presets-"));
 });
 
 afterEach(async () => {

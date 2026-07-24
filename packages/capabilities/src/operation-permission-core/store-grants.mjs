@@ -3,7 +3,7 @@ import {
   apiCapabilityId,
   evaluateAuthorizationPolicy,
   toolExecuteCapabilityId
-} from "@lico/foundation/security/authorization/authorization-engine";
+} from "@meshrix/foundation/security/authorization/authorization-engine";
 import {
   bindingContextFromGrant,
   bindingContextFromRequest,

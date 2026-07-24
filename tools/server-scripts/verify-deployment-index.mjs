@@ -13,12 +13,12 @@ const [dockerfile, compose, packageJson] = await Promise.all([
   fs.readFile(path.join(repoRoot, "package.json"), "utf8").then(JSON.parse)
 ]);
 
-assert.equal(index.kind, "lico.deployment.entry-index");
+assert.equal(index.kind, "meshrix.deployment.entry-index");
 assert.equal(index.dockerPresets?.mainService?.dockerfile, "Dockerfile");
 assert.equal(index.dockerPresets?.mainService?.runtime?.command?.[0], "node");
 assert.equal(index.dockerPresets?.mainService?.runtime?.hostPublishAddress, "127.0.0.1");
-assert.equal(index.dockerPresets?.mainService?.runtime?.hostPublishAddressEnv, "LICO_BIND_ADDRESS");
-assert.equal(index.dockerPresets?.mainService?.runtime?.advertisedHostEnv, "LICO_ADVERTISED_HOST");
+assert.equal(index.dockerPresets?.mainService?.runtime?.hostPublishAddressEnv, "MESHRIX_BIND_ADDRESS");
+assert.equal(index.dockerPresets?.mainService?.runtime?.advertisedHostEnv, "MESHRIX_ADVERTISED_HOST");
 assert.equal(index.sourcePackages?.mainService?.command, "npm run release:package-server-source");
 assert.equal(index.sourcePackages?.mainService?.builder, "tools/server-scripts/package-server-source.mjs");
 assert.equal(index.sourcePackages?.mainService?.archiveFormat, "tar.gz");
@@ -34,10 +34,10 @@ assert.equal(
   packageJson.scripts?.["server:deployment-index"],
   "node tools/server-scripts/deployment-index.mjs"
 );
-assert.match(compose, /target: \$\{LICO_BUILD_TARGET:-runtime\}/u);
-assert.match(compose, /LICO_SERVER_WITH_UI: "\$\{LICO_SERVER_WITH_UI:-0\}"/u);
-assert.match(compose, /\$\{LICO_BIND_ADDRESS:-127\.0\.0\.1\}:\$\{LICO_HOST_PORT:-7228\}:7228/u);
-assert.match(compose, /http:\/\/\$\{LICO_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{LICO_HOST_PORT:-7228\}/u);
+assert.match(compose, /target: \$\{MESHRIX_BUILD_TARGET:-runtime\}/u);
+assert.match(compose, /MESHRIX_SERVER_WITH_UI: "\$\{MESHRIX_SERVER_WITH_UI:-0\}"/u);
+assert.match(compose, /\$\{MESHRIX_BIND_ADDRESS:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}:7228/u);
+assert.match(compose, /http:\/\/\$\{MESHRIX_ADVERTISED_HOST:-127\.0\.0\.1\}:\$\{MESHRIX_HOST_PORT:-7228\}/u);
 assert.match(compose, /^\s+healthcheck:$/mu);
 const baseImage = String(index.dockerPresets?.baseImages?.mainService || "");
 assert.match(

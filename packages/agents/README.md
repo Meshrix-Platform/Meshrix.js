@@ -18,7 +18,7 @@ The agents package owns agent-facing runtime behavior that is not specific to on
 ## Model credential custody
 
 Model records persist only encrypted credential references. Set
-`LICO_MODEL_CREDENTIAL_MASTER_KEY` to deployment-managed key material of at
+`MESHRIX_MODEL_CREDENTIAL_MASTER_KEY` to deployment-managed key material of at
 least 32 characters before saving or loading a model credential. The key is
 never written to the registry; changing an agent provider or endpoint clears
 the old credential binding and requires an explicit replacement.

@@ -1,29 +1,29 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { UPSTREAM_PUBLISHING_MAX_COMMAND_BYTES } from "@lico/contracts/upstream-service-publishing";
+import { UPSTREAM_PUBLISHING_MAX_COMMAND_BYTES } from "@meshrix/contracts/upstream-service-publishing";
 import {
   createTraceContext,
   runWithTraceContext,
   setTraceContextOnRequest
-} from "#lico/foundation/observability/trace-context";
+} from "#meshrix/foundation/observability/trace-context";
 import {
   handleLicoMcpHttpRequest,
   MCP_LOCAL_AUTHORIZATION_MAX_BODY_BYTES
-} from "#lico/protocols/mcp/adapter/http-mcp-adapter";
-import { inputFromRequest } from "#lico/server-runtime/composition/dispatch-operation";
+} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
+import { inputFromRequest } from "#meshrix/server-runtime/composition/dispatch-operation";
 import {
   createRequestBodyAdmissionController,
   readRequestBody,
   sendJson
-} from "#lico/http-utils";
+} from "#meshrix/http-utils";
 import {
   irreversibleSecurityDigest,
   summarizeError
-} from "#lico/runtime-logger";
-import { UPLOAD_SESSION_MAX_CHUNK_BYTES } from "#lico/server-runtime/state/upload-session-admission";
+} from "#meshrix/runtime-logger";
+import { UPLOAD_SESSION_MAX_CHUNK_BYTES } from "#meshrix/server-runtime/state/upload-session-admission";
 import {
   handleUpstreamPayloadTransitRequest,
   isUpstreamPayloadTransitRoute
-} from "#lico/protocols/http/controllers/upstream-payload-transit-controller";
+} from "#meshrix/protocols/http/controllers/upstream-payload-transit-controller";
 import { handleStaticFallback } from "./http-server-static-handlers.mjs";
 import { handlePluginConsoleAssetRequest } from "./http-server-plugin-console-assets.mjs";
 import {
@@ -190,7 +190,7 @@ export function createHttpServerRequestHandler({
       actor: { type: "http-request" }
     });
     setTraceContextOnRequest(request, traceContext);
-    response.setHeader("X-LicoMesh-Trace-Id", traceContext.traceId);
+    response.setHeader("X-Meshrix-Trace-Id", traceContext.traceId);
     request.__licoRequestId = requestId;
     let finished = false;
     let requestMetricRecorded = false;

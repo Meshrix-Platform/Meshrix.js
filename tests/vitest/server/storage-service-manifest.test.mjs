@@ -36,7 +36,7 @@ function manifest(label, references = []) {
 }
 
 async function tempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-manifest-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-manifest-"));
   roots.push(root);
   return root;
 }

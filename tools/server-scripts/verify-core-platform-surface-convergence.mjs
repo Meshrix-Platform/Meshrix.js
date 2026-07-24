@@ -54,7 +54,7 @@ const PRIVATE_ROOT_PATTERNS = Object.freeze([
   ["private_package_root", /\bpackages\/private\b/iu],
   ["private_product_root", /\bprivate-product\b/iu],
   ["proprietary_runtime", /\bproprietary-runtime\b/iu],
-  ["private_repo_name", /\blicomesh-private\b/iu]
+  ["private_repo_name", /\bmeshrix-private\b/iu]
 ]);
 
 const SENSITIVE_REPORT_PATTERNS = Object.freeze([

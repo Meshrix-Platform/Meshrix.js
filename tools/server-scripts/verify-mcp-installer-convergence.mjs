@@ -19,9 +19,9 @@ import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test
 const execFileAsync = promisify(execFile);
 
 const REPORT_PATH = "build/reports/mcp-installer-convergence.json";
-const PROTOCOL_INSTALLER_BIN = "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs";
-const NATIVE_INSTALLER_SH = "packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh";
-const NATIVE_INSTALLER_PS1 = "packages/protocols/mcp/adapter/native-installer/lico-mcp-install.ps1";
+const PROTOCOL_INSTALLER_BIN = "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs";
+const NATIVE_INSTALLER_SH = "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh";
+const NATIVE_INSTALLER_PS1 = "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1";
 const BASIC_UTILS_SOURCE = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/basic-utils.mjs";
 const CLIENT_ADAPTER_RUNNER_SOURCE = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.mjs";
 const INSTALL_COMMAND_SOURCE = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/install-command.mjs";
@@ -30,7 +30,7 @@ const DISCOVERY_SOURCE = "packages/protocols/mcp/adapter/gateway-installer/lib/c
 const FORMATTERS_SOURCE = "packages/protocols/mcp/adapter/gateway-installer/lib/cli/formatters.mjs";
 const STANDALONE_INSTALL_WRAPPER = "tools/server-scripts/mcp-install.mjs";
 const STANDALONE_DOCTOR = "tools/server-scripts/mcp-doctor.mjs";
-const DOCTOR_TOKEN_ENV = "LICO_VERIFY_MCP_INSTALLER_CONVERGENCE_TOKEN";
+const DOCTOR_TOKEN_ENV = "MESHRIX_VERIFY_MCP_INSTALLER_CONVERGENCE_TOKEN";
 const VERIFIED_DOWNLOAD_GUIDANCE_FILES = [
   ".github/RELEASE_TEMPLATE.md",
   "docs/architecture/MCP-NATIVE-INSTALLER.md",
@@ -41,7 +41,7 @@ const VERIFIED_DOWNLOAD_GUIDANCE_FILES = [
 ];
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-installer-convergence-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-installer-convergence-"));
 const manifestPath = path.join(userDataPath, "device", "servers.json");
 const missingManifestPath = path.join(userDataPath, "missing", "servers.json");
 const pathNeedles = [
@@ -69,7 +69,7 @@ function safeEvidence(value = {}) {
     for (const needle of pathNeedles) {
       if (needle && child.includes(needle)) return "[redacted-local-path]";
     }
-    if (/Bearer\s+\S+/i.test(child) || /lico_[A-Za-z0-9_-]{12,}=/.test(child)) return "[redacted-secret]";
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[A-Za-z0-9_-]{12,}=/.test(child)) return "[redacted-secret]";
     return child;
   }));
 }
@@ -80,7 +80,7 @@ function assertNoLeakText(text = "", label = "text") {
     assert.equal(needle ? value.includes(needle) : false, false, `${label} leaked local path`);
   }
   assert.equal(/Bearer\s+\S+/i.test(value), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[A-Za-z0-9_-]{12,}=/.test(value), false, `${label} leaked cookie`);
+  assert.equal(/meshrix_[A-Za-z0-9_-]{12,}=/.test(value), false, `${label} leaked cookie`);
 }
 
 function assertNoLeak(value, label = "payload") {
@@ -212,8 +212,8 @@ function parseJsonOutput(stdout = "", label = "stdout") {
 function assertNoDeviceManifestPath(payload, label) {
   const serialized = JSON.stringify(payload?.checks?.deviceManifest || {});
   assert.equal(/"path"\s*:/.test(serialized), false, `${label} exposed a path key`);
-  assert.equal(serialized.includes(".lico/mcp/servers.json"), false, `${label} exposed default manifest path`);
-  assert.equal(serialized.includes(".lico\\\\mcp\\\\servers.json"), false, `${label} exposed default manifest path`);
+  assert.equal(serialized.includes(".meshrix/mcp/servers.json"), false, `${label} exposed default manifest path`);
+  assert.equal(serialized.includes(".meshrix\\\\mcp\\\\servers.json"), false, `${label} exposed default manifest path`);
 }
 
 function assertRedactedDeviceManifest(payload, label, exists) {
@@ -227,7 +227,7 @@ async function writeDeviceManifest(httpUrl) {
   await fs.mkdir(path.dirname(manifestPath), { recursive: true });
   await fs.writeFile(manifestPath, `${JSON.stringify({
     servers: {
-      lico: {
+      meshrix: {
         httpUrl,
         connector: {
           type: "verifier",
@@ -246,10 +246,10 @@ async function writeDeviceManifest(httpUrl) {
 
 function doctorEnv(deviceManifestPath) {
   return {
-    LICO_MCP_BASE_URL: server.url,
-    LICO_MCP_DISCOVERY_FILE: deviceManifestPath,
-    LICO_MCP_TOKEN: "",
-    LICO_MCP_TARGET: "",
+    MESHRIX_MCP_BASE_URL: server.url,
+    MESHRIX_MCP_DISCOVERY_FILE: deviceManifestPath,
+    MESHRIX_MCP_TOKEN: "",
+    MESHRIX_MCP_TARGET: "",
     [DOCTOR_TOKEN_ENV]: ""
   };
 }
@@ -272,8 +272,8 @@ try {
   await test("native installer scripts are the canonical user-device entrypoints", async () => {
     const shSource = await fs.readFile(NATIVE_INSTALLER_SH, "utf8");
     const ps1Source = await fs.readFile(NATIVE_INSTALLER_PS1, "utf8");
-    assert.match(shSource, /gateway-installer\/bin\/lico-mcp\.mjs/u);
-    assert.match(ps1Source, /gateway-installer\\bin\\lico-mcp\.mjs/u);
+    assert.match(shSource, /gateway-installer\/bin\/meshrix-mcp\.mjs/u);
+    assert.match(ps1Source, /gateway-installer\\bin\\meshrix-mcp\.mjs/u);
     assert.match(shSource, /--token\|--token=\*/u);
     assert.match(ps1Source, /Raw tokens are not accepted/u);
     assert.equal(/\beval\b/u.test(shSource), false);
@@ -281,10 +281,10 @@ try {
     assert.equal(ps1Source.includes("Invoke-RestMethod"), false);
     assert.equal(ps1Source.includes("Publish-TokenEnv"), false);
     assert.equal(/\[string\]\$Token\s*=/u.test(ps1Source), false);
-    assert.equal(shSource.includes("LICO_MCP_CONNECTOR"), false);
-    assert.equal(ps1Source.includes("LICO_MCP_CONNECTOR"), false);
-    assert.equal(shSource.includes("command -v lico-mcp"), false);
-    assert.equal(ps1Source.includes("Get-Command lico-mcp"), false);
+    assert.equal(shSource.includes("MESHRIX_MCP_CONNECTOR"), false);
+    assert.equal(ps1Source.includes("MESHRIX_MCP_CONNECTOR"), false);
+    assert.equal(shSource.includes("command -v meshrix-mcp"), false);
+    assert.equal(ps1Source.includes("Get-Command meshrix-mcp"), false);
     return {
       nativeInstallers: [NATIVE_INSTALLER_SH, NATIVE_INSTALLER_PS1],
       userDeviceInstallerMode: "secure-connector-delegation",
@@ -295,7 +295,7 @@ try {
   });
 
   await destructiveTest("raw token arguments and token-env injection fail before connector execution", async () => {
-    const secret = "lico_installer_argv_secret_should_not_escape";
+    const secret = "meshrix_installer_argv_secret_should_not_escape";
     const direct = await runNode(PROTOCOL_INSTALLER_BIN, ["doctor", "--token", secret, "--json"]);
     assert.notEqual(direct.status, 0);
     assert.equal(`${direct.stdout}${direct.stderr}`.includes(secret), false);
@@ -312,7 +312,7 @@ try {
     const adapterRunnerSource = await fs.readFile(CLIENT_ADAPTER_RUNNER_SOURCE, "utf8");
     const discoverySource = await fs.readFile(DISCOVERY_SOURCE, "utf8");
     assert.equal(basicUtilsSource.includes("--token TOKEN"), false);
-    assert.equal(adapterRunnerSource.includes('"X-LicoMesh-Api-Key": token'), false);
+    assert.equal(adapterRunnerSource.includes('"X-Meshrix-Api-Key": token'), false);
     assert.match(adapterRunnerSource, /assertSecretFreeRequest/u);
     assert.match(adapterRunnerSource, /cleanEnv:\s*true/u);
     assert.match(discoverySource, /sensitive_environment_persistence_requires_a_secret_store/u);
@@ -327,8 +327,8 @@ try {
   });
 
   await destructiveTest("external adapter requests contain connector metadata and secret references only", async () => {
-    const tokenEnv = "LICO_VERIFY_CLIENT_TOKEN";
-    const sentinel = "lico_sensitive_token_must_not_reach_argv";
+    const tokenEnv = "MESHRIX_VERIFY_CLIENT_TOKEN";
+    const sentinel = "meshrix_sensitive_token_must_not_reach_argv";
     const request = clientAdapterConnectorRequest({
       baseUrl: server.url,
       tokenEnv,
@@ -340,9 +340,9 @@ try {
     assert.equal(serialized.includes('"token"'), false);
     assert.equal(request.tokenEnv, tokenEnv);
     assert.equal(Array.isArray(request.connector.args), true);
-    assert.equal(CLIENT_ADAPTER_DESCRIPTOR_SCHEMA, "licomesh.client-adapter.descriptor.v1");
+    assert.equal(CLIENT_ADAPTER_DESCRIPTOR_SCHEMA, "v0.0.1:meshrix:client-adapter-descriptor-1");
     assert.equal(CLIENT_ADAPTER_MAX_MESSAGE_BYTES, 256 * 1024);
-    assert.equal(formatterSource.includes("X-LicoMesh-Api-Key: <token>"), false);
+    assert.equal(formatterSource.includes("X-Meshrix-Api-Key: <token>"), false);
     return {
       externalAdapterProtocolBounded: true,
       connectorMetadataOnly: true,
@@ -374,9 +374,9 @@ try {
 
   await test("standalone install wrapper delegates to native installer", async () => {
     const source = await fs.readFile(STANDALONE_INSTALL_WRAPPER, "utf8");
-    assert.match(source, /native-installer\/lico-mcp-install\.sh/u);
-    assert.match(source, /native-installer\/lico-mcp-install\.ps1/u);
-    assert.equal(source.includes("gateway-installer/bin/lico-mcp.mjs"), false);
+    assert.match(source, /native-installer\/meshrix-mcp-install\.sh/u);
+    assert.match(source, /native-installer\/meshrix-mcp-install\.ps1/u);
+    assert.equal(source.includes("gateway-installer/bin/meshrix-mcp.mjs"), false);
     return {
       wrapper: STANDALONE_INSTALL_WRAPPER,
       delegatesTo: "native-installer"
@@ -443,9 +443,9 @@ try {
     const markerServer = createServer((request, response) => {
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({
-        name: "LicoMesh",
+        name: "Meshrix",
         interfaceVersion: "v0.0.1:mcp:interface-1",
-        stableToolName: "lico.discovery"
+        stableToolName: "meshrix.discovery"
       }));
     });
     await new Promise((resolve, reject) => {

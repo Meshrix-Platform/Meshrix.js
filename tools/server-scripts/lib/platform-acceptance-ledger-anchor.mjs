@@ -104,7 +104,7 @@ export async function anchorAcceptanceEvidence({
     .update(JSON.stringify(reportDigests))
     .digest("hex")}`;
   const context = {
-    schemaVersion: "licomesh.acceptance-evidence-anchor-context.v1",
+    schemaVersion: "v0.0.1:meshrix:acceptance-evidence-anchor-context-1",
     sourceRevision: String(evidenceContext?.sourceRevision || "").trim(),
     sourceTreeDigest: String(evidenceContext?.sourceTreeDigest || "").trim(),
     selectedProfile: String(evidenceContext?.selectedProfile || "").trim(),

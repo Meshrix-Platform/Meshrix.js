@@ -1,4 +1,4 @@
-import { OPERATION_PROOF_PROFILES } from "#lico/contracts/operations/operation-decorators";
+import { OPERATION_PROOF_PROFILES } from "#meshrix/contracts/operations/operation-decorators";
 import {
   compactStrings,
   firstText,

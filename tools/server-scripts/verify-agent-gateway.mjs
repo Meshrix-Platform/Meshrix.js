@@ -55,7 +55,7 @@ async function delay(ms = 0) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-agent-gateway-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-agent-gateway-"));
 
 try {
   const sourceOperation = operationById(SERVER_API_OPERATIONS, OPERATION_ID);
@@ -91,11 +91,11 @@ try {
   const catalog = createToolCatalog({ operations: SERVER_API_OPERATIONS });
   const tool = catalog.tools.find((item) => item.operationId === OPERATION_ID);
   assert.ok(tool, `${OPERATION_ID} must be exposed in Operation Permission catalog`);
-  assert.equal(tool.id, "lico.agentGateway.call");
+  assert.equal(tool.id, "meshrix.agentGateway.call");
   assert.deepEqual(tool.requiredScopes, ["model:call"]);
   assert.equal(tool.risk, "safe_write");
   assert.equal(tool.readOnly, false);
-  assert.ok(tool.toolsets.includes("lico.model.call"));
+  assert.ok(tool.toolsets.includes("meshrix.model.call"));
 
   const executorResult = await executeSettingsAgentGatewayOperation({
     operationId: OPERATION_ID,

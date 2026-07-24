@@ -13,7 +13,7 @@
       "layerId": "mcp",
       "protocol": "mcp",
       "adapterKind": "agent-framework-mcp-adapter-layer",
-      "boundary": "agent-to-lico"
+      "boundary": "agent-to-meshrix"
     }
   ],
   "components": {

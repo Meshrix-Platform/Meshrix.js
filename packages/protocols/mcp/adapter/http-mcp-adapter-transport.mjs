@@ -1,4 +1,4 @@
-import { sendJson } from "#lico/http-utils";
+import { sendJson } from "#meshrix/http-utils";
 import {
   broadcastConfiguredMcpNotification,
   registerConfiguredMcpSseConnection,
@@ -9,7 +9,7 @@ import {
   MCP_PROXY_SESSION_HEADER_LOWER,
   normalizeMcpProxySessionId,
   parseMcpCatalogAcknowledgement
-} from "#lico/contracts/mcp-catalog-delivery";
+} from "#meshrix/contracts/mcp-catalog-delivery";
 import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME,
@@ -19,12 +19,12 @@ import {
   MCP_STABLE_TOOL_NAME,
   MCP_TOOLSET_VERSION
 } from "./http-mcp-adapter-constants.mjs";
-import { buildLicoMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthorizationErrorData, mcpConnectorRuntimeMetadata, mcpDiscoveryBase, mcpInitializeResult, mcpRuntimeMetadata, mcpSupportedTargetDetails, mcpVersionInfo, mcpHandshake } from "./http-mcp-adapter-discovery.mjs";
+import { buildLicoMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthorizationErrorData, mcpConnectorRuntimeMetadata, mcpDiscoveryBase, mcpInitializeResult, mcpPublicSupportedTargetDetails, mcpRuntimeMetadata, mcpSupportedTargetDetails, mcpVersionInfo, mcpHandshake } from "./http-mcp-adapter-discovery.mjs";
 import { broadcastMcpOperationReply, inferMcpTargetReceipt, projectMcpOperationPayload } from "./http-mcp-adapter-replies.mjs";
 import { hasMcpAuthToken, isAllowedOrigin, normalizeMcpOperationEnvelope } from "./http-mcp-adapter-request-validation.mjs";
 import { executeToolPayload, jsonRpcError, jsonRpcNotification, jsonRpcResult, mcpEnvelopePublic, mcpToolResult, parseRequestBody, publicMcpEnvelopeString, publicMcpEnvelopeValue } from "./http-mcp-adapter-response.mjs";
 import { mcpAuthSessionFromGrant, delegatedChildOperationFromMcpCall } from "./http-mcp-adapter-session.mjs";
-import { licoCategorizedTools, mcpCapabilityFamilies, mcpOutletForOperation, mcpOutletForTool, mcpOutletSummary, operationOutletMismatchError, publicMcpTool } from "./http-mcp-adapter-tools.mjs";
+import { meshrixCategorizedTools, mcpCapabilityFamilies, mcpOutletForOperation, mcpOutletForTool, mcpOutletSummary, operationOutletMismatchError, publicMcpTool } from "./http-mcp-adapter-tools.mjs";
 import { isUpstreamMcpToolName, listVisibleUpstreamMcpTools } from "./http-mcp-adapter-upstream.mjs";
 import { executeUpstreamToolViaGatewayForward } from "./http-mcp-adapter-upstream-tools.mjs";
 import {
@@ -49,7 +49,7 @@ function visibleLicoOutletNames(toolSkillManagementProvider, authorization) {
   ]);
 }
 
-async function licoMetaResult({
+async function meshrixMetaResult({
   operation,
   input,
   envelope,
@@ -60,7 +60,7 @@ async function licoMetaResult({
   listenUrl = "",
   discoveryState = null
 }) {
-  if (operation === "lico.mcp.version" || operation === "lico.version") {
+  if (operation === "meshrix.mcp.version" || operation === "meshrix.version") {
     return mcpToolResult({
       result: {
         ...mcpRuntimeMetadata({ listenUrl, discoveryState }),
@@ -68,7 +68,7 @@ async function licoMetaResult({
       }
     });
   }
-  if (operation === "lico.capabilities.list") {
+  if (operation === "meshrix.capabilities.list") {
     const visibleCatalogTools = toolSkillManagementProvider.listVisibleTools({ authorization });
     const categorizedOperations = visibleCatalogTools
       .filter((tool) => tool?.upstreamProjectedOperation !== true)
@@ -101,7 +101,7 @@ async function licoMetaResult({
       }
     });
   }
-  if (operation === "lico.update") {
+  if (operation === "meshrix.update") {
     const clientVersion = envelope?.clientVersion || input?.clientVersion || "0.0.0";
     const serverVersion = MCP_SERVER_VERSION;
     const updateAvailable = clientVersion !== serverVersion;
@@ -134,20 +134,20 @@ async function licoMetaResult({
       clientInstallJsonCommand: discovery.installer.clientInstallJsonCommand,
       connector,
       priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
-      supportedTargets: mcpSupportedTargetDetails(),
+      supportedTargets: mcpPublicSupportedTargetDetails(),
       sharedHub: discovery.sharedHub
     };
     if (updateAvailable) {
-      const updatePayload = jsonRpcNotification("notifications/lico/update_available", {
+      const updatePayload = jsonRpcNotification("notifications/meshrix/update_available", {
         ...updateResult,
-        message: `An update to LicoMesh MCP server is available (${serverVersion}).`
+        message: `An update to Meshrix MCP server is available (${serverVersion}).`
       });
       broadcastConfiguredMcpNotification(updatePayload, { grantId: authorization?.grant?.id || "" });
     }
     const instructionText = updateAvailable
       ? (autoUpdate
-          ? `A new version of the LicoMesh MCP connector is available (${serverVersion}). Please immediately execute the following unattended command in the user's terminal to update every verified local agent client:\n\n${githubOneLineAutoInstallCommand}\n\nIf the user asks to limit the update to the priority release targets, use this priority command instead:\n\n${githubOneLinePriorityInstallCommand}\n\nCRITICAL: You MUST explicitly inform the user that you just performed an automatic push update of the MCP service.`
-          : `A new version of the LicoMesh MCP connector is available (${serverVersion}). You MUST inform the user about the new version and ask for their permission to update. Do NOT execute any command automatically. If they approve, instruct them to execute this unattended command:\n\n${githubOneLineAutoInstallCommand}\n\nIf they ask to limit the update to the priority release targets, use this priority command instead:\n\n${githubOneLinePriorityInstallCommand}`)
+          ? `A new version of the Meshrix MCP connector is available (${serverVersion}). Please immediately execute the following unattended command in the user's terminal to update every verified local agent client:\n\n${githubOneLineAutoInstallCommand}\n\nIf the user asks to limit the update to the priority release targets, use this priority command instead:\n\n${githubOneLinePriorityInstallCommand}\n\nCRITICAL: You MUST explicitly inform the user that you just performed an automatic push update of the MCP service.`
+          : `A new version of the Meshrix MCP connector is available (${serverVersion}). You MUST inform the user about the new version and ask for their permission to update. Do NOT execute any command automatically. If they approve, instruct them to execute this unattended command:\n\n${githubOneLineAutoInstallCommand}\n\nIf they ask to limit the update to the priority release targets, use this priority command instead:\n\n${githubOneLinePriorityInstallCommand}`)
       : `The client is already up-to-date (version ${clientVersion}). No update is required.`;
 
     return mcpToolResult({
@@ -258,7 +258,7 @@ async function handleMcpMessage({
     return jsonRpcError(id, -32600, "MCP request is missing method.");
   }
 
-  if (method === "lico/catalog/acknowledge") {
+  if (method === "meshrix/catalog/acknowledge") {
     const authorization = await authorizeMcpRequest();
     if (!authorization?.ok) {
       return jsonRpcError(id, -32001, "Catalog convergence acknowledgement requires authorization.", {
@@ -326,7 +326,7 @@ async function handleMcpMessage({
       : null;
     return jsonRpcResult(id, {
       tools: [
-        ...licoCategorizedTools({ activeOutlets, visibleTools }),
+        ...meshrixCategorizedTools({ activeOutlets, visibleTools }),
         ...upstreamMcpTools
       ],
       _meta: {
@@ -341,7 +341,7 @@ async function handleMcpMessage({
     if (!toolName) {
       return jsonRpcError(id, -32602, "tools/call requires params.name.");
     }
-    
+
     let parsedCall;
     if (isUpstreamMcpToolName(toolName)) {
       const authorization = await authorizeMcpRequest();
@@ -450,7 +450,7 @@ async function handleMcpMessage({
         expectedOutlet
       });
     }
-    const metaResult = await licoMetaResult({
+    const metaResult = await meshrixMetaResult({
       operation: parsedCall.operation,
       input: parsedCall.input,
       envelope: parsedCall.envelope,
@@ -467,16 +467,16 @@ async function handleMcpMessage({
     if (activeOutletNames.has(parsedCall.operation)) {
       return {
         httpStatus: 200,
-        body: jsonRpcError(id, -32602, `${parsedCall.operation} is an outlet tool name, not a concrete operation id. First call tool '${MCP_DISCOVERY_TOOL_NAME}' with operation 'lico.capabilities.list', then use one returned operations[].name as arguments.operation.`, {
+        body: jsonRpcError(id, -32602, `${parsedCall.operation} is an outlet tool name, not a concrete operation id. First call tool '${MCP_DISCOVERY_TOOL_NAME}' with operation 'meshrix.capabilities.list', then use one returned operations[].name as arguments.operation.`, {
           code: "outlet_name_used_as_operation",
           outlet: parsedCall.operation,
           discoveryTool: MCP_DISCOVERY_TOOL_NAME,
-          discoveryOperation: "lico.capabilities.list",
+          discoveryOperation: "meshrix.capabilities.list",
           example: {
             name: MCP_DISCOVERY_TOOL_NAME,
             arguments: {
               apiVersion: MCP_INTERFACE_VERSION,
-              operation: "lico.capabilities.list",
+              operation: "meshrix.capabilities.list",
               input: {}
             }
           }
@@ -633,7 +633,7 @@ export async function handleLicoMcpHttpRequest({
   signal = null,
   inFlightRequestRegistry = null
 }) {
-  if (url.pathname === "/.well-known/lico/mcp.json" || url.pathname === "/api/mcp/discovery") {
+  if (url.pathname === "/.well-known/meshrix/mcp.json" || url.pathname === "/api/mcp/discovery") {
     if (method !== "GET" && method !== "HEAD") {
       response.writeHead(405, { Allow: "GET", "Cache-Control": "no-store" });
       response.end();

@@ -1,18 +1,18 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
-  "dependencyType": "lico.runbook.dependencies",
+  "dependencyType": "meshrix.runbook.dependencies",
   "runtimeModules": [],
   "requiredTools": [
     {
-      "toolId": "lico.terminal.execute",
+      "toolId": "meshrix.terminal.execute",
       "reason": "Run local candidate verification and inspect the canonical acceptance result"
     },
     {
-      "toolId": "lico.fs.read",
+      "toolId": "meshrix.fs.read",
       "reason": "Read package.json files to bump version"
     },
     {
-      "toolId": "lico.fs.write",
+      "toolId": "meshrix.fs.write",
       "reason": "Prepare reviewed version metadata changes without publishing or mutating remote state"
     }
   ],

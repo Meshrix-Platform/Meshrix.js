@@ -11,11 +11,11 @@ const loadDiscoveryConfigMock = vi.hoisted(() => vi.fn(async () => ({})));
 const createMaintenanceWorkQueueProviderMock = vi.hoisted(() => vi.fn());
 const createQueueApplicationPortMock = vi.hoisted(() => vi.fn());
 
-vi.mock("#lico/agents/maintenance/index", () => ({
+vi.mock("#meshrix/agents/maintenance/index", () => ({
   createMaintenanceAgentService: createMaintenanceAgentServiceMock
 }));
 
-vi.mock("#lico/capabilities/operation-permission-core/store", () => ({
+vi.mock("#meshrix/capabilities/operation-permission-core/store", () => ({
   createOperationPermissionStore: createOperationPermissionStoreMock
 }));
 
@@ -27,7 +27,7 @@ vi.mock("../../../packages/server-runtime/src/events/protocol-event-runtime.mjs"
   createProtocolEventRuntime: createProtocolEventRuntimeMock
 }));
 
-vi.mock("#lico/product-api", () => ({
+vi.mock("#meshrix/product-api", () => ({
   createServerRuntime: createServerRuntimeMock,
   bindOperationDispatcher: bindOperationDispatcherMock,
   loadSettings: loadSettingsMock,

@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 
 export const HOST_OPAQUE_PAYLOAD_POLICY = Object.freeze({
   ttlMs: 15 * 60 * 1000,

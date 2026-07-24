@@ -19,7 +19,7 @@ import { createSecurityAlertStore } from "../../../packages/foundation/src/secur
 import { createOrganizationModelStore } from "../../../packages/foundation/src/security/authorization/organization-model.mjs";
 
 function tempRoot() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lico-owned-sqlite-failure-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-owned-sqlite-failure-"));
   tempRoots.push(root);
   return root;
 }

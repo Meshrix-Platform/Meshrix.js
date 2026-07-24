@@ -68,9 +68,9 @@ describe("authorization governance card context behavior", () => {
     const baseRequest = {
       requestKind: "local_mcp_install" as const,
       status: "pending" as const,
-      clientName: "LicoMesh MCP codex",
+      clientName: "Meshrix MCP codex",
       targets: ["codex"],
-      toolsets: ["lico.runtime.read"],
+      toolsets: ["meshrix.runtime.read"],
       maxRisk: "read_only",
       requestedScopes: [],
       requestedTools: [],
@@ -101,15 +101,15 @@ describe("authorization governance card context behavior", () => {
       requestKind: "local_mcp_install",
       status: "pending",
       requestId: "mcp_auth_req_evidence",
-      clientName: "LicoMesh MCP codex",
+      clientName: "Meshrix MCP codex",
       targets: ["codex"],
-      toolsets: ["lico.runtime.read", "lico.workspace.write"],
+      toolsets: ["meshrix.runtime.read", "meshrix.workspace.write"],
       requestedTools: ["runtime.status.read", "workspace.file.write"],
       requestedScopes: ["runtime:read", "workspace:write"],
       processKeyFingerprints: [{ target: "codex", fingerprint }],
     });
 
-    expect(card.meta).toContain("工具集 ID lico.runtime.read, lico.workspace.write");
+    expect(card.meta).toContain("工具集 ID meshrix.runtime.read, meshrix.workspace.write");
     expect(card.meta).toContain("工具 ID runtime.status.read, workspace.file.write");
     expect(card.meta).toContain("权限域 ID runtime:read, workspace:write");
     expect(card.meta).toContain(`进程密钥指纹 codex: ${fingerprint}`);

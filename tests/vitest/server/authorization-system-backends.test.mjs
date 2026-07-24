@@ -63,7 +63,7 @@ vi.mock("node:child_process", () => ({
   spawn: spawnHarness.spawn
 }));
 
-import { apiCapabilityId } from "#lico/authorization-engine";
+import { apiCapabilityId } from "#meshrix/authorization-engine";
 import {
   createCapabilityBindingGuard
 } from "../../../packages/foundation/src/security/authorization/capability-binding-guard.mjs";
@@ -75,7 +75,7 @@ import {
 } from "../../../packages/foundation/src/security/authorization/opaque-capability-key.mjs";
 
 const tempRoots = [];
-const originalDpapiCommand = process.env.LICO_WINDOWS_DPAPI_COMMAND;
+const originalDpapiCommand = process.env.MESHRIX_WINDOWS_DPAPI_COMMAND;
 const originalPath = process.env.PATH;
 const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
 
@@ -221,9 +221,9 @@ afterEach(async () => {
   spawnHarness.responder = null;
   process.env.PATH = originalPath;
   if (originalDpapiCommand === undefined) {
-    delete process.env.LICO_WINDOWS_DPAPI_COMMAND;
+    delete process.env.MESHRIX_WINDOWS_DPAPI_COMMAND;
   } else {
-    process.env.LICO_WINDOWS_DPAPI_COMMAND = originalDpapiCommand;
+    process.env.MESHRIX_WINDOWS_DPAPI_COMMAND = originalDpapiCommand;
   }
   Object.defineProperty(process, "platform", originalPlatformDescriptor);
   await Promise.all(tempRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
@@ -232,8 +232,8 @@ afterEach(async () => {
 describe("authorization system backend coverage", () => {
   it("initializes opaque capability kernel records through mocked system backends", async () => {
     spawnHarness.responder = defaultBackendResponder;
-    process.env.LICO_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
-    const root = await makeTempRoot("lico-authz-system-opaque-");
+    process.env.MESHRIX_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
+    const root = await makeTempRoot("meshrix-authz-system-opaque-");
     const backends = ["linux-kernel-keyring", "secret-service", "pass-gpg", "windows-dpapi"];
     if (process.platform === "darwin") {
       backends.unshift("macos-keychain");
@@ -261,8 +261,8 @@ describe("authorization system backend coverage", () => {
 
   it("initializes capability binding guard records through mocked system backends", async () => {
     spawnHarness.responder = defaultBackendResponder;
-    process.env.LICO_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
-    const root = await makeTempRoot("lico-authz-system-guard-");
+    process.env.MESHRIX_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
+    const root = await makeTempRoot("meshrix-authz-system-guard-");
     const backends = ["linux-kernel-keyring", "secret-service", "pass-gpg", "windows-dpapi"];
     if (process.platform === "darwin") {
       backends.unshift("macos-keychain");
@@ -336,8 +336,8 @@ describe("authorization system backend coverage", () => {
 
   it("propagates explicit system backend failures without falling back silently", async () => {
     spawnHarness.responder = failingBackendResponder;
-    process.env.LICO_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
-    const root = await makeTempRoot("lico-authz-system-failing-");
+    process.env.MESHRIX_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
+    const root = await makeTempRoot("meshrix-authz-system-failing-");
 
     for (const backend of ["linux-kernel-keyring", "secret-service", "pass-gpg", "windows-dpapi"]) {
       const store = createSealedCapabilityKernelStore({
@@ -364,8 +364,8 @@ describe("authorization system backend coverage", () => {
 
   it("propagates explicit system backend write failures after missing records are initialized", async () => {
     spawnHarness.responder = writeFailingBackendResponder;
-    process.env.LICO_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
-    const root = await makeTempRoot("lico-authz-system-write-failing-");
+    process.env.MESHRIX_WINDOWS_DPAPI_COMMAND = "pwsh-fixture";
+    const root = await makeTempRoot("meshrix-authz-system-write-failing-");
 
     for (const backend of ["linux-kernel-keyring", "secret-service", "pass-gpg", "windows-dpapi"]) {
       const store = createSealedCapabilityKernelStore({
@@ -392,7 +392,7 @@ describe("authorization system backend coverage", () => {
 
   it("falls back from auto system backends to local records when probing fails", async () => {
     spawnHarness.responder = failingBackendResponder;
-    const root = await makeTempRoot("lico-authz-auto-fallback-");
+    const root = await makeTempRoot("meshrix-authz-auto-fallback-");
 
     const provider = createOpaqueCapabilityKeyProvider({
       backend: "auto",
@@ -433,7 +433,7 @@ describe("authorization system backend coverage", () => {
   });
 
   it("rewraps Linux auto records across mocked keyring backends before pass-gpg succeeds", async () => {
-    const root = await makeTempRoot("lico-authz-linux-auto-rewrap-");
+    const root = await makeTempRoot("meshrix-authz-linux-auto-rewrap-");
     await installFakeCommands(root, ["systemd-creds", "keyctl", "secret-tool", "pass"]);
     spawnHarness.responder = linuxAutoRewrapResponder;
 
@@ -484,7 +484,7 @@ describe("authorization system backend coverage", () => {
   });
 
   it("covers local opaque key recovery, expiry, wildcard, rotation, and invalidation decisions", async () => {
-    const root = await makeTempRoot("lico-authz-local-opaque-");
+    const root = await makeTempRoot("meshrix-authz-local-opaque-");
 
     const emptyStore = createSealedCapabilityKernelStore({
       backend: "local-file",
@@ -693,7 +693,7 @@ describe("authorization system backend coverage", () => {
   });
 
   it("covers binding guard context mismatch, expiry, recovery, and invalidation decisions", async () => {
-    const root = await makeTempRoot("lico-authz-local-guard-");
+    const root = await makeTempRoot("meshrix-authz-local-guard-");
     const guard = createCapabilityBindingGuard({
       backend: "local-file",
       dataDir: root,

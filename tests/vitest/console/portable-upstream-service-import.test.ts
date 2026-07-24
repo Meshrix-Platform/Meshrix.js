@@ -4,7 +4,7 @@ import {
   parsePortableUpstreamServiceImport,
   PORTABLE_UPSTREAM_SERVICE_KIND,
   PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
-} from "@lico/contracts/upstream-service-publishing";
+} from "@meshrix/contracts/upstream-service-publishing";
 
 describe("portable upstream service import schema", () => {
   it("accepts the canonical format-convert multipart artifact configuration", () => {

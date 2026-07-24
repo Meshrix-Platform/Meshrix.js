@@ -43,7 +43,7 @@ async function main() {
   await ensureBuiltConsole(distPath);
   await fs.rm(path.join(repoRoot, screenshotRoot), { recursive: true, force: true });
 
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-console-admin-browser-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-admin-browser-"));
   let server = null;
   let browser = null;
   let desktopContext = null;

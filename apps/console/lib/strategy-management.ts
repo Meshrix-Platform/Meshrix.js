@@ -1,5 +1,5 @@
-import { getJson } from "@lico/ui-console/bridge-http";
-import { callRpc } from "@lico/ui-console/rpc-client";
+import { getJson } from "@meshrix/ui-console/bridge-http";
+import { callRpc } from "@meshrix/ui-console/rpc-client";
 
 const MAX_CAPABILITIES = 32;
 const MAX_PUBLIC_LIST_ITEMS = 16;

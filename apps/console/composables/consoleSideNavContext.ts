@@ -55,11 +55,11 @@ export type ConsoleSideNavContext = Pick<ServerConsoleShellContext, ConsoleSideN
 
 const SIDE_NAV_MIN_WIDTH = 200;
 const SIDE_NAV_DEFAULT_WIDTH = 220;
-const SIDE_NAV_WIDTH_STORAGE_KEY = "lico:console:sideNavWidth";
+const SIDE_NAV_WIDTH_STORAGE_KEY = "meshrix:console:sideNavWidth";
 const SIDE_NAV_DIRECTORY_MIN_WIDTH = 220;
 const SIDE_NAV_DIRECTORY_DEFAULT_WIDTH = SIDE_NAV_DIRECTORY_MIN_WIDTH;
 const SIDE_NAV_DIRECTORY_NARROW_QUERY = "(max-width: 720px)";
-const SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY = "lico:console:sideNavDirectoryWidth";
+const SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY = "meshrix:console:sideNavDirectoryWidth";
 const SIDE_NAV_OVERLAY_BREAKPOINT = 860;
 const SIDE_NAV_COLLAPSED_WIDTH = 56;
 const MAIN_CONTENT_MIN_WIDTH = 480;

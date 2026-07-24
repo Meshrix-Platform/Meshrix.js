@@ -54,13 +54,13 @@ function emptyRegistry() {
 }
 
 function registryContractError() {
-  const error = new Error("LicoMesh local secret registry is invalid.");
+  const error = new Error("Meshrix local secret registry is invalid.");
   error.code = "local_secret_registry_invalid";
   return error;
 }
 
 function targetContractError(field, message = "") {
-  const error = new Error(message || `LicoMesh local secret target field ${field} is invalid.`);
+  const error = new Error(message || `Meshrix local secret target field ${field} is invalid.`);
   error.code = "local_secret_target_invalid";
   error.field = field;
   return error;
@@ -79,7 +79,7 @@ function explicitTargetId(value, field) {
 function assertKnownKeys(value, allowedKeys, field) {
   const unknown = Object.keys(asObject(value)).find((key) => !allowedKeys.has(key));
   if (unknown) {
-    throw targetContractError(`${field}.${unknown}`, `LicoMesh local secret target contains an unsupported field: ${field}.${unknown}.`);
+    throw targetContractError(`${field}.${unknown}`, `Meshrix local secret target contains an unsupported field: ${field}.${unknown}.`);
   }
 }
 
@@ -87,41 +87,41 @@ function assertSecretRef(secretRef = "") {
   const source = typeof secretRef === "string" ? secretRef : "";
   const value = text(source);
   if (source !== value || !SECRET_REF_PATTERN.test(value)) {
-    throw targetContractError("secretRef", "LicoMesh local secret target requires an explicit canonical secret:// reference.");
+    throw targetContractError("secretRef", "Meshrix local secret target requires an explicit canonical secret:// reference.");
   }
   const segments = value.slice("secret://".length).split("/");
   if (segments.some((segment) => segment === "." || segment === "..")) {
-    throw targetContractError("secretRef", "LicoMesh local secret target secretRef cannot contain relative path segments.");
+    throw targetContractError("secretRef", "Meshrix local secret target secretRef cannot contain relative path segments.");
   }
   return value;
 }
 
 function explicitTextList(value, field, { normalize = text, allowEmpty = false } = {}) {
   if (!Array.isArray(value)) {
-    throw targetContractError(field, `LicoMesh local secret target field ${field} must be an explicit array.`);
+    throw targetContractError(field, `Meshrix local secret target field ${field} must be an explicit array.`);
   }
   const normalizedValues = value.map((item) => normalize(item));
   if (value.some((item, index) => typeof item !== "string" || item !== normalizedValues[index])) {
-    throw targetContractError(field, `LicoMesh local secret target field ${field} must use canonical string values.`);
+    throw targetContractError(field, `Meshrix local secret target field ${field} must use canonical string values.`);
   }
   const values = [...new Set(normalizedValues.filter(Boolean))];
   if (!allowEmpty && values.length === 0) {
-    throw targetContractError(field, `LicoMesh local secret target field ${field} cannot be empty.`);
+    throw targetContractError(field, `Meshrix local secret target field ${field} cannot be empty.`);
   }
   if (values.length !== value.length) {
-    throw targetContractError(field, `LicoMesh local secret target field ${field} contains an empty or duplicate value.`);
+    throw targetContractError(field, `Meshrix local secret target field ${field} contains an empty or duplicate value.`);
   }
   return values;
 }
 
 function explicitTargetScope(scope = null) {
   if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
-    throw targetContractError("scope", "LicoMesh local secret target requires an explicit scope object.");
+    throw targetContractError("scope", "Meshrix local secret target requires an explicit scope object.");
   }
   assertKnownKeys(scope, TARGET_SCOPE_KEYS, "scope");
   const serviceId = text(scope.serviceId);
   if (typeof scope.serviceId !== "string" || scope.serviceId !== serviceId || !serviceId) {
-    throw targetContractError("scope.serviceId", "LicoMesh local secret target requires scope.serviceId.");
+    throw targetContractError("scope.serviceId", "Meshrix local secret target requires scope.serviceId.");
   }
   const scopes = explicitTextList(scope.scopes, "scope.scopes");
   const allowedHosts = explicitTextList(scope.allowedHosts, "scope.allowedHosts", {
@@ -129,7 +129,7 @@ function explicitTargetScope(scope = null) {
     allowEmpty: true
   });
   if (allowedHosts.some((host) => host === "*" || !HOST_PATTERN.test(host))) {
-    throw targetContractError("scope.allowedHosts", "LicoMesh local secret target allowedHosts must contain exact host names or addresses.");
+    throw targetContractError("scope.allowedHosts", "Meshrix local secret target allowedHosts must contain exact host names or addresses.");
   }
   const allowedProtocols = explicitTextList(scope.allowedProtocols, "scope.allowedProtocols", {
     normalize: protocolName,
@@ -149,7 +149,7 @@ function explicitTargetScope(scope = null) {
 
 export function validateLocalSecretTarget(target = null) {
   if (!target || typeof target !== "object" || Array.isArray(target)) {
-    throw targetContractError("target", "LicoMesh local secret writes require an explicit target object.");
+    throw targetContractError("target", "Meshrix local secret writes require an explicit target object.");
   }
   assertKnownKeys(target, TARGET_KEYS, "target");
   return {
@@ -164,13 +164,13 @@ export function validateLocalSecretTarget(target = null) {
 function assertSecretPayload(payload = {}) {
   const secretPayload = asObject(payload, null);
   if (!secretPayload || Object.keys(secretPayload).length === 0) {
-    const error = new Error("LicoMesh local secret write requires a non-empty JSON object payload.");
+    const error = new Error("Meshrix local secret write requires a non-empty JSON object payload.");
     error.code = "local_secret_payload_invalid";
     throw error;
   }
   const payloadBytes = Buffer.byteLength(JSON.stringify(secretPayload), "utf8");
   if (payloadBytes > MAX_SECRET_PAYLOAD_BYTES) {
-    const error = new Error(`LicoMesh local secret payload exceeds the ${MAX_SECRET_PAYLOAD_BYTES} byte limit.`);
+    const error = new Error(`Meshrix local secret payload exceeds the ${MAX_SECRET_PAYLOAD_BYTES} byte limit.`);
     error.code = "local_secret_payload_too_large";
     throw error;
   }
@@ -189,7 +189,7 @@ function hasExpectedRevision(expectedRevision) {
 function parseExpectedRevision(expectedRevision, secretRef) {
   const revision = Number(expectedRevision);
   if (!Number.isSafeInteger(revision) || revision < 0) {
-    const error = new Error(`LicoMesh local secret expectedRevision is invalid for ${secretRef}.`);
+    const error = new Error(`Meshrix local secret expectedRevision is invalid for ${secretRef}.`);
     error.code = "local_secret_revision_invalid";
     error.secretRef = secretRef;
     error.expectedRevision = expectedRevision;
@@ -203,7 +203,7 @@ function assertExpectedRevision(entry, expectedRevision, secretRef) {
   const expected = parseExpectedRevision(expectedRevision, secretRef);
   const actual = revisionOf(entry);
   if (actual !== expected) {
-    const error = new Error(`LicoMesh local secret revision conflict for ${secretRef}: expected ${expected}, got ${actual}.`);
+    const error = new Error(`Meshrix local secret revision conflict for ${secretRef}: expected ${expected}, got ${actual}.`);
     error.code = "local_secret_revision_conflict";
     error.secretRef = secretRef;
     error.expectedRevision = expected;
@@ -251,7 +251,7 @@ function assertScopeTextMatch({
   if (!requested || allowed === requested) {
     return;
   }
-  const error = new Error(`LicoMesh local secret scope denied: ${reasonCode || field}.`);
+  const error = new Error(`Meshrix local secret scope denied: ${reasonCode || field}.`);
   error.code = "local_secret_scope_denied";
   error.reasonCode = reasonCode || `${field}_mismatch`;
   error.field = field;
@@ -278,7 +278,7 @@ function assertScopeListIncludes({
   const deniedReason = !requested
     ? missingReasonCode || reasonCode || `${scopeField}_required`
     : reasonCode || `${scopeField}_not_allowed`;
-  const error = new Error(`LicoMesh local secret scope denied: ${deniedReason}.`);
+  const error = new Error(`Meshrix local secret scope denied: ${deniedReason}.`);
   error.code = "local_secret_scope_denied";
   error.reasonCode = deniedReason;
   error.field = scopeField;
@@ -292,7 +292,7 @@ function assertSecretScopeAllowed({
 } = {}) {
   const expected = asObject(expectedScope, null);
   if (!expected) {
-    const error = new Error("LicoMesh local secret resolution requires an explicit expected scope.");
+    const error = new Error("Meshrix local secret resolution requires an explicit expected scope.");
     error.code = "local_secret_scope_required";
     error.statusCode = 403;
     error.secretRef = secretRef;
@@ -300,7 +300,7 @@ function assertSecretScopeAllowed({
   }
   const unknownExpectedField = Object.keys(expected).find((key) => !EXPECTED_SCOPE_KEYS.has(key));
   if (unknownExpectedField) {
-    const error = new Error(`LicoMesh local secret expected scope contains an unsupported field: ${unknownExpectedField}.`);
+    const error = new Error(`Meshrix local secret expected scope contains an unsupported field: ${unknownExpectedField}.`);
     error.code = "local_secret_scope_invalid";
     error.statusCode = 403;
     error.secretRef = secretRef;
@@ -308,7 +308,7 @@ function assertSecretScopeAllowed({
     throw error;
   }
   if (!text(expected.serviceId) || !Array.isArray(expected.requiredScopes)) {
-    const error = new Error("LicoMesh local secret expected scope requires serviceId and requiredScopes.");
+    const error = new Error("Meshrix local secret expected scope requires serviceId and requiredScopes.");
     error.code = "local_secret_scope_invalid";
     error.statusCode = 403;
     error.secretRef = secretRef;
@@ -401,7 +401,7 @@ function revisionValuePath(paths, secretRef, revision) {
 
 function assertExpectedRevisionProvided(expectedRevision, secretRef) {
   if (!hasExpectedRevision(expectedRevision)) {
-    const error = new Error(`LicoMesh local secret expectedRevision is required for ${secretRef}.`);
+    const error = new Error(`Meshrix local secret expectedRevision is required for ${secretRef}.`);
     error.code = "local_secret_revision_required";
     error.secretRef = secretRef;
     throw error;
@@ -412,7 +412,7 @@ function assertExpectedRevisionProvided(expectedRevision, secretRef) {
 function assertTargetIdentityMatches(entry, target) {
   for (const field of ["provider", "family", "authType"]) {
     if (text(entry?.[field]) === target[field]) continue;
-    const error = new Error(`LicoMesh local secret target does not match the configured ${field}.`);
+    const error = new Error(`Meshrix local secret target does not match the configured ${field}.`);
     error.code = "local_secret_target_mismatch";
     error.secretRef = target.secretRef;
     error.field = field;
@@ -420,7 +420,7 @@ function assertTargetIdentityMatches(entry, target) {
   }
   const configuredScope = effectiveSecretScope(entry?.metadata);
   if (JSON.stringify(configuredScope) !== JSON.stringify(target.scope)) {
-    const error = new Error("LicoMesh local secret target scope does not match the configured binding.");
+    const error = new Error("Meshrix local secret target scope does not match the configured binding.");
     error.code = "local_secret_target_mismatch";
     error.secretRef = target.secretRef;
     error.field = "scope";
@@ -477,25 +477,25 @@ async function writeLocalSecret({
   const registry = await readRegistry(paths.dataDir);
   const existing = registry.refs[resolvedSecretRef] || null;
   if (operation === "initialize" && existing) {
-    const error = new Error(`LicoMesh local secret is already configured: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is already configured: ${resolvedSecretRef}`);
     error.code = "local_secret_already_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (operation === "initialize" && hasExpectedRevision(expectedRevision)) {
-    const error = new Error("LicoMesh local secret initialize does not accept expectedRevision.");
+    const error = new Error("Meshrix local secret initialize does not accept expectedRevision.");
     error.code = "local_secret_revision_unexpected";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (operation === "rotate" && !existing) {
-    const error = new Error(`LicoMesh local secret is not configured: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is not configured: ${resolvedSecretRef}`);
     error.code = "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (operation === "rotate" && !entryResolvable(existing)) {
-    const error = new Error(`LicoMesh local secret is not active: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is not active: ${resolvedSecretRef}`);
     error.code = lifecycleStatus(existing) === "revoked" ? "local_secret_revoked" : "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
@@ -660,13 +660,13 @@ async function revokeLocalSecretUnlocked({
   const registry = await readRegistry(paths.dataDir);
   const existing = registry.refs[resolvedSecretRef] || null;
   if (!existing) {
-    const error = new Error(`LicoMesh local secret is not configured: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is not configured: ${resolvedSecretRef}`);
     error.code = "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (!entryResolvable(existing)) {
-    const error = new Error(`LicoMesh local secret is not active: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is not active: ${resolvedSecretRef}`);
     error.code = lifecycleStatus(existing) === "revoked" ? "local_secret_revoked" : "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
@@ -739,14 +739,14 @@ export async function resolveLocalSecretPayload({
   const registry = await readRegistry(paths.dataDir);
   const entry = registry.refs[resolvedSecretRef] || null;
   if (!entry) {
-    const error = new Error(`LicoMesh local secret is not configured: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is not configured: ${resolvedSecretRef}`);
     error.code = "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (!entryResolvable(entry)) {
     const status = lifecycleStatus(entry);
-    const error = new Error(`LicoMesh local secret is not active: ${resolvedSecretRef}`);
+    const error = new Error(`Meshrix local secret is not active: ${resolvedSecretRef}`);
     error.code = status === "revoked" ? "local_secret_revoked" : "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     error.status = status;
@@ -758,27 +758,27 @@ export async function resolveLocalSecretPayload({
   assertSecretScopeAllowed({ entry, secretRef: resolvedSecretRef, expectedScope });
   const storageRef = text(entry.storageRef);
   if (!storageRef.startsWith("local:")) {
-    const error = new Error(`LicoMesh local secret storage is not local for ${resolvedSecretRef}.`);
+    const error = new Error(`Meshrix local secret storage is not local for ${resolvedSecretRef}.`);
     error.code = "local_secret_storage_unsupported";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   const fileName = storageRef.slice("local:".length);
   if (!fileName || fileName.includes("/") || fileName.includes("\\") || path.basename(fileName) !== fileName) {
-    const error = new Error(`LicoMesh local secret storage ref is invalid for ${resolvedSecretRef}.`);
+    const error = new Error(`Meshrix local secret storage ref is invalid for ${resolvedSecretRef}.`);
     error.code = "local_secret_storage_invalid";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (!canonicalStorageFileName(resolvedSecretRef, revisionOf(entry), fileName)) {
-    const error = new Error(`LicoMesh local secret storage ref is not canonical for ${resolvedSecretRef}.`);
+    const error = new Error(`Meshrix local secret storage ref is not canonical for ${resolvedSecretRef}.`);
     error.code = "local_secret_storage_invalid";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   const valueRecord = await readLocalSecretJson(path.join(paths.valuesDir, fileName), null);
   if (!valueRecordMatchesEntry(valueRecord, entry, resolvedSecretRef)) {
-    const error = new Error(`LicoMesh local secret value record does not match ${resolvedSecretRef}.`);
+    const error = new Error(`Meshrix local secret value record does not match ${resolvedSecretRef}.`);
     error.code = "local_secret_value_mismatch";
     error.secretRef = resolvedSecretRef;
     throw error;

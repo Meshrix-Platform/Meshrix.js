@@ -9,7 +9,7 @@
  * foundation never directly import runtime/tag-state.
  *
  * @module tag-store-adapter
- * @package @lico/server-runtime
+ * @package @meshrix/server-runtime
  * @layer server-runtime/state
  */
 
@@ -21,7 +21,7 @@ import { validateTagStoreProvider } from "../../../foundation/src/security/autho
  *
  * @param {object} options
  * @param {string} options.userDataPath - User data directory path
- * @returns {Promise<import("#lico/foundation/security/authorization/tag-store.port.mjs").TagStoreProvider>}
+ * @returns {Promise<import("#meshrix/foundation/security/authorization/tag-store.port.mjs").TagStoreProvider>}
  */
 export async function createTagStoreAdapter({ userDataPath }) {
   const mod = await import("./tag-management-store.mjs");
@@ -43,7 +43,7 @@ export async function createTagStoreAdapter({ userDataPath }) {
 /**
  * Registers the tag store provider into the given registry at composition time.
  *
- * @param {import("#lico/foundation/security/authorization/tag-store.port.mjs").TagStoreProviderRegistry} registry
+ * @param {import("#meshrix/foundation/security/authorization/tag-store.port.mjs").TagStoreProviderRegistry} registry
  * @param {object} [options]
  * @param {string} [options.userDataPath] - Optional; provider set via adapter
  */

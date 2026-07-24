@@ -1,4 +1,4 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 import {
   RISK_CONTROL_DEFINITION_STATES,

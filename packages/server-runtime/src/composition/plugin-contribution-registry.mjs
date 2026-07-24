@@ -1,20 +1,20 @@
 import { isDeepStrictEqual } from "node:util";
 
-import { decorateServerApiOperations } from "#lico/contracts/operations/operation-decorators";
-import { operationFeatureId } from "#lico/contracts/operations/operation-feature-resolution";
+import { decorateServerApiOperations } from "#meshrix/contracts/operations/operation-decorators";
+import { operationFeatureId } from "#meshrix/contracts/operations/operation-feature-resolution";
 import {
   pluginManifestArtifactIdentity,
   readPluginArtifactFile
-} from "#lico/foundation/module-system/plugin-registry";
-import { validateExecutableStateMachineDefinition } from "#lico/foundation/workflow/state-machine/engine/state-machine-core";
+} from "#meshrix/foundation/module-system/plugin-registry";
+import { validateExecutableStateMachineDefinition } from "#meshrix/foundation/workflow/state-machine/engine/state-machine-core";
 import { registerPlatformService } from "./platform-registry.mjs";
 import { PLUGIN_HOST_PORT_CONTRACT } from "./plugin-artifact-core-contract.mjs";
 
 export const PLUGIN_HOST_PORT_NAMES = Object.freeze(Object.keys(PLUGIN_HOST_PORT_CONTRACT));
 
 const HOST_PORT_NAMES = new Set(PLUGIN_HOST_PORT_NAMES);
-const CORE_MCP_OUTLETS = new Set(["lico.discovery", "lico.gateway"]);
-const MCP_OUTLET_PATTERN = /^lico\.[A-Za-z][A-Za-z0-9]*$/u;
+const CORE_MCP_OUTLETS = new Set(["meshrix.discovery", "meshrix.gateway"]);
+const MCP_OUTLET_PATTERN = /^meshrix\.[A-Za-z][A-Za-z0-9]*$/u;
 const CONTRIBUTION_KINDS = Object.freeze([
   "operations",
   "routes",

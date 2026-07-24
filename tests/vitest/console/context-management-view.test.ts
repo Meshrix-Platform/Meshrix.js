@@ -87,7 +87,7 @@ describe("ContextManagementView configuration truthfulness", () => {
     expect(wrapper.text()).not.toContain("默认规则");
 
     await wrapper.find(".context-profile-item .table-action").trigger("click");
-    const inputs = wrapper.findAll(".lico-modal input");
+    const inputs = wrapper.findAll(".meshrix-modal input");
     expect(inputs.map((input) => input.element.value)).toEqual([
       "profile-alpha",
       "",
@@ -98,7 +98,7 @@ describe("ContextManagementView configuration truthfulness", () => {
       "",
     ]);
 
-    await wrapper.find("form.lico-modal").trigger("submit");
+    await wrapper.find("form.meshrix-modal").trigger("submit");
     await flushPromises();
 
     expect(contextCompilerClientMock.saveContextProfiles).not.toHaveBeenCalled();
@@ -108,21 +108,21 @@ describe("ContextManagementView configuration truthfulness", () => {
   it("applies the candidate template only after the user opens the add form", async () => {
     const { wrapper } = mountView([]);
 
-    expect(wrapper.find(".lico-modal").exists()).toBe(false);
+    expect(wrapper.find(".meshrix-modal").exists()).toBe(false);
     await wrapper.find(".section-actions button").trigger("click");
 
-    const inputs = wrapper.findAll(".lico-modal input");
+    const inputs = wrapper.findAll(".meshrix-modal input");
     expect(inputs.map((input) => input.element.value)).toEqual([
       "",
       "",
       "128000",
-      "40000",
-      "32000",
-      "20000",
+      "40960",
+      "32768",
+      "20480",
       "0.08",
     ]);
     await inputs[0].setValue("new-profile");
-    await wrapper.find("form.lico-modal").trigger("submit");
+    await wrapper.find("form.meshrix-modal").trigger("submit");
     await flushPromises();
 
     const payload = contextCompilerClientMock.saveContextProfiles.mock.calls[0][0];

@@ -4,7 +4,7 @@ import { resolveArchiveBatchIdentity } from "../archive-batch-id.mjs";
 import {
   isServerToken,
   serverToken
-} from "#lico/product-api";
+} from "#meshrix/product-api";
 
 export const CLOSE_ABORT_MESSAGE = "服务已关闭，任务已中止。";
 export const RECOVERY_STAGE_MESSAGE = "服务已恢复，任务等待重试。";

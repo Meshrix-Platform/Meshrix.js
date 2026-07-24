@@ -1,6 +1,6 @@
 import http from "node:http";
 import https from "node:https";
-import { summarizeError } from "#lico/runtime-logger";
+import { summarizeError } from "#meshrix/runtime-logger";
 
 function hostnameFromUrl(value = "") {
   try {
@@ -89,15 +89,15 @@ export async function proxyApiRequest({
     "authorization",
     "content-type",
     "cookie",
-    "x-lico-csrf",
-    "x-lico-safety-confirm",
-    "x-lico-confirm",
-    "x-lico-tool-token"
+    "x-meshrix-csrf",
+    "x-meshrix-safety-confirm",
+    "x-meshrix-confirm",
+    "x-meshrix-tool-token"
   ]);
   const credentialRequestHeaders = new Set([
     "authorization",
     "cookie",
-    "x-lico-tool-token"
+    "x-meshrix-tool-token"
   ]);
   const forwardCredentials = proxyShouldForwardCredentials({
     targetBaseUrl,
@@ -128,8 +128,8 @@ export async function proxyApiRequest({
     headers.set(name, value);
   }
 
-  headers.set("x-lico-forwarded-by", discoveryState.serverId);
-  headers.set("x-lico-active-service", discoveryState.activeServiceUrl);
+  headers.set("x-meshrix-forwarded-by", discoveryState.serverId);
+  headers.set("x-meshrix-active-service", discoveryState.activeServiceUrl);
   if (request.method !== "GET" && request.method !== "HEAD") {
     headers.set("content-length", String(requestBody?.length || 0));
   }
@@ -215,8 +215,8 @@ export async function proxyApiRequest({
 
     upstreamHeaders[name] = value;
   }
-  upstreamHeaders["x-lico-forwarded-by"] = discoveryState.serverId;
-  upstreamHeaders["x-lico-active-service"] = discoveryState.activeServiceUrl;
+  upstreamHeaders["x-meshrix-forwarded-by"] = discoveryState.serverId;
+  upstreamHeaders["x-meshrix-active-service"] = discoveryState.activeServiceUrl;
 
   response.writeHead(upstream.status, upstreamHeaders);
   response.end(upstream.body);

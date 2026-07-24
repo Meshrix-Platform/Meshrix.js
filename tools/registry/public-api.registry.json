@@ -3,168 +3,168 @@
   "version": "v0.1.0",
   "aliases": [
     {
-      "alias": "#lico/contracts/*",
+      "alias": "#meshrix/contracts/*",
       "targetPath": "./packages/contracts/src/*.mjs",
       "status": "active",
       "domainPackage": "contracts",
       "owner": "platform"
     },
     {
-      "alias": "#lico/contracts/*.mjs",
+      "alias": "#meshrix/contracts/*.mjs",
       "targetPath": "./packages/contracts/src/*.mjs",
       "status": "active",
       "domainPackage": "contracts",
       "owner": "platform"
     },
     {
-      "alias": "#lico/foundation/*",
+      "alias": "#meshrix/foundation/*",
       "targetPath": "./packages/foundation/src/*.mjs",
       "status": "active",
       "domainPackage": "foundation",
       "owner": "platform"
     },
     {
-      "alias": "#lico/foundation/*.mjs",
+      "alias": "#meshrix/foundation/*.mjs",
       "targetPath": "./packages/foundation/src/*.mjs",
       "status": "active",
       "domainPackage": "foundation",
       "owner": "platform"
     },
     {
-      "alias": "#lico/agents/*",
+      "alias": "#meshrix/agents/*",
       "targetPath": "./packages/agents/src/*.mjs",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
     },
     {
-      "alias": "#lico/agents/*.mjs",
+      "alias": "#meshrix/agents/*.mjs",
       "targetPath": "./packages/agents/src/*.mjs",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
     },
     {
-      "alias": "#lico/capabilities/*",
+      "alias": "#meshrix/capabilities/*",
       "targetPath": "./packages/capabilities/src/*.mjs",
       "status": "active",
       "domainPackage": "capabilities",
       "owner": "platform"
     },
     {
-      "alias": "#lico/capabilities/*.mjs",
+      "alias": "#meshrix/capabilities/*.mjs",
       "targetPath": "./packages/capabilities/src/*.mjs",
       "status": "active",
       "domainPackage": "capabilities",
       "owner": "platform"
     },
     {
-      "alias": "#lico/protocols/*",
+      "alias": "#meshrix/protocols/*",
       "targetPath": "./packages/protocols/*.mjs",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
     },
     {
-      "alias": "#lico/protocols/*.mjs",
+      "alias": "#meshrix/protocols/*.mjs",
       "targetPath": "./packages/protocols/*.mjs",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
     },
     {
-      "alias": "#lico/server-runtime/*",
+      "alias": "#meshrix/server-runtime/*",
       "targetPath": "./packages/server-runtime/src/*.mjs",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"
     },
     {
-      "alias": "#lico/server-runtime/*.mjs",
+      "alias": "#meshrix/server-runtime/*.mjs",
       "targetPath": "./packages/server-runtime/src/*.mjs",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"
     },
     {
-      "alias": "#lico/ui-console/*",
+      "alias": "#meshrix/ui-console/*",
       "targetPath": "./packages/ui-console/src/*.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "platform"
     },
     {
-      "alias": "#lico/ui-console/bridge-http",
+      "alias": "#meshrix/ui-console/bridge-http",
       "targetPath": "./packages/ui-console/src/bridge-http.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/page-refresh",
+      "alias": "#meshrix/ui-console/page-refresh",
       "targetPath": "./packages/ui-console/src/page-refresh.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/rpc-client",
+      "alias": "#meshrix/ui-console/rpc-client",
       "targetPath": "./packages/ui-console/src/rpc-client.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/error-message",
+      "alias": "#meshrix/ui-console/error-message",
       "targetPath": "./packages/ui-console/src/error-message.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/binary-checkbox",
+      "alias": "#meshrix/ui-console/binary-checkbox",
       "targetPath": "./packages/ui-console/src/BinaryCheckbox.vue",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/workspaces-view-context",
+      "alias": "#meshrix/ui-console/workspaces-view-context",
       "targetPath": "./packages/ui-console/src/workspaces-view-context.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/server-console-shell-context",
+      "alias": "#meshrix/ui-console/server-console-shell-context",
       "targetPath": "./packages/ui-console/src/server-console-shell-context.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/console-format-utils",
+      "alias": "#meshrix/ui-console/console-format-utils",
       "targetPath": "./packages/ui-console/src/console-format-utils.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/console-client-display-utils",
+      "alias": "#meshrix/ui-console/console-client-display-utils",
       "targetPath": "./packages/ui-console/src/console-client-display-utils.ts",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/option-bar",
+      "alias": "#meshrix/ui-console/option-bar",
       "targetPath": "./packages/ui-console/src/OptionBar.vue",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "frontend"
     },
     {
-      "alias": "#lico/ui-console/status-pill",
+      "alias": "#meshrix/ui-console/status-pill",
       "targetPath": "./packages/ui-console/src/StatusPill.vue",
       "status": "active",
       "domainPackage": "ui-console",

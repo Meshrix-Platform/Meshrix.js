@@ -11,7 +11,7 @@ export {
   loadSettings,
   resolveModelForModule,
   saveSettings
-} from "#lico/settings";
+} from "#meshrix/settings";
 export {
   appendJsonLine,
   appendJsonLineSerialized,
@@ -22,21 +22,21 @@ export {
   readJsonFile,
   stateFileKey,
   waitForStateIdle
-} from "#lico/state-coordinator";
+} from "#meshrix/state-coordinator";
 export {
   assertServerToken,
   hashClientString,
   isServerToken,
   resolveWithin,
   serverToken
-} from "#lico/client-strings";
-export { sendJson } from "#lico/http-utils";
+} from "#meshrix/client-strings";
+export { sendJson } from "#meshrix/http-utils";
 export async function callAgentGateway(...args) {
-  const module = await import("#lico/agents/agent-gateway/index");
+  const module = await import("#meshrix/agents/agent-gateway/index");
   return module.callAgentGateway(...args);
 }
 export async function publicAgentGatewayConfig(...args) {
-  const module = await import("#lico/agents/agent-gateway/index");
+  const module = await import("#meshrix/agents/agent-gateway/index");
   return module.publicAgentGatewayConfig(...args);
 }
 export {
@@ -45,7 +45,7 @@ export {
   setRuntimeLogger,
   summarizeError,
   summarizeForLog
-} from "#lico/runtime-logger";
+} from "#meshrix/runtime-logger";
 export {
   buildBootstrapPayload,
   getDiscoveryConfigPath,
@@ -53,17 +53,17 @@ export {
   resolveDiscoveryState,
   saveDiscoveryConfig
 } from "./discovery-config.mjs";
-export { createCorePlatformProvider } from "#lico/server-runtime/composition/core-platform-provider";
+export { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
 export {
   createTraceContext,
   setTraceContextOnRequest,
   traceContextFromRequest,
   traceDetails
-} from "#lico/foundation/observability/trace-context";
+} from "#meshrix/foundation/observability/trace-context";
 export { createClientRegistryService } from "../state/client-registry-service.mjs";
-export { resolveStoredObjectPath } from "#lico/foundation/storage/object-store";
+export { resolveStoredObjectPath } from "#meshrix/foundation/storage/object-store";
 export { bindOperationDispatcher, dispatchOperation } from "./dispatch-operation.mjs";
-export { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+export { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 export {
   composeUnifiedSystemStatus,
   normalizeUnifiedRegistration,
@@ -79,7 +79,7 @@ export {
   loadCheckpointTree,
   startCheckpointTree,
   upsertCheckpointNode
-} from "#lico/foundation/checkpoint/tree/checkpoint-tree-projection";
+} from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
 export async function removeImportCheckpoint() {
   return undefined;
 }
@@ -88,7 +88,7 @@ export {
   DURABLE_WORKFLOW_SUBSTRATE_PROTOCOL_VERSION,
   verifyWorkflowHistory,
   workflowId
-} from "#lico/foundation/workflow/durable-workflow-substrate";
+} from "#meshrix/foundation/workflow/durable-workflow-substrate";
 
 import { createServerRuntime as createCommonServerRuntime } from "../module-runtime/server-runtime.mjs";
 

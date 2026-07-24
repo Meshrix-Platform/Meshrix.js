@@ -17,7 +17,7 @@ const tool = Object.freeze({
 });
 
 async function fixture(grantInput = {}) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-grant-security-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-grant-security-"));
   roots.push(userDataPath);
   const store = createOperationPermissionStore({
     userDataPath,
@@ -64,7 +64,7 @@ afterEach(async () => {
 
 describe("Operation Permission grant security invariants", () => {
   it("drops successful health probes and automatically bounds raw metric history", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-metric-retention-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-metric-retention-"));
     roots.push(userDataPath);
     const store = createOperationPermissionStore({
       userDataPath,
@@ -114,7 +114,7 @@ describe("Operation Permission grant security invariants", () => {
   });
 
   it("binds catalog owners and durably revokes plugin grants and delegated descendants", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-owner-grant-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-owner-grant-"));
     roots.push(userDataPath);
     const pluginTool = Object.freeze({
       id: "fixture.plugin.execute",
@@ -328,7 +328,7 @@ describe("Operation Permission grant security invariants", () => {
   });
 
   it("atomically fences grant consumption when an owner retires during credential verification", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-owner-consume-fence-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-owner-consume-fence-"));
     roots.push(userDataPath);
     const generationDigest = "f".repeat(64);
     const pluginTool = Object.freeze({
@@ -413,7 +413,7 @@ describe("Operation Permission grant security invariants", () => {
   });
 
   it("rejects grant references outside the active operation catalog", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-inactive-grant-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-inactive-grant-"));
     roots.push(userDataPath);
     const registry = createToolCatalogRegistry({
       operations: [],
@@ -441,7 +441,7 @@ describe("Operation Permission grant security invariants", () => {
   });
 
   it("does not expand an empty grant into wildcard tool capabilities", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-empty-grant-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-empty-grant-"));
     roots.push(userDataPath);
     const store = createOperationPermissionStore({ userDataPath, capabilityBindingGuard: false });
     try {

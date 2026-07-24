@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   ARCHITECTURE_MODULE_CATEGORY_BY_LAYER,
   ARCHITECTURE_FACT_MANIFEST_VERSION,
-  LICO_ARCHITECTURE_FACTS,
+  MESHRIX_ARCHITECTURE_FACTS,
   buildArchitectureComponentInventory,
   listArchitectureNodeFacts,
   listDocumentationAssetsByClassification,
@@ -78,16 +78,16 @@ async function verifyDocumentationClassification() {
 }
 
 async function verifyManifestShape() {
-  assert.equal(LICO_ARCHITECTURE_FACTS.schemaVersion, "v0.0.1:schema:definition-1");
-  assert.equal(LICO_ARCHITECTURE_FACTS.protocolVersion, ARCHITECTURE_FACT_MANIFEST_VERSION);
-  assert.equal(LICO_ARCHITECTURE_FACTS.authority, "packages/contracts/src/modules/manifest.mjs");
-  assert.deepEqual(LICO_ARCHITECTURE_FACTS.sourceDiagrams, [
-    "docs/architecture/LICOMESH-SYSTEM-ARCHITECTURE.html",
-    "docs/architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html"
+  assert.equal(MESHRIX_ARCHITECTURE_FACTS.schemaVersion, "v0.0.1:schema:definition-1");
+  assert.equal(MESHRIX_ARCHITECTURE_FACTS.protocolVersion, ARCHITECTURE_FACT_MANIFEST_VERSION);
+  assert.equal(MESHRIX_ARCHITECTURE_FACTS.authority, "packages/contracts/src/modules/manifest.mjs");
+  assert.deepEqual(MESHRIX_ARCHITECTURE_FACTS.sourceDiagrams, [
+    "docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html",
+    "docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html"
   ]);
 
   const categoryIds = new Set();
-  for (const category of LICO_ARCHITECTURE_FACTS.moduleCategoryDefinitions) {
+  for (const category of MESHRIX_ARCHITECTURE_FACTS.moduleCategoryDefinitions) {
     assert.ok(category.categoryId, "module category must have categoryId");
     assert.ok(category.label, `${category.categoryId} must have label`);
     assert.ok(category.description, `${category.categoryId} must have description`);
@@ -98,7 +98,7 @@ async function verifyManifestShape() {
     assert.equal(categoryIds.has(expectedCategory), true, `category ${expectedCategory} must be defined`);
   }
 
-  for (const layer of LICO_ARCHITECTURE_FACTS.systemLayers) {
+  for (const layer of MESHRIX_ARCHITECTURE_FACTS.systemLayers) {
     assert.equal(
       layer.moduleCategory,
       ARCHITECTURE_MODULE_CATEGORY_BY_LAYER[layer.layerId],
@@ -107,9 +107,9 @@ async function verifyManifestShape() {
     assertHydrationShape(layer, `layer ${layer.layerId}`);
   }
 
-  const layerIds = new Set(LICO_ARCHITECTURE_FACTS.systemLayers.map((layer) => layer.layerId));
+  const layerIds = new Set(MESHRIX_ARCHITECTURE_FACTS.systemLayers.map((layer) => layer.layerId));
   const moduleIds = [];
-  for (const module of LICO_ARCHITECTURE_FACTS.systemModules) {
+  for (const module of MESHRIX_ARCHITECTURE_FACTS.systemModules) {
     assert.equal(layerIds.has(module.layerId), true, `${module.moduleId} must reference a known layer`);
     assert.equal(
       module.moduleCategory,
@@ -147,10 +147,10 @@ async function verifyManifestShape() {
     }
   }
 
-  const serviceLayerNumbers = LICO_ARCHITECTURE_FACTS.serviceCapabilityLayers.map((layer) => layer.layerNumber);
+  const serviceLayerNumbers = MESHRIX_ARCHITECTURE_FACTS.serviceCapabilityLayers.map((layer) => layer.layerNumber);
   assert.deepEqual(serviceLayerNumbers, [1, 2, 3, 4, 5, 6], "service capability layers must be ordered from client to external applications");
 
-  for (const field of LICO_ARCHITECTURE_FACTS.serviceCapabilityProtocolFields) {
+  for (const field of MESHRIX_ARCHITECTURE_FACTS.serviceCapabilityProtocolFields) {
     assert.ok(field.fieldId, "service capability protocol field must have fieldId");
     assert.ok(field.label, `${field.fieldId} must have label`);
     assert.ok(field.functionItems.length > 0, `${field.fieldId} must describe function items`);
@@ -186,8 +186,8 @@ async function verifyManifestShape() {
 
 async function verifyHtmlSourceCoverage() {
   const expectedDigest = computeArchitectureFactsDigest();
-  const systemHtml = await read("docs/architecture/LICOMESH-SYSTEM-ARCHITECTURE.html");
-  const serviceHtml = await read("docs/architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html");
+  const systemHtml = await read("docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html");
+  const serviceHtml = await read("docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html");
 
   for (const [label, html] of [
     ["system", systemHtml],
@@ -211,7 +211,7 @@ async function verifyHtmlSourceCoverage() {
     );
   }
 
-  for (const layer of LICO_ARCHITECTURE_FACTS.systemLayers) {
+  for (const layer of MESHRIX_ARCHITECTURE_FACTS.systemLayers) {
     assert.match(systemHtml, new RegExp(layer.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `system architecture HTML must include layer ${layer.label}`);
   }
 
@@ -228,7 +228,7 @@ async function verifyHtmlSourceCoverage() {
     );
   }
 
-  for (const module of LICO_ARCHITECTURE_FACTS.systemModules) {
+  for (const module of MESHRIX_ARCHITECTURE_FACTS.systemModules) {
     assert.equal(systemHtml.includes(module.label), true, `system architecture HTML must include module label ${module.label}`);
     assert.equal(
       systemHtml.includes(`<code>${module.moduleId}</code>`) || systemHtml.includes(module.label),
@@ -244,12 +244,12 @@ async function verifyHtmlSourceCoverage() {
     }
   }
 
-  const serviceProtocolFieldIds = new Set(LICO_ARCHITECTURE_FACTS.serviceCapabilityProtocolFields.map((field) => field.fieldId));
+  const serviceProtocolFieldIds = new Set(MESHRIX_ARCHITECTURE_FACTS.serviceCapabilityProtocolFields.map((field) => field.fieldId));
   for (const htmlCode of extractHtmlCodeValues(serviceHtml)) {
     assert.equal(serviceProtocolFieldIds.has(htmlCode), true, `service capability manifest must include protocol field ${htmlCode}`);
   }
 
-  for (const layer of LICO_ARCHITECTURE_FACTS.serviceCapabilityLayers) {
+  for (const layer of MESHRIX_ARCHITECTURE_FACTS.serviceCapabilityLayers) {
     assert.equal(serviceHtml.includes(`<span>Layer ${layer.layerNumber}</span>`), true, `service capability HTML must include Layer ${layer.layerNumber}`);
     assert.equal(serviceHtml.includes(layer.label), true, `service capability HTML must include ${layer.label}`);
     for (const item of layer.functionItems) {

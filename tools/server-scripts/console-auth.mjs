@@ -3,7 +3,7 @@ import process from "node:process";
 import crypto from "node:crypto";
 import { createConsoleAuth } from "../../packages/foundation/src/security/auth/console-auth.mjs";
 import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/tags/tag-store.adapter.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 function parseArgs(argv) {
   const parsed = { _: [] };
@@ -26,7 +26,7 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  console.log(`LicoMesh Console Auth
+  console.log(`Meshrix Console Auth
 
 Usage:
   npm run server:auth -- list-users
@@ -83,7 +83,7 @@ async function main() {
   }
 
   const userDataPath = path.resolve(
-    String(args["data-dir"] || process.env.LICO_SERVER_DATA_DIR || ServerConfig.getDataDir())
+    String(args["data-dir"] || process.env.MESHRIX_SERVER_DATA_DIR || ServerConfig.getDataDir())
   );
   const tagManagementStore = createTagStoreAdapter({ userDataPath });
   const auth = createConsoleAuth({ userDataPath, tagManagementStore });

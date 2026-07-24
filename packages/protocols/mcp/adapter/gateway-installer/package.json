@@ -1,29 +1,30 @@
 {
-  "name": "lico-mcp-connector",
+  "name": "meshrix-mcp-connector",
   "version": "0.0.1",
-  "description": "Runtime MCP connector for LicoMesh stdio proxy and process-identity protocol support.",
+  "description": "Runtime MCP connector for Meshrix stdio proxy and process-identity protocol support.",
   "type": "module",
   "license": "GPL-3.0-or-later",
-  "author": "LicoMesh Maintainers",
-  "homepage": "https://github.com/LicoLand/LicoMesh#readme",
+  "author": "Meshrix Maintainers",
+  "homepage": "https://meshrix.io",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "packages/protocols/mcp/adapter/gateway-installer"
   },
   "bin": {
-    "lico-mcp": "bin/lico-mcp.mjs"
+    "meshrix-mcp": "bin/meshrix-mcp.mjs"
   },
   "files": [
     "bin/",
     "lib/",
     "LICENSE",
+    "mcp-identity.mjs",
     "mcp-release-targets.mjs",
     "README.md",
     "package.json"
   ],
   "keywords": [
-    "lico",
+    "meshrix",
     "mcp",
     "codex",
     "claude-code",
@@ -36,9 +37,9 @@
     "node": "^22.0.0 || ^24.0.0"
   },
   "dependencies": {
-    "@lico/contracts": "0.0.1"
+    "@meshrix/contracts": "0.0.1"
   },
   "imports": {
-    "#lico/contracts/*": "@lico/contracts/*"
+    "#meshrix/contracts/*": "@meshrix/contracts/*"
   }
 }

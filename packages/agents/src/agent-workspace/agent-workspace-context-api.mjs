@@ -594,7 +594,8 @@ export function createAgentWorkspaceContextApi({
       return { ok: false, error: "工作空间存储边界无效", code: "workspace_storage_boundary_invalid" };
     }
     const parentPath = foldersRoot;
-    const quarantinePath = path.join(parentPath, `.${path.basename(fsPath)}.deleting-${stableId("delete", workspaceId, nowIso())}`);
+    const deleteSuffix = stableId("delete", workspaceId, nowIso());
+    const quarantinePath = path.join(parentPath, `.${path.basename(fsPath)}.deleting-${deleteSuffix}`);
     let movedToQuarantine = false;
     try {
       if (fs.existsSync(fsPath)) {

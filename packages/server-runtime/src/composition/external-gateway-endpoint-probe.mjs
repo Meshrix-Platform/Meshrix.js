@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { verifyMcpHandshakeSignature } from "@lico/protocols/mcp/adapter/mcp-identity";
-import { MCP_PROTOCOL_VERSION } from "@lico/protocols/mcp/adapter/http-mcp-adapter-constants";
+import { verifyMcpHandshakeSignature } from "@meshrix/protocols/mcp/adapter/mcp-identity";
+import { MCP_PROTOCOL_VERSION } from "@meshrix/protocols/mcp/adapter/http-mcp-adapter-constants";
 
 const PROBE_TIMEOUT_MS = 2_500;
 const MAX_PROBE_RESPONSE_BYTES = 64 * 1024;
@@ -63,7 +63,7 @@ function validHandshakeIdentity({ payload, expectedIdentity, nonce }) {
   return payload?.ok === true &&
     handshake.schemaVersion === "v0.0.1:mcp:handshake-1" &&
     handshake.nonce === nonce &&
-    handshake.server?.name === "LicoMesh" &&
+    handshake.server?.name === "Meshrix" &&
     handshake.identity?.keyId === expectedIdentity.keyId &&
     samePublicKey(handshake.identity?.publicKeyJwk, expectedIdentity.publicKeyJwk) &&
     signature.algorithm === "Ed25519" &&
@@ -120,7 +120,7 @@ export async function probeExternalGatewayEndpoint({ profile, expectedIdentity, 
       },
       body: JSON.stringify({
         nonce,
-        client: { name: "LicoMesh External Gateway Probe", version: "1" },
+        client: { name: "Meshrix External Gateway Probe", version: "1" },
       }),
     });
     if (!handshake.response.ok || !validHandshakeIdentity({
@@ -154,12 +154,12 @@ export async function probeExternalGatewayEndpoint({ profile, expectedIdentity, 
         params: {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: {},
-          clientInfo: { name: "LicoMesh External Gateway Probe", version: "1" },
+          clientInfo: { name: "Meshrix External Gateway Probe", version: "1" },
         },
       }),
     });
     sessionId = String(initialized.response.headers.get("mcp-session-id") || "").trim();
-    if (!initialized.response.ok || initialized.payload?.result?.serverInfo?.name !== "LicoMesh" ||
+    if (!initialized.response.ok || initialized.payload?.result?.serverInfo?.name !== "Meshrix" ||
       initialized.payload?.result?.protocolVersion !== MCP_PROTOCOL_VERSION) {
       return Object.freeze({ ok: false, reason: "external_gateway_mcp_probe_failed" });
     }

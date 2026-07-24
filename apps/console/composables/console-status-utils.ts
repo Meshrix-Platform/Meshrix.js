@@ -2,7 +2,7 @@ import type {
   BackgroundProcessStatus,
   ClientAlignmentState,
 } from "../lib/types";
-import { clientAlignmentTone } from "@lico/ui-console/console-client-display-utils";
+import { clientAlignmentTone } from "@meshrix/ui-console/console-client-display-utils";
 
 export function queueLifecycleTone(status: string) {
   const normalized = String(status || "").toLowerCase();

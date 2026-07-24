@@ -1,1 +1,1 @@
-export * from "@lico/contracts/modules/manifest";
+export * from "@meshrix/contracts/modules/manifest";

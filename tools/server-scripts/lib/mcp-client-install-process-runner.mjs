@@ -119,7 +119,7 @@ export function createMcpClientInstallProcessRunner({ connectorScript, redactTex
         timeoutMs: options.timeoutMs || 60000
       });
       if (result.status !== 0) {
-        const verboseOutput = process.env.LICO_VERIFY_VERBOSE
+        const verboseOutput = process.env.MESHRIX_VERIFY_VERBOSE
           ? ` stdout=${redactText(result.stdout)} stderr=${redactText(result.stderr)}`
           : "";
         const error = new Error(`connector failed status=${result.status} stdoutBytes=${result.stdout.length} stderrBytes=${result.stderr.length} timedOut=${result.timedOut}${verboseOutput}`);
@@ -129,7 +129,7 @@ export function createMcpClientInstallProcessRunner({ connectorScript, redactTex
         error.timedOut = result.timedOut;
         throw error;
       }
-      return parseJsonOutput(result.stdout, `lico-mcp ${args[0] || ""}`);
+      return parseJsonOutput(result.stdout, `meshrix-mcp ${args[0] || ""}`);
     }
   };
 }

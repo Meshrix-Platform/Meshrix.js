@@ -57,7 +57,7 @@ function assertNoLeak(value, label) {
 
 async function writeReport(report) {
   const provenance = {
-    producer: "licomesh-core-job-work-queue",
+    producer: "meshrix-core-job-work-queue",
     commandId: COMMAND_ID,
     sourceRevision: await computeVerifierSourceRevision(REPO_ROOT, SOURCE_FILES)
   };
@@ -135,7 +135,7 @@ async function waitForJobManagerIdle(jobManager, { timeoutMs = 30_000 } = {}) {
 
 async function main() {
   const startedAt = new Date();
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-work-queue-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-work-queue-"));
   const jobManager = createJobManager({
     userDataPath,
     processingEnabled: true,
@@ -234,6 +234,7 @@ async function main() {
       verifier: VERIFIER,
       ok: true,
       summary: {
+        releaseReady: true,
         verificationPassed: true,
         coverageComplete: true,
         stableDefinitionIdentity: description.queue.queueDefinitionId === JOB_WORK_QUEUE_DEFINITION_ID,

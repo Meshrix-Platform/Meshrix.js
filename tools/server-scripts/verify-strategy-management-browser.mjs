@@ -13,7 +13,7 @@ import { loginBrowserContext } from "./lib/console-admin-browser-fixture.mjs";
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const distPath = path.join(repoRoot, "build", "dist");
 const reportPath = path.join(repoRoot, "build", "reports", "strategy-management-browser.json");
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-strategy-browser-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-strategy-browser-"));
 const KNOWN_NONFUNCTIONAL_HTTP_ERRORS = new Map([
   // The global Console shell probes this disabled optional monitor feed independently of Strategy Management.
   ["/api/system/monitor-alerts", new Set([400])],
@@ -111,7 +111,7 @@ try {
     .waitFor({ state: "visible", timeout: 10_000 });
 
   await capabilitySelect.selectOption("strategy.tool_policy.preview");
-  await previewInput.fill(JSON.stringify({ toolId: "lico.jobs.list" }));
+  await previewInput.fill(JSON.stringify({ toolId: "meshrix.jobs.list" }));
   await root.getByRole("button", { name: "执行预览" }).click();
   await page.locator(".strategy-management-layout[data-preview-state='denied']")
     .waitFor({ state: "visible", timeout: 10_000 });

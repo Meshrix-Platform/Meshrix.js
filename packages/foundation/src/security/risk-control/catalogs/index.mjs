@@ -1,4 +1,4 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
 
@@ -19,9 +19,9 @@ function freezeEntries(prefix, entries) {
 }
 
 export const RISK_CONTROL_COMPONENT_CATALOG = freezeEntries("v0.0.1:strategy:risk-control-component-1", [
-  { id: "component.mcp-adapter", version: "v1:c1.r1", lifecycle: "active", authority: "LicoMesh MCP adapter" },
-  { id: "component.operation-dispatcher", version: "v1:c1.r1", lifecycle: "active", authority: "LicoMesh operation dispatcher" },
-  { id: "component.console-auth", version: "v1:c1.r1", lifecycle: "active", authority: "LicoMesh console auth" },
+  { id: "component.mcp-adapter", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix MCP adapter" },
+  { id: "component.operation-dispatcher", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix operation dispatcher" },
+  { id: "component.console-auth", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix console auth" },
   { id: "component.operation-permission", version: "v1:c1.r1", lifecycle: "active", authority: "Operation Permission v1" },
   { id: "component.capability-kernel", version: "v1:c1.r1", lifecycle: "active", authority: "Capability Kernel" },
   { id: "component.binding-guard", version: "v1:c1.r1", lifecycle: "active", authority: "Capability Binding Guard" },
@@ -30,7 +30,7 @@ export const RISK_CONTROL_COMPONENT_CATALOG = freezeEntries("v0.0.1:strategy:ris
   { id: "component.checkpoint-tree", version: "v1:c1.r1", lifecycle: "active", authority: "Checkpoint Tree" },
   { id: "component.secret-store", version: "v1:c1.r1", lifecycle: "active", authority: "SecretStore" },
   { id: "component.quota-bulkhead", version: "v1:c1.r1", lifecycle: "active", authority: "Quota and bulkhead runtime" },
-  { id: "component.runtime-queue", version: "v1:c1.r1", lifecycle: "active", authority: "LicoMesh Work Queue" },
+  { id: "component.runtime-queue", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix Work Queue" },
   { id: "component.runtime-capacity", version: "v1:c1.r1", lifecycle: "active", authority: "Performance capacity gate" },
   { id: "component.audit-store", version: "v1:c1.r1", lifecycle: "active", authority: "Risk and operation audit stores" },
   { id: "component.recovery-package", version: "v1:c1.r1", lifecycle: "active", authority: "Security recovery package" },

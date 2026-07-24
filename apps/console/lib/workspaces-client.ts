@@ -1,4 +1,4 @@
-import { deleteJson, getJson, postJson } from "@lico/ui-console/bridge-http";
+import { deleteJson, getJson, postJson } from "@meshrix/ui-console/bridge-http";
 import type {
   WsCheckpointTreeDetail,
   WsCheckpointTreeSummary,

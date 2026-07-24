@@ -16,7 +16,7 @@ import {
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.mjs";
 
 async function withTempAuth(callback) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-console-auth-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-auth-"));
   const tagManagementStore = createTagStoreAdapter({ userDataPath });
   const auth = createConsoleAuth({ userDataPath, tagManagementStore });
   try {
@@ -45,7 +45,7 @@ function makeRequest({
     "user-agent": userAgent
   };
   if (cookie) headers.cookie = cookie;
-  if (csrf) headers["x-lico-csrf"] = csrf;
+  if (csrf) headers["x-meshrix-csrf"] = csrf;
   if (origin) headers.origin = origin;
   if (referer) headers.referer = referer;
   return {
@@ -107,7 +107,7 @@ describe("console auth boundary behavior", () => {
   });
 
   it("removes persisted builtin plugin scopes when the feature is disabled on restart", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-console-role-restart-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-role-restart-"));
     const tagManagementStore = createTagStoreAdapter({ userDataPath });
     let auth;
     try {
@@ -128,7 +128,7 @@ describe("console auth boundary behavior", () => {
   });
 
   it("removes persisted builtin plugin scopes during a lifecycle refresh", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-console-role-refresh-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-role-refresh-"));
     const tagManagementStore = createTagStoreAdapter({ userDataPath });
     const auth = createConsoleAuth({ userDataPath, activeFeatureIds: ["sample-feature"], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS, tagManagementStore });
     try {
@@ -399,7 +399,7 @@ describe("console auth boundary behavior", () => {
   it.skipIf(process.platform === "win32")(
     "enforces private modes for Console Auth and authorization SQLite state",
     async () => {
-      const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-console-auth-private-modes-"));
+      const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-auth-private-modes-"));
       let auth = null;
       let tagManagementStore = null;
       const previousMask = process.umask(0o022);

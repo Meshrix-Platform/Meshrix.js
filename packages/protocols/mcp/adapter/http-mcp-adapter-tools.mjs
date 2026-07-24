@@ -13,7 +13,7 @@ export const MCP_OUTLET_METADATA = Object.freeze({
   [MCP_GATEWAY_TOOL_NAME]: { toolName: MCP_GATEWAY_TOOL_NAME, architectureCategory: "Gateway" }
 });
 
-const PLUGIN_MCP_OUTLET_PATTERN = /^lico\.[A-Za-z][A-Za-z0-9]*$/u;
+const PLUGIN_MCP_OUTLET_PATTERN = /^meshrix\.[A-Za-z][A-Za-z0-9]*$/u;
 
 export function mcpOutletMetadata(toolName = "", tool = {}) {
   const normalized = String(toolName || "").trim();
@@ -81,7 +81,7 @@ export function mcpCapabilityFamilies({ operations = [] } = {}) {
       } = outlet.capabilityFamily;
       const visibleOperations = [...outlet.operations];
       const visible = new Set(visibleOperations);
-      const key = outlet.toolName.replace(/^lico\./u, "");
+      const key = outlet.toolName.replace(/^meshrix\./u, "");
       return [key, {
         ...family,
         available: true,
@@ -108,7 +108,7 @@ export function mcpToolForOperation({ operation = "", toolSkillManagementProvide
 
 export function mcpOutletForOperation({ operation = "", toolSkillManagementProvider, authorization = null } = {}) {
   const operationId = String(operation || "").trim();
-  if (operationId === "lico.mcp.version" || operationId === "lico.version" || operationId === "lico.capabilities.list") {
+  if (operationId === "meshrix.mcp.version" || operationId === "meshrix.version" || operationId === "meshrix.capabilities.list") {
     return MCP_OUTLET_METADATA[MCP_DISCOVERY_TOOL_NAME];
   }
   const tool = mcpToolForOperation({ operation: operationId, toolSkillManagementProvider, authorization });
@@ -125,7 +125,7 @@ export function operationOutletMismatchError({ id, operation, requestedTool, exp
       expectedTool: expectedOutlet.toolName,
       architectureCategory: expectedOutlet.architectureCategory,
       discoveryTool: MCP_DISCOVERY_TOOL_NAME,
-      discoveryOperation: "lico.capabilities.list",
+      discoveryOperation: "meshrix.capabilities.list",
       stableToolName: MCP_STABLE_TOOL_NAME,
       example: {
         name: expectedOutlet.toolName,
@@ -209,24 +209,24 @@ function publicMcpInputSchema(value) {
         const refKey = key.replace(/Id$/i, "Ref");
         properties[refKey] = {
           type: "string",
-          description: "LicoMesh MCP workspace reference, for example 'workspace-1'. Discover it with operation 'lico.agentWorkspace.list'."
+          description: "Meshrix MCP workspace reference, for example 'workspace-1'. Discover it with operation 'meshrix.agentWorkspace.list'."
         };
         if (key === "workspaceId") {
           properties.workspaceIndex = {
             type: "integer",
-            description: "LicoMesh MCP workspace index from operation 'lico.agentWorkspace.list', for example 1."
+            description: "Meshrix MCP workspace index from operation 'meshrix.agentWorkspace.list', for example 1."
           };
           properties["workspace-index"] = {
             type: "integer",
-            description: "Alias for workspaceIndex. LicoMesh MCP workspace index from operation 'lico.agentWorkspace.list', for example 1."
+            description: "Alias for workspaceIndex. Meshrix MCP workspace index from operation 'meshrix.agentWorkspace.list', for example 1."
           };
           properties.workspaceName = {
             type: "string",
-            description: "Workspace title/name from operation 'lico.agentWorkspace.list'."
+            description: "Workspace title/name from operation 'meshrix.agentWorkspace.list'."
           };
           properties["workspace-name"] = {
             type: "string",
-            description: "Alias for workspaceName. Workspace title/name from operation 'lico.agentWorkspace.list'."
+            description: "Alias for workspaceName. Workspace title/name from operation 'meshrix.agentWorkspace.list'."
           };
         }
         continue;
@@ -259,7 +259,7 @@ function executeToolPayload(result = {}) {
   return result.payload?.result !== undefined ? result.payload.result : result.payload;
 }
 
-export function licoCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, visibleTools = [] } = {}) {
+export function meshrixCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, visibleTools = [] } = {}) {
   const enabledOutlets = new Set([
     MCP_DISCOVERY_TOOL_NAME,
     ...activeOutlets
@@ -271,13 +271,13 @@ export function licoCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, v
     properties: {
       apiVersion: {
         type: "string",
-        description: "LicoMesh MCP interface version expected by the caller.",
+        description: "Meshrix MCP interface version expected by the caller.",
         default: MCP_INTERFACE_VERSION,
         enum: [MCP_INTERFACE_VERSION]
       },
       operation: {
         type: "string",
-        description: "Concrete LicoMesh operation id to execute, for example 'operation_permission.catalog'. Do not use an outlet tool name itself here, such as 'lico.discovery' or 'lico.gateway'. If unsure, first call tool 'lico.discovery' with operation 'lico.capabilities.list' and then use one returned operations[].name value."
+        description: "Concrete Meshrix operation id to execute, for example 'operation_permission.catalog'. Do not use an outlet tool name itself here, such as 'meshrix.discovery' or 'meshrix.gateway'. If unsure, first call tool 'meshrix.discovery' with operation 'meshrix.capabilities.list' and then use one returned operations[].name value."
       },
       input: {
         type: "object",
@@ -287,7 +287,7 @@ export function licoCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, v
       },
       subject: {
         type: "object",
-        description: "Optional caller subject. If omitted, LicoMesh injects the authenticated grant subject.",
+        description: "Optional caller subject. If omitted, Meshrix injects the authenticated grant subject.",
         additionalProperties: true
       },
       operatorId: {
@@ -304,11 +304,11 @@ export function licoCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, v
       },
       traceId: {
         type: "string",
-        description: "Caller trace id. LicoMesh generates one when omitted."
+        description: "Caller trace id. Meshrix generates one when omitted."
       },
       idempotencyKey: {
         type: "string",
-        description: "Caller idempotency key. LicoMesh generates one when omitted."
+        description: "Caller idempotency key. Meshrix generates one when omitted."
       },
       intent: {
         type: "string",
@@ -342,8 +342,8 @@ export function licoCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, v
   const coreTools = [
     {
       name: MCP_DISCOVERY_TOOL_NAME,
-      title: "LicoMesh Discovery",
-      description: "Discovery outlet/router for capability discovery, tool descriptions, doctor checks, available commands, connection state, and gateway availability. Start here with operation='lico.capabilities.list', then use one returned operations[].name as the operation value for a LicoMesh outlet.",
+      title: "Meshrix Discovery",
+      description: "Discovery outlet/router for capability discovery, tool descriptions, doctor checks, available commands, connection state, and gateway availability. Start here with operation='meshrix.capabilities.list', then use one returned operations[].name as the operation value for a Meshrix outlet.",
       inputSchema: commonSchema,
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: {
@@ -353,8 +353,8 @@ export function licoCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES, v
     },
     {
       name: MCP_GATEWAY_TOOL_NAME,
-      title: "LicoMesh Gateway",
-      description: "Gateway outlet/router for upstream service registrations, toolsets, grants, policy preview, approval, audit, and governed forwarding operations. Do not call operation='lico.gateway'. First discover concrete operation ids by calling tool 'lico.discovery' with operation='lico.capabilities.list'.",
+      title: "Meshrix Gateway",
+      description: "Gateway outlet/router for upstream service registrations, toolsets, grants, policy preview, approval, audit, and governed forwarding operations. Do not call operation='meshrix.gateway'. First discover concrete operation ids by calling tool 'meshrix.discovery' with operation='meshrix.capabilities.list'.",
       inputSchema: commonSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },
       _meta: {

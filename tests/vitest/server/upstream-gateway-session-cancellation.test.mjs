@@ -8,7 +8,7 @@ const secretMaterial = vi.hoisted(() => ({
   value: "private-secret-generation-one"
 }));
 
-vi.mock("@lico/foundation/security/secrets/local-secret-store", () => ({
+vi.mock("@meshrix/foundation/security/secrets/local-secret-store", () => ({
   resolveLocalSecretPayload: vi.fn(async ({ secretRef }) => ({
     secretRef,
     revision: secretMaterial.revision,
@@ -33,7 +33,7 @@ function fixtureTools() {
 }
 
 async function registryFixture(mcpSessionManager, overrides = {}) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-session-test-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-session-test-"));
   const services = [{
       serviceId: "session-fixture",
       serviceProtocol: "mcp",

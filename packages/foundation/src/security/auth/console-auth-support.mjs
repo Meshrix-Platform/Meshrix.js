@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { LICO_ROOT_ORGANIZATION_ID } from "../authorization/organization-model.mjs";
+import { MESHRIX_ROOT_ORGANIZATION_ID } from "../authorization/organization-model.mjs";
 import { isTrustedProxyAddress } from "../trusted-client-ip.mjs";
 
 
@@ -18,8 +18,8 @@ export const CONSOLE_SCOPE_CONFIG_DIR = path.resolve(
   "../../../config/entity-config/tools/scopes"
 );
 
-export const CONSOLE_SESSION_COOKIE = "lico_console_session";
-export const CONSOLE_CSRF_COOKIE = "lico_console_csrf";
+export const CONSOLE_SESSION_COOKIE = "meshrix_console_session";
+export const CONSOLE_CSRF_COOKIE = "meshrix_console_csrf";
 
 const FALLBACK_CONSOLE_SCOPES = [
   "console:read",
@@ -386,8 +386,8 @@ function singleForwardedHeader(value = "") {
 }
 
 export function isSecureRequest(request) {
-  // M-4: honor LICO_COOKIE_SECURE env var (always|auto|never)
-  const envSetting = String(process.env.LICO_COOKIE_SECURE || "auto").trim().toLowerCase();
+  // M-4: honor MESHRIX_COOKIE_SECURE env var (always|auto|never)
+  const envSetting = String(process.env.MESHRIX_COOKIE_SECURE || "auto").trim().toLowerCase();
   if (envSetting === "always" || envSetting === "1" || envSetting === "true") return true;
   if (envSetting === "never" || envSetting === "0" || envSetting === "false") return false;
   // "auto": use socket TLS or trust HTTPS from a trusted proxy
@@ -465,7 +465,7 @@ export function publicUser(row, roles = CONSOLE_ROLES) {
     roleLabel: role.label,
     scopes: role.scopes,
     tenantId: row.tenant_id || "default",
-    orgId: row.org_id || LICO_ROOT_ORGANIZATION_ID,
+    orgId: row.org_id || MESHRIX_ROOT_ORGANIZATION_ID,
     teamIds: parseJson(row.team_ids_json, []),
     departmentIds: parseJson(row.department_ids_json, []),
     allowedWorkspaceIds: parseJson(row.allowed_workspace_ids_json, []),

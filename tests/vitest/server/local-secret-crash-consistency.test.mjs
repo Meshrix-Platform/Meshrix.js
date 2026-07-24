@@ -53,7 +53,7 @@ afterEach(async () => {
 
 describe("local secret crash consistency", () => {
   it("keeps the previously committed value resolvable when rotation loses its lock", async () => {
-    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-secret-crash-"));
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-secret-crash-"));
     roots.push(dataDir);
     await initializeLocalSecret({ dataDir, target, payload: { token: "material-before" } });
 

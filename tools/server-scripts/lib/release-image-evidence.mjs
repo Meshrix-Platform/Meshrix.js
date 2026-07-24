@@ -98,7 +98,7 @@ function validateCoordinates({
     throw evidenceError("release_image_source_commit_invalid", "The release source commit is invalid.");
   }
   const owner = repository.slice(0, repository.indexOf("/")).toLowerCase();
-  const expectedImage = `ghcr.io/${owner}/licomesh`;
+  const expectedImage = `ghcr.io/${owner}/meshrix`;
   if (image !== expectedImage) {
     throw evidenceError("release_image_name_invalid", "The release image name is invalid.");
   }
@@ -344,9 +344,9 @@ function validateProvenance({ provenance, repository, sourceRef, sourceCommit })
       );
     }
     if (
-      args["build-arg:LICO_SOURCE_REPOSITORY"] !== repository
-      || args["build-arg:LICO_SOURCE_REF"] !== sourceRef
-      || args["build-arg:LICO_SOURCE_COMMIT"] !== sourceCommit
+      args["build-arg:MESHRIX_SOURCE_REPOSITORY"] !== repository
+      || args["build-arg:MESHRIX_SOURCE_REF"] !== sourceRef
+      || args["build-arg:MESHRIX_SOURCE_COMMIT"] !== sourceCommit
       || vcs.revision !== sourceCommit
       || normalizeGitHubRepositorySource(vcs.source).toLowerCase() !== repository.toLowerCase()
     ) {

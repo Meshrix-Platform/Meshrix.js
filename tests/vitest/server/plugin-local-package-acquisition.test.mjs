@@ -5,12 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it } from "vitest";
 
-import { createLocalPluginPackageSource } from "#lico/contracts/plugins/plugin-package-source";
-import { createPluginPackageAcquisition } from "#lico/foundation/module-system/plugin-package-acquisition";
-import { createLocalPluginPackageAcquisition } from "#lico/foundation/module-system/local-plugin-package-source";
-import { createGitHubReleasePluginPackageAcquisition } from "#lico/foundation/module-system/github-release-plugin-package-source";
-import { createPluginPackageLifecycle } from "#lico/foundation/module-system/plugin-package-lifecycle";
-import { createPluginPackageCustody } from "#lico/foundation/module-system/plugin-package-custody";
+import { createLocalPluginPackageSource } from "#meshrix/contracts/plugins/plugin-package-source";
+import { createPluginPackageAcquisition } from "#meshrix/foundation/module-system/plugin-package-acquisition";
+import { createLocalPluginPackageAcquisition } from "#meshrix/foundation/module-system/local-plugin-package-source";
+import { createGitHubReleasePluginPackageAcquisition } from "#meshrix/foundation/module-system/github-release-plugin-package-source";
+import { createPluginPackageLifecycle } from "#meshrix/foundation/module-system/plugin-package-lifecycle";
+import { createPluginPackageCustody } from "#meshrix/foundation/module-system/plugin-package-custody";
 
 function sha256(bytes) {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -27,7 +27,7 @@ describe("local plugin package acquisition", () => {
   });
 
   it("acquires from an authorized root and matches GitHub digest for identical bytes", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-pkg-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-pkg-"));
     try {
       const bytes = Buffer.from("identical-plugin-bytes");
       await fs.writeFile(path.join(root, "sample-plugin.tar.gz"), bytes, { mode: 0o644 });
@@ -87,7 +87,7 @@ describe("local plugin package acquisition", () => {
   });
 
   it("rejects links, path escape, unsafe modes, oversize, and cancellation with path-free errors", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-pkg-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-pkg-"));
     try {
       await fs.writeFile(path.join(root, "ok.tar.gz"), Buffer.from("ok"), { mode: 0o644 });
       await fs.symlink(path.join(root, "ok.tar.gz"), path.join(root, "link.tar.gz"));
@@ -143,7 +143,7 @@ describe("local plugin package acquisition", () => {
   });
 
   it("coalesces identical imports and does not stage plugins", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-pkg-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-pkg-"));
     try {
       const bytes = Buffer.from("coalesce");
       await fs.writeFile(path.join(root, "sample-plugin.tar.gz"), bytes, { mode: 0o644 });
@@ -166,7 +166,7 @@ describe("local plugin package acquisition", () => {
       const acquisition = createPluginPackageAcquisition({
         local: { resolveImportRoot: async () => root }
       });
-      const custodyRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-life-"));
+      const custodyRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-life-"));
       try {
         const lifecycle = createPluginPackageLifecycle({
           custody: createPluginPackageCustody({ rootDir: custodyRoot }),
@@ -192,7 +192,7 @@ describe("local plugin package acquisition", () => {
   });
 
   it("keeps the offline adapter free of network calls", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-pkg-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-pkg-"));
     try {
       await fs.writeFile(path.join(root, "sample-plugin.tar.gz"), Buffer.from("offline"), { mode: 0o644 });
       const previousFetch = globalThis.fetch;

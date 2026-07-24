@@ -1,5 +1,5 @@
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
-import { getRuntimeLogger } from "#lico/foundation/observability/runtime-logger";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
+import { getRuntimeLogger } from "#meshrix/foundation/observability/runtime-logger";
 import { createCapturedResponse, parseCapturedResult } from "./dispatch-operation-captured-response.mjs";
 import { dispatchOperation } from "./dispatch-operation-core.mjs";
 import { findHttpOperation } from "./dispatch-operation-input.mjs";

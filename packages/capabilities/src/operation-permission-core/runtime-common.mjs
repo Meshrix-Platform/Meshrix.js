@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { clientIpFromRequest } from "@lico/foundation/security/trusted-client-ip";
+import { clientIpFromRequest } from "@meshrix/foundation/security/trusted-client-ip";
 
 export function nowIso() {
   return new Date().toISOString();

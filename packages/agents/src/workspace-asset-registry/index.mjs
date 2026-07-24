@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import {
   WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
   WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION,

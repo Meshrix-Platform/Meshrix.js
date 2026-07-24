@@ -2,10 +2,10 @@
 import {
   buildConsoleState,
   buildRuntimeInfo
-} from "@lico/protocols/http/api-facade";
-import { buildBootstrapPayload } from "@lico/protocols/http/bootstrap-payload";
-import { buildProductionHealthReport } from "@lico/foundation/observability/report-reader";
-import { buildArchitectureLiveMap } from "@lico/foundation/observability/architecture-live-map";
+} from "@meshrix/protocols/http/api-facade";
+import { buildBootstrapPayload } from "@meshrix/protocols/http/bootstrap-payload";
+import { buildProductionHealthReport } from "@meshrix/foundation/observability/report-reader";
+import { buildArchitectureLiveMap } from "@meshrix/foundation/observability/architecture-live-map";
 import {
   actorFrom,
   errorPayload,

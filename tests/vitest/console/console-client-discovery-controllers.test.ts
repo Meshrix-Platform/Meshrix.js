@@ -151,7 +151,7 @@ describe("console client controller behavior", () => {
     expect(browserEffectsMock.downloadTextFile).toHaveBeenCalledTimes(1);
     const [fileName, content, contentType] = browserEffectsMock.downloadTextFile.mock.calls[0];
     const payload = JSON.parse(content);
-    expect(fileName).toMatch(/^lico-clients-.*\.json$/);
+    expect(fileName).toMatch(/^meshrix-clients-.*\.json$/);
     expect(contentType).toBe("application/json;charset=utf-8");
     expect(payload.privacy.redacted).toBe(true);
     expect(payload.clients).toEqual([

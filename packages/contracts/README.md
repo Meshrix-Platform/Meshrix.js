@@ -1,6 +1,6 @@
 # Contracts Package
 
-The contracts package defines LicoMesh's shared operation, event, receipt, module, protocol, and schema contracts.
+The contracts package defines Meshrix's shared operation, event, receipt, module, protocol, and schema contracts.
 
 ## Boundaries
 

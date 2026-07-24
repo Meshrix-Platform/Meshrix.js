@@ -14,16 +14,16 @@ import {
   normalizeSandboxExecutionRequest,
   sandboxApprovalRequestDigest,
   sandboxDigest
-} from "@lico/foundation/execution-sandbox/contracts";
+} from "@meshrix/foundation/execution-sandbox/contracts";
 import {
   compileSandboxAdmission,
   normalizeSandboxConfiguration
-} from "@lico/foundation/execution-sandbox/policy-compiler";
-import { createSandboxExecutionBroker } from "@lico/server-runtime/execution-sandbox/broker";
+} from "@meshrix/foundation/execution-sandbox/policy-compiler";
+import { createSandboxExecutionBroker } from "@meshrix/server-runtime/execution-sandbox/broker";
 import {
   createSandboxProviderConformanceReceipt,
   createTrustedSandboxProviderResolver
-} from "@lico/server-runtime/execution-sandbox/trusted-provider-resolver";
+} from "@meshrix/server-runtime/execution-sandbox/trusted-provider-resolver";
 import { runExecutionSandboxOciConformance } from "./verify-execution-sandbox-oci-conformance.mjs";
 import { runOpaqueSandboxCustodyVerification } from "./verify-opaque-sandbox-custody.mjs";
 import { runExecutionLauncherBoundary } from "../verifiers/execution-launcher-boundary.mjs";
@@ -373,7 +373,7 @@ export async function runControlledExecutionSandboxVerification({
   assert.deepEqual(normalizeSandboxConfiguration(undefined), { state: "unconfigured" });
   assert.equal(compileSandboxAdmission({ request: requestFixture(), configuration: undefined }).reasonCode, SANDBOX_DENIAL_REASONS.UNCONFIGURED);
 
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-controlled-sandbox-verifier-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-controlled-sandbox-verifier-"));
   const checks = {};
   try {
     checks.unconfiguredDeniedWithoutSideEffects = await denialScenario(path.join(root, "unconfigured"), {

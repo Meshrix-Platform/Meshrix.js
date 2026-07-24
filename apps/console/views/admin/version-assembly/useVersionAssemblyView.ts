@@ -1,5 +1,5 @@
 import { computed, onMounted, ref, type Ref } from "vue";
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import { buildRuntimeAssembly, getRuntimeInfo } from "../../../lib/runtime-info-client";
 import type {
   FeatureRuntimeSummary,

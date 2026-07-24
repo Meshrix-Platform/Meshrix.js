@@ -16,7 +16,7 @@ describe("SegmentedProgressBar behavior", () => {
       },
     });
 
-    const segments = wrapper.findAll(".lico-segmented-progress-segment");
+    const segments = wrapper.findAll(".meshrix-segmented-progress-segment");
     expect(wrapper.attributes("role")).toBe("progressbar");
     expect(wrapper.attributes("aria-label")).toBe("上传进度");
     expect(wrapper.attributes("aria-valuemax")).toBe("3");
@@ -50,7 +50,7 @@ describe("SegmentedProgressBar behavior", () => {
       },
     });
 
-    const segments = wrapper.findAll(".lico-segmented-progress-segment");
+    const segments = wrapper.findAll(".meshrix-segmented-progress-segment");
     expect(wrapper.attributes("aria-valuemax")).toBe("4");
     expect(wrapper.attributes("aria-valuenow")).toBe("1");
     expect(wrapper.attributes("aria-valuetext")).toBeUndefined();
@@ -72,7 +72,7 @@ describe("SegmentedProgressBar behavior", () => {
   it("keeps a stable one-column layout when no steps are supplied", () => {
     const wrapper = mount(SegmentedProgressBar);
 
-    expect(wrapper.findAll(".lico-segmented-progress-segment")).toHaveLength(0);
+    expect(wrapper.findAll(".meshrix-segmented-progress-segment")).toHaveLength(0);
     expect(wrapper.attributes("aria-valuemax")).toBe("0");
     expect(wrapper.attributes("aria-valuenow")).toBe("0");
     expect(wrapper.attributes("style")).toContain("repeat(1, minmax(0, 1fr))");

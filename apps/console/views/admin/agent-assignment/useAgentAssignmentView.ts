@@ -13,7 +13,7 @@ type DefaultAgentKey =
   | "ruleAuthoringModelAlias"
   | "reviewFusionModelAlias";
 
-const BATCH_PLACEHOLDER_VALUE = "__lico_agent_assignment_batch_placeholder__";
+const BATCH_PLACEHOLDER_VALUE = "__meshrix_agent_assignment_batch_placeholder__";
 
 type AssignmentProbeFailure = {
   key: string;

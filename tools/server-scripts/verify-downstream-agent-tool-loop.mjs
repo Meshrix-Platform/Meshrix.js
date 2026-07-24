@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Deterministic downstream agent stand-in verification.
 //
-// A scripted agent scenario drives the published lico-mcp proxy CLI as a real
+// A scripted agent scenario drives the published meshrix-mcp proxy CLI as a real
 // stdio child process for every declared MCP client target. Each turn goes
 // through the platform downstream MCP gateway (process identity, operation
 // permission grant, tool projection) and reaches the deterministic upstream
 // fixture MCP service, so the whole downstream chain runs with no LLM access
 // and no external credentials. Custom scenarios can extend the default turn
-// sequence through the LICO_DOWNSTREAM_AGENT_SCENARIO environment variable.
+// sequence through the MESHRIX_DOWNSTREAM_AGENT_SCENARIO environment variable.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
@@ -55,7 +55,7 @@ import {
 import { seedVerifierUpstreamServices, writeVerifierLocalUpstreamSecret } from "./lib/upstream-gateway-verifier-publication.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const connectorScript = path.join(repoRoot, "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs");
+const connectorScript = path.join(repoRoot, "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs");
 const fixtureCliPath = path.join(repoRoot, UPSTREAM_FIXTURE_CLI_PATH);
 const REPORT_PATH = path.join(repoRoot, DOWNSTREAM_AGENT_TOOL_LOOP_REPORT_PATH);
 const MCP_SECRET_REF = "secret://verify/downstream-agent-tool-loop/fixture-token";
@@ -212,7 +212,7 @@ async function createLocalGrant({ target, scenario, extraToolNames = [] }) {
       targets: [target],
       label: `verify-downstream-agent-${target}`,
       connectorVersion: "verify-downstream-agent-tool-loop",
-      toolsets: ["lico.gateway.read", "lico.gateway.write"],
+      toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
       dynamicCapabilities: [...grantBindings.dynamicCapabilities],
       allowedServiceIds: [...grantBindings.allowedServiceIds],
       allowedSecretBindings: [...grantBindings.allowedSecretBindings],
@@ -271,7 +271,7 @@ async function runScenarioTurn({ client, turn, requestId, target, observed }) {
       clientInfo: profile.clientInfo
     }, { id: requestId, timeoutMs: 60000 });
     assert.equal(proxyResponseOk(initialize), true, JSON.stringify(safeEvidence(initialize)));
-    assert.equal(initialize.result?.serverInfo?.name, "LicoMesh");
+    assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
     await client.notify("notifications/initialized", {}, {
       omitParams: profile.initializedParamsOmitted === true
     });
@@ -287,7 +287,7 @@ async function runScenarioTurn({ client, turn, requestId, target, observed }) {
       framing: profile.framing
     };
     return {
-      serverName: "LicoMesh",
+      serverName: "Meshrix",
       initializedNotificationSent: true,
       clientProtocolProfile: observed.clientProtocolProfile
     };
@@ -512,7 +512,7 @@ async function runCancellationPropagationScenario({ client }) {
 }
 
 async function runProxyClientTarget({ target, scenario }) {
-  const tokenEnv = `LICO_VERIFY_DOWNSTREAM_AGENT_${target.replace(/[^A-Za-z0-9]/gu, "_").toUpperCase()}_${randomBytes(4).toString("hex").toUpperCase()}`;
+  const tokenEnv = `MESHRIX_VERIFY_DOWNSTREAM_AGENT_${target.replace(/[^A-Za-z0-9]/gu, "_").toUpperCase()}_${randomBytes(4).toString("hex").toUpperCase()}`;
   const cancellationTarget = target === DOWNSTREAM_AGENT_CANCELLATION_TARGET;
   const grant = await createLocalGrant({
     target,
@@ -573,7 +573,7 @@ async function runProxyClientTarget({ target, scenario }) {
       target,
       status: "passed",
       realProxyTransport: true,
-      proxyCommand: "lico-mcp proxy",
+      proxyCommand: "meshrix-mcp proxy",
       protocol: "mcp-stdio-jsonl-json-rpc",
       initialized: observed.initialized,
       initializedNotificationSent: observed.initializedNotificationSent,
@@ -603,8 +603,8 @@ async function runProxyClientTarget({ target, scenario }) {
 
 async function main() {
   const scenario = await loadScenario();
-  userDataPath = rememberTempRoot(await fs.mkdtemp(path.join(os.tmpdir(), "lico-downstream-agent-loop-")));
-  installerHome = rememberTempRoot(await fs.mkdtemp(path.join(os.tmpdir(), "lico-downstream-agent-home-")));
+  userDataPath = rememberTempRoot(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-downstream-agent-loop-")));
+  installerHome = rememberTempRoot(await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-downstream-agent-home-")));
   await writeVerifierLocalUpstreamSecret({
     userDataPath,
     fixtureUrl: "http://127.0.0.1",
@@ -675,7 +675,7 @@ async function main() {
       targetCount: DOWNSTREAM_AGENT_CLIENT_TARGETS.length,
       fixtureCli: UPSTREAM_FIXTURE_CLI_PATH
     },
-    notes: "Scripted target-specific client profiles drive the published lico-mcp proxy CLI over newline-delimited stdio JSON-RPC for every declared MCP client target, through the downstream MCP gateway to the deterministic upstream fixture MCP service."
+    notes: "Scripted target-specific client profiles drive the published meshrix-mcp proxy CLI over newline-delimited stdio JSON-RPC for every declared MCP client target, through the downstream MCP gateway to the deterministic upstream fixture MCP service."
   };
 
   const proxyClientTargets = [];

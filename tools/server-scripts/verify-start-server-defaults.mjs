@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -20,7 +20,7 @@ assert.equal(
 const startServerPath = requestedEntrypoint
   ? path.resolve(requestedEntrypoint)
   : path.join(repoRoot, "tools", "server-scripts", "start-server.mjs");
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-start-server-defaults-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-start-server-defaults-"));
 const readyFilePath = path.join(userDataPath, "private-ready.json");
 const queryNeedle = "private-query-value-73f1";
 const userAgentNeedle = "private-user-agent-91c4";
@@ -115,8 +115,8 @@ async function assertFilesExclude(rootPath, values) {
 }
 
 const env = { ...process.env };
-delete env.LICO_EDITION;
-delete env.LICO_FEATURE_PROFILE;
+delete env.MESHRIX_EDITION;
+delete env.MESHRIX_FEATURE_PROFILE;
 
 const outputChunks = [];
 const output = {
@@ -180,7 +180,7 @@ try {
     headers: { "User-Agent": userAgentNeedle }
   });
   assert.equal(health.status, 200);
-  assert.ok(health.headers.get("x-licomesh-trace-id"));
+  assert.ok(health.headers.get("x-meshrix-trace-id"));
 
   const bootstrap = await requestJson(`${serverUrl}/api/bootstrap`);
   assert.equal(bootstrap.status, 200);
@@ -198,13 +198,21 @@ try {
   assert.equal(rpcHealth.status, 200);
   assert.equal(rpcHealth.payload.jsonrpc, "2.0");
 
-  child.kill("SIGTERM");
+  if (process.platform === "win32") {
+    // Windows has no POSIX signal delivery; terminate the launcher process
+    // tree instead of awaiting a signal-driven graceful shutdown.
+    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    child.kill("SIGTERM");
+  }
   const exit = await waitForChildExit(child);
   assert.equal(exit.timedOut, false);
 
   const finalText = output.text();
-  assert.equal(finalText.includes("Server shutdown: started"), true, "shutdown start status is missing");
-  assert.equal(finalText.includes("Server shutdown: complete"), true, "shutdown completion status is missing");
+  if (process.platform !== "win32") {
+    assert.equal(finalText.includes("Server shutdown: started"), true, "shutdown start status is missing");
+    assert.equal(finalText.includes("Server shutdown: complete"), true, "shutdown completion status is missing");
+  }
   assert.equal(/https?:\/\//i.test(finalText), false, "server output exposed an endpoint URL");
   assert.equal(/(?:^|\n)\s+at\s+/m.test(finalText), false, "server output exposed a stack frame");
   assertAbsent(
@@ -213,7 +221,10 @@ try {
     "server output"
   );
 
-  await assert.rejects(fs.access(readyFilePath));
+  if (process.platform !== "win32") {
+    // A hard-killed Windows server cannot remove its readiness file.
+    await assert.rejects(fs.access(readyFilePath));
+  }
   const runtimeLogText = await readRuntimeLogText(path.join(userDataPath, "logs", "runtime"));
   assert.ok(runtimeLogText.length > 0, "runtime log output is missing");
   assertAbsent(
@@ -298,5 +309,5 @@ try {
     child.kill("SIGKILL");
   }
   await fs.rm(readyFilePath, { force: true });
-  await fs.rm(userDataPath, { recursive: true, force: true });
+  await fs.rm(userDataPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
 }

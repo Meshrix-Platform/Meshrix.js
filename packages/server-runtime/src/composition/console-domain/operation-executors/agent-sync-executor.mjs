@@ -42,7 +42,7 @@ export async function loadAgentSyncPolicy(context = {}) {
   if (!context.agentSyncFeatureActive) {
     return defaultAgentSyncPolicy();
   }
-  return import("@lico/protocols/agent-sync/policy");
+  return import("@meshrix/protocols/agent-sync/policy");
 }
 
 

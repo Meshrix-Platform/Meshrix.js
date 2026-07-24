@@ -1,16 +1,16 @@
 /**
- * LicoMesh server bootstrap.
+ * Meshrix server bootstrap.
  *
  * Parses configuration from environment variables and explicit options,
  * then creates and returns the HTTP server handle.
  *
  * Consumed by:
- *   - bin/lico.mjs (CLI entry point)
+ *   - bin/meshrix.mjs (CLI entry point)
  *   - external launchers / test harnesses
  */
 
 import { startHttpServer } from "./http-server.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 /**
  * Parse a positive integer from a string value with a fallback.
@@ -30,14 +30,14 @@ function parsePort(value, fallback = 0) {
  */
 function resolveRuntimeOptions(overrides = {}) {
   return {
-    profile: process.env.LICO_PROFILE || "default",
-    cleanRuntimeTempOnStart: process.env.LICO_CLEAN_TEMP !== "false",
+    profile: process.env.MESHRIX_PROFILE || "default",
+    cleanRuntimeTempOnStart: process.env.MESHRIX_CLEAN_TEMP !== "false",
     ...overrides
   };
 }
 
 /**
- * Bootstrap the LicoMesh HTTP server.
+ * Bootstrap the Meshrix HTTP server.
  *
  * @param {object} [options]
  * @param {string}  [options.userDataPath]   — data directory (default: ServerConfig.getDataDir())
@@ -52,14 +52,14 @@ function resolveRuntimeOptions(overrides = {}) {
  * @returns {Promise<{server, host, port, url, discovery, close}>}
  */
 export async function bootstrapServer(options = {}) {
-  const host = options.host || process.env.LICO_HOST || "127.0.0.1";
+  const host = options.host || process.env.MESHRIX_HOST || "127.0.0.1";
   const port = parsePort(
-    String(options.port ?? process.env.LICO_PORT ?? ""),
+    String(options.port ?? process.env.MESHRIX_PORT ?? ""),
     0
   );
-  const advertisedHost = options.advertisedHost || process.env.LICO_ADVERTISED_HOST || "";
-  const userDataPath = options.userDataPath || process.env.LICO_SERVER_DATA_DIR || ServerConfig.getDataDir();
-  const distPath = options.distPath || process.env.LICO_DIST_PATH || "";
+  const advertisedHost = options.advertisedHost || process.env.MESHRIX_ADVERTISED_HOST || "";
+  const userDataPath = options.userDataPath || process.env.MESHRIX_SERVER_DATA_DIR || ServerConfig.getDataDir();
+  const distPath = options.distPath || process.env.MESHRIX_DIST_PATH || "";
   const runtimeOptions = resolveRuntimeOptions(options.runtimeOptions);
   const discoveryOptions = options.discoveryOptions || {};
 

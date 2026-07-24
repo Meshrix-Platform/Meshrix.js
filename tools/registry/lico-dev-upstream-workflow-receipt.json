@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "v1:licomesh:lico-dev-upstream-workflow-receipt",
+  "schemaVersion": "v1:meshrix:lico-dev-upstream-workflow-receipt",
   "receiptId": "lico-dev:core.upstream-service-publishing",
   "source": {
     "repository": "lico-dev",
@@ -95,7 +95,7 @@
     }
   },
   "skillRouting": {
-    "skill": "lico-upstream-service-publishing",
+    "skill": "meshrix-upstream-service-publishing",
     "owner": "core",
     "routeCount": 6,
     "routeDigest": "sha256:365c1c9bbe135392476d7716c2c99d7fd3c834f61053b59541f3afd7a2eb5a74",
@@ -121,5 +121,5 @@
     "rawOutputIncluded": false,
     "localInformationIncluded": false
   },
-  "receiptDigest": "sha256:cd853b1a26a98d5fbf87c19e60fe4b10ae4d2f6d8493b1158c5f0008e7957f5a"
+  "receiptDigest": "sha256:3bb54c582e4209d4bf9804a7e697862a4f414fe8eb0b90efd72bc7262a435a69"
 }

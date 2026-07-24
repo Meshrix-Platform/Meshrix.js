@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { sendJson } from "#lico/http-utils";
+import { sendJson } from "#meshrix/http-utils";
 import { requestOwnerSubjectFromSession } from "./jobs-controller-access.mjs";
 import { publishProtocolEvent } from "./jobs-controller-events.mjs";
 import {

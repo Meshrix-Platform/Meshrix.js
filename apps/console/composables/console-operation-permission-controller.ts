@@ -30,8 +30,8 @@ export function createConsoleOperationPermissionController(
   const operationPermissionGrantsState = ref<OperationPermissionGrant[]>([]);
   const operationPermissionMetricsState = ref<OperationPermissionMetrics | null>(null);
   const operationPermissionAuditItems = ref<OperationPermissionAuditItem[]>([]);
-  const selectedOperationPermissionToolId = ref("lico.gateway.health");
-  const policyPreviewToolId = ref("lico.gateway.health");
+  const selectedOperationPermissionToolId = ref("meshrix.gateway.health");
+  const policyPreviewToolId = ref("meshrix.gateway.health");
   const policyPreviewProfileId = ref("gateway-operator");
   const policyPreviewGrantId = ref("");
   const policyPreviewResult = ref<Record<string, unknown> | null>(null);

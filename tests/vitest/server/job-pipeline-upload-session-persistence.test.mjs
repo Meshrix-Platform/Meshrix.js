@@ -13,22 +13,22 @@ const checkpointMocks = vi.hoisted(() => ({
   upsertCheckpointNode: vi.fn(async () => undefined)
 }));
 
-vi.mock("#lico/foundation/checkpoint/tree/checkpoint-tree-projection", () => checkpointMocks);
-vi.mock("#lico/product-api", async (importOriginal) => ({
+vi.mock("#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection", () => checkpointMocks);
+vi.mock("#meshrix/product-api", async (importOriginal) => ({
   ...(await importOriginal()),
   saveSettings: vi.fn(async (_userDataPath, settings = {}) => settings || {})
 }));
 
-import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.mjs";
-import { createStorageProvider } from "../../../packages/foundation/src/storage/storage-provider.mjs";
-import { createJobArtifactHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-artifact-handlers.mjs";
-import { createBatchDeletionCoordinator } from "../../../packages/server-runtime/src/jobs/batch-deletion-coordinator.mjs";
-import { createJobPipeline } from "../../../packages/server-runtime/src/jobs/job-pipeline.mjs";
+import { createStorageKernel } from "#meshrix/foundation/storage/storage-kernel.mjs";
+import { createStorageProvider } from "#meshrix/foundation/storage/storage-provider.mjs";
+import { createJobArtifactHandlers } from "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers.mjs";
+import { createBatchDeletionCoordinator } from "#meshrix/server-runtime/jobs/batch-deletion-coordinator.mjs";
+import { createJobPipeline } from "#meshrix/server-runtime/jobs/job-pipeline.mjs";
 import {
   appendUploadSessionChunk,
   createOrResumeUploadSession,
   resolveUploadSessionFiles
-} from "../../../packages/server-runtime/src/state/upload-session-store.mjs";
+} from "#meshrix/server-runtime/state/upload-session-store.mjs";
 
 const tempRoots = [];
 const storageKernels = [];
@@ -101,7 +101,7 @@ async function createCompleteUploadSession(userDataPath, bytes) {
 }
 
 async function createHarness() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-pipeline-upload-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-pipeline-upload-"));
   tempRoots.push(userDataPath);
   const storageKernel = createStorageKernel({ userDataPath });
   storageKernels.push(storageKernel);

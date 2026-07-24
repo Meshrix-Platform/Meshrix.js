@@ -77,9 +77,9 @@ function createMemoryAgentConfigRegistry() {
   };
 }
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-agent-management-"));
-const previousCredentialMasterKey = process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY;
-process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY = crypto.randomBytes(32).toString("hex");
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-agent-management-"));
+const previousCredentialMasterKey = process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY;
+process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY = crypto.randomBytes(32).toString("hex");
 
 try {
   const sourceIds = EXPECTED_OPERATION_IDS.filter((id) => operationById(SERVER_API_OPERATIONS, id));
@@ -126,7 +126,7 @@ try {
 
   const catalog = createToolCatalog({ operations: SERVER_API_OPERATIONS });
   const toolsByOperation = new Map(catalog.tools.map((tool) => [tool.operationId, tool]));
-  assert.equal(toolsByOperation.get("agents.list")?.id, "lico.agentManagement.agents.list");
+  assert.equal(toolsByOperation.get("agents.list")?.id, "meshrix.agentManagement.agents.list");
   assert.deepEqual(toolsByOperation.get("agents.list")?.requiredScopes, ["console:read"]);
   assert.equal(toolsByOperation.get("agents.list")?.readOnly, true);
   for (const operationId of ["agents.create", "agents.update", "agents.delete"]) {
@@ -135,7 +135,7 @@ try {
     assert.equal(tool.risk, "repair_write");
     assert.equal(tool.readOnly, false);
     assert.deepEqual(tool.requiredScopes, ["runtime:admin"]);
-    assert.ok(tool.toolsets.includes("lico.runtime.maintain"));
+    assert.ok(tool.toolsets.includes("meshrix.runtime.maintain"));
   }
 
   const registry = createMemoryAgentConfigRegistry();
@@ -213,9 +213,9 @@ try {
   console.log("[agent-management] ok");
 } finally {
   if (previousCredentialMasterKey === undefined) {
-    delete process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY;
+    delete process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY;
   } else {
-    process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY = previousCredentialMasterKey;
+    process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY = previousCredentialMasterKey;
   }
   await fs.rm(tempRoot, { recursive: true, force: true });
 }
