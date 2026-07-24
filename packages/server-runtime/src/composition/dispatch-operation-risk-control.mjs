@@ -1,4 +1,4 @@
-import { getTraceContext, traceDetails } from "#lico/foundation/observability/trace-context";
+import { getTraceContext, traceDetails } from "#meshrix/foundation/observability/trace-context";
 import {
   RISK_CONTROL_BOUNDARY_IDS,
   RISK_CONTROL_ENVIRONMENT_IDS,
@@ -6,7 +6,7 @@ import {
   appendRiskControlGateRecord,
   createRiskControlOperationEnvelope,
   digestRiskControlValue
-} from "#lico/foundation/security/risk-control/index";
+} from "#meshrix/foundation/security/risk-control/index";
 import {
   actorFromInput,
   arrayOf,

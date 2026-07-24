@@ -30,7 +30,7 @@ function provider(visibleTools = []) {
 }
 
 const SAMPLE_OUTLET_DESCRIPTOR = Object.freeze({
-  toolName: "lico.sample",
+  toolName: "meshrix.sample",
   title: "Sample plugin",
   description: "Fixture plugin outlet.",
   architectureCategory: "Sample extension",
@@ -64,25 +64,25 @@ describe("enabled plugin MCP outlets", () => {
       method: "tools/list",
       params: {}
     });
-    expect(payload.result.tools.map((tool) => tool.name)).toEqual(["lico.discovery"]);
+    expect(payload.result.tools.map((tool) => tool.name)).toEqual(["meshrix.discovery"]);
 
     const capabilities = await mcpRequest(runtime, {
       jsonrpc: "2.0",
       id: 11,
       method: "tools/call",
       params: {
-        name: "lico.discovery",
+        name: "meshrix.discovery",
         arguments: {
           apiVersion: "v0.0.1:mcp:interface-1",
-          operation: "lico.capabilities.list",
+          operation: "meshrix.capabilities.list",
           input: {}
         }
       }
     });
     expect(Object.keys(capabilities.payload.result.structuredContent.outlets)).toEqual([
-      "lico.discovery"
+      "meshrix.discovery"
     ]);
-    expect(capabilities.payload.result.structuredContent.outlets).not.toHaveProperty("lico.sample");
+    expect(capabilities.payload.result.structuredContent.outlets).not.toHaveProperty("meshrix.sample");
   });
 
   it("rejects a disabled outlet before parsing or executing its operation", async () => {
@@ -92,7 +92,7 @@ describe("enabled plugin MCP outlets", () => {
       id: 2,
       method: "tools/call",
       params: {
-        name: "lico.sample",
+        name: "meshrix.sample",
         arguments: { malformed: "not-an-operation-envelope" }
       }
     });
@@ -102,9 +102,9 @@ describe("enabled plugin MCP outlets", () => {
 
   it("hides and denies unauthorized operations through the Operation Permission provider port", async () => {
     const unauthorized = provider([{
-      id: "lico.sample.file.read",
+      id: "meshrix.sample.file.read",
       operationId: "sample_plugin.file.read",
-      mcpOutlet: "lico.sample",
+      mcpOutlet: "meshrix.sample",
       mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR
     }]);
     unauthorized.authorizeRequest.mockResolvedValue({
@@ -133,7 +133,7 @@ describe("enabled plugin MCP outlets", () => {
       id: 22,
       method: "tools/call",
       params: {
-        name: "lico.sample",
+        name: "meshrix.sample",
         arguments: {
           apiVersion: "v0.0.1:mcp:interface-1",
           operation: "sample_plugin.file.read",
@@ -157,15 +157,15 @@ describe("enabled plugin MCP outlets", () => {
       method: "tools/list",
       params: {}
     });
-    expect(listed.payload.result.tools.map((tool) => tool.name)).toEqual(["lico.discovery"]);
-    expect(listed.payload.result.tools.map((tool) => tool.name)).not.toContain("lico.sample");
+    expect(listed.payload.result.tools.map((tool) => tool.name)).toEqual(["meshrix.discovery"]);
+    expect(listed.payload.result.tools.map((tool) => tool.name)).not.toContain("meshrix.sample");
 
     const denied = await mcpRequest(runtime, {
       jsonrpc: "2.0",
       id: 32,
       method: "tools/call",
       params: {
-        name: "lico.sample",
+        name: "meshrix.sample",
         arguments: {
           apiVersion: "v0.0.1:mcp:interface-1",
           operation: "sample_plugin.session.create",
@@ -179,9 +179,9 @@ describe("enabled plugin MCP outlets", () => {
 
   it("lists an explicitly bound outlet only while its tool is visible", async () => {
     const runtime = provider([{
-      id: "lico.sample.file.read",
+      id: "meshrix.sample.file.read",
       operationId: "sample_plugin.file.read",
-      mcpOutlet: "lico.sample",
+      mcpOutlet: "meshrix.sample",
       mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR
     }]);
     const { payload } = await mcpRequest(runtime, {
@@ -191,8 +191,8 @@ describe("enabled plugin MCP outlets", () => {
       params: {}
     });
     expect(payload.result.tools.map((tool) => tool.name)).toEqual([
-      "lico.discovery",
-      "lico.sample"
+      "meshrix.discovery",
+      "meshrix.sample"
     ]);
     expect(payload.result.tools[1]).toMatchObject({
       title: SAMPLE_OUTLET_DESCRIPTOR.title,
@@ -215,9 +215,9 @@ describe("enabled plugin MCP outlets", () => {
       traceId: "delegated-trace-1"
     };
     const visibleTool = {
-      id: "lico.sample.file.read",
+      id: "meshrix.sample.file.read",
       operationId: "sample_plugin.file.read",
-      mcpOutlet: "lico.sample",
+      mcpOutlet: "meshrix.sample",
       mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR
     };
     const runtime = provider([visibleTool]);
@@ -227,7 +227,7 @@ describe("enabled plugin MCP outlets", () => {
         id: "delegated-grant-1",
         type: "delegated-mcp-child",
         scopes: ["sample_plugin:read"],
-        toolsets: ["lico.sample.read"],
+        toolsets: ["meshrix.sample.read"],
         metadata: { delegatedMcp: delegation }
       }
     });
@@ -235,21 +235,21 @@ describe("enabled plugin MCP outlets", () => {
     runtime.publicMcpToolPayload = vi.fn(async ({ payload }) => payload);
     runtime.executeTool.mockResolvedValue({ ok: true, status: 200, payload: { ok: true } });
     const headers = {
-      "X-LicoMesh-Delegated-Mcp-Grant-Id": "delegated-grant-1",
-      "X-LicoMesh-Delegated-Session-Id": delegation.sessionId,
-      "X-LicoMesh-Delegated-Turn-Id": delegation.turnId,
-      "X-LicoMesh-Delegated-Subject-Id": delegation.subjectId,
-      "X-LicoMesh-Delegated-Target-Id": delegation.targetId,
-      "X-LicoMesh-Delegated-Workspace-Id": delegation.workspaceId,
-      "X-LicoMesh-Delegated-Parent-Operation-Id": delegation.parentOperationId,
-      "X-LicoMesh-Delegated-Trace-Id": delegation.traceId
+      "X-Meshrix-Delegated-Mcp-Grant-Id": "delegated-grant-1",
+      "X-Meshrix-Delegated-Session-Id": delegation.sessionId,
+      "X-Meshrix-Delegated-Turn-Id": delegation.turnId,
+      "X-Meshrix-Delegated-Subject-Id": delegation.subjectId,
+      "X-Meshrix-Delegated-Target-Id": delegation.targetId,
+      "X-Meshrix-Delegated-Workspace-Id": delegation.workspaceId,
+      "X-Meshrix-Delegated-Parent-Operation-Id": delegation.parentOperationId,
+      "X-Meshrix-Delegated-Trace-Id": delegation.traceId
     };
     const { payload } = await mcpRequest(runtime, {
       jsonrpc: "2.0",
       id: 5,
       method: "tools/call",
       params: {
-        name: "lico.sample",
+        name: "meshrix.sample",
         arguments: {
           apiVersion: "v0.0.1:mcp:interface-1",
           operation: visibleTool.id,
@@ -285,7 +285,7 @@ describe("enabled plugin MCP outlets", () => {
       id: 6,
       method: "tools/call",
       params: {
-        name: "lico.sample",
+        name: "meshrix.sample",
         arguments: {
           apiVersion: "v0.0.1:mcp:interface-1",
           operation: visibleTool.id,
@@ -294,7 +294,7 @@ describe("enabled plugin MCP outlets", () => {
       }
     }, {
       ...headers,
-      "X-LicoMesh-Delegated-Subject-Id": "different-subject"
+      "X-Meshrix-Delegated-Subject-Id": "different-subject"
     });
     expect(mismatch.payload.error.data).toEqual({
       code: "delegated_child_operation_binding_mismatch",

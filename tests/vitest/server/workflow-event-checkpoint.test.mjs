@@ -13,7 +13,7 @@ const checkpointTreeIdMock = vi.hoisted(() => vi.fn((kind, ...parts) => {
   return `checkpoint_tree_${kind}_${suffix}`;
 }));
 
-vi.mock("#lico/foundation/checkpoint/tree/checkpoint-tree-projection", () => ({
+vi.mock("#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection", () => ({
   checkpointTreeId: checkpointTreeIdMock,
   deleteCheckpointTree: deleteCheckpointTreeMock,
   finishCheckpointTree: finishCheckpointTreeMock,
@@ -34,7 +34,7 @@ import {
 import {
   dispatchInternalOperation,
   dispatchOperation
-} from "#lico/server-runtime/composition/dispatch-operation";
+} from "#meshrix/server-runtime/composition/dispatch-operation";
 
 function sha256(value) {
   return createHash("sha256").update(String(value)).digest("hex");
@@ -47,7 +47,7 @@ const OWNER_A = {
   tenantId: "tenant-a"
 };
 
-async function withTempUserData(testCase, prefix = "lico-workflow-event-checkpoint-more-extra-") {
+async function withTempUserData(testCase, prefix = "meshrix-workflow-event-checkpoint-more-extra-") {
   const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   try {
     return await testCase(userDataPath);

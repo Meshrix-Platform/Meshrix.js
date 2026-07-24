@@ -9,7 +9,7 @@ import {
   CAPABILITY_BINDING_GUARD_PROTOCOL_VERSION
 } from "./capability-binding-guard.mjs";
 
-const DEFAULT_ALIAS = "lico-tool-grants";
+const DEFAULT_ALIAS = "meshrix-tool-grants";
 
 function text(value) {
   return String(value || "").trim();
@@ -17,30 +17,30 @@ function text(value) {
 
 function resolveBackend(input = {}) {
   return text(input.backend) ||
-    process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
-    process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER ||
+    process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
+    process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
     "auto";
 }
 
 function resolveAlias(input = {}) {
   return text(input.alias) ||
-    process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_ALIAS ||
-    process.env.LICO_OPAQUE_CAPABILITY_KEY_ALIAS ||
+    process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS ||
+    process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_ALIAS ||
     DEFAULT_ALIAS;
 }
 
 function resolveBindingBackend(input = {}) {
   return text(input.backend) ||
-    process.env.LICO_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
-    process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER ||
+    process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
+    process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
     "auto";
 }
 
 function resolveBindingAlias(input = {}) {
   return text(input.alias) ||
-    process.env.LICO_TOOL_GRANT_BINDING_GUARD_ALIAS ||
-    process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS ||
-    "lico-tool-bindings";
+    process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS ||
+    process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS ||
+    "meshrix-tool-bindings";
 }
 
 export async function describeCapabilityKernelStatus(input = {}) {

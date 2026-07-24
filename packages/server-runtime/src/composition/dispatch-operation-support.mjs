@@ -1,14 +1,14 @@
-import { sendJson } from "#lico/foundation/http/http-response";
-import { OPERATION_PROOF_PROFILES } from "#lico/contracts/operations/operation-decorators";
+import { sendJson } from "#meshrix/foundation/http/http-response";
+import { OPERATION_PROOF_PROFILES } from "#meshrix/contracts/operations/operation-decorators";
 
 // Literal field names used in dispatch proof lifecycle instrumentation.
 export const OP_DISPATCH_OTEL_ATTRIBUTES = Object.freeze({
-  "service.name": "licomesh-server",
+  "service.name": "meshrix-server",
   "service.version": "0.0.1",
-  "lico.operation.id": null,
-  "lico.workspace.id": null,
-  "lico.capability.id": null,
-  "lico.receipt.id": null,
+  "meshrix.operation.id": null,
+  "meshrix.workspace.id": null,
+  "meshrix.capability.id": null,
+  "meshrix.receipt.id": null,
 });
 
 export function coerceValue(value, type) {

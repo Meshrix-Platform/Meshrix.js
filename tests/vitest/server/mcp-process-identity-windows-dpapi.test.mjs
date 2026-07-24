@@ -37,14 +37,14 @@ describe("MCP process identity Windows DPAPI backend", () => {
   });
 
   it.skipIf(process.platform === "win32")("round-trips through the DPAPI command boundary without plaintext persistence", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-dpapi-test-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-dpapi-test-"));
     temporaryRoots.push(root);
     const command = path.join(root, "fake-powershell.mjs");
     await fs.writeFile(command, `#!/usr/bin/env node
 const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 const input = Buffer.concat(chunks).toString("utf8");
-if (process.env.LICO_MCP_TOKEN || process.env.CUSTOM_GRANT_SECRET) process.exit(3);
+if (process.env.MESHRIX_MCP_TOKEN || process.env.CUSTOM_GRANT_SECRET) process.exit(3);
 const args = process.argv.slice(2).join(" ");
 if (args.includes("ProtectedData]::Protect")) {
   process.stdout.write(Buffer.from("dpapi:" + input, "utf8").toString("base64"));
@@ -82,7 +82,7 @@ if (args.includes("ProtectedData]::Protect")) {
           }
         }
       });
-      const encryptedPath = path.join(process.env.HOME, ".lico", "mcp", "process-identity", target + ".dpapi");
+      const encryptedPath = path.join(process.env.HOME, ".meshrix", "mcp", "process-identity", target + ".dpapi");
       const encrypted = await fs.readFile(encryptedPath, "utf8");
       const loaded = await loadProcessIdentity(target);
       await deleteProcessIdentity(target);
@@ -100,9 +100,9 @@ if (args.includes("ProtectedData]::Protect")) {
       env: {
         ...process.env,
         HOME: root,
-        LICO_MCP_PROCESS_IDENTITY_STORE: "windows-dpapi",
-        LICO_WINDOWS_DPAPI_COMMAND: command,
-        LICO_MCP_TOKEN: "synthetic-grant-token",
+        MESHRIX_MCP_PROCESS_IDENTITY_STORE: "windows-dpapi",
+        MESHRIX_WINDOWS_DPAPI_COMMAND: command,
+        MESHRIX_MCP_TOKEN: "synthetic-grant-token",
         CUSTOM_GRANT_SECRET: "synthetic-grant-token"
       },
       encoding: "utf8",

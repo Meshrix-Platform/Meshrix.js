@@ -1,4 +1,4 @@
-import { serverToken } from "#lico/product-api";
+import { serverToken } from "#meshrix/product-api";
 import { cloneJob } from "./job-manager-projection.mjs";
 import { persistJobMeta } from "./job-manager-persistence.mjs";
 import { normalizeArchiveBatchId, RECOVERY_STAGE_MESSAGE } from "./job-manager-validation.mjs";

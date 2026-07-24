@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/capability.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/capability.schema.json",
   "title": "Capability Registry",
   "description": "Canonical operation capability registry generated from the operation registry.",
   "type": "object",

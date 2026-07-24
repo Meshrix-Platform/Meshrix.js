@@ -1,5 +1,5 @@
 {
-  "kind": "lico.upstream-service",
+  "kind": "meshrix.upstream-service",
   "schemaVersion": "v0.0.1:upstream-service:portable-import-2",
   "serviceKey": "file-parser/format-convert",
   "descriptor": {

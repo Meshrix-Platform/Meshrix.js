@@ -12,8 +12,8 @@ import {
   setRuntimeLogger,
   summarizeError,
   summarizeForLog
-} from "#lico/runtime-logger";
-import { ServerConfig } from "#lico/server-config";
+} from "#meshrix/runtime-logger";
+import { ServerConfig } from "#meshrix/server-config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -66,7 +66,7 @@ const role = normalizeBackgroundRoleList(args.role || args.roles)[0] || "import-
 const userDataPath = path.resolve(
   String(
     args["data-dir"] ||
-      process.env.LICO_SERVER_DATA_DIR ||
+      process.env.MESHRIX_SERVER_DATA_DIR ||
       ServerConfig.getDataDir()
   )
 );
@@ -76,7 +76,7 @@ const logger = createRuntimeLogger({
   userDataPath,
   runtimeOptions: {
     cwd: projectRoot,
-    logDir: args["log-dir"] || process.env.LICO_LOG_DIR || ""
+    logDir: args["log-dir"] || process.env.MESHRIX_LOG_DIR || ""
   },
   component: `background-worker-${role}`
 });

@@ -11,11 +11,11 @@ describe("operation proof evidence policy readiness", () => {
       signerSecret: ""
     });
     expect(result.ok).toBe(false);
-    expect(result.reason).toMatch(/LICO_OPERATION_PROOF_SIGNER_SECRET/);
+    expect(result.reason).toMatch(/MESHRIX_OPERATION_PROOF_SIGNER_SECRET/);
     expect(() => assertEvidencePolicyReadiness({
       evidencePolicy: "production",
       signerSecret: ""
-    })).toThrow(/LICO_OPERATION_PROOF_SIGNER_SECRET/);
+    })).toThrow(/MESHRIX_OPERATION_PROOF_SIGNER_SECRET/);
   });
 
   it("passes when production policy and signer are consistent", () => {

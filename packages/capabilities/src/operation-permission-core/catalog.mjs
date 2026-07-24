@@ -1,6 +1,6 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
-import { operationFeatureId } from "@lico/contracts/operations/operation-feature-resolution";
+import { operationFeatureId } from "@meshrix/contracts/operations/operation-feature-resolution";
 import {
   INTERNAL_OPERATION_IDS_HIDDEN_FROM_TOOL_CATALOG,
   OPERATION_PERMISSION_SCOPES,
@@ -34,9 +34,9 @@ function uniqueStrings(values = []) {
 
 const DYNAMIC_TOOLSET_IDS_BY_FEATURE = Object.freeze({
   "upstream-gateway": Object.freeze([
-    "lico.gateway.read",
-    "lico.gateway.write",
-    "lico.gateway.maintain"
+    "meshrix.gateway.read",
+    "meshrix.gateway.write",
+    "meshrix.gateway.maintain"
   ])
 });
 
@@ -93,53 +93,53 @@ function inferToolsets(operation, scopes = [], toolId = "", risk = "read_only") 
     ...uniqueStrings(operation.toolsets || []),
     ...scopes.map((scope) => TOOLSET_BY_SCOPE[scope]).filter(Boolean)
   ]);
-  if (toolId.startsWith("lico.runtime.")) {
+  if (toolId.startsWith("meshrix.runtime.")) {
     if (operation.id === "runtime.info" || operation.id === "runtime.mounts") {
-      toolsets.add("lico.runtime.read");
+      toolsets.add("meshrix.runtime.read");
     } else {
-      toolsets.add("lico.runtime.maintain");
+      toolsets.add("meshrix.runtime.maintain");
     }
   }
-  if (toolId.startsWith("lico.architecture.")) {
-    toolsets.add("lico.runtime.read");
+  if (toolId.startsWith("meshrix.architecture.")) {
+    toolsets.add("meshrix.runtime.read");
   }
-  if (toolId.startsWith("lico.sampleCapabilityPack.")) {
-    toolsets.add(operation.id === "sample_capability_pack.materialize" ? "lico.runtime.maintain" : "lico.runtime.read");
+  if (toolId.startsWith("meshrix.sampleCapabilityPack.")) {
+    toolsets.add(operation.id === "sample_capability_pack.materialize" ? "meshrix.runtime.maintain" : "meshrix.runtime.read");
   }
-  if (toolId.startsWith("lico.gateway.")) {
+  if (toolId.startsWith("meshrix.gateway.")) {
     if (scopes.includes("gateway:admin")) {
-      toolsets.add("lico.gateway.admin");
+      toolsets.add("meshrix.gateway.admin");
     } else if (scopes.includes("gateway:maintain")) {
-      toolsets.add("lico.gateway.maintain");
+      toolsets.add("meshrix.gateway.maintain");
     } else if (scopes.includes("gateway:write")) {
-      toolsets.add("lico.gateway.write");
+      toolsets.add("meshrix.gateway.write");
     } else {
-      toolsets.add("lico.gateway.read");
+      toolsets.add("meshrix.gateway.read");
     }
   }
-  if (toolId.startsWith("lico.storageBackups.")) {
+  if (toolId.startsWith("meshrix.storageBackups.")) {
     toolsets.add(
       operation.id === "storage.backups.list" || operation.id === "storage.backups.restore_preview"
-        ? "lico.runtime.read"
-        : "lico.runtime.maintain"
+        ? "meshrix.runtime.read"
+        : "meshrix.runtime.maintain"
     );
   }
-  if (toolId.startsWith("lico.executiveReport.")) {
-    toolsets.add(operation.id === "executive_report.generate" ? "lico.runtime.maintain" : "lico.runtime.read");
+  if (toolId.startsWith("meshrix.executiveReport.")) {
+    toolsets.add(operation.id === "executive_report.generate" ? "meshrix.runtime.maintain" : "meshrix.runtime.read");
   }
   if (
-    toolId.startsWith("lico.agentWorkspace.") ||
-    toolId.startsWith("lico.workspace.") ||
-    toolId.startsWith("lico.agentSession.") ||
-    toolId.startsWith("lico.workspaceGovernance.")
+    toolId.startsWith("meshrix.agentWorkspace.") ||
+    toolId.startsWith("meshrix.workspace.") ||
+    toolId.startsWith("meshrix.agentSession.") ||
+    toolId.startsWith("meshrix.workspaceGovernance.")
   ) {
-    toolsets.add("lico.agent.workspace");
+    toolsets.add("meshrix.agent.workspace");
   }
   if (toolId.includes(".renderMarkdown")) {
-    toolsets.add("lico.result.export");
+    toolsets.add("meshrix.result.export");
   }
   if (operation.id === "agent_sync.publish") {
-    toolsets.add("lico.agent.sync.publish");
+    toolsets.add("meshrix.agent.sync.publish");
   }
   return [...toolsets].filter((toolsetId) => !TOOLSET_BY_ID.has(toolsetId) || toolsetAllowsRisk(toolsetId, risk));
 }
@@ -157,7 +157,7 @@ function createInternalToolDefinition({
   id,
   label,
   description,
-  owner = "lico",
+  owner = "meshrix",
   source = "handler-backed",
   handlerId,
   featureId = "core-platform",
@@ -216,14 +216,14 @@ function createInternalToolDefinition({
 function createInternalToolDefinitions() {
   return [
     ...[
-      ["system.health", "System health", "lico.runtime.read", "storage:read", "read_only"],
-      ["runtime.info", "Runtime info", "lico.runtime.read", "storage:read", "read_only"],
-      ["storage.summary", "Storage summary", "lico.storage.read", "storage:read", "read_only"],
-      ["storage.doctor", "Storage doctor", "lico.runtime.read", "storage:read", "read_only"],
-      ["storage.reconcile", "Storage reconcile", "lico.runtime.maintain", "runtime:admin", "repair_write"],
-      ["jobs.list", "Jobs list", "lico.jobs.read", "jobs:read", "read_only"],
-      ["jobs.failed_review", "Failed jobs review", "lico.jobs.read", "jobs:read", "read_only"],
-      ["runtime.reload_mounts", "Runtime reload mounts", "lico.runtime.maintain", "runtime:admin", "repair_write"]
+      ["system.health", "System health", "meshrix.runtime.read", "storage:read", "read_only"],
+      ["runtime.info", "Runtime info", "meshrix.runtime.read", "storage:read", "read_only"],
+      ["storage.summary", "Storage summary", "meshrix.storage.read", "storage:read", "read_only"],
+      ["storage.doctor", "Storage doctor", "meshrix.runtime.read", "storage:read", "read_only"],
+      ["storage.reconcile", "Storage reconcile", "meshrix.runtime.maintain", "runtime:admin", "repair_write"],
+      ["jobs.list", "Jobs list", "meshrix.jobs.read", "jobs:read", "read_only"],
+      ["jobs.failed_review", "Failed jobs review", "meshrix.jobs.read", "jobs:read", "read_only"],
+      ["runtime.reload_mounts", "Runtime reload mounts", "meshrix.runtime.maintain", "runtime:admin", "repair_write"]
     ].map(([toolName, label, toolset, scope, risk]) =>
       createInternalToolDefinition({
         id: `maintenance-agent.${toolName}`,
@@ -440,7 +440,7 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
       version: "1",
       label: String(operation.label || toolId),
       description: String(operation.description || operation.label || toolId),
-      owner: pluginOwnerId || "lico",
+      owner: pluginOwnerId || "meshrix",
       ownerKind: pluginOwnerId ? "plugin" : "core",
       ownerId: pluginOwnerId || "core-platform",
       source: "operation-backed",

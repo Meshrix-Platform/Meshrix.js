@@ -9,7 +9,7 @@ import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operation
 import { executeRuntimeMountOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/runtime-admin-executors.mjs";
 import { createExternalGatewayManagementProvider } from "../../../packages/server-runtime/src/composition/external-gateway-management-provider.mjs";
 import { probeExternalGatewayEndpoint } from "../../../packages/server-runtime/src/composition/external-gateway-endpoint-probe.mjs";
-import { signMcpHandshake } from "../../../packages/protocols/mcp/adapter/mcp-identity.mjs";
+import { signMcpHandshake } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-identity.mjs";
 import { mcpHandshake } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-discovery.mjs";
 
 function createProbeIdentity() {
@@ -42,7 +42,7 @@ function createProbeFetch({ identity, adapterId = "caddy", mcpOk = true } = {}) 
           keyId: identity.keyId,
           publicKeyJwk: identity.publicKeyJwk,
         },
-        server: { name: "LicoMesh" },
+        server: { name: "Meshrix" },
         externalGateway: {
           adapterId,
           route: "/api/mcp/handshake",
@@ -55,7 +55,7 @@ function createProbeFetch({ identity, adapterId = "caddy", mcpOk = true } = {}) 
       return jsonResponse(mcpOk ? {
         jsonrpc: "2.0",
         id: "external-gateway-probe",
-        result: { protocolVersion: "2025-06-18", serverInfo: { name: "LicoMesh" } },
+        result: { protocolVersion: "2025-06-18", serverInfo: { name: "Meshrix" } },
       } : { error: "not mcp" }, { headers: { "Mcp-Session-Id": "probe-session" } });
     }
     if (parsed.pathname === "/mcp" && options.method === "DELETE") {
@@ -228,9 +228,9 @@ describe("External Gateway management provider", () => {
     const result = mcpHandshake({
       request: {
         headers: {
-          "x-licomesh-gateway": "caddy",
-          "x-licomesh-gateway-route": "/api/mcp/handshake",
-          "x-licomesh-gateway-request-id": "request-id",
+          "x-meshrix-gateway": "caddy",
+          "x-meshrix-gateway-route": "/api/mcp/handshake",
+          "x-meshrix-gateway-request-id": "request-id",
         },
       },
       requestBody: Buffer.from(JSON.stringify({ nonce: "a".repeat(32) })),

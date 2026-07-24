@@ -21,7 +21,7 @@ export function evaluateEvidencePolicyReadiness({
     return {
       ok: false,
       reason:
-        `LICO_OPERATION_PROOF_EVIDENCE_POLICY must be "development" or "production", got "${policy}".`
+        `MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY must be "development" or "production", got "${policy}".`
     };
   }
 
@@ -29,8 +29,8 @@ export function evaluateEvidencePolicyReadiness({
     return {
       ok: false,
       reason:
-        "Production evidence policy (LICO_OPERATION_PROOF_EVIDENCE_POLICY=production) " +
-        "requires a configured signer (LICO_OPERATION_PROOF_SIGNER_SECRET). " +
+        "Production evidence policy (MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY=production) " +
+        "requires a configured signer (MESHRIX_OPERATION_PROOF_SIGNER_SECRET). " +
         "Without a signer, production deployments silently produce non-verifiable evidence. " +
         "See docs/RUNBOOK.md for signer provisioning and rotation."
     };
@@ -57,7 +57,7 @@ export function assertEvidencePolicyReadiness(input = {}) {
  */
 export function assertEvidencePolicyReadinessFromEnv(env = process.env) {
   return assertEvidencePolicyReadiness({
-    evidencePolicy: env.LICO_OPERATION_PROOF_EVIDENCE_POLICY,
-    signerSecret: env.LICO_OPERATION_PROOF_SIGNER_SECRET
+    evidencePolicy: env.MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY,
+    signerSecret: env.MESHRIX_OPERATION_PROOF_SIGNER_SECRET
   });
 }

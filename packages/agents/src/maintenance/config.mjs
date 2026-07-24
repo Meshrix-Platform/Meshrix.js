@@ -5,7 +5,7 @@ import {
   atomicWriteJsonThroughState,
   mutateState,
   waitForStateIdle
-} from "@lico/foundation/storage/state-coordinator";
+} from "@meshrix/foundation/storage/state-coordinator";
 
 export const MAINTENANCE_AGENT_SCHEMA_VERSION = "v0.0.1:platform:maintenance-agent-schema-1";
 export const MAINTENANCE_AGENT_RISKS = [

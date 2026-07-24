@@ -1,8 +1,8 @@
-export const MCP_CLIENT_ADAPTER_PROTOCOL = "licomesh.client-adapter.json-stdio.v1";
+export const MCP_CLIENT_ADAPTER_PROTOCOL = "v0.0.1:meshrix:client-adapter-json-stdio-1";
 
 function trustedAdapter(target, label) {
   const version = "0.0.1";
-  const packageName = `@licomesh/agent-${target}-adapter`;
+  const packageName = `@meshrix/agent-${target}-adapter`;
   return Object.freeze({
     target,
     label,
@@ -62,5 +62,15 @@ export function mcpSupportedTargetDetails() {
     installMode: "external-client-adapter",
     locations: [...locations],
     adapter: { ...adapter }
+  }));
+}
+
+export function mcpPublicSupportedTargetDetails() {
+  return MCP_CLIENT_TARGETS.map(({ target, label, priority, locations }) => ({
+    target,
+    label,
+    priority,
+    installMode: "external-client-adapter",
+    locations: [...locations]
   }));
 }

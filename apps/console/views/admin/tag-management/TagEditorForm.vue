@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import type { TagManagementTag } from "../../../lib/tag-management-client";
 
 type TagEditor = {

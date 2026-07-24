@@ -1791,620 +1791,620 @@
   ],
   "toolCapabilities": [
     {
-      "id": "cap:tool:lico.readiness.baseline.status:execute",
-      "toolId": "lico.readiness.baseline.status",
+      "id": "cap:tool:meshrix.readiness.baseline.status:execute",
+      "toolId": "meshrix.readiness.baseline.status",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.subject.resolve:execute",
-      "toolId": "lico.authorization.subject.resolve",
+      "id": "cap:tool:meshrix.authorization.subject.resolve:execute",
+      "toolId": "meshrix.authorization.subject.resolve",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.policy.evaluate:execute",
-      "toolId": "lico.authorization.policy.evaluate",
+      "id": "cap:tool:meshrix.authorization.policy.evaluate:execute",
+      "toolId": "meshrix.authorization.policy.evaluate",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.governance.summary:execute",
-      "toolId": "lico.authorization.governance.summary",
+      "id": "cap:tool:meshrix.authorization.governance.summary:execute",
+      "toolId": "meshrix.authorization.governance.summary",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.tagManagement.tags.list:execute",
-      "toolId": "lico.tagManagement.tags.list",
+      "id": "cap:tool:meshrix.tagManagement.tags.list:execute",
+      "toolId": "meshrix.tagManagement.tags.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.tagManagement.tags.get:execute",
-      "toolId": "lico.tagManagement.tags.get",
+      "id": "cap:tool:meshrix.tagManagement.tags.get:execute",
+      "toolId": "meshrix.tagManagement.tags.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.tagManagement.tags.upsert:execute",
-      "toolId": "lico.tagManagement.tags.upsert",
+      "id": "cap:tool:meshrix.tagManagement.tags.upsert:execute",
+      "toolId": "meshrix.tagManagement.tags.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.tagManagement.tags.archive:execute",
-      "toolId": "lico.tagManagement.tags.archive",
+      "id": "cap:tool:meshrix.tagManagement.tags.archive:execute",
+      "toolId": "meshrix.tagManagement.tags.archive",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.tagManagement.tags.restore:execute",
-      "toolId": "lico.tagManagement.tags.restore",
+      "id": "cap:tool:meshrix.tagManagement.tags.restore:execute",
+      "toolId": "meshrix.tagManagement.tags.restore",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.tagManagement.projections.list:execute",
-      "toolId": "lico.tagManagement.projections.list",
+      "id": "cap:tool:meshrix.tagManagement.projections.list:execute",
+      "toolId": "meshrix.tagManagement.projections.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.tagManagement.projections.rebuild:execute",
-      "toolId": "lico.tagManagement.projections.rebuild",
+      "id": "cap:tool:meshrix.tagManagement.projections.rebuild:execute",
+      "toolId": "meshrix.tagManagement.projections.rebuild",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.tagManagement.audit.list:execute",
-      "toolId": "lico.tagManagement.audit.list",
+      "id": "cap:tool:meshrix.tagManagement.audit.list:execute",
+      "toolId": "meshrix.tagManagement.audit.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.roles.list:execute",
-      "toolId": "lico.authorization.roles.list",
+      "id": "cap:tool:meshrix.authorization.roles.list:execute",
+      "toolId": "meshrix.authorization.roles.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.roles.upsert:execute",
-      "toolId": "lico.authorization.roles.upsert",
+      "id": "cap:tool:meshrix.authorization.roles.upsert:execute",
+      "toolId": "meshrix.authorization.roles.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.departments.list:execute",
-      "toolId": "lico.authorization.departments.list",
+      "id": "cap:tool:meshrix.authorization.departments.list:execute",
+      "toolId": "meshrix.authorization.departments.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.departments.upsert:execute",
-      "toolId": "lico.authorization.departments.upsert",
+      "id": "cap:tool:meshrix.authorization.departments.upsert:execute",
+      "toolId": "meshrix.authorization.departments.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.teams.list:execute",
-      "toolId": "lico.authorization.teams.list",
+      "id": "cap:tool:meshrix.authorization.teams.list:execute",
+      "toolId": "meshrix.authorization.teams.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.teams.upsert:execute",
-      "toolId": "lico.authorization.teams.upsert",
+      "id": "cap:tool:meshrix.authorization.teams.upsert:execute",
+      "toolId": "meshrix.authorization.teams.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.users.policies.list:execute",
-      "toolId": "lico.authorization.users.policies.list",
+      "id": "cap:tool:meshrix.authorization.users.policies.list:execute",
+      "toolId": "meshrix.authorization.users.policies.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.users.policy.upsert:execute",
-      "toolId": "lico.authorization.users.policy.upsert",
+      "id": "cap:tool:meshrix.authorization.users.policy.upsert:execute",
+      "toolId": "meshrix.authorization.users.policy.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.agentGroups.list:execute",
-      "toolId": "lico.authorization.agentGroups.list",
+      "id": "cap:tool:meshrix.authorization.agentGroups.list:execute",
+      "toolId": "meshrix.authorization.agentGroups.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.agentGroups.upsert:execute",
-      "toolId": "lico.authorization.agentGroups.upsert",
+      "id": "cap:tool:meshrix.authorization.agentGroups.upsert:execute",
+      "toolId": "meshrix.authorization.agentGroups.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.agents.bindings.list:execute",
-      "toolId": "lico.authorization.agents.bindings.list",
+      "id": "cap:tool:meshrix.authorization.agents.bindings.list:execute",
+      "toolId": "meshrix.authorization.agents.bindings.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.agents.binding.upsert:execute",
-      "toolId": "lico.authorization.agents.binding.upsert",
+      "id": "cap:tool:meshrix.authorization.agents.binding.upsert:execute",
+      "toolId": "meshrix.authorization.agents.binding.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.approvals.list:execute",
-      "toolId": "lico.authorization.approvals.list",
+      "id": "cap:tool:meshrix.authorization.approvals.list:execute",
+      "toolId": "meshrix.authorization.approvals.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.approvals.upsert:execute",
-      "toolId": "lico.authorization.approvals.upsert",
+      "id": "cap:tool:meshrix.authorization.approvals.upsert:execute",
+      "toolId": "meshrix.authorization.approvals.upsert",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.approvals.revoke:execute",
-      "toolId": "lico.authorization.approvals.revoke",
+      "id": "cap:tool:meshrix.authorization.approvals.revoke:execute",
+      "toolId": "meshrix.authorization.approvals.revoke",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.authorization.receipts.list:execute",
-      "toolId": "lico.authorization.receipts.list",
+      "id": "cap:tool:meshrix.authorization.receipts.list:execute",
+      "toolId": "meshrix.authorization.receipts.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.loanRecords.list:execute",
-      "toolId": "lico.authorization.loanRecords.list",
+      "id": "cap:tool:meshrix.authorization.loanRecords.list:execute",
+      "toolId": "meshrix.authorization.loanRecords.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.authorization.deniedRequests.list:execute",
-      "toolId": "lico.authorization.deniedRequests.list",
+      "id": "cap:tool:meshrix.authorization.deniedRequests.list:execute",
+      "toolId": "meshrix.authorization.deniedRequests.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.info:execute",
-      "toolId": "lico.workspace.info",
+      "id": "cap:tool:meshrix.workspace.info:execute",
+      "toolId": "meshrix.workspace.info",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.file.upload:execute",
-      "toolId": "lico.workspace.file.upload",
+      "id": "cap:tool:meshrix.workspace.file.upload:execute",
+      "toolId": "meshrix.workspace.file.upload",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.file.list:execute",
-      "toolId": "lico.workspace.file.list",
+      "id": "cap:tool:meshrix.workspace.file.list:execute",
+      "toolId": "meshrix.workspace.file.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.file.download:execute",
-      "toolId": "lico.workspace.file.download",
+      "id": "cap:tool:meshrix.workspace.file.download:execute",
+      "toolId": "meshrix.workspace.file.download",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.file.read:execute",
-      "toolId": "lico.workspace.file.read",
+      "id": "cap:tool:meshrix.workspace.file.read:execute",
+      "toolId": "meshrix.workspace.file.read",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.file.write:execute",
-      "toolId": "lico.workspace.file.write",
+      "id": "cap:tool:meshrix.workspace.file.write:execute",
+      "toolId": "meshrix.workspace.file.write",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.file.patch:execute",
-      "toolId": "lico.workspace.file.patch",
+      "id": "cap:tool:meshrix.workspace.file.patch:execute",
+      "toolId": "meshrix.workspace.file.patch",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.submit:execute",
-      "toolId": "lico.workspace.contribution.submit",
+      "id": "cap:tool:meshrix.workspace.contribution.submit:execute",
+      "toolId": "meshrix.workspace.contribution.submit",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.list:execute",
-      "toolId": "lico.workspace.contribution.list",
+      "id": "cap:tool:meshrix.workspace.contribution.list:execute",
+      "toolId": "meshrix.workspace.contribution.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.leaderboard:execute",
-      "toolId": "lico.workspace.contribution.leaderboard",
+      "id": "cap:tool:meshrix.workspace.contribution.leaderboard:execute",
+      "toolId": "meshrix.workspace.contribution.leaderboard",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.stats:execute",
-      "toolId": "lico.workspace.contribution.stats",
+      "id": "cap:tool:meshrix.workspace.contribution.stats:execute",
+      "toolId": "meshrix.workspace.contribution.stats",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.report:execute",
-      "toolId": "lico.workspace.contribution.report",
+      "id": "cap:tool:meshrix.workspace.contribution.report:execute",
+      "toolId": "meshrix.workspace.contribution.report",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.assets.list:execute",
-      "toolId": "lico.workspace.contribution.assets.list",
+      "id": "cap:tool:meshrix.workspace.contribution.assets.list:execute",
+      "toolId": "meshrix.workspace.contribution.assets.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.permission.request:execute",
-      "toolId": "lico.workspace.contribution.permission.request",
+      "id": "cap:tool:meshrix.workspace.contribution.permission.request:execute",
+      "toolId": "meshrix.workspace.contribution.permission.request",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.permission.grant:execute",
-      "toolId": "lico.workspace.contribution.permission.grant",
+      "id": "cap:tool:meshrix.workspace.contribution.permission.grant:execute",
+      "toolId": "meshrix.workspace.contribution.permission.grant",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.scan:execute",
-      "toolId": "lico.workspace.contribution.scan",
+      "id": "cap:tool:meshrix.workspace.contribution.scan:execute",
+      "toolId": "meshrix.workspace.contribution.scan",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.review:execute",
-      "toolId": "lico.workspace.contribution.review",
+      "id": "cap:tool:meshrix.workspace.contribution.review:execute",
+      "toolId": "meshrix.workspace.contribution.review",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.preview:execute",
-      "toolId": "lico.workspace.contribution.preview",
+      "id": "cap:tool:meshrix.workspace.contribution.preview:execute",
+      "toolId": "meshrix.workspace.contribution.preview",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.publish:execute",
-      "toolId": "lico.workspace.contribution.publish",
+      "id": "cap:tool:meshrix.workspace.contribution.publish:execute",
+      "toolId": "meshrix.workspace.contribution.publish",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.adopt:execute",
-      "toolId": "lico.workspace.contribution.adopt",
+      "id": "cap:tool:meshrix.workspace.contribution.adopt:execute",
+      "toolId": "meshrix.workspace.contribution.adopt",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.reject:execute",
-      "toolId": "lico.workspace.contribution.reject",
+      "id": "cap:tool:meshrix.workspace.contribution.reject:execute",
+      "toolId": "meshrix.workspace.contribution.reject",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.requestChanges:execute",
-      "toolId": "lico.workspace.contribution.requestChanges",
+      "id": "cap:tool:meshrix.workspace.contribution.requestChanges:execute",
+      "toolId": "meshrix.workspace.contribution.requestChanges",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.contribution.revoke:execute",
-      "toolId": "lico.workspace.contribution.revoke",
+      "id": "cap:tool:meshrix.workspace.contribution.revoke:execute",
+      "toolId": "meshrix.workspace.contribution.revoke",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.proposal.create:execute",
-      "toolId": "lico.workspace.proposal.create",
+      "id": "cap:tool:meshrix.workspace.proposal.create:execute",
+      "toolId": "meshrix.workspace.proposal.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.proposal.apply:execute",
-      "toolId": "lico.workspace.proposal.apply",
+      "id": "cap:tool:meshrix.workspace.proposal.apply:execute",
+      "toolId": "meshrix.workspace.proposal.apply",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.policy.set:execute",
-      "toolId": "lico.workspace.asset.policy.set",
+      "id": "cap:tool:meshrix.workspace.asset.policy.set:execute",
+      "toolId": "meshrix.workspace.asset.policy.set",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.permission.check:execute",
-      "toolId": "lico.workspace.asset.permission.check",
+      "id": "cap:tool:meshrix.workspace.asset.permission.check:execute",
+      "toolId": "meshrix.workspace.asset.permission.check",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.target.connect:execute",
-      "toolId": "lico.workspace.asset.target.connect",
+      "id": "cap:tool:meshrix.workspace.asset.target.connect:execute",
+      "toolId": "meshrix.workspace.asset.target.connect",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.list:execute",
-      "toolId": "lico.workspace.asset.list",
+      "id": "cap:tool:meshrix.workspace.asset.list:execute",
+      "toolId": "meshrix.workspace.asset.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.read:execute",
-      "toolId": "lico.workspace.asset.read",
+      "id": "cap:tool:meshrix.workspace.asset.read:execute",
+      "toolId": "meshrix.workspace.asset.read",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.submit:execute",
-      "toolId": "lico.workspace.asset.submit",
+      "id": "cap:tool:meshrix.workspace.asset.submit:execute",
+      "toolId": "meshrix.workspace.asset.submit",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.mutate:execute",
-      "toolId": "lico.workspace.asset.mutate",
+      "id": "cap:tool:meshrix.workspace.asset.mutate:execute",
+      "toolId": "meshrix.workspace.asset.mutate",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.sync.plan:execute",
-      "toolId": "lico.workspace.asset.sync.plan",
+      "id": "cap:tool:meshrix.workspace.asset.sync.plan:execute",
+      "toolId": "meshrix.workspace.asset.sync.plan",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.sync.apply:execute",
-      "toolId": "lico.workspace.asset.sync.apply",
+      "id": "cap:tool:meshrix.workspace.asset.sync.apply:execute",
+      "toolId": "meshrix.workspace.asset.sync.apply",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.import:execute",
-      "toolId": "lico.workspace.asset.import",
+      "id": "cap:tool:meshrix.workspace.asset.import:execute",
+      "toolId": "meshrix.workspace.asset.import",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.export:execute",
-      "toolId": "lico.workspace.asset.export",
+      "id": "cap:tool:meshrix.workspace.asset.export:execute",
+      "toolId": "meshrix.workspace.asset.export",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.review.comment:execute",
-      "toolId": "lico.workspace.asset.review.comment",
+      "id": "cap:tool:meshrix.workspace.asset.review.comment:execute",
+      "toolId": "meshrix.workspace.asset.review.comment",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.review.requestChanges:execute",
-      "toolId": "lico.workspace.asset.review.requestChanges",
+      "id": "cap:tool:meshrix.workspace.asset.review.requestChanges:execute",
+      "toolId": "meshrix.workspace.asset.review.requestChanges",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.review.approve:execute",
-      "toolId": "lico.workspace.asset.review.approve",
+      "id": "cap:tool:meshrix.workspace.asset.review.approve:execute",
+      "toolId": "meshrix.workspace.asset.review.approve",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.checkpoint:execute",
-      "toolId": "lico.workspace.asset.checkpoint",
+      "id": "cap:tool:meshrix.workspace.asset.checkpoint:execute",
+      "toolId": "meshrix.workspace.asset.checkpoint",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.lineage:execute",
-      "toolId": "lico.workspace.asset.lineage",
+      "id": "cap:tool:meshrix.workspace.asset.lineage:execute",
+      "toolId": "meshrix.workspace.asset.lineage",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.receipt.get:execute",
-      "toolId": "lico.workspace.asset.receipt.get",
+      "id": "cap:tool:meshrix.workspace.asset.receipt.get:execute",
+      "toolId": "meshrix.workspace.asset.receipt.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.asset.backfill:execute",
-      "toolId": "lico.workspace.asset.backfill",
+      "id": "cap:tool:meshrix.workspace.asset.backfill:execute",
+      "toolId": "meshrix.workspace.asset.backfill",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.audit.query:execute",
-      "toolId": "lico.workspace.audit.query",
+      "id": "cap:tool:meshrix.workspace.audit.query:execute",
+      "toolId": "meshrix.workspace.audit.query",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.operation.history:execute",
-      "toolId": "lico.workspace.operation.history",
+      "id": "cap:tool:meshrix.workspace.operation.history:execute",
+      "toolId": "meshrix.workspace.operation.history",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.checkpoint.tree.list:execute",
-      "toolId": "lico.workspace.checkpoint.tree.list",
+      "id": "cap:tool:meshrix.workspace.checkpoint.tree.list:execute",
+      "toolId": "meshrix.workspace.checkpoint.tree.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.checkpoint.node.get:execute",
-      "toolId": "lico.workspace.checkpoint.node.get",
+      "id": "cap:tool:meshrix.workspace.checkpoint.node.get:execute",
+      "toolId": "meshrix.workspace.checkpoint.node.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.checkpoint.diff:execute",
-      "toolId": "lico.workspace.checkpoint.diff",
+      "id": "cap:tool:meshrix.workspace.checkpoint.diff:execute",
+      "toolId": "meshrix.workspace.checkpoint.diff",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.checkpoint.restore.preview:execute",
-      "toolId": "lico.workspace.checkpoint.restore.preview",
+      "id": "cap:tool:meshrix.workspace.checkpoint.restore.preview:execute",
+      "toolId": "meshrix.workspace.checkpoint.restore.preview",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.checkpoint.restore:execute",
-      "toolId": "lico.workspace.checkpoint.restore",
+      "id": "cap:tool:meshrix.workspace.checkpoint.restore:execute",
+      "toolId": "meshrix.workspace.checkpoint.restore",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.checkpoint.scope.query:execute",
-      "toolId": "lico.workspace.checkpoint.scope.query",
+      "id": "cap:tool:meshrix.workspace.checkpoint.scope.query:execute",
+      "toolId": "meshrix.workspace.checkpoint.scope.query",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.operation.revert.scope:execute",
-      "toolId": "lico.workspace.operation.revert.scope",
+      "id": "cap:tool:meshrix.workspace.operation.revert.scope:execute",
+      "toolId": "meshrix.workspace.operation.revert.scope",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspace.operation.revert.apply:execute",
-      "toolId": "lico.workspace.operation.revert.apply",
+      "id": "cap:tool:meshrix.workspace.operation.revert.apply:execute",
+      "toolId": "meshrix.workspace.operation.revert.apply",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.publications.list:execute",
-      "toolId": "lico.gateway.externalServices.publications.list",
+      "id": "cap:tool:meshrix.gateway.externalServices.publications.list:execute",
+      "toolId": "meshrix.gateway.externalServices.publications.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.publications.get:execute",
-      "toolId": "lico.gateway.externalServices.publications.get",
+      "id": "cap:tool:meshrix.gateway.externalServices.publications.get:execute",
+      "toolId": "meshrix.gateway.externalServices.publications.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.create:execute",
-      "toolId": "lico.gateway.externalServices.create",
+      "id": "cap:tool:meshrix.gateway.externalServices.create:execute",
+      "toolId": "meshrix.gateway.externalServices.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.replace:execute",
-      "toolId": "lico.gateway.externalServices.replace",
+      "id": "cap:tool:meshrix.gateway.externalServices.replace:execute",
+      "toolId": "meshrix.gateway.externalServices.replace",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.disable:execute",
-      "toolId": "lico.gateway.externalServices.disable",
+      "id": "cap:tool:meshrix.gateway.externalServices.disable:execute",
+      "toolId": "meshrix.gateway.externalServices.disable",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.remove:execute",
-      "toolId": "lico.gateway.externalServices.remove",
+      "id": "cap:tool:meshrix.gateway.externalServices.remove:execute",
+      "toolId": "meshrix.gateway.externalServices.remove",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.republish:execute",
-      "toolId": "lico.gateway.externalServices.republish",
+      "id": "cap:tool:meshrix.gateway.externalServices.republish:execute",
+      "toolId": "meshrix.gateway.externalServices.republish",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.list:execute",
-      "toolId": "lico.gateway.externalServices.list",
+      "id": "cap:tool:meshrix.gateway.externalServices.list:execute",
+      "toolId": "meshrix.gateway.externalServices.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.get:execute",
-      "toolId": "lico.gateway.externalServices.get",
+      "id": "cap:tool:meshrix.gateway.externalServices.get:execute",
+      "toolId": "meshrix.gateway.externalServices.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.externalServices.health:execute",
-      "toolId": "lico.gateway.externalServices.health",
+      "id": "cap:tool:meshrix.gateway.externalServices.health:execute",
+      "toolId": "meshrix.gateway.externalServices.health",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.policyPreview:execute",
-      "toolId": "lico.gateway.policyPreview",
+      "id": "cap:tool:meshrix.gateway.policyPreview:execute",
+      "toolId": "meshrix.gateway.policyPreview",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.forward:execute",
-      "toolId": "lico.gateway.forward",
+      "id": "cap:tool:meshrix.gateway.forward:execute",
+      "toolId": "meshrix.gateway.forward",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.gateway.payloadTransit:execute",
-      "toolId": "lico.gateway.payloadTransit",
+      "id": "cap:tool:meshrix.gateway.payloadTransit:execute",
+      "toolId": "meshrix.gateway.payloadTransit",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.gateway.artifacts.get:execute",
-      "toolId": "lico.gateway.artifacts.get",
+      "id": "cap:tool:meshrix.gateway.artifacts.get:execute",
+      "toolId": "meshrix.gateway.artifacts.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.audit:execute",
-      "toolId": "lico.gateway.audit",
+      "id": "cap:tool:meshrix.gateway.audit:execute",
+      "toolId": "meshrix.gateway.audit",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.gateway.metrics:execute",
-      "toolId": "lico.gateway.metrics",
+      "id": "cap:tool:meshrix.gateway.metrics:execute",
+      "toolId": "meshrix.gateway.metrics",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.securityAlerts.list:execute",
-      "toolId": "lico.securityAlerts.list",
+      "id": "cap:tool:meshrix.securityAlerts.list:execute",
+      "toolId": "meshrix.securityAlerts.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.securityAlerts.ack:execute",
-      "toolId": "lico.securityAlerts.ack",
+      "id": "cap:tool:meshrix.securityAlerts.ack:execute",
+      "toolId": "meshrix.securityAlerts.ack",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.securityAlerts.export:execute",
-      "toolId": "lico.securityAlerts.export",
+      "id": "cap:tool:meshrix.securityAlerts.export:execute",
+      "toolId": "meshrix.securityAlerts.export",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.securityAlerts.prune:execute",
-      "toolId": "lico.securityAlerts.prune",
+      "id": "cap:tool:meshrix.securityAlerts.prune:execute",
+      "toolId": "meshrix.securityAlerts.prune",
       "kind": "tool",
       "risk": "repair_write"
     },
@@ -2415,734 +2415,734 @@
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.architecture.liveMap:execute",
-      "toolId": "lico.architecture.liveMap",
+      "id": "cap:tool:meshrix.architecture.liveMap:execute",
+      "toolId": "meshrix.architecture.liveMap",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.sampleCapabilityPack.list:execute",
-      "toolId": "lico.sampleCapabilityPack.list",
+      "id": "cap:tool:meshrix.sampleCapabilityPack.list:execute",
+      "toolId": "meshrix.sampleCapabilityPack.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.sampleCapabilityPack.get:execute",
-      "toolId": "lico.sampleCapabilityPack.get",
+      "id": "cap:tool:meshrix.sampleCapabilityPack.get:execute",
+      "toolId": "meshrix.sampleCapabilityPack.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.sampleCapabilityPack.materialize:execute",
-      "toolId": "lico.sampleCapabilityPack.materialize",
+      "id": "cap:tool:meshrix.sampleCapabilityPack.materialize:execute",
+      "toolId": "meshrix.sampleCapabilityPack.materialize",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.executiveReport.list:execute",
-      "toolId": "lico.executiveReport.list",
+      "id": "cap:tool:meshrix.executiveReport.list:execute",
+      "toolId": "meshrix.executiveReport.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.executiveReport.preview:execute",
-      "toolId": "lico.executiveReport.preview",
+      "id": "cap:tool:meshrix.executiveReport.preview:execute",
+      "toolId": "meshrix.executiveReport.preview",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.executiveReport.generate:execute",
-      "toolId": "lico.executiveReport.generate",
+      "id": "cap:tool:meshrix.executiveReport.generate:execute",
+      "toolId": "meshrix.executiveReport.generate",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspaceGovernance.describe:execute",
-      "toolId": "lico.workspaceGovernance.describe",
+      "id": "cap:tool:meshrix.workspaceGovernance.describe:execute",
+      "toolId": "meshrix.workspaceGovernance.describe",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspaceGovernance.policy.set:execute",
-      "toolId": "lico.workspaceGovernance.policy.set",
+      "id": "cap:tool:meshrix.workspaceGovernance.policy.set:execute",
+      "toolId": "meshrix.workspaceGovernance.policy.set",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.workspaceGovernance.evaluate:execute",
-      "toolId": "lico.workspaceGovernance.evaluate",
+      "id": "cap:tool:meshrix.workspaceGovernance.evaluate:execute",
+      "toolId": "meshrix.workspaceGovernance.evaluate",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspaceGovernance.shareGrant:execute",
-      "toolId": "lico.workspaceGovernance.shareGrant",
+      "id": "cap:tool:meshrix.workspaceGovernance.shareGrant:execute",
+      "toolId": "meshrix.workspaceGovernance.shareGrant",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentSync.config.get:execute",
-      "toolId": "lico.agentSync.config.get",
+      "id": "cap:tool:meshrix.agentSync.config.get:execute",
+      "toolId": "meshrix.agentSync.config.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentSync.config.set:execute",
-      "toolId": "lico.agentSync.config.set",
+      "id": "cap:tool:meshrix.agentSync.config.set:execute",
+      "toolId": "meshrix.agentSync.config.set",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.agentSync.publish:execute",
-      "toolId": "lico.agentSync.publish",
+      "id": "cap:tool:meshrix.agentSync.publish:execute",
+      "toolId": "meshrix.agentSync.publish",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentSync.subscribe:execute",
-      "toolId": "lico.agentSync.subscribe",
+      "id": "cap:tool:meshrix.agentSync.subscribe:execute",
+      "toolId": "meshrix.agentSync.subscribe",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.config.get:execute",
-      "toolId": "lico.maintenanceAgent.config.get",
+      "id": "cap:tool:meshrix.maintenanceAgent.config.get:execute",
+      "toolId": "meshrix.maintenanceAgent.config.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.config.set:execute",
-      "toolId": "lico.maintenanceAgent.config.set",
+      "id": "cap:tool:meshrix.maintenanceAgent.config.set:execute",
+      "toolId": "meshrix.maintenanceAgent.config.set",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.chat:execute",
-      "toolId": "lico.maintenanceAgent.chat",
+      "id": "cap:tool:meshrix.maintenanceAgent.chat:execute",
+      "toolId": "meshrix.maintenanceAgent.chat",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.runs.create:execute",
-      "toolId": "lico.maintenanceAgent.runs.create",
+      "id": "cap:tool:meshrix.maintenanceAgent.runs.create:execute",
+      "toolId": "meshrix.maintenanceAgent.runs.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.runs.list:execute",
-      "toolId": "lico.maintenanceAgent.runs.list",
+      "id": "cap:tool:meshrix.maintenanceAgent.runs.list:execute",
+      "toolId": "meshrix.maintenanceAgent.runs.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.runs.get:execute",
-      "toolId": "lico.maintenanceAgent.runs.get",
+      "id": "cap:tool:meshrix.maintenanceAgent.runs.get:execute",
+      "toolId": "meshrix.maintenanceAgent.runs.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.runs.approve:execute",
-      "toolId": "lico.maintenanceAgent.runs.approve",
+      "id": "cap:tool:meshrix.maintenanceAgent.runs.approve:execute",
+      "toolId": "meshrix.maintenanceAgent.runs.approve",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.maintenanceAgent.runs.cancel:execute",
-      "toolId": "lico.maintenanceAgent.runs.cancel",
+      "id": "cap:tool:meshrix.maintenanceAgent.runs.cancel:execute",
+      "toolId": "meshrix.maintenanceAgent.runs.cancel",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.runtime.info:execute",
-      "toolId": "lico.runtime.info",
+      "id": "cap:tool:meshrix.runtime.info:execute",
+      "toolId": "meshrix.runtime.info",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.runtime.mounts:execute",
-      "toolId": "lico.runtime.mounts",
+      "id": "cap:tool:meshrix.runtime.mounts:execute",
+      "toolId": "meshrix.runtime.mounts",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.runtime.mounts.set:execute",
-      "toolId": "lico.runtime.mounts.set",
+      "id": "cap:tool:meshrix.runtime.mounts.set:execute",
+      "toolId": "meshrix.runtime.mounts.set",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.runtime.mounts.reload:execute",
-      "toolId": "lico.runtime.mounts.reload",
+      "id": "cap:tool:meshrix.runtime.mounts.reload:execute",
+      "toolId": "meshrix.runtime.mounts.reload",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.agentGateway.call:execute",
-      "toolId": "lico.agentGateway.call",
+      "id": "cap:tool:meshrix.agentGateway.call:execute",
+      "toolId": "meshrix.agentGateway.call",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentGateway.modelRouting.health:execute",
-      "toolId": "lico.agentGateway.modelRouting.health",
+      "id": "cap:tool:meshrix.agentGateway.modelRouting.health:execute",
+      "toolId": "meshrix.agentGateway.modelRouting.health",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.strategy.describe:execute",
-      "toolId": "lico.strategy.describe",
+      "id": "cap:tool:meshrix.strategy.describe:execute",
+      "toolId": "meshrix.strategy.describe",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.strategy.workflowPolicy.evaluate:execute",
-      "toolId": "lico.strategy.workflowPolicy.evaluate",
+      "id": "cap:tool:meshrix.strategy.workflowPolicy.evaluate:execute",
+      "toolId": "meshrix.strategy.workflowPolicy.evaluate",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.strategy.agentPolicy.evaluate:execute",
-      "toolId": "lico.strategy.agentPolicy.evaluate",
+      "id": "cap:tool:meshrix.strategy.agentPolicy.evaluate:execute",
+      "toolId": "meshrix.strategy.agentPolicy.evaluate",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.strategy.routePolicy.evaluate:execute",
-      "toolId": "lico.strategy.routePolicy.evaluate",
+      "id": "cap:tool:meshrix.strategy.routePolicy.evaluate:execute",
+      "toolId": "meshrix.strategy.routePolicy.evaluate",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.strategy.queuePolicy.evaluate:execute",
-      "toolId": "lico.strategy.queuePolicy.evaluate",
+      "id": "cap:tool:meshrix.strategy.queuePolicy.evaluate:execute",
+      "toolId": "meshrix.strategy.queuePolicy.evaluate",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.strategy.toolPolicy.preview:execute",
-      "toolId": "lico.strategy.toolPolicy.preview",
+      "id": "cap:tool:meshrix.strategy.toolPolicy.preview:execute",
+      "toolId": "meshrix.strategy.toolPolicy.preview",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentManagement.agents.list:execute",
-      "toolId": "lico.agentManagement.agents.list",
+      "id": "cap:tool:meshrix.agentManagement.agents.list:execute",
+      "toolId": "meshrix.agentManagement.agents.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentManagement.agents.create:execute",
-      "toolId": "lico.agentManagement.agents.create",
+      "id": "cap:tool:meshrix.agentManagement.agents.create:execute",
+      "toolId": "meshrix.agentManagement.agents.create",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.agentManagement.agents.update:execute",
-      "toolId": "lico.agentManagement.agents.update",
+      "id": "cap:tool:meshrix.agentManagement.agents.update:execute",
+      "toolId": "meshrix.agentManagement.agents.update",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.agentManagement.agents.delete:execute",
-      "toolId": "lico.agentManagement.agents.delete",
+      "id": "cap:tool:meshrix.agentManagement.agents.delete:execute",
+      "toolId": "meshrix.agentManagement.agents.delete",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.catalog:execute",
-      "toolId": "lico.operationPermission.catalog",
+      "id": "cap:tool:meshrix.operationPermission.catalog:execute",
+      "toolId": "meshrix.operationPermission.catalog",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.catalogItem:execute",
-      "toolId": "lico.operationPermission.catalogItem",
+      "id": "cap:tool:meshrix.operationPermission.catalogItem:execute",
+      "toolId": "meshrix.operationPermission.catalogItem",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.toolsets:execute",
-      "toolId": "lico.operationPermission.toolsets",
+      "id": "cap:tool:meshrix.operationPermission.toolsets:execute",
+      "toolId": "meshrix.operationPermission.toolsets",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.toolsetsResolve:execute",
-      "toolId": "lico.operationPermission.toolsetsResolve",
+      "id": "cap:tool:meshrix.operationPermission.toolsetsResolve:execute",
+      "toolId": "meshrix.operationPermission.toolsetsResolve",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.profiles:execute",
-      "toolId": "lico.operationPermission.profiles",
+      "id": "cap:tool:meshrix.operationPermission.profiles:execute",
+      "toolId": "meshrix.operationPermission.profiles",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.policyEvaluate:execute",
-      "toolId": "lico.operationPermission.policyEvaluate",
+      "id": "cap:tool:meshrix.operationPermission.policyEvaluate:execute",
+      "toolId": "meshrix.operationPermission.policyEvaluate",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.policyPreview:execute",
-      "toolId": "lico.operationPermission.policyPreview",
+      "id": "cap:tool:meshrix.operationPermission.policyPreview:execute",
+      "toolId": "meshrix.operationPermission.policyPreview",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.grants:execute",
-      "toolId": "lico.operationPermission.grants",
+      "id": "cap:tool:meshrix.operationPermission.grants:execute",
+      "toolId": "meshrix.operationPermission.grants",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.createGrant:execute",
-      "toolId": "lico.operationPermission.createGrant",
+      "id": "cap:tool:meshrix.operationPermission.createGrant:execute",
+      "toolId": "meshrix.operationPermission.createGrant",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.updateGrant:execute",
-      "toolId": "lico.operationPermission.updateGrant",
+      "id": "cap:tool:meshrix.operationPermission.updateGrant:execute",
+      "toolId": "meshrix.operationPermission.updateGrant",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.rotateGrant:execute",
-      "toolId": "lico.operationPermission.rotateGrant",
+      "id": "cap:tool:meshrix.operationPermission.rotateGrant:execute",
+      "toolId": "meshrix.operationPermission.rotateGrant",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.revokeGrant:execute",
-      "toolId": "lico.operationPermission.revokeGrant",
+      "id": "cap:tool:meshrix.operationPermission.revokeGrant:execute",
+      "toolId": "meshrix.operationPermission.revokeGrant",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.audit:execute",
-      "toolId": "lico.operationPermission.audit",
+      "id": "cap:tool:meshrix.operationPermission.audit:execute",
+      "toolId": "meshrix.operationPermission.audit",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.auditItem:execute",
-      "toolId": "lico.operationPermission.auditItem",
+      "id": "cap:tool:meshrix.operationPermission.auditItem:execute",
+      "toolId": "meshrix.operationPermission.auditItem",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.metricsSummary:execute",
-      "toolId": "lico.operationPermission.metricsSummary",
+      "id": "cap:tool:meshrix.operationPermission.metricsSummary:execute",
+      "toolId": "meshrix.operationPermission.metricsSummary",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.metricsExport:execute",
-      "toolId": "lico.operationPermission.metricsExport",
+      "id": "cap:tool:meshrix.operationPermission.metricsExport:execute",
+      "toolId": "meshrix.operationPermission.metricsExport",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.metricsHealth:execute",
-      "toolId": "lico.operationPermission.metricsHealth",
+      "id": "cap:tool:meshrix.operationPermission.metricsHealth:execute",
+      "toolId": "meshrix.operationPermission.metricsHealth",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.metricsPrometheus:execute",
-      "toolId": "lico.operationPermission.metricsPrometheus",
+      "id": "cap:tool:meshrix.operationPermission.metricsPrometheus:execute",
+      "toolId": "meshrix.operationPermission.metricsPrometheus",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.metricsStorage:execute",
-      "toolId": "lico.operationPermission.metricsStorage",
+      "id": "cap:tool:meshrix.operationPermission.metricsStorage:execute",
+      "toolId": "meshrix.operationPermission.metricsStorage",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.metricsPrune:execute",
-      "toolId": "lico.operationPermission.metricsPrune",
+      "id": "cap:tool:meshrix.operationPermission.metricsPrune:execute",
+      "toolId": "meshrix.operationPermission.metricsPrune",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.events:execute",
-      "toolId": "lico.operationPermission.events",
+      "id": "cap:tool:meshrix.operationPermission.events:execute",
+      "toolId": "meshrix.operationPermission.events",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.pendingOperations.list:execute",
-      "toolId": "lico.operationPermission.pendingOperations.list",
+      "id": "cap:tool:meshrix.operationPermission.pendingOperations.list:execute",
+      "toolId": "meshrix.operationPermission.pendingOperations.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.pendingOperations.resolve:execute",
-      "toolId": "lico.operationPermission.pendingOperations.resolve",
+      "id": "cap:tool:meshrix.operationPermission.pendingOperations.resolve:execute",
+      "toolId": "meshrix.operationPermission.pendingOperations.resolve",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.mcp.requestAuthorization:execute",
-      "toolId": "lico.operationPermission.mcp.requestAuthorization",
+      "id": "cap:tool:meshrix.operationPermission.mcp.requestAuthorization:execute",
+      "toolId": "meshrix.operationPermission.mcp.requestAuthorization",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.operationPermission.mcp.listRequests:execute",
-      "toolId": "lico.operationPermission.mcp.listRequests",
+      "id": "cap:tool:meshrix.operationPermission.mcp.listRequests:execute",
+      "toolId": "meshrix.operationPermission.mcp.listRequests",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.operationPermission.mcp.resolveRequest:execute",
-      "toolId": "lico.operationPermission.mcp.resolveRequest",
+      "id": "cap:tool:meshrix.operationPermission.mcp.resolveRequest:execute",
+      "toolId": "meshrix.operationPermission.mcp.resolveRequest",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.storageSummary:execute",
-      "toolId": "lico.storageSummary",
+      "id": "cap:tool:meshrix.storageSummary:execute",
+      "toolId": "meshrix.storageSummary",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.storageBackups.list:execute",
-      "toolId": "lico.storageBackups.list",
+      "id": "cap:tool:meshrix.storageBackups.list:execute",
+      "toolId": "meshrix.storageBackups.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.storageBackups.create:execute",
-      "toolId": "lico.storageBackups.create",
+      "id": "cap:tool:meshrix.storageBackups.create:execute",
+      "toolId": "meshrix.storageBackups.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.storageBackups.restorePreview:execute",
-      "toolId": "lico.storageBackups.restorePreview",
+      "id": "cap:tool:meshrix.storageBackups.restorePreview:execute",
+      "toolId": "meshrix.storageBackups.restorePreview",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.storageBackups.restore:execute",
-      "toolId": "lico.storageBackups.restore",
+      "id": "cap:tool:meshrix.storageBackups.restore:execute",
+      "toolId": "meshrix.storageBackups.restore",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.create:execute",
-      "toolId": "lico.agentWorkspace.create",
+      "id": "cap:tool:meshrix.agentWorkspace.create:execute",
+      "toolId": "meshrix.agentWorkspace.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.create:execute",
-      "toolId": "lico.workspace.create",
+      "id": "cap:tool:meshrix.workspace.create:execute",
+      "toolId": "meshrix.workspace.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.list:execute",
-      "toolId": "lico.agentWorkspace.list",
+      "id": "cap:tool:meshrix.agentWorkspace.list:execute",
+      "toolId": "meshrix.agentWorkspace.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.get:execute",
-      "toolId": "lico.agentWorkspace.get",
+      "id": "cap:tool:meshrix.agentWorkspace.get:execute",
+      "toolId": "meshrix.agentWorkspace.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.delete:execute",
-      "toolId": "lico.agentWorkspace.delete",
+      "id": "cap:tool:meshrix.agentWorkspace.delete:execute",
+      "toolId": "meshrix.agentWorkspace.delete",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.folder.create:execute",
-      "toolId": "lico.agentWorkspace.folder.create",
+      "id": "cap:tool:meshrix.agentWorkspace.folder.create:execute",
+      "toolId": "meshrix.agentWorkspace.folder.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.folder.create:execute",
-      "toolId": "lico.workspace.folder.create",
+      "id": "cap:tool:meshrix.workspace.folder.create:execute",
+      "toolId": "meshrix.workspace.folder.create",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentSession.list:execute",
-      "toolId": "lico.agentSession.list",
+      "id": "cap:tool:meshrix.agentSession.list:execute",
+      "toolId": "meshrix.agentSession.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentSession.get:execute",
-      "toolId": "lico.agentSession.get",
+      "id": "cap:tool:meshrix.agentSession.get:execute",
+      "toolId": "meshrix.agentSession.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentSession.context:execute",
-      "toolId": "lico.agentSession.context",
+      "id": "cap:tool:meshrix.agentSession.context:execute",
+      "toolId": "meshrix.agentSession.context",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentSession.events.append:execute",
-      "toolId": "lico.agentSession.events.append",
+      "id": "cap:tool:meshrix.agentSession.events.append:execute",
+      "toolId": "meshrix.agentSession.events.append",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentSession.fork:execute",
-      "toolId": "lico.agentSession.fork",
+      "id": "cap:tool:meshrix.agentSession.fork:execute",
+      "toolId": "meshrix.agentSession.fork",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentSession.compare:execute",
-      "toolId": "lico.agentSession.compare",
+      "id": "cap:tool:meshrix.agentSession.compare:execute",
+      "toolId": "meshrix.agentSession.compare",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentSession.mergeProposal:execute",
-      "toolId": "lico.agentSession.mergeProposal",
+      "id": "cap:tool:meshrix.agentSession.mergeProposal:execute",
+      "toolId": "meshrix.agentSession.mergeProposal",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentSession.archive:execute",
-      "toolId": "lico.agentSession.archive",
+      "id": "cap:tool:meshrix.agentSession.archive:execute",
+      "toolId": "meshrix.agentSession.archive",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.submissionResolve:execute",
-      "toolId": "lico.agentWorkspace.submissionResolve",
+      "id": "cap:tool:meshrix.agentWorkspace.submissionResolve:execute",
+      "toolId": "meshrix.agentWorkspace.submissionResolve",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.issueResolve:execute",
-      "toolId": "lico.agentWorkspace.issueResolve",
+      "id": "cap:tool:meshrix.agentWorkspace.issueResolve:execute",
+      "toolId": "meshrix.agentWorkspace.issueResolve",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.locks:execute",
-      "toolId": "lico.agentWorkspace.locks",
+      "id": "cap:tool:meshrix.agentWorkspace.locks:execute",
+      "toolId": "meshrix.agentWorkspace.locks",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.lock:execute",
-      "toolId": "lico.agentWorkspace.lock",
+      "id": "cap:tool:meshrix.agentWorkspace.lock:execute",
+      "toolId": "meshrix.agentWorkspace.lock",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.files.list:execute",
-      "toolId": "lico.agentWorkspace.files.list",
+      "id": "cap:tool:meshrix.agentWorkspace.files.list:execute",
+      "toolId": "meshrix.agentWorkspace.files.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.files.list:execute",
-      "toolId": "lico.workspace.files.list",
+      "id": "cap:tool:meshrix.workspace.files.list:execute",
+      "toolId": "meshrix.workspace.files.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.file.upload:execute",
-      "toolId": "lico.agentWorkspace.file.upload",
+      "id": "cap:tool:meshrix.agentWorkspace.file.upload:execute",
+      "toolId": "meshrix.agentWorkspace.file.upload",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.file.stat:execute",
-      "toolId": "lico.agentWorkspace.file.stat",
+      "id": "cap:tool:meshrix.agentWorkspace.file.stat:execute",
+      "toolId": "meshrix.agentWorkspace.file.stat",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.workspace.file.stat:execute",
-      "toolId": "lico.workspace.file.stat",
+      "id": "cap:tool:meshrix.workspace.file.stat:execute",
+      "toolId": "meshrix.workspace.file.stat",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.file.download:execute",
-      "toolId": "lico.agentWorkspace.file.download",
+      "id": "cap:tool:meshrix.agentWorkspace.file.download:execute",
+      "toolId": "meshrix.agentWorkspace.file.download",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.file.write:execute",
-      "toolId": "lico.agentWorkspace.file.write",
+      "id": "cap:tool:meshrix.agentWorkspace.file.write:execute",
+      "toolId": "meshrix.agentWorkspace.file.write",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.file.delete:execute",
-      "toolId": "lico.agentWorkspace.file.delete",
+      "id": "cap:tool:meshrix.agentWorkspace.file.delete:execute",
+      "toolId": "meshrix.agentWorkspace.file.delete",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.file.delete:execute",
-      "toolId": "lico.workspace.file.delete",
+      "id": "cap:tool:meshrix.workspace.file.delete:execute",
+      "toolId": "meshrix.workspace.file.delete",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.file.move:execute",
-      "toolId": "lico.agentWorkspace.file.move",
+      "id": "cap:tool:meshrix.agentWorkspace.file.move:execute",
+      "toolId": "meshrix.agentWorkspace.file.move",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.workspace.file.move:execute",
-      "toolId": "lico.workspace.file.move",
+      "id": "cap:tool:meshrix.workspace.file.move:execute",
+      "toolId": "meshrix.workspace.file.move",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.context:execute",
-      "toolId": "lico.agentWorkspace.context",
+      "id": "cap:tool:meshrix.agentWorkspace.context:execute",
+      "toolId": "meshrix.agentWorkspace.context",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.contextBundle.export:execute",
-      "toolId": "lico.agentWorkspace.contextBundle.export",
+      "id": "cap:tool:meshrix.agentWorkspace.contextBundle.export:execute",
+      "toolId": "meshrix.agentWorkspace.contextBundle.export",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.contextBundle.restore:execute",
-      "toolId": "lico.agentWorkspace.contextBundle.restore",
+      "id": "cap:tool:meshrix.agentWorkspace.contextBundle.restore:execute",
+      "toolId": "meshrix.agentWorkspace.contextBundle.restore",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.chain:execute",
-      "toolId": "lico.agentWorkspace.chain",
+      "id": "cap:tool:meshrix.agentWorkspace.chain:execute",
+      "toolId": "meshrix.agentWorkspace.chain",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.parent.set:execute",
-      "toolId": "lico.agentWorkspace.parent.set",
+      "id": "cap:tool:meshrix.agentWorkspace.parent.set:execute",
+      "toolId": "meshrix.agentWorkspace.parent.set",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.profile.hotswap:execute",
-      "toolId": "lico.agentWorkspace.profile.hotswap",
+      "id": "cap:tool:meshrix.agentWorkspace.profile.hotswap:execute",
+      "toolId": "meshrix.agentWorkspace.profile.hotswap",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.sources.set:execute",
-      "toolId": "lico.agentWorkspace.sources.set",
+      "id": "cap:tool:meshrix.agentWorkspace.sources.set:execute",
+      "toolId": "meshrix.agentWorkspace.sources.set",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.share:execute",
-      "toolId": "lico.agentWorkspace.share",
+      "id": "cap:tool:meshrix.agentWorkspace.share:execute",
+      "toolId": "meshrix.agentWorkspace.share",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.agentWorkspace.unshare:execute",
-      "toolId": "lico.agentWorkspace.unshare",
+      "id": "cap:tool:meshrix.agentWorkspace.unshare:execute",
+      "toolId": "meshrix.agentWorkspace.unshare",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.context.profiles:execute",
-      "toolId": "lico.context.profiles",
+      "id": "cap:tool:meshrix.context.profiles:execute",
+      "toolId": "meshrix.context.profiles",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.context.profiles.set:execute",
-      "toolId": "lico.context.profiles.set",
+      "id": "cap:tool:meshrix.context.profiles.set:execute",
+      "toolId": "meshrix.context.profiles.set",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.agentMemory.sessionMemory.get:execute",
-      "toolId": "lico.agentMemory.sessionMemory.get",
+      "id": "cap:tool:meshrix.agentMemory.sessionMemory.get:execute",
+      "toolId": "meshrix.agentMemory.sessionMemory.get",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.agentMemory.sessionMemory.clear:execute",
-      "toolId": "lico.agentMemory.sessionMemory.clear",
+      "id": "cap:tool:meshrix.agentMemory.sessionMemory.clear:execute",
+      "toolId": "meshrix.agentMemory.sessionMemory.clear",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.jobs.uploadWorkspaceMaterialize:execute",
-      "toolId": "lico.jobs.uploadWorkspaceMaterialize",
+      "id": "cap:tool:meshrix.jobs.uploadWorkspaceMaterialize:execute",
+      "toolId": "meshrix.jobs.uploadWorkspaceMaterialize",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.jobs.list:execute",
-      "toolId": "lico.jobs.list",
+      "id": "cap:tool:meshrix.jobs.list:execute",
+      "toolId": "meshrix.jobs.list",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.jobs.workQueue.inspect:execute",
-      "toolId": "lico.jobs.workQueue.inspect",
+      "id": "cap:tool:meshrix.jobs.workQueue.inspect:execute",
+      "toolId": "meshrix.jobs.workQueue.inspect",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:lico.jobs.workQueue.pause:execute",
-      "toolId": "lico.jobs.workQueue.pause",
+      "id": "cap:tool:meshrix.jobs.workQueue.pause:execute",
+      "toolId": "meshrix.jobs.workQueue.pause",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.jobs.workQueue.resume:execute",
-      "toolId": "lico.jobs.workQueue.resume",
+      "id": "cap:tool:meshrix.jobs.workQueue.resume:execute",
+      "toolId": "meshrix.jobs.workQueue.resume",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.jobs.workQueue.drain:execute",
-      "toolId": "lico.jobs.workQueue.drain",
+      "id": "cap:tool:meshrix.jobs.workQueue.drain:execute",
+      "toolId": "meshrix.jobs.workQueue.drain",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.jobs.workQueue.recoverFailed:execute",
-      "toolId": "lico.jobs.workQueue.recoverFailed",
+      "id": "cap:tool:meshrix.jobs.workQueue.recoverFailed:execute",
+      "toolId": "meshrix.jobs.workQueue.recoverFailed",
       "kind": "tool",
       "risk": "safe_write"
     },
     {
-      "id": "cap:tool:lico.jobs.workQueue.rebuild:execute",
-      "toolId": "lico.jobs.workQueue.rebuild",
+      "id": "cap:tool:meshrix.jobs.workQueue.rebuild:execute",
+      "toolId": "meshrix.jobs.workQueue.rebuild",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:lico.jobs.get:execute",
-      "toolId": "lico.jobs.get",
+      "id": "cap:tool:meshrix.jobs.get:execute",
+      "toolId": "meshrix.jobs.get",
       "kind": "tool",
       "risk": "read_only"
     },

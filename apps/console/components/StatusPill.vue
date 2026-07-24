@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import PublicStatusPill from "@lico/ui-console/status-pill";
+import PublicStatusPill from "@meshrix/ui-console/status-pill";
 import { currentConsoleLocale, localizeConsoleText } from "../i18n/console";
 
 const props = withDefaults(defineProps<{

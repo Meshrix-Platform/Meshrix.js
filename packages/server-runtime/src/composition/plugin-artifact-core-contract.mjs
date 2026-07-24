@@ -1,9 +1,9 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
-import { PLUGIN_BUNDLE_MANIFEST_SCHEMA } from "#lico/contracts/plugins/plugin-bundle-manifest";
-import { PLUGIN_MANIFEST_SCHEMA_VERSION } from "#lico/foundation/module-system/plugin-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
+import { PLUGIN_BUNDLE_MANIFEST_SCHEMA } from "#meshrix/contracts/plugins/plugin-bundle-manifest";
+import { PLUGIN_MANIFEST_SCHEMA_VERSION } from "#meshrix/foundation/module-system/plugin-registry";
 
 export const PLUGIN_HOST_PORT_CONTRACT = Object.freeze({
   workspaceAccess: Object.freeze(["readTextFile", "writeTextFile"]),
@@ -50,7 +50,7 @@ export const PLUGIN_HOST_PORT_CONTRACT = Object.freeze({
 
 export function pluginArtifactCoreContract() {
   return Object.freeze({
-    schemaVersion: "licomesh.plugin-host-contract.v1",
+    schemaVersion: "v0.0.1:meshrix:plugin-host-contract-1",
     bundleManifestSchema: PLUGIN_BUNDLE_MANIFEST_SCHEMA,
     runtimeManifestSchema: PLUGIN_MANIFEST_SCHEMA_VERSION,
     operationIds: Object.freeze(SERVER_API_OPERATIONS.map((operation) => operation.id).sort()),

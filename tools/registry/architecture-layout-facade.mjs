@@ -112,7 +112,7 @@ export const CORE_MODULE_ROLES = Object.freeze(
 
 export const PUBLIC_FACADES = Object.freeze(
   (_publicApiData.aliases || []).map((api) => Object.freeze({
-    moduleId: api.alias.replace("#lico/", "").replace(/\*/gu, "star").replace(/[./-]/gu, "_"),
+    moduleId: api.alias.replace("#meshrix/", "").replace(/\*/gu, "star").replace(/[./-]/gu, "_"),
     importSpecifier: api.alias,
     facadePath: String(api.targetPath || "").replace(/^\.\//u, ""),
     owner: api.owner || "platform",

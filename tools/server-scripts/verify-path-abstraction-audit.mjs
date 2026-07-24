@@ -20,7 +20,7 @@ const helperAllowlist = new Set([
   "packages/agents/src/agent-workspace/index.mjs"
 ]);
 const ignoredFiles = new Set([
-  "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs"
+  "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs"
 ]);
 const requiredHelpers = [
   "normalizeSandboxRelativePath",

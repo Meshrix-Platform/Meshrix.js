@@ -289,7 +289,7 @@ export function summarizeInstallCandidate(candidate) {
     installed: Boolean(candidate.installed),
     installCommand: candidate.installCommand || "",
     repairCommand: candidate.repairCommand || "",
-    doctorCommand: candidate.doctorCommand || "lico-mcp doctor --json"
+    doctorCommand: candidate.doctorCommand || "meshrix-mcp doctor --json"
   };
 }
 

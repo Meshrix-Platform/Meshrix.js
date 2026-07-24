@@ -1,4 +1,4 @@
-import { postJson } from "@lico/ui-console/bridge-http";
+import { postJson } from "@meshrix/ui-console/bridge-http";
 import type {
   AgentSettings,
   RuntimeMountConfig,

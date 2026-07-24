@@ -193,11 +193,22 @@ function transportInputSchema(operation = {}) {
 
 function normalizeInputSchema(inputSchema = {}, operation = {}) {
   const transportSchema = transportInputSchema(operation);
+  const safety = normalizeOperationSafety(operation.safety || {}, operation);
+  const confirmationProperties = safety.readOnly
+    ? {}
+    : {
+        confirm: { type: "boolean" },
+        safetyConfirm: { type: "boolean" }
+      };
   if (!inputSchema || typeof inputSchema !== "object" || Array.isArray(inputSchema)) {
     return {
       type: "object",
       additionalProperties: false,
-      ...transportSchema
+      ...transportSchema,
+      properties: {
+        ...transportSchema.properties,
+        ...confirmationProperties
+      }
     };
   }
   return {
@@ -207,6 +218,7 @@ function normalizeInputSchema(inputSchema = {}, operation = {}) {
     required: uniqueStrings([...(inputSchema.required || []), ...transportSchema.required]),
     properties: {
       ...transportSchema.properties,
+      ...confirmationProperties,
       ...(inputSchema.properties || {})
     }
   };
@@ -671,8 +683,8 @@ function isTruthyFlag(value) {
 function hasSafetyConfirmation(context = {}) {
   const input = getSafetyInput(context);
   const safetyHeader = String(
-    context.request?.headers?.["x-lico-safety-confirm"] ||
-    context.request?.headers?.["x-lico-confirm"] ||
+    context.request?.headers?.["x-meshrix-safety-confirm"] ||
+    context.request?.headers?.["x-meshrix-confirm"] ||
     ""
   ).trim();
   // L-3: removed URL query-param confirm path — it appears in access logs and

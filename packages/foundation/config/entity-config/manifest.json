@@ -1,6 +1,6 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
-  "entityType": "lico.entity-config-root",
+  "entityType": "meshrix.entity-config-root",
   "description": "Human-maintainable entity configuration bundles for tools, runbooks, standards, and specs.",
   "categories": [
     "auth",

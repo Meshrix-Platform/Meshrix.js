@@ -25,8 +25,8 @@ async function requestJson(url, options = {}) {
 function unauthenticatedDeviceHeaders(extra = {}) {
   return {
     Cookie: "",
-    "x-lico-csrf": "",
-    "x-lico-safety-confirm": "",
+    "x-meshrix-csrf": "",
+    "x-meshrix-safety-confirm": "",
     ...extra
   };
 }
@@ -90,7 +90,7 @@ export async function issueVerifierLocalMcpGrant({ server = null, baseUrl = "", 
       method: "POST",
       headers: unauthenticatedDeviceHeaders({
         "Content-Type": "application/json",
-        "x-lico-authorization-claim": claimToken
+        "x-meshrix-authorization-claim": claimToken
       }),
       body: "{}"
     }

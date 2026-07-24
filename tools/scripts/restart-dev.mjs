@@ -81,12 +81,12 @@ try {
     path.join(projectRoot, "tools", "scripts", "clean-existing-service.mjs"),
     "--process-only",
     "--data-dir", dataDir,
-    "--launch-label", `dev.lico.server.${options.port}`,
-    "--launch-label", "dev.lico.background-supervisor",
-    "--launch-label", "dev.lico.system-inspection",
-    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", `dev.lico.server.${options.port}.plist`),
-    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.lico.background-supervisor.plist"),
-    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.lico.system-inspection.plist")
+    "--launch-label", `dev.meshrix.server.${options.port}`,
+    "--launch-label", "dev.meshrix.background-supervisor",
+    "--launch-label", "dev.meshrix.system-inspection",
+    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", `dev.meshrix.server.${options.port}.plist`),
+    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.meshrix.background-supervisor.plist"),
+    "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.meshrix.system-inspection.plist")
   ], { inherit: true });
   if (clean.status !== 0) process.exit(clean.status ?? 1);
 

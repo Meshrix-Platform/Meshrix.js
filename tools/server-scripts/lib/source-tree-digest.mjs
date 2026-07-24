@@ -3,8 +3,27 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const SOURCE_PACKAGE_MANIFEST = "lico-source-package-manifest.json";
+const SOURCE_PACKAGE_MANIFEST = "meshrix-source-package-manifest.json";
 const SOURCE_PACKAGE_SCHEMA = "v0.0.1:release:source-package-manifest-4";
+
+function resolveGitRepoRoot(repoRoot) {
+  const resolvedRepoRoot = path.resolve(repoRoot);
+  const acceptanceRoot = String(process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT || "").trim();
+  if (process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1" && acceptanceRoot) {
+    try {
+      const gitMarker = fs.statSync(path.join(resolvedRepoRoot, ".git"));
+      if (gitMarker.isDirectory() || gitMarker.isFile()) {
+        return resolvedRepoRoot;
+      }
+    } catch {
+      // Generation workspaces without a Git marker resolve against the authoritative repository.
+    }
+    return path.resolve(acceptanceRoot);
+  }
+  return resolvedRepoRoot;
+}
+
+export { resolveGitRepoRoot };
 
 function normalizedExcludedPaths(exclude = []) {
   return new Set(exclude.map((value) => String(value || "").replace(/\\/gu, "/")));
@@ -77,20 +96,21 @@ function packagedSourceTreeDigest(repoRoot, { exclude = [] } = {}) {
 }
 
 export function currentSourceTreeDigest(repoRoot, { exclude = [] } = {}) {
+  const gitRepoRoot = resolveGitRepoRoot(repoRoot);
   const result = spawnSync("git", ["ls-files", "-co", "--exclude-standard", "-z"], {
-    cwd: repoRoot,
+    cwd: gitRepoRoot,
     encoding: "buffer",
     windowsHide: true,
     maxBuffer: 64 * 1024 * 1024
   });
-  if (result.status !== 0) return packagedSourceTreeDigest(repoRoot, { exclude });
+  if (result.status !== 0) return packagedSourceTreeDigest(gitRepoRoot, { exclude });
   const excluded = normalizedExcludedPaths(exclude);
   const files = result.stdout.toString("utf8").split("\0").filter(Boolean)
     .filter((relativePath) => !excluded.has(relativePath))
     .sort();
   const hash = crypto.createHash("sha256");
   for (const relativePath of files) {
-    const absolutePath = path.join(repoRoot, ...relativePath.split("/"));
+    const absolutePath = path.join(gitRepoRoot, ...relativePath.split("/"));
     let stats;
     try {
       stats = fs.lstatSync(absolutePath);
@@ -108,14 +128,15 @@ export function currentSourceTreeDigest(repoRoot, { exclude = [] } = {}) {
 }
 
 export function currentRepositoryRevision(repoRoot) {
+  const gitRepoRoot = resolveGitRepoRoot(repoRoot);
   const result = spawnSync("git", ["rev-parse", "HEAD"], {
-    cwd: repoRoot,
+    cwd: gitRepoRoot,
     encoding: "utf8",
     windowsHide: true
   });
   const revision = String(result.stdout || "").trim();
   if (result.status === 0 && /^[a-f0-9]{40,64}$/u.test(revision)) return revision;
-  return readVerifiedSourcePackageManifest(repoRoot).sourceRevision;
+  return readVerifiedSourcePackageManifest(gitRepoRoot).sourceRevision;
 }
 
 export function sourceFileDigest(repoRoot, relativePath) {

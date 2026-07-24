@@ -27,7 +27,7 @@ import {
 } from "./capability-binding-guard-core.mjs";
 
 export function keychainService(alias = DEFAULT_ALIAS) {
-  return `com.licomesh.capability-binding-guard.${safeAlias(alias)}`;
+  return `com.meshrix.capability-binding-guard.${safeAlias(alias)}`;
 }
 
 export async function runText(command, args = [], { input = "" } = {}) {
@@ -114,13 +114,13 @@ $plainBytes = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $n
 }
 
 export function linuxKeyringDescription(alias = DEFAULT_ALIAS) {
-  return `lico:capability-binding-guard:${safeAlias(alias)}`;
+  return `meshrix:capability-binding-guard:${safeAlias(alias)}`;
 }
 
 export function secretToolAttributes(alias = DEFAULT_ALIAS) {
   return [
     "application",
-    "lico",
+    "meshrix",
     "component",
     "capability-binding-guard",
     "alias",
@@ -129,7 +129,7 @@ export function secretToolAttributes(alias = DEFAULT_ALIAS) {
 }
 
 export function passEntryName(alias = DEFAULT_ALIAS) {
-  return `lico/capability-binding-guard/${safeAlias(alias)}`;
+  return `meshrix/capability-binding-guard/${safeAlias(alias)}`;
 }
 
 export function createRecord({ alias = DEFAULT_ALIAS, provider = "local-file", securityMode = "degraded_file_fallback", state = null, sealingKeyBase64 = "" } = {}) {
@@ -210,7 +210,7 @@ export async function readMacosRecord({ alias = DEFAULT_ALIAS } = {}) {
       "find-generic-password",
       "-w",
       "-a",
-      "lico",
+      "meshrix",
       "-s",
       keychainService(alias)
     ]);
@@ -231,7 +231,7 @@ export async function writeMacosRecord({ alias = DEFAULT_ALIAS } = {}, record = 
     "add-generic-password",
     "-U",
     "-a",
-    "lico",
+    "meshrix",
     "-s",
     keychainService(alias),
     "-w",
@@ -288,7 +288,7 @@ export async function writeSecretServiceRecord({ alias = DEFAULT_ALIAS } = {}, r
   await runText("secret-tool", [
     "store",
     "--label",
-    `LicoMesh Capability Binding Guard ${safeAlias(alias)}`,
+    `Meshrix Capability Binding Guard ${safeAlias(alias)}`,
     ...secretToolAttributes(alias)
   ], { input: JSON.stringify(record) });
   return record;

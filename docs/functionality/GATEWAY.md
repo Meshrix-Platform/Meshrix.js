@@ -9,7 +9,7 @@ Authenticated maintainers publish closed service commands through `/api/gateway/
 The production composition binds the control-plane application service, canonical manifest compiler and writer, manifest observer, immutable gateway snapshot, Operation Permission catalog publication, scoped audience projection, and MCP catalog-delivery protocol. The console is a consumer of the public server API and is not a publication authority.
 
 The console can load a portable service document with kind
-`lico.upstream-service` and schema version
+`meshrix.upstream-service` and schema version
 `v0.0.1:upstream-service:portable-import-2`. The document contains only a
 `serviceKey` and the complete service `descriptor`. File selection and validation
 are local operations. Import loads the validated document into the editable
@@ -160,11 +160,11 @@ Server protocol conformance uses a neutral downstream peer generated from the MC
 
 Native downstream installation obtains a grant through the local device-authorization request, authenticated console approval, and one-time claim consumption flow. The installer never receives a console cookie or CSRF token, and it does not treat loopback location or process identity as authorization. A user may instead provide an already issued grant through standard input or a named environment variable. Uninstall notification uses an existing grant and does not mint a replacement credential when none is available.
 
-The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. The catalog pins external packages from LicoMesh-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
+The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. The catalog pins external packages from Meshrix-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
 
 Destructive fixture tools stay hidden from downstream projection. The approval verifier first proves that the pending call produced no upstream side effect, then resolves the shared pending operation and requires exactly one credential-bound upstream MCP call. Repeated approval is rejected without replay, while rejection and expiry leave the upstream hit count unchanged. The dedicated readiness reducer rejects reports that contain only `pending_approval` without the resume, exactly-once, no-side-effect, audit-correlation, and credential-binding evidence.
 
-Other upstream services use the same descriptor and operation policy model. A live external HTTPS compatibility probe remains available as an explicitly optional check (`LICO_UPSTREAM_EXTERNAL_COMPAT=1 npm run verify:upstream-gateway-external`); it is excluded from default and container gates.
+Other upstream services use the same descriptor and operation policy model. A live external HTTPS compatibility probe remains available as an explicitly optional check (`MESHRIX_UPSTREAM_EXTERNAL_COMPAT=1 npm run verify:upstream-gateway-external`); it is excluded from default and container gates.
 
 ## Response Policy
 
@@ -176,7 +176,7 @@ The upstream gateway E2E verifier publishes local fixture services through the d
 
 The upstream fixture transit verifier (`npm run verify:upstream-fixture-transit`) registers the self-contained fixture twice — once as a REST/HTTP external service with `responseSchema` and `publicResponseFields`, once as an MCP service over stdio with an HTTP-transport variant — then proves REST forwarding, MCP tool projection and transit, `state.increment` followed by `state.probe` in the same initialized stdio session, secret-store credential injection on both header and env paths, identity-proof redaction, downstream tool visibility, and denial paths (missing scope, destructive without approval). The managed-session transport tests additionally cover concurrent id routing, SSE notification/result interleaving, session headers and `404` rebuilding, cancellation without side effects, slot release, and isolation of a concurrent peer request.
 
-The downstream agent tool-loop and connector installation verifiers exercise independently released adapter compatibility. They may validate a real `lico-mcp proxy` or locally installed target, but their reports are outside the server acceptance DAG. Server cancellation and downstream protocol readiness are instead proven through the neutral protocol peer against `/mcp`, Operation Permission, the gateway registry, and the deterministic upstream fixture.
+The downstream agent tool-loop and connector installation verifiers exercise independently released adapter compatibility. They may validate a real `meshrix-mcp proxy` or locally installed target, but their reports are outside the server acceptance DAG. Server cancellation and downstream protocol readiness are instead proven through the neutral protocol peer against `/mcp`, Operation Permission, the gateway registry, and the deterministic upstream fixture.
 
 The fixture service can also be started standalone for manual inspection:
 

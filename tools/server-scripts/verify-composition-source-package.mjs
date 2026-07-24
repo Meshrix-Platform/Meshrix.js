@@ -187,10 +187,10 @@ async function stageVerifierDependencyClosure(sourceRoot) {
   const stagedModules = path.join(sourceRoot, "node_modules");
   await fs.mkdir(stagedModules, { recursive: true });
   for (const entry of await fs.readdir(installedModules, { withFileTypes: true })) {
-    if (entry.name === ".bin" || entry.name === "@lico") continue;
+    if (entry.name === ".bin" || entry.name === "@meshrix") continue;
     await fs.symlink(path.join(installedModules, entry.name), path.join(stagedModules, entry.name), "junction");
   }
-  const workspaceScope = path.join(stagedModules, "@lico");
+  const workspaceScope = path.join(stagedModules, "@meshrix");
   await fs.mkdir(workspaceScope, { recursive: true });
   for (const [name, relativeTarget] of Object.entries({
     agents: "packages/agents",
@@ -243,7 +243,7 @@ async function verifyArtifactScannerContract() {
   };
 }
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-composition-source-package-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-composition-source-package-"));
 const packageOutputRoot = path.join(tempRoot, "packages");
 const extractionRoot = path.join(tempRoot, "extracted");
 const commands = [];
@@ -340,7 +340,7 @@ try {
     }
   }
   if (sourceRoot && actualArchiveVerified) {
-    manifest = await readJson(path.join(sourceRoot, "lico-source-package-manifest.json")).catch(() => null);
+    manifest = await readJson(path.join(sourceRoot, "meshrix-source-package-manifest.json")).catch(() => null);
     packagedPluginCount = await countPackagedPlugins(sourceRoot).catch(() => 0);
     artifactBoundaryScan = await scanPublicArtifact(sourceRoot, {
       localNeedles: [repoRoot, tempRoot]

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { readStorageBackupCatalog } from "./backup-catalog.mjs";
 import { BACKUP_RESTORE_PROTOCOL_VERSION } from "./backup-contract.mjs";
 import { rebuildStorageBackupCatalog } from "./backup-manifest.mjs";

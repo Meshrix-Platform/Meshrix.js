@@ -149,7 +149,7 @@ describe("canonical PluginArtifactAuthority", () => {
     await runtime.close();
 
     await context.lifecycleStatePort.runExclusive(() => context.lifecycleStatePort.writeRecord("ledger", {
-      schemaVersion: "licomesh.plugin-lifecycle-ledger/1",
+      schemaVersion: "meshrix.plugin-lifecycle-ledger/1",
       pluginId: "sample-plugin",
       state: "inactive",
       operation: "disable",
@@ -286,7 +286,7 @@ describe("canonical PluginArtifactAuthority", () => {
     await context.port.install(first);
     await context.port.remove({ expectedArtifactDigest: first.artifactDigest, expectedGeneration: 1 });
     await context.lifecycleStatePort.runExclusive(() => context.lifecycleStatePort.writeRecord("ledger", {
-      schemaVersion: "licomesh.plugin-lifecycle-ledger/1", pluginId: "sample-plugin", state: "uninstalled",
+      schemaVersion: "meshrix.plugin-lifecycle-ledger/1", pluginId: "sample-plugin", state: "uninstalled",
       operation: "uninstall", idempotencyKey: "removed", requestDigest: "b".repeat(64), generation: 1
     }));
     const second = await context.port.publish({ sourceRoot: context.sourceRoot, version: "1.0.0", generation: 2, dependencyClosure: [] });
@@ -299,7 +299,7 @@ describe("canonical PluginArtifactAuthority", () => {
       .rejects.toMatchObject({ code: "PLUGIN_ARTIFACT_REMOVAL_MISMATCH" });
 
     await context.lifecycleStatePort.runExclusive(() => context.lifecycleStatePort.writeRecord("ledger", {
-      schemaVersion: "licomesh.plugin-lifecycle-ledger/1", pluginId: "sample-plugin", state: "inactive",
+      schemaVersion: "meshrix.plugin-lifecycle-ledger/1", pluginId: "sample-plugin", state: "inactive",
       operation: "disable", idempotencyKey: "stopped", requestDigest: "c".repeat(64), generation: 2
     }));
     const third = await context.port.publish({ sourceRoot: context.sourceRoot, version: "1.0.0", generation: 3, dependencyClosure: [] });

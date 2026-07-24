@@ -428,7 +428,7 @@ export const RISK_CONTROL_POINTS = Object.freeze([
   })),
 
   ...[
-    ["platform.canonical-state.execute", "LicoMesh canonical state"],
+    ["platform.canonical-state.execute", "Meshrix canonical state"],
     ["platform.operation-proof.execute", "Operation Proof Substrate"],
     ["platform.state-commit.execute", "StateCommit"],
     ["platform.cas-merkle-state.execute", "CAS/Merkle state"],

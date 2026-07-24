@@ -11,7 +11,7 @@ import {
   type TagManagementProjection,
   type TagManagementTag,
 } from "../lib/tag-management-client";
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import { confirmConsoleAction } from "./console-browser-effects";
 
 type TagEditor = {

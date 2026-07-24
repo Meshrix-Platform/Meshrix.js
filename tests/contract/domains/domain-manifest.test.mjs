@@ -115,7 +115,7 @@ function executableSourcePaths(suite) {
 }
 
 function packageIdFromInternalSpecifier(specifier) {
-  const match = String(specifier).match(/^(?:@lico\/|#lico\/)([^/]+)/u);
+  const match = String(specifier).match(/^(?:@meshrix\/|#meshrix\/)([^/]+)/u);
   return match?.[1] || null;
 }
 

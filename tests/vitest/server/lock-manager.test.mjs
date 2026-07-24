@@ -223,7 +223,7 @@ describe("SQLite lock manager", () => {
   it("never resurrects an expired durable row through heartbeat", async () => {
     const manager = createSqliteManager({ defaultTtlMs: 1000 });
     const handle = await manager.acquire("stale-heartbeat");
-    manager.db.prepare("UPDATE _lico_locks SET expires_at = ? WHERE lock_key = ?")
+    manager.db.prepare("UPDATE _meshrix_locks SET expires_at = ? WHERE lock_key = ?")
       .run(new Date(Date.now() - 1).toISOString(), handle.lockKey);
     await expect(handle.heartbeat(1000)).rejects.toBeInstanceOf(LockReleasedError);
     expect(handle.released).toBe(true);
@@ -277,7 +277,7 @@ describe("SQLite lock manager", () => {
     let shouldFail = true;
     manager.db.prepare = (sql) => {
       const statement = prepare(sql);
-      if (!/^DELETE FROM _lico_locks WHERE lock_key = \? AND fencing_token = \?$/.test(
+      if (!/^DELETE FROM _meshrix_locks WHERE lock_key = \? AND fencing_token = \?$/.test(
         String(sql).trim().replace(/\s+/g, " ")
       )) return statement;
       return new Proxy(statement, {
@@ -318,7 +318,7 @@ describe("SQLite lock manager", () => {
     });
     const now = new Date();
     manager.db.prepare(`
-      INSERT INTO _lico_locks
+      INSERT INTO _meshrix_locks
         (lock_key, fencing_token, acquired_at, expires_at, heartbeat_at, owner_pid)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(
@@ -346,7 +346,7 @@ describe("SQLite lock manager", () => {
   });
 
   it("coordinates leases, fences, and instance shutdown across SQLite connections", async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lico-sqlite-lock-cross-instance-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-sqlite-lock-cross-instance-"));
     const databasePath = path.join(root, "locks.sqlite");
     const dbA = new Database(databasePath);
     const dbB = new Database(databasePath);

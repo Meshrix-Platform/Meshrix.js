@@ -52,7 +52,7 @@ function currentPortableTarget() {
   return `${platformMap[process.platform] || process.platform}-${archMap[process.arch] || process.arch}`;
 }
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-release-portable-assembly-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-release-portable-assembly-"));
 const report = {
   schemaVersion: SCHEMA_VERSION,
   verifier: VERIFIER,
@@ -83,7 +83,7 @@ function safeEvidence(value = {}) {
     for (const needle of pathNeedles) {
       if (needle) redacted = redacted.split(needle).join("[redacted-local-path]");
     }
-    if (/Bearer\s+\S+/i.test(redacted) || /lico_[A-Za-z0-9_-]{12,}=/.test(redacted)) return "[redacted-secret]";
+    if (/Bearer\s+\S+/i.test(redacted) || /meshrix_[A-Za-z0-9_-]{12,}=/.test(redacted)) return "[redacted-secret]";
     return redacted;
   }));
 }
@@ -94,7 +94,7 @@ function assertNoLeakText(text = "", label = "text") {
     assert.equal(needle ? value.includes(needle) : false, false, `${label} leaked local path`);
   }
   assert.equal(/Bearer\s+\S+/i.test(value), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[A-Za-z0-9_-]{12,}=/.test(value), false, `${label} leaked local grant token`);
+  assert.equal(/meshrix_[A-Za-z0-9_-]{12,}=/.test(value), false, `${label} leaked local grant token`);
 }
 
 function assertNoLeak(value, label = "payload") {
@@ -143,9 +143,9 @@ async function runPortable(executable, args = []) {
       APPDATA: path.join(isolatedHome, "AppData", "Roaming"),
       LOCALAPPDATA: path.join(isolatedHome, "AppData", "Local"),
       ANTIGRAVITY_MCP_CONFIG_ROOT: path.join(isolatedHome, "antigravity"),
-      LICO_MCP_DISCOVERY_FILE: path.join(tempRoot, "isolated", "servers.json"),
-      LICO_MCP_TOKEN: "",
-      LICO_TOOL_TOKEN: ""
+      MESHRIX_MCP_DISCOVERY_FILE: path.join(tempRoot, "isolated", "servers.json"),
+      MESHRIX_MCP_TOKEN: "",
+      MESHRIX_TOOL_TOKEN: ""
     },
     timeout: 30000,
     maxBuffer: 10 * 1024 * 1024
@@ -344,8 +344,8 @@ try {
     }
     const files = await listFiles(extractedRoot);
     const platformEntrypoints = target.startsWith("windows-")
-      ? ["lico-mcp.ps1", "lico-mcp-install.ps1", "lico-mcp-uninstall.ps1"]
-      : ["lico-mcp", "lico-mcp-install.sh", "lico-mcp-uninstall.sh"];
+      ? ["meshrix-mcp.ps1", "meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]
+      : ["meshrix-mcp", "meshrix-mcp-install.sh", "meshrix-mcp-uninstall.sh"];
     if (target.startsWith("macos-")) {
       platformEntrypoints.push("install.command", "uninstall.command", "doctor.command");
     }
@@ -353,7 +353,8 @@ try {
       bundle.executable,
       "mcp-identity.mjs",
       "package.json",
-      "app/bin/lico-mcp.mjs",
+      "app/mcp-identity.mjs",
+      "app/bin/meshrix-mcp.mjs",
       "app/mcp-release-targets.mjs",
       "app/package.json",
       "app/vendor/contracts/mcp-catalog-delivery.mjs",
@@ -372,15 +373,15 @@ try {
     }
     assert.equal(files.some((file) => file.startsWith("runtime/")), true);
     const portablePackageJson = await readJson(path.join(extractedRoot, "app", "package.json"));
-    assert.equal(portablePackageJson.dependencies?.["@lico/contracts"], "0.0.1");
+    assert.equal(portablePackageJson.dependencies?.["@meshrix/contracts"], "0.0.1");
     assert.equal(
-      portablePackageJson.imports?.["#lico/contracts/*"],
+      portablePackageJson.imports?.["#meshrix/contracts/*"],
       "./vendor/contracts/*.mjs"
     );
     const portableRootPackageJson = await readJson(path.join(extractedRoot, "package.json"));
     assert.equal(portableRootPackageJson.private, true);
     assert.equal(
-      portableRootPackageJson.imports?.["#lico/contracts/*"],
+      portableRootPackageJson.imports?.["#meshrix/contracts/*"],
       "./app/vendor/contracts/*.mjs"
     );
     const [canonicalSource, bundledCanonicalSource] = await Promise.all([
@@ -411,18 +412,18 @@ try {
     const windowsTarget = target.startsWith("windows-");
     const installer = path.join(
       extractedRoot,
-      windowsTarget ? "lico-mcp-install.ps1" : "lico-mcp-install.sh"
+      windowsTarget ? "meshrix-mcp-install.ps1" : "meshrix-mcp-install.sh"
     );
     const installSource = await fs.readFile(installer, "utf8");
     if (windowsTarget) {
-      assert.match(installSource, /lico-mcp\.ps1/u);
+      assert.match(installSource, /meshrix-mcp\.ps1/u);
       assert.equal(/Invoke-Expression|\biex\b/iu.test(installSource), false);
     } else {
-      assert.match(installSource, /SCRIPT_DIR\/lico-mcp/u);
+      assert.match(installSource, /SCRIPT_DIR\/meshrix-mcp/u);
       assert.equal(installSource.includes("eval "), false);
       if (target.startsWith("macos-")) {
         const installCommand = await fs.readFile(path.join(extractedRoot, "install.command"), "utf8");
-        assert.match(installCommand, /lico-mcp-install\.sh/u);
+        assert.match(installCommand, /meshrix-mcp-install\.sh/u);
       }
     }
     const { stdout, stderr } = await runPortable(
@@ -454,13 +455,13 @@ try {
     await extractTarball(windowsBundle.archivePath, windowsExtractDir);
     const windowsRoot = path.join(windowsExtractDir, windowsBundle.rootName);
     const files = await listFiles(windowsRoot);
-    for (const required of ["lico-mcp.ps1", "lico-mcp-install.ps1", "lico-mcp-uninstall.ps1"]) {
+    for (const required of ["meshrix-mcp.ps1", "meshrix-mcp-install.ps1", "meshrix-mcp-uninstall.ps1"]) {
       assert.equal(files.includes(required), true, `missing Windows PowerShell entrypoint: ${required}`);
     }
     for (const prohibited of [
-      "lico-mcp",
-      "lico-mcp-install.sh",
-      "lico-mcp-uninstall.sh",
+      "meshrix-mcp",
+      "meshrix-mcp-install.sh",
+      "meshrix-mcp-uninstall.sh",
       "install.command",
       "uninstall.command",
       "doctor.command"
@@ -469,7 +470,7 @@ try {
     }
     const readme = await fs.readFile(path.join(windowsRoot, "README.txt"), "utf8");
     assert.match(readme, /Windows PowerShell install:/u);
-    assert.equal(readme.includes("./lico-mcp-install.sh"), false);
+    assert.equal(readme.includes("./meshrix-mcp-install.sh"), false);
     return {
       powershellEntrypoints: 3,
       posixEntrypointsAbsent: true,
@@ -529,7 +530,7 @@ try {
     };
   });
 
-  await test("portable lico-mcp help exposes the release target set", async () => {
+  await test("portable meshrix-mcp help exposes the release target set", async () => {
     const { stdout, stderr } = await runPortable(executable, ["help"]);
     assertNoLeakText(stdout, "portable help stdout");
     assertNoLeakText(stderr, "portable help stderr");
@@ -543,7 +544,7 @@ try {
     };
   });
 
-  await test("portable lico-mcp version json matches stable MCP identity", async () => {
+  await test("portable meshrix-mcp version json matches stable MCP identity", async () => {
     const { stdout, stderr } = await runPortable(executable, ["version", "--json"]);
     assertNoLeakText(stdout, "portable version stdout");
     assertNoLeakText(stderr, "portable version stderr");
@@ -558,7 +559,7 @@ try {
     };
   });
 
-  await test("portable lico-mcp scan no-scan returns every release target without install", async () => {
+  await test("portable meshrix-mcp scan no-scan returns every release target without install", async () => {
     const { stdout, stderr } = await runPortable(executable, ["scan", "--json", "--no-scan"]);
     assertNoLeakText(stdout, "portable scan stdout");
     assertNoLeakText(stderr, "portable scan stderr");

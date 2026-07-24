@@ -164,7 +164,7 @@ function fileNameFromUrl(url: string) {
 }
 
 function safetyHeaders(options: SafetyRequestOptions = {}): Record<string, string> {
-  return options.safetyConfirm ? { "x-lico-safety-confirm": "true" } : {};
+  return options.safetyConfirm ? { "x-meshrix-safety-confirm": "true" } : {};
 }
 
 export async function downloadFile(
@@ -175,7 +175,7 @@ export async function downloadFile(
     method: "GET",
     headers: {
       Accept: "*/*",
-      ...(csrfToken ? { "x-lico-csrf": csrfToken } : {}),
+      ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
     },
     credentials: "same-origin",
     signal: options.signal,
@@ -219,7 +219,7 @@ export async function postJson<T>(
     ? {
         "Content-Type": "application/json",
         Accept: "application/json",
-        ...(csrfToken ? { "x-lico-csrf": csrfToken } : {}),
+        ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
         ...safetyHeaders(options),
       }
     : { Accept: "application/json" };
@@ -253,7 +253,7 @@ export async function sendJson<T>(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      ...(csrfToken ? { "x-lico-csrf": csrfToken } : {}),
+      ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
       ...safetyHeaders(options),
     },
     body: JSON.stringify(payload),
@@ -276,7 +276,7 @@ export async function deleteJson<T>(
   await ensureCsrfToken(url);
   const headers: HeadersInit = {
     Accept: "application/json",
-    ...(csrfToken ? { "x-lico-csrf": csrfToken } : {}),
+    ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
     ...safetyHeaders(options),
   };
   const response = await fetch(url, {
@@ -302,7 +302,7 @@ export async function getJson<T>(
 ): Promise<T> {
   const headers: HeadersInit = {
     Accept: "application/json",
-    ...(csrfToken ? { "x-lico-csrf": csrfToken } : {}),
+    ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
   };
   const response = await fetch(url, {
     method: "GET",
@@ -330,7 +330,7 @@ export async function putBinaryJson<T>(
     method: "PUT",
     headers: {
       Accept: "application/json",
-      ...(csrfToken ? { "x-lico-csrf": csrfToken } : {}),
+      ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
     },
     body: payload,
     credentials: "same-origin",

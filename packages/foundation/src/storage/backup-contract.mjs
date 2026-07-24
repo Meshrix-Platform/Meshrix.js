@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 export const BACKUP_RESTORE_PROTOCOL_VERSION = "v0.0.1:storage:backup-restore-1";
 

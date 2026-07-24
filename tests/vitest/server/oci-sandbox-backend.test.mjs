@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createOciSandboxBackend } from "#lico/server-runtime/execution-sandbox/oci-backend";
+import { createOciSandboxBackend } from "#meshrix/server-runtime/execution-sandbox/oci-backend";
 
 const roots = [];
 
@@ -89,8 +89,8 @@ describe("OCI sandbox backend", () => {
     ]));
     expect(createArgs.includes("--runtime")).toBe(false);
     expect(createArgs.join(" ")).not.toContain("opaque-run-reference");
-    expect(createArgs.find((value) => value.startsWith("lico.sandbox.run-digest=")))
-      .toMatch(/^lico\.sandbox\.run-digest=[a-f0-9]{64}$/u);
+    expect(createArgs.find((value) => value.startsWith("meshrix.sandbox.run-digest=")))
+      .toMatch(/^meshrix\.sandbox\.run-digest=[a-f0-9]{64}$/u);
     expect(createArgs).toEqual(expect.arrayContaining([
       "--permission",
       "--allow-fs-read=*",

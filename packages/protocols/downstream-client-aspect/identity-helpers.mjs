@@ -2,7 +2,7 @@ import path from "node:path";
 import {
   executableExists,
   resolveCommandCandidate as resolveHostCommandCandidate
-} from "#lico/foundation/environment-compatibility/index";
+} from "#meshrix/foundation/environment-compatibility/index";
 
 export function asText(value, fallback = "") {
   return String(value ?? fallback).trim();

@@ -11,7 +11,7 @@ import {
 
 describe("governed version scanning", () => {
   it("captures malformed shapes and exempts only explicitly validated dynamic templates", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-version-scan-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-version-scan-"));
     try {
       const scanRoot = path.join(root, "fixtures");
       await fs.mkdir(scanRoot, { recursive: true });
@@ -74,7 +74,7 @@ describe("governed version scanning", () => {
   });
 
   it("does not let the registry document act as its own functional source", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-version-registry-source-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-version-registry-source-"));
     try {
       const registryDir = path.join(root, "packages/foundation/src/version-control");
       await fs.mkdir(registryDir, { recursive: true });

@@ -12,7 +12,7 @@ import {
 import { createTagStoreAdapter } from "../../../packages/server-runtime/src/state/tags/tag-store.adapter.mjs";
 
 async function withTagStore(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-universal-tag-policy-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-universal-tag-policy-"));
   const store = createTagStoreAdapter({ userDataPath });
   try {
     return await testCase(store);

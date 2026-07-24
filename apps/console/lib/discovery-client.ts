@@ -1,4 +1,4 @@
-import { getJson, postJson } from "@lico/ui-console/bridge-http";
+import { getJson, postJson } from "@meshrix/ui-console/bridge-http";
 import type {
   DiscoveryClientsResponse,
   DiscoveryConfig,

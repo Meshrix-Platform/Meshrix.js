@@ -4,7 +4,7 @@ import {
   atomicWriteJson,
   queueStateMutation,
   waitForStateIdle
-} from "#lico/state-coordinator";
+} from "#meshrix/state-coordinator";
 
 export const AGENT_SYNC_SCHEMA_VERSION = "v0.0.1:agent:sync-schema-1";
 export const AGENT_SYNC_PREFIX = "agent.sync.";

@@ -4,42 +4,42 @@ import {
   publicFeatureRuntime,
   resolveFeatureRuntimeFromEnv
 } from "./features/feature-manifest.mjs";
-import { createProtocolEventRuntime } from "#lico/server-runtime/events/protocol-event-runtime";
-import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
-import { createCorePlatformProvider } from "#lico/server-runtime/composition/core-platform-provider";
-import { registerCorePlatformServices } from "#lico/server-runtime/composition/core-platform-register";
-import { createDataStructureSubstrate } from "#lico/foundation/checkpoint/tree/data-structure-substrate";
-import { registerDataStructureSubstratePlatformServices } from "#lico/foundation/checkpoint/tree/data-structure-substrate-register";
-import { assertPactiumFreshDataDir } from "#lico/foundation/checkpoint/tree/pactium-substrate-preflight";
-import { createOperationProofSubstrate } from "#lico/foundation/proof/proof-substrate/index";
-import { registerOperationProofSubstratePlatformServices } from "#lico/foundation/proof/proof-substrate/register";
-import { createConsoleAuth } from "#lico/foundation/security/auth/console-auth";
-import { createOperationAuditStore } from "#lico/foundation/security/operation-audit";
-import { createProcessIdentityService } from "#lico/foundation/security/process-identity/index";
-import { registerSecurityPlatformServices } from "#lico/foundation/security/register";
-import { createSecurityPermissionsProvider } from "#lico/foundation/security/security-permissions-provider";
+import { createProtocolEventRuntime } from "#meshrix/server-runtime/events/protocol-event-runtime";
+import { createProtocolEventBus } from "#meshrix/protocols/pubsub/event-bus";
+import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
+import { registerCorePlatformServices } from "#meshrix/server-runtime/composition/core-platform-register";
+import { createDataStructureSubstrate } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
+import { registerDataStructureSubstratePlatformServices } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate-register";
+import { assertPactiumFreshDataDir } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
+import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
+import { registerOperationProofSubstratePlatformServices } from "#meshrix/foundation/proof/proof-substrate/register";
+import { createConsoleAuth } from "#meshrix/foundation/security/auth/console-auth";
+import { createOperationAuditStore } from "#meshrix/foundation/security/operation-audit";
+import { createProcessIdentityService } from "#meshrix/foundation/security/process-identity/index";
+import { registerSecurityPlatformServices } from "#meshrix/foundation/security/register";
+import { createSecurityPermissionsProvider } from "#meshrix/foundation/security/security-permissions-provider";
 import {
   createModuleManagementProvider,
   setModuleManagementSettingsDeps
-} from "#lico/foundation/module-system/module-management-provider";
+} from "#meshrix/foundation/module-system/module-management-provider";
 import { createServerRuntime } from "../module-runtime/server-runtime.mjs";
-import { registerModuleManagementPlatformServices } from "#lico/foundation/module-system/register";
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { registerModuleManagementPlatformServices } from "#meshrix/foundation/module-system/register";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 import {
   getSettingsPath,
   loadSettings,
   normalizeSettings,
   saveSettings
-} from "#lico/settings";
-import { registerStoragePlatformServices } from "#lico/foundation/storage/register";
-import { createStorageProvider } from "#lico/foundation/storage/storage-provider";
-import { createDevopsProvider } from "#lico/server-runtime/composition/devops-provider";
-import { registerDevopsPlatformServices } from "#lico/server-runtime/composition/devops-register";
+} from "#meshrix/settings";
+import { registerStoragePlatformServices } from "#meshrix/foundation/storage/register";
+import { createStorageProvider } from "#meshrix/foundation/storage/storage-provider";
+import { createDevopsProvider } from "#meshrix/server-runtime/composition/devops-provider";
+import { registerDevopsPlatformServices } from "#meshrix/server-runtime/composition/devops-register";
 import { createPlatformRegistry } from "./platform-registry.mjs";
 import {
   createPluginLifecycleStatePort,
   discoverPluginLifecycleStateIds
-} from "@lico/foundation/module-system/plugin-lifecycle-state-port";
+} from "@meshrix/foundation/module-system/plugin-lifecycle-state-port";
 import {
   createPluginContributionRegistry
 } from "./plugin-contribution-registry.mjs";
@@ -47,7 +47,7 @@ import { registerStateMachineDefinitions } from "./register-state-machines.mjs";
 import {
   loadPluginRegistry,
   normalizeEnabledPluginIds
-} from "#lico/foundation/module-system/plugin-registry";
+} from "#meshrix/foundation/module-system/plugin-registry";
 import { bindServerMcpNotificationBus } from "./mcp-notification-bus-binding.mjs";
 import { createConfiguredSandboxExecution } from "./execution-sandbox-provider.mjs";
 import { createLocalCustodyKeyBroker } from "../execution-sandbox/custody-key-broker.mjs";
@@ -71,7 +71,7 @@ async function refreshAgentConfigRegistryIfNeeded({ enabled, userDataPath }) {
   if (!enabled) {
     return null;
   }
-  const { getAgentConfigRegistry } = await import("#lico/agents/agent-configs/config-registry");
+  const { getAgentConfigRegistry } = await import("#meshrix/agents/agent-configs/config-registry");
   return getAgentConfigRegistry({ rootPath: path.join(userDataPath, "agent-configs") }).refresh();
 }
 

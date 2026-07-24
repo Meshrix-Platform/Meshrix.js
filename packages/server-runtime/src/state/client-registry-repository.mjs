@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 
-export const MAX_LICO_CLIENT_REGISTRATIONS = 2000;
+export const MAX_MESHRIX_CLIENT_REGISTRATIONS = 2000;
 // Internal capacity safety policy; it does not populate user discovery configuration.
 export const DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS = 15 * 60;
 
@@ -155,7 +155,7 @@ function prepareClientRegistryStatements(database) {
 export function createClientRegistryService({
   userDataPath = "",
   db = null,
-  maxClientRegistrations = MAX_LICO_CLIENT_REGISTRATIONS,
+  maxClientRegistrations = MAX_MESHRIX_CLIENT_REGISTRATIONS,
   registrationRetentionSeconds = DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
   now = Date.now
 } = {}) {
@@ -163,7 +163,7 @@ export function createClientRegistryService({
   const ownsDatabase = !db;
   const maxRegistrations = Math.max(
     1,
-    Math.floor(Number(maxClientRegistrations || MAX_LICO_CLIENT_REGISTRATIONS) || MAX_LICO_CLIENT_REGISTRATIONS)
+    Math.floor(Number(maxClientRegistrations || MAX_MESHRIX_CLIENT_REGISTRATIONS) || MAX_MESHRIX_CLIENT_REGISTRATIONS)
   );
   const defaultRetentionSeconds = Math.max(
     1,
@@ -278,8 +278,8 @@ export function createClientRegistryService({
         ok: true,
         clientId,
         alignmentState,
-        connectionKind: "lico-client",
-        connectionMethod: "lico-client 封装",
+        connectionKind: "meshrix-client",
+        connectionMethod: "meshrix-client 封装",
         connectionState: alignmentState === "offline"
           ? "offline"
           : alignmentState === "unknown"
@@ -317,8 +317,8 @@ export function createClientRegistryService({
           currentJobServiceUrl: row.current_job_service_url || "",
           configVersion: row.config_version || "",
           alignmentState,
-          connectionKind: "lico-client",
-          connectionMethod: "lico-client 封装",
+          connectionKind: "meshrix-client",
+          connectionMethod: "meshrix-client 封装",
           connectionState: alignmentState === "offline"
             ? "offline"
             : alignmentState === "unknown"
@@ -344,7 +344,7 @@ export function createClientRegistryService({
           .length,
         offlineCount: items.filter((item) => item.alignmentState === "offline").length,
         unknownCount: items.filter((item) => item.alignmentState === "unknown").length,
-        licoClientCount: items.length,
+        meshrixClientCount: items.length,
         mcpPluginCount: 0,
         alignableCount: items.length
       };

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import { openSqliteDatabase } from "./sqlite-database.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 const TRANSACTION_SCHEMA_VERSION = "v0.0.1:schema:definition-1";
 const TRANSACTION_PROTOCOL = "v0.0.1:storage:restore-transaction-1";

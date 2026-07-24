@@ -1,6 +1,6 @@
 # Code of Conduct
 
-LicoMesh welcomes contributors and users from different backgrounds and levels
+Meshrix welcomes contributors and users from different backgrounds and levels
 of experience. Project spaces must remain safe, technical, and constructive.
 
 ## Expected Conduct
@@ -35,5 +35,5 @@ project-controlled spaces. Retaliation against a good-faith reporter is itself
 a violation.
 
 This policy applies to repository issues, pull requests, reviews, discussions,
-release channels, and other spaces represented as official LicoMesh community
+release channels, and other spaces represented as official Meshrix community
 spaces.

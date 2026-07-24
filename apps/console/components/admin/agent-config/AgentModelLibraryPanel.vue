@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useServerConsoleShellContext } from "../../../composables/serverConsoleShellContext";
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import AgentModelEntryCard from "./AgentModelEntryCard.vue";
 
 const {

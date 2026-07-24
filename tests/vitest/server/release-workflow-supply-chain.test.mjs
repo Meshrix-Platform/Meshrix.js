@@ -99,7 +99,7 @@ describe("release workflow supply-chain boundary", () => {
     expect(firstPublicationJob).toBeGreaterThan(verifyJob);
     expect(verification).not.toContain("npm run verify:acceptance");
     expect(acceptanceJob).toContain("needs: [verify]");
-    expect(acceptanceJob).toContain("LICO_RELEASE_PARALLELISM: \"4\"");
+    expect(acceptanceJob).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
     expect(acceptanceJob).toContain("npm run verify:acceptance");
     expect(assembly).toContain("needs: [verify, platform-acceptance]");
     const orderedJobOffsets = orderedJobs.map((jobId) => workflow.indexOf(`  ${jobId}:\n`));
@@ -323,9 +323,9 @@ describe("release workflow supply-chain boundary", () => {
     expect(build.match(/severity: CRITICAL,HIGH/gu)).toHaveLength(2);
     expect(build.match(/exit-code: "1"/gu)).toHaveLength(2);
     expect(build.match(/ignore-unfixed: true/gu)).toHaveLength(2);
-    expect(build).toContain('--build-arg "LICO_SOURCE_REPOSITORY=${GITHUB_REPOSITORY}"');
-    expect(build).toContain('--build-arg "LICO_SOURCE_REF=${GITHUB_REF}"');
-    expect(build).toContain('--build-arg "LICO_SOURCE_COMMIT=${GITHUB_SHA}"');
+    expect(build).toContain('--build-arg "MESHRIX_SOURCE_REPOSITORY=${GITHUB_REPOSITORY}"');
+    expect(build).toContain('--build-arg "MESHRIX_SOURCE_REF=${GITHUB_REF}"');
+    expect(build).toContain('--build-arg "MESHRIX_SOURCE_COMMIT=${GITHUB_SHA}"');
     expect(build).not.toContain("JSON.stringify(provenance).includes");
     expect(workflow).toContain("sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6");
     expect(workflow).toContain("id-token: write");
@@ -400,18 +400,18 @@ describe("release workflow supply-chain boundary", () => {
     const compose = read("docker-compose.yml");
     const releaseTemplate = read(".github/RELEASE_TEMPLATE.md");
     expect(compose).toContain(
-      '"${LICO_BIND_ADDRESS:-127.0.0.1}:${LICO_HOST_PORT:-7228}:7228"'
+      '"${MESHRIX_BIND_ADDRESS:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}:7228"'
     );
     expect(compose).toContain("healthcheck:");
     expect(compose).toContain("stop_grace_period: 90s");
     expect(releaseTemplate).toContain("--stop-timeout 90");
     for (const field of [
-      "LICO_BOOTSTRAP_URL",
-      "LICO_ADVERTISED_BASE_URL",
-      "LICO_ACTIVE_SERVICE_URL"
+      "MESHRIX_BOOTSTRAP_URL",
+      "MESHRIX_ADVERTISED_BASE_URL",
+      "MESHRIX_ACTIVE_SERVICE_URL"
     ]) {
       expect(compose).toContain(
-        `${field}: http://${"${LICO_ADVERTISED_HOST:-127.0.0.1}"}:${"${LICO_HOST_PORT:-7228}"}`
+        `${field}: http://${"${MESHRIX_ADVERTISED_HOST:-127.0.0.1}"}:${"${MESHRIX_HOST_PORT:-7228}"}`
       );
       expect(compose).not.toContain(`${field}: http://127.0.0.1:7228`);
     }
@@ -420,22 +420,22 @@ describe("release workflow supply-chain boundary", () => {
   it("keeps the npm verifier cache content-addressed and project-isolated", () => {
     const dockerfile = read("Dockerfile");
     const cacheMount =
-      "--mount=type=cache,id=licomesh-core-npm,target=${ROOTFS}var/cache/licomesh/npm,sharing=locked";
+      "--mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm,sharing=locked";
     expect(dockerfile.split(cacheMount)).toHaveLength(3);
-    expect(dockerfile).toContain('--cache="${ROOTFS}var/cache/licomesh/npm"');
+    expect(dockerfile).toContain('--cache="${ROOTFS}var/cache/meshrix/npm"');
     expect(dockerfile).toContain(
-      'cp -a "${ROOTFS}var/cache/licomesh/npm/_cacache" "${ROOTFS}opt/lico-npm-cache/_cacache"'
+      'cp -a "${ROOTFS}var/cache/meshrix/npm/_cacache" "${ROOTFS}opt/meshrix-npm-cache/_cacache"'
     );
-    expect(dockerfile).not.toContain("cp -a ${ROOTFS}var/cache/licomesh/npm/. ");
+    expect(dockerfile).not.toContain("cp -a ${ROOTFS}var/cache/meshrix/npm/. ");
     expect(dockerfile).not.toContain(["", "root", ".npm"].join("/"));
   });
 
   it("executes the connector from the canonical npm release set", () => {
     const verifier = read("tools/server-scripts/verify-npm-package-installability.mjs");
     expect(verifier).toContain('import { discoverReleaseSet } from "./publish-release-set.mjs";');
-    expect(verifier).toContain('name === "lico-mcp-connector"');
+    expect(verifier).toContain('name === "meshrix-mcp-connector"');
     expect(verifier).toContain('connectorFiles.includes("lib/mcp-proxy-session.mjs")');
-    expect(verifier).toContain('"lico-mcp", "version", "--json"');
+    expect(verifier).toContain('"meshrix-mcp", "version", "--json"');
   });
 
   it("gives the canonical fresh-container package probe a layered timeout budget without widening host probes", () => {
@@ -516,8 +516,8 @@ describe("release workflow supply-chain boundary", () => {
     );
     expect([ciAcceptanceMinutes, releaseAcceptanceMinutes, declaredAcceptanceJobMinutes])
       .toEqual([395, 395, 395]);
-    expect(ciAcceptance).toContain('LICO_RELEASE_PARALLELISM: "4"');
-    expect(releaseAcceptance).toContain('LICO_RELEASE_PARALLELISM: "4"');
+    expect(ciAcceptance).toContain('MESHRIX_RELEASE_PARALLELISM: "4"');
+    expect(releaseAcceptance).toContain('MESHRIX_RELEASE_PARALLELISM: "4"');
     expect(assembly).toContain("timeout-minutes: 60");
   });
 
@@ -534,7 +534,7 @@ describe("release workflow supply-chain boundary", () => {
     const override = path.join(ROOT, "build", "fixture-node-runtime-cache");
     const dataDir = path.join(ROOT, "build", "fixture-data");
     expect(resolveNodeRuntimeCacheDirectory({
-      environment: { LICO_MCP_NODE_RUNTIME_CACHE_DIR: `  ${override}  ` },
+      environment: { MESHRIX_MCP_NODE_RUNTIME_CACHE_DIR: `  ${override}  ` },
       dataDir: ""
     })).toBe(path.resolve(override));
     expect(resolveNodeRuntimeCacheDirectory({ environment: {}, dataDir })).toBe(
@@ -626,7 +626,7 @@ describe("release workflow supply-chain boundary", () => {
   });
 
   it("accepts only a new or empty dedicated MCP output directory", async () => {
-    const repositoryRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "licomesh-release-output-"));
+    const repositoryRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "meshrix-release-output-"));
     try {
       const releaseRoot = path.join(repositoryRoot, "build", "release");
       const allowed = path.join(releaseRoot, "mcp");
@@ -680,7 +680,7 @@ describe("release workflow supply-chain boundary", () => {
   });
 
   it("writes outer checksums with final flat asset names and rejects collisions", async () => {
-    const temporaryRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "licomesh-release-checksum-"));
+    const temporaryRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "meshrix-release-checksum-"));
     try {
       const first = path.join(temporaryRoot, "mcp");
       const second = path.join(temporaryRoot, "supply-chain");

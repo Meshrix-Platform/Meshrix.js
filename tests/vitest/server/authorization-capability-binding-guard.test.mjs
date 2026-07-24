@@ -66,7 +66,7 @@ describe("authorization capability binding guard boundary behavior", () => {
   });
 
   it("binds from aliased context fields, verifies wildcard-free matches, and leaves no-op invalidations untouched", async () => {
-    const dataDir = await tempDir("lico-binding-guard-extra-");
+    const dataDir = await tempDir("meshrix-binding-guard-extra-");
     const guard = createCapabilityBindingGuard({
       backend: "local-file",
       dataDir,

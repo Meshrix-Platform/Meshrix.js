@@ -9,38 +9,38 @@ export function usage() {
   const priorityTargets = SUPPORTED_TARGETS.join(",");
   return [
     "Usage:",
-    "  lico-mcp register",
-    "  lico-mcp install",
-    "  lico-mcp install --target auto",
-    `  lico-mcp install --target ${priorityTargets}`,
-    "  lico-mcp uninstall",
-    `  lico-mcp uninstall --target ${priorityTargets}`,
-    "  lico-mcp scan --json",
-    "  lico-mcp discover-local --json",
-    "  lico-mcp doctor",
-    "  lico-mcp proxy --target opencode",
-    "  lico-mcp discover",
-    "  lico-mcp server-config --set --url http://host:port --name local",
-    "  lico-mcp server-config --switch local",
-    "  lico-mcp server-config --refresh",
-    "  lico-mcp server-config --reset",
+    "  meshrix-mcp register",
+    "  meshrix-mcp install",
+    "  meshrix-mcp install --target auto",
+    `  meshrix-mcp install --target ${priorityTargets}`,
+    "  meshrix-mcp uninstall",
+    `  meshrix-mcp uninstall --target ${priorityTargets}`,
+    "  meshrix-mcp scan --json",
+    "  meshrix-mcp discover-local --json",
+    "  meshrix-mcp doctor",
+    "  meshrix-mcp proxy --target opencode",
+    "  meshrix-mcp discover",
+    "  meshrix-mcp server-config --set --url http://host:port --name local",
+    "  meshrix-mcp server-config --switch local",
+    "  meshrix-mcp server-config --refresh",
+    "  meshrix-mcp server-config --reset",
     "",
     "Options:",
     "  --target LIST                 Comma-separated targets for non-interactive install. Use auto for detected clients.",
     `                                Supported targets: ${SUPPORTED_TARGETS.join(", ")}.`,
-    "  --url URL                     Explicit LicoMesh base URL. Still requires signed MCP handshake.",
+    "  --url URL                     Explicit Meshrix base URL. Still requires signed MCP handshake.",
     "  --scan-ports LIST            Local ports to scan when --url is omitted. Default: 7228-7237.",
     "  --token-stdin                 Read token from stdin.",
-    "  --token-env NAME              Token environment variable. Default: LICO_MCP_TOKEN.",
+    "  --token-env NAME              Token environment variable. Default: MESHRIX_MCP_TOKEN.",
     "  --no-auto-token               Require an explicit token instead of requesting a local grant.",
     "  --no-verify                   Skip post-install MCP HTTP verification.",
     "  --json                        Emit JSON.",
     "  --pretty                      Pretty-print JSON output.",
     "  --no-env                      Do not publish launchctl environment variables during register.",
-    "  --discovery-file PATH         Registry file used by register/discover-local. Default: ~/.lico/mcp/servers.json.",
+    "  --discovery-file PATH         Registry file used by register/discover-local. Default: ~/.meshrix/mcp/servers.json.",
     "  --auto-update                 Enable automatic push updates when installing (non-interactive mode).",
     "  --client-command COMMAND      Explicit local client command or path for one selected target.",
-    "  --adapter-cache PATH          Verified external adapter cache. Default: ~/.lico/mcp/client-adapters.",
+    "  --adapter-cache PATH          Verified external adapter cache. Default: ~/.meshrix/mcp/client-adapters.",
     "",
     "Interactive install:",
     "  When --target is omitted in a TTY, install opens a multi-select menu.",
@@ -116,7 +116,7 @@ export function mcpUrlForTarget(baseUrl, target) {
 
 export function mcpTargetHeaders(target) {
   const normalizedTarget = normalizeTarget(target);
-  return normalizedTarget ? { "X-Lico-MCP-Target": normalizedTarget } : {};
+  return normalizedTarget ? { "X-Meshrix-MCP-Target": normalizedTarget } : {};
 }
 
 export function parseTargets(rawTarget) {
@@ -140,7 +140,7 @@ export function targetLabel(target) {
 }
 
 export function targetInstallMode(target) {
-  return TARGET_INSTALL_MODES[target] || "lico-mcp-client-install";
+  return TARGET_INSTALL_MODES[target] || "meshrix-mcp-client-install";
 }
 
 export function notDetectedTargetDetail(target) {

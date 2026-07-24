@@ -38,7 +38,7 @@ async function runChild(args) {
 
 async function writeReport(report) {
   const provenance = {
-    producer: "licomesh-core-work-queue-restart",
+    producer: "meshrix-core-work-queue-restart",
     commandId,
     sourceRevision: await computeVerifierSourceRevision(repoRoot, sourceFiles)
   };
@@ -51,7 +51,7 @@ async function writeReport(report) {
 
 async function main() {
   const startedAt = new Date();
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-process-restart-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-process-restart-"));
   try {
     const seeded = await runChild(["seed", userDataPath]);
     await new Promise((resolve) => setTimeout(resolve, 80));
@@ -83,6 +83,7 @@ async function main() {
       verifier,
       ok: true,
       summary: {
+        releaseReady: true,
         verificationPassed: true,
         coverageComplete: true,
         processBoundaryCount: 2,

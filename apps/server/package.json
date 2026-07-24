@@ -1,12 +1,12 @@
 {
-  "name": "@lico/server",
+  "name": "@meshrix/server",
   "version": "0.0.1",
   "private": true,
-  "description": "LicoMesh Node server executable — HTTP runtime bootstrap, process lifecycle",
+  "description": "Meshrix Node server executable — HTTP runtime bootstrap, process lifecycle",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "apps/server"
   },
   "engines": {
@@ -14,21 +14,21 @@
   },
   "type": "module",
   "dependencies": {
-    "@lico/contracts": "0.0.1",
-    "@lico/foundation": "0.0.1",
-    "@lico/protocols": "0.0.1",
-    "@lico/server-runtime": "0.0.1",
-    "@lico/ui-console": "0.0.1"
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1",
+    "@meshrix/server-runtime": "0.0.1",
+    "@meshrix/ui-console": "0.0.1"
   },
   "imports": {
-    "#lico/foundation/*": "@lico/foundation/*",
-    "#lico/http-utils": "@lico/protocols/http/http-utils",
-    "#lico/operation-registry": "@lico/contracts/operations/operation-registry",
-    "#lico/platform-registry": "@lico/server-runtime/composition/platform-registry",
-    "#lico/protocols/*": "@lico/protocols/*",
-    "#lico/runtime-logger": "@lico/foundation/observability/runtime-logger",
-    "#lico/server-config": "@lico/foundation/config/server-config",
-    "#lico/server-runtime/*": "@lico/server-runtime/*"
+    "#meshrix/foundation/*": "@meshrix/foundation/*",
+    "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
+    "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
+    "#meshrix/platform-registry": "@meshrix/server-runtime/composition/platform-registry",
+    "#meshrix/protocols/*": "@meshrix/protocols/*",
+    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/server-config": "@meshrix/foundation/config/server-config",
+    "#meshrix/server-runtime/*": "@meshrix/server-runtime/*"
   },
   "exports": {
     "./*": "./runtime/*.mjs"

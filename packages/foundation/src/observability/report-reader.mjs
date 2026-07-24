@@ -13,7 +13,7 @@ export const DEFAULT_PRODUCTION_READINESS_REPORT_ROOT = "build/reports/productio
 
 const defaultRepoRoot = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const PRODUCTION_HEALTH_PROVENANCE = Object.freeze({
-  producer: "licomesh-core-observability",
+  producer: "meshrix-core-observability",
   commandId: "production-health.read",
   sourceRevision: PRODUCTION_HEALTH_REPORT_TYPE
 });

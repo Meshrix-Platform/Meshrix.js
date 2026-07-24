@@ -5,15 +5,15 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   ORGANIZATION_MODEL_PROTOCOL_VERSION,
-  LICO_ROOT_ORGANIZATION_ID,
-  LICO_ROOT_ORGANIZATION_LABEL,
+  MESHRIX_ROOT_ORGANIZATION_ID,
+  MESHRIX_ROOT_ORGANIZATION_LABEL,
   createOrganizationModelStore
 } from "../../../packages/foundation/src/security/authorization/organization-model.mjs";
 
 const tempRoots = [];
 
 async function tempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-org-model-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-org-model-"));
   tempRoots.push(root);
   return root;
 }
@@ -27,11 +27,11 @@ describe("organization model store behavior", () => {
     const rootPath = await tempRoot();
     const store = createOrganizationModelStore({ rootPath });
 
-    expect(store.getNode(LICO_ROOT_ORGANIZATION_ID)).toMatchObject({
+    expect(store.getNode(MESHRIX_ROOT_ORGANIZATION_ID)).toMatchObject({
       protocolVersion: ORGANIZATION_MODEL_PROTOCOL_VERSION,
-      nodeId: LICO_ROOT_ORGANIZATION_ID,
+      nodeId: MESHRIX_ROOT_ORGANIZATION_ID,
       nodeType: "root",
-      label: LICO_ROOT_ORGANIZATION_LABEL,
+      label: MESHRIX_ROOT_ORGANIZATION_LABEL,
       metadata: { authorizationBoundary: false }
     });
 
@@ -43,7 +43,7 @@ describe("organization model store behavior", () => {
     expect(engineering).toMatchObject({
       nodeId: "engineering-org",
       nodeType: "organization",
-      parentId: LICO_ROOT_ORGANIZATION_ID,
+      parentId: MESHRIX_ROOT_ORGANIZATION_ID,
       label: "Engineering",
       metadata: { costCenter: "eng" }
     });
@@ -72,7 +72,7 @@ describe("organization model store behavior", () => {
     });
     expect(store.listChildren("engineering-org").map((node) => node.nodeId)).toEqual(["platform"]);
     expect(store.pathForNode("user-1").map((node) => node.nodeId)).toEqual([
-      LICO_ROOT_ORGANIZATION_ID,
+      MESHRIX_ROOT_ORGANIZATION_ID,
       "engineering-org",
       "platform",
       "user-1"
@@ -81,7 +81,7 @@ describe("organization model store behavior", () => {
     const moved = store.moveNode("user-1", "engineering-org");
     expect(moved.parentId).toBe("engineering-org");
     expect(store.pathForNode("user-1").map((node) => node.nodeId)).toEqual([
-      LICO_ROOT_ORGANIZATION_ID,
+      MESHRIX_ROOT_ORGANIZATION_ID,
       "engineering-org",
       "user-1"
     ]);
@@ -121,11 +121,11 @@ describe("organization model store behavior", () => {
     const rootPath = await tempRoot();
     const store = createOrganizationModelStore({ rootPath });
 
-    expect(() => store.upsertOrganization({ organizationId: LICO_ROOT_ORGANIZATION_ID }))
-      .toThrow("LicoMesh Root id is reserved");
-    expect(() => store.moveNode(LICO_ROOT_ORGANIZATION_ID, LICO_ROOT_ORGANIZATION_ID))
-      .toThrow("LicoMesh Root cannot be moved");
-    expect(() => store.moveNode("missing", LICO_ROOT_ORGANIZATION_ID))
+    expect(() => store.upsertOrganization({ organizationId: MESHRIX_ROOT_ORGANIZATION_ID }))
+      .toThrow("Meshrix Root id is reserved");
+    expect(() => store.moveNode(MESHRIX_ROOT_ORGANIZATION_ID, MESHRIX_ROOT_ORGANIZATION_ID))
+      .toThrow("Meshrix Root cannot be moved");
+    expect(() => store.moveNode("missing", MESHRIX_ROOT_ORGANIZATION_ID))
       .toThrow("Unknown organization node");
     expect(() => store.upsertOrganization({ nodeId: "child", parentId: "missing" }))
       .toThrow("Unknown organization parent");

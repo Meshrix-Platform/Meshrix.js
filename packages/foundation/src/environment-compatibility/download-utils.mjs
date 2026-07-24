@@ -11,11 +11,11 @@ function boundedInteger(value, fallback, { min = 1, max = 10 } = {}) {
 }
 
 export function downloadRetryAttempts(env = process.env) {
-  return boundedInteger(env.LICO_DOWNLOAD_RETRY_ATTEMPTS, 3, { min: 1, max: 10 });
+  return boundedInteger(env.MESHRIX_DOWNLOAD_RETRY_ATTEMPTS, 3, { min: 1, max: 10 });
 }
 
 export function retryDelayMs(attemptIndex = 0, env = process.env) {
-  const baseMs = boundedInteger(env.LICO_DOWNLOAD_RETRY_DELAY_MS, 500, { min: 50, max: 30_000 });
+  const baseMs = boundedInteger(env.MESHRIX_DOWNLOAD_RETRY_DELAY_MS, 500, { min: 50, max: 30_000 });
   const cappedAttempt = Math.min(6, Math.max(0, Math.trunc(Number(attemptIndex) || 0)));
   return Math.min(30_000, baseMs * (2 ** cappedAttempt));
 }

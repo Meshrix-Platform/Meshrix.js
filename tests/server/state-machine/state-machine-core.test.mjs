@@ -101,7 +101,7 @@ describe('State Machine Core', () => {
       metadata: {
         normalField: 'hello',
         token: 'secret123',
-        path: '/tmp/lico-redaction-fixture'
+        path: '/tmp/meshrix-redaction-fixture'
       },
       now: '2023-01-01'
     });

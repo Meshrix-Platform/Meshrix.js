@@ -104,7 +104,7 @@ describe("workspace contribution lifecycle ownership", () => {
   });
 
   it("rejects persistence paths that escape the configured data root", () => {
-    const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "lico-contribution-root-"));
+    const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-contribution-root-"));
     try {
       expect(() => createContributionRegistry({
         userDataPath,

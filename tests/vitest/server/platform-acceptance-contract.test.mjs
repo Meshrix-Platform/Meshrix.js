@@ -7,24 +7,24 @@ import {
 
 describe("platform acceptance profile contract", () => {
   it("requires one registered profile for plan and execution modes", () => {
-    expect(parsePlatformAcceptanceArgs(["--profile", "core"])).toEqual({
+    expect(parsePlatformAcceptanceArgs(["--profile", "enterprise-single-node"])).toEqual({
       planOnly: false,
-      selectedProfile: "core",
+      selectedProfile: "enterprise-single-node",
     });
-    expect(parsePlatformAcceptanceArgs(["--profile", "core", "--plan"])).toEqual({
+    expect(parsePlatformAcceptanceArgs(["--profile", "enterprise-single-node", "--plan"])).toEqual({
       planOnly: true,
-      selectedProfile: "core",
+      selectedProfile: "enterprise-single-node",
     });
     expect(() => parsePlatformAcceptanceArgs([])).toThrow("requires --profile");
     expect(() => parsePlatformAcceptanceArgs(["--profile", "any"])).toThrow(
       "Unknown platform acceptance profile",
     );
-    expect(() => parsePlatformAcceptanceArgs(["--profile", "core", "--profile", "core"]))
+    expect(() => parsePlatformAcceptanceArgs(["--profile", "enterprise-single-node", "--profile", "enterprise-single-node"]))
       .toThrow("provided more than once");
   });
 
   it("rejects missing and unknown profile bindings", () => {
-    expect(requirePlatformAcceptanceProfile("core")).toBe("core");
+    expect(requirePlatformAcceptanceProfile("enterprise-single-node")).toBe("enterprise-single-node");
     expect(() => requirePlatformAcceptanceProfile("")).toThrow("requires --profile");
     expect(() => requirePlatformAcceptanceProfile("any")).toThrow(
       "Unknown platform acceptance profile",

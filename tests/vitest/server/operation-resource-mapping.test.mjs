@@ -143,8 +143,8 @@ describe("operation resource mapping", () => {
 
   it("projects long-running upstream forwarding timeout from the operation registry", () => {
     const catalog = createToolCatalog({ operations: SERVER_API_OPERATIONS });
-    const gatewayForward = catalog.tools.find((tool) => tool.id === "lico.gateway.forward");
-    const gatewayMetrics = catalog.tools.find((tool) => tool.id === "lico.gateway.metrics");
+    const gatewayForward = catalog.tools.find((tool) => tool.id === "meshrix.gateway.forward");
+    const gatewayMetrics = catalog.tools.find((tool) => tool.id === "meshrix.gateway.metrics");
 
     expect(operationById("gateway.forward").execution?.timeoutMs).toBe(180_000);
     expect(gatewayForward?.timeoutMs).toBe(180_000);

@@ -7,10 +7,10 @@ import {
   AGENT_SESSION_THREAD_VERSION,
   createAgentWorkspace
 } from "../../packages/agents/src/agent-workspace/index.mjs";
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.mjs";
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-session-governance-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-session-governance-"));
 const actor = { actorUserId: "session-governance-admin" };
 
 try {
@@ -129,9 +129,9 @@ try {
 
     const toolCatalog = createToolCatalog({ operations });
     for (const toolId of [
-      "lico.agentSession.compare",
-      "lico.agentSession.mergeProposal",
-      "lico.agentSession.archive"
+      "meshrix.agentSession.compare",
+      "meshrix.agentSession.mergeProposal",
+      "meshrix.agentSession.archive"
     ]) {
       assert.ok(toolCatalog.tools.some((tool) => tool.id === toolId), `missing tool ${toolId}`);
     }
@@ -141,7 +141,7 @@ try {
     workspaceRuntime.close();
   }
 } finally {
-  if (process.env.LICO_KEEP_TEST_DATA !== "1") {
+  if (process.env.MESHRIX_KEEP_TEST_DATA !== "1") {
     await fs.rm(userDataPath, { recursive: true, force: true });
   } else {
     console.log(`kept test data: ${userDataPath}`);

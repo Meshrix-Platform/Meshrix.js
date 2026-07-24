@@ -4,19 +4,19 @@ import path from "node:path";
 
 import pprof from "@datadog/pprof";
 
-const MESSAGE_KIND = "lico.resource-discipline.memory-sample";
+const MESSAGE_KIND = "meshrix.resource-discipline.memory-sample";
 const intervalBytes = positiveInteger(
-  process.env.LICO_MEMORY_PROFILE_INTERVAL_BYTES,
+  process.env.MESHRIX_MEMORY_PROFILE_INTERVAL_BYTES,
   256 * 1024,
   16 * 1024 * 1024
 );
 const stackDepth = positiveInteger(
-  process.env.LICO_MEMORY_PROFILE_STACK_DEPTH,
+  process.env.MESHRIX_MEMORY_PROFILE_STACK_DEPTH,
   64,
   256
 );
-const gcPasses = positiveInteger(process.env.LICO_MEMORY_GC_PASSES, 3, 8);
-const profilePath = String(process.env.LICO_MEMORY_PROFILE_PATH || "").trim();
+const gcPasses = positiveInteger(process.env.MESHRIX_MEMORY_GC_PASSES, 3, 8);
+const profilePath = String(process.env.MESHRIX_MEMORY_PROFILE_PATH || "").trim();
 
 function positiveInteger(value, fallback, maximum) {
   const parsed = Number(value);

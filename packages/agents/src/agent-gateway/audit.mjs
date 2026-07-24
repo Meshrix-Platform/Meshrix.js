@@ -1,7 +1,7 @@
 import path from "node:path";
 import { nowIso } from "./shared.mjs";
 import { sanitizePayload } from "./projections.mjs";
-import { appendBoundedJsonLine } from "@lico/foundation/storage/bounded-jsonl";
+import { appendBoundedJsonLine } from "@meshrix/foundation/storage/bounded-jsonl";
 
 const AGENT_GATEWAY_AUDIT_MAX_BYTES = 32 * 1024 * 1024;
 

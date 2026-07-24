@@ -33,7 +33,7 @@ export const UPSTREAM_RESPONSE_REPRESENTATION_MODES = Object.freeze([
   "artifact"
 ]);
 
-export const PORTABLE_UPSTREAM_SERVICE_KIND = "lico.upstream-service";
+export const PORTABLE_UPSTREAM_SERVICE_KIND = "meshrix.upstream-service";
 export const PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION =
   "v0.0.1:upstream-service:portable-import-2";
 

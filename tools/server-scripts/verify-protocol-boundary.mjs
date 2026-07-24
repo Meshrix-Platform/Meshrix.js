@@ -15,11 +15,11 @@ const TEXT_EXTENSIONS = new Set([".js", ".json", ".mjs", ".ts", ".tsx"]);
 const FORBIDDEN_PATTERNS = Object.freeze([
   {
     id: "server-runtime-package-import",
-    pattern: /@lico\/server-runtime/u
+    pattern: /@meshrix\/server-runtime/u
   },
   {
     id: "server-runtime-import-alias",
-    pattern: /#lico\/server-runtime/u
+    pattern: /#meshrix\/server-runtime/u
   },
   {
     id: "server-runtime-source-path",
@@ -27,11 +27,11 @@ const FORBIDDEN_PATTERNS = Object.freeze([
   },
   {
     id: "settings-runtime-alias",
-    pattern: /#lico\/settings/u
+    pattern: /#meshrix\/settings/u
   },
   {
     id: "agents-package-import",
-    pattern: /@lico\/agents|#lico\/agents/u
+    pattern: /@meshrix\/agents|#meshrix\/agents/u
   },
   {
     id: "agents-source-path",
@@ -39,7 +39,7 @@ const FORBIDDEN_PATTERNS = Object.freeze([
   },
   {
     id: "capabilities-package-import",
-    pattern: /@lico\/capabilities|#lico\/capabilities/u
+    pattern: /@meshrix\/capabilities|#meshrix\/capabilities/u
   },
   {
     id: "capabilities-source-path",
@@ -51,10 +51,10 @@ const FORBIDDEN_PATTERNS = Object.freeze([
   }
 ]);
 const FORBIDDEN_PACKAGE_DEPENDENCIES = Object.freeze([
-  "@lico/agents",
-  "@lico/capabilities",
-  "@lico/server-runtime",
-  "@lico/ui-console"
+  "@meshrix/agents",
+  "@meshrix/capabilities",
+  "@meshrix/server-runtime",
+  "@meshrix/ui-console"
 ]);
 const APPROVED_PROTOCOL_PORTS = Object.freeze([
   "configureMcpNotificationBus",
@@ -192,10 +192,10 @@ async function main() {
     if (forbidden.length > 0) {
       throw new Error(`Protocol package declares forbidden dependencies: ${forbidden.join(", ")}`);
     }
-    const allowed = new Set(["@lico/contracts", "@lico/foundation"]);
-    const unexpected = Object.keys(declared).filter((name) => name.startsWith("@lico/") && !allowed.has(name));
+    const allowed = new Set(["@meshrix/contracts", "@meshrix/foundation"]);
+    const unexpected = Object.keys(declared).filter((name) => name.startsWith("@meshrix/") && !allowed.has(name));
     if (unexpected.length > 0) {
-      throw new Error(`Protocol package declares unexpected @lico dependencies: ${unexpected.join(", ")}`);
+      throw new Error(`Protocol package declares unexpected @meshrix dependencies: ${unexpected.join(", ")}`);
     }
     return { dependencyCount: Object.keys(declared).length };
   });
@@ -269,15 +269,15 @@ async function main() {
 
   await check("mcp-identity-provider-is-wired-in-composition", async () => {
     const discovery = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-discovery.mjs");
-    const identity = await readText("packages/protocols/mcp/adapter/mcp-identity.mjs");
+    const identity = await readText("packages/protocols/mcp/adapter/gateway-installer/mcp-identity.mjs");
     const runtimeIdentity = await readText("packages/server-runtime/src/composition/mcp-identity-provider.mjs");
-    if (!discovery.includes("./mcp-identity.mjs")) {
+    if (!discovery.includes("./gateway-installer/mcp-identity.mjs")) {
       throw new Error("MCP discovery must import identity contract helpers from protocols.");
     }
     if (!identity.includes("buildMcpHandshakePayload") || !identity.includes("signMcpHandshake")) {
       throw new Error("Protocol identity helper must own handshake payload and signature helpers.");
     }
-    if (!runtimeIdentity.includes("@lico/protocols/mcp/adapter/mcp-identity")) {
+    if (!runtimeIdentity.includes("@meshrix/protocols/mcp/adapter/mcp-identity")) {
       throw new Error("Runtime composition must reuse the protocol identity contract.");
     }
   });
@@ -292,7 +292,7 @@ async function main() {
     if (!bootstrap.includes("buildBootstrapPayload")) {
       throw new Error("Protocol bootstrap projection helper is missing.");
     }
-    if (!discoveryConfig.includes("@lico/protocols/http/bootstrap-payload")) {
+    if (!discoveryConfig.includes("@meshrix/protocols/http/bootstrap-payload")) {
       throw new Error("Runtime discovery config must reuse protocol bootstrap projection.");
     }
   });

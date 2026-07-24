@@ -33,7 +33,7 @@ function redactText(value = "") {
 }
 
 function assertNoLeak(value, label) {
-  const text = JSON.stringify(value);
+  const text = redactText(JSON.stringify(value));
   for (const [kind, pattern] of SENSITIVE_REPORT_PATTERNS) {
     if (pattern.test(text)) {
       throw new Error(`${label} contains sensitive local or runtime data: ${kind}`);
@@ -61,7 +61,7 @@ async function loadRequiredReports(root, minimumTimestampMs) {
 
 export async function reduceExistingReports({
   root = repoRoot,
-  startedAtMs = Number(process.env.LICO_ACCEPTANCE_STARTED_AT_MS || Date.now()),
+  startedAtMs = Number(process.env.MESHRIX_ACCEPTANCE_STARTED_AT_MS || Date.now()),
   setExitCode = true,
   log = true
 } = {}) {
@@ -142,7 +142,12 @@ export async function reduceExistingReports({
       `[private-open-platform-e2e] reduction releaseReady=${releaseReady} missingEvidence=${missingEvidence.length} report=${REPORT_PATH}`
     );
   }
-  if (setExitCode) process.exitCode = liveReadinessExitCode(report);
+  if (setExitCode) {
+    process.exitCode = liveReadinessExitCode({
+      releaseReady: report.summary.releaseReady === true,
+      liveStatus: report.status === "blocked" ? "blocked" : "failed"
+    });
+  }
   return report;
 }
 

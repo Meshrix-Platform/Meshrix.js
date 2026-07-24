@@ -130,13 +130,13 @@ $plainBytes = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $n
 }
 
 export function linuxKeyringDescription(alias = DEFAULT_ALIAS) {
-  return `lico:capability-kernel:${safeAlias(alias)}`;
+  return `meshrix:capability-kernel:${safeAlias(alias)}`;
 }
 
 export function secretToolAttributes(alias = DEFAULT_ALIAS) {
   return [
     "application",
-    "lico",
+    "meshrix",
     "component",
     "capability-kernel",
     "alias",
@@ -145,7 +145,7 @@ export function secretToolAttributes(alias = DEFAULT_ALIAS) {
 }
 
 export function passEntryName(alias = DEFAULT_ALIAS) {
-  return `lico/capability-kernel/${safeAlias(alias)}`;
+  return `meshrix/capability-kernel/${safeAlias(alias)}`;
 }
 
 export async function readLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS, provider = "local-file", securityMode = "degraded_file_fallback" } = {}) {
@@ -189,7 +189,7 @@ export async function readMacosKernelRecord({ alias = DEFAULT_ALIAS } = {}) {
       "find-generic-password",
       "-w",
       "-a",
-      "lico",
+      "meshrix",
       "-s",
       keychainService(alias)
     ]);
@@ -210,7 +210,7 @@ export async function writeMacosKernelRecord({ alias = DEFAULT_ALIAS } = {}, rec
     "add-generic-password",
     "-U",
     "-a",
-    "lico",
+    "meshrix",
     "-s",
     keychainService(alias),
     "-w",
@@ -267,7 +267,7 @@ export async function writeSecretServiceKernelRecord({ alias = DEFAULT_ALIAS } =
   await runText("secret-tool", [
     "store",
     "--label",
-    `LicoMesh Capability Kernel ${safeAlias(alias)}`,
+    `Meshrix Capability Kernel ${safeAlias(alias)}`,
     ...secretToolAttributes(alias)
   ], { input: JSON.stringify(record) });
   return record;

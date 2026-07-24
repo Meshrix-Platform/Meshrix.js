@@ -36,12 +36,16 @@ export async function stagePluginArtifactVerificationFixture({
   artifactRoot: requestedArtifactRoot = "",
   userDataPath = "",
   coreContractDigest = `sha256:${"e".repeat(64)}`,
-  runtimeDependencyPackages = {}
+  runtimeDependencyPackages = {},
+  runtimeDependencyNodeModulesRoot = ""
 }) {
   const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "plugin-artifact-verification-"));
   const artifactRoot = requestedArtifactRoot ? path.resolve(requestedArtifactRoot) : path.join(fixtureRoot, "artifacts");
   const dataRoot = userDataPath ? path.resolve(userDataPath) : path.join(fixtureRoot, "data");
   const dependencyPackages = normalizeRuntimeDependencyPackages(runtimeDependencyPackages);
+  const dependencyNodeModulesRoot = runtimeDependencyNodeModulesRoot
+    ? path.resolve(runtimeDependencyNodeModulesRoot)
+    : path.join(path.dirname(sourcePluginRoot), "node_modules");
   await Promise.all([
     fs.mkdir(artifactRoot, { recursive: true, mode: 0o700 }),
     fs.mkdir(dataRoot, { recursive: true, mode: 0o700 })
@@ -74,27 +78,35 @@ export async function stagePluginArtifactVerificationFixture({
     coreContractDigest
   });
   const manifests = new Map();
+  let sourceEntries = [];
   try {
-    for (const entry of await fs.readdir(sourcePluginRoot, { withFileTypes: true })) {
-      if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
-      const sourceRoot = path.join(sourcePluginRoot, entry.name);
-      const manifest = JSON.parse(await fs.readFile(path.join(sourceRoot, "plugin.json"), "utf8"));
-      const packageNames = dependencyPackages[manifest.id] || [];
-      let publishRoot = sourceRoot;
-      if (packageNames.length > 0) {
-        publishRoot = path.join(fixtureRoot, "publish-sources", manifest.id);
-        await fs.cp(sourceRoot, publishRoot, { recursive: true, dereference: true, errorOnExist: true });
-        for (const packageName of packageNames) {
-          const dependencyRoot = path.join(path.dirname(sourcePluginRoot), "node_modules", packageName);
-          const targetRoot = path.join(publishRoot, "node_modules", packageName);
-          await fs.mkdir(path.dirname(targetRoot), { recursive: true, mode: 0o700 });
-          await fs.cp(dependencyRoot, targetRoot, { recursive: true, dereference: true, errorOnExist: true });
-        }
-      }
-      manifests.set(manifest.id, { manifest, sourceRoot: publishRoot });
-    }
+    sourceEntries = await fs.readdir(sourcePluginRoot, { withFileTypes: true });
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
+  }
+  for (const entry of sourceEntries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink()) continue;
+    const sourceRoot = path.join(sourcePluginRoot, entry.name);
+    let manifest;
+    try {
+      manifest = JSON.parse(await fs.readFile(path.join(sourceRoot, "plugin.json"), "utf8"));
+    } catch (error) {
+      if (error?.code === "ENOENT") continue;
+      throw error;
+    }
+    const packageNames = dependencyPackages[manifest.id] || [];
+    let publishRoot = sourceRoot;
+    if (packageNames.length > 0) {
+      publishRoot = path.join(fixtureRoot, "publish-sources", manifest.id);
+      await fs.cp(sourceRoot, publishRoot, { recursive: true, dereference: true, errorOnExist: true });
+      for (const packageName of packageNames) {
+        const dependencyRoot = path.join(dependencyNodeModulesRoot, packageName);
+        const targetRoot = path.join(publishRoot, "node_modules", packageName);
+        await fs.mkdir(path.dirname(targetRoot), { recursive: true, mode: 0o700 });
+        await fs.cp(dependencyRoot, targetRoot, { recursive: true, dereference: true, errorOnExist: true });
+      }
+    }
+    manifests.set(manifest.id, { manifest, sourceRoot: publishRoot });
   }
   const installed = new Map();
   async function stage(id) {

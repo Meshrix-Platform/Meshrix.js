@@ -46,8 +46,8 @@ their current domain owners. Protocol packages must not import `packages/agents`
 
 Core MCP outlets are:
 
-- `lico.discovery`
-- `lico.gateway`
+- `meshrix.discovery`
+- `meshrix.gateway`
 
 Enabled verified plugins may contribute additional outlets declared by their
 package manifests. Core does not define product-specific plugin outlets.
@@ -58,7 +58,7 @@ come from Operation Permission and tag-policy evaluation on the injected provide
 adapters never bypass that path.
 
 Dynamic `upstream.*` tools are direct MCP tools rather than categorized outlets.
-`lico.capabilities.list` may include their visible descriptors, but they do not
+`meshrix.capabilities.list` may include their visible descriptors, but they do not
 declare `mcpOutlet` and do not contribute to the categorized outlet summary.
 
 ### Upstream Payload Transit
@@ -89,25 +89,25 @@ The published protocol is the complete server-client boundary. Core owns only se
 
 ## Delegated MCP Child Calls
 
-Targets that call LicoMesh MCP on behalf of a parent operation use a `delegated-mcp-child` grant. The MCP request carries the canonical child binding in `delegatedMcp.childOperation` or `delegatedChildOperation`, or through the corresponding headers:
+Targets that call Meshrix MCP on behalf of a parent operation use a `delegated-mcp-child` grant. The MCP request carries the canonical child binding in `delegatedMcp.childOperation` or `delegatedChildOperation`, or through the corresponding headers:
 
-- `X-LicoMesh-Delegated-Mcp-Grant-Id`
-- `X-LicoMesh-Delegated-Session-Id`
-- `X-LicoMesh-Delegated-Turn-Id`
-- `X-LicoMesh-Delegated-Subject-Id`
-- `X-LicoMesh-Delegated-Target-Id`
-- `X-LicoMesh-Delegated-Workspace-Id`
-- `X-LicoMesh-Delegated-Parent-Operation-Id`
-- `X-LicoMesh-Delegated-Trace-Id`
+- `X-Meshrix-Delegated-Mcp-Grant-Id`
+- `X-Meshrix-Delegated-Session-Id`
+- `X-Meshrix-Delegated-Turn-Id`
+- `X-Meshrix-Delegated-Subject-Id`
+- `X-Meshrix-Delegated-Target-Id`
+- `X-Meshrix-Delegated-Workspace-Id`
+- `X-Meshrix-Delegated-Parent-Operation-Id`
+- `X-Meshrix-Delegated-Trace-Id`
 
 The MCP adapter compares every request binding field with the authenticated grant metadata. A missing or mismatched field returns `delegated_child_operation_binding_mismatch` before operation dispatch. The bound workspace from the delegated grant takes precedence over a caller-supplied MCP envelope workspace. The execution context and audit projection use only generic delegated-child field names.
 
 ## Adapter Target Scope
 
-The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. Their implementations and compatibility evidence are external LicoMesh-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
+The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. Their implementations and compatibility evidence are external Meshrix-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
 
 MCP user-device installation begins at platform-native launchers: macOS and Linux
-use `lico-mcp-install.sh`, and Windows uses `lico-mcp-install.ps1` only. The
+use `meshrix-mcp-install.sh`, and Windows uses `meshrix-mcp-install.ps1` only. The
 launchers validate arguments and delegate to the bundled connector, which is
 the single implementation of signed discovery, grants, local client search,
 batch and interactive installation, configuration, and uninstall.

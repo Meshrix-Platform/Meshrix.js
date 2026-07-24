@@ -109,7 +109,7 @@ afterEach(() => {
 });
 
 function tempUserDataPath() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "lico-sqlite-constructor-unwind-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-sqlite-constructor-unwind-"));
   tempRoots.push(root);
   return root;
 }

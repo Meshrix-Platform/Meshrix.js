@@ -19,7 +19,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const VERIFIER = "tools/server-scripts/verify-enterprise-audit-retention-redaction.mjs";
 const COMMAND_ID = "enterprise-audit-retention-redaction";
 const REPORT_SCHEMA_VERSION = "v0.0.1:observability:audit-retention-redaction-report-1";
-const PLAN_FILE = "docs/plans/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
+const PLAN_FILE = "docs/plans/end-to-end-release/enterprise-single-node/Plan.md";
 const REQUIREMENTS = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES = Object.freeze([
   "packages/foundation/src/observability/sensitive-report-scan.mjs",
@@ -44,7 +44,7 @@ function oldIso(daysAgo) {
 }
 
 async function main() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-enterprise-audit-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-enterprise-audit-"));
   const store = createOperationAuditStore({ userDataPath });
   const bearerFixture = ["Bearer", "raw", "token", "123"].join("-").replace("Bearer-", "Bearer ");
   const secretFixture = ["sk", "test", "secret"].join("-");
@@ -126,7 +126,7 @@ async function main() {
     assert.equal(listedBeforePrune.length >= CAPABILITY_OPERATIONS.length, true);
     assert.equal(exportResult.manifest.protocolVersion, "v0.0.1:platform:audit-export-1");
     assertReportProvenance(exportResult, {
-      producer: "licomesh-core-operation-audit",
+      producer: "meshrix-core-operation-audit",
       commandId: "auth.audit.export",
       sourceRevision: exportResult.manifest.protocolVersion
     });
@@ -214,7 +214,7 @@ async function main() {
     };
     const revision = await computeVerifierSourceRevision(repoRoot, SOURCE_FILES);
     const provenance = {
-      producer: "licomesh-core-observability",
+      producer: "meshrix-core-observability",
       commandId: COMMAND_ID,
       sourceRevision: revision
     };

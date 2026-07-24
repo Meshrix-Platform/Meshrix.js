@@ -4,7 +4,7 @@
  * Wires platform providers into runtime registries at composition startup.
  *
  * @module register-domain-loaders
- * @package @lico/server-runtime
+ * @package @meshrix/server-runtime
  * @layer server-runtime/composition
  */
 
@@ -12,7 +12,7 @@
  * Registers domain loaders into the provided registries.
  *
  * @param {object} options
- * @param {import("#lico/foundation/security/authorization/tag-store.port.mjs").TagStoreProviderRegistry} [options.tagStoreProviderRegistry]
+ * @param {import("#meshrix/foundation/security/authorization/tag-store.port.mjs").TagStoreProviderRegistry} [options.tagStoreProviderRegistry]
  * @param {boolean} [options.enableTagStore=true]
  */
 export async function registerDomainLoaders({
@@ -21,7 +21,7 @@ export async function registerDomainLoaders({
 }) {
   if (enableTagStore && tagStoreProviderRegistry) {
     const { registerTagStoreProvider } = await import(
-      "#lico/server-runtime/state/tag-store-adapter"
+      "#meshrix/server-runtime/state/tag-store-adapter"
     );
     registerTagStoreProvider(tagStoreProviderRegistry);
   }

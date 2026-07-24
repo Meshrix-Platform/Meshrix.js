@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createMaintenanceAgentAuditStore, redactForMaintenanceAudit } from "../../../packages/agents/src/maintenance/audit-store.mjs";
 
 async function withTempDir(testCase) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-maintenance-agent-audit-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-maintenance-agent-audit-"));
   try {
     return await testCase(root);
   } finally {
@@ -19,10 +19,10 @@ describe("maintenance agent audit redaction and persistence", () => {
       token: "top-secret",
       user: {
         apiKey: "server-key",
-        endpoint: "/private/lico/config",
+        endpoint: "/private/meshrix/config",
       },
       values: [
-        "/tmp/lico/agent.log",
+        "/tmp/meshrix/agent.log",
         42,
       ],
     });

@@ -10,7 +10,7 @@ export function installerProcessEnv(installerHome = "") {
     HOME: installerHome,
     USERPROFILE: installerHome,
     XDG_CONFIG_HOME: path.join(installerHome, ".config"),
-    LICO_MCP_PROCESS_IDENTITY_STORE: "file"
+    MESHRIX_MCP_PROCESS_IDENTITY_STORE: "file"
   };
 }
 
@@ -36,7 +36,7 @@ export async function saveInstallerProcessIdentity({
   if (!discovered?.ok || !issuerIdentity.keyId || !issuerIdentity.publicKeyJwk || !issuerIdentity.serverId) {
     throw new Error("installer verifier could not establish the stored credential issuer binding");
   }
-  const dir = path.join(installerHome, ".lico", "mcp", "process-identity");
+  const dir = path.join(installerHome, ".meshrix", "mcp", "process-identity");
   const filePath = path.join(dir, `${target || "mcp"}.json`);
   await fs.mkdir(dir, { recursive: true, mode: 0o700 });
   await fs.writeFile(filePath, `${JSON.stringify({

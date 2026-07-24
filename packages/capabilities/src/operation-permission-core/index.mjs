@@ -8,8 +8,8 @@ import { createOperationPermissionStore, getOperationPermissionDatabasePath } fr
 import { createToolPolicyEngine } from "./policy.mjs";
 import { createToolExecutionRuntime } from "./runtime.mjs";
 import { createOperationPermissionHttpRouter } from "./http.mjs";
-import { getRuntimeLogger } from "@lico/foundation/observability/runtime-logger";
-import { createSecurityPermissionsProvider } from "@lico/foundation/security/security-permissions-provider";
+import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
+import { createSecurityPermissionsProvider } from "@meshrix/foundation/security/security-permissions-provider";
 
 export {
   OPERATION_PERMISSION_SCOPES,

@@ -35,19 +35,19 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
       label: "Operation Permission tag-governed E2E discovery verifier",
       grantMode: "read",
       maxRisk: "read_only",
-      toolsets: ["lico.gateway.read", "lico.console.read"]
+      toolsets: ["meshrix.gateway.read", "meshrix.console.read"]
     });
     const hiddenWithoutAuthority = [
-      "lico.gateway.forward",
-      "lico.workspace.file.upload",
-      "lico.tagManagement.tags.upsert",
-      "lico.operationPermission.createGrant"
+      "meshrix.gateway.forward",
+      "meshrix.workspace.file.upload",
+      "meshrix.tagManagement.tags.upsert",
+      "meshrix.operationPermission.createGrant"
     ];
     const sse = await openMcpSse(grant.token);
     try {
       const before = await capabilitiesForToken(grant.token, 130);
       const beforeNames = operationNames(before);
-      assert.equal(beforeNames.has("lico.gateway.metrics"), true, "read grant should see gateway metrics");
+      assert.equal(beforeNames.has("meshrix.gateway.metrics"), true, "read grant should see gateway metrics");
       assert.deepEqual(
         hiddenWithoutAuthority.filter((operation) => beforeNames.has(operation)),
         [],
@@ -56,7 +56,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
 
       const update = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(grant.grantId)}`, {
         scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["lico.gateway.read", "lico.gateway.write"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         maxRisk: "safe_write",
         metadata: { maxRisk: "safe_write" },
         reason: "verify-operation-permission-tag-governed-e2e"
@@ -66,7 +66,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
 
       const afterGrant = await capabilitiesForToken(grant.token, 131);
       const afterGrantNames = operationNames(afterGrant);
-      assert.equal(afterGrantNames.has("lico.gateway.forward"), true);
+      assert.equal(afterGrantNames.has("meshrix.gateway.forward"), true);
 
       const tagUpdate = await api("POST", "/api/tag-management/v1/tags", {
         tagId: "governance:e2e-discovery-refresh",
@@ -78,9 +78,9 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
 
       const afterTag = await capabilitiesForToken(grant.token, 132);
       const afterTagNames = operationNames(afterTag);
-      assert.equal(afterTagNames.has("lico.gateway.metrics"), true);
-      assert.equal(afterTagNames.has("lico.gateway.forward"), true);
-      assert.equal(afterTagNames.has("lico.tagManagement.tags.upsert"), false);
+      assert.equal(afterTagNames.has("meshrix.gateway.metrics"), true);
+      assert.equal(afterTagNames.has("meshrix.gateway.forward"), true);
+      assert.equal(afterTagNames.has("meshrix.tagManagement.tags.upsert"), false);
 
       return {
         authorizedReadVisible: true,
@@ -101,7 +101,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
 
   async function verifyAllowAcrossDomains() {
     const gatewayBefore = fixtureState.echoCount;
-    const gateway = await callMcp("lico.gateway.forward", {
+    const gateway = await callMcp("meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       body: { proof: "external-service-forward" },
@@ -110,18 +110,18 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     assertMcpOk(gateway, "external service forward");
     assert.equal(fixtureState.echoCount, gatewayBefore + 1);
 
-    const gatewayAudit = await callMcp("lico.gateway.audit", {
+    const gatewayAudit = await callMcp("meshrix.gateway.audit", {
       limit: 20,
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 110);
     assertMcpOk(gatewayAudit, "external service audit");
 
-    const gatewayMetrics = await callMcp("lico.gateway.metrics", {
+    const gatewayMetrics = await callMcp("meshrix.gateway.metrics", {
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 111);
     assertMcpOk(gatewayMetrics, "external service metrics");
 
-    const createWorkspace = await callMcp("lico.workspace.create", {
+    const createWorkspace = await callMcp("meshrix.workspace.create", {
       title: "Tag governed Operation Permission workspace",
       objective: "Verify tag-governed workspace and document operations."
     }, 103);
@@ -133,18 +133,16 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     assert.ok(workspaceId, "workspace create did not return an id");
     trackSecret(workspaceId);
 
-    const upload = await callMcp("lico.workspace.file.upload", {
+    const upload = await callMcp("meshrix.workspace.file.upload", {
       workspaceId,
-      folderPath: "tag-governed",
-      fileName: "document.txt",
+      path: "tag-governed/document.txt",
       content: "tag governed document proof\n",
-      createdBy: "verify-operation-permission-tag-governed-e2e",
       tagPolicy: tagPolicy(ENTITY_REFS.workspace)
     }, 104);
     assertMcpOk(upload, "workspace upload");
     assert.equal(mcpPayload(upload).ok, true);
 
-    const download = await callMcp("lico.workspace.file.download", {
+    const download = await callMcp("meshrix.workspace.file.download", {
       workspaceId,
       path: "tag-governed/document.txt",
       tagPolicy: tagPolicy(ENTITY_REFS.document)
@@ -152,7 +150,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     assertMcpOk(download, "document download");
     assert.equal(mcpPayload(download).content, "tag governed document proof\n");
 
-    const consoleList = await callMcp("lico.tagManagement.tags.list", {
+    const consoleList = await callMcp("meshrix.tagManagement.tags.list", {
       kind: "custom",
       tagPolicy: tagPolicy(ENTITY_REFS.console)
     }, 109);
@@ -209,11 +207,10 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
       `/api/operation-permission/v1/pending-operations/${encodeURIComponent(listed.pendingOperationId)}/resolve`,
       {
         resolution: "approved",
-        resolvedBy: "verify-operation-permission-tag-governed-e2e",
         reason: "verify real approval resolution"
       },
       {
-        headers: { "x-lico-safety-confirm": "true" },
+        headers: { "x-meshrix-safety-confirm": "true" },
         expectedStatuses: [200, 201, 202]
       }
     );
@@ -233,7 +230,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     assert.equal(Number(rebuild.count || 0) >= Object.keys(ENTITY_REFS).length, true);
 
     const gatewayBefore = fixtureState.echoCount;
-    const deniedGatewayForward = await callMcp("lico.gateway.forward", {
+    const deniedGatewayForward = await callMcp("meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       body: { proof: "must-not-forward" },
@@ -242,29 +239,28 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     assertMcpDenied(deniedGatewayForward, "denied external service forward");
     assert.equal(fixtureState.echoCount, gatewayBefore);
 
-    const deniedGatewayMetrics = await callMcp("lico.gateway.metrics", {
+    const deniedGatewayMetrics = await callMcp("meshrix.gateway.metrics", {
       tagPolicy: tagPolicy(ENTITY_REFS.externalService)
     }, 206, [200, 403]);
     assertMcpDenied(deniedGatewayMetrics, "denied external service metrics");
 
-    const deniedDocumentDownload = await callMcp("lico.workspace.file.download", {
+    const deniedDocumentDownload = await callMcp("meshrix.workspace.file.download", {
       workspaceId,
       path: "tag-governed/document.txt",
       tagPolicy: tagPolicy(ENTITY_REFS.document)
     }, 202, [200, 403]);
     assertMcpDenied(deniedDocumentDownload, "denied document download");
 
-    const deniedWorkspaceUpload = await callMcp("lico.workspace.file.upload", {
+    const deniedWorkspaceUpload = await callMcp("meshrix.workspace.file.upload", {
       workspaceId,
-      folderPath: "tag-governed",
-      fileName: "denied.txt",
+      path: "tag-governed/denied.txt",
       content: "must not be written\n",
       tagPolicy: tagPolicy(ENTITY_REFS.workspace)
     }, 203, [200, 403]);
     assertMcpDenied(deniedWorkspaceUpload, "denied workspace upload");
 
     const deniedConsoleTagId = "custom:tag-governed-denied-console";
-    const deniedConsole = await callMcp("lico.tagManagement.tags.upsert", {
+    const deniedConsole = await callMcp("meshrix.tagManagement.tags.upsert", {
       tagId: deniedConsoleTagId,
       kind: "custom",
       label: "Denied console tag",
@@ -299,7 +295,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
 
   async function verifyBypassPrevention() {
     const gatewayBefore = fixtureState.echoCount;
-    const wrongOutlet = await callMcpWithToolName(getMcpToken(), "lico.discovery", "lico.gateway.forward", {
+    const wrongOutlet = await callMcpWithToolName(getMcpToken(), "meshrix.discovery", "meshrix.gateway.forward", {
       serviceId: SERVICE_ID,
       operationKey: "echo",
       body: { proof: "wrong-outlet-must-not-forward" },
@@ -312,12 +308,12 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
       label: "Operation Permission tag-governed E2E bypass verifier",
       grantMode: "read",
       maxRisk: "read_only",
-      toolsets: ["lico.gateway.read"]
+      toolsets: ["meshrix.gateway.read"]
     });
     const directWithoutAuthority = await callMcpWithToolName(
       readOnlyGrant.token,
-      "lico.gateway",
-      "lico.gateway.forward",
+      "meshrix.gateway",
+      "meshrix.gateway.forward",
       {
         serviceId: SERVICE_ID,
         operationKey: "echo",
@@ -347,13 +343,13 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     assert.equal(statuses.has("denied"), true);
     assert.equal(statuses.has("pending_approval"), true);
     const requiredTools = [
-      "lico.gateway.forward",
+      "meshrix.gateway.forward",
       APPROVAL_TOOL,
-      "lico.gateway.audit",
-      "lico.gateway.metrics",
-      "lico.workspace.file.download",
-      "lico.workspace.file.upload",
-      "lico.tagManagement.tags.list"
+      "meshrix.gateway.audit",
+      "meshrix.gateway.metrics",
+      "meshrix.workspace.file.download",
+      "meshrix.workspace.file.upload",
+      "meshrix.tagManagement.tags.list"
     ];
     const missingAudit = requiredTools.filter((toolId) => !items.some((item) => item.toolId === toolId));
     assert.deepEqual(missingAudit, []);
@@ -374,7 +370,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     const archive = await api(
       "POST",
       `/api/tag-management/v1/tags/${encodeURIComponent(DENY_TAG)}/archive`,
-      { reason: "verify-operation-permission-tag-governed-e2e cleanup" },
+      {},
       { expectedStatuses: [200] }
     );
     assert.equal(archive.payload.tag?.status, "archived");
@@ -383,7 +379,7 @@ export function createOperationPermissionTagGovernedWorkflows(context = {}) {
     const disabledPrimary = await api(
       "POST",
       `/api/gateway/v1/external-services/${encodeURIComponent(SERVICE_ID)}/disable`,
-      { reason: "verify-operation-permission-tag-governed-e2e cleanup" },
+      {},
       { expectedStatuses: [400, 403, 404, 405] }
     );
     assert.equal(disabledPrimary.status >= 400, true);

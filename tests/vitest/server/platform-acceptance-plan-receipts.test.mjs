@@ -8,27 +8,43 @@ import {
 function dependencyMap() {
   const provider = (directory, finalNodeId) => ({
     directory,
-    final_validation_node_id: finalNodeId,
-    accepted_final_receipt: { receipt_digest: `${directory}:receipt` },
+    parent: null,
+    parent_contract_node_id: null,
+    parent_integrations: [],
+    final_validations: [{ node_id: finalNodeId, profiles: ["enterprise-single-node"] }],
+    prerequisite_receipts: [],
+    children: [],
+    accepted_final_receipts: {
+      [finalNodeId]: { receipt_digest: `${directory}:receipt` },
+    },
   });
   return {
+    schema_version: 3,
     plans: [
       provider("end-to-end-release/platform-foundation", "foundation-final"),
       provider("end-to-end-release/deployment/linux-container", "linux-final"),
       {
         directory: "end-to-end-release/release-acceptance",
+        parent: null,
+        parent_contract_node_id: null,
+        parent_integrations: [],
+        final_validations: [{ node_id: "release-final", profiles: ["enterprise-single-node"] }],
         prerequisite_receipts: [
           {
             plan: "end-to-end-release/platform-foundation",
             node_id: "foundation-final",
             kind: "final_validation",
+            profiles: ["enterprise-single-node"],
           },
           {
             plan: "end-to-end-release/deployment/linux-container",
             node_id: "linux-final",
             kind: "final_validation",
+            profiles: ["enterprise-single-node"],
           },
         ],
+        children: [],
+        accepted_final_receipts: {},
       },
     ],
   };
@@ -39,7 +55,7 @@ function binding(planDirectory) {
   return {
     finalNodeId: suffix === "platform-foundation" ? "foundation-final" : "linux-final",
     platform: suffix === "linux-container" ? "linux" : "any",
-    selectedProfile: "core",
+    profiles: ["enterprise-single-node"],
     requirements: [`REQ-${suffix}`],
     receiptDigest: `${suffix}-receipt`,
     checkpointDigest: `${suffix}-checkpoints`,
@@ -55,14 +71,14 @@ function binding(planDirectory) {
 describe("platform acceptance Plan receipt preflight", () => {
   it("requires the exact Release Acceptance prerequisite final receipts", () => {
     expect(requiredPlatformAcceptancePlanReceipts(dependencyMap())).toEqual([
-      { plan: "end-to-end-release/platform-foundation", finalNodeId: "foundation-final" },
-      { plan: "end-to-end-release/deployment/linux-container", finalNodeId: "linux-final" },
+      { plan: "end-to-end-release/platform-foundation", finalNodeId: "foundation-final", planProfile: "enterprise-single-node" },
+      { plan: "end-to-end-release/deployment/linux-container", finalNodeId: "linux-final", planProfile: "enterprise-single-node" },
     ]);
   });
 
   it("rejects a missing required accepted receipt before command execution", () => {
     const map = dependencyMap();
-    delete map.plans[0].accepted_final_receipt;
+    delete map.plans[0].accepted_final_receipts["foundation-final"];
     expect(() => requiredPlatformAcceptancePlanReceipts(map)).toThrow("required-plan-receipt-missing");
   });
 
@@ -77,7 +93,7 @@ describe("platform acceptance Plan receipt preflight", () => {
     const loadBinding = vi.fn(async ({ planDirectory }) => binding(planDirectory));
     const result = await verifyPlatformAcceptancePlanReceipts({
       repoRoot: "/synthetic-repo",
-      selectedProfile: "core",
+      selectedProfile: "enterprise-single-node",
       dependencyMap: dependencyMap(),
       verifyPlan,
       loadBinding,
@@ -94,13 +110,14 @@ describe("platform acceptance Plan receipt preflight", () => {
       requireCompletedReceipts: true,
     });
     expect(loadBinding).toHaveBeenCalledTimes(2);
-    expect(loadBinding).toHaveBeenCalledWith(expect.objectContaining({ selectedProfile: "core" }));
-    expect(result.selectedProfile).toBe("core");
+    expect(loadBinding).toHaveBeenCalledWith(expect.objectContaining({ finalNodeId: expect.any(String) }));
+    expect(result.selectedProfile).toBe("enterprise-single-node");
+    expect(result.planProfile).toBe("enterprise-single-node");
     expect(result.requiredReceiptCount).toBe(2);
     expect(result.bindings).toHaveLength(2);
     expect(result.bindings).toEqual(expect.arrayContaining([
-      expect.objectContaining({ platform: "linux", selectedProfile: "core" }),
-      expect.objectContaining({ platform: "any", selectedProfile: "core" }),
+      expect.objectContaining({ platform: "linux", profiles: ["enterprise-single-node"] }),
+      expect.objectContaining({ platform: "any", profiles: ["enterprise-single-node"] }),
     ]));
     expect(result.planReceiptSetDigest).toMatch(/^sha256:[a-f0-9]{64}$/u);
   });
@@ -108,7 +125,7 @@ describe("platform acceptance Plan receipt preflight", () => {
   it("rejects a stale or unverified binding", async () => {
     await expect(verifyPlatformAcceptancePlanReceipts({
       repoRoot: "/synthetic-repo",
-      selectedProfile: "core",
+      selectedProfile: "enterprise-single-node",
       dependencyMap: dependencyMap(),
       verifyPlan: async () => ({ accepted: true }),
       loadBinding: async ({ planDirectory }) => ({ ...binding(planDirectory), proofVerified: false }),
@@ -118,13 +135,13 @@ describe("platform acceptance Plan receipt preflight", () => {
   it("rejects a binding whose profile, platform, or requirement coverage is absent", async () => {
     const verify = async (patch) => verifyPlatformAcceptancePlanReceipts({
       repoRoot: "/synthetic-repo",
-      selectedProfile: "core",
+      selectedProfile: "enterprise-single-node",
       dependencyMap: dependencyMap(),
       verifyPlan: async () => ({ accepted: true }),
       loadBinding: async ({ planDirectory }) => ({ ...binding(planDirectory), ...patch }),
     });
 
-    await expect(verify({ selectedProfile: "unexpected" })).rejects.toThrow("required-plan-receipt-profile-mismatch");
+    await expect(verify({ profiles: ["unsupported-profile"] })).rejects.toThrow("required-plan-receipt-profile-mismatch");
     await expect(verify({ platform: "" })).rejects.toThrow("required-plan-receipt-platform-missing");
     await expect(verify({ requirements: [] })).rejects.toThrow("required-plan-receipt-requirements-missing");
   });

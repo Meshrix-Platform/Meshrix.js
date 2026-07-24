@@ -21,16 +21,16 @@ const FIXTURE_FRAMEWORK = Object.freeze({
   commandNames: ["fixture-client"],
   mcp: {
     adapterId: "fixture-mcp-adapter",
-    profileId: "lico.mcp.fixture-client",
+    profileId: "meshrix.mcp.fixture-client",
     installMode: "external-client-adapter",
     locations: ["local"],
     configurationStrategy: "external-adapter-package",
-    serverName: "lico",
+    serverName: "meshrix",
     commandNames: ["fixture-client"]
   }
 });
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-downstream-mcp-aspect-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-downstream-mcp-aspect-"));
 try {
   const fixtureBin = path.join(tempRoot, "bin");
   await fs.mkdir(fixtureBin, { recursive: true });
@@ -62,7 +62,7 @@ try {
   assert.equal(capabilities.every((record) => record.capabilities.toolBoundary === "v0.0.1:operation-permission:projection-1"), true);
 
   const route = service.translateInboundRequest({
-    protocol: "mcp", frameworkId: "fixture-client", method: "tools/call", input: { name: "lico.discovery" }
+    protocol: "mcp", frameworkId: "fixture-client", method: "tools/call", input: { name: "meshrix.discovery" }
   });
   assert.equal(route.ok, true);
   assert.equal(route.routeTarget, "mcp-server-side");

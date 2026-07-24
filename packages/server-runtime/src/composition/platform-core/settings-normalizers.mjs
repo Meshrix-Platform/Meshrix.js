@@ -11,7 +11,7 @@ import {
   normalizeModelEndpoint,
   normalizeModelTokenHeader,
   normalizeModelTokenPrefix
-} from "#lico/agents/agent-configs/credential-binding";
+} from "#meshrix/agents/agent-configs/credential-binding";
 
 function sanitizeNumericSetting(value, fallback) {
   const parsed = Number(value);

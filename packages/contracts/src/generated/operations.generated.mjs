@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.mjs
  * Generator: tools/generators/generate-operation-artifacts.mjs
- * Hash: sha256:a37380bbbafee51f
+ * Hash: sha256:c29658db8d3fe661
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:a37380bbbafee51f";
+export const GENERATED_OPERATIONS_HASH = "sha256:c29658db8d3fe661";
 export const SERVER_API_OPERATIONS = [
   {
     "id": "readiness.baseline.status",
@@ -910,6 +910,12 @@ export const SERVER_API_OPERATIONS = [
         "label"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "tagId": {
           "type": "string"
         },
@@ -1078,6 +1084,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "tagId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1215,6 +1227,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "tagId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1520,7 +1538,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -1935,7 +1960,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -2177,7 +2209,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -2419,7 +2458,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -2663,7 +2709,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -2905,7 +2958,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -3149,7 +3209,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -3445,7 +3512,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -3578,6 +3652,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "approvalId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -4326,6 +4406,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -5077,6 +5163,12 @@ export const SERVER_API_OPERATIONS = [
         "path"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -5222,6 +5314,12 @@ export const SERVER_API_OPERATIONS = [
         "path"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -5362,7 +5460,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -6230,6 +6335,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -6367,6 +6478,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -6503,6 +6620,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -6639,6 +6762,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -6775,6 +6904,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -6911,6 +7046,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -7047,6 +7188,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -7183,6 +7330,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -7319,6 +7472,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -7455,6 +7614,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "contributionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -7584,6 +7749,12 @@ export const SERVER_API_OPERATIONS = [
         "title"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -7735,6 +7906,12 @@ export const SERVER_API_OPERATIONS = [
         "proposalId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -7882,7 +8059,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -8130,6 +8314,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -8215,9 +8405,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -8925,6 +9112,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -9010,9 +9203,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -9150,6 +9340,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -9235,9 +9431,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -9602,6 +9795,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -9687,9 +9886,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -9827,6 +10023,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -9912,9 +10114,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -10052,6 +10251,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -10137,9 +10342,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -10278,6 +10480,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -10363,9 +10571,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -10504,6 +10709,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -10589,9 +10800,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -10730,6 +10938,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -10815,9 +11029,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -10955,6 +11166,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -11040,9 +11257,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -11631,6 +11845,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "workspaceId": {
           "type": "string"
         },
@@ -11716,9 +11936,6 @@ export const SERVER_API_OPERATIONS = [
           "type": "boolean"
         },
         "overwrite": {
-          "type": "boolean"
-        },
-        "confirm": {
           "type": "boolean"
         }
       }
@@ -12608,6 +12825,12 @@ export const SERVER_API_OPERATIONS = [
         "nodeId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "treeId": {
           "type": "string"
         },
@@ -12756,6 +12979,12 @@ export const SERVER_API_OPERATIONS = [
         "nodeId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "treeId": {
           "type": "string"
         },
@@ -13022,7 +13251,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -13144,7 +13380,14 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      },
       "required": []
     },
     "safety": {
@@ -13331,6 +13574,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -13522,6 +13771,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -13665,6 +13920,12 @@ export const SERVER_API_OPERATIONS = [
       "additionalProperties": false,
       "required": [],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "serviceId": {
           "type": "string"
         },
@@ -13705,6 +13966,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -13859,6 +14126,12 @@ export const SERVER_API_OPERATIONS = [
         "serviceId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "operationKey": {
           "type": "string"
         },
@@ -13896,6 +14169,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -14056,6 +14335,12 @@ export const SERVER_API_OPERATIONS = [
         "serviceId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "operationKey": {
           "type": "string"
         },
@@ -14093,6 +14378,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -14253,6 +14544,12 @@ export const SERVER_API_OPERATIONS = [
         "serviceId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "operationKey": {
           "type": "string"
         },
@@ -14290,6 +14587,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -14450,6 +14753,12 @@ export const SERVER_API_OPERATIONS = [
         "serviceId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "operationKey": {
           "type": "string"
         },
@@ -14487,6 +14796,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -14683,6 +14998,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "reason": {
           "type": "string"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -14873,6 +15194,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -15069,6 +15396,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -15252,6 +15585,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -15390,6 +15729,12 @@ export const SERVER_API_OPERATIONS = [
         "serviceId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "serviceId": {
           "type": "string"
         },
@@ -15430,6 +15775,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -15596,6 +15947,12 @@ export const SERVER_API_OPERATIONS = [
         "operationKey": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "artifactId": {
           "type": "string"
         },
@@ -15630,6 +15987,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -15824,6 +16187,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -16028,6 +16397,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "reason": {
           "type": "string"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -16206,6 +16581,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "limit": {
           "type": "number"
+        },
+        "approved": {
+          "type": "boolean"
+        },
+        "approvalApproved": {
+          "type": "boolean"
         }
       }
     },
@@ -16553,6 +16934,12 @@ export const SERVER_API_OPERATIONS = [
         "alertId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "acknowledgedBy": {
           "type": "string"
         }
@@ -16828,6 +17215,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "retentionDays": {
           "type": "number"
         }
@@ -17365,6 +17758,12 @@ export const SERVER_API_OPERATIONS = [
       "additionalProperties": false,
       "required": [],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "config": {
           "type": "object"
         },
@@ -17962,7 +18361,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -18302,7 +18708,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -18760,7 +19173,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -18874,7 +19294,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -18988,7 +19415,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -19415,7 +19849,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -19533,7 +19974,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -20087,7 +20535,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -20242,6 +20697,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "wait": {
           "type": "boolean"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -20364,6 +20825,12 @@ export const SERVER_API_OPERATIONS = [
           "type": "string"
         },
         "wait": {
+          "type": "boolean"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
           "type": "boolean"
         }
       }
@@ -20802,6 +21269,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "wait": {
           "type": "boolean"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -20951,6 +21424,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "reason": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -21126,6 +21605,12 @@ export const SERVER_API_OPERATIONS = [
         "password"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "username": {
           "type": "string",
           "minLength": 1
@@ -21279,7 +21764,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -21503,7 +21995,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -21637,6 +22136,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "userId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -21996,7 +22501,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -22660,7 +23172,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -22773,7 +23292,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -23179,7 +23705,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -23312,6 +23845,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -23389,6 +23928,12 @@ export const SERVER_API_OPERATIONS = [
         "defaultIdentityHash"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "claimToken": {
           "type": "string"
         },
@@ -23558,6 +24103,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "processKeyId": {
           "type": "string"
         },
@@ -23696,6 +24247,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "reason": {
           "type": "string"
         },
@@ -23869,7 +24426,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -24114,6 +24678,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "clientId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -24337,7 +24907,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -24520,6 +25097,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "selectedComponentIds": {
           "type": "array",
           "items": {
@@ -24690,7 +25273,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -25022,7 +25612,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -25135,7 +25732,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -25248,7 +25852,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -25360,7 +25971,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -25472,7 +26090,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -25694,7 +26319,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -26035,6 +26667,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "engine": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         },
         "query": {
           "type": "string"
@@ -27684,6 +28322,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "timeoutMs": {
           "type": "number"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -27972,6 +28616,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "timeoutMs": {
           "type": "number"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -28109,6 +28759,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "agentId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -29000,6 +29656,12 @@ export const SERVER_API_OPERATIONS = [
         "toolId"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "toolId": {
           "type": "string",
           "minLength": 1,
@@ -29007,9 +29669,6 @@ export const SERVER_API_OPERATIONS = [
         },
         "input": {
           "type": "object"
-        },
-        "confirm": {
-          "type": "boolean"
         },
         "idempotencyKey": {
           "type": "string",
@@ -29126,6 +29785,12 @@ export const SERVER_API_OPERATIONS = [
         "calls"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "calls": {
           "type": "array",
           "items": {
@@ -29518,6 +30183,12 @@ export const SERVER_API_OPERATIONS = [
       "additionalProperties": false,
       "required": [],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "grantId": {
           "type": "string",
           "minLength": 1,
@@ -29877,6 +30548,12 @@ export const SERVER_API_OPERATIONS = [
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         },
         "label": {
           "type": "string",
@@ -30276,6 +30953,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "grantId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -30371,6 +31054,12 @@ export const SERVER_API_OPERATIONS = [
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         },
         "reason": {
           "type": "string",
@@ -31934,7 +32623,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -32318,6 +33014,12 @@ export const SERVER_API_OPERATIONS = [
         "pendingOperationId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "resolution": {
           "type": "string",
           "enum": [
@@ -32442,6 +33144,12 @@ export const SERVER_API_OPERATIONS = [
         "claimTokenHash"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "claimTokenHash": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
@@ -32719,10 +33427,15 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "requestId",
         "resolution"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "requestId": {
           "type": "string"
         },
@@ -32735,6 +33448,27 @@ export const SERVER_API_OPERATIONS = [
         },
         "reason": {
           "type": "string"
+        },
+        "clientName": {
+          "type": "string"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "toolsets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "toolAllow": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -33116,6 +33850,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "pruneOrphanObjects": {
           "type": "boolean"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -33318,6 +34058,22 @@ export const SERVER_API_OPERATIONS = [
       "reason": "",
       "resolveRisk": null
     },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": []
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -33345,12 +34101,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -33439,11 +34189,14 @@ export const SERVER_API_OPERATIONS = [
         "confirm"
       ],
       "properties": {
-        "policy": {
-          "type": "object"
-        },
         "confirm": {
           "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "policy": {
+          "type": "object"
         }
       }
     },
@@ -33556,6 +34309,24 @@ export const SERVER_API_OPERATIONS = [
       "reason": "",
       "resolveRisk": null
     },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backupId"
+      ],
+      "properties": {
+        "backupId": {
+          "type": "string"
+        },
+        "includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -33580,12 +34351,6 @@ export const SERVER_API_OPERATIONS = [
       "changeProjection": "",
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
     },
     "audit": {
       "enabled": true,
@@ -33667,6 +34432,30 @@ export const SERVER_API_OPERATIONS = [
       "reason": "",
       "resolveRisk": null
     },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backupId"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "backupId": {
+          "type": "string"
+        },
+        "includePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -33694,12 +34483,6 @@ export const SERVER_API_OPERATIONS = [
       "substrate": "operation-proof-substrate"
     },
     "concurrencySafe": false,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -34270,7 +35053,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -34403,6 +35193,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "alertId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -34516,7 +35312,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -34592,6 +35395,12 @@ export const SERVER_API_OPERATIONS = [
         "title"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "title": {
           "type": "string"
         },
@@ -35124,6 +35933,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -35233,6 +36048,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         },
         "folderPath": {
           "type": "string"
@@ -35936,6 +36757,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -36082,6 +36909,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -36374,6 +37207,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -36520,6 +37359,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "sessionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -36682,6 +37527,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "submissionId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -36844,6 +37695,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "issueId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -37173,6 +38030,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -37530,6 +38393,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         },
         "folderPath": {
           "type": "string"
@@ -38118,6 +38987,12 @@ export const SERVER_API_OPERATIONS = [
         "workspaceId": {
           "type": "string"
         },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "path": {
           "type": "string"
         },
@@ -38371,6 +39246,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "recursive": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -38482,6 +39363,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         },
         "sourcePath": {
           "type": "string",
@@ -39114,6 +40001,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -39388,6 +40281,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -39532,6 +40431,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -39662,6 +40567,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -39801,6 +40712,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -39933,6 +40850,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "workspaceId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -40149,7 +41072,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -40260,7 +41190,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -40462,6 +41399,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "contextProfileId": {
           "type": "string"
         },
@@ -40870,6 +41813,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "sessionId": {
           "type": "string"
         },
@@ -40878,9 +41827,6 @@ export const SERVER_API_OPERATIONS = [
         },
         "reason": {
           "type": "string"
-        },
-        "confirm": {
-          "type": "boolean"
         }
       },
       "required": []
@@ -41163,7 +42109,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -41238,6 +42191,12 @@ export const SERVER_API_OPERATIONS = [
         "files"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "checkpoint": {
           "type": "object"
         },
@@ -41596,6 +42555,12 @@ export const SERVER_API_OPERATIONS = [
         },
         "fileIndex": {
           "type": "number"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -41709,7 +42674,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -41785,6 +42757,12 @@ export const SERVER_API_OPERATIONS = [
         "expectedWorkspaceRevision"
       ],
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "uploadSessionId": {
           "type": "string"
         },
@@ -42008,6 +42986,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "requestRef": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -42488,6 +43472,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "reason": {
           "type": "string"
         }
@@ -42605,6 +43595,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "reason": {
           "type": "string"
         }
@@ -42722,6 +43718,12 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
         "reason": {
           "type": "string"
         }
@@ -42877,7 +43879,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -42990,7 +43999,14 @@ export const SERVER_API_OPERATIONS = [
       "type": "object",
       "additionalProperties": false,
       "required": [],
-      "properties": {}
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        }
+      }
     },
     "audit": {
       "enabled": true,
@@ -43256,6 +44272,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "jobId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -43389,6 +44411,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "jobId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },
@@ -43522,6 +44550,12 @@ export const SERVER_API_OPERATIONS = [
       "properties": {
         "jobId": {
           "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
         }
       }
     },

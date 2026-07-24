@@ -3,7 +3,7 @@ export const SERVICE_CAPABILITY_LAYERS = Object.freeze([
     layerNumber: 1,
     layerId: "client-types",
     label: "客户端类型",
-    functionItems: Object.freeze(["Agent Harness", "LicoMesh Client"])
+    functionItems: Object.freeze(["Agent Harness", "Meshrix Client"])
   }),
   Object.freeze({
     layerNumber: 2,
@@ -38,9 +38,9 @@ export const SERVICE_CAPABILITY_LAYERS = Object.freeze([
 ]);
 export const SERVICE_CAPABILITY_PROTOCOL_FIELDS = Object.freeze([
   Object.freeze({
-    fieldId: "lico.call",
+    fieldId: "meshrix.call",
     layerNumber: 3,
-    label: "lico.call",
+    label: "meshrix.call",
     functionItems: Object.freeze(["统一操作调用入口", "HTTP / RPC / CLI 的等价调用面"])
   }),
   Object.freeze({

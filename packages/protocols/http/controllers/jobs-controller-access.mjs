@@ -1,4 +1,4 @@
-import { sendJson } from "#lico/http-utils";
+import { sendJson } from "#meshrix/http-utils";
 
 function arrayOfStrings(value) {
   return Array.isArray(value)

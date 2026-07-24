@@ -24,7 +24,7 @@ export function createConsoleToolGrantsController(
 ) {
   const newGrantLabel = ref("默认智能体");
   const newGrantScopes = ref<string[]>(["gateway:read"]);
-  const newGrantToolsets = ref<string[]>(["lico.gateway.read"]);
+  const newGrantToolsets = ref<string[]>(["meshrix.gateway.read"]);
   const issuedToolToken = ref("");
 
   const toolGrants = computed(() => options.operationPermissionGrantsState.value);

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { atomicWriteJson, readJsonFile } from "#lico/state-coordinator";
+import { atomicWriteJson, readJsonFile } from "#meshrix/state-coordinator";
 import { createExternalGatewayAuthority } from "../../../agents/src/agent-gateway/external-gateway/index.mjs";
 import { loadOrCreateMcpIdentity } from "./mcp-identity-provider.mjs";
 import { probeExternalGatewayEndpoint } from "./external-gateway-endpoint-probe.mjs";

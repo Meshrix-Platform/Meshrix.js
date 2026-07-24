@@ -109,7 +109,7 @@ export async function runRegressionCommandGroup({
   extraReportFields = {},
   groupId,
   reportPath,
-  schemaVersion = "licomesh.server-regression-command-group.report.v1",
+  schemaVersion = "v0.0.1:meshrix:server-regression-command-group-report-1",
   verifier
 }) {
   if (argv.includes("--list")) {

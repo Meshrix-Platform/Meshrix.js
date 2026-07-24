@@ -790,7 +790,7 @@ if (stale.length === 0 && duplicateDeclarations.length === 0) {
 
 // ── Check 7b: npm package must include directly referenced script sources ───
 console.log("7b. Checking npm package script source closure...");
-const npmPackCachePath = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-npm-pack-cache-"));
+const npmPackCachePath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-pack-cache-"));
 const npmPackSpawnOptions = Object.freeze({
   cwd: repoRoot,
   encoding: "utf8",

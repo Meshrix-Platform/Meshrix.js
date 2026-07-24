@@ -23,7 +23,7 @@ function redacted(value = "") {
 }
 
 const result = spawnSync(process.execPath, [
-  "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs",
+  "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs",
   "identity-store-self-test",
   "--target",
   "verify-windows-dpapi-system",
@@ -32,7 +32,7 @@ const result = spawnSync(process.execPath, [
   cwd: repoRoot,
   env: {
     ...process.env,
-    LICO_MCP_PROCESS_IDENTITY_STORE: "system"
+    MESHRIX_MCP_PROCESS_IDENTITY_STORE: "system"
   },
   encoding: "utf8",
   timeout: 60000,

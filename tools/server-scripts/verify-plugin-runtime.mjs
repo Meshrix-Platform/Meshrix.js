@@ -136,13 +136,13 @@ async function runPackagedServer({
   }), "utf8");
   const env = { ...process.env };
   for (const key of [
-    "LICO_RUNTIME_CONFIG",
-    "LICO_REQUIRE_RUNTIME_CONFIG",
-    "LICO_EXPECTED_RUNTIME_KIND",
-    "LICO_EDITION",
-    "LICO_FEATURE_PROFILE",
-    "LICO_SERVER_DATA_DIR",
-    "LICO_SERVER_PORT"
+    "MESHRIX_RUNTIME_CONFIG",
+    "MESHRIX_REQUIRE_RUNTIME_CONFIG",
+    "MESHRIX_EXPECTED_RUNTIME_KIND",
+    "MESHRIX_EDITION",
+    "MESHRIX_FEATURE_PROFILE",
+    "MESHRIX_SERVER_DATA_DIR",
+    "MESHRIX_SERVER_PORT"
   ]) {
     delete env[key];
   }
@@ -245,10 +245,10 @@ async function stageInstalledDependencyClosure(packageRoot) {
   const targetModules = path.join(packageRoot, "node_modules");
   await fs.mkdir(targetModules, { recursive: true });
   for (const entry of await fs.readdir(sourceModules, { withFileTypes: true })) {
-    if (entry.name === ".bin" || entry.name === "@lico") continue;
+    if (entry.name === ".bin" || entry.name === "@meshrix") continue;
     await fs.symlink(path.join(sourceModules, entry.name), path.join(targetModules, entry.name), "junction");
   }
-  const workspaceScope = path.join(targetModules, "@lico");
+  const workspaceScope = path.join(targetModules, "@meshrix");
   await fs.mkdir(workspaceScope, { recursive: true });
   const workspacePackages = {
     agents: "packages/agents",
@@ -456,7 +456,7 @@ async function writePluginRuntimeReport(report) {
 async function main() {
   await fs.rm(REPORT_PATH, { force: true });
   const checks = [];
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-plugin-runtime-"));
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-runtime-"));
 
   async function check(id, fn) {
     try {

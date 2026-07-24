@@ -109,9 +109,9 @@ async function runPortable(executable, args, isolatedRoot) {
       LANG: "C.UTF-8",
       LC_ALL: "C.UTF-8",
       ANTIGRAVITY_MCP_CONFIG_ROOT: path.join(home, "antigravity"),
-      LICO_MCP_DISCOVERY_FILE: path.join(home, "discovery", "servers.json"),
-      LICO_MCP_TOKEN: "",
-      LICO_TOOL_TOKEN: ""
+      MESHRIX_MCP_DISCOVERY_FILE: path.join(home, "discovery", "servers.json"),
+      MESHRIX_MCP_TOKEN: "",
+      MESHRIX_TOOL_TOKEN: ""
     },
     timeout: 30000,
     maxBuffer: 4 * 1024 * 1024
@@ -137,7 +137,7 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }) {
   if (!inputStat.isDirectory() || inputStat.isSymbolicLink()) {
     throw new Error("mcp_final_release_asset_input_invalid");
   }
-  const manifestPath = path.join(inputRoot, "lico-mcp-release.json");
+  const manifestPath = path.join(inputRoot, "meshrix-mcp-release.json");
   const checksumPath = path.join(inputRoot, "SHA256SUMS");
   await Promise.all([
     assertRegularFile(manifestPath, "mcp_final_release_asset_manifest_invalid"),
@@ -154,7 +154,7 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }) {
     portable?.currentPlatform !== RELEASE_PLATFORM
     || portable?.includesNodeRuntime !== true
     || portable?.requiresInstalledNode !== false
-    || portable?.executable !== "lico-mcp"
+    || portable?.executable !== "meshrix-mcp"
     || !/^v\d+\.\d+\.\d+$/u.test(String(portable?.bundledNodeVersion || ""))
     || typeof connector?.packageName !== "string"
     || typeof connector?.packageVersion !== "string"
@@ -186,7 +186,7 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }) {
     throw new Error("mcp_final_release_asset_archive_digest_mismatch");
   }
 
-  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-final-release-asset-"));
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-final-release-asset-"));
   try {
     const extractRoot = path.join(temporaryRoot, "extract");
     await fs.mkdir(extractRoot, { mode: 0o700 });
@@ -206,7 +206,7 @@ export async function verifyFinalReleaseAsset({ inputDir, reportPath }) {
     const portableRoot = path.join(extractRoot, rootName);
     await assertExtractedTree(portableRoot);
     const executable = path.join(portableRoot, portable.executable);
-    const installer = path.join(portableRoot, "lico-mcp-install.sh");
+    const installer = path.join(portableRoot, "meshrix-mcp-install.sh");
     const runtime = path.join(portableRoot, "runtime", "node");
     for (const filePath of [executable, installer, runtime]) {
       const stat = await assertRegularFile(filePath, "mcp_final_release_asset_executable_invalid");

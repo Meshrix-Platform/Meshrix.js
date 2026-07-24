@@ -21,7 +21,14 @@ import {
   planReceiptBuildContext,
   resolveContainedPlanDirectory
 } from "./plan-receipt-context.mjs";
-import { requirePlatformAcceptanceProfile } from "../server-scripts/lib/platform-acceptance-contract.mjs";
+import {
+  acceptedFinalReceipt,
+  assertCurrentDependencyMapShape,
+  finalValidationBinding,
+  finalValidationBindingForProfile,
+  planReceiptKey,
+  setAcceptedFinalReceipt,
+} from "./plan-dependency-map.mjs";
 
 const modulePath = fileURLToPath(import.meta.url);
 const defaultRepoRoot = path.resolve(path.dirname(modulePath), "../..");
@@ -36,21 +43,17 @@ function requireCondition(condition, message) {
   }
 }
 
-async function readJson(filePath) {
-  return JSON.parse(await fs.readFile(filePath, "utf8"));
-}
-
 function dependencyMapText(dependencyMap) {
   return `${JSON.stringify(dependencyMap, null, 2)}\n`;
 }
 
-async function readPlanState({ repoRoot, planRoot, mapPlan }) {
+async function readPlanState({ planRoot, mapPlan, finalNodeId }) {
   const resolved = resolveContainedPlanDirectory(planRoot, mapPlan.directory);
   const [planText, checkpointsText] = await Promise.all([
     loadPlanAuthorityText(planRoot, mapPlan.directory),
     fs.readFile(path.join(resolved.planPath, "Checkpoints.json"), "utf8")
   ]);
-  const finalNode = JSON.parse(checkpointsText).find((node) => node.id === mapPlan.final_validation_node_id);
+  const finalNode = JSON.parse(checkpointsText).find((node) => node.id === finalNodeId);
   requireCondition(finalNode, `DependencyMap final-validation node is missing for ${mapPlan.directory}`);
   return { planText, checkpointsText, finalNode };
 }
@@ -59,26 +62,36 @@ async function validateCandidateDependencyMap({
   repoRoot,
   planRoot,
   dependencyMap,
-  currentPlanDirectories,
+  currentReceiptKeys,
+  requireProofAnchors,
 }) {
-  for (const mapPlan of dependencyMap.plans.filter((plan) => currentPlanDirectories.has(plan.directory))) {
-    const { planText, checkpointsText, finalNode } = await readPlanState({ repoRoot, planRoot, mapPlan });
+  for (const mapPlan of dependencyMap.plans) {
+    for (const binding of mapPlan.final_validations) {
+      const receiptKey = planReceiptKey(mapPlan.directory, binding.node_id);
+      if (!currentReceiptKeys.has(receiptKey)) continue;
+      const { planText, checkpointsText, finalNode } = await readPlanState({
+        planRoot,
+        mapPlan,
+        finalNodeId: binding.node_id,
+      });
     requireCondition(finalNode.status === "completed", "Receipt candidate Plan final is incomplete");
-    const receipt = mapPlan.accepted_final_receipt;
+      const receipt = acceptedFinalReceipt(mapPlan, binding.node_id);
     requireCondition(receipt, "Receipt candidate is missing an accepted final receipt");
-    assertReceiptCurrent(receipt, planReceiptBuildContext({
+      const context = planReceiptBuildContext({
       repoRoot,
       planDirectory: mapPlan.directory,
       mapPlan,
       planText,
       checkpointsText,
       finalNode,
-      selectedProfile: receipt.selected_profile,
       dependencyMap,
-    }));
+        candidateReceiptKeys: requireProofAnchors ? new Set() : currentReceiptKeys,
+      });
+      (requireProofAnchors ? assertReceiptCurrent : assertReceiptCandidateCurrent)(receipt, context);
+    }
   }
 
-  const validationRoot = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-plan-candidate-"));
+  const validationRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plan-candidate-"));
   const candidatePlanRoot = path.join(validationRoot, "plan");
   try {
     await fs.cp(planRoot, candidatePlanRoot, { recursive: true });
@@ -98,27 +111,6 @@ async function validateCandidateDependencyMap({
   }
 }
 
-async function validateDraftCandidateDependencyMap({ repoRoot, planRoot, dependencyMap, draftPlanDirectories }) {
-  for (const mapPlan of dependencyMap.plans.filter((plan) => draftPlanDirectories.has(plan.directory))) {
-    const { planText, checkpointsText, finalNode } = await readPlanState({ repoRoot, planRoot, mapPlan });
-    requireCondition(finalNode.status === "completed", "Receipt candidate Plan final is incomplete");
-    const receipt = mapPlan.accepted_final_receipt;
-    requireCondition(receipt, "Receipt candidate is missing an accepted final receipt");
-    const context = planReceiptBuildContext({
-      repoRoot,
-      planDirectory: mapPlan.directory,
-      mapPlan,
-      planText,
-      checkpointsText,
-      finalNode,
-      selectedProfile: receipt.selected_profile,
-      dependencyMap,
-      candidateReceiptPlans: draftPlanDirectories
-    });
-    assertReceiptCandidateCurrent(receipt, context);
-  }
-}
-
 async function replaceDependencyMap({ dependencyMapPath, originalText, dependencyMap }) {
   const currentText = await fs.readFile(dependencyMapPath, "utf8");
   requireCondition(currentText === originalText, "DependencyMap changed during receipt reduction");
@@ -126,7 +118,7 @@ async function replaceDependencyMap({ dependencyMapPath, originalText, dependenc
 }
 
 async function anchorReceipt(repoRoot, receipt) {
-  const { createOperationProofSubstrate } = await import("#lico/foundation/proof/proof-substrate/index");
+  const { createOperationProofSubstrate } = await import("#meshrix/foundation/proof/proof-substrate/index");
   const proofSubstrate = createOperationProofSubstrate({ dataDir: path.join(repoRoot, "build", "plan-proof-ledger") });
   try {
     const anchor = await proofSubstrate.recordPlanReceiptEvidence({
@@ -166,12 +158,16 @@ async function anchorReceipt(repoRoot, receipt) {
 export async function reduceEndToEndReleaseReceipt({
   repoRoot = defaultRepoRoot,
   planDirectory,
-  selectedProfile,
+  finalNodeId,
+  planProfile,
   write = true,
 } = {}) {
   requireCondition(typeof planDirectory === "string" && planDirectory.length > 0, "--plan is required");
-  requireCondition(typeof selectedProfile === "string" && selectedProfile.length > 0, "--profile is required");
-  selectedProfile = requirePlatformAcceptanceProfile(selectedProfile);
+  requireCondition(
+    (typeof finalNodeId === "string" && finalNodeId.length > 0) !==
+      (typeof planProfile === "string" && planProfile.length > 0),
+    "Exactly one of --final-node or --profile is required",
+  );
   const planRoot = path.join(repoRoot, "docs", "plans");
   const resolvedPlan = resolveContainedPlanDirectory(planRoot, planDirectory);
   planDirectory = resolvedPlan.planDirectory;
@@ -180,27 +176,45 @@ export async function reduceEndToEndReleaseReceipt({
 
   const originalDependencyMapText = await fs.readFile(dependencyMapPath, "utf8");
   const dependencyMap = JSON.parse(originalDependencyMapText);
+  assertCurrentDependencyMapShape(dependencyMap);
   const candidateDependencyMap = structuredClone(dependencyMap);
   const mapPlan = candidateDependencyMap.plans.find((plan) => plan.directory === planDirectory);
   requireCondition(mapPlan, `DependencyMap does not contain plan ${planDirectory}`);
+  const finalBinding = finalNodeId
+    ? finalValidationBinding(mapPlan, finalNodeId)
+    : finalValidationBindingForProfile(mapPlan, planProfile);
+  const candidateReceiptKey = planReceiptKey(planDirectory, finalBinding.node_id);
+  const candidateReceiptKeys = new Set([candidateReceiptKey]);
 
-  const { checkpointsText, planText, finalNode } = await readPlanState({ repoRoot, planRoot, mapPlan });
+  const { checkpointsText, planText, finalNode } = await readPlanState({
+    planRoot,
+    mapPlan,
+    finalNodeId: finalBinding.node_id,
+  });
 
   await verifyEndToEndReleasePlan({ repoRoot, writeReport: false, reportPath, requireCompletedReceipts: false });
   const buildContext = planReceiptBuildContext({
-    repoRoot, planDirectory, mapPlan, planText, checkpointsText, finalNode, selectedProfile, dependencyMap: candidateDependencyMap
+    repoRoot,
+    planDirectory,
+    mapPlan,
+    planText,
+    checkpointsText,
+    finalNode,
+    dependencyMap: candidateDependencyMap,
+    candidateReceiptKeys,
   });
   await verifyPlanEvidenceCurrent({
     repoRoot,
     finalNode,
   });
   const draftReceipt = buildPlanFinalReceipt(buildContext);
-  mapPlan.accepted_final_receipt = draftReceipt;
-  await validateDraftCandidateDependencyMap({
+  setAcceptedFinalReceipt(mapPlan, finalBinding.node_id, draftReceipt);
+  await validateCandidateDependencyMap({
     repoRoot,
     planRoot,
     dependencyMap: candidateDependencyMap,
-    draftPlanDirectories: new Set([planDirectory])
+    currentReceiptKeys: candidateReceiptKeys,
+    requireProofAnchors: false,
   });
   if (!write) {
     return Object.freeze({
@@ -218,12 +232,13 @@ export async function reduceEndToEndReleaseReceipt({
   const receipt = bindPlanReceiptProofAnchor(draftReceipt, await anchorReceipt(repoRoot, draftReceipt));
   assertReceiptCurrent(receipt, buildContext);
 
-  mapPlan.accepted_final_receipt = receipt;
+  setAcceptedFinalReceipt(mapPlan, finalBinding.node_id, receipt);
   await validateCandidateDependencyMap({
     repoRoot,
     planRoot,
     dependencyMap: candidateDependencyMap,
-    currentPlanDirectories: new Set([planDirectory]),
+    currentReceiptKeys: candidateReceiptKeys,
+    requireProofAnchors: true,
   });
   await replaceDependencyMap({
     dependencyMapPath,
@@ -233,38 +248,46 @@ export async function reduceEndToEndReleaseReceipt({
   return receipt;
 }
 
-export async function runReceiptReductionMutationTests({
-  repoRoot = defaultRepoRoot,
-  planDirectory = "end-to-end-release/platform-foundation/state-machine-governance",
-} = {}) {
+export async function runReceiptReductionMutationTests() {
   const results = [];
-  const planRoot = path.join(repoRoot, "docs", "plans");
-  const dependencyMapPath = path.join(planRoot, "end-to-end-release", "DependencyMap.json");
-  const checkpointsPath = path.join(planRoot, planDirectory, "Checkpoints.json");
-
-  const dependencyMap = await readJson(dependencyMapPath);
-  const mapPlan = dependencyMap.plans.find((plan) => plan.directory === planDirectory);
-  requireCondition(mapPlan, "SMG DependencyMap entry missing");
-  const checkpointsText = await fs.readFile(checkpointsPath, "utf8");
-  const finalNode = structuredClone(JSON.parse(checkpointsText).find((node) => node.id === mapPlan.final_validation_node_id));
-  requireCondition(finalNode, "SMG final node missing");
-  for (const criterion of finalNode.acceptance_criteria || []) {
-    criterion.evidence_refs = (criterion.evidence_refs || []).map((ref) => {
-      if (ref.type !== "command" || !Object.hasOwn(ref, "command")) return ref;
-      return {
+  const planDirectory = "end-to-end-release/generated-receipt-fixture";
+  const finalNode = {
+    id: "00000000-0000-4000-8000-000000000001",
+    status: "completed",
+    role: "final_validation",
+    platform: "any",
+    requirements: ["REQ-GENERATED-RECEIPT"],
+    commit: { repository: ".git", delivered: "generated-revision" },
+    prerequisites: ["00000000-0000-4000-8000-000000000000"],
+    next: [],
+    acceptance_criteria: [{
+      checked: true,
+      text: "Generated receipt fixture is current.",
+      evidence_refs: [{
         type: "command",
-        command_sha256: digest(ref.command),
-        exit_code: ref.exit_code ?? null,
-        recorded_at: ref.recorded_at ?? null
-      };
-    });
-  }
+        command_sha256: digest("generated receipt fixture"),
+        exit_code: 0,
+        recorded_at: null,
+      }],
+    }],
+  };
+  const checkpointsText = JSON.stringify([finalNode]);
+  const mapPlan = {
+    directory: planDirectory,
+    parent: null,
+    parent_contract_node_id: null,
+    parent_integrations: [],
+    final_validations: [{ node_id: finalNode.id, profiles: ["enterprise-single-node"] }],
+    prerequisite_receipts: [],
+    children: [],
+    accepted_final_receipts: {},
+  };
   const draftGoodReceipt = buildPlanFinalReceipt({
     planDirectory,
     mapPlan,
+    planText: "generated fixture",
     checkpointsText,
     finalNode,
-    selectedProfile: "core",
   });
   const goodReceipt = bindPlanReceiptProofAnchor(draftGoodReceipt, {
     provider: "pactium.operation-proof-substrate",
@@ -274,7 +297,13 @@ export async function runReceiptReductionMutationTests({
     fact_id: "mutation-fixture",
     verified: true
   });
-  const assertionContext = { planDirectory, mapPlan, checkpointsText, finalNode, selectedProfile: "core" };
+  const assertionContext = {
+    planDirectory,
+    mapPlan,
+    planText: "generated fixture",
+    checkpointsText,
+    finalNode,
+  };
 
   const cases = [
     {
@@ -337,10 +366,10 @@ export async function runReceiptReductionMutationTests({
       expectedSubstring: "digest is stale",
     },
     {
-      name: "absent-selected-profile",
+      name: "absent-profiles",
       run: () =>
         assertReceiptCurrent(
-          { ...structuredClone(goodReceipt), selected_profile: "" },
+          { ...structuredClone(goodReceipt), profiles: [] },
           assertionContext,
         ),
       expectedSubstring: "digest is stale",
@@ -354,7 +383,7 @@ export async function runReceiptReductionMutationTests({
             evidence_refs: [
               {
                 type: "file",
-                path: path.posix.join(path.posix.sep, "Users", "someone", "secret", "report.json"),
+                path: "C:\\synthetic-private\\report.json",
                 sha256: "abc",
               },
             ],
@@ -409,12 +438,12 @@ async function main(argv = process.argv.slice(2)) {
   }
   const planIndex = argv.indexOf("--plan");
   requireCondition(planIndex >= 0 && argv[planIndex + 1], "--plan <directory> is required");
+  const finalNodeIndex = argv.indexOf("--final-node");
   const profileIndex = argv.indexOf("--profile");
-  requireCondition(profileIndex >= 0 && argv[profileIndex + 1], "--profile <profile> is required");
-  const selectedProfile = argv[profileIndex + 1];
   const receipt = await reduceEndToEndReleaseReceipt({
     planDirectory: argv[planIndex + 1],
-    selectedProfile,
+    finalNodeId: finalNodeIndex >= 0 ? argv[finalNodeIndex + 1] : undefined,
+    planProfile: profileIndex >= 0 ? argv[profileIndex + 1] : undefined,
     write: !argv.includes("--dry-run"),
   });
   process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
