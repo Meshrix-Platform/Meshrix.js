@@ -1,0 +1,30 @@
+{
+  "name": "@meshrix/agents",
+  "version": "0.0.1",
+  "description": "Meshrix agent library, collaboration, relay domain, memory/context contracts",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
+    "directory": "packages/agents"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
+  },
+  "exports": {
+    "./workspace-contribution": "./src/workspace-contribution/index.mjs",
+    "./*": "./src/*.mjs"
+  },
+  "files": [
+    "src/**/*",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/registry/schema/mcp-connector.schema.json",
+  "title": "MCP Connector Registry",
+  "description": "Canonical location, package names, and package scripts for the MCP gateway connector.",
+  "type": "object",
+  "required": ["version", "directory", "packageScripts"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "pattern": "^v?\\d+\\.\\d+\\.\\d+$" },
+    "generatedAt": { "type": "string", "format": "date" },
+    "directory": { "type": "string" },
+    "names": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "packageScripts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "verifierScripts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "evidenceReports": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

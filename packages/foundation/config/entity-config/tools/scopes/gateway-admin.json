@@ -1,0 +1,5 @@
+{
+  "id": "gateway:admin",
+  "label": "Administer gateway",
+  "description": "Modify gateway routing, grants, and runtime settings."
+}

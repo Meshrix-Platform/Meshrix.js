@@ -1,0 +1,134 @@
+[
+  {
+    "id": "0088a683-d94d-432c-9cc4-600718989c43",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Implement Downstream MCP Gateway end to end.",
+    "description": "Implement downstream-mcp-gateway end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Unauthorized capability use creates or links a pending approval request when policy allows escalation.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Disabled plugin tools disappear from tools/list and tools/call fails before side effects.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "plugin-runtime",
+            "report": "build/reports/plugin-runtime.json"
+          },
+          {
+            "acceptanceCommandId": "downstream-mcp-audit",
+            "report": "build/reports/downstream-mcp-completeness-audit.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Internal-only operations are either absent from MCP or explicitly justified by an admin MCP policy.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "downstream-mcp-audit",
+            "report": "build/reports/downstream-mcp-completeness-audit.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Hard-denied MCP calls do not create approvals; policy-marked escalatable denies create pending approval before side effects.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete downstream-mcp-gateway",
+      "target": "packages/protocols/mcp/adapter/http-mcp-adapter-transport.mjs, packages/protocols/mcp/adapter/http-mcp-adapter-tools.mjs, packages/protocols/mcp/adapter/http-mcp-adapter-discovery.mjs, tools/verifiers/downstream-mcp-completeness-audit.mjs"
+    },
+    "next": [
+      "a7025d7e-4d7d-4080-a4e6-11c35e6e0be9"
+    ]
+  },
+  {
+    "id": "a7025d7e-4d7d-4080-a4e6-11c35e6e0be9",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "0088a683-d94d-432c-9cc4-600718989c43"
+    ],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Validate Downstream MCP Gateway closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          },
+          {
+            "acceptanceCommandId": "plugin-runtime",
+            "report": "build/reports/plugin-runtime.json"
+          },
+          {
+            "acceptanceCommandId": "downstream-mcp-audit",
+            "report": "build/reports/downstream-mcp-completeness-audit.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate downstream-mcp-gateway",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]

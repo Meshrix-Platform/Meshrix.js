@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/registry/schema/docs.schema.json",
+  "title": "Docs Registry",
+  "description": "Canonical list of every generated documentation entry point and its source registry.",
+  "type": "object",
+  "required": ["version", "entries"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "pattern": "^v?\\d+\\.\\d+\\.\\d+$" },
+    "generatedAt": { "type": "string", "format": "date" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "source", "description"],
+        "properties": {
+          "id": { "type": "string" },
+          "path": { "type": "string" },
+          "source": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      }
+    }
+  }
+}

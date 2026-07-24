@@ -1,0 +1,56 @@
+{
+  "name": "@meshrix/protocols",
+  "version": "0.0.1",
+  "description": "Meshrix MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
+    "directory": "packages/protocols"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  },
+  "type": "module",
+  "dependencies": {
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1"
+  },
+  "imports": {
+    "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
+    "#meshrix/contracts/*": "@meshrix/contracts/*",
+    "#meshrix/foundation/*": "@meshrix/foundation/*",
+    "#meshrix/http-response": "@meshrix/foundation/http/http-response",
+    "#meshrix/http-utils": "./http/http-utils.mjs",
+    "#meshrix/local-path-boundary": "@meshrix/foundation/security/local-path-boundary",
+    "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
+    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
+  },
+  "exports": {
+    "./mcp/adapter/mcp-identity": "./mcp/adapter/gateway-installer/mcp-identity.mjs",
+    "./mcp/*": "./mcp/*.mjs",
+    "./agent-sync/*": "./agent-sync/*.mjs",
+    "./downstream-client-aspect/*": "./downstream-client-aspect/*.mjs",
+    "./http/*": "./http/*.mjs",
+    "./pubsub/*": "./pubsub/*.mjs",
+    "./common/*": "./common/*.mjs",
+    "./*": "./common/*.mjs"
+  },
+  "files": [
+    "mcp/**/*.mjs",
+    "mcp/adapter/gateway-installer/bin/**/*",
+    "mcp/adapter/gateway-installer/lib/**/*",
+    "mcp/adapter/gateway-installer/package.json",
+    "mcp/adapter/gateway-installer/README.md",
+    "mcp/adapter/native-installer/**/*",
+    "agent-sync/**/*.mjs",
+    "downstream-client-aspect/**/*.mjs",
+    "http/**/*.mjs",
+    "pubsub/**/*.mjs",
+    "common/**/*.mjs",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ]
+}

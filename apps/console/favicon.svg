@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fef100"/>
+      <stop offset="50%" stop-color="#fff75c"/>
+      <stop offset="100%" stop-color="#6b6117"/>
+    </linearGradient>
+    <linearGradient id="i" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5ed7f2"/>
+      <stop offset="50%" stop-color="#5ed7f2"/>
+      <stop offset="100%" stop-color="#155c70"/>
+    </linearGradient>
+    <linearGradient id="f" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.07"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Dark background circle -->
+  <circle cx="32" cy="32" r="32" fill="#070707"/>
+
+  <!-- Outer hexagon frame -->
+  <polygon fill="none"
+    points="32,6 54.5,19 54.5,45 32,58 9.5,45 9.5,19"
+    stroke="url(#g)" stroke-width="0.5" opacity="0.3"/>
+
+  <!-- Second hexagon rotated 30deg -->
+  <polygon fill="none"
+    points="32,8.5 52,20.25 52,43.75 32,55.5 12,43.75 12,20.25"
+    stroke="url(#i)" stroke-width="0.4" opacity="0.2"
+    transform="rotate(30 32 32)"/>
+
+  <!-- Lattice lines -->
+  <line x1="32" y1="12" x2="32" y2="52" stroke="url(#i)" stroke-width="0.4" opacity="0.2"/>
+  <line x1="14.7" y1="22" x2="49.3" y2="42" stroke="url(#i)" stroke-width="0.4" opacity="0.2"/>
+  <line x1="14.7" y1="42" x2="49.3" y2="22" stroke="url(#i)" stroke-width="0.4" opacity="0.2"/>
+
+  <!-- Inner hexagon — crystal core -->
+  <polygon
+    points="32,20 43,26 43,38 32,44 21,38 21,26"
+    fill="url(#f)" stroke="url(#g)" stroke-width="1" opacity="0.55"/>
+
+  <!-- Lattice nodes -->
+  <circle cx="32" cy="20" r="1.5" fill="#5ed7f2" opacity="0.5"/>
+  <circle cx="43" cy="26" r="1.5" fill="#fef100" opacity="0.5"/>
+  <circle cx="43" cy="38" r="1.5" fill="#5ed7f2" opacity="0.45"/>
+  <circle cx="32" cy="44" r="1.5" fill="#fef100" opacity="0.5"/>
+  <circle cx="21" cy="38" r="1.5" fill="#5ed7f2" opacity="0.45"/>
+  <circle cx="21" cy="26" r="1.5" fill="#fef100" opacity="0.5"/>
+
+  <!-- Central brilliant -->
+  <circle cx="32" cy="32" r="3" fill="url(#g)" opacity="0.65"/>
+  <circle cx="32" cy="32" r="1.5" fill="#ffffff" opacity="0.55"/>
+</svg>

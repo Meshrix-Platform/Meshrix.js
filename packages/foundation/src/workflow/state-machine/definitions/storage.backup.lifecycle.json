@@ -1,0 +1,436 @@
+{
+  "machineId": "storage.backup.lifecycle",
+  "entityType": "storage_backup",
+  "version": "v0.0.1:state-machine:storage-backup-lifecycle-1",
+  "description": "Storage backup scheduling, snapshot, verification, retention, restore preview, restore, expiry, and failure lifecycle.",
+  "initialState": "scheduled",
+  "states": [
+    {
+      "id": "scheduled"
+    },
+    {
+      "id": "snapshotting"
+    },
+    {
+      "id": "verifying"
+    },
+    {
+      "id": "retained"
+    },
+    {
+      "id": "restore_previewed"
+    },
+    {
+      "id": "restored"
+    },
+    {
+      "id": "expired",
+      "terminal": true
+    },
+    {
+      "id": "failed",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "snapshot_started",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "snapshot_captured",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "verification_passed",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "restore_previewed",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "restore_applied",
+      "riskLevel": "high"
+    },
+    {
+      "id": "retention_expired",
+      "riskLevel": "medium"
+    },
+    {
+      "id": "failure_detected",
+      "riskLevel": "medium"
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "scheduled",
+      "event": "snapshot_started",
+      "result": "legal_transition",
+      "to": "snapshotting"
+    },
+    {
+      "from": "scheduled",
+      "event": "snapshot_captured",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "scheduled",
+      "event": "verification_passed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "scheduled",
+      "event": "restore_previewed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "scheduled",
+      "event": "restore_applied",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "scheduled",
+      "event": "retention_expired",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "scheduled",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "snapshotting",
+      "event": "snapshot_started",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "snapshotting",
+      "event": "snapshot_captured",
+      "result": "legal_transition",
+      "to": "verifying"
+    },
+    {
+      "from": "snapshotting",
+      "event": "verification_passed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "snapshotting",
+      "event": "restore_previewed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "snapshotting",
+      "event": "restore_applied",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "snapshotting",
+      "event": "retention_expired",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "snapshotting",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "verifying",
+      "event": "snapshot_started",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "verifying",
+      "event": "snapshot_captured",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "verifying",
+      "event": "verification_passed",
+      "result": "legal_transition",
+      "to": "retained"
+    },
+    {
+      "from": "verifying",
+      "event": "restore_previewed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "verifying",
+      "event": "restore_applied",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "verifying",
+      "event": "retention_expired",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "verifying",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "retained",
+      "event": "snapshot_started",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "retained",
+      "event": "snapshot_captured",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "retained",
+      "event": "verification_passed",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "retained",
+      "event": "restore_previewed",
+      "result": "legal_transition",
+      "to": "restore_previewed"
+    },
+    {
+      "from": "retained",
+      "event": "restore_applied",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "retained",
+      "event": "retention_expired",
+      "result": "legal_transition",
+      "to": "expired"
+    },
+    {
+      "from": "retained",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "restore_previewed",
+      "event": "snapshot_started",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restore_previewed",
+      "event": "snapshot_captured",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restore_previewed",
+      "event": "verification_passed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restore_previewed",
+      "event": "restore_previewed",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "restore_previewed",
+      "event": "restore_applied",
+      "result": "legal_transition",
+      "to": "restored",
+      "requiredGuards": [
+        "policyAllowed",
+        "require_admin"
+      ]
+    },
+    {
+      "from": "restore_previewed",
+      "event": "retention_expired",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restore_previewed",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "restored",
+      "event": "snapshot_started",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restored",
+      "event": "snapshot_captured",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restored",
+      "event": "verification_passed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "restored",
+      "event": "restore_previewed",
+      "result": "legal_transition",
+      "to": "restore_previewed"
+    },
+    {
+      "from": "restored",
+      "event": "restore_applied",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "restored",
+      "event": "retention_expired",
+      "result": "legal_transition",
+      "to": "expired"
+    },
+    {
+      "from": "restored",
+      "event": "failure_detected",
+      "result": "legal_transition",
+      "to": "failed"
+    },
+    {
+      "from": "expired",
+      "event": "snapshot_started",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "expired",
+      "event": "snapshot_captured",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "expired",
+      "event": "verification_passed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "expired",
+      "event": "restore_previewed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "expired",
+      "event": "restore_applied",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "expired",
+      "event": "retention_expired",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "expired",
+      "event": "failure_detected",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "snapshot_started",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "snapshot_captured",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "verification_passed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "restore_previewed",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "restore_applied",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "retention_expired",
+      "result": "illegal_transition",
+      "errorCode": "STORAGE_BACKUP_LIFECYCLE_INVALID_TRANSITION"
+    },
+    {
+      "from": "failed",
+      "event": "failure_detected",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "SM-STORAGE-SNAPSHOT-BEFORE-VERIFY",
+    "SM-STORAGE-VERIFY-BEFORE-RETAIN",
+    "SM-STORAGE-PREVIEW-BEFORE-RESTORE",
+    "SM-STORAGE-RESTORE-INTEGRITY-BOUND",
+    "SM-STORAGE-REPORTS-PRIVACY-SAFE"
+  ],
+  "proofObligations": [
+    "PO-STORAGE-BACKUP-RESTORE",
+    "PO-STORAGE-PRODUCTION-DRILL",
+    "PO-STORAGE-REPORT-SAFETY"
+  ],
+  "proofMappings": [
+    {
+      "obligationId": "PO-STORAGE-BACKUP-RESTORE",
+      "method": "verifier_command",
+      "params": {
+        "command": "node tools/server-scripts/verify-backup-restore.mjs"
+      }
+    },
+    {
+      "obligationId": "PO-STORAGE-PRODUCTION-DRILL",
+      "method": "required_report",
+      "params": {
+        "command": "node tools/server-scripts/verify-storage-production-restore-drill.mjs",
+        "reportPath": "build/reports/storage-production-restore-drill/latest.json"
+      }
+    },
+    {
+      "obligationId": "PO-STORAGE-REPORT-SAFETY",
+      "method": "required_report",
+      "params": {
+        "command": "npm run repo:local-info-hygiene",
+        "reportPath": "build/reports/local-info-hygiene.json"
+      }
+    }
+  ]
+}

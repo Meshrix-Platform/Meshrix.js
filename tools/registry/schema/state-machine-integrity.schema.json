@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.local/schema/state-machine-integrity.schema.json",
+  "title": "State Machine Integrity Registry",
+  "type": "object",
+  "required": ["version", "definitionRoot", "definitionCount", "hashAlgorithm", "machines"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "$comment": { "type": "string" },
+    "version": { "type": "string" },
+    "generatedAt": { "type": "string" },
+    "definitionRoot": { "type": "string" },
+    "definitionCount": { "type": "integer", "minimum": 1 },
+    "hashAlgorithm": { "const": "canonical-json-sha256" },
+    "machines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "machineId",
+          "version",
+          "path",
+          "canonicalSha256",
+          "stateCount",
+          "eventCount",
+          "matrixCellCount",
+          "initialState",
+          "terminalStateIds"
+        ],
+        "properties": {
+          "machineId": { "type": "string", "minLength": 1 },
+          "entityType": { "type": "string" },
+          "version": { "type": "string" },
+          "path": { "type": "string", "minLength": 1 },
+          "canonicalSha256": {
+            "type": "string",
+            "pattern": "^sha256:[a-f0-9]{64}$"
+          },
+          "stateCount": { "type": "integer", "minimum": 1 },
+          "eventCount": { "type": "integer", "minimum": 1 },
+          "matrixCellCount": { "type": "integer", "minimum": 1 },
+          "initialState": { "type": "string", "minLength": 1 },
+          "terminalStateIds": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

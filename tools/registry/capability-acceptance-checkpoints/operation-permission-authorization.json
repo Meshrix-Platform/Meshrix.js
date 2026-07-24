@@ -1,0 +1,182 @@
+[
+  {
+    "id": "7e3b31c7-3ebc-45e5-b15b-ad64df41b8df",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Implement Operation Permission And Authorization end to end.",
+    "description": "Implement operation-permission-authorization end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Every governed request has an authenticated subject, grant context, operation id, capability set, resource context, and policy result before side effects.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "authorization-enforcement",
+            "report": "build/reports/enterprise-authorization-enforcement.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Missing security provider is a startup/config error outside explicit tests.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "authorization-enforcement",
+            "report": "build/reports/enterprise-authorization-enforcement.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-domain-model",
+            "report": "build/reports/operation-permission-domain-model.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Authorization verifiers include static tools, dynamic upstream tools, workspace resources, and plugin-disabled surfaces.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "authorization-enforcement",
+            "report": "build/reports/enterprise-authorization-enforcement.json"
+          },
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "workspace-asset-management"
+          },
+          {
+            "acceptanceCommandId": "plugin-runtime",
+            "report": "build/reports/plugin-runtime.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Upstream service operation descriptors compile into dynamic capabilities consumed by grants and policy evaluation.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Escalatable denies are the only denied results that create approval requests.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete operation-permission-authorization",
+      "target": "packages/capabilities/src/operation-permission-core/store.mjs, packages/capabilities/src/operation-permission-core/store-grants.mjs, packages/capabilities/src/operation-permission-core/runtime.mjs, packages/capabilities/src/operation-permission-core/http.mjs, packages/foundation/src/security/authorization/authorization-engine.mjs, tools/server-scripts/verify-enterprise-authorization-enforcement.mjs"
+    },
+    "next": [
+      "b85a6643-4d68-4ac0-bc32-221bbbadff29"
+    ]
+  },
+  {
+    "id": "b85a6643-4d68-4ac0-bc32-221bbbadff29",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "7e3b31c7-3ebc-45e5-b15b-ad64df41b8df"
+    ],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Validate Operation Permission And Authorization closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "authorization-enforcement",
+            "report": "build/reports/enterprise-authorization-enforcement.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-tag-governed-e2e",
+            "report": "build/reports/operation-permission-tag-governed-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
+          },
+          {
+            "acceptanceCommandId": "operation-permission-domain-model",
+            "report": "build/reports/operation-permission-domain-model.json"
+          },
+          {
+            "acceptanceCommandId": "upstream-gateway-e2e",
+            "report": "build/reports/upstream-gateway-e2e.json"
+          },
+          {
+            "acceptanceCommandId": "workspace-asset-management"
+          },
+          {
+            "acceptanceCommandId": "plugin-runtime",
+            "report": "build/reports/plugin-runtime.json"
+          },
+          {
+            "acceptanceCommandId": "mcp-authorization-request-filters",
+            "report": "build/reports/mcp-authorization-request-filters.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate operation-permission-authorization",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]

@@ -1,0 +1,10 @@
+{
+  "id": "meshrix.model.call",
+  "label": "Model calls",
+  "requiredScopes": [
+    "model:call"
+  ],
+  "maxRisk": "safe_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

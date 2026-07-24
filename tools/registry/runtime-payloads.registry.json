@@ -1,0 +1,6 @@
+{
+  "$schema": "./schema/runtime-payload.schema.json",
+  "version": "0.3.0",
+  "generatedAt": "2026-06-30",
+  "payloads": []
+}

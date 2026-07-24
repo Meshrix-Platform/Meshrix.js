@@ -1,0 +1,59 @@
+[
+  {
+    "id": "205e31a9-fc1d-4f59-865d-2910b3704201",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "linux",
+    "difficulty": "deep",
+    "goal": "Close the controlled execution sandbox lifecycle and production backend boundary.",
+    "description": "Validate default denial, policy compilation, immutable inputs, bounded execution, quarantine, cancellation, cleanup, receipts, and bypass removal through one core port.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Empty, disabled, missing, unhealthy, stale, revoked, unsupported, timed-out, cancelled, and cleanup-incomplete states fail closed without input staging or host fallback.",
+        "evidence": [
+          { "acceptanceCommandId": "controlled-execution-sandbox", "report": "build/reports/controlled-execution-sandbox.json" }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "A production backend proves filesystem, process, network, environment, credential, resource, output, cleanup, and cross-trust-domain isolation.",
+        "evidence": [
+          { "acceptanceCommandId": "controlled-execution-sandbox", "report": "build/reports/controlled-execution-sandbox.json" }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: close controlled sandbox lifecycle",
+      "target": "core sandbox contracts, broker, backend, composition, verification, and acceptance"
+    },
+    "next": ["a5d45973-355f-48ca-a43a-2f2dfa5967d4"]
+  },
+  {
+    "id": "a5d45973-355f-48ca-a43a-2f2dfa5967d4",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": ["205e31a9-fc1d-4f59-865d-2910b3704201"],
+    "platform": "linux",
+    "difficulty": "deep",
+    "goal": "Validate Controlled Execution Sandbox closed-loop acceptance.",
+    "description": "Produce the exact core receipt consumed through the generic plugin Host contract without claiming plugin or platform readiness.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "The production backend, adversarial isolation, lifecycle, removal, bypass audit, privacy, schema, freshness, and dependency checks pass in the canonical workflow.",
+        "evidence": [
+          { "acceptanceCommandId": "controlled-execution-sandbox", "report": "build/reports/controlled-execution-sandbox.json" }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate controlled execution sandbox",
+      "target": "controlled sandbox reports and canonical acceptance receipt"
+    },
+    "next": []
+  }
+]

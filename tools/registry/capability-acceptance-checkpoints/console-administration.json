@@ -1,0 +1,118 @@
+[
+  {
+    "id": "384a5a18-fae3-4a42-8499-32ec253b384c",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Implement Console Administration end to end.",
+    "description": "Implement console-administration end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "Every visible route is reachable from navigation and every hidden route has explicit registry reason.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "console-administration",
+            "report": "build/reports/console-administration-coverage.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Disabled plugins have no direct console route resolution.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "console-administration",
+            "report": "build/reports/console-administration-coverage.json"
+          },
+          {
+            "acceptanceCommandId": "plugin-runtime",
+            "report": "build/reports/plugin-runtime.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Console verifier fails on route/nav/i18n/feature/doc/test divergence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "console-administration",
+            "report": "build/reports/console-administration-coverage.json"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: complete console-administration",
+      "target": "apps/console/router/admin-route-registry.mjs, apps/console/router/index.ts, apps/console/router/route-access-policy.mjs, apps/console/components/shell/ConsoleSideNav.vue, packages/foundation/config/frontend-feature-registry.yaml, tools/server-scripts/verify-console-administration-coverage.mjs"
+    },
+    "next": [
+      "eb729631-1fea-4cfb-b751-f09679748d77"
+    ]
+  },
+  {
+    "id": "eb729631-1fea-4cfb-b751-f09679748d77",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "384a5a18-fae3-4a42-8499-32ec253b384c"
+    ],
+    "platform": "macos",
+    "difficulty": "deep",
+    "goal": "Validate Console Administration closed-loop acceptance.",
+    "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "console-administration",
+            "report": "build/reports/console-administration-coverage.json"
+          },
+          {
+            "acceptanceCommandId": "plugin-runtime",
+            "report": "build/reports/plugin-runtime.json"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          },
+          {
+            "acceptanceCommandId": "foundation-tests",
+            "report": "build/reports/local-info-hygiene.json"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "foundation-tests"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate console-administration",
+      "target": "build/reports and capability verifier reports"
+    },
+    "next": []
+  }
+]

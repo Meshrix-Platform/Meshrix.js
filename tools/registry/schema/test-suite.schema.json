@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/schemas/test-suite.schema.json",
+  "title": "Test Suite Registry Entry",
+  "type": "object",
+  "required": ["profiles", "suites"],
+  "properties": {
+    "version": { "type": "string" },
+    "generatedAt": { "type": "string", "format": "date" },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "description": { "type": "string" },
+          "extends": { "type": "string" },
+          "suites": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "timeoutMs": { "type": "integer", "minimum": 1000 },
+          "coverage": { "type": "boolean" },
+          "dynamic": { "type": "boolean" }
+        }
+      }
+    },
+    "suites": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "owner", "level", "command", "args"],
+        "properties": {
+          "id": { "type": "string" },
+          "owner": { "type": "string" },
+          "command": { "type": "string", "minLength": 1 },
+          "args": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "package": { "type": "string" },
+          "level": {
+            "type": "string",
+            "enum": ["smoke", "integration", "e2e", "architecture", "security"]
+          },
+          "sideEffects": {
+            "description": "Primary runtime side effect outside the explicitly listed artifacts. Report files and other exact outputs belong in artifacts, not sideEffects.",
+            "type": "string",
+            "enum": ["none", "build-output", "temp-files", "network-service", "local-agent-state", "container"]
+          },
+          "timeoutClass": {
+            "type": "string",
+            "enum": ["fast", "standard", "slow"]
+          },
+          "requiredServices": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "flakePolicy": {
+            "type": "string",
+            "enum": ["fail", "retry", "skip"]
+          },
+          "profiles": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "coverageContribution": { "type": "boolean" },
+          "artifacts": {
+            "description": "Exact persistent output paths produced by the suite. This is the only source of truth for report artifacts.",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "artifactSemantics": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

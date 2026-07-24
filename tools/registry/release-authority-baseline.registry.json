@@ -1,0 +1,157 @@
+{
+  "$schema": "./schema/release-authority-baseline.schema.json",
+  "version": "v0.0.1:registry:release-authority-baseline-1",
+  "policy": {
+    "inspectAuthoritiesDirectly": true,
+    "neverImportGeneratedReportStatus": true,
+    "placeholderReportsCannotSatisfyReleaseFacts": true,
+    "doNotDeleteLockdownBeforePositivePath": true,
+    "notes": [
+      "This baseline inventories live release authorities and remaining migration targets.",
+      "Register only recomputable positive evidence as release-ready.",
+      "Generated projections are owned by generatorOwnership and must stay in sync with authority sources.",
+      "Live catalogs are discovered from catalogAuthorities; migrationInventory classifies retained positive paths versus lockdown/static-only authorities to remove later."
+    ]
+  },
+  "catalogAuthorities": {
+    "commands": "tools/server-scripts/lib/platform-acceptance-command-catalog.mjs",
+    "reports": "tools/server-scripts/lib/platform-acceptance-command-catalog.mjs",
+    "capabilities": "tools/registry/capability-acceptance.registry.json",
+    "checkpoints": "tools/registry/capability-acceptance-checkpoints",
+    "reducerInputs": "tools/server-scripts/lib/platform-acceptance-reducer.mjs",
+    "requiredReportSpecs": "tools/server-scripts/lib/required-report-validator.mjs",
+    "generatedProjections": "tools/registry/release-authority-baseline.registry.json#generatorOwnership",
+    "sourceAuthorities": "tools/registry/fact-source-authority.registry.json"
+  },
+  "generatorOwnership": [
+    {
+      "id": "capability-acceptance-definitions",
+      "generator": "tools/generators/generate-capability-acceptance-definitions.mjs",
+      "authorityPath": "tools/registry/capability-acceptance-checkpoints",
+      "projectionPaths": [
+        "tools/registry/capability-acceptance.registry.json",
+        "packages/foundation/src/workflow/state-machine/definitions/acceptance"
+      ]
+    },
+    {
+      "id": "state-machine-integrity-registry",
+      "generator": "tools/generators/generate-state-machine-integrity-registry.mjs",
+      "authorityPath": "packages/foundation/src/workflow/state-machine/definitions",
+      "projectionPaths": [
+        "tools/registry/state-machines/state-machine-integrity.registry.json"
+      ]
+    },
+    {
+      "id": "operation-artifacts",
+      "generator": "tools/generators/generate-operation-artifacts.mjs",
+      "authorityPath": "packages/contracts/src/operations/operation-registry.mjs",
+      "projectionPaths": [
+        "tools/registry/operations/operations.registry.json",
+        "tools/registry/capabilities/capabilities.registry.json"
+      ]
+    },
+    {
+      "id": "state-machine-docs-projection",
+      "generator": "tools/generators/generate-state-machine-docs.mjs",
+      "authorityPath": "tools/registry/state-machines/state-machine-integrity.registry.json",
+      "projectionPaths": [
+        "docs/architecture/STATE-MACHINES.md",
+        "packages/foundation/src/workflow/state-machine/definitions/README.md"
+      ]
+    },
+    {
+      "id": "architecture-diagram-digests",
+      "generator": "tools/generators/generate-architecture-diagram-digests.mjs",
+      "authorityPath": "packages/contracts/src/modules/manifest.mjs",
+      "projectionPaths": [
+        "docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html",
+        "docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html"
+      ]
+    }
+  ],
+  "migrationInventory": {
+    "retainedPositiveForwarding": [
+      {
+        "id": "fact-source-authority-positive-path",
+        "classification": "retained-positive-forwarding",
+        "description": "Fact-source authority registry and verifier remain the positive path for release facts.",
+        "authorityPaths": [
+          "tools/registry/fact-source-authority.registry.json",
+          "tools/verifiers/registry-fact-source-authority.mjs"
+        ],
+        "assertions": [
+          "Every required release fact maps to a declared source authority.",
+          "Generated report status is never imported as an authority.",
+          "Placeholder or static-only authorities cannot satisfy required release facts."
+        ]
+      },
+      {
+        "id": "platform-acceptance-reducer-positive-path",
+        "classification": "retained-positive-forwarding",
+        "description": "Platform acceptance catalogs and reducer remain the positive path for command/report readiness.",
+        "authorityPaths": [
+          "tools/server-scripts/lib/platform-acceptance-command-catalog.mjs",
+          "tools/server-scripts/lib/platform-acceptance-reducer.mjs",
+          "tools/server-scripts/lib/required-report-validator.mjs",
+          "tools/server-scripts/lib/release-evidence-readiness.mjs"
+        ],
+        "assertions": [
+          "Every acceptance command is registered in the command catalog.",
+          "Every required report is owned by exactly one command and registered in required-report specs.",
+          "Reducer inputs are derived only from registered catalogs and live evidence."
+        ]
+      },
+      {
+        "id": "capability-acceptance-positive-path",
+        "classification": "retained-positive-forwarding",
+        "description": "Capability acceptance checkpoints remain the positive path for capability readiness machines.",
+        "authorityPaths": [
+          "tools/registry/capability-acceptance-checkpoints",
+          "tools/registry/capability-acceptance.registry.json",
+          "tools/generators/generate-capability-acceptance-definitions.mjs"
+        ],
+        "assertions": [
+          "Every capability checkpoint is registered.",
+          "Checkpoint evidence must reference live authority, not decorative placeholders."
+        ]
+      }
+    ],
+    "removeLaterLockdownOrStaticOnly": [
+      {
+        "id": "security-local-stdio-lockdown",
+        "classification": "lockdown",
+        "description": "Local stdio lockdown verifier asserts absence of unsafe local stdio surfaces; remove after positive governed stdio path is the only remaining authority.",
+        "authorityPaths": [
+          "tools/server-scripts/verify-security-local-stdio-lockdown.mjs"
+        ],
+        "consumers": [
+          "tools/server-scripts/production-readiness-gate.mjs",
+          "tools/server-scripts/verify-security-hardening.mjs",
+          "docs/functionality/SECURITY-AUTHORIZATION.md"
+        ],
+        "replacementAuthority": "tools/registry/fact-source-authority.registry.json",
+        "status": "present-must-remove-after-positive-path",
+        "liveCommandIds": [],
+        "liveReportPaths": []
+      },
+      {
+        "id": "static-only-placeholder-report-success",
+        "classification": "static-only",
+        "description": "Any static or placeholder report that claims releaseReady without live authority evidence must remain inventoried as forbidden until deleted.",
+        "authorityPaths": [
+          "tools/server-scripts/lib/required-report-validator.mjs",
+          "tools/server-scripts/lib/release-evidence-readiness.mjs"
+        ],
+        "consumers": [
+          "tools/server-scripts/lib/platform-acceptance-reducer.mjs",
+          "tools/verifiers/registry-release-authority-baseline.mjs",
+          "tests/vitest/server/release-authority-baseline.test.mjs"
+        ],
+        "replacementAuthority": "tools/registry/fact-source-authority.registry.json",
+        "status": "present-must-remove-after-positive-path",
+        "liveCommandIds": [],
+        "liveReportPaths": []
+      }
+    ]
+  }
+}

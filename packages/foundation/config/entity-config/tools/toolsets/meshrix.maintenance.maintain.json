@@ -1,0 +1,11 @@
+{
+  "id": "meshrix.maintenance.maintain",
+  "label": "Maintenance Agent maintain",
+  "requiredScopes": [
+    "maintenance:admin",
+    "maintenance:approve"
+  ],
+  "maxRisk": "repair_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

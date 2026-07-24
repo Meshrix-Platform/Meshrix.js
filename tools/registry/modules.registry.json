@@ -1,0 +1,105 @@
+{
+  "$schema": "./schema/module.schema.json",
+  "version": "v0.1.0",
+  "modules": [
+    {
+      "id": "contracts",
+      "kind": "foundation",
+      "owner": "platform",
+      "directory": "packages/contracts",
+      "chineseName": "契约",
+      "description": "Operation and module contracts.",
+      "publicApi": [
+        "#meshrix/contracts/*"
+      ]
+    },
+    {
+      "id": "foundation",
+      "kind": "foundation",
+      "owner": "platform",
+      "directory": "packages/foundation",
+      "chineseName": "基础设施",
+      "description": "Security, state, configuration, and governance primitives.",
+      "publicApi": [
+        "#meshrix/foundation/*"
+      ]
+    },
+    {
+      "id": "agents",
+      "kind": "domain",
+      "owner": "platform",
+      "directory": "packages/agents",
+      "description": "Agent gateway and local agent workspace primitives.",
+      "publicApi": [
+        "#meshrix/agents/*"
+      ]
+    },
+    {
+      "id": "capabilities",
+      "kind": "domain",
+      "owner": "platform",
+      "directory": "packages/capabilities",
+      "description": "Operation Permission and capability catalog.",
+      "publicApi": [
+        "#meshrix/capabilities/*"
+      ]
+    },
+    {
+      "id": "protocols-mcp",
+      "kind": "protocol",
+      "owner": "platform",
+      "directory": "packages/protocols/mcp",
+      "description": "MCP gateway adapter.",
+      "publicApi": [
+        "#meshrix/protocols/*"
+      ]
+    },
+    {
+      "id": "server-runtime",
+      "kind": "runtime",
+      "owner": "platform",
+      "directory": "packages/server-runtime",
+      "description": "Server composition runtime.",
+      "publicApi": [
+        "#meshrix/server-runtime/*"
+      ]
+    },
+    {
+      "id": "ui-console",
+      "kind": "ui",
+      "owner": "frontend",
+      "directory": "packages/ui-console",
+      "description": "Shared console domain services and portable UI contracts.",
+      "publicApi": [
+        "#meshrix/ui-console/*",
+        "#meshrix/ui-console/bridge-http",
+        "#meshrix/ui-console/page-refresh",
+        "#meshrix/ui-console/rpc-client",
+        "#meshrix/ui-console/error-message",
+        "#meshrix/ui-console/binary-checkbox",
+        "#meshrix/ui-console/workspaces-view-context",
+        "#meshrix/ui-console/server-console-shell-context",
+        "#meshrix/ui-console/console-format-utils",
+        "#meshrix/ui-console/console-client-display-utils",
+        "#meshrix/ui-console/option-bar",
+        "#meshrix/ui-console/status-pill"
+      ]
+    },
+    {
+      "id": "server-app",
+      "kind": "app",
+      "owner": "platform",
+      "directory": "apps/server",
+      "description": "Node server process bootstrap.",
+      "publicApi": []
+    },
+    {
+      "id": "console-app",
+      "kind": "app",
+      "owner": "frontend",
+      "directory": "apps/console",
+      "description": "Vue console application.",
+      "publicApi": []
+    }
+  ]
+}

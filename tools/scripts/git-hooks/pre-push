@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+zero_oid=0000000000000000000000000000000000000000
+repo_root="$(git rev-parse --show-toplevel)"
+updates_file="$(mktemp -t meshrix-pre-push)"
+trap 'rm -f "$updates_file"' EXIT HUP INT TERM
+cat > "$updates_file"
+
+while read local_ref local_sha remote_ref remote_sha
+do
+  case "$remote_ref" in
+    refs/heads/nightly|refs/heads/stable|refs/heads/release)
+      echo "Direct pushes to protected branches are not allowed: $remote_ref" >&2
+      echo "Push a temporary branch and open a pull request instead." >&2
+      exit 1
+      ;;
+    *)
+      ;;
+  esac
+
+  # A deleted remote ref has no outgoing local history to inspect.
+  if [ "$local_sha" = "$zero_oid" ]; then
+    continue
+  fi
+
+  if [ "$remote_sha" = "$zero_oid" ]; then
+    outgoing_commits=$(git rev-list "$local_sha") || exit 1
+  else
+    outgoing_commits=$(git rev-list "$local_sha" "^$remote_sha") || exit 1
+  fi
+
+  for commit in $outgoing_commits
+  do
+    if [ -n "$(git ls-tree -r --name-only "$commit" -- docs/plans docs/reports)" ]; then
+      echo "Push blocked: local process documents are present in outgoing history." >&2
+      echo "Keep docs/plans and docs/reports outside published Git history." >&2
+      exit 1
+    fi
+  done
+done < "$updates_file"
+
+node "$repo_root/tools/scripts/verify-git-publication.mjs" --pre-push < "$updates_file"

@@ -1,0 +1,221 @@
+version: 1
+owner: apps-console
+routes:
+  - routePath: /welcome
+    viewFile: apps/console/views/LandingView.vue
+    features:
+      - featureId: landing.welcome
+        actions:
+          - landing.welcome.view
+
+  - routePath: /login
+    viewFile: apps/console/views/LoginView.vue
+    features:
+      - featureId: auth.console-login
+        actions:
+          - auth.login.view
+          - auth.login.submit
+
+  - routePath: /workspaces
+    viewFile: apps/console/views/WorkspacesView.vue
+    features:
+      - featureId: workspace.navigation
+        actions:
+          - workspace.list
+          - workspace.open
+          - workspace.switch
+      - featureId: workspace.gateway-context
+        actions:
+          - workspace.gateway-scope.inspect
+          - workspace.context-bundle.export
+          - workspace.context-bundle.restore
+
+  - routePath: /
+    viewFile: apps/console/views/DashboardView.vue
+    features:
+      - featureId: dashboard.home
+        actions:
+          - dashboard.overview
+          - dashboard.quick-navigation
+
+  - routePath: /approval
+    viewFile: apps/console/views/ApprovalFlowView.vue
+    features:
+      - featureId: approval.workflow
+        actions:
+          - approval.mcp-authorize.review
+          - approval.operation-permission-pending.review
+          - approval.gateway-policy.review
+          - approval.refresh
+
+  - routePath: /admin/storage
+    viewFile: apps/console/views/admin/StorageView.vue
+    features:
+      - featureId: admin.storage-control
+        actions:
+          - admin.storage.overview
+          - admin.storage.maintenance
+
+  - routePath: /admin/jobs
+    viewFile: apps/console/views/admin/JobsView.vue
+    features:
+      - featureId: admin.jobs-control
+        actions:
+          - admin.jobs.list
+          - admin.jobs.control
+
+  - routePath: /admin/logs
+    viewFile: apps/console/views/admin/LogsView.vue
+    features:
+      - featureId: admin.logs-observability
+        actions:
+          - admin.logs.list
+          - admin.logs.filter
+
+  - routePath: /admin/ops-monitor
+    viewFile: apps/console/views/admin/OpsMonitorView.vue
+    features:
+      - featureId: admin.ops-monitor
+        actions:
+          - admin.ops-monitor.health
+          - admin.ops-monitor.alerts
+
+  - routePath: /admin/strategy-management
+    viewFile: apps/console/views/admin/StrategyManagementView.vue
+    features:
+      - featureId: admin.strategy-management
+        actions:
+          - admin.strategy-management.index
+          - admin.strategy-management.navigate
+
+  - routePath: /admin/tag-management
+    viewFile: apps/console/views/admin/TagManagementView.vue
+    features:
+      - featureId: admin.tag-management
+        actions:
+          - admin.tag-management.tags.list
+          - admin.tag-management.tags.update
+          - admin.tag-management.projections.inspect
+          - admin.tag-management.audit.inspect
+
+  - routePath: /admin/version-release
+    viewFile: apps/console/views/admin/VersionReleaseView.vue
+    features:
+      - featureId: admin.version-release
+        actions:
+          - admin.version-release.baseline
+
+  - routePath: /admin/version-assembly
+    viewFile: apps/console/views/admin/VersionAssemblyView.vue
+    features:
+      - featureId: admin.version-assembly
+        actions:
+          - admin.version-assembly.plan
+          - admin.version-assembly.promote
+
+  - routePath: /admin/production-health
+    viewFile: apps/console/views/admin/ProductionHealthView.vue
+    features:
+      - featureId: admin.production-health
+        actions:
+          - admin.production-health.summary
+          - admin.production-health.coverage
+          - admin.production-health.gates
+          - admin.production-health.history
+
+  - routePath: /admin/tool-list
+    viewFile: apps/console/views/admin/ToolsView.vue
+    features:
+      - featureId: admin.tools-list
+        actions:
+          - admin.tools.list
+
+  - routePath: /admin/tool-governance
+    viewFile: apps/console/views/admin/ToolsView.vue
+    features:
+      - featureId: admin.tools-governance
+        actions:
+          - admin.tools.governance.inspect
+          - admin.tools.governance.manage
+
+  - routePath: /admin/tool-stats
+    viewFile: apps/console/views/admin/ToolsView.vue
+    features:
+      - featureId: admin.tools-statistics
+        actions:
+          - admin.tools.metrics
+          - admin.tools.audit
+
+  - routePath: /admin/operation-permission
+    viewFile: apps/console/views/admin/OperationPermissionView.vue
+    features:
+      - featureId: admin.operation-permission
+        actions:
+          - admin.operation-permission.list
+          - admin.operation-permission.update
+      - featureId: admin.operation-permission-governance
+        actions:
+          - admin.tools.catalog.inspect
+          - admin.tools.policy.evaluate
+          - admin.tools.grants.manage
+
+  - routePath: /admin/modules
+    viewFile: apps/console/views/admin/ModulesView.vue
+    features:
+      - featureId: admin.modules-management
+        actions:
+          - admin.modules.list
+          - admin.modules.status
+      - featureId: admin.gateway-mount-governance
+        actions:
+          - admin.modules.gateway-mount.configure
+          - admin.modules.mounts.reload
+          - admin.modules.generation.inspect
+
+  - routePath: /admin/agent-config
+    viewFile: apps/console/views/admin/AgentConfigView.vue
+    features:
+      - featureId: admin.agent-config
+        actions:
+          - admin.agent-config.view
+          - admin.agent-config.update
+
+  - routePath: /admin/agent-assignment
+    viewFile: apps/console/views/admin/AgentAssignmentView.vue
+    features:
+      - featureId: admin.agent-assignment
+        actions:
+          - admin.agent-assignment.view
+          - admin.agent-assignment.update
+          - admin.agent-assignment.probe
+
+  - routePath: /admin/context-management
+    viewFile: apps/console/views/admin/ContextManagementView.vue
+    features:
+      - featureId: admin.context-management
+        actions:
+          - admin.context-management.profiles
+          - admin.context-management.preview
+          - admin.context-management.replay
+          - admin.context-management.export
+
+  - routePath: /admin/upstream-services
+    viewFile: apps/console/views/admin/UpstreamGatewayView.vue
+    features:
+      - featureId: admin.upstream-services
+        actions:
+          - admin.upstream-services.list
+      - featureId: admin.gateway-routes
+        actions:
+          - admin.gateway-routes.audit
+          - admin.gateway-routes.metrics
+
+  - routePath: /admin/maintenance-agent
+    viewFile: apps/console/views/admin/MaintenanceAgentView.vue
+    features:
+      - featureId: admin.maintenance-agent
+        actions:
+          - admin.maintenance-agent.runbook
+          - admin.maintenance-agent.audit
+
+systemConfigTabs: []
