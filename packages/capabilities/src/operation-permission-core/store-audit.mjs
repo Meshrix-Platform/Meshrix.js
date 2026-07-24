@@ -1,4 +1,4 @@
-import { redactOperationAuditValue } from "@lico/foundation/security/operation-audit";
+import { redactOperationAuditValue } from "@meshrix/foundation/security/operation-audit";
 import { hashValue, executionResultSummary } from "./store-models.mjs";
 import { nowIso, parseJson, randomId, stringifyJson } from "./store-utils.mjs";
 
@@ -17,16 +17,16 @@ function metricRetentionPolicy(input = {}) {
   const source = input && typeof input === "object" ? input : {};
   return {
     retentionDays: positiveInteger(
-      source.retentionDays ?? process.env.LICO_METRIC_RETENTION_DAYS,
+      source.retentionDays ?? process.env.MESHRIX_METRIC_RETENTION_DAYS,
       DEFAULT_METRIC_RETENTION_DAYS,
       3660
     ),
     maxToolMetricRows: positiveInteger(
-      source.maxToolMetricRows ?? process.env.LICO_MAX_TOOL_METRIC_ROWS,
+      source.maxToolMetricRows ?? process.env.MESHRIX_MAX_TOOL_METRIC_ROWS,
       DEFAULT_MAX_TOOL_METRIC_ROWS
     ),
     maxHttpRequestMetricRows: positiveInteger(
-      source.maxHttpRequestMetricRows ?? process.env.LICO_MAX_HTTP_METRIC_ROWS,
+      source.maxHttpRequestMetricRows ?? process.env.MESHRIX_MAX_HTTP_METRIC_ROWS,
       DEFAULT_MAX_HTTP_METRIC_ROWS
     ),
     maintenanceInterval: positiveInteger(

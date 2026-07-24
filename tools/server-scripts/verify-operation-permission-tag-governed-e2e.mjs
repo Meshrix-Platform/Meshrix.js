@@ -112,8 +112,8 @@ try {
     assert.equal(Number(rebuild.count || 0) >= Object.keys(ENTITY_REFS).length, true);
     const gateway = await registerGatewayFixture();
     const grant = await createLocalGrant();
-    assert.equal(grant.grant?.toolsets?.includes("lico.gateway.read"), true);
-    assert.equal(grant.grant?.toolsets?.includes("lico.gateway.write"), true);
+    assert.equal(grant.grant?.toolsets?.includes("meshrix.gateway.read"), true);
+    assert.equal(grant.grant?.toolsets?.includes("meshrix.gateway.write"), true);
     setPrimaryGrant(grant);
     const capabilities = await refreshCapabilities();
     return {
@@ -133,7 +133,7 @@ try {
   await test("audit metrics and cleanup close the tag-governed E2E loop", workflows.verifyAuditMetricsAndCleanup);
 } catch (error) {
   console.error(`FAIL: ${redactText(error?.message || String(error))}`);
-  if (process.env.LICO_VERIFY_VERBOSE) {
+  if (process.env.MESHRIX_VERIFY_VERBOSE) {
     console.error(`stage=${redactText(error?.stage || "unknown")} reason=${redactText(error?.reasonCode || "unknown")}`);
     console.error(redactText(error?.stack || String(error)));
     if (error?.cause) console.error(redactText(error.cause?.stack || error.cause?.message || String(error.cause)));

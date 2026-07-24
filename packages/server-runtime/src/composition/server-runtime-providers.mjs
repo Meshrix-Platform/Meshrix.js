@@ -1,32 +1,32 @@
 import path from "node:path";
 
-import { loadSettings } from "#lico/settings";
-import { getAgentConfigRegistry } from "#lico/agents/agent-configs/config-registry";
-import { createAgentRuntimeProvider } from "#lico/agents/agent-runtime-provider";
+import { loadSettings } from "#meshrix/settings";
+import { getAgentConfigRegistry } from "#meshrix/agents/agent-configs/config-registry";
+import { createAgentRuntimeProvider } from "#meshrix/agents/agent-runtime-provider";
 import {
   createUpstreamGatewayRegistry,
   createUpstreamManifestObserver,
   createUpstreamPublishingApplication,
   createUpstreamManifestSnapshotCommitter
-} from "#lico/agents/upstream-gateway/index";
-import { createWorkspaceGovernanceRegistry } from "#lico/agents/workspace-governance/index";
+} from "#meshrix/agents/upstream-gateway/index";
+import { createWorkspaceGovernanceRegistry } from "#meshrix/agents/workspace-governance/index";
 import {
   CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION,
   createContributionRegistry
-} from "#lico/agents/workspace-contribution";
-import { createWorkspaceAssetRegistry } from "#lico/agents/workspace-asset-registry/index";
-import { createToolSkillManagementProvider } from "#lico/capabilities/skills/tool-skill-management-provider";
-import { createOperationPermissionPlatform } from "#lico/capabilities/operation-permission-core/index";
-import { createOperationPermissionStore } from "#lico/capabilities/operation-permission-core/store";
-import { broadcastAudienceCatalogInvalidation } from "#lico/protocols/mcp/adapter/http-mcp-adapter";
+} from "#meshrix/agents/workspace-contribution";
+import { createWorkspaceAssetRegistry } from "#meshrix/agents/workspace-asset-registry/index";
+import { createToolSkillManagementProvider } from "#meshrix/capabilities/skills/tool-skill-management-provider";
+import { createOperationPermissionPlatform } from "#meshrix/capabilities/operation-permission-core/index";
+import { createOperationPermissionStore } from "#meshrix/capabilities/operation-permission-core/store";
+import { broadcastAudienceCatalogInvalidation } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
 import { disconnectMcpSseConnectionsByGrant } from "../state/sse-connection-state.mjs";
 import {
   buildExecutiveReport,
   createExecutiveReportStore
-} from "#lico/foundation/observability/executive-report";
-import { createReadinessBaselineProvider } from "#lico/foundation/observability/readiness-baseline/baseline-provider";
-import { createSampleCapabilityPackStore } from "#lico/foundation/observability/sample-capability-pack";
-import { createSecurityAlertStore } from "#lico/foundation/security/security-alerts";
+} from "#meshrix/foundation/observability/executive-report";
+import { createReadinessBaselineProvider } from "#meshrix/foundation/observability/readiness-baseline/baseline-provider";
+import { createSampleCapabilityPackStore } from "#meshrix/foundation/observability/sample-capability-pack";
+import { createSecurityAlertStore } from "#meshrix/foundation/security/security-alerts";
 import { bindOperationDispatcher } from "./dispatch-operation.mjs";
 import {
   appendUploadSessionChunk,
@@ -469,8 +469,8 @@ export function createServerConsoleDomainServices({
   const runtimeAgentConfigRegistry = () => getAgentConfigRegistry({
     rootPath: path.join(userDataPath, "agent-configs")
   });
-  const loadAgentGatewayModule = () => import("#lico/agents/agent-gateway/index");
-  const loadModelProbeModule = () => import("#lico/agents/agent-gateway/model-probe/index");
+  const loadAgentGatewayModule = () => import("#meshrix/agents/agent-gateway/index");
+  const loadModelProbeModule = () => import("#meshrix/agents/agent-gateway/model-probe/index");
   const agentRuntimeProvider = createAgentRuntimeProvider({
     getAgentConfigRegistry: runtimeAgentConfigRegistry,
     loadAgentGatewayModule,
@@ -533,7 +533,7 @@ export async function createServerRuntimeProviders({
     const needsAgentMemory = isFeatureActive("agent-memory") || needsContextRuntime;
     const agentMemory = await createProvider(
       needsAgentMemory,
-      "#lico/agents/agent-memory/index",
+      "#meshrix/agents/agent-memory/index",
       "createAgentMemory",
       [{ userDataPath }]
     );
@@ -542,7 +542,7 @@ export async function createServerRuntimeProviders({
       if (!isFeatureActive("agent-gateway")) {
         throw new Error("AgentGateway feature is not active in this feature edition.");
       }
-      const { callAgentGateway } = await import("#lico/agents/agent-gateway/index");
+      const { callAgentGateway } = await import("#meshrix/agents/agent-gateway/index");
       return callAgentGateway({
         ...options,
         input,
@@ -551,7 +551,7 @@ export async function createServerRuntimeProviders({
     };
     const contextRuntime = await createProvider(
       needsContextRuntime,
-      "#lico/server-runtime/state/interface/index",
+      "#meshrix/server-runtime/state/interface/index",
       "createContextRuntime",
       [{
         userDataPath,
@@ -573,7 +573,7 @@ export async function createServerRuntimeProviders({
     let maintenanceAgent = null;
     const maintenanceWorkQueue = await createProvider(
       maintenanceAgentEnabled,
-      "#lico/server-runtime/composition/maintenance-work-queue-provider",
+      "#meshrix/server-runtime/composition/maintenance-work-queue-provider",
       "createMaintenanceWorkQueueProvider",
       maintenanceAgentEnabled
         ? [{
@@ -581,7 +581,7 @@ export async function createServerRuntimeProviders({
             getMaintenanceAgent: () => maintenanceAgent,
             capabilitySelected: true,
             autoStart: false,
-            consumerEnabled: process.env.LICO_MAINTENANCE_WORKER_EXTERNAL !== "1"
+            consumerEnabled: process.env.MESHRIX_MAINTENANCE_WORKER_EXTERNAL !== "1"
           }]
         : []
     );
@@ -590,7 +590,7 @@ export async function createServerRuntimeProviders({
     }
     maintenanceAgent = await createProvider(
       maintenanceAgentEnabled,
-      "#lico/agents/maintenance/index",
+      "#meshrix/agents/maintenance/index",
       "createMaintenanceAgentService",
       maintenanceAgentEnabled
         ? [{
@@ -608,7 +608,7 @@ export async function createServerRuntimeProviders({
             operationConcurrencyScope,
             operationPermissionStore: maintenanceOperationPermissionStore,
             workQueuePort: maintenanceWorkQueue,
-            schedulerEnabled: process.env.LICO_MAINTENANCE_WORKER_EXTERNAL !== "1",
+            schedulerEnabled: process.env.MESHRIX_MAINTENANCE_WORKER_EXTERNAL !== "1",
             logger: runtimeLogger
           }]
         : []
@@ -626,7 +626,7 @@ export async function createServerRuntimeProviders({
     }
     const agentWorkspace = await createProvider(
       isFeatureActive("agent-workspace-core"),
-      "#lico/agents/agent-workspace/index",
+      "#meshrix/agents/agent-workspace/index",
       "createAgentWorkspace",
       [{
         userDataPath,
@@ -639,7 +639,7 @@ export async function createServerRuntimeProviders({
     const needsStrategyManagement = isFeatureActive("strategy-management");
     strategyManagementProvider = await createProvider(
       needsStrategyManagement,
-      "#lico/server-runtime/composition/strategy-management-provider",
+      "#meshrix/server-runtime/composition/strategy-management-provider",
       "createStrategyManagementProvider",
       [{
         getOperationPermissionPlatform

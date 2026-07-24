@@ -16,7 +16,7 @@ import {
   redactCompactionValue as redactCompactionValueInternal
 } from "../context-compact/index.mjs";
 
-export const AGENT_CONTEXT_INTERFACE_PROTOCOL_VERSION = "lico.agent_context.interface.v1";
+export const AGENT_CONTEXT_INTERFACE_PROTOCOL_VERSION = "meshrix.agent_context.interface.v1";
 
 // Agent-context is the internal runtime loop; external workflows live outside this interface.
 const DEFAULT_METHODS = Object.freeze([

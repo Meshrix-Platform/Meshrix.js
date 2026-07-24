@@ -65,11 +65,12 @@ function resolveReportPath(value) {
 function createChildEnvironment(runRoot, intervalMs) {
   const environment = { ...process.env };
   delete environment.NODE_OPTIONS;
+  delete environment.ELECTRON_RUN_AS_NODE;
   return {
     ...environment,
     NO_COLOR: "1",
     TMPDIR: runRoot,
-    LICO_PERFORMANCE_OBSERVER_INTERVAL_MS: String(intervalMs)
+    MESHRIX_PERFORMANCE_OBSERVER_INTERVAL_MS: String(intervalMs)
   };
 }
 
@@ -157,7 +158,7 @@ const timeoutMs = boundedInteger(
   600_000
 );
 const reportPath = resolveReportPath(argValue("--report", DEFAULT_REPORT));
-const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-performance-observation-"));
+const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-performance-observation-"));
 const privateLoadReportPath = path.join(runRoot, "mcp-gateway-load.json");
 const observations = [];
 let droppedObservationCount = 0;
@@ -184,7 +185,7 @@ try {
   });
 
   child.on("message", (message) => {
-    if (!message || message.kind !== "lico.performance.runtime-observation") return;
+    if (!message || message.kind !== "meshrix.performance.runtime-observation") return;
     if (!isRuntimePerformanceObservation(message)) {
       invalidObservationCount += 1;
       return;

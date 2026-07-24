@@ -99,7 +99,7 @@ describe("MCP SSE admission", () => {
     request.url = "/mcp?capability=upstream.catalog.list_changed";
     request.headers = {
       authorization: "Bearer redacted",
-      "x-licomesh-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
+      "x-meshrix-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
     };
     request.socket = { remoteAddress: "127.0.0.2" };
     const response = responseFixture();
@@ -151,14 +151,14 @@ describe("MCP SSE admission", () => {
     request.url = "/mcp";
     request.headers = {
       authorization: "Bearer redacted",
-      "x-licomesh-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
+      "x-meshrix-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
     };
     request.socket = { remoteAddress: "127.0.0.7" };
     const response = responseFixture();
     const message = {
       jsonrpc: "2.0",
       id: 7,
-      method: "lico/catalog/acknowledge",
+      method: "meshrix/catalog/acknowledge",
       params: {
         sourceRevision: 2,
         catalogRevision: "catalog-2",

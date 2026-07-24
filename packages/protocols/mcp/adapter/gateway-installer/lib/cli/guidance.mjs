@@ -17,7 +17,7 @@ export function shellCommandForInstall({
   includeToken = false,
   tokenEnv = ""
 } = {}) {
-  const parts = ["lico-mcp", "install", "--target", target];
+  const parts = ["meshrix-mcp", "install", "--target", target];
   if (includeUrl) {
     parts.push("--url", shellQuote(baseUrl));
   }
@@ -54,14 +54,14 @@ export function appendGuidanceContextArgs(parts, { baseUrl = "", tokenEnv = DEFA
 }
 
 export function shellCommandForScan({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV } = {}) {
-  const parts = ["lico-mcp", "scan"];
+  const parts = ["meshrix-mcp", "scan"];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv });
   parts.push("--json");
   return parts.join(" ");
 }
 
 export function shellCommandForDiscoverLocal({ includeUrl = false, baseUrl = "" } = {}) {
-  const parts = ["lico-mcp", "discover-local"];
+  const parts = ["meshrix-mcp", "discover-local"];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv: DEFAULT_TOKEN_ENV });
   parts.push("--json");
   return parts.join(" ");
@@ -73,7 +73,7 @@ export function shellCommandForDoctor({
   baseUrl = "",
   tokenEnv = DEFAULT_TOKEN_ENV
 } = {}) {
-  const parts = ["lico-mcp", "doctor"];
+  const parts = ["meshrix-mcp", "doctor"];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv });
   if (includeToken) {
     parts.push("--token-stdin");
@@ -83,14 +83,14 @@ export function shellCommandForDoctor({
 }
 
 export function shellCommandForUninstall({ target = "codex", includeUrl = false, baseUrl = "" } = {}) {
-  const parts = ["lico-mcp", "uninstall", "--target", target];
+  const parts = ["meshrix-mcp", "uninstall", "--target", target];
   appendGuidanceContextArgs(parts, { includeUrl, baseUrl, tokenEnv: DEFAULT_TOKEN_ENV });
   parts.push("--json");
   return parts.join(" ");
 }
 
 export function shellCommandForServerConfig({ baseUrl = "http://127.0.0.1:7228" } = {}) {
-  return `lico-mcp server-config --set --url ${shellQuote(normalizeBaseUrl(baseUrl) || "http://127.0.0.1:7228")}`;
+  return `meshrix-mcp server-config --set --url ${shellQuote(normalizeBaseUrl(baseUrl) || "http://127.0.0.1:7228")}`;
 }
 
 export function githubOneLineInstallGuidance({ includeUrl = false, baseUrl = "", tokenEnv = DEFAULT_TOKEN_ENV } = {}) {
@@ -168,11 +168,11 @@ export function commandFailureGuidance({ command = "", message = "", options = {
       ...installGuidanceMetadata({ includeUrl, baseUrl, tokenEnv })
     };
   }
-	if (/no signed lico(?:lite)? mcp hub was discovered/.test(lower)) {
+	if (/no signed meshrix(?:lite)? mcp hub was discovered/.test(lower)) {
     const discoverCommand = shellCommandForDiscoverLocal({ includeUrl, baseUrl });
     const fallbackBaseUrl = baseUrl || "http://127.0.0.1:7228";
     return {
-      errorCode: "LICO_HUB_NOT_DISCOVERED",
+      errorCode: "MESHRIX_HUB_NOT_DISCOVERED",
       nextCommand: discoverCommand,
       repairCommands: [
         discoverCommand,
@@ -191,7 +191,7 @@ export function commandFailureGuidance({ command = "", message = "", options = {
       nextCommand: shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
       repairCommands: [
         shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
-        `${tokenEnv}=your-token lico-mcp ${command || "install"} --target ${target}${urlArgs}${tokenEnvArgs} --json`
+        `${tokenEnv}=your-token meshrix-mcp ${command || "install"} --target ${target}${urlArgs}${tokenEnvArgs} --json`
       ],
       ...installGuidanceMetadata({ includeUrl: Boolean(baseUrl), baseUrl, tokenEnv })
     };
@@ -233,7 +233,7 @@ export function commandOptionArgs(options = {}) {
 }
 
 export function candidateInstallCommand(candidate, settings) {
-  const args = ["lico-mcp", "install", "--target", candidate.target];
+  const args = ["meshrix-mcp", "install", "--target", candidate.target];
   if (settings.baseUrl) {
     args.push("--url", shellQuote(settings.baseUrl));
   }

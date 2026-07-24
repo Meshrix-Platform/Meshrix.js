@@ -21,7 +21,7 @@ import { createMaintenanceScheduler } from "../../../packages/agents/src/mainten
 import { maintenanceScheduledRunId } from "../../../packages/agents/src/maintenance/reporting.mjs";
 
 async function withTempUserData(testCase) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-maintenance-agent-config-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-maintenance-agent-config-"));
   try {
     return await testCase(root);
   } finally {
@@ -71,10 +71,10 @@ describe("maintenance agent config normalization", () => {
   });
 
   it("uses stable maintenance-agent state paths and next-run timestamps", () => {
-    const root = "/tmp/lico-user-data";
-    expect(getMaintenanceAgentConfigPath(root)).toBe("/tmp/lico-user-data/maintenance-agent.json");
-    expect(getMaintenanceAgentAuditPath(root)).toBe("/tmp/lico-user-data/maintenance-agent-audit.jsonl");
-    expect(getMaintenanceAgentRunsPath(root)).toBe("/tmp/lico-user-data/maintenance-agent-runs.jsonl");
+    const root = "/tmp/meshrix-user-data";
+    expect(getMaintenanceAgentConfigPath(root)).toBe("/tmp/meshrix-user-data/maintenance-agent.json");
+    expect(getMaintenanceAgentAuditPath(root)).toBe("/tmp/meshrix-user-data/maintenance-agent-audit.jsonl");
+    expect(getMaintenanceAgentRunsPath(root)).toBe("/tmp/meshrix-user-data/maintenance-agent-runs.jsonl");
     expect(computeNextRunAt({ intervalMinutes: 30 }, new Date("2026-06-03T00:00:00.000Z"))).toBe(
       "2026-06-03T00:30:00.000Z",
     );

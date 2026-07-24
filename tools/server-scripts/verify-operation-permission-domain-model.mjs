@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const DEFAULT_REPORT_PATH = "build/reports/operation-permission-domain-model.json";
@@ -71,10 +71,10 @@ async function readJson(relativeFile) {
 
 async function verifyEntityConfigManifests() {
   const expected = [
-    ["packages/foundation/config/entity-config/tools/manifest.json", "lico.operation-permission.entities"],
-    ["packages/foundation/config/entity-config/tools/toolsets/manifest.json", "lico.operation-permission.toolsets"],
-    ["packages/foundation/config/entity-config/tools/scopes/manifest.json", "lico.operation-permission.scopes"],
-    ["packages/foundation/config/entity-config/tools/profiles/manifest.json", "lico.operation-permission.profiles"]
+    ["packages/foundation/config/entity-config/tools/manifest.json", "meshrix.operation-permission.entities"],
+    ["packages/foundation/config/entity-config/tools/toolsets/manifest.json", "meshrix.operation-permission.toolsets"],
+    ["packages/foundation/config/entity-config/tools/scopes/manifest.json", "meshrix.operation-permission.scopes"],
+    ["packages/foundation/config/entity-config/tools/profiles/manifest.json", "meshrix.operation-permission.profiles"]
   ];
   const manifests = [];
   for (const [file, expectedEntityType] of expected) {

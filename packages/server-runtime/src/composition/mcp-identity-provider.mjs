@@ -4,7 +4,7 @@ import path from "node:path";
 import {
   MCP_IDENTITY_SCHEMA_VERSION,
   stableStringify
-} from "@lico/protocols/mcp/adapter/mcp-identity";
+} from "@meshrix/protocols/mcp/adapter/mcp-identity";
 
 function base64Url(input) {
   return Buffer.from(input).toString("base64url");

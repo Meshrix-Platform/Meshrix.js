@@ -71,6 +71,7 @@ const TOP_LEVEL_KEYS = Object.freeze([
   "productionBoundaries", "revisionEdges", "protocolCohorts", "scenarios", "counters",
   "resourceBudgets", "observationSchemaVersion", "observations"
 ]);
+const OPTIONAL_TOP_LEVEL_KEYS = Object.freeze(["releaseEvidenceProvenance"]);
 const MAX_COUNTER = 1_000_000;
 const MAX_REPORT_BYTES = 512 * 1024;
 const MAX_DURATION_MS = 300_000;
@@ -93,6 +94,16 @@ function exactKeys(value, keys, field) {
   const expected = [...keys].sort();
   if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
     fail("upstream_service_publishing_report_unknown_field", `${field} fields do not match the report contract.`);
+  }
+}
+
+function exactReportKeys(report) {
+  record(report);
+  const actual = Object.keys(report).sort();
+  const allowed = new Set([...TOP_LEVEL_KEYS, ...OPTIONAL_TOP_LEVEL_KEYS]);
+  if (actual.some((key) => !allowed.has(key)) ||
+      TOP_LEVEL_KEYS.some((key) => !Object.hasOwn(report, key))) {
+    fail("upstream_service_publishing_report_unknown_field", "report fields do not match the report contract.");
   }
 }
 
@@ -507,7 +518,7 @@ export function validateUpstreamServicePublishingReport(report, {
   now = Date.now(),
   maxAgeMs = 24 * 60 * 60 * 1_000
 } = {}) {
-  exactKeys(report, TOP_LEVEL_KEYS, "report");
+  exactReportKeys(report);
   if (report.schemaVersion !== UPSTREAM_SERVICE_PUBLISHING_REPORT_SCHEMA_VERSION ||
       report.verifier !== UPSTREAM_SERVICE_PUBLISHING_VERIFIER ||
       report.producer !== UPSTREAM_SERVICE_PUBLISHING_VERIFIER ||

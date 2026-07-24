@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://licomesh.local/schema/plugin-manifest.schema.json",
-  "title": "LicoMesh Plugin Manifest",
+  "$id": "https://meshrix.local/schema/plugin-manifest.schema.json",
+  "title": "Meshrix Plugin Manifest",
   "type": "object",
   "required": ["schemaVersion", "id", "label", "version"],
   "properties": {

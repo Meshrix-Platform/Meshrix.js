@@ -223,7 +223,7 @@ export function createReleaseCommandSchedule(commands = []) {
 export function defaultReleaseCommandParallelism(env = process.env) {
   const fallback = Math.min(4, Math.max(2, os.availableParallelism?.() || os.cpus().length || 2));
   return normalizedPositiveInteger(
-    env.LICO_RELEASE_PARALLELISM || env.LICO_PRIVATE_E2E_PARALLELISM,
+    env.MESHRIX_RELEASE_PARALLELISM || env.MESHRIX_PRIVATE_E2E_PARALLELISM,
     fallback
   );
 }
@@ -231,7 +231,7 @@ export function defaultReleaseCommandParallelism(env = process.env) {
 function releaseCommandTimeoutMs(command, defaultTimeoutMs, env = process.env) {
   return Math.max(
     1,
-    Number(command.timeoutMs || env.LICO_RELEASE_COMMAND_TIMEOUT_MS || defaultTimeoutMs) ||
+    Number(command.timeoutMs || env.MESHRIX_RELEASE_COMMAND_TIMEOUT_MS || defaultTimeoutMs) ||
       Number(defaultTimeoutMs || 1)
   );
 }

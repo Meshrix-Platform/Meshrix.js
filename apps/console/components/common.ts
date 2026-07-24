@@ -1,4 +1,4 @@
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import AgentModelOptionBar from "./AgentModelOptionBar.vue";
 import BridgeDownloadButton from "./BridgeDownloadButton.vue";
 import BrowseSelectButton from "./BrowseSelectButton.vue";
@@ -15,9 +15,9 @@ import FeatureToggle from "./FeatureToggle.vue";
 import HelpTooltip from "./HelpTooltip.vue";
 import HistorySessionPanel from "./HistorySessionPanel.vue";
 import JsonConfigFileEditor from "./JsonConfigFileEditor.vue";
-import LicoTabs from "./LicoTabs.vue";
+import MeshrixTabs from "./MeshrixTabs.vue";
 import MultiChoiceCardGroup from "./MultiChoiceCardGroup.vue";
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import SafeHtmlBlock from "./SafeHtmlBlock.vue";
 import ScopeSelector from "./ScopeSelector.vue";
 import SegmentedProgressBar from "./SegmentedProgressBar.vue";
@@ -27,7 +27,7 @@ import StatusPill from "./StatusPill.vue";
 import UploadFileListCard from "./UploadFileListCard.vue";
 import WorkspaceFileTree from "./WorkspaceFileTree.vue";
 
-export { AgentModelOptionBar, BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, LicoTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
+export { AgentModelOptionBar, BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
 
 export type CommonComponentRegistration = {
   name: string;
@@ -185,8 +185,8 @@ export const commonComponentRegistry: CommonComponentRegistration[] = [
     usageRule: "页面需要数据表格时优先使用；不要在页面级直接散布 ElTable 配置。",
   },
   {
-    name: "LicoTabs",
-    file: "apps/console/components/LicoTabs.vue",
+    name: "MeshrixTabs",
+    file: "apps/console/components/MeshrixTabs.vue",
     category: "choice",
     description: "二级页签切换标准组件，统一样式、选中态和键盘操作。",
     usageRule: "页面需要页签式二级导航时使用，不手写 tab 列表。",

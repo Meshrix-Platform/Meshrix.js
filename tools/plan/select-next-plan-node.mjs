@@ -8,11 +8,11 @@ import {
   evaluatePlanExecutionEligibility,
   loadPlanExecutionInputs,
 } from "./plan-execution-eligibility.mjs";
-import { verifyEndToEndReleasePlan } from "./verify-end-to-end-release-plan.mjs";
+import { verifyBetterPlan } from "../server-scripts/verify-better-plan.mjs";
 
 const modulePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(modulePath), "../..");
-const OUTPUT_SCHEMA = "licomesh.plan-execution-selection.v1";
+const OUTPUT_SCHEMA = "v0.0.1:meshrix:plan-execution-selection-1";
 const CLOSURE_DECLARATION = /^Scope:\s+Closure:\s+(?:capability|module|scenario)\s+-\s+[^;]+;/u;
 
 function isRecord(value) {
@@ -95,6 +95,7 @@ function selectedNodeProjection(node) {
     status: node.status,
     role: node.role,
     platform: node.platform,
+    profiles: [...node.profiles],
   };
 }
 
@@ -105,12 +106,25 @@ export function boundedSelectionOutput(evaluation, checkpoints) {
       "eligible execution is waiting for a valid prerequisite Plan receipt",
     );
   }
-  assertSelectionContract(evaluation.eligible[0], checkpoints);
+  const selected = evaluation.eligible[0];
+  if (!evaluation.selectedProfile && selected && selected.profiles.length === 1) {
+    const candidateProfiles = new Set(
+      evaluation.eligible.flatMap((candidate) => candidate.profiles),
+    );
+    if (candidateProfiles.size > 1) {
+      throw new PlanExecutionPolicyError(
+        "profile_selection_required",
+        "multiple profile-specific checkpoints are eligible",
+      );
+    }
+  }
+  assertSelectionContract(selected, checkpoints);
   return {
     schema_version: OUTPUT_SCHEMA,
     accepted: true,
     host_platform: evaluation.hostPlatform,
-    selected: selectedNodeProjection(evaluation.eligible[0]),
+    profile: evaluation.selectedProfile,
+    selected: selectedNodeProjection(selected),
     candidate_count: evaluation.candidateCount,
     eligible_count: evaluation.eligible.length,
     deferred_count: evaluation.deferred.length,
@@ -120,14 +134,15 @@ export function boundedSelectionOutput(evaluation, checkpoints) {
 
 export async function selectNextPlanNode({
   selectedRepoRoot = repoRoot,
-  verifyPlan = verifyEndToEndReleasePlan,
+  selectedProfile,
+  verifyPlan = verifyBetterPlan,
   loadInputs = loadPlanExecutionInputs,
 } = {}) {
   try {
     await verifyPlan({
       repoRoot: selectedRepoRoot,
       writeReport: false,
-      requireCompletedReceipts: false,
+      requireCompletedReceipts: true,
     });
   } catch {
     throw new PlanExecutionPolicyError(
@@ -139,6 +154,7 @@ export async function selectNextPlanNode({
   return boundedSelectionOutput(evaluatePlanExecutionEligibility({
     ...inputs,
     hostPlatform: process.platform,
+    selectedProfile,
   }), inputs.checkpoints);
 }
 
@@ -151,10 +167,15 @@ export function boundedSelectionError(error) {
 }
 
 async function main(argv = process.argv.slice(2)) {
-  if (argv.length > 0) {
-    throw new PlanExecutionPolicyError("unsupported_arguments", "plan selection accepts no platform or path overrides");
+  let selectedProfile;
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] !== "--profile" || selectedProfile || !argv[index + 1]) {
+      throw new PlanExecutionPolicyError("unsupported_arguments", "plan selection accepts only one --profile value");
+    }
+    selectedProfile = argv[index + 1];
+    index += 1;
   }
-  process.stdout.write(`${JSON.stringify(await selectNextPlanNode())}\n`);
+  process.stdout.write(`${JSON.stringify(await selectNextPlanNode({ selectedProfile }))}\n`);
 }
 
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === modulePath;

@@ -77,7 +77,7 @@ async function main() {
   assert.equal(verified.packageDigest, sha256Digest(archive));
   checks.push("schema-and-payload-digest");
 
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-bundle-verify-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-bundle-verify-"));
   try {
     let discarded = false;
     const lifecycle = createPluginPackageLifecycle({

@@ -19,12 +19,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="lico-modal-overlay" @click.self="emit('close')">
-    <form class="lico-modal" @submit.prevent="emit('save')">
-      <header class="lico-modal-header">
+  <div class="meshrix-modal-overlay" @click.self="emit('close')">
+    <form class="meshrix-modal" @submit.prevent="emit('save')">
+      <header class="meshrix-modal-header">
         <h3>{{ title }}</h3>
       </header>
-      <div class="lico-modal-body form-grid">
+      <div class="meshrix-modal-body form-grid">
         <label class="full-row">
           <span>配置标识 (Profile ID)</span>
           <input v-model="form.profileId" placeholder="例如: context-256k" />
@@ -55,7 +55,7 @@ const emit = defineEmits<{
         </label>
         <p v-if="formError" class="preset-form-error full-row">{{ formError }}</p>
       </div>
-      <footer class="lico-modal-footer">
+      <footer class="meshrix-modal-footer">
         <button class="tool-button tool-button-ghost" type="button" :disabled="saving" @click="emit('close')">取消</button>
         <button class="tool-button" type="submit" :disabled="saving || !form.profileId.trim()">
           {{ saving ? "保存中" : "保存配置" }}
@@ -67,7 +67,7 @@ const emit = defineEmits<{
 
 <style scoped>
 /* Modal Styles */
-.lico-modal-overlay {
+.meshrix-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.4);
@@ -79,7 +79,7 @@ const emit = defineEmits<{
   animation: fade-in 0.2s ease-out;
 }
 
-.lico-modal {
+.meshrix-modal {
   background: var(--el-bg-color);
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 12px;
@@ -91,12 +91,12 @@ const emit = defineEmits<{
   flex-direction: column;
 }
 
-.lico-modal-header {
+.meshrix-modal-header {
   padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-.lico-modal-header h3 {
+.meshrix-modal-header h3 {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
@@ -104,25 +104,25 @@ const emit = defineEmits<{
   letter-spacing: 0;
 }
 
-.lico-modal-body {
+.meshrix-modal-body {
   padding: 1.5rem;
   overflow-y: auto;
   max-height: 70vh;
 }
 
-.lico-modal-body label {
+.meshrix-modal-body label {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.lico-modal-body label span {
+.meshrix-modal-body label span {
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--el-text-color-regular);
 }
 
-.lico-modal-body input {
+.meshrix-modal-body input {
   width: 100%;
   height: 40px;
   padding: 0 0.75rem;
@@ -134,12 +134,12 @@ const emit = defineEmits<{
   transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
-.lico-modal-body input:focus {
+.meshrix-modal-body input:focus {
   outline: none;
   border-color: var(--el-color-primary);
 }
 
-.lico-modal-body input::placeholder {
+.meshrix-modal-body input::placeholder {
   color: var(--el-text-color-placeholder);
 }
 
@@ -153,7 +153,7 @@ const emit = defineEmits<{
   font-size: 0.875rem;
 }
 
-.lico-modal-footer {
+.meshrix-modal-footer {
   padding: 1.25rem 1.5rem;
   border-top: 1px solid var(--el-border-color-lighter);
   display: flex;
@@ -175,7 +175,7 @@ const emit = defineEmits<{
 }
 
 @media (max-width: 720px) {
-  .lico-modal-footer {
+  .meshrix-modal-footer {
     justify-content: flex-start;
   }
 }

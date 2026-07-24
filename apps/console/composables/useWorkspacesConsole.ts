@@ -1,7 +1,7 @@
 import { computed, ref, watch, type Ref } from 'vue';
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import type { WsSession, WsWorkspace } from '../types/workspaces';
-import { errorMessage } from '@lico/ui-console/error-message';
+import { errorMessage } from '@meshrix/ui-console/error-message';
 import * as workspacesClient from '../lib/workspaces-client';
 import {
   confirmConsoleAction,

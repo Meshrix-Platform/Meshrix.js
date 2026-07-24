@@ -64,8 +64,8 @@ export function createSignedMcpHeaders({
 } = {}) {
   return {
     "Content-Type": "application/json",
-    "X-LicoMesh-Api-Key": token,
-    "X-Lico-MCP-Target": target,
+    "X-Meshrix-Api-Key": token,
+    "X-Meshrix-MCP-Target": target,
     ...createProcessIdentityRequestHeaders({
       privateKeyPem,
       method,

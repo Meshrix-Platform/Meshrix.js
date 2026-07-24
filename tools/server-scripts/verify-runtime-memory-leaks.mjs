@@ -33,8 +33,8 @@ const policy = RESOURCE_DISCIPLINE_POLICY;
 const memoryPolicy = policy.memoryLeak;
 const highRiskPolicy = policy.highRiskWorkloads;
 const selectedHighRiskProfile =
-  process.env.LICO_RESOURCE_LOAD_PROFILE === "release" ? "release" : highRiskPolicy.profile;
-const MESSAGE_KIND = "lico.resource-discipline.memory-sample";
+  process.env.MESHRIX_RESOURCE_LOAD_PROFILE === "release" ? "release" : highRiskPolicy.profile;
+const MESSAGE_KIND = "meshrix.resource-discipline.memory-sample";
 const MAX_CAPTURED_CHILD_OUTPUT_BYTES = 64 * 1024;
 
 function delay(milliseconds) {
@@ -260,33 +260,46 @@ async function writeJsonAtomically(filePath, value) {
   await fs.rename(temporary, filePath);
 }
 
-function createChildEnvironment(runRoot, profilePath) {
+const ISOLATED_CHILD_ENV_KEYS = [
+  "NODE_OPTIONS",
+  "ELECTRON_RUN_AS_NODE",
+  "MESHRIX_ACCEPTANCE_GENERATION_WORKER",
+  "MESHRIX_ACCEPTANCE_PARALLELISM",
+  "MESHRIX_ACCEPTANCE_PROOF_LEDGER_DIR",
+  "MESHRIX_ACCEPTANCE_RELEASE_ID",
+  "MESHRIX_ACCEPTANCE_SKIP_LEDGER_ANCHOR",
+  "MESHRIX_ACCEPTANCE_STARTED_AT_MS",
+  "MESHRIX_EDITION",
+  "MESHRIX_FEATURE_PROFILE",
+  "MESHRIX_RELEASE_PARALLELISM",
+  "MESHRIX_RUNTIME_CONFIG",
+  "MESHRIX_REQUIRE_RUNTIME_CONFIG",
+  "MESHRIX_SERVER_DATA_DIR",
+  "MESHRIX_SERVER_PORT",
+  "MESHRIX_SERVER_READY_FILE"
+];
+
+function createIsolatedChildEnvironment(overrides = {}) {
   const environment = { ...process.env };
-  for (const key of [
-    "NODE_OPTIONS",
-    "LICO_EDITION",
-    "LICO_FEATURE_PROFILE",
-    "LICO_RUNTIME_CONFIG",
-    "LICO_REQUIRE_RUNTIME_CONFIG",
-    "LICO_SERVER_DATA_DIR",
-    "LICO_SERVER_PORT",
-    "LICO_SERVER_READY_FILE"
-  ]) {
+  for (const key of ISOLATED_CHILD_ENV_KEYS) {
     delete environment[key];
   }
-  return {
-    ...environment,
+  return { ...environment, ...overrides };
+}
+
+function createChildEnvironment(runRoot, profilePath) {
+  return createIsolatedChildEnvironment({
     NO_COLOR: "1",
-    LICO_HTTP_RATE_LIMIT_IP_PER_MINUTE: "1000000",
-    LICO_HTTP_RATE_LIMIT_SUBJECT_PER_MINUTE: "1000000",
-    LICO_HTTP_RATE_LIMIT_TENANT_PER_MINUTE: "1000000",
-    LICO_LOG_LEVEL: policy.logging.requiredDefaultLevel,
-    LICO_MEMORY_GC_PASSES: String(memoryPolicy.gcPasses),
-    LICO_MEMORY_PROFILE_INTERVAL_BYTES: String(memoryPolicy.heapProfileIntervalBytes),
-    LICO_MEMORY_PROFILE_STACK_DEPTH: String(memoryPolicy.heapProfileStackDepth),
-    LICO_MEMORY_PROFILE_PATH: profilePath,
+    MESHRIX_HTTP_RATE_LIMIT_IP_PER_MINUTE: "1000000",
+    MESHRIX_HTTP_RATE_LIMIT_SUBJECT_PER_MINUTE: "1000000",
+    MESHRIX_HTTP_RATE_LIMIT_TENANT_PER_MINUTE: "1000000",
+    MESHRIX_LOG_LEVEL: policy.logging.requiredDefaultLevel,
+    MESHRIX_MEMORY_GC_PASSES: String(memoryPolicy.gcPasses),
+    MESHRIX_MEMORY_PROFILE_INTERVAL_BYTES: String(memoryPolicy.heapProfileIntervalBytes),
+    MESHRIX_MEMORY_PROFILE_STACK_DEPTH: String(memoryPolicy.heapProfileStackDepth),
+    MESHRIX_MEMORY_PROFILE_PATH: profilePath,
     TMPDIR: runRoot
-  };
+  });
 }
 
 function compactHighRiskFacts(value) {
@@ -309,7 +322,7 @@ function compactHighRiskFacts(value) {
 
 function compactHighRiskResult(message) {
   if (
-    message?.kind !== "lico.resource-discipline.high-risk-result" ||
+    message?.kind !== "meshrix.resource-discipline.high-risk-result" ||
     message.profile !== selectedHighRiskProfile ||
     message.syntheticDataOnly !== true ||
     !Array.isArray(message.scenarios)
@@ -377,9 +390,9 @@ function compactHighRiskResult(message) {
 async function runHighRiskWorkloads(runRoot) {
   const workloadRoot = path.join(runRoot, "high-risk-workloads");
   await fs.mkdir(workloadRoot, { recursive: true, mode: 0o700 });
-  const environment = { ...process.env };
-  delete environment.NODE_OPTIONS;
-  environment.LICO_RESOURCE_LOAD_PROFILE = selectedHighRiskProfile;
+  const environment = createIsolatedChildEnvironment({
+    MESHRIX_RESOURCE_LOAD_PROFILE: selectedHighRiskProfile
+  });
   const workloadOutput = boundedOutputCollector();
   highRiskChild = spawn(process.execPath, [
     "--expose-gc",
@@ -430,7 +443,7 @@ async function runHighRiskWorkloads(runRoot) {
   }
 }
 
-const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-resource-discipline-"));
+const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-resource-discipline-"));
 const userDataPath = path.join(runRoot, "data");
 const readyFilePath = path.join(runRoot, "private-ready.json");
 const privateProfilePath = path.join(runRoot, "runtime-heap.pb.gz");

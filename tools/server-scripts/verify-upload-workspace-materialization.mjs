@@ -17,13 +17,13 @@ const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 let verifierStage="startup";
 
 async function main(){
- const startedAt=new Date(); const userDataPath=await fs.mkdtemp(path.join(os.tmpdir(),"lico-upload-materialization-")); let server; let verified=false;
+ const startedAt=new Date(); const userDataPath=await fs.mkdtemp(path.join(os.tmpdir(),"meshrix-upload-materialization-")); let server; let verified=false;
  try{
   verifierStage="server-start";
   server=await startHttpServer({userDataPath,distPath:"",port:0,runtimeOptions:{profile:"minimal"}});
   verifierStage="authentication";
   await installAuthenticatedFetch(server,{safetyConfirm:false});
-  const api=async(method,route,body,confirm=true)=>{const response=await fetch(`${server.url}${route}`,{method,headers:{"Content-Type":"application/json",...(confirm?{"x-lico-safety-confirm":"true"}:{})},body:body===undefined?undefined:JSON.stringify(body)});const text=await response.text();return{status:response.status,payload:text?JSON.parse(text):{}}};
+  const api=async(method,route,body,confirm=true)=>{const response=await fetch(`${server.url}${route}`,{method,headers:{"Content-Type":"application/json",...(confirm?{"x-meshrix-safety-confirm":"true"}:{})},body:body===undefined?undefined:JSON.stringify(body)});const text=await response.text();return{status:response.status,payload:text?JSON.parse(text):{}}};
   verifierStage="workspace-create";
   const created=await api("POST","/api/agent-workspaces",{title:"Materialization verification",objective:"Verify governed queued materialization."}); assert.equal(created.status,201); const workspaceId=created.payload.workspace.workspaceId;
   verifierStage="workspace-seed";
@@ -49,7 +49,7 @@ async function main(){
   verifierStage="materialization-replay";
   const replay=await api("POST","/api/jobs/upload-workspace-materializations",request,true); assert.equal(replay.status,200); assert.equal(replay.payload.deduped,true);
   verifierStage="report-finalize";
-  const finishedAt=new Date(); const provenance={producer:"licomesh-core-upload-workspace-materialization",commandId:"upload-workspace-materialization",sourceRevision:await computeVerifierSourceRevision(root,["packages/server-runtime/src/jobs/upload-workspace-materialization.mjs","packages/server-runtime/src/composition/upload-workspace-materialization-provider.mjs",verifier])};
+  const finishedAt=new Date(); const provenance={producer:"meshrix-core-upload-workspace-materialization",commandId:"upload-workspace-materialization",sourceRevision:await computeVerifierSourceRevision(root,["packages/server-runtime/src/jobs/upload-workspace-materialization.mjs","packages/server-runtime/src/composition/upload-workspace-materialization-provider.mjs",verifier])};
   const report=finalizeSensitiveReport({schemaVersion:"v0.0.1:jobs:upload-workspace-materialization-report-1",verifier,generatedAt:finishedAt.toISOString(),startedAt:startedAt.toISOString(),finishedAt:finishedAt.toISOString(),ok:true,summary:{verificationPassed:true,productionComposition:true,canonicalQueue:true,canonicalWorkspaceRevision:true,approvalDenialBeforeAdmission:true,idempotentReplayPassed:true,materializedContentVerified:true},checks:[{id:"approval-denial",status:"passed"},{id:"queued-production-admission",status:"passed"},{id:"canonical-workspace-mutation",status:"passed"},{id:"idempotent-replay",status:"passed"}]},{provenance});
   verifierStage="report-privacy";
   assertNoSensitiveReportLeak(report,"upload workspace materialization report");

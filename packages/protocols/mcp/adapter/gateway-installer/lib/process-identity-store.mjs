@@ -7,12 +7,12 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-export const PROCESS_IDENTITY_STORE_ENV = "LICO_MCP_PROCESS_IDENTITY_STORE";
-export const PROCESS_IDENTITY_WINDOWS_DPAPI_COMMAND_ENV = "LICO_WINDOWS_DPAPI_COMMAND";
+export const PROCESS_IDENTITY_STORE_ENV = "MESHRIX_MCP_PROCESS_IDENTITY_STORE";
+export const PROCESS_IDENTITY_WINDOWS_DPAPI_COMMAND_ENV = "MESHRIX_WINDOWS_DPAPI_COMMAND";
 
-const PROCESS_IDENTITY_CREDENTIAL_SERVICE = "LicoMesh MCP Process Identity";
+const PROCESS_IDENTITY_CREDENTIAL_SERVICE = "Meshrix MCP Process Identity";
 const PROCESS_IDENTITY_CREDENTIAL_TIMEOUT_MS = 8000;
-const DEFAULT_PROCESS_IDENTITY_DIR = path.join(os.homedir(), ".lico", "mcp", "process-identity");
+const DEFAULT_PROCESS_IDENTITY_DIR = path.join(os.homedir(), ".meshrix", "mcp", "process-identity");
 const TARGET_ALIASES = new Map([["open-code", "opencode"]]);
 const SYSTEM_STORE_MODES = new Set([
   "macos-keychain",
@@ -35,7 +35,7 @@ function processIdentityWindowsDpapiPath(target = "codex") {
 }
 
 function processIdentityCredentialAccount(target = "codex") {
-  return `lico-mcp:${normalizeTarget(target) || "mcp"}`;
+  return `meshrix-mcp:${normalizeTarget(target) || "mcp"}`;
 }
 
 function processIdentityStoreMode() {

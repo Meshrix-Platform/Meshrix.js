@@ -17,7 +17,7 @@ const tempRoots = [];
 const kernels = [];
 
 async function createHarness() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-ops-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-ops-"));
   tempRoots.push(userDataPath);
   const storageKernel = createStorageKernel({ userDataPath });
   kernels.push(storageKernel);
@@ -80,7 +80,7 @@ describe("canonical storage operations", () => {
   });
 
   it("hashes an existing object-store destination instead of trusting an equal byte size", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-object-retry-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-object-retry-"));
     tempRoots.push(userDataPath);
     const content = Buffer.from("direct retry bytes");
     const sourcePath = path.join(userDataPath, "staging", "direct.bin");

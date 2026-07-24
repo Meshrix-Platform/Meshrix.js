@@ -1,4 +1,4 @@
-# LicoMesh Deployment Entry Index
+# Meshrix Deployment Entry Index
 
 Start with `packages/foundation/config/deployment/index.json`. It is the machine-readable entry point for Docker presets and the verification commands that prove those entries still match the public implementation.
 

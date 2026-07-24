@@ -51,9 +51,9 @@ function reportFixture() {
       domainBoundary: "console-domain-operation-executor",
       operationSequence,
       dispatchResults,
-      proofBeginCount: operationSequence.length,
-      proofFinishCount: operationSequence.length,
-      auditRecordCount: operationSequence.length,
+      proofBeginCount: 4,
+      proofFinishCount: 4,
+      auditRecordCount: operationSequence.filter((operationId) => operationId !== "storage.backups.list").length,
       authorizationDeniedWithoutSideEffects: true,
       runbookPromotion: { missingTokenCount: 0 },
       operationRegistry: {

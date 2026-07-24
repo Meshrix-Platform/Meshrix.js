@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://licomesh.local/schema/capability-acceptance.schema.json",
+  "$id": "https://meshrix.local/schema/capability-acceptance.schema.json",
   "title": "Capability Acceptance Registry",
   "type": "object",
   "required": ["$schema", "$comment", "version", "generatedAt", "entryCount", "entries"],

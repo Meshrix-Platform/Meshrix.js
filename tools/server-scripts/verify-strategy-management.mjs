@@ -22,7 +22,7 @@ import {
   resolveFeatureRuntime
 } from "../../packages/server-runtime/src/composition/features/feature-manifest.mjs";
 import { executeStrategyManagementOperation } from "../../packages/server-runtime/src/composition/console-domain/operation-executors/runtime-admin-executors.mjs";
-import { dispatchOperation } from "#lico/server-runtime/composition/dispatch-operation";
+import { dispatchOperation } from "#meshrix/server-runtime/composition/dispatch-operation";
 import { reduceCapabilityCheckpoints } from "./capability-acceptance-checkpoint-reducer.mjs";
 import { PLATFORM_ACCEPTANCE_COMMANDS } from "./lib/platform-acceptance-command-catalog.mjs";
 
@@ -89,7 +89,7 @@ const VALID_INPUT_BY_OPERATION = Object.freeze({
   "strategy.agent_policy.evaluate": { roleId: "role-a" },
   "strategy.route_policy.evaluate": { routeId: "route-a", internalCapabilityId: "capability-a" },
   "strategy.queue_policy.evaluate": { queueDefinitionId: "queue-a", operationId: "jobs.create" },
-  "strategy.tool_policy.preview": { toolId: "lico.jobs.list" }
+  "strategy.tool_policy.preview": { toolId: "meshrix.jobs.list" }
 });
 const PRIVATE_REPORT_KEYS = new Set([
   "grantId",
@@ -204,7 +204,7 @@ function assertPreviewOnlyDocumentation() {
   assert.match(doc, /read-only preview/i);
 }
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-strategy-verifier-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-strategy-verifier-"));
 let operationPermissionPlatform = null;
 
 try {
@@ -336,7 +336,7 @@ try {
   assert.deepEqual(sourceIds, generatedIds);
   assert.deepEqual(sourceIds, capabilityIds);
   assert.equal(catalogTools.length, EXPECTED_OPERATION_IDS.length);
-  assert.ok(catalogTools.every((tool) => tool.id.startsWith("lico.strategy.")));
+  assert.ok(catalogTools.every((tool) => tool.id.startsWith("meshrix.strategy.")));
   assert.ok(catalogTools.every((tool) => tool.requiredScopes.includes("console:read")));
   assert.ok(catalogTools.every((tool) => tool.readOnly === true));
 
@@ -422,9 +422,9 @@ try {
   assert.notDeepEqual(stableDecision(queue.payload), stableDecision(queueChanged.payload));
 
   const previewPolicyCallsBefore = operationPermissionPolicyCallCount;
-  const toolPreview = await dispatchStrategy("strategy.tool_policy.preview", { toolId: "lico.jobs.list" });
-  const toolPreviewEquivalent = await dispatchStrategy("strategy.tool_policy.preview", { toolId: "  lico.jobs.list  " });
-  const toolPreviewChanged = await dispatchStrategy("strategy.tool_policy.preview", { toolId: "lico.jobs.get" });
+  const toolPreview = await dispatchStrategy("strategy.tool_policy.preview", { toolId: "meshrix.jobs.list" });
+  const toolPreviewEquivalent = await dispatchStrategy("strategy.tool_policy.preview", { toolId: "  meshrix.jobs.list  " });
+  const toolPreviewChanged = await dispatchStrategy("strategy.tool_policy.preview", { toolId: "meshrix.jobs.get" });
   const toolPreviewCallCount = operationPermissionPolicyCallCount - previewPolicyCallsBefore;
   assert.equal(toolPreview.status, 200);
   assert.equal(toolPreview.payload.decision.policyType, "tool-policy");
@@ -453,9 +453,9 @@ try {
   assert.equal(previewAuditRows.length, toolPreviewCallCount);
   assert.equal(new Set(previewAuditRows.map((row) => row.decision_id)).size, previewAuditRows.length);
   assert.deepEqual(previewAuditRows.map((row) => row.tool_id), [
-    "lico.jobs.list",
-    "lico.jobs.list",
-    "lico.jobs.get"
+    "meshrix.jobs.list",
+    "meshrix.jobs.list",
+    "meshrix.jobs.get"
   ]);
   for (const row of previewAuditRows) {
     assert.equal(typeof row.decision_id, "string");
@@ -471,7 +471,7 @@ try {
 
   const governedPolicyCallsBefore = operationPermissionPolicyCallCount;
   const governedFollowUp = await operationPermissionPlatform.runtime.executeTool({
-    toolId: "lico.gateway.forward",
+    toolId: "meshrix.gateway.forward",
     input: {
       serviceId: "strategy-verifier-service",
       previewDecision: toolPreview.payload.decision
@@ -481,7 +481,7 @@ try {
       id: "strategy-verifier-current-grant",
       label: "Strategy verifier current grant",
       scopes: ["gateway:write"],
-      toolsets: ["lico.gateway.write"]
+      toolsets: ["meshrix.gateway.write"]
     }
   });
   assert.equal(operationPermissionPolicyCallCount - governedPolicyCallsBefore, 1);
@@ -516,17 +516,17 @@ try {
   const versionRegistry = JSON.parse(fsSync.readFileSync(VERSION_REGISTRY_PATH, "utf8"));
   const activeVersions = collectVersionRegistryActiveVersions(versionRegistry);
   assert.equal(
-    activeVersions.get("lico.strategy.strategy-management"),
+    activeVersions.get("meshrix.strategy.strategy-management"),
     STRATEGY_PROTOCOL_VERSION,
     "strategy provider protocol version must match the version registry"
   );
   assert.equal(
-    activeVersions.get("lico.strategy.strategy-management-verification-report"),
+    activeVersions.get("meshrix.strategy.strategy-management-verification-report"),
     STRATEGY_REPORT_SCHEMA_VERSION,
     "strategy verification report schema must match the version registry"
   );
   assert.equal(
-    activeVersions.get("lico.strategy.strategy-management-browser-report"),
+    activeVersions.get("meshrix.strategy.strategy-management-browser-report"),
     STRATEGY_BROWSER_REPORT_SCHEMA_VERSION,
     "strategy browser report schema must match the version registry"
   );

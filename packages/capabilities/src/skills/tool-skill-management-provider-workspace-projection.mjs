@@ -175,8 +175,8 @@ export function sanitizeInternalPaths(value) {
 export function sanitizeSensitiveMcpText(value) {
   return String(value || "")
     .replace(/\b(Authorization\s*:\s*Bearer\s+)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
-    .replace(/\b(X-LicoMesh-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
-    .replace(/\b(x-lico-tool-token\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
+    .replace(/\b(X-Meshrix-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
+    .replace(/\b(x-meshrix-tool-token\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/(^|[\s"'=:(])(--token(?:=|\s+))[^\s"',;)\]}]+/gi, "$1$2<redacted-token>")
     .replace(/\b(token|access_token|refresh_token|api_key|apiKey|secret|password)=([^\s"',;)\]}]+)/gi, "$1=<redacted-secret>");
 }
@@ -281,7 +281,7 @@ export function isSensitiveMcpOutputKey(key = "") {
     "idtoken",
     "apikey",
     "xlicoapikey",
-    "xlicomeshapikey",
+    "xmeshrixapikey",
     "xlicotooltoken",
     "secret",
     "clientsecret",
@@ -290,4 +290,3 @@ export function isSensitiveMcpOutputKey(key = "") {
     "privatekeyjwk"
   ].includes(normalized);
 }
-

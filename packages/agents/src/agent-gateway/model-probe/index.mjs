@@ -3,8 +3,8 @@ import { modelLibraryAgentReadiness } from "../policy-validation.mjs";
 import { assertModelAssistedEgressAllowed } from "../model-egress-policy.mjs";
 import { redactSecretText, truncateText } from "../shared.mjs";
 
-const PROBE_EXPECTED_ANSWER = "LicoProbeOK";
-const PROBE_PROMPT = `This is a LicoMesh model connectivity probe. Reply only with: ${PROBE_EXPECTED_ANSWER}`;
+const PROBE_EXPECTED_ANSWER = "MeshrixProbeOK";
+const PROBE_PROMPT = `This is a Meshrix model connectivity probe. Reply only with: ${PROBE_EXPECTED_ANSWER}`;
 const SUPPORTED_MODEL_PROVIDERS = new Set([
   "openai",
   "deepseek",

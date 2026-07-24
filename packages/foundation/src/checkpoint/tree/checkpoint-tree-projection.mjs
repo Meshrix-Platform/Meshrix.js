@@ -1,11 +1,11 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { randomUUID } from "node:crypto";
 import {
   PACTIUM_PACKAGE_VERSION,
   PACTIUM_PROTOCOL,
   PACTIUM_SCHEMA_VERSION
 } from "pactium";
-import { assertServerToken, serverToken } from "#lico/client-strings";
+import { assertServerToken, serverToken } from "#meshrix/client-strings";
 import { queueStateMutation } from "../../storage/state-coordinator.mjs";
 import {
   normalizeLicoPactiumRuntime,
@@ -15,10 +15,10 @@ import {
 export const CHECKPOINT_TREE_PROJECTION_PROTOCOL = PACTIUM_PROTOCOL;
 export const CHECKPOINT_TREE_PROJECTION_PROVIDER = "pactium.checkpoint-projection";
 
-const TREE_SCOPE = "licomesh-checkpoint-tree";
-const INDEX_SCOPE = "licomesh-checkpoint-tree-index";
+const TREE_SCOPE = "meshrix-checkpoint-tree";
+const INDEX_SCOPE = "meshrix-checkpoint-tree-index";
 const INDEX_KEY = "tree-ids";
-const TREE_TYPE = "licomesh.checkpoint-tree";
+const TREE_TYPE = "meshrix.checkpoint-tree";
 const OWNS_PACTIUM_RUNTIME = Symbol("ownsPactiumRuntime");
 
 const VALID_NODE_STATUS = new Set(["pending", "running", "paused", "completed", "failed", "skipped"]);

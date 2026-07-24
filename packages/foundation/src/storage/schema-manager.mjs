@@ -15,7 +15,7 @@ export function getStorageDatabaseDirectory(userDataPath) {
 }
 
 export function getStorageDatabasePath(userDataPath) {
-  return path.join(getStorageDatabaseDirectory(userDataPath), "lico.sqlite");
+  return path.join(getStorageDatabaseDirectory(userDataPath), "meshrix.sqlite");
 }
 
 export function initializeStorageSchema(db, { schemaContributors = [] } = {}) {

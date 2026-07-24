@@ -255,7 +255,7 @@ export async function closeHttpServerRuntime({
 
   const drainTimeoutMs = parsePositiveInt(
     runtimeOptions.httpCloseDrainTimeoutMs,
-    parsePositiveInt(process.env.LICO_HTTP_CLOSE_DRAIN_TIMEOUT_MS, 30_000)
+    parsePositiveInt(process.env.MESHRIX_HTTP_CLOSE_DRAIN_TIMEOUT_MS, 30_000)
   );
   const drained = await lifecycle.waitForDrain(drainTimeoutMs);
 

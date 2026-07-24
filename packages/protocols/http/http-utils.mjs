@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { resolveWithin } from "#lico/client-strings";
+import { resolveWithin } from "#meshrix/client-strings";
 
 // Re-export sendJson from foundation (canonical location)
-export { sendJson } from "#lico/http-response";
+export { sendJson } from "#meshrix/http-response";
 
 const CONTENT_TYPES = new Map([
   [".html", "text/html; charset=utf-8"],

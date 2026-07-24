@@ -19,7 +19,7 @@ import { createJobProjectionStore } from "../../../packages/server-runtime/src/j
 
 const MIB = 1024 * 1024;
 const rootPath = path.resolve(String(process.argv[2] || ""));
-const releaseProfile = process.env.LICO_RESOURCE_LOAD_PROFILE === "release";
+const releaseProfile = process.env.MESHRIX_RESOURCE_LOAD_PROFILE === "release";
 const eventCount = releaseProfile ? 1_000_000 : 100_000;
 const jobCount = releaseProfile ? 100_000 : 10_000;
 const auditWriteCount = releaseProfile ? 100_000 : 10_000;
@@ -317,7 +317,7 @@ async function runJobScenario() {
           elapsedMs: performance.now() - startedAt
         });
       }
-      if ((index + 1) % 512 === 0) {
+      if ((index + 1) % 64 === 0) {
         await new Promise((resolve) => setImmediate(resolve));
       }
     }
@@ -514,7 +514,7 @@ async function runManifestScenario() {
       setRevision: last.setRevision,
       setDigest: last.setDigest
     });
-    if ((index + 1) % 128 === 0) await new Promise((resolve) => setImmediate(resolve));
+    if ((index + 1) % 16 === 0) await new Promise((resolve) => setImmediate(resolve));
   }
   const snapshot = await store.getSnapshot();
   assert(snapshot.serviceCount === 1, "manifest_snapshot_service_count_mismatch");
@@ -599,7 +599,7 @@ async function main() {
   scenarios.push(await measureScenario("service_manifest", manifestCommitCount, runManifestScenario));
   scenarios.push(await measureScenario("backup_snapshot", 2, runBackupScenario));
   const result = {
-    kind: "lico.resource-discipline.high-risk-result",
+    kind: "meshrix.resource-discipline.high-risk-result",
     profile: releaseProfile ? "release" : "quick",
     syntheticDataOnly: true,
     scenarios

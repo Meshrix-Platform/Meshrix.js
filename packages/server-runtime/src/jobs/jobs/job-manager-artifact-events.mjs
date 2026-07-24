@@ -4,7 +4,7 @@ import {
   startCheckpointTree,
   upsertCheckpointNode,
   workflowId
-} from "#lico/product-api";
+} from "#meshrix/product-api";
 import { normalizeManifestKey } from "./job-manager-validation.mjs";
 import { persistJobMeta, persistJobTerminal } from "./job-manager-persistence.mjs";
 

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 const LOCK_DIRECTORY = "locks";
 const RUNTIME_LEASE_FILE = "storage-runtime.lease";

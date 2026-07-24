@@ -1,12 +1,12 @@
 /**
- * Runtime JSONL Logger — LicoMesh structured logging with OTel alignment.
+ * Runtime JSONL Logger — Meshrix structured logging with OTel alignment.
  *
  * OTel Semantic Convention Fields (adoption baseline):
  *   service.name, service.version
  *   process.pid, process.command
  *   ci.workflow.name, ci.job.name
  *   gen_ai.operation.name
- *   lico.operation.id, lico.workspace.id, lico.capability.id, lico.receipt.id
+ *   meshrix.operation.id, meshrix.workspace.id, meshrix.capability.id, meshrix.receipt.id
  *
  * process.pid is already emitted in log entry metadata.
  * Other fields are adopted incrementally as dispatch paths are instrumented.
@@ -15,21 +15,21 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getTraceContext, traceDetails } from "./trace-context.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { OTEL_SEMANTIC_FIELDS } from "./otel-semantic-fields.mjs";
 
 // ── OTel Attribute Registry ─────────────────────────────────────────────────
 // Literal field names used in runtime log record instrumentation.
 const RUNTIME_LOG_OTEL_ATTRIBUTES = Object.freeze({
-  "service.name": "licomesh-server",
+  "service.name": "meshrix-server",
   "service.version": "0.0.1",
   "ci.workflow.name": null,
   "ci.job.name": null,
   "gen_ai.operation.name": null,
-  "lico.operation.id": null,
-  "lico.workspace.id": null,
-  "lico.capability.id": null,
-  "lico.receipt.id": null,
+  "meshrix.operation.id": null,
+  "meshrix.workspace.id": null,
+  "meshrix.capability.id": null,
+  "meshrix.receipt.id": null,
 });
 
 const DEFAULT_RETENTION_DAYS = 14;
@@ -143,7 +143,7 @@ function normalizeLogLevel(value, fallback = "debug") {
 function resolveLogDirectory({ runtimeOptions = {}, userDataPath = "" } = {}) {
   const explicit = String(
     runtimeOptions.logDir ||
-      process.env.LICO_LOG_DIR ||
+      process.env.MESHRIX_LOG_DIR ||
       ""
   ).trim();
   if (explicit) {
@@ -429,7 +429,7 @@ function normalizeEventRecord({ component, level, event, details }) {
     level,
     component,
     event: sanitizeString(event, 160),
-    [OTEL_SEMANTIC_FIELDS.serviceName]: "licomesh-server",
+    [OTEL_SEMANTIC_FIELDS.serviceName]: "meshrix-server",
     [OTEL_SEMANTIC_FIELDS.serviceVersion]: process.env.npm_package_version || "0.0.1",
     [OTEL_SEMANTIC_FIELDS.processPid]: process.pid,
     [OTEL_SEMANTIC_FIELDS.processCommand]: irreversibleSecurityDigest(process.argv, {
@@ -471,12 +471,12 @@ export function createRuntimeLogger({
   userDataPath = "",
   runtimeOptions = {},
   component = "server",
-  retentionDays = process.env.LICO_LOG_RETENTION_DAYS,
-  maxTotalBytes = runtimeOptions.logMaxTotalBytes || process.env.LICO_LOG_MAX_TOTAL_BYTES,
-  maxFileBytes = runtimeOptions.logMaxFileBytes || process.env.LICO_LOG_MAX_FILE_BYTES,
-  maxPendingRecords = runtimeOptions.logMaxPendingRecords || process.env.LICO_LOG_MAX_PENDING_RECORDS,
-  maxRecordBytes = runtimeOptions.logMaxRecordBytes || process.env.LICO_LOG_MAX_RECORD_BYTES,
-  level = runtimeOptions.logLevel || process.env.LICO_LOG_LEVEL
+  retentionDays = process.env.MESHRIX_LOG_RETENTION_DAYS,
+  maxTotalBytes = runtimeOptions.logMaxTotalBytes || process.env.MESHRIX_LOG_MAX_TOTAL_BYTES,
+  maxFileBytes = runtimeOptions.logMaxFileBytes || process.env.MESHRIX_LOG_MAX_FILE_BYTES,
+  maxPendingRecords = runtimeOptions.logMaxPendingRecords || process.env.MESHRIX_LOG_MAX_PENDING_RECORDS,
+  maxRecordBytes = runtimeOptions.logMaxRecordBytes || process.env.MESHRIX_LOG_MAX_RECORD_BYTES,
+  level = runtimeOptions.logLevel || process.env.MESHRIX_LOG_LEVEL
 } = {}) {
   const logDir = resolveLogDirectory({ runtimeOptions, userDataPath });
   const safeRetentionDays = normalizeRetentionDays(retentionDays);
@@ -502,7 +502,7 @@ export function createRuntimeLogger({
 
   function logPathFor(date = new Date(), index = 0) {
     const suffix = index > 0 ? `.${index}` : "";
-    return path.join(logDir, `licomesh-${component}-${datePart(date)}${suffix}.jsonl`);
+    return path.join(logDir, `meshrix-${component}-${datePart(date)}${suffix}.jsonl`);
   }
 
   async function currentLogPath() {
@@ -535,7 +535,7 @@ export function createRuntimeLogger({
     const entries = await fs.readdir(logDir, { withFileTypes: true }).catch(() => []);
     const logFiles = [];
     for (const entry of entries) {
-      if (!entry.isFile() || !/^licomesh-.+\.jsonl$/.test(entry.name)) {
+      if (!entry.isFile() || !/^meshrix-.+\.jsonl$/.test(entry.name)) {
         continue;
       }
       const filePath = path.join(logDir, entry.name);

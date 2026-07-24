@@ -110,7 +110,7 @@ export function reduceReleaseEvidenceStates({
     RELEASE_EVIDENCE_STATES.map((state) => [state, nodes.filter((node) => node.state === state).length])
   );
   return Object.freeze({
-    schemaVersion: "licomesh.release-evidence.state-reduction.v1",
+    schemaVersion: "v0.0.1:meshrix:release-evidence-state-reduction-1",
     states: RELEASE_EVIDENCE_STATES,
     nodes,
     stateCounts,

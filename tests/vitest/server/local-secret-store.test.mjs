@@ -16,7 +16,7 @@ import {
 } from "../../../packages/foundation/src/security/secrets/local-secret-store.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)));
-const cliEntrypoint = path.join(repoRoot, "apps", "server", "bin", "lico.mjs");
+const cliEntrypoint = path.join(repoRoot, "apps", "server", "bin", "meshrix.mjs");
 const SECRET_REF = "secret://fixture/service-material";
 const MATERIAL_ALPHA = "fixture-material-alpha";
 const MATERIAL_BETA = "fixture-material-beta";
@@ -89,7 +89,7 @@ async function readRegistry() {
 }
 
 beforeEach(async () => {
-  dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-secret-"));
+  dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-secret-"));
   target = targetContract();
   targetFile = path.join(dataDir, "target.json");
   await fs.writeFile(targetFile, `${JSON.stringify(target, null, 2)}\n`, { mode: 0o600 });
@@ -335,11 +335,11 @@ describe("local secret CLI", () => {
       "--target-file",
       targetFile,
       "--from-env",
-      "LICO_TEST_SECRET_MATERIAL"
+      "MESHRIX_TEST_SECRET_MATERIAL"
     ]), {
       cwd: repoRoot,
       encoding: "utf8",
-      env: { ...process.env, LICO_TEST_SECRET_MATERIAL: MATERIAL_ALPHA }
+      env: { ...process.env, MESHRIX_TEST_SECRET_MATERIAL: MATERIAL_ALPHA }
     });
     expect(envPayload.status).toBe(1);
     expect(envPayload.stderr).toContain("--payload-key is required");

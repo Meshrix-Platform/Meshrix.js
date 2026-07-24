@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { assertPathWithinRootSync } from "@lico/foundation/security/local-path-boundary";
+import { assertPathWithinRootSync } from "@meshrix/foundation/security/local-path-boundary";
 import { WORKSPACE_FILE_MAX_BYTES } from "./agent-workspace-core.mjs";
 
 function boundedPath(root, absolutePath, options = {}) {
@@ -120,7 +120,7 @@ export function writeFileAtomically(
     allowDirectory: false,
     allowFile: true
   });
-  const temporaryPath = path.join(path.dirname(absolutePath), `.lico-restore-${randomUUID()}.tmp`);
+  const temporaryPath = path.join(path.dirname(absolutePath), `.meshrix-restore-${randomUUID()}.tmp`);
   let descriptor;
   try {
     descriptor = fs.openSync(

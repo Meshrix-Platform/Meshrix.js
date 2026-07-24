@@ -1,11 +1,11 @@
 {
-  "name": "@lico/agents",
+  "name": "@meshrix/agents",
   "version": "0.0.1",
-  "description": "LicoMesh agent library, collaboration, relay domain, memory/context contracts",
+  "description": "Meshrix agent library, collaboration, relay domain, memory/context contracts",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "packages/agents"
   },
   "engines": {
@@ -13,9 +13,9 @@
   },
   "type": "module",
   "dependencies": {
-    "@lico/contracts": "0.0.1",
-    "@lico/foundation": "0.0.1",
-    "@lico/protocols": "0.0.1"
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
   },
   "exports": {
     "./workspace-contribution": "./src/workspace-contribution/index.mjs",

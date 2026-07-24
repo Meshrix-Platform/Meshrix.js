@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { stableStringify } from "../../../mcp-identity.mjs";
+import { stableStringify } from "../../mcp-identity.mjs";
 import { deleteProcessIdentity, loadProcessIdentity, saveProcessIdentity } from "../process-identity-store.mjs";
 import { DEFAULT_TOKEN_ENV, packageJson, TARGET_LOCATIONS, msg } from "./constants.mjs";
 import { mcpTargetHeaders, normalizeBaseUrl, normalizeTarget, option, targetLabel } from "./basic-utils.mjs";
@@ -32,7 +32,7 @@ export function selectionGlyph(selected) {
 
 export function renderInstallMenu({ candidates, index, selectedIds, baseUrl, message = "", mode = "install" }) {
   const action = mode === "uninstall" ? "uninstall" : "install";
-  const title = mode === "uninstall" ? msg("LicoMesh MCP uninstall", "LicoMesh MCP 卸载") : msg("LicoMesh MCP install", "LicoMesh MCP 安装");
+  const title = mode === "uninstall" ? msg("Meshrix MCP uninstall", "Meshrix MCP 卸载") : msg("Meshrix MCP install", "Meshrix MCP 安装");
   const mcpLine = baseUrl ? `MCP: ${baseUrl}/mcp` : msg("MCP: no server URL required for local client removal", "MCP: 本地卸载无需服务端 URL");
   const rows = [
     "\x1b[2J\x1b[H",
@@ -56,7 +56,7 @@ export function renderInstallMenu({ candidates, index, selectedIds, baseUrl, mes
 export function renderAutoUpdateMenu({ enabled }) {
   const rows = [
     "\x1b[2J\x1b[H",
-    msg("LicoMesh MCP Auto-Update Preference", "LicoMesh MCP 自动推送更新设置"),
+    msg("Meshrix MCP Auto-Update Preference", "Meshrix MCP 自动推送更新设置"),
     "",
     msg("Do you want to enable automatic push updates?", "您是否希望启用自动推送更新？"),
     msg("If enabled, your local AI agent will automatically download and install updates when the server pushes them.", "如果启用，当服务端推送更新时，您的本地 AI 智能体将自动下载并安装更新。"),
@@ -90,9 +90,9 @@ export async function chooseAutoUpdate() {
       stdin.pause();
       process.stdout.write("\x1b[?25h\n");
     };
-    
+
     renderAutoUpdateMenu({ enabled });
-    
+
     const onData = (chunk) => {
       const key = chunk.toString("utf8");
       if (key === "\u0003") {
@@ -110,7 +110,7 @@ export async function chooseAutoUpdate() {
         renderAutoUpdateMenu({ enabled });
       }
     };
-    
+
     if (stdin.setRawMode) {
       stdin.setRawMode(true);
     }
@@ -213,7 +213,7 @@ export async function chooseUninstallCandidates({ candidates, baseUrl }) {
     index = 0;
   }
   const selectedIds = new Set();
-  let message = msg("Space selects one or more clients. Enter removes LicoMesh MCP from selected clients.", "空格键选择一个或多个客户端，Enter 键确认移除所选客户端的 LicoMesh MCP 服务。");
+  let message = msg("Space selects one or more clients. Enter removes Meshrix MCP from selected clients.", "空格键选择一个或多个客户端，Enter 键确认移除所选客户端的 Meshrix MCP 服务。");
   return new Promise((resolve, reject) => {
     const stdin = process.stdin;
     const wasRaw = stdin.isRaw;
@@ -348,7 +348,7 @@ export async function resolveInteractiveToken(options) {
     return token;
   }
   const tokenEnv = String(option(options, "token-env", DEFAULT_TOKEN_ENV));
-  const entered = await promptLine(`LicoMesh MCP token (${tokenEnv}): `, { hidden: true });
+  const entered = await promptLine(`Meshrix MCP token (${tokenEnv}): `, { hidden: true });
   if (!entered) {
     throw new Error(`Missing token. Provide --token-stdin or ${tokenEnv}.`);
   }
@@ -412,7 +412,7 @@ async function requestApprovedLocalMcpGrant(options, requestPayload) {
   const deadline = Date.now() + timeoutMs;
   process.stderr.write(
     `MCP installation authorization ${requestId} is pending. ` +
-    `Approve verification code ${verificationCode} in the authenticated LicoMesh console.\n`
+    `Approve verification code ${verificationCode} in the authenticated Meshrix console.\n`
   );
   while (Date.now() < deadline) {
     let consumeResponse;
@@ -424,7 +424,7 @@ async function requestApprovedLocalMcpGrant(options, requestPayload) {
           timeoutMs: 10000,
           headers: {
             "Content-Type": "application/json",
-            "x-lico-authorization-claim": claimToken
+            "x-meshrix-authorization-claim": claimToken
           },
           body: "{}"
         }
@@ -485,13 +485,13 @@ export async function requestLocalMcpGrant(options, { targets = [], autoUpdate =
   const processIdentityClaim = createProcessIdentityClaim(target);
   const responsePayload = await requestApprovedLocalMcpGrant(options, {
     targets: targetList,
-    label: `LicoMesh MCP ${targetList.length ? targetList.map(targetLabel).join(", ") : "local agent"}`,
+    label: `Meshrix MCP ${targetList.length ? targetList.map(targetLabel).join(", ") : "local agent"}`,
     connectorVersion: packageJson.version,
     processIdentity: processIdentityClaim.request,
     autoUpdate
   });
   if (!responsePayload?.token || !responsePayload?.processIdentity?.clientIdentityPackage) {
-    throw new Error("Failed to request local LicoMesh MCP process identity package.");
+    throw new Error("Failed to request local Meshrix MCP process identity package.");
   }
   const material = localMcpGrantTargetMaterial({
     settings,
@@ -591,13 +591,13 @@ export async function requestLocalMcpGrantBatch(options, { targets = [], autoUpd
   );
   const responsePayload = await requestApprovedLocalMcpGrant(options, {
     targets: targetList,
-    label: `LicoMesh MCP ${targetList.map(targetLabel).join(", ")}`,
+    label: `Meshrix MCP ${targetList.map(targetLabel).join(", ")}`,
     connectorVersion: packageJson.version,
     processIdentities,
     autoUpdate
   });
   if (responsePayload?.ok === false || !responsePayload?.targetGrants) {
-    throw new Error("Failed to request batched local LicoMesh MCP process identity packages.");
+    throw new Error("Failed to request batched local Meshrix MCP process identity packages.");
   }
   const issuerIdentity = issuerIdentityFromDiscovery(options.__licoDiscovery);
   const materials = [];
@@ -622,7 +622,7 @@ export async function requestLocalMcpGrantBatch(options, { targets = [], autoUpd
           .filter(Boolean)
       );
       await rollbackIssuedCredentialMaterials(rollbackMaterials);
-      throw new Error(`Failed to request local LicoMesh MCP process identity package for ${targetLabel(target)}.`);
+      throw new Error(`Failed to request local Meshrix MCP process identity package for ${targetLabel(target)}.`);
     }
     materials.push(localMcpGrantTargetMaterial({
       settings,
@@ -734,7 +734,7 @@ async function notifyCredentialUninstall({
     body
   });
   if (!response.ok || response.payload?.ok === false) {
-    throw new Error(`Failed to update the LicoMesh MCP device list after uninstall (HTTP ${response.status}).`);
+    throw new Error(`Failed to update the Meshrix MCP device list after uninstall (HTTP ${response.status}).`);
   }
   return {
     ok: true,
@@ -825,9 +825,9 @@ export async function notifyLocalMcpUninstall(options, { targets = [], expectedG
       });
     } catch (error) {
       const detail = String(error?.message || "");
-      const safeDetail = /^(?:No stored MCP|The stored MCP|Failed to update the LicoMesh MCP device list)/u.test(detail)
+      const safeDetail = /^(?:No stored MCP|The stored MCP|Failed to update the Meshrix MCP device list)/u.test(detail)
         ? detail
-        : `Failed to update the LicoMesh MCP device list for ${targetLabel(target)}.`;
+        : `Failed to update the Meshrix MCP device list for ${targetLabel(target)}.`;
       perTarget[target] = {
         ok: false,
         serverDeviceRemoved: false,
@@ -1031,9 +1031,9 @@ export async function resolveHubForInstall(options) {
     };
   }
   if (!canUseInstallTui(options)) {
-    throw new Error(`${discovered.reason} Run lico-mcp server-config --set --url <lico-url>, or rerun install in a TTY and choose manual configuration.`);
+    throw new Error(`${discovered.reason} Run meshrix-mcp server-config --set --url <meshrix-url>, or rerun install in a TTY and choose manual configuration.`);
   }
-  console.log("No signed LicoMesh MCP service was discovered on this device.");
+  console.log("No signed Meshrix MCP service was discovered on this device.");
   console.log("The installer will not write any agent client config until a server identity signature is verified.");
   console.log("");
   const answer = await promptLine("Choose: [c]onfigure server URL now, [s]kip, manually configure later [s]: ");
@@ -1044,14 +1044,14 @@ export async function resolveHubForInstall(options) {
         ok: false,
         skipped: true,
         attempts: discovered.attempts,
-        reason: "Skipped. Manually configure later with lico-mcp server-config --set --url <lico-url>."
+        reason: "Skipped. Manually configure later with meshrix-mcp server-config --set --url <meshrix-url>."
       }
     };
   }
   if (!answer.toLowerCase().startsWith("c")) {
     return resolveHubForInstall(options);
   }
-  const url = await promptLine("LicoMesh server URL: ");
+  const url = await promptLine("Meshrix server URL: ");
   const manual = await discoverLicoHub({ ...options, url });
   if (!manual.ok) {
     throw new Error(`Failed to verify ${url}: ${manual.reason}`);

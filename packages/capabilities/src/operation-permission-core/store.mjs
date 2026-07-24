@@ -1,16 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import {
   createCommandCapabilitySecurityClient
-} from "@lico/foundation/security/authorization/capability-security-helper-client";
+} from "@meshrix/foundation/security/authorization/capability-security-helper-client";
 import {
   createOpaqueCapabilityKeyProvider
-} from "@lico/foundation/security/authorization/opaque-capability-key";
+} from "@meshrix/foundation/security/authorization/opaque-capability-key";
 import {
   createCapabilityBindingGuard
-} from "@lico/foundation/security/authorization/capability-binding-guard";
-import { createSecurityAlertStore } from "@lico/foundation/security/security-alerts";
+} from "@meshrix/foundation/security/authorization/capability-binding-guard";
+import { createSecurityAlertStore } from "@meshrix/foundation/security/security-alerts";
 import { createAuditStoreMethods } from "./store-audit.mjs";
 import { createGrantStoreMethods } from "./store-grants.mjs";
 import { createMetricsStoreMethods } from "./store-metrics.mjs";
@@ -91,19 +91,19 @@ export function createOperationPermissionStore({
     db = openSqliteDatabase(getOperationPermissionDatabasePath(userDataPath));
     ensureSchema(db);
     securityHelperClient = (!capabilityKeyProvider && !capabilityBindingGuard && isEnabled(
-      process.env.LICO_TOOL_GRANT_CAPABILITY_SECURITY_HELPER ||
-        process.env.LICO_CAPABILITY_SECURITY_HELPER
+      process.env.MESHRIX_TOOL_GRANT_CAPABILITY_SECURITY_HELPER ||
+        process.env.MESHRIX_CAPABILITY_SECURITY_HELPER
     ))
       ? createCommandCapabilitySecurityClient({
           dataDir: userDataPath,
-          backend: process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
-            process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER ||
+          backend: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
+            process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
             "auto",
-          alias: process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "lico-tool-grants",
-          bindingBackend: process.env.LICO_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
-            process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER ||
+          alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants",
+          bindingBackend: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
+            process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
             "auto",
-          bindingAlias: process.env.LICO_TOOL_GRANT_BINDING_GUARD_ALIAS || "lico-tool-bindings"
+          bindingAlias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
         })
       : null;
     resolvedCapabilityKeyProvider =
@@ -111,10 +111,10 @@ export function createOperationPermissionStore({
       securityHelperClient ||
       createOpaqueCapabilityKeyProvider({
         dataDir: userDataPath,
-        backend: process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
-          process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER ||
+        backend: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
+          process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
           "auto",
-        alias: process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "lico-tool-grants"
+        alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants"
       });
     resolvedCapabilityBindingGuard = capabilityBindingGuard === false
       ? null
@@ -122,10 +122,10 @@ export function createOperationPermissionStore({
         securityHelperClient ||
         createCapabilityBindingGuard({
           dataDir: userDataPath,
-          backend: process.env.LICO_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
-            process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER ||
+          backend: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
+            process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
             "auto",
-          alias: process.env.LICO_TOOL_GRANT_BINDING_GUARD_ALIAS || "lico-tool-bindings"
+          alias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
         });
     return createOperationPermissionStoreFromResources({
       db,

@@ -163,7 +163,7 @@ export async function executeUpstreamToolViaGatewayForward({
     ? configuredToolId
     : visibleTool?._meta?.upstreamMcp === true && projectedToolsCallId
       ? projectedToolsCallId
-      : "lico.gateway.forward";
+      : "meshrix.gateway.forward";
   const result = await toolSkillManagementProvider.executeTool({
     toolId: executionToolId,
     input,

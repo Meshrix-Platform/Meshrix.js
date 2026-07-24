@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { sendJson, serveStaticFile } from "#lico/http-utils";
+import { sendJson, serveStaticFile } from "#meshrix/http-utils";
 
 function shouldRenderConsoleIndexFallback(pathname) {
   return pathname === "/" || pathname === "/console" || pathname === "/index.html";
@@ -46,7 +46,7 @@ export async function handleStaticFallback({
   if (url.pathname === "/" && !distPath) {
     sendJson(response, 200, {
       ok: true,
-      service: "LicoMesh Server",
+      service: "Meshrix Server",
       serverId: discoveryState.serverId,
       activeServiceUrl: discoveryState.activeServiceUrl
     });

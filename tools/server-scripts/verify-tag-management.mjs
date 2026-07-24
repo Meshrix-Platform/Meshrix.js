@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PROTOCOL_OPERATION_DEFINITIONS } from "#lico/contracts/operations/protocol-operation-definitions";
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
-import { operationFeatureId } from "#lico/contracts/operations/operation-feature-resolution";
+import { PROTOCOL_OPERATION_DEFINITIONS } from "#meshrix/contracts/operations/protocol-operation-definitions";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
+import { operationFeatureId } from "#meshrix/contracts/operations/operation-feature-resolution";
 import { CONSOLE_ROLES } from "../../packages/foundation/src/security/auth/console-auth.mjs";
 import { createAuthorizationGovernanceStore } from "../../packages/foundation/src/security/authorization/authorization-governance-store.mjs";
 import { createSecurityPermissionsProvider } from "../../packages/foundation/src/security/security-permissions-provider.mjs";
 import { createToolCatalogRegistry } from "../../packages/capabilities/src/operation-permission-core/catalog.mjs";
 import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/tags/tag-store.adapter.mjs";
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-tag-management-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-tag-management-"));
 
 function repoPolicy(resourceId, actions = ["repo:write"], providers = ["github"]) {
   return {
@@ -146,7 +146,7 @@ try {
     {
       id: "verify-tag-profile",
       label: "Verify Tag Profile",
-      toolsets: ["lico.runtime.read"],
+      toolsets: ["meshrix.runtime.read"],
       maxRisk: "read_only"
     }
   ]);
@@ -154,7 +154,7 @@ try {
     {
       id: "verify-tag-profile",
       label: "Verify Tag Profile Duplicate",
-      toolsets: ["lico.runtime.read"],
+      toolsets: ["meshrix.runtime.read"],
       maxRisk: "read_only"
     }
   ]);
@@ -171,9 +171,9 @@ try {
     profiles: toolProfiles
   });
   assert.equal(registry.listProfiles().some((profile) => profile.id === "verify-tag-profile"), true);
-  assert.equal(registry.getToolByOperationId("tag_management.tags.list")?.id, "lico.tagManagement.tags.list");
+  assert.equal(registry.getToolByOperationId("tag_management.tags.list")?.id, "meshrix.tagManagement.tags.list");
   assert.equal(registry.getToolByOperationId("tag_management.tags.upsert")?.requiredScopes.includes("auth:admin"), true);
-  assert.equal(registry.getToolByOperationId("authorization.departments.list")?.id, "lico.authorization.departments.list");
+  assert.equal(registry.getToolByOperationId("authorization.departments.list")?.id, "meshrix.authorization.departments.list");
   assert.equal(registry.getToolByOperationId("authorization.departments.upsert")?.requiredScopes.includes("auth:admin"), true);
 
   const tagOperations = SERVER_API_OPERATIONS.filter((operation) => operation.id.startsWith("tag_management."));

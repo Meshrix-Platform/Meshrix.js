@@ -4,7 +4,7 @@ import {
   createPlatformRegistry,
   registerPlatformService,
   requirePlatformInterface
-} from "#lico/platform-registry";
+} from "#meshrix/platform-registry";
 
 describe("platform interactive registry", () => {
   it("registers common-platform interfaces, lists public metadata, and calls function values", async () => {

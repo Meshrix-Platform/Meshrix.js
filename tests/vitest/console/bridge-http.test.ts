@@ -14,13 +14,13 @@ vi.mock("../../../packages/ui-console/src/browser-downloads", () => ({
   triggerBrowserDownload: triggerBrowserDownloadMock,
 }));
 
-type BridgeHttpModule = typeof import("@lico/ui-console/bridge-http");
+type BridgeHttpModule = typeof import("@meshrix/ui-console/bridge-http");
 
 const originalFetch = globalThis.fetch;
 
 async function loadBridgeHttp(): Promise<BridgeHttpModule> {
   vi.resetModules();
-  return import("@lico/ui-console/bridge-http");
+  return import("@meshrix/ui-console/bridge-http");
 }
 
 function jsonResponse(payload: unknown, init: ResponseInit = {}) {
@@ -77,9 +77,9 @@ describe("bridge-http JSON helpers", () => {
     expect(postCall[1].headers).toMatchObject({
       Accept: "application/json",
       "Content-Type": "application/json",
-      "x-lico-safety-confirm": "true",
+      "x-meshrix-safety-confirm": "true",
     });
-    expect(postCall[1].headers["x-lico-csrf"]).toBeUndefined();
+    expect(postCall[1].headers["x-meshrix-csrf"]).toBeUndefined();
 
     await getJson("/api/session");
     expect(fetchMock().mock.calls[1][1]).toMatchObject({
@@ -87,15 +87,15 @@ describe("bridge-http JSON helpers", () => {
       credentials: "same-origin",
       headers: {
         Accept: "application/json",
-        "x-lico-csrf": "token-1",
+        "x-meshrix-csrf": "token-1",
       },
     });
 
     await deleteJson("/api/sessions/old", { safetyConfirm: true });
     expect(fetchMock().mock.calls[2][1].headers).toMatchObject({
       Accept: "application/json",
-      "x-lico-csrf": "token-1",
-      "x-lico-safety-confirm": "true",
+      "x-meshrix-csrf": "token-1",
+      "x-meshrix-safety-confirm": "true",
     });
 
     const blob = new Blob(["abc"], { type: "application/octet-stream" });
@@ -106,7 +106,7 @@ describe("bridge-http JSON helpers", () => {
       credentials: "same-origin",
       headers: {
         Accept: "application/json",
-        "x-lico-csrf": "token-2",
+        "x-meshrix-csrf": "token-2",
       },
     });
   });

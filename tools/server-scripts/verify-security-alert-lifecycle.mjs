@@ -19,11 +19,11 @@ import {
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const reportPath = path.join(repoRoot, "build", "reports", "security-alert-lifecycle.json");
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-security-alerts-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-security-alerts-"));
 const VERIFIER = "tools/server-scripts/verify-security-alert-lifecycle.mjs";
 const COMMAND_ID = "security-alert-lifecycle";
 const REPORT_SCHEMA_VERSION = "v0.0.1:security:alert-lifecycle-report-1";
-const PLAN_FILE = "docs/plans/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
+const PLAN_FILE = "docs/plans/end-to-end-release/enterprise-single-node/Plan.md";
 const REQUIREMENTS = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES = Object.freeze([
   "packages/foundation/src/observability/alert-service.mjs",
@@ -129,7 +129,7 @@ try {
   assert.equal(exported.itemCount, 1);
   assert.equal(exported.reportLeakScan, true);
   assertReportProvenance(exported, {
-    producer: "licomesh-core-security-alerts",
+    producer: "meshrix-core-security-alerts",
     commandId: "security_alerts.export",
     sourceRevision: store.protocolVersion
   });
@@ -191,7 +191,7 @@ try {
 
   const revision = await computeVerifierSourceRevision(repoRoot, SOURCE_FILES);
   const provenance = {
-    producer: "licomesh-core-observability",
+    producer: "meshrix-core-observability",
     commandId: COMMAND_ID,
     sourceRevision: revision
   };

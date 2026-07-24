@@ -264,14 +264,14 @@ export async function resolveFeatureRuntimeFromEnv({
     args["feature-profile"] ||
     args.featureProfile ||
     runtimeOptions.featureProfile ||
-    env.LICO_FEATURE_PROFILE ||
+    env.MESHRIX_FEATURE_PROFILE ||
     "";
   const profile = await loadFeatureProfile(profilePath);
   return resolveFeatureRuntime({
     edition:
       args.edition ||
       runtimeOptions.edition ||
-      env.LICO_EDITION ||
+      env.MESHRIX_EDITION ||
       DEFAULT_EDITION,
     profile: profile || {},
     enableFeatures: [
@@ -279,13 +279,13 @@ export async function resolveFeatureRuntimeFromEnv({
       ...splitFeatureList(args.enableFeatures),
       ...splitFeatureList(runtimeOptions.features),
       ...splitFeatureList(runtimeOptions.enableFeatures),
-      ...splitFeatureList(env.LICO_FEATURES)
+      ...splitFeatureList(env.MESHRIX_FEATURES)
     ],
     disableFeatures: [
       ...splitFeatureList(args["without-features"]),
       ...splitFeatureList(args.disableFeatures),
       ...splitFeatureList(runtimeOptions.disableFeatures),
-      ...splitFeatureList(env.LICO_DISABLED_FEATURES)
+      ...splitFeatureList(env.MESHRIX_DISABLED_FEATURES)
   ]
 });
 }

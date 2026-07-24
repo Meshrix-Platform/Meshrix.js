@@ -1,7 +1,7 @@
 import path from "node:path";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
-import { ensurePrivateDir } from "#lico/foundation/storage/private-file-atomic";
-import { ensurePrivateSqliteLocation } from "#lico/foundation/storage/private-sqlite";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
+import { ensurePrivateDir } from "#meshrix/foundation/storage/private-file-atomic";
+import { ensurePrivateSqliteLocation } from "#meshrix/foundation/storage/private-sqlite";
 
 const STORE_SCHEMA_REVISION = 1;
 const DEFAULT_MAX_RECORDS = 100_000;

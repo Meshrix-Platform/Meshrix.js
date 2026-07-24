@@ -5,8 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const bridge = vi.hoisted(() => ({ getJson: vi.fn() }));
 const rpc = vi.hoisted(() => ({ callRpc: vi.fn() }));
 
-vi.mock("@lico/ui-console/bridge-http", () => bridge);
-vi.mock("@lico/ui-console/rpc-client", () => rpc);
+vi.mock("@meshrix/ui-console/bridge-http", () => bridge);
+vi.mock("@meshrix/ui-console/rpc-client", () => rpc);
 
 import {
   loadStrategyDescription,
@@ -151,7 +151,7 @@ describe("Strategy Management client", () => {
       internalContext: "must-not-project",
     });
 
-    await expect(previewStrategyCapability("strategy.tool_policy.preview", { toolId: "lico.jobs.delete" }))
+    await expect(previewStrategyCapability("strategy.tool_policy.preview", { toolId: "meshrix.jobs.delete" }))
       .resolves.toEqual({
         state: "denied",
         decision: {

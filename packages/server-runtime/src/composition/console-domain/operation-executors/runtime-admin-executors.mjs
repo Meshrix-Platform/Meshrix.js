@@ -224,7 +224,7 @@ async function buildRuntimeAssemblyPackage({ input = {}, context = {} } = {}) {
   packageFiles.push(await writePackageTextFile(packageRoot, "manifest.json", manifestText));
   packageFiles.push(await writePackageTextFile(packageRoot, "package.json", `${JSON.stringify({
     schemaVersion: "v0.0.1:schema:definition-1",
-    packageKind: "licomesh.runtime-assembly.portable-directory",
+    packageKind: "meshrix.runtime-assembly.portable-directory",
     artifactId,
     artifactRef: manifest.artifactRef,
     createdAt: manifest.createdAt,
@@ -241,7 +241,7 @@ async function buildRuntimeAssemblyPackage({ input = {}, context = {} } = {}) {
     packageFiles.push(await writePackageTextFile(packageRoot, componentFile, `${JSON.stringify(component, null, 2)}\n`));
   }
   packageFiles.push(await writePackageTextFile(packageRoot, "README.md", [
-    "# LicoMesh Runtime Assembly Portable Directory",
+    "# Meshrix Runtime Assembly Portable Directory",
     "",
     "This directory is a portable runtime assembly evidence package generated from the current architecture component inventory.",
     "",

@@ -5,8 +5,17 @@ import { loadCurrentPlanReceiptBinding } from "../../plan/current-plan-receipt.m
 import { verifyEndToEndReleasePlan } from "../../plan/verify-end-to-end-release-plan.mjs";
 import { reportPayloadDigest } from "../../../packages/foundation/src/observability/sensitive-report-scan.mjs";
 import { requirePlatformAcceptanceProfile } from "./platform-acceptance-contract.mjs";
+import {
+  acceptedFinalReceipt,
+  assertCurrentDependencyMapShape,
+  finalValidationBinding,
+  normalizePlanProfiles,
+} from "../../plan/plan-dependency-map.mjs";
 
 const RELEASE_ACCEPTANCE_PLAN = "end-to-end-release/release-acceptance";
+const ACCEPTANCE_TO_PLAN_PROFILE = Object.freeze({
+  "enterprise-single-node": "enterprise-single-node",
+});
 
 export class PlatformAcceptancePlanReceiptError extends Error {
   constructor(code, classification = "blocked") {
@@ -25,8 +34,16 @@ function requireReady(condition, code) {
   if (!condition) throw new PlatformAcceptancePlanReceiptError(code, "blocked");
 }
 
-export function requiredPlatformAcceptancePlanReceipts(dependencyMap) {
-  requireStructure(Array.isArray(dependencyMap?.plans), "plan-receipt-map-missing");
+export function requiredPlatformAcceptancePlanReceipts(
+  dependencyMap,
+  planProfile = "enterprise-single-node",
+) {
+  try {
+    assertCurrentDependencyMapShape(dependencyMap);
+    normalizePlanProfiles([planProfile]);
+  } catch {
+    throw new PlatformAcceptancePlanReceiptError("plan-receipt-map-missing", "failed");
+  }
   const plansByDirectory = new Map();
   for (const plan of dependencyMap.plans) {
     requireStructure(
@@ -38,7 +55,8 @@ export function requiredPlatformAcceptancePlanReceipts(dependencyMap) {
 
   const releaseAcceptance = plansByDirectory.get(RELEASE_ACCEPTANCE_PLAN);
   requireStructure(releaseAcceptance, "plan-receipt-consumer-missing");
-  const references = releaseAcceptance.prerequisite_receipts;
+  const references = releaseAcceptance.prerequisite_receipts?.filter((reference) =>
+    Array.isArray(reference?.profiles) && reference.profiles.includes(planProfile));
   requireStructure(
     Array.isArray(references) && references.length > 0,
     "plan-receipt-requirements-empty",
@@ -50,15 +68,26 @@ export function requiredPlatformAcceptancePlanReceipts(dependencyMap) {
     const provider = plansByDirectory.get(reference.plan);
     requireStructure(provider, "plan-receipt-provider-unknown");
     requireStructure(reference.plan !== RELEASE_ACCEPTANCE_PLAN, "plan-receipt-consumer-cycle");
+    let finalBinding;
+    try {
+      finalBinding = finalValidationBinding(provider, reference.node_id);
+    } catch {
+      throw new PlatformAcceptancePlanReceiptError("plan-receipt-final-node-mismatch", "failed");
+    }
     requireStructure(
-      provider.final_validation_node_id === reference.node_id,
-      "plan-receipt-final-node-mismatch",
+      finalBinding.profiles.includes(planProfile) &&
+        normalizePlanProfiles(reference.profiles).includes(planProfile),
+      "plan-receipt-profile-declaration-mismatch",
     );
-    requireReady(provider.accepted_final_receipt, "required-plan-receipt-missing");
+    requireReady(acceptedFinalReceipt(provider, reference.node_id), "required-plan-receipt-missing");
     const key = `${reference.plan}\u0000${reference.node_id}`;
     requireStructure(!keys.has(key), "plan-receipt-requirement-duplicate");
     keys.add(key);
-    return Object.freeze({ plan: reference.plan, finalNodeId: reference.node_id });
+    return Object.freeze({
+      plan: reference.plan,
+      finalNodeId: reference.node_id,
+      planProfile,
+    });
   });
 }
 
@@ -75,6 +104,8 @@ export async function verifyPlatformAcceptancePlanReceipts({
   } catch {
     throw new PlatformAcceptancePlanReceiptError("plan-receipt-profile-invalid", "failed");
   }
+  const planProfile = ACCEPTANCE_TO_PLAN_PROFILE[selectedProfile];
+  requireStructure(planProfile, "plan-receipt-profile-unmapped");
   const currentDependencyMap = dependencyMap || JSON.parse(await fs.readFile(
     path.join(repoRoot, "docs/plans/end-to-end-release/DependencyMap.json"),
     "utf8",
@@ -85,7 +116,7 @@ export async function verifyPlatformAcceptancePlanReceipts({
   } catch {
     throw new PlatformAcceptancePlanReceiptError("plan-receipt-dag-invalid", "failed");
   }
-  const requiredReceipts = requiredPlatformAcceptancePlanReceipts(currentDependencyMap);
+  const requiredReceipts = requiredPlatformAcceptancePlanReceipts(currentDependencyMap, planProfile);
   const bindings = [];
   for (const required of requiredReceipts) {
     let binding;
@@ -94,7 +125,7 @@ export async function verifyPlatformAcceptancePlanReceipts({
         repoRoot,
         planDirectory: required.plan,
         dependencyMap: currentDependencyMap,
-        selectedProfile,
+        finalNodeId: required.finalNodeId,
       });
     } catch {
       throw new PlatformAcceptancePlanReceiptError("required-plan-receipt-stale", "blocked");
@@ -103,7 +134,10 @@ export async function verifyPlatformAcceptancePlanReceipts({
       binding?.finalNodeId === required.finalNodeId && binding?.proofVerified === true,
       "required-plan-receipt-unverified",
     );
-    requireReady(binding?.selectedProfile === selectedProfile, "required-plan-receipt-profile-mismatch");
+    requireReady(
+      Array.isArray(binding?.profiles) && binding.profiles.includes(planProfile),
+      "required-plan-receipt-profile-mismatch",
+    );
     requireReady(typeof binding?.platform === "string" && binding.platform.length > 0, "required-plan-receipt-platform-missing");
     requireReady(Array.isArray(binding?.requirements) && binding.requirements.length > 0, "required-plan-receipt-requirements-missing");
     requireReady(binding?.privacySafe === true, "required-plan-receipt-privacy-unsafe");
@@ -111,7 +145,7 @@ export async function verifyPlatformAcceptancePlanReceipts({
       plan: required.plan,
       finalNodeId: binding.finalNodeId,
       platform: binding.platform,
-      selectedProfile: binding.selectedProfile,
+      profiles: Object.freeze([...binding.profiles]),
       requirements: Object.freeze([...binding.requirements]),
       receiptDigest: binding.receiptDigest,
       checkpointDigest: binding.checkpointDigest,
@@ -130,9 +164,10 @@ export async function verifyPlatformAcceptancePlanReceipts({
     throw new PlatformAcceptancePlanReceiptError("completed-plan-receipt-stale", "blocked");
   }
   return Object.freeze({
-    schemaVersion: "licomesh.platform-acceptance-plan-receipts.v1",
+    schemaVersion: "v0.0.1:meshrix:platform-acceptance-plan-receipts-1",
     releaseAcceptancePlan: RELEASE_ACCEPTANCE_PLAN,
     selectedProfile,
+    planProfile,
     requiredReceiptCount: requiredReceipts.length,
     bindings,
     planReceiptSetDigest: reportPayloadDigest({ bindings }),

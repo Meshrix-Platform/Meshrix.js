@@ -1,4 +1,4 @@
-import { createMcpCatalogInvalidation } from "#lico/contracts/mcp-catalog-delivery";
+import { createMcpCatalogInvalidation } from "#meshrix/contracts/mcp-catalog-delivery";
 import { broadcastConfiguredMcpNotification } from "./mcp-notification-bus.mjs";
 import {
   jsonRpcNotification,
@@ -58,7 +58,7 @@ export function inferMcpTargetReceipt({ operation = "", input = {}, payload = {}
   if (/workspace|agentWorkspace|file|artifact|proposal|context/i.test(operationId)) {
     targetKind = "workspace";
   }
-  const provider = targetProvider || "lico";
+  const provider = targetProvider || "meshrix";
   const workspaceId = firstString([
     envelope.workspaceId,
     input.workspaceRef,
@@ -257,7 +257,7 @@ export function broadcastMcpOperationReply({ envelope, operation, status, target
   const message = status === "completed"
     ? `已完成 ${operation} 任务`
     : `${operation} 任务执行失败`;
-  broadcastConfiguredMcpNotification(jsonRpcNotification("notifications/lico/operation_reply", {
+  broadcastConfiguredMcpNotification(jsonRpcNotification("notifications/meshrix/operation_reply", {
     schemaVersion: "v0.0.1:schema:definition-1",
     status,
     operation,

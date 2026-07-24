@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { hashClientString } from "#lico/client-strings";
-import { sendJson } from "#lico/http-utils";
+import { hashClientString } from "#meshrix/client-strings";
+import { sendJson } from "#meshrix/http-utils";
 import {
   authSubjectFromSession,
   canAccessAllJobs,

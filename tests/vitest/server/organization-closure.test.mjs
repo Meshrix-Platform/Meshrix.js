@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +20,33 @@ function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8"));
 }
 
+let planFixtureRoot = "";
+
+// The live docs/plans tree is gitignored local state, so the audit
+// materializes a controlled plan tree for the fixture checkpoints it governs
+// instead of depending on untracked repository content.
+function planFixtureCheckpointsPath(planOwner) {
+  if (!planFixtureRoot) {
+    planFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "organization-closure-plan-"));
+    const owners = { ...ORGANIZATION_ROOT_FACTS, ...MATRIX_CAPABILITY_FACTS };
+    const idsByOwner = new Map();
+    for (const owner of Object.values(owners)) {
+      const ids = idsByOwner.get(owner.plan_owner) ?? [];
+      ids.push(owner.plan_node);
+      idsByOwner.set(owner.plan_owner, ids);
+    }
+    for (const [owner, ids] of idsByOwner) {
+      const directory = path.join(planFixtureRoot, ...owner.split("/"));
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(
+        path.join(directory, "Checkpoints.json"),
+        `${JSON.stringify(ids.map((id) => ({ id })), null, 2)}\n`
+      );
+    }
+  }
+  return path.join(planFixtureRoot, ...planOwner.split("/"), "Checkpoints.json");
+}
+
 const CAPABILITY_MATRIX_PATH = "tools/registry/open-platform-capability-matrix.json";
 const VERSION_REGISTRY_PATH = "packages/foundation/src/version-control/version-registry.json";
 const ACCEPTANCE_REGISTRY_PATH = "tools/registry/capability-acceptance.registry.json";
@@ -37,14 +65,14 @@ const REQUIRED_RECOVERED_CAPABILITIES = Object.freeze([
   "core-workspace-assets-governance",
 ]);
 const STRATEGY_VERSION_REGISTRY_IDENTITIES = Object.freeze([
-  "lico.strategy.strategy-management-browser-report",
+  "meshrix.strategy.strategy-management-browser-report",
   "v0.0.1:schema:strategy-management-browser-report-1",
-  "lico.strategy.strategy-management-browser-report@v0.0.1:schema:strategy-management-browser-report-1",
+  "meshrix.strategy.strategy-management-browser-report@v0.0.1:schema:strategy-management-browser-report-1",
   "v0-0-1-schema-strategy-management-browser-report-1-verifier",
   "tools/server-scripts/verify-strategy-management-browser.mjs",
-  "lico.strategy.strategy-management-verification-report",
+  "meshrix.strategy.strategy-management-verification-report",
   "v0.0.1:strategy-management:verification-report-1",
-  "lico.strategy.strategy-management-verification-report@v0.0.1:strategy-management:verification-report-1",
+  "meshrix.strategy.strategy-management-verification-report@v0.0.1:strategy-management:verification-report-1",
   "v0-0-1-strategy-management-verification-report-1-validator",
   "tools/server-scripts/lib/required-report-validator.mjs",
   "v0-0-1-strategy-management-verification-report-1-verifier",
@@ -67,7 +95,7 @@ const ORGANIZATION_LAYERS = Object.freeze([
 const ORGANIZATION_ROOT_FACTS = Object.freeze({
   "application-entry": {
     layer: "application-entry",
-    code_owner: "apps/server/bin/lico.mjs",
+    code_owner: "apps/server/bin/meshrix.mjs",
     document_owner: "docs/functionality/SERVER-RUNTIME.md",
     plan_owner: "docs/plans/end-to-end-release",
     plan_node: "10000000-0000-4000-8000-000000000004",
@@ -104,7 +132,7 @@ const MATRIX_CAPABILITY_FACTS = Object.freeze({
   },
   "downstream-mcp": {
     layer: "agents-and-protocols",
-    code_owner: "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs",
+    code_owner: "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs",
     plan_owner: "docs/plans/end-to-end-release/gateway-distribution/downstream-mcp",
     plan_node: "10000000-0000-4000-8000-000000000179",
     acceptance_capabilities: ["downstream-mcp-gateway"],
@@ -186,55 +214,55 @@ const MATRIX_CAPABILITY_FACTS = Object.freeze({
 const CAPABILITY_REGISTRY_CONTRACTS = Object.freeze({
   "upstream-gateway": {
     operation_ids: ["gateway.forward"], acceptance_ids: ["upstream-service-publishing"],
-    test_suite_ids: ["upstream-gateway.e2e"], version_artifact_ids: ["lico.upstream-gateway.e2e-report"],
+    test_suite_ids: ["upstream-gateway.e2e"], version_artifact_ids: ["meshrix.upstream-gateway.e2e-report"],
   },
   "downstream-mcp": {
     operation_ids: ["operation_permission.catalog"], acceptance_ids: ["downstream-mcp-gateway"],
-    test_suite_ids: ["downstream-mcp.completeness-audit"], version_artifact_ids: ["lico.mcp.downstream-completeness-audit"],
+    test_suite_ids: ["downstream-mcp.completeness-audit"], version_artifact_ids: ["meshrix.mcp.downstream-completeness-audit"],
   },
   "strategy-management": {
     operation_ids: ["strategy.describe"], acceptance_ids: ["strategy-management"],
     test_suite_ids: ["strategy-management.runtime"],
     version_artifact_ids: [
-      "lico.strategy.strategy-management-browser-report",
-      "lico.strategy.strategy-management-verification-report",
+      "meshrix.strategy.strategy-management-browser-report",
+      "meshrix.strategy.strategy-management-verification-report",
     ],
     additional_registry_identities: STRATEGY_VERSION_REGISTRY_IDENTITIES,
   },
   "enterprise-governance": {
     operation_ids: ["operation_permission.catalog"],
     acceptance_ids: ["operation-permission-authorization", "observability-alerts-reporting"],
-    test_suite_ids: ["observability.semantic-baseline"], version_artifact_ids: ["lico.observability.semantics"],
+    test_suite_ids: ["observability.semantic-baseline"], version_artifact_ids: ["meshrix.observability.semantics"],
   },
   "console-administration": {
     operation_ids: ["system.console_state"], acceptance_ids: ["console-administration"],
-    test_suite_ids: ["console.administration-coverage"], version_artifact_ids: ["lico.console.administration-coverage-report"],
+    test_suite_ids: ["console.administration-coverage"], version_artifact_ids: ["meshrix.console.administration-coverage-report"],
   },
   "container-deployment": {
     operation_ids: [], acceptance_ids: ["container-deployment-resumability"],
-    test_suite_ids: ["container.deployment-flow"], version_artifact_ids: ["lico.deployment.container-flow-report"],
+    test_suite_ids: ["container.deployment-flow"], version_artifact_ids: ["meshrix.deployment.container-flow-report"],
   },
   storage: {
     operation_ids: ["storage.summary"], acceptance_ids: ["storage-backup-runtime"],
-    test_suite_ids: ["storage.backup-restore"], version_artifact_ids: ["lico.storage.production-restore-drill-report"],
+    test_suite_ids: ["storage.backup-restore"], version_artifact_ids: ["meshrix.storage.production-restore-drill-report"],
   },
   jobs: {
     operation_ids: ["jobs.list"], acceptance_ids: ["jobs-work-queue-runtime"],
-    test_suite_ids: ["jobs.work-queue"], version_artifact_ids: ["lico.workflow.job-work-queue-report"],
+    test_suite_ids: ["jobs.work-queue"], version_artifact_ids: ["meshrix.workflow.job-work-queue-report"],
   },
   "external-plugin-packaging-loading": {
     operation_ids: [], acceptance_ids: ["plugin-runtime-and-module-system"],
     test_suite_ids: [],
-    version_artifact_ids: ["lico.state-machine.capability-acceptance-plugin-runtime-and-module-system"],
+    version_artifact_ids: ["meshrix.state-machine.capability-acceptance-plugin-runtime-and-module-system"],
   },
   "agent-gateway-model-routing": {
     operation_ids: ["agent_gateway.call"], acceptance_ids: ["agent-gateway-model-routing"],
-    test_suite_ids: ["agent-gateway.runtime", "model-routing.runtime"], version_artifact_ids: ["lico.strategy.model-routing"],
+    test_suite_ids: ["agent-gateway.runtime", "model-routing.runtime"], version_artifact_ids: ["meshrix.strategy.model-routing"],
   },
   "core-workspace-assets-governance": {
     operation_ids: ["workspace.file.list"], acceptance_ids: ["core-workspace-assets-governance"],
     test_suite_ids: ["workspace-asset-management.runtime", "workspace-governance.runtime"],
-    version_artifact_ids: ["lico.workspace.asset-registry"],
+    version_artifact_ids: ["meshrix.workspace.asset-registry"],
   },
 });
 
@@ -386,7 +414,7 @@ function closureFixture() {
   ];
   const allFacts = { ...ORGANIZATION_ROOT_FACTS, ...MATRIX_CAPABILITY_FACTS };
   const planFacts = Object.entries(allFacts).map(([capability, owners]) => {
-    const checkpoints = readJson(`${owners.plan_owner}/Checkpoints.json`);
+    const checkpoints = JSON.parse(fs.readFileSync(planFixtureCheckpointsPath(owners.plan_owner), "utf8"));
     expect(checkpoints.some((checkpoint) => checkpoint.id === owners.plan_node)).toBe(true);
     return { capability, plan_owner: owners.plan_owner, plan_node: owners.plan_node };
   });

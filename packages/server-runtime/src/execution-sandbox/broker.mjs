@@ -17,8 +17,8 @@ import {
   sandboxApprovalRequestDigest,
   sandboxDigest,
   stableSandboxJson
-} from "#lico/foundation/execution-sandbox/index";
-import { writePrivateFileAtomic } from "#lico/foundation/storage/private-file-atomic";
+} from "#meshrix/foundation/execution-sandbox/index";
+import { writePrivateFileAtomic } from "#meshrix/foundation/storage/private-file-atomic";
 
 const REQUIRED_BACKEND_RESTRICTIONS = Object.freeze([
   "filesystem",

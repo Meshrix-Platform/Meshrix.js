@@ -7,7 +7,7 @@ import {
   publicActor,
   summarizeRun
 } from "./reporting.mjs";
-import { summarizeForLog } from "@lico/foundation/observability/runtime-logger";
+import { summarizeForLog } from "@meshrix/foundation/observability/runtime-logger";
 
 export function createMaintenanceRunbookPlanning({
   planner,

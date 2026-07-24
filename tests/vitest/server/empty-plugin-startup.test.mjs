@@ -23,7 +23,7 @@ function cookieHeader(response) {
 
 describe("empty plugin startup", () => {
   it("starts Core with no installed plugin contributions and no implicit agent project", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-empty-plugin-startup-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-empty-plugin-startup-"));
     resources.push(() => fs.rm(userDataPath, { recursive: true, force: true }));
 
     const tagManagementStore = createTagStoreAdapter({ userDataPath });
@@ -57,8 +57,8 @@ describe("empty plugin startup", () => {
     const writeHeaders = {
       ...readHeaders,
       "content-type": "application/json",
-      "x-lico-csrf": loginPayload.csrfToken,
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-csrf": loginPayload.csrfToken,
+      "x-meshrix-safety-confirm": "true"
     };
 
     const interfacesResponse = await fetch(`${server.url}/api/interfaces`, { headers: readHeaders });

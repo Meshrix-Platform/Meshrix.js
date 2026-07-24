@@ -219,7 +219,7 @@ export function createDefaultRedactionTrie() {
       "headers.cookie",
       "headers.set-cookie",
       "headers.x-api-key",
-      "headers.x-lico-token",
+      "headers.x-meshrix-token",
       "query.token",
       "query.code",
       "query.oauth_code",

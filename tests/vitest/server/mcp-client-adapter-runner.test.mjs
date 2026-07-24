@@ -11,10 +11,10 @@ import {
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/client-adapter-runner.mjs";
 
 const tempRoots = [];
-const originalCanary = process.env.LICO_MCP_ADAPTER_SECRET_CANARY;
+const originalCanary = process.env.MESHRIX_MCP_ADAPTER_SECRET_CANARY;
 
 async function fixtureRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-neutral-adapter-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-neutral-adapter-"));
   tempRoots.push(root);
   return root;
 }
@@ -34,21 +34,21 @@ function fixtureInstaller(counter) {
       for await (const chunk of process.stdin) input += chunk;
       const request = JSON.parse(input);
       const action = process.argv[2];
-      const base = { schemaVersion: "licomesh.client-adapter.json-stdio.v1", ok: true };
+      const base = { schemaVersion: "v0.0.1:meshrix:client-adapter-json-stdio-1", ok: true };
       const results = {
         describe: {
-          schemaVersion: "licomesh.client-adapter.descriptor.v1",
-          protocol: "licomesh.client-adapter.json-stdio.v1",
+          schemaVersion: "v0.0.1:meshrix:client-adapter-descriptor-1",
+          protocol: "v0.0.1:meshrix:client-adapter-json-stdio-1",
           target: "codex",
           label: "Neutral client",
           version: "0.0.1",
-          packageName: "@licomesh/agent-codex-adapter",
+          packageName: "@meshrix/agent-codex-adapter",
           commandNames: ["neutral-client"],
           locations: ["local"],
           actions: ["describe", "scan", "install", "verify", "uninstall"],
           installMode: "external-client-adapter"
         },
-        scan: { available: true, installed: false, secretInherited: Boolean(process.env.LICO_MCP_ADAPTER_SECRET_CANARY) },
+        scan: { available: true, installed: false, secretInherited: Boolean(process.env.MESHRIX_MCP_ADAPTER_SECRET_CANARY) },
         install: { installed: true },
         verify: { installed: true },
         uninstall: { removed: true, installed: false }
@@ -60,8 +60,8 @@ function fixtureInstaller(counter) {
 
 afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
-  if (originalCanary === undefined) delete process.env.LICO_MCP_ADAPTER_SECRET_CANARY;
-  else process.env.LICO_MCP_ADAPTER_SECRET_CANARY = originalCanary;
+  if (originalCanary === undefined) delete process.env.MESHRIX_MCP_ADAPTER_SECRET_CANARY;
+  else process.env.MESHRIX_MCP_ADAPTER_SECRET_CANARY = originalCanary;
 });
 
 describe("external MCP client adapter runner", () => {
@@ -80,7 +80,7 @@ describe("external MCP client adapter runner", () => {
   it("validates the trusted descriptor and strips unrelated secrets from the child environment", async () => {
     const cacheRoot = await fixtureRoot();
     const installPackage = fixtureInstaller({ count: 0 });
-    process.env.LICO_MCP_ADAPTER_SECRET_CANARY = "must-not-cross-process-boundary";
+    process.env.MESHRIX_MCP_ADAPTER_SECRET_CANARY = "must-not-cross-process-boundary";
     const described = await describeClientAdapter({ target: "codex", cacheRoot, installPackage });
     expect(described.result.target).toBe("codex");
     const scanned = await runClientAdapter({
@@ -88,7 +88,7 @@ describe("external MCP client adapter runner", () => {
       action: "scan",
       cacheRoot,
       installPackage,
-      request: { client: { command: "neutral-client" }, tokenEnv: "LICO_MCP_TOKEN" }
+      request: { client: { command: "neutral-client" }, tokenEnv: "MESHRIX_MCP_TOKEN" }
     });
     expect(scanned.result).toMatchObject({ available: true, secretInherited: false });
   });

@@ -24,65 +24,65 @@ const factories = vi.hoisted(() => ({
   createWorkspaceGovernanceRegistry: vi.fn()
 }));
 
-vi.mock("#lico/settings", () => ({ loadSettings: vi.fn() }));
-vi.mock("#lico/agents/agent-configs/config-registry", () => ({ getAgentConfigRegistry: vi.fn() }));
-vi.mock("#lico/agents/agent-runtime-provider", () => ({
+vi.mock("#meshrix/settings", () => ({ loadSettings: vi.fn() }));
+vi.mock("#meshrix/agents/agent-configs/config-registry", () => ({ getAgentConfigRegistry: vi.fn() }));
+vi.mock("#meshrix/agents/agent-runtime-provider", () => ({
   createAgentRuntimeProvider: factories.createAgentRuntimeProvider
 }));
-vi.mock("#lico/agents/upstream-gateway/index", () => ({
+vi.mock("#meshrix/agents/upstream-gateway/index", () => ({
   createUpstreamGatewayRegistry: factories.createUpstreamGatewayRegistry,
   createUpstreamManifestObserver: factories.createUpstreamManifestObserver,
   createUpstreamManifestSnapshotCommitter: factories.createUpstreamManifestSnapshotCommitter,
   createUpstreamPublishingApplication: factories.createUpstreamPublishingApplication
 }));
-vi.mock("#lico/agents/workspace-governance/index", () => ({
+vi.mock("#meshrix/agents/workspace-governance/index", () => ({
   createWorkspaceGovernanceRegistry: factories.createWorkspaceGovernanceRegistry
 }));
-vi.mock("#lico/agents/workspace-contribution", () => ({
+vi.mock("#meshrix/agents/workspace-contribution", () => ({
   CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION: Object.freeze({ machineId: "fixture" }),
   createContributionRegistry: factories.createContributionRegistry
 }));
-vi.mock("#lico/agents/workspace-asset-registry/index", () => ({
+vi.mock("#meshrix/agents/workspace-asset-registry/index", () => ({
   createWorkspaceAssetRegistry: factories.createWorkspaceAssetRegistry
 }));
-vi.mock("#lico/capabilities/skills/tool-skill-management-provider", () => ({
+vi.mock("#meshrix/capabilities/skills/tool-skill-management-provider", () => ({
   createToolSkillManagementProvider: factories.createToolSkillManagementProvider
 }));
-vi.mock("#lico/capabilities/operation-permission-core/index", () => ({
+vi.mock("#meshrix/capabilities/operation-permission-core/index", () => ({
   createOperationPermissionPlatform: factories.createOperationPermissionPlatform
 }));
-vi.mock("#lico/capabilities/operation-permission-core/store", () => ({
+vi.mock("#meshrix/capabilities/operation-permission-core/store", () => ({
   createOperationPermissionStore: factories.createOperationPermissionStore
 }));
-vi.mock("#lico/foundation/observability/executive-report", () => ({
+vi.mock("#meshrix/foundation/observability/executive-report", () => ({
   buildExecutiveReport: vi.fn(),
   createExecutiveReportStore: factories.createExecutiveReportStore
 }));
-vi.mock("#lico/foundation/observability/readiness-baseline/baseline-provider", () => ({
+vi.mock("#meshrix/foundation/observability/readiness-baseline/baseline-provider", () => ({
   createReadinessBaselineProvider: factories.createReadinessBaselineProvider
 }));
-vi.mock("#lico/foundation/observability/sample-capability-pack", () => ({
+vi.mock("#meshrix/foundation/observability/sample-capability-pack", () => ({
   createSampleCapabilityPackStore: factories.createSampleCapabilityPackStore
 }));
-vi.mock("#lico/foundation/security/security-alerts", () => ({
+vi.mock("#meshrix/foundation/security/security-alerts", () => ({
   createSecurityAlertStore: factories.createSecurityAlertStore
 }));
-vi.mock("#lico/agents/agent-memory/index", () => ({
+vi.mock("#meshrix/agents/agent-memory/index", () => ({
   createAgentMemory: factories.createAgentMemory
 }));
-vi.mock("#lico/server-runtime/state/interface/index", () => ({
+vi.mock("#meshrix/server-runtime/state/interface/index", () => ({
   createContextRuntime: factories.createContextRuntime
 }));
-vi.mock("#lico/agents/maintenance/index", () => ({
+vi.mock("#meshrix/agents/maintenance/index", () => ({
   createMaintenanceAgentService: factories.createMaintenanceAgentService
 }));
-vi.mock("#lico/server-runtime/composition/maintenance-work-queue-provider", () => ({
+vi.mock("#meshrix/server-runtime/composition/maintenance-work-queue-provider", () => ({
   createMaintenanceWorkQueueProvider: factories.createMaintenanceWorkQueueProvider
 }));
-vi.mock("#lico/agents/agent-workspace/index", () => ({
+vi.mock("#meshrix/agents/agent-workspace/index", () => ({
   createAgentWorkspace: factories.createAgentWorkspace
 }));
-vi.mock("#lico/server-runtime/composition/strategy-management-provider", () => ({
+vi.mock("#meshrix/server-runtime/composition/strategy-management-provider", () => ({
   createStrategyManagementProvider: factories.createStrategyManagementProvider
 }));
 

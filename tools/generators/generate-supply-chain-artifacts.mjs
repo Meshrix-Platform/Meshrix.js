@@ -292,7 +292,7 @@ function buildSbom(lockfile, inventory) {
 
 function buildNotices(inventory) {
   const lines = [
-    "LicoMesh Third-Party Dependency Notices",
+    "Meshrix Third-Party Dependency Notices",
     "",
     "Scope: production npm dependency graph from package-lock.json",
     `Components: ${inventory.components.length}`,

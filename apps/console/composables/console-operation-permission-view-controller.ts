@@ -5,7 +5,7 @@ import {
   type AuthorizationGovernanceKind,
 } from '../lib/authorization-governance-client';
 import { formatCompactDate } from './console-format-utils';
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import { useServerConsoleShellContext } from './serverConsoleShellContext';
 
 type GovernanceItem = Record<string, unknown>;

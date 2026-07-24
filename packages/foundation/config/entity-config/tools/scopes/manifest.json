@@ -1,5 +1,5 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
-  "entityType": "lico.operation-permission.scopes",
+  "entityType": "meshrix.operation-permission.scopes",
   "count": 33
 }

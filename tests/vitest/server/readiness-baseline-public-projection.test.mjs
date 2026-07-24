@@ -19,7 +19,7 @@ function collectKeys(value, keys = new Set()) {
 
 describe("readiness baseline public projection", () => {
   it("reports runtime observation without paths or a release-readiness claim", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-readiness-projection-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-readiness-projection-"));
     try {
       const status = await createReadinessBaselineProvider({ userDataPath }).status();
 

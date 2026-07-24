@@ -1,6 +1,6 @@
 # Architecture
 
-LicoMesh is an open, private-deployable gateway platform for agent access and governed service forwarding.
+Meshrix is an open, private-deployable gateway platform for agent access and governed service forwarding.
 
 ## Runtime Shape
 
@@ -239,7 +239,7 @@ The service provider keeps the MCP route target, protocol versions, and module p
 
 ## MCP Native Installer
 
-MCP user-device installation uses platform-native launchers. macOS and Linux use `packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh`; Windows uses `packages/protocols/mcp/adapter/native-installer/lico-mcp-install.ps1`. Windows `.cmd` entrypoints are not part of the release surface.
+MCP user-device installation uses platform-native launchers. macOS and Linux use `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh`; Windows uses `packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1`. Windows `.cmd` entrypoints are not part of the release surface.
 
 The launchers validate security-sensitive arguments and delegate to the connector shipped in a verified portable release. The connector is the single implementation of signed hub discovery, local agent search, grants, batch and interactive install, device hub registration, client configuration, and uninstall. Shell and PowerShell must not duplicate those protocols.
 

@@ -59,7 +59,7 @@ async function assertNoLocalCheckpointMerkleAuthority() {
 }
 
 async function withTempDir(run) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-checkpoint-tree-unit-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-checkpoint-tree-unit-"));
   try {
     return await run(userDataPath);
   } finally {

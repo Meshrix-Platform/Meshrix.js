@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 
 export const STRATEGY_MANAGEMENT_PROTOCOL_VERSION = "v0.0.1:strategy:strategy-management-1";
 

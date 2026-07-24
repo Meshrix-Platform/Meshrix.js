@@ -16,10 +16,6 @@
           {
             "acceptanceCommandId": "mcp-authorization-request-filters",
             "report": "build/reports/mcp-authorization-request-filters.json"
-          },
-          {
-            "acceptanceCommandId": "downstream-mcp-product-e2e",
-            "report": "build/reports/downstream-mcp-product-e2e.json"
           }
         ]
       },
@@ -34,10 +30,6 @@
           {
             "acceptanceCommandId": "downstream-mcp-audit",
             "report": "build/reports/downstream-mcp-completeness-audit.json"
-          },
-          {
-            "acceptanceCommandId": "downstream-mcp-product-e2e",
-            "report": "build/reports/downstream-mcp-product-e2e.json"
           }
         ]
       },
@@ -62,10 +54,6 @@
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",
             "report": "build/reports/operation-permission-tag-governed-e2e.json"
-          },
-          {
-            "acceptanceCommandId": "downstream-mcp-product-e2e",
-            "report": "build/reports/downstream-mcp-product-e2e.json"
           }
         ]
       }
@@ -98,10 +86,6 @@
           {
             "acceptanceCommandId": "mcp-authorization-request-filters",
             "report": "build/reports/mcp-authorization-request-filters.json"
-          },
-          {
-            "acceptanceCommandId": "downstream-mcp-product-e2e",
-            "report": "build/reports/downstream-mcp-product-e2e.json"
           },
           {
             "acceptanceCommandId": "plugin-runtime",

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { redactForMaintenanceAudit } from "./audit-store.mjs";
 import { EVENT_TYPES, cloneRun, nowIso, summarizeRun } from "./reporting.mjs";
 import { dispatchSkipReason, isTerminalRunStatus } from "./validation.mjs";
-import { summarizeError, summarizeForLog } from "@lico/foundation/observability/runtime-logger";
+import { summarizeError, summarizeForLog } from "@meshrix/foundation/observability/runtime-logger";
 
 export function createMaintenanceRunExecutor({
   toolRegistry,
@@ -121,7 +121,7 @@ export function createMaintenanceRunExecutor({
         traceId,
         toolId: `maintenance-agent.${rawStep.toolId}`,
         toolVersion: "v0.0.1:platform:maintenance-agent-1",
-        toolsetIds: ["lico.runtime.maintain"],
+        toolsetIds: ["meshrix.runtime.maintain"],
         subjectType: "agent-profile",
         subjectId: "maintenance-agent",
         grantId: "",
@@ -189,7 +189,7 @@ export function createMaintenanceRunExecutor({
         traceId,
         toolId: `maintenance-agent.${rawStep.toolId}`,
         toolVersion: "v0.0.1:platform:maintenance-agent-1",
-        toolsetIds: ["lico.runtime.maintain"],
+        toolsetIds: ["meshrix.runtime.maintain"],
         subjectType: "agent-profile",
         subjectId: "maintenance-agent",
         grantId: "",

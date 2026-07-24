@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { dispatchOperation } from "#lico/server-runtime/composition/dispatch-operation";
-import { MemoryLockManager } from "#lico/foundation/concurrency/lock-manager";
+import { dispatchOperation } from "#meshrix/server-runtime/composition/dispatch-operation";
+import { MemoryLockManager } from "#meshrix/foundation/concurrency/lock-manager";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const operationNarrowDefinitionPath = path.resolve(

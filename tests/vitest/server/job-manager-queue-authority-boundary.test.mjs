@@ -8,7 +8,7 @@ import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs
 const tempRoots = [];
 
 async function withTempUserData(callback) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-queue-authority-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-queue-authority-"));
   tempRoots.push(userDataPath);
   return callback(userDataPath);
 }

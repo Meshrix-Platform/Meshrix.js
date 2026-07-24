@@ -12,9 +12,10 @@ import {
   resolveFeatureRuntime
 } from "../../packages/server-runtime/src/composition/features/feature-manifest.mjs";
 import { scanPublicArtifact } from "./lib/public-artifact-boundary.mjs";
+import { resolveGitRepoRoot } from "./lib/source-tree-digest.mjs";
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const SOURCE_PACKAGE_MANIFEST = "lico-source-package-manifest.json";
+const SOURCE_PACKAGE_MANIFEST = "meshrix-source-package-manifest.json";
 const SOURCE_PACKAGE_ARCHIVE_SUFFIX = ".tar.gz";
 const SOURCE_PACKAGE_CHECKSUM_SUFFIX = ".sha256";
 const SOURCE_PACKAGE_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
@@ -209,14 +210,15 @@ async function ignoredSourcePaths(repoRoot, relativePaths = []) {
   if (relativePaths.length === 0) {
     return new Set();
   }
-  if (!await exists(path.join(repoRoot, ".git"))) {
+  const gitRepoRoot = resolveGitRepoRoot(repoRoot);
+  if (!await exists(path.join(gitRepoRoot, ".git"))) {
     return new Set();
   }
   const result = spawnSync(
     "git",
     ["check-ignore", "--no-index", "--stdin", "-z"],
     {
-      cwd: repoRoot,
+      cwd: gitRepoRoot,
       encoding: "utf8",
       input: relativePaths.join("\0") + "\0",
       maxBuffer: 64 * 1024 * 1024
@@ -242,8 +244,9 @@ async function sha256File(filePath) {
 }
 
 function resolveSourceRevision(repoRoot) {
+  const gitRepoRoot = resolveGitRepoRoot(repoRoot);
   const result = spawnSync("git", ["rev-parse", "HEAD"], {
-    cwd: repoRoot,
+    cwd: gitRepoRoot,
     encoding: "utf8",
     windowsHide: true
   });
@@ -490,7 +493,7 @@ export async function createServerSourcePackage({
   await validateArtifactTarget(archivePath, { force });
   await validateArtifactTarget(checksumPath, { force });
 
-  const workspacePrefix = path.join(absoluteOutputDirectory, ".licomesh-server-source-package-");
+  const workspacePrefix = path.join(absoluteOutputDirectory, ".meshrix-server-source-package-");
   const temporaryRoot = await fs.mkdtemp(workspacePrefix);
   const stagingRoot = path.join(temporaryRoot, identity.rootName);
   const generatedArchivePath = path.join(temporaryRoot, identity.archiveName);

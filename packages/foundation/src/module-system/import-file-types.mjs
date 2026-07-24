@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_DICTIONARY_PATH = path.resolve(__dirname, "../../config/default-import-file-types.json");
-const ENV_DICTIONARY_PATH = "LICO_IMPORT_FILE_TYPES_PATH";
+const ENV_DICTIONARY_PATH = "MESHRIX_IMPORT_FILE_TYPES_PATH";
 
 let cachedRegistry = null;
 let cachedPath = "";

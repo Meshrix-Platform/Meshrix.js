@@ -28,7 +28,7 @@ afterEach(() => {
 
 describe("unified test runner dry-run", () => {
   it("selects canonical suites without creating or changing report files", () => {
-    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lico-test-runner-dry-run-"));
+    const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-test-runner-dry-run-"));
     temporaryRoots.push(temporaryRoot);
     const explicitReport = path.join(temporaryRoot, "report.json");
     const before = reportDirectorySnapshot();

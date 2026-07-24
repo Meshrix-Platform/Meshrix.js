@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/public-api.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/public-api.schema.json",
   "title": "Public API Registry",
-  "description": "Canonical list of every #lico public import alias and its implementation path.",
+  "description": "Canonical list of every #meshrix public import alias and its implementation path.",
   "type": "object",
   "required": ["$schema", "version", "aliases"],
   "properties": {
@@ -14,7 +14,7 @@
         "type": "object",
         "required": ["alias", "targetPath", "status"],
         "properties": {
-          "alias": { "type": "string", "pattern": "^#lico/" },
+          "alias": { "type": "string", "pattern": "^#meshrix/" },
           "targetPath": { "type": "string" },
           "status": { "type": "string", "enum": ["active"] },
           "domainPackage": { "type": "string" },

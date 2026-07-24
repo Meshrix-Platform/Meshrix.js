@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -10,7 +10,7 @@ import {
   throwIfObservabilityAborted
 } from "./observability-budgets.mjs";
 import { finalizeSensitiveReport } from "./sensitive-report-scan.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   atomicWriteFile,
   queueStateMutation,
@@ -259,7 +259,7 @@ export async function buildExecutiveReport(input = {}) {
     timeRange: text(input.timeRange || "all"),
     status: risks.some((risk) => risk.severity === "critical") ? "blocked" : text(health.status || "unknown"),
     executiveSummary: {
-      headline: text(input.headline || "LicoMesh executive report"),
+      headline: text(input.headline || "Meshrix executive report"),
       keyFindings: keyFindings({ health, assetValue, evaluation, capacity, trace }),
       recommendedDecisions: risks.slice(0, 5).map((risk) => ({
         riskType: risk.type,
@@ -287,7 +287,7 @@ export async function buildExecutiveReport(input = {}) {
   return finalizeSensitiveReport(report, {
     signal: input.signal,
     provenance: {
-      producer: "licomesh-core-observability",
+      producer: "meshrix-core-observability",
       commandId: "executive-report.generate",
       sourceRevision: EXECUTIVE_REPORT_PROTOCOL_VERSION
     }

@@ -1,4 +1,4 @@
-import { getJson } from "@lico/ui-console/bridge-http";
+import { getJson } from "@meshrix/ui-console/bridge-http";
 import type { AgentRegistryResponse } from "./types";
 
 export function listAgents() {

@@ -5,16 +5,16 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { createStorageKernel } from "@lico/foundation/storage/storage-kernel";
-import { createStorageProvider } from "@lico/foundation/storage/storage-provider";
+import { createStorageKernel } from "@meshrix/foundation/storage/storage-kernel";
+import { createStorageProvider } from "@meshrix/foundation/storage/storage-provider";
 import {
   SANDBOX_CUSTODY_PROMOTION_SCHEMA
-} from "@lico/foundation/execution-sandbox/custody-contracts";
+} from "@meshrix/foundation/execution-sandbox/custody-contracts";
 import {
   SANDBOX_PROVIDER_CONFORMANCE_SCHEMA
-} from "@lico/foundation/execution-sandbox/contracts";
-import { createLocalCustodyKeyBroker } from "@lico/server-runtime/execution-sandbox/custody-key-broker";
-import { createOpaqueSandboxCustodyRuntime } from "@lico/server-runtime/execution-sandbox/opaque-custody";
+} from "@meshrix/foundation/execution-sandbox/contracts";
+import { createLocalCustodyKeyBroker } from "@meshrix/server-runtime/execution-sandbox/custody-key-broker";
+import { createOpaqueSandboxCustodyRuntime } from "@meshrix/server-runtime/execution-sandbox/opaque-custody";
 import { createSourceEvidenceContext } from "./lib/source-tree-digest.mjs";
 
 const REPORT_SCHEMA = "v0.0.1:execution-sandbox:opaque-custody-acceptance-report-1";
@@ -67,7 +67,7 @@ export async function runOpaqueSandboxCustodyVerification({
   reportPath = REPORT_PATH,
   writeReport = true
 } = {}) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-opaque-custody-verifier-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-opaque-custody-verifier-"));
   const storageKernel = createStorageKernel({ userDataPath: root });
   const storageProvider = createStorageProvider({ userDataPath: root, storageKernel });
   const keyBroker = createLocalCustodyKeyBroker({ userDataPath: root });

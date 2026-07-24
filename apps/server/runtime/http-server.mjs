@@ -7,15 +7,15 @@ import {
   createRuntimeLogger,
   setRuntimeLogger,
   summarizeError
-} from "#lico/runtime-logger";
-import { ServerConfig } from "#lico/server-config";
-import { createHttpApplicationAssembly } from "#lico/server-runtime/composition/http-application-assembly";
-import { createConsoleDomainServices } from "#lico/server-runtime/composition/console-domain/services";
+} from "#meshrix/runtime-logger";
+import { ServerConfig } from "#meshrix/server-config";
+import { createHttpApplicationAssembly } from "#meshrix/server-runtime/composition/http-application-assembly";
+import { createConsoleDomainServices } from "#meshrix/server-runtime/composition/console-domain/services";
 import {
   defaultAdvertisedHost,
   formatUrlHost
-} from "#lico/http-utils";
-import { isUpstreamPayloadTransitRoute } from "#lico/protocols/http/controllers/upstream-payload-transit-controller";
+} from "#meshrix/http-utils";
+import { isUpstreamPayloadTransitRoute } from "#meshrix/protocols/http/controllers/upstream-payload-transit-controller";
 import {
   assertSafeListenHost,
   createFixedWindowRateLimiter,
@@ -47,7 +47,7 @@ function resolveServerUserDataPath(inputUserDataPath) {
   const runningFromSourceCheckout = fs.existsSync(path.join(sourceCheckoutRoot, ".git"));
   if (runningFromSourceCheckout && isPathInside(sourceCheckoutRoot, resolved)) {
     throw new Error(
-      "Refusing a project-local LicoMesh server data directory. Use the platform data directory or an external LICO_SERVER_DATA_DIR."
+      "Refusing a project-local Meshrix server data directory. Use the platform data directory or an external MESHRIX_SERVER_DATA_DIR."
     );
   }
   return resolved;

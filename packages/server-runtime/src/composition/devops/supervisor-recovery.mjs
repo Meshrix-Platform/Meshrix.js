@@ -3,8 +3,8 @@ import {
   recoverLaunchAgentService,
 } from "../../../../foundation/src/environment-compatibility/host-services.mjs";
 
-const DEFAULT_SUPERVISOR_SERVICE_LABEL = "dev.lico.background-supervisor";
-const DEFAULT_SYSTEM_INSPECTION_SERVICE_LABEL = "dev.lico.system-inspection";
+const DEFAULT_SUPERVISOR_SERVICE_LABEL = "dev.meshrix.background-supervisor";
+const DEFAULT_SYSTEM_INSPECTION_SERVICE_LABEL = "dev.meshrix.system-inspection";
 const SUPERVISOR_RECOVERY_PROTOCOL_VERSION = "v0.0.1:platform:supervisor-recovery-1";
 
 function recoveryEnvelope(result = {}, { serviceLabel = "", alreadyRunning = false } = {}) {

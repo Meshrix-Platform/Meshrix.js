@@ -55,7 +55,7 @@ export class PostgresLockBackendError extends Error {
  * Map an arbitrary application key into PostgreSQL's two-int32 advisory space.
  * The namespace prevents unrelated framework instances from sharing a keyspace.
  */
-export function postgresAdvisoryKey(key, namespace = "licomesh") {
+export function postgresAdvisoryKey(key, namespace = "meshrix") {
   const lockKey = normalizeLockKey(key);
   const lockNamespace = normalizeLockKey(namespace, "Lock namespace");
   const digest = crypto
@@ -73,12 +73,12 @@ export class PostgresLockManager extends LockManager {
    * @param {object} [config.pool] - Injected node-postgres Pool-compatible object.
    * @param {object} [config.pgConfig] - Options passed to a manager-owned Pool.
    * @param {string} [config.connectionString] - Manager-owned Pool connection URI.
-   * @param {string} [config.namespace=licomesh] - Advisory lock key namespace.
+   * @param {string} [config.namespace=meshrix] - Advisory lock key namespace.
    * @param {number} [config.retryIntervalMs=50] - Non-blocking retry cadence.
    */
   constructor(config = {}) {
     super({ ...config, backend: "postgres" });
-    this.namespace = normalizeLockKey(config.namespace ?? "licomesh", "Lock namespace");
+    this.namespace = normalizeLockKey(config.namespace ?? "meshrix", "Lock namespace");
     this.retryIntervalMs = positiveDuration(config.retryIntervalMs, 50, "retryIntervalMs");
     this.queryTimeoutMs = positiveDuration(config.queryTimeoutMs, 5000, "queryTimeoutMs");
     this._entries = new Map();

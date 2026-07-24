@@ -50,7 +50,7 @@ describe("HTTP startup lock safety", () => {
   it("unwinds an injected lock manager when listen fails after composition", async () => {
     const listenError = Object.assign(new Error("address unavailable"), { code: "EADDRINUSE" });
     vi.spyOn(http, "createServer").mockReturnValue(new ListenerStub({ listenError }));
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-startup-lock-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-startup-lock-"));
     const manager = new MemoryLockManager();
 
     try {
@@ -77,7 +77,7 @@ describe("HTTP startup lock safety", () => {
 
   it("owns an injected manager and makes successful server close idempotent", async () => {
     vi.spyOn(http, "createServer").mockReturnValue(new ListenerStub());
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-startup-close-lock-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-startup-close-lock-"));
     const manager = new MemoryLockManager();
     let serverHandle = null;
 

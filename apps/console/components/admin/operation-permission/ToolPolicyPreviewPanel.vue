@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useOperationPermissionViewContext } from "../../../composables/operationPermissionViewContext";
 import { jsonPreview } from "../../../composables/console-format-utils";
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 
 const {
   busyKey,

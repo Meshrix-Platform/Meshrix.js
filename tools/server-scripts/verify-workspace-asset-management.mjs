@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createOperationProofSubstrate } from "#lico/foundation/proof/proof-substrate/index";
+import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
 import { createAgentWorkspace } from "../../packages/agents/src/agent-workspace/index.mjs";
 import {
   CORE_WORKSPACE_CONTRIBUTION_LIFECYCLE_DEFINITION,
@@ -53,7 +53,7 @@ const allScopes = [
   "repo:review"
 ];
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-assets-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-assets-"));
 const contributionRegistries = new Map();
 const operationProviders = Object.freeze({
   operationProofSubstrate: createOperationProofSubstrate({ userDataPath }),

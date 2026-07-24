@@ -11,7 +11,7 @@ import {
   isLocalHttpOrigin,
   isLoopbackAddress,
   originHost
-} from "@lico/foundation/security/trusted-client-ip";
+} from "@meshrix/foundation/security/trusted-client-ip";
 
 import {
   compactText,
@@ -22,59 +22,59 @@ import {
   normalizedTargetKey
 } from "./tool-skill-management-provider-grant-utils.mjs";
 
-const LOCAL_GRANT_MCP_CONNECTOR_PACKAGE = "lico-mcp-connector";
-const LOCAL_GRANT_BOOTSTRAP_SCRIPT = "lico-mcp-install.sh";
-const LOCAL_GRANT_BOOTSTRAP_SCRIPT_ZH_CN = "lico-mcp-install.zh-CN.sh";
+const LOCAL_GRANT_MCP_CONNECTOR_PACKAGE = "meshrix-mcp-connector";
+const LOCAL_GRANT_BOOTSTRAP_SCRIPT = "meshrix-mcp-install.sh";
+const LOCAL_GRANT_BOOTSTRAP_SCRIPT_ZH_CN = "meshrix-mcp-install.zh-CN.sh";
 export const LOCAL_GRANT_PRIORITY_TARGETS = Object.freeze(["claude-code", "codex", "openclaw"]);
 const LOCAL_GRANT_READ_TOOLSETS = Object.freeze([
-  "lico.runtime.read",
-  "lico.storage.read",
-  "lico.jobs.read",
-  "lico.gateway.read",
-  "lico.agent.workspace.read",
-  "lico.result.export"
+  "meshrix.runtime.read",
+  "meshrix.storage.read",
+  "meshrix.jobs.read",
+  "meshrix.gateway.read",
+  "meshrix.agent.workspace.read",
+  "meshrix.result.export"
 ]);
 
 const LOCAL_GRANT_TARGET_MATCH = Object.freeze({
   openclaw: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.openclaw"
+    agentProfileId: "meshrix.mcp.openclaw"
   },
   "claude-code": {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.claude-code"
+    agentProfileId: "meshrix.mcp.claude-code"
   },
   codex: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.codex"
+    agentProfileId: "meshrix.mcp.codex"
   },
   antigravity: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.antigravity"
+    agentProfileId: "meshrix.mcp.antigravity"
   },
   opencode: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.opencode"
+    agentProfileId: "meshrix.mcp.opencode"
   },
   pi: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.pi"
+    agentProfileId: "meshrix.mcp.pi"
   },
   copilot: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.copilot"
+    agentProfileId: "meshrix.mcp.copilot"
   },
   "kilo-code": {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.kilo-code"
+    agentProfileId: "meshrix.mcp.kilo-code"
   },
   cursor: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.cursor"
+    agentProfileId: "meshrix.mcp.cursor"
   },
   hermes: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
-    agentProfileId: "lico.mcp.hermes"
+    agentProfileId: "meshrix.mcp.hermes"
   }
 });
 
@@ -90,7 +90,7 @@ export const LOCAL_MCP_AUTHORIZATION_REPLAY_TTL_MS = 2 * 60 * 1000;
 export const LOCAL_MCP_AUTHORIZATION_REQUEST_MAX_PERSISTED_BYTES = 64 * 1024;
 
 const LOCAL_MCP_AUTHORIZATION_REPLAY_ENVELOPE_VERSION = 1;
-const LOCAL_MCP_AUTHORIZATION_REPLAY_CONTEXT = "lico-local-mcp-authorization-replay";
+const LOCAL_MCP_AUTHORIZATION_REPLAY_CONTEXT = "meshrix-local-mcp-authorization-replay";
 const LOCAL_MCP_PROCESS_IDENTITY_FIELDS = new Set([
   "clientId",
   "installationId",
@@ -246,8 +246,8 @@ export function openLocalMcpAuthorizationReplay({ claimToken = "", requestId = "
 
 export function normalizeApiKeyHeader(request) {
 	const headers = request?.headers || {};
-	if (!headers.authorization && !headers["x-lico-tool-token"] && headers["x-licomesh-api-key"]) {
-		headers["x-lico-tool-token"] = String(headers["x-licomesh-api-key"] || "").trim();
+	if (!headers.authorization && !headers["x-meshrix-tool-token"] && headers["x-meshrix-api-key"]) {
+		headers["x-meshrix-tool-token"] = String(headers["x-meshrix-api-key"] || "").trim();
 	}
 }
 
@@ -341,7 +341,7 @@ export function localMcpGrantTargets(grant) {
 export function isLocalMcpGrant(grant) {
   const metadata = grantMetadata(grant);
   return (
-    String(metadata.issuedBy || "").trim() === "lico-mcp-local-pairing" ||
+    String(metadata.issuedBy || "").trim() === "meshrix-mcp-local-pairing" ||
     String(grant?.type || "").trim() === "mcp-client"
   );
 }
@@ -575,8 +575,8 @@ export function grantCanSeeTool(tool, grant = null) {
 
 export function hasSafetyConfirm(request = null) {
   const value = String(
-    request?.headers?.["x-lico-safety-confirm"] ||
-      request?.headers?.["x-lico-confirm"] ||
+    request?.headers?.["x-meshrix-safety-confirm"] ||
+      request?.headers?.["x-meshrix-confirm"] ||
       ""
   ).toLowerCase();
   return ["1", "true", "yes"].includes(value);
@@ -683,7 +683,7 @@ export async function authorizeLocalGrantIssuance({
     return denyLocalGrant(
       403,
       "confirmation_required",
-      "Write-capable MCP local grants require x-lico-safety-confirm: true.",
+      "Write-capable MCP local grants require x-meshrix-safety-confirm: true.",
       { maxRisk: resolvedRisk }
     );
   }

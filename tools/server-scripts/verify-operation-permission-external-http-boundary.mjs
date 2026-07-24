@@ -17,7 +17,7 @@ const REPORT_PATH = "build/reports/operation-permission-external-http-boundary.j
 const AGENT_PROFILE_ID = "verify-http-boundary-agent";
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-tool-http-boundary-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-tool-http-boundary-"));
 const dynamicSecretNeedles = new Set();
 const mcpIdentityByToken = new Map();
 const report = {
@@ -38,7 +38,7 @@ function safeEvidence(value = {}) {
       if (needle && child.includes(needle)) return "[redacted-dynamic-secret]";
     }
     if (child.includes(userDataPath) || child.includes(os.homedir())) return "[redacted-local-path]";
-    if (/Bearer\s+\S+/i.test(child) || /lico_[a-z0-9_-]+=/i.test(child)) return "[redacted-secret]";
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[a-z0-9_-]+=/i.test(child)) return "[redacted-secret]";
     if (/grant_|tool_exec|trace_|policy_/i.test(child)) return "[redacted-runtime-id]";
     return child;
   }));
@@ -52,7 +52,7 @@ function assertNoLeak(value, label = "payload") {
     assert.equal(needle ? serialized.includes(needle) : false, false, `${label} leaked dynamic secret`);
   }
   assert.equal(/Bearer\s+\S+/i.test(serialized), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[a-z0-9_-]+=/i.test(serialized), false, `${label} leaked cookie`);
+  assert.equal(/meshrix_[a-z0-9_-]+=/i.test(serialized), false, `${label} leaked cookie`);
 }
 
 async function writeReport() {
@@ -134,7 +134,7 @@ async function grantToken() {
       connectorVersion: "verify-operation-permission-external-http-boundary",
       agentProfileId: AGENT_PROFILE_ID,
       grantMode: "maintain",
-      toolsets: ["lico.gateway.read"],
+      toolsets: ["meshrix.gateway.read"],
       processIdentity: verifierIdentity.request
     }
   });
@@ -168,14 +168,14 @@ async function toolRequest(route, token, body) {
     headers: {
       ...signedHeaders,
       Authorization: `Bearer ${token}`,
-      "X-Lico-Agent-Profile-Id": AGENT_PROFILE_ID
+      "X-Meshrix-Agent-Profile-Id": AGENT_PROFILE_ID
     },
     body: bodyText
   });
 }
 
 function assertNoTrustedLocalGate(payload, label) {
-  assert.equal(JSON.stringify(payload).includes("trusted_lico_client_required"), false, `${label} returned trusted local gate`);
+  assert.equal(JSON.stringify(payload).includes("trusted_meshrix_client_required"), false, `${label} returned trusted local gate`);
 }
 
 try {
@@ -196,7 +196,7 @@ try {
 
   await test("grant token can execute a governed read tool through HTTP", async () => {
     const response = await toolRequest("/api/operation-permission/v1/execute", token, {
-      toolId: "lico.gateway.metrics",
+      toolId: "meshrix.gateway.metrics",
       input: {}
     });
     assert.equal(response.status, 200, JSON.stringify(response.payload, null, 2));
@@ -207,7 +207,7 @@ try {
 
   await test("grant token can dry-run the same governed HTTP boundary", async () => {
     const response = await toolRequest("/api/operation-permission/v1/dry-run", token, {
-      toolId: "lico.gateway.metrics",
+      toolId: "meshrix.gateway.metrics",
       input: {}
     });
     assert.equal(response.status, 200, JSON.stringify(response.payload, null, 2));
@@ -218,8 +218,8 @@ try {
   await test("grant token can batch governed read operations through HTTP", async () => {
     const response = await toolRequest("/api/operation-permission/v1/batch", token, {
       calls: [
-        { toolId: "lico.gateway.metrics", input: {} },
-        { toolId: "lico.gateway.externalServices.list", input: {} }
+        { toolId: "meshrix.gateway.metrics", input: {} },
+        { toolId: "meshrix.gateway.externalServices.list", input: {} }
       ]
     });
     assert.equal(response.status, 200, JSON.stringify(response.payload, null, 2));
@@ -233,14 +233,14 @@ try {
     const missing = await fetchJson("/api/operation-permission/v1/execute", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toolId: "lico.gateway.metrics", input: {} })
+      body: JSON.stringify({ toolId: "meshrix.gateway.metrics", input: {} })
     });
     assert.equal(missing.status, 401);
     assert.equal(missing.payload.error?.code, "missing_token");
     assertNoTrustedLocalGate(missing.payload, "missing token");
 
     const invalid = await toolRequest("/api/operation-permission/v1/execute", "ock_invalid_token_for_boundary_verifier", {
-      toolId: "lico.gateway.metrics",
+      toolId: "meshrix.gateway.metrics",
       input: {}
     });
     assert.equal(invalid.status, 401);
@@ -256,7 +256,7 @@ try {
     const audit = await api("GET", "/api/operation-permission/v1/audit?limit=20");
     assert.equal(audit.status, 200, JSON.stringify(audit.payload, null, 2));
     const executions = audit.payload.items || [];
-    assert.equal(executions.some((item) => item.toolId === "lico.gateway.metrics" && item.status === "ok"), true);
+    assert.equal(executions.some((item) => item.toolId === "meshrix.gateway.metrics" && item.status === "ok"), true);
     const metrics = await api("GET", "/api/operation-permission/v1/metrics/summary?limit=20");
     assert.equal(metrics.status, 200, JSON.stringify(metrics.payload, null, 2));
     assertNoLeak(audit.payload, "tool audit");

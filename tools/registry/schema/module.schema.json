@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/module.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/module.schema.json",
   "title": "Module Registry",
   "description": "Registry of every domain module, its public API, operations, and metadata.",
   "type": "object",

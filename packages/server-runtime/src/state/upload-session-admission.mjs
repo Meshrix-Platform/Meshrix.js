@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { openSqliteDatabase } from "@lico/foundation/storage/sqlite-database";
+import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 
 // Server safety ceilings. These do not represent or populate user configuration.
 export const UPLOAD_SESSION_MAX_FILE_COUNT = 256;

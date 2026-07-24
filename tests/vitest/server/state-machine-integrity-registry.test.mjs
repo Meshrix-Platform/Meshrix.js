@@ -12,7 +12,7 @@ import { computeStateMachineDefinitionHash } from "../../../packages/foundation/
 import { runVerifier } from "../../../tools/server-scripts/verify-state-machines.mjs";
 
 async function withTempDir(callback) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-state-machine-integrity-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-state-machine-integrity-"));
   try {
     return await callback(dir);
   } finally {

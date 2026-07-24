@@ -66,7 +66,7 @@ Pending operations store approval requirements and approval layers as a redacted
 
 ## Current External Execution Boundary
 
-Operation Permission v1 is the current external execution boundary. External agent clients call `/api/operation-permission/v1/execute`, `/api/operation-permission/v1/dry-run`, or `/api/operation-permission/v1/batch` with a grant token in `Authorization: Bearer <token>` or `x-lico-tool-token`; token policy handles grant state, scope, and binding decisions. MCP clients use the `/mcp` outlet projection for the same governed operations.
+Operation Permission v1 is the current external execution boundary. External agent clients call `/api/operation-permission/v1/execute`, `/api/operation-permission/v1/dry-run`, or `/api/operation-permission/v1/batch` with a grant token in `Authorization: Bearer <token>` or `x-meshrix-tool-token`; token policy handles grant state, scope, and binding decisions. MCP clients use the `/mcp` outlet projection for the same governed operations.
 
 This is an authorization and operation-mediation boundary, not operating-system execution isolation. A governed executable workload additionally requires the target [Execution Sandbox](../architecture/EXECUTION-SANDBOX.md), which enforces the effective filesystem, process, network, secret, resource, output, and tenant restrictions. Missing sandbox enablement, backend configuration, an enforceable policy, or a current per-run grant keeps that workload denied; Operation Permission does not authorize a host-process fallback.
 

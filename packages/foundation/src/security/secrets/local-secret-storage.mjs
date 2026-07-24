@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   ensurePrivateDir as ensurePrivateDirSync,
   writePrivateFileAtomic
@@ -142,7 +142,7 @@ async function acquireMutationLock(dataDir = "") {
       await delay(15 + crypto.randomInt(35));
     }
   }
-  const error = new Error("LicoMesh local secret store is busy; retry the operation.");
+  const error = new Error("Meshrix local secret store is busy; retry the operation.");
   error.code = "local_secret_store_busy";
   throw error;
 }
@@ -158,7 +158,7 @@ async function mutationLockOwned(lock) {
 
 export async function assertLocalSecretMutationLockOwned(lock) {
   if (await mutationLockOwned(lock)) return;
-  const error = new Error("LicoMesh local secret mutation lock ownership was lost.");
+  const error = new Error("Meshrix local secret mutation lock ownership was lost.");
   error.code = "local_secret_store_lock_lost";
   throw error;
 }

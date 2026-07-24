@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 import {
   buildProductionHealthReport,
   PRODUCTION_HEALTH_REPORT_TYPE
@@ -76,7 +76,7 @@ async function writeSampleReport(root, runId, overrides = {}) {
 }
 
 async function verifyReportReader() {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-production-health-"));
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-production-health-"));
   const reportRoot = path.join(tempRoot, "reports", "production-readiness");
   try {
     const missing = await buildProductionHealthReport({
@@ -260,7 +260,7 @@ async function main() {
   await verifyReportReader();
   verifyOperationRegistry();
   await verifyFrontendWiring();
-  const currentDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-production-health-current-"));
+  const currentDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-production-health-current-"));
   try {
     const current = await buildProductionHealthReport({
       repoRoot,

@@ -1,9 +1,9 @@
-import { sendJson } from "#lico/http-utils";
+import { sendJson } from "#meshrix/http-utils";
 import {
   getStaticSemanticFamily,
   listStaticSemanticFamilyPublicSummaries,
   staticSemanticFamilyPublicSummary
-} from "#lico/contracts/operations/static-semantic-family-catalog";
+} from "#meshrix/contracts/operations/static-semantic-family-catalog";
 
 export function createSystemControllerCapabilityEcosystemHandlers({
   sendConsoleDomainOperation,
@@ -92,7 +92,7 @@ export function createSystemControllerCapabilityEcosystemHandlers({
       sendJson(response, 200, {
         ok: true,
         schemaVersion: "v0.0.1:schema:definition-1",
-        kind: "lico.operation.static-semantic-family-catalog",
+        kind: "meshrix.operation.static-semantic-family-catalog",
         families: listStaticSemanticFamilyPublicSummaries()
       });
     },

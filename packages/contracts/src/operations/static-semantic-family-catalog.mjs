@@ -1,7 +1,7 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 
-export const OPERATION_STATIC_SEMANTIC_FAMILY_CATALOG_KIND = "lico.operation.static-semantic-family-catalog";
+export const OPERATION_STATIC_SEMANTIC_FAMILY_CATALOG_KIND = "meshrix.operation.static-semantic-family-catalog";
 export const OPERATION_STATIC_SEMANTIC_FAMILY_PROTOCOL_VERSION = "v0.0.1:operation-registry:static-semantic-family-2";
 
 

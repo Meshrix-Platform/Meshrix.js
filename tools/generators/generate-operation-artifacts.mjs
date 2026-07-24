@@ -325,7 +325,7 @@ function openApiResponses(operation = {}) {
       content: {
         "application/json": { schema: errors[0].contract.responseSchema }
       },
-      "x-lico-error-codes": Object.fromEntries(errors.map(({ code, contract: errorContract }) => [
+      "x-meshrix-error-codes": Object.fromEntries(errors.map(({ code, contract: errorContract }) => [
         code,
         { retry: errorContract.retry }
       ]))
@@ -351,10 +351,10 @@ function generateOpenApi(registry) {
       tags: [op.feature || "general"],
       security: op.public ? [] : [{ bearerAuth: [] }],
       ...(op.http?.headerContract
-        ? { "x-lico-http-header-contract": op.http.headerContract }
+        ? { "x-meshrix-http-header-contract": op.http.headerContract }
         : {}),
       ...(Array.isArray(op.http?.admissionDimensions)
-        ? { "x-lico-admission-dimensions": op.http.admissionDimensions }
+        ? { "x-meshrix-admission-dimensions": op.http.admissionDimensions }
         : {}),
       requestBody: method !== "get" && op.inputSchema ? {
         required: true,
@@ -368,7 +368,7 @@ function generateOpenApi(registry) {
     "$comment": `GENERATED - DO NOT EDIT MANUALLY. Source: ${SOURCE_OPERATION_REGISTRY}`,
     openapi: "3.1.0",
     info: {
-      title: "LicoMesh API",
+      title: "Meshrix API",
       version: registry.version || "v1.0.0",
       description: `Generated from ${SOURCE_OPERATION_REGISTRY}`,
     },

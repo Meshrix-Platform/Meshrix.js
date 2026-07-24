@@ -1,15 +1,15 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { openSqliteDatabase } from "../../storage/sqlite-database.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   ensurePrivateSqliteLocation,
   withPrivateFileCreationMask
 } from "../../storage/private-sqlite.mjs";
 
 export const ORGANIZATION_MODEL_PROTOCOL_VERSION = "v0.0.1:platform:organization-model-1";
-export const LICO_ROOT_ORGANIZATION_ID = "lico-root";
-export const LICO_ROOT_ORGANIZATION_LABEL = "LicoMesh Root";
+export const MESHRIX_ROOT_ORGANIZATION_ID = "meshrix-root";
+export const MESHRIX_ROOT_ORGANIZATION_LABEL = "Meshrix Root";
 
 function nowIso() {
   return new Date().toISOString();
@@ -37,7 +37,7 @@ function normalizeNodeId(value, fallbackPrefix) {
 }
 
 function normalizeParentId(value) {
-  return String(value || LICO_ROOT_ORGANIZATION_ID).trim() || LICO_ROOT_ORGANIZATION_ID;
+  return String(value || MESHRIX_ROOT_ORGANIZATION_ID).trim() || MESHRIX_ROOT_ORGANIZATION_ID;
 }
 
 function nodeFromRow(row) {
@@ -130,13 +130,13 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
   }
 
   function seedRoot() {
-    const existing = getNode(LICO_ROOT_ORGANIZATION_ID);
+    const existing = getNode(MESHRIX_ROOT_ORGANIZATION_ID);
     const timestamp = nowIso();
     upsertNodeStmt.run(
-      LICO_ROOT_ORGANIZATION_ID,
+      MESHRIX_ROOT_ORGANIZATION_ID,
       "root",
       "",
-      LICO_ROOT_ORGANIZATION_LABEL,
+      MESHRIX_ROOT_ORGANIZATION_LABEL,
       "",
       stringifyJson({ authorizationBoundary: false }, {}),
       existing?.createdAt || timestamp,
@@ -153,7 +153,7 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
       throw new Error("Users cannot have child organizations or users.");
     }
     if (childType === "root") {
-      throw new Error("LicoMesh Root cannot have a parent.");
+      throw new Error("Meshrix Root cannot have a parent.");
     }
     if (childId && parent.nodeId === childId) {
       throw new Error("Organization tree cannot parent a node to itself.");
@@ -169,17 +169,17 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
     }
   }
 
-  function upsertNode({ nodeId, nodeType, parentId = LICO_ROOT_ORGANIZATION_ID, label = "", username = "", metadata = {} } = {}) {
+  function upsertNode({ nodeId, nodeType, parentId = MESHRIX_ROOT_ORGANIZATION_ID, label = "", username = "", metadata = {} } = {}) {
     const normalizedType = String(nodeType || "").trim();
     if (!["root", "organization", "user"].includes(normalizedType)) {
       throw new Error(`Unsupported organization node type: ${normalizedType || "(empty)"}`);
     }
     const id = normalizeNodeId(nodeId, normalizedType);
-    if (id === LICO_ROOT_ORGANIZATION_ID && normalizedType !== "root") {
-      throw new Error("LicoMesh Root id is reserved.");
+    if (id === MESHRIX_ROOT_ORGANIZATION_ID && normalizedType !== "root") {
+      throw new Error("Meshrix Root id is reserved.");
     }
-    if (normalizedType === "root" && id !== LICO_ROOT_ORGANIZATION_ID) {
-      throw new Error("Only LicoMesh Root may use node type root.");
+    if (normalizedType === "root" && id !== MESHRIX_ROOT_ORGANIZATION_ID) {
+      throw new Error("Only Meshrix Root may use node type root.");
     }
     const parent = normalizedType === "root" ? "" : normalizeParentId(parentId);
     if (normalizedType !== "root") {
@@ -187,7 +187,7 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
     }
     const existing = getNode(id);
     if (existing?.nodeType === "root") {
-      throw new Error("LicoMesh Root is immutable.");
+      throw new Error("Meshrix Root is immutable.");
     }
     const timestamp = nowIso();
     upsertNodeStmt.run(
@@ -207,7 +207,7 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
     return upsertNode({
       nodeId: input.organizationId || input.orgId || input.nodeId || input.id,
       nodeType: "organization",
-      parentId: input.parentId || input.parentOrganizationId || LICO_ROOT_ORGANIZATION_ID,
+      parentId: input.parentId || input.parentOrganizationId || MESHRIX_ROOT_ORGANIZATION_ID,
       label: input.label || input.name,
       metadata: input.metadata
     });
@@ -217,20 +217,20 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
     return upsertNode({
       nodeId: input.userId || input.nodeId || input.id,
       nodeType: "user",
-      parentId: input.parentId || input.organizationId || input.orgId || LICO_ROOT_ORGANIZATION_ID,
+      parentId: input.parentId || input.organizationId || input.orgId || MESHRIX_ROOT_ORGANIZATION_ID,
       label: input.label || input.displayName || input.username,
       username: input.username,
       metadata: input.metadata
     });
   }
 
-  function moveNode(nodeId, parentId = LICO_ROOT_ORGANIZATION_ID) {
+  function moveNode(nodeId, parentId = MESHRIX_ROOT_ORGANIZATION_ID) {
     const node = getNode(nodeId);
     if (!node) {
       throw new Error(`Unknown organization node: ${nodeId}`);
     }
     if (node.nodeType === "root") {
-      throw new Error("LicoMesh Root cannot be moved.");
+      throw new Error("Meshrix Root cannot be moved.");
     }
     return upsertNode({
       nodeId: node.nodeId,
@@ -246,7 +246,7 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
     return db.prepare("SELECT * FROM organization_tree_nodes ORDER BY node_type ASC, node_id ASC").all().map(nodeFromRow);
   }
 
-  function listChildren(parentId = LICO_ROOT_ORGANIZATION_ID) {
+  function listChildren(parentId = MESHRIX_ROOT_ORGANIZATION_ID) {
     return db.prepare("SELECT * FROM organization_tree_nodes WHERE parent_id = ? ORDER BY node_type ASC, node_id ASC")
       .all(String(parentId || ""))
       .map(nodeFromRow);
@@ -272,7 +272,7 @@ function createOrganizationModelStoreFromDatabase({ db, ownsDatabase }) {
     const nodes = listNodes();
     return {
       protocolVersion: ORGANIZATION_MODEL_PROTOCOL_VERSION,
-      root: getNode(LICO_ROOT_ORGANIZATION_ID),
+      root: getNode(MESHRIX_ROOT_ORGANIZATION_ID),
       nodeCount: nodes.length,
       organizationCount: nodes.filter((node) => node.nodeType === "organization").length,
       userCount: nodes.filter((node) => node.nodeType === "user").length,

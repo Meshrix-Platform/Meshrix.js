@@ -66,7 +66,7 @@ describe("plugin removal recovery composition", () => {
     resources.push(() => fixture.close());
     const installed = fixture.installed.get("sample-plugin");
     await installed.lifecycleStatePort.runExclusive(() => installed.lifecycleStatePort.writeRecord("ledger", {
-      schemaVersion: "licomesh.plugin-lifecycle-ledger/1",
+      schemaVersion: "meshrix.plugin-lifecycle-ledger/1",
       pluginId: "sample-plugin",
       state: "inactive",
       operation: "disable",
@@ -99,7 +99,7 @@ describe("plugin removal recovery composition", () => {
     });
     await installed.lifecycleStatePort.runExclusive(async () => {
       await installed.lifecycleStatePort.writeRecord("artifact-removal-journal", {
-        schemaVersion: "licomesh.plugin-artifact-removal-journal/1",
+        schemaVersion: "meshrix.plugin-artifact-removal-journal/1",
         recordType: "artifact_removal",
         pluginId: "sample-plugin",
         artifactDigest: installed.artifactDigest,
@@ -107,7 +107,7 @@ describe("plugin removal recovery composition", () => {
         phase: "content_removed"
       });
       await installed.lifecycleStatePort.writeRecord("ledger", {
-        schemaVersion: "licomesh.plugin-lifecycle-ledger/1",
+        schemaVersion: "meshrix.plugin-lifecycle-ledger/1",
         pluginId: "sample-plugin",
         state: "removal_pending",
         operation: "uninstall",
@@ -157,7 +157,7 @@ describe("plugin removal recovery composition", () => {
       await fs.rm(ledgerPath);
     } else {
       await installed.lifecycleStatePort.runExclusive(() => installed.lifecycleStatePort.writeRecord("ledger", {
-        schemaVersion: "licomesh.plugin-lifecycle-ledger/1",
+        schemaVersion: "meshrix.plugin-lifecycle-ledger/1",
         pluginId: override.pluginId,
         state: "active",
         operation: "",

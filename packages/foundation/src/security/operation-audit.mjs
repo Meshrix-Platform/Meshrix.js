@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -763,7 +763,7 @@ export function createOperationAuditStore({ userDataPath }) {
       ].join("\n") + "\n"
     }, {
       provenance: {
-        producer: "licomesh-core-operation-audit",
+        producer: "meshrix-core-operation-audit",
         commandId: "auth.audit.export",
         sourceRevision: manifest.protocolVersion
       }

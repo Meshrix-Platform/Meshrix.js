@@ -31,11 +31,11 @@ const RELEASE_EVIDENCE_INVENTORY = Object.freeze([Object.freeze({
   timestampField: "generatedAt",
   reportLeakScanField: "summary.reportLeakScan",
   reducer: "tools/reduce-child.mjs#createReadiness",
-  provenanceSchemaVersion: "licomesh.release-evidence.report-provenance.v1"
+  provenanceSchemaVersion: "v0.0.1:meshrix:release-evidence-report-provenance-1"
 })]);
 
 async function fixtureRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-acceptance-generation-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-generation-"));
   roots.push(root);
   await fs.mkdir(path.join(root, "node_modules"), { recursive: true });
   await fs.writeFile(path.join(root, "package.json"), "{}\n", "utf8");
@@ -51,7 +51,7 @@ async function writeWorkerEvidence(workspace, { includeChild = true, accepted = 
       generatedAt: "2026-01-01T00:00:00.000Z"
     };
     child.releaseEvidenceProvenance = {
-      schemaVersion: "licomesh.release-evidence.report-provenance.v1",
+      schemaVersion: "v0.0.1:meshrix:release-evidence-report-provenance-1",
       commandId: "child-verifier",
       producer: "tools/verify-child.mjs",
       recordedAt: "2026-01-01T00:00:00.000Z",
@@ -97,7 +97,7 @@ async function writeWorkerEvidence(workspace, { includeChild = true, accepted = 
     `${JSON.stringify({
       schemaVersion: "v0.0.1:acceptance:platform-report-2",
       verifier: "tools/server-scripts/verify-platform-acceptance.mjs",
-      selectedProfile: "core",
+      selectedProfile: "enterprise-single-node",
       status: accepted ? "accepted" : "failed",
       stateMachine: {
         ...PLATFORM_ACCEPTANCE_STATE_MACHINE,
@@ -115,13 +115,13 @@ async function writeWorkerEvidence(workspace, { includeChild = true, accepted = 
       releaseEvidenceInventory: RELEASE_EVIDENCE_INVENTORY,
       releaseEvidenceInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
       planReceiptPreflight: {
-        selectedProfile: "core",
+        selectedProfile: "enterprise-single-node",
         requiredReceiptCount: 1,
         bindings: [{}],
         planReceiptSetDigest: `sha256:${"b".repeat(64)}`
       },
       finalPlanReceiptPreflight: {
-        selectedProfile: "core",
+        selectedProfile: "enterprise-single-node",
         requiredReceiptCount: 1,
         bindings: [{}],
         planReceiptSetDigest: `sha256:${"b".repeat(64)}`
@@ -155,7 +155,7 @@ async function writeWorkerEvidence(workspace, { includeChild = true, accepted = 
           contentHash: `sha256:${"c".repeat(64)}`
         }],
         evidenceContext: {
-          selectedProfile: "core",
+          selectedProfile: "enterprise-single-node",
           ownedReportsInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
           planReceiptSetDigest: `sha256:${"b".repeat(64)}`,
           privacySafe: true
@@ -245,7 +245,7 @@ describe("platform acceptance generation store", () => {
     const current = await resolveFixture(repoRoot);
     expect(current.pointer.generationId).toBe("accepted-generation");
     expect(current.manifest.generationId).toBe("accepted-generation");
-    expect(current.manifest.selectedProfile).toBe("core");
+    expect(current.manifest.selectedProfile).toBe("enterprise-single-node");
     expect(current.pointer.manifestSha256).toMatch(/^[a-f0-9]{64}$/u);
     await expect(fs.readFile(path.join(repoRoot, "build", "reports", "child.json"), "utf8"))
       .rejects.toMatchObject({ code: "ENOENT" });

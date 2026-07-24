@@ -2,13 +2,13 @@ import {
   buildMcpHandshakePayload,
   publicMcpIdentity,
   signMcpHandshake
-} from "./mcp-identity.mjs";
+} from "./gateway-installer/mcp-identity.mjs";
 import {
   DEFAULT_TIMEOUT_MS,
-  LICO_MCP_DISCOVERY_FILE,
-  LICO_MCP_DISCOVERY_FILE_ENV,
-  LICO_MCP_DISCOVERY_URL_ENV,
-  LICO_MCP_URL_ENV,
+  MESHRIX_MCP_DISCOVERY_FILE,
+  MESHRIX_MCP_DISCOVERY_FILE_ENV,
+  MESHRIX_MCP_DISCOVERY_URL_ENV,
+  MESHRIX_MCP_URL_ENV,
   MCP_BOOTSTRAP_INSTALL_SCRIPT,
   MCP_BOOTSTRAP_INSTALL_SCRIPT_ZH_CN,
   MCP_BOOTSTRAP_UNINSTALL_SCRIPT,
@@ -30,6 +30,7 @@ import {
 } from "./http-mcp-adapter-constants.mjs";
 import {
   MCP_CLIENT_ADAPTER_PROTOCOL,
+  mcpPublicSupportedTargetDetails as releaseMcpPublicSupportedTargetDetails,
   mcpSupportedTargetDetails as releaseMcpSupportedTargetDetails
 } from "./mcp-release-targets.mjs";
 import { parseRequestBody } from "./http-mcp-adapter-response.mjs";
@@ -41,7 +42,7 @@ export function mcpVersionInfo() {
     serverVersion: MCP_SERVER_VERSION,
     stableToolName: MCP_STABLE_TOOL_NAME,
     categorizedOutlets: [MCP_DISCOVERY_TOOL_NAME, MCP_GATEWAY_TOOL_NAME],
-    capabilitiesSummary: "LicoMesh MCP gateway layer. Plugin outlets are advertised only when their contributions are active and visible.",
+    capabilitiesSummary: "Meshrix MCP gateway layer. Plugin outlets are advertised only when their contributions are active and visible.",
     capabilityFamilies: {},
     listChanged: true,
     upgradeNotification: "notifications/tools/list_changed",
@@ -94,7 +95,7 @@ export function mcpRuntimeMetadata({ listenUrl = "", discoveryState = null } = {
     connector: mcpConnectorRuntimeMetadata(discovery, version),
     sharedHub: discovery.sharedHub,
     priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
-    supportedTargets: mcpSupportedTargetDetails()
+    supportedTargets: mcpPublicSupportedTargetDetails()
   };
 }
 
@@ -110,7 +111,7 @@ export function mcpAuthorizationErrorData({ authorization = {}, listenUrl = "", 
     authorizationRequestEndpoint: discovery.installer.authorizationRequestEndpoint,
     authorizationConsumeEndpointTemplate: discovery.installer.authorizationConsumeEndpointTemplate,
     priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
-    supportedTargets: mcpSupportedTargetDetails(),
+    supportedTargets: mcpPublicSupportedTargetDetails(),
     nextCommand,
     nextCommandZhCN,
     repairCommands: [
@@ -182,7 +183,17 @@ function mcpTargetConfigTemplate(_target, { baseUrl = "", vmBaseUrl = "" } = {})
     endpoint: {
       httpUrl: `${baseUrl}/mcp`,
       vmHttpUrl: `${vmBaseUrl}/mcp`,
-      tokenEnv: "LICO_MCP_TOKEN"
+      tokenEnv: "MESHRIX_MCP_TOKEN"
+    }
+  };
+}
+
+function mcpPublicTargetConfigTemplate(_target, { baseUrl = "", vmBaseUrl = "" } = {}) {
+  return {
+    endpoint: {
+      httpUrl: `${baseUrl}/mcp`,
+      vmHttpUrl: `${vmBaseUrl}/mcp`,
+      tokenEnv: "MESHRIX_MCP_TOKEN"
     }
   };
 }
@@ -190,7 +201,10 @@ function mcpTargetConfigTemplate(_target, { baseUrl = "", vmBaseUrl = "" } = {})
 function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "", githubOneLineCommand = "", githubOneLineCommandZhCN = "" } = {}) {
   const urlArgs = commandUrlArgs(baseUrl);
   return MCP_CLIENT_TARGETS.map((client) => ({
-    ...client,
+    target: client.target,
+    label: client.label,
+    priority: client.priority,
+    locations: [...client.locations],
     endpoints: {
       mcpUrl: `${baseUrl}/mcp`,
       vmMcpUrl: `${vmBaseUrl}/mcp`
@@ -206,12 +220,16 @@ function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "", githubOneLineComm
       doctor: `${githubOneLineCommand} -- doctor${urlArgs} --json`
     },
     tokenInput: "device-authorization-or-stdin-or-env",
-    configTemplate: mcpTargetConfigTemplate(client.target, { baseUrl, vmBaseUrl })
+    configTemplate: mcpPublicTargetConfigTemplate(client.target, { baseUrl, vmBaseUrl })
   }));
 }
 
 export function mcpSupportedTargetDetails() {
   return releaseMcpSupportedTargetDetails();
+}
+
+export function mcpPublicSupportedTargetDetails() {
+  return releaseMcpPublicSupportedTargetDetails();
 }
 
 export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } = {}) {
@@ -240,11 +258,11 @@ export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } 
   const discoverCommand = `${githubOneLineCommand} -- discover-local${urlArgs} --json`;
   const scanCommand = `${githubOneLineCommand} -- scan${urlArgs} --json`;
   const clientTargets = mcpClientTargetGuides({ baseUrl, vmBaseUrl, githubOneLineCommand, githubOneLineCommandZhCN });
-  const supportedTargets = mcpSupportedTargetDetails();
+  const supportedTargets = mcpPublicSupportedTargetDetails();
   return {
     schemaVersion: "v0.0.1:schema:definition-1",
-    name: "LicoMesh",
-    description: "LicoMesh MCP gateway layer. Provides Discovery, Gateway, and enabled plugin outlets.",
+    name: "Meshrix",
+    description: "Meshrix MCP gateway layer. Provides Discovery, Gateway, and enabled plugin outlets.",
     interfaceVersion: MCP_INTERFACE_VERSION,
     toolsetVersion: MCP_TOOLSET_VERSION,
     serverVersion: MCP_SERVER_VERSION,
@@ -260,26 +278,26 @@ export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } 
     localDiscovery: {
       entrypoint: {
         command: discoverCommand,
-        registryFile: LICO_MCP_DISCOVERY_FILE,
+        registryFile: MESHRIX_MCP_DISCOVERY_FILE,
         schemaVersion: "v0.0.1:mcp:device-hub-1"
       },
       env: {
-        [LICO_MCP_URL_ENV]: `${baseUrl}/mcp`,
-        [LICO_MCP_DISCOVERY_URL_ENV]: `${baseUrl}/.well-known/lico/mcp.json`,
-        [LICO_MCP_DISCOVERY_FILE_ENV]: LICO_MCP_DISCOVERY_FILE
+        [MESHRIX_MCP_URL_ENV]: `${baseUrl}/mcp`,
+        [MESHRIX_MCP_DISCOVERY_URL_ENV]: `${baseUrl}/.well-known/meshrix/mcp.json`,
+        [MESHRIX_MCP_DISCOVERY_FILE_ENV]: MESHRIX_MCP_DISCOVERY_FILE
       },
       files: [
-        LICO_MCP_DISCOVERY_FILE
+        MESHRIX_MCP_DISCOVERY_FILE
       ],
       http: [
-        `${baseUrl}/.well-known/lico/mcp.json`,
+        `${baseUrl}/.well-known/meshrix/mcp.json`,
         `${baseUrl}/api/mcp/discovery`
       ],
       lookupOrder: [
-        "lico-mcp discover-local --json",
-        "LICO_MCP_URL",
-        "LICO_MCP_DISCOVERY_URL",
-        "LICO_MCP_DISCOVERY_FILE",
+        "meshrix-mcp discover-local --json",
+        "MESHRIX_MCP_URL",
+        "MESHRIX_MCP_DISCOVERY_URL",
+        "MESHRIX_MCP_DISCOVERY_FILE",
         "local port scan"
       ]
     },
@@ -343,8 +361,8 @@ export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } 
         githubOneLinePriorityInstallCommand,
         githubOneLinePriorityInstallCommandZhCN,
         supportsMultiSelect: true,
-        releaseAssetPattern: "lico-mcp-connector-<version>-<platform>.<tar.gz|zip>",
-        tarballReleaseAssetPattern: "lico-mcp-connector-<version>-<platform>.tar.gz",
+        releaseAssetPattern: "meshrix-mcp-connector-<version>-<platform>.<tar.gz|zip>",
+        tarballReleaseAssetPattern: "meshrix-mcp-connector-<version>-<platform>.tar.gz",
         zipInstallEntry: "",
         installCommand,
         interactiveInstallCommand,
@@ -380,20 +398,20 @@ export function buildLicoMcpDiscovery({ listenUrl = "", discoveryState = null } 
       doctorCommand
     },
     mcpServers: {
-      lico: {
+      meshrix: {
         httpUrl: `${baseUrl}/mcp`,
         vmHttpUrl: `${vmBaseUrl}/mcp`,
         headers: {
-          "X-LicoMesh-Api-Key": "${LICO_MCP_TOKEN}"
+          "X-Meshrix-Api-Key": "${MESHRIX_MCP_TOKEN}"
         },
-        authProviderType: "lico_api_key",
+        authProviderType: "meshrix_api_key",
         timeout: DEFAULT_TIMEOUT_MS
       }
     },
     auth: {
-      type: "lico_operation_permission_token",
-      acceptedHeaders: ["Authorization: Bearer <token>", "X-LicoMesh-Api-Key"],
-      tokenSource: "LicoMesh Operation Permission grant token"
+      type: "meshrix_operation_permission_token",
+      acceptedHeaders: ["Authorization: Bearer <token>", "X-Meshrix-Api-Key"],
+      tokenSource: "Meshrix Operation Permission grant token"
     },
     identity: discoveryState?.mcpIdentity
       ? publicMcpIdentity(discoveryState.mcpIdentity)
@@ -414,9 +432,9 @@ function validHandshakeNonce(value) {
 }
 
 function gatewayTransitEvidence(request) {
-  const adapterId = String(request?.headers?.["x-licomesh-gateway"] || "").trim().toLowerCase();
-  const route = String(request?.headers?.["x-licomesh-gateway-route"] || "").trim();
-  const requestId = String(request?.headers?.["x-licomesh-gateway-request-id"] || "").trim();
+  const adapterId = String(request?.headers?.["x-meshrix-gateway"] || "").trim().toLowerCase();
+  const route = String(request?.headers?.["x-meshrix-gateway-route"] || "").trim();
+  const requestId = String(request?.headers?.["x-meshrix-gateway-request-id"] || "").trim();
   if (!["caddy", "nginx"].includes(adapterId) || route !== "/api/mcp/handshake" || !requestId) {
     return null;
   }
@@ -431,7 +449,7 @@ export function mcpHandshake({ request = null, requestBody, listenUrl = "", disc
       status: 503,
       body: {
         ok: false,
-        error: "LicoMesh MCP identity is not available."
+        error: "Meshrix MCP identity is not available."
       }
     };
   }
@@ -479,7 +497,7 @@ export function mcpInitializeResult({ listenUrl = "", discoveryState = null } = 
       }
     },
     serverInfo: {
-      name: "LicoMesh",
+      name: "Meshrix",
       version: MCP_SERVER_VERSION
     },
     _meta: mcpRuntimeMetadata({ listenUrl, discoveryState })

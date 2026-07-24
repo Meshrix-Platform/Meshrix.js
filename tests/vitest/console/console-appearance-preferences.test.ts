@@ -18,10 +18,10 @@ describe("console appearance preferences", () => {
   });
 
   it("returns null for an unknown appearance preset id", () => {
-    window.localStorage.setItem("lico-appearance-preset", "unknown-preset");
+    window.localStorage.setItem("meshrix-appearance-preset", "unknown-preset");
 
     expect(readStoredAppearancePreset()).toBeNull();
-    expect(window.localStorage.getItem("lico-appearance-preset")).toBe("unknown-preset");
+    expect(window.localStorage.getItem("meshrix-appearance-preset")).toBe("unknown-preset");
   });
 
   it("applies the active preset through the document dataset", () => {
@@ -58,7 +58,7 @@ describe("console appearance preferences", () => {
       .map((config) => [config.id, config.label["zh-CN"]]);
 
     expect(darkPresets).toEqual([
-      ["lico-crystal", "黑晶灿金"],
+      ["meshrix-crystal", "黑晶灿金"],
       ["sunset-ember", "落日余烬"],
       ["tokyo-night", "东京之夜"],
       ["cappuccino-dark", "卡布奇诺"],
@@ -70,10 +70,10 @@ describe("console appearance preferences", () => {
     ]);
   });
 
-  it("applies the shared Lico Crystal black-and-yellow palette", async () => {
+  it("applies the shared Meshrix Crystal black-and-yellow palette", async () => {
     await refreshAvailableAppearancePresetConfigs();
 
-    applyAppearancePresetDocument("lico-crystal");
+    applyAppearancePresetDocument("meshrix-crystal");
 
     const expectedTokens = {
       "--bg-base": "#070707",
@@ -97,7 +97,7 @@ describe("console appearance preferences", () => {
       "--danger": "#ff5a4e",
     };
 
-    expect(document.documentElement.dataset.appearancePreset).toBe("lico-crystal");
+    expect(document.documentElement.dataset.appearancePreset).toBe("meshrix-crystal");
     expect(document.documentElement.style.colorScheme).toBe("dark");
     for (const [tokenName, value] of Object.entries(expectedTokens)) {
       expect(document.documentElement.style.getPropertyValue(tokenName)).toBe(value);
