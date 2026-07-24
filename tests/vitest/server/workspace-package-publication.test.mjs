@@ -25,7 +25,7 @@ describe("workspace package publication boundary", () => {
       bugs: {
         url: "https://github.com/LicoLand/Meshrix/issues"
       },
-      homepage: "https://github.com/LicoLand/Meshrix#readme"
+      homepage: "https://meshrix.io"
     });
   });
 

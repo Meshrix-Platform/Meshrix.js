@@ -116,9 +116,9 @@ describe("ContextManagementView configuration truthfulness", () => {
       "",
       "",
       "128000",
-      "40000",
-      "32000",
-      "20000",
+      "40960",
+      "32768",
+      "20480",
       "0.08",
     ]);
     await inputs[0].setValue("new-profile");

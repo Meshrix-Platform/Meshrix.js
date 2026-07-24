@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,6 +18,33 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 function readJson(relativePath) {
   return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8"));
+}
+
+let planFixtureRoot = "";
+
+// The live docs/plans tree is gitignored local state, so the audit
+// materializes a controlled plan tree for the fixture checkpoints it governs
+// instead of depending on untracked repository content.
+function planFixtureCheckpointsPath(planOwner) {
+  if (!planFixtureRoot) {
+    planFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "organization-closure-plan-"));
+    const owners = { ...ORGANIZATION_ROOT_FACTS, ...MATRIX_CAPABILITY_FACTS };
+    const idsByOwner = new Map();
+    for (const owner of Object.values(owners)) {
+      const ids = idsByOwner.get(owner.plan_owner) ?? [];
+      ids.push(owner.plan_node);
+      idsByOwner.set(owner.plan_owner, ids);
+    }
+    for (const [owner, ids] of idsByOwner) {
+      const directory = path.join(planFixtureRoot, ...owner.split("/"));
+      fs.mkdirSync(directory, { recursive: true });
+      fs.writeFileSync(
+        path.join(directory, "Checkpoints.json"),
+        `${JSON.stringify(ids.map((id) => ({ id })), null, 2)}\n`
+      );
+    }
+  }
+  return path.join(planFixtureRoot, ...planOwner.split("/"), "Checkpoints.json");
 }
 
 const CAPABILITY_MATRIX_PATH = "tools/registry/open-platform-capability-matrix.json";
@@ -386,7 +414,7 @@ function closureFixture() {
   ];
   const allFacts = { ...ORGANIZATION_ROOT_FACTS, ...MATRIX_CAPABILITY_FACTS };
   const planFacts = Object.entries(allFacts).map(([capability, owners]) => {
-    const checkpoints = readJson(`${owners.plan_owner}/Checkpoints.json`);
+    const checkpoints = JSON.parse(fs.readFileSync(planFixtureCheckpointsPath(owners.plan_owner), "utf8"));
     expect(checkpoints.some((checkpoint) => checkpoint.id === owners.plan_node)).toBe(true);
     return { capability, plan_owner: owners.plan_owner, plan_node: owners.plan_node };
   });
