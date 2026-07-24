@@ -1,4 +1,4 @@
-import { runMigrations } from "@lico/foundation/storage/sqlite-migrations";
+import { runMigrations } from "@meshrix/foundation/storage/sqlite-migrations";
 
 function hasColumn(db, tableName, columnName) {
   return db.prepare(`PRAGMA table_info(${tableName})`).all()

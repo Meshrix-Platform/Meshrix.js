@@ -164,7 +164,7 @@ export async function forwardProxyMessage({
       id: message?.id ?? null,
       error: {
         code: -32001,
-        message: response.payload?.error?.message || response.payload?.error || `LicoMesh MCP proxy failed with HTTP ${response.status}`
+        message: response.payload?.error?.message || response.payload?.error || `Meshrix MCP proxy failed with HTTP ${response.status}`
       }
     };
   }
@@ -356,7 +356,7 @@ export function createProxyRequestDispatcher({
         emitMessage({
           jsonrpc: "2.0",
           id: requestId,
-          error: { code: -32001, message: error.message || "LicoMesh MCP proxy forwarding failed." }
+          error: { code: -32001, message: error.message || "Meshrix MCP proxy forwarding failed." }
         }, framing);
       } finally {
         releaseCancellationReservation(entry);
@@ -568,13 +568,13 @@ export async function resolveProxyCredentials(options = {}) {
   const providedToken = await resolveToken(options, { required: false });
   const identity = await loadProcessIdentity(target);
   if (!identity) {
-    throw new Error(`Missing local process identity for ${target}. Run lico-mcp install --target ${target} first.`);
+    throw new Error(`Missing local process identity for ${target}. Run meshrix-mcp install --target ${target} first.`);
   }
   const token = providedToken || String(identity.grantToken || "").trim();
   if (!token) {
     throw new Error(
       `Missing stored MCP grant credential for ${target}. ` +
-      `Run lico-mcp uninstall --target ${target}, then reinstall before starting the proxy.`
+      `Run meshrix-mcp uninstall --target ${target}, then reinstall before starting the proxy.`
     );
   }
   return {

@@ -6,17 +6,17 @@ import { fileURLToPath } from "node:url";
 import {
   OPERATION_PROOF_PROFILES,
   decorateServerApiOperations
-} from "#lico/contracts/operations/operation-decorators";
+} from "#meshrix/contracts/operations/operation-decorators";
 import {
   dispatchOperation
-} from "#lico/server-runtime/composition/dispatch-operation";
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
-import { MemoryLockManager } from "#lico/foundation/concurrency/lock-manager";
+} from "#meshrix/server-runtime/composition/dispatch-operation";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
+import { MemoryLockManager } from "#meshrix/foundation/concurrency/lock-manager";
 import {
   OPERATION_PROOF_SUBSTRATE_MODES,
   OPERATION_PROOF_SUBSTRATE_PROVIDER,
   createOperationProofSubstrate
-} from "#lico/foundation/proof/proof-substrate/index";
+} from "#meshrix/foundation/proof/proof-substrate/index";
 import {
   assertEvidencePolicyReadinessFromEnv,
   evaluateEvidencePolicyReadiness
@@ -138,7 +138,7 @@ function operationForDispatcherVerification() {
 }
 
 async function assertProviderContract() {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-proof-substrate-"));
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-proof-substrate-"));
   try {
     const proofSubstrate = createOperationProofSubstrate({ dataDir });
     assert.equal(proofSubstrate.provider, OPERATION_PROOF_SUBSTRATE_PROVIDER);
@@ -405,10 +405,10 @@ function assertEvidencePolicyReadiness() {
 }
 
 async function assertPermissionAuditAnchoring() {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-op-audit-anchor-"));
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-op-audit-anchor-"));
   try {
     const { createOperationPermissionStore } = await import(
-      "#lico/capabilities/operation-permission-core/store"
+      "#meshrix/capabilities/operation-permission-core/store"
     );
     const proofSubstrate = createOperationProofSubstrate({ dataDir: path.join(dataDir, "proof") });
     const store = createOperationPermissionStore({
@@ -419,7 +419,7 @@ async function assertPermissionAuditAnchoring() {
       const decision = await store.appendPolicyDecisionAnchored({
         toolExecutionId: "tool_exec_anchor_1",
         traceId: "trace-anchor-1",
-        toolId: "lico.operation.proof-substrate",
+        toolId: "meshrix.operation.proof-substrate",
         grantId: "grant_anchor",
         effect: "allow",
         reasonCode: "verification_allow",
@@ -432,13 +432,13 @@ async function assertPermissionAuditAnchoring() {
       const execution = await store.appendExecutionAnchored({
         toolExecutionId: "tool_exec_anchor_1",
         traceId: "trace-anchor-1",
-        toolId: "lico.operation.proof-substrate",
+        toolId: "meshrix.operation.proof-substrate",
         toolVersion: "v0.0.1:operation:proof-substrate-2",
         toolsetIds: ["verify"],
         subjectType: "grant",
         subjectId: "grant_anchor",
         grantId: "grant_anchor",
-        operationId: "lico.operation.proof-substrate",
+        operationId: "meshrix.operation.proof-substrate",
         risk: "safe_read",
         decision: "allow",
         input: {

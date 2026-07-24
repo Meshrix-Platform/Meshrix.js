@@ -1,4 +1,4 @@
-import { logRuntimeEvent } from "#lico/runtime-logger";
+import { logRuntimeEvent } from "#meshrix/runtime-logger";
 
 export function createSystemControllerContexts({
   userDataPath,

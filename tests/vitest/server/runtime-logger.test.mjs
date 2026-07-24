@@ -11,13 +11,13 @@ import {
   summarizeError,
   summarizeForLog,
   summarizeSecurityValue
-} from "#lico/runtime-logger";
+} from "#meshrix/runtime-logger";
 import { createTraceContext, runWithTraceContext } from "../../../packages/foundation/src/observability/trace-context.mjs";
 
 const tempRoots = [];
 
 async function makeTempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-runtime-logger-extra-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-runtime-logger-extra-"));
   tempRoots.push(root);
   return root;
 }
@@ -25,7 +25,7 @@ async function makeTempRoot() {
 async function readJsonlRecords(logDir) {
   const entries = await fs.readdir(logDir, { withFileTypes: true }).catch(() => []);
   const files = entries
-    .filter((entry) => entry.isFile() && /^licomesh-.+\.jsonl$/.test(entry.name))
+    .filter((entry) => entry.isFile() && /^meshrix-.+\.jsonl$/.test(entry.name))
     .map((entry) => path.join(logDir, entry.name))
     .sort();
   const records = [];
@@ -60,12 +60,12 @@ describe("runtime logger behavior", () => {
     await fs.mkdir(logDir, { recursive: true });
 
     const today = new Date().toISOString().slice(0, 10);
-    const stalePath = path.join(logDir, "licomesh-server-2000-01-01.jsonl");
+    const stalePath = path.join(logDir, "meshrix-server-2000-01-01.jsonl");
     await fs.writeFile(stalePath, `${JSON.stringify({ event: "stale" })}\n`, "utf8");
     const staleDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     await fs.utimes(stalePath, staleDate, staleDate);
 
-    const occupiedPath = path.join(logDir, `licomesh-server-${today}.jsonl`);
+    const occupiedPath = path.join(logDir, `meshrix-server-${today}.jsonl`);
     await fs.writeFile(
       occupiedPath,
       `${JSON.stringify({ event: "seed", payload: "x".repeat(1024 * 1024 + 32) })}\n`,
@@ -159,8 +159,8 @@ describe("runtime logger behavior", () => {
     const { records, files } = await readJsonlRecords(logDir);
     expect(files).toEqual(
       expect.arrayContaining([
-        path.join(logDir, `licomesh-server-${today}.jsonl`),
-        path.join(logDir, `licomesh-server-${today}.1.jsonl`)
+        path.join(logDir, `meshrix-server-${today}.jsonl`),
+        path.join(logDir, `meshrix-server-${today}.1.jsonl`)
       ])
     );
 

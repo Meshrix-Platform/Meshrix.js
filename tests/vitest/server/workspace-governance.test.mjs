@@ -9,7 +9,7 @@ import {
 } from "../../../packages/agents/src/workspace-governance/index.mjs";
 
 async function withRegistry(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-governance-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-governance-extra-"));
   const registry = createWorkspaceGovernanceRegistry({ userDataPath });
   try {
     await testCase({ registry, userDataPath });

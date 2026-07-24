@@ -4,14 +4,14 @@ import {
   normalizeRegisteredToolCapabilities,
   toolExecuteCapabilityId,
   unknownKernelCapabilities
-} from "@lico/foundation/security/authorization/authorization-engine";
+} from "@meshrix/foundation/security/authorization/authorization-engine";
 import {
   OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION
-} from "@lico/foundation/security/authorization/opaque-capability-key";
+} from "@meshrix/foundation/security/authorization/opaque-capability-key";
 import {
   CAPABILITY_BINDING_GUARD_PROTOCOL_VERSION
-} from "@lico/foundation/security/authorization/capability-binding-guard";
-import { clientIpFromRequest } from "@lico/foundation/security/trusted-client-ip";
+} from "@meshrix/foundation/security/authorization/capability-binding-guard";
+import { clientIpFromRequest } from "@meshrix/foundation/security/trusted-client-ip";
 import {
   OPERATION_PERMISSION_SCOPES,
   scopesToToolsets,
@@ -19,7 +19,7 @@ import {
 } from "./catalog.mjs";
 
 export const DEFAULT_RATE_LIMIT_PER_MINUTE = 0;
-export const LOCAL_MCP_GRANT_ISSUER = "lico-mcp-local-pairing";
+export const LOCAL_MCP_GRANT_ISSUER = "meshrix-mcp-local-pairing";
 export function nowIso() {
   return new Date().toISOString();
 }
@@ -56,7 +56,7 @@ export function readBearerToken(request) {
   if (match) {
     return match[1].trim();
   }
-  return String(request?.headers?.["x-lico-tool-token"] || "").trim();
+  return String(request?.headers?.["x-meshrix-tool-token"] || "").trim();
 }
 
 export function parseJson(value, fallback) {
@@ -118,10 +118,10 @@ export function normalizeMcpTarget(value) {
 export function mcpTargetHeaderFromRequest(request) {
   const headerTarget = normalizeMcpTarget(headerValue(
     request,
-    "x-lico-mcp-target",
-    "x-lico-client-target",
-    "x-lico-tool-target",
-    "x-lico-client-id"
+    "x-meshrix-mcp-target",
+    "x-meshrix-client-target",
+    "x-meshrix-tool-target",
+    "x-meshrix-client-id"
   ));
   if (headerTarget) {
     return headerTarget;
@@ -506,37 +506,37 @@ export function bindingContextFromRequest({ request = null, context = {} } = {})
     namespace: firstString(
       requestContext.namespace,
       requestContext.bindingNamespace,
-      headerValue(request, "x-lico-binding-namespace", "x-lico-namespace"),
+      headerValue(request, "x-meshrix-binding-namespace", "x-meshrix-namespace"),
       "operation-permission"
     ),
     agentId: firstString(
       requestContext.agentId,
       requestContext.agentProfileId,
       requestContext.profileId,
-      headerValue(request, "x-lico-agent-id", "x-lico-agent-profile-id", "x-lico-profile-id")
+      headerValue(request, "x-meshrix-agent-id", "x-meshrix-agent-profile-id", "x-meshrix-profile-id")
     ),
     agentProfileId: firstString(
       requestContext.agentProfileId,
       requestContext.profileId,
       requestContext.agentId,
-      headerValue(request, "x-lico-agent-profile-id", "x-lico-profile-id", "x-lico-agent-id")
+      headerValue(request, "x-meshrix-agent-profile-id", "x-meshrix-profile-id", "x-meshrix-agent-id")
     ),
     userId: firstString(
       requestContext.boundUserId,
       requestContext.userId,
       requestContext.subjectId,
-      headerValue(request, "x-lico-bound-user-id", "x-lico-user-id", "x-lico-subject-id")
+      headerValue(request, "x-meshrix-bound-user-id", "x-meshrix-user-id", "x-meshrix-subject-id")
     ),
     boundUserId: firstString(
       requestContext.boundUserId,
       requestContext.userId,
       requestContext.subjectId,
-      headerValue(request, "x-lico-bound-user-id", "x-lico-user-id", "x-lico-subject-id")
+      headerValue(request, "x-meshrix-bound-user-id", "x-meshrix-user-id", "x-meshrix-subject-id")
     ),
     clientId: firstString(
       requestContext.clientId,
       requestContext.clientName,
-      headerValue(request, "x-lico-client-id", "x-lico-client-name", "x-lico-mcp-target", "x-lico-client-target"),
+      headerValue(request, "x-meshrix-client-id", "x-meshrix-client-name", "x-meshrix-mcp-target", "x-meshrix-client-target"),
       mcpTargetHeaderFromRequest(request)
     )
   };

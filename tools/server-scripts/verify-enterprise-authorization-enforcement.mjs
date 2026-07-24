@@ -196,17 +196,44 @@ async function verifyDispatcherAuthorizationInputBinding() {
   };
 }
 
+function reportTest(report = {}, pattern) {
+  return (report.tests || []).find((test) => pattern.test(String(test.name || "")));
+}
+
+function reportEvidence(report = {}, pattern) {
+  return reportTest(report, pattern)?.evidence || {};
+}
+
+function destructiveReportEvidence(report = {}, pattern) {
+  return (report.destructiveTests || []).find((test) => pattern.test(String(test.name || "")))?.evidence || {};
+}
+
 function realReportEvidence(tagGoverned = {}, protocol = {}) {
   const tagText = JSON.stringify(tagGoverned);
   const protocolText = JSON.stringify(protocol);
+  const approvalEvidence = reportEvidence(tagGoverned, /approval queue/u);
+  const bypassEvidence = reportEvidence(tagGoverned, /wrong outlet/u);
+  const auditMetricsEvidence = reportEvidence(tagGoverned, /audit metrics/u);
+  const denyEvidence = destructiveReportEvidence(tagGoverned, /deny-tag rejection/u);
+  const auditStatuses = auditMetricsEvidence.auditStatuses || [];
+  const auditProof = ["ok", "denied", "pending_approval"].every((status) => auditStatuses.includes(status)) &&
+    Object.values(auditMetricsEvidence.auditToolCoverage || {}).every((covered) => covered === true);
+  const policyDecisionPresent = Object.values({
+    ...(reportEvidence(tagGoverned, /allow-tag admission/u)),
+    ...denyEvidence
+  }).some((entry) => entry && typeof entry === "object" && entry.tagPolicy && typeof entry.tagPolicy === "object");
   return {
     tagGovernedE2e: {
       releaseReady: releaseEvidenceReady(TAG_GOVERNED_E2E_REPORT, tagGoverned),
       reportLeakScan: tagGoverned.summary?.reportLeakScan === true,
-      pendingApprovalListed: tagText.includes("pendingOperationListed"),
-      pendingApprovalResolved: tagText.includes("pendingOperationResolved"),
-      denialWithoutDownstreamMutation: tagText.includes("noDownstreamMutation") && tagText.includes("DeniedWithoutSideEffect"),
-      auditProof: tagText.includes("auditProof") && tagText.includes("policyDecisionPresent"),
+      pendingApprovalListed: approvalEvidence.pendingOperationListed === true ||
+        tagText.includes("pendingOperationListed"),
+      pendingApprovalResolved: approvalEvidence.pendingOperationResolved === true ||
+        tagText.includes("pendingOperationResolved"),
+      denialWithoutDownstreamMutation: bypassEvidence.noDownstreamMutation === true &&
+        (denyEvidence.upstreamService?.forwardDeniedWithoutSideEffect === true ||
+          tagText.includes("DeniedWithoutSideEffect")),
+      auditProof: auditProof && policyDecisionPresent,
       publicDenialEvidence: tagText.includes("tag_policy_denied") || tagText.includes("denied")
     },
     protocolConsistency: {

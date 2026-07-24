@@ -10,7 +10,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../../..", import.meta.url)
 const resolveScriptPath = path.join(repoRoot, "tools", "server-scripts", "resolve-server-data-dir.mjs");
 
 async function withTempHome(testCase) {
-  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-startup-home-"));
+  const homeDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-startup-home-"));
   try {
     return await testCase(homeDir);
   } finally {
@@ -22,9 +22,9 @@ function scriptEnv(homeDir) {
   const env = {
     ...process.env,
     HOME: homeDir,
-    LICO_CONFIG_FILE: path.join(homeDir, ".missing-lico-config.json"),
+    MESHRIX_CONFIG_FILE: path.join(homeDir, ".missing-meshrix-config.json"),
   };
-  delete env.LICO_SERVER_DATA_DIR;
+  delete env.MESHRIX_SERVER_DATA_DIR;
   return env;
 }
 
@@ -47,9 +47,9 @@ describe("startup data-dir resolver", () => {
     });
   });
 
-  it("uses the fresh LicoMesh data directory by default", async () => {
+  it("uses the fresh Meshrix data directory by default", async () => {
     await withTempHome(async (homeDir) => {
-      const defaultDataDir = path.join(homeDir, "licomesh-data");
+      const defaultDataDir = path.join(homeDir, "meshrix-data");
 
       const result = runResolveDataDir([], homeDir);
       expect(result.status).toBe(0);
@@ -58,12 +58,12 @@ describe("startup data-dir resolver", () => {
     });
   });
 
-  it("keeps the shared LICO_SERVER_DATA_DIR override", async () => {
+  it("keeps the shared MESHRIX_SERVER_DATA_DIR override", async () => {
     await withTempHome(async (homeDir) => {
       const configuredDataDir = path.join(homeDir, "configured-data");
 
       const result = runResolveDataDir([], homeDir, {
-        LICO_SERVER_DATA_DIR: configuredDataDir,
+        MESHRIX_SERVER_DATA_DIR: configuredDataDir,
       });
       expect(result.status).toBe(0);
       expect(result.stdout.trim()).toBe(configuredDataDir);
@@ -96,7 +96,7 @@ describe("server console startup args", () => {
     ]);
 
     expect(args).toEqual([
-      "apps/server/bin/lico.mjs",
+      "apps/server/bin/meshrix.mjs",
       "--port",
       "7232",
       "--active-service-url",

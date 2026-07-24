@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import fsNative from "node:fs";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { rebuildStorageBackupCatalog } from "./backup-manifest.mjs";
 import { listStorageBackups } from "./backup-query.mjs";
 import { writePrivateFileAtomic } from "./private-file-atomic.mjs";
@@ -102,7 +102,7 @@ function roots(userDataPath) {
 function validateJournal(value, transactionId) {
   if (
     !value ||
-    value.schema !== "licomesh.storage.retention-journal" ||
+    value.schema !== "meshrix.storage.retention-journal" ||
     value.transactionId !== transactionId ||
     !PHASES.has(value.phase) ||
     !Array.isArray(value.candidateIds) ||
@@ -332,7 +332,7 @@ export async function applyStorageBackupRetention({
     const quarantineRoot = path.join(transactionPath, "quarantine");
     await ensurePrivateDirectory(quarantineRoot);
     journal = {
-      schema: "licomesh.storage.retention-journal",
+      schema: "meshrix.storage.retention-journal",
       transactionId,
       phase: "prepared",
       policyDigest,

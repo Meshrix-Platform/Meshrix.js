@@ -142,11 +142,11 @@ export function createProcessIdentityService({
   }
 
   async function expectedClaimToken() {
-    const direct = text(claimToken || process.env.LICO_PROCESS_IDENTITY_CLAIM_TOKEN);
+    const direct = text(claimToken || process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN);
     if (direct) {
       return direct;
     }
-    const filePath = text(claimTokenFile || process.env.LICO_PROCESS_IDENTITY_CLAIM_TOKEN_FILE);
+    const filePath = text(claimTokenFile || process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN_FILE);
     if (!filePath) {
       return "";
     }
@@ -172,7 +172,7 @@ export function createProcessIdentityService({
       if (!expected) {
         return deny(503, "bootstrap_claim_token_unconfigured", "Process identity bootstrap claim token is not configured.");
       }
-      const provided = text(source.claimToken || source.claim_token || headerValue(request?.headers || {}, "x-lico-claim-token"));
+      const provided = text(source.claimToken || source.claim_token || headerValue(request?.headers || {}, "x-meshrix-claim-token"));
       if (!provided || !timingSafeTextEqual(provided, expected)) {
         return deny(401, "bootstrap_claim_token_invalid", "Process identity bootstrap claim token is invalid.");
       }
@@ -424,13 +424,13 @@ export function createProcessIdentityService({
       return { ok: true, applicable: false, reasonCode: "process_identity_not_required" };
     }
     const headers = request?.headers || {};
-    const clientId = headerValue(headers, "x-lico-client-id");
-    const packageId = headerValue(headers, "x-lico-identity-package-id");
-    const processKeyId = headerValue(headers, "x-lico-process-key-id");
-    const timestamp = headerValue(headers, "x-lico-timestamp");
-    const nonce = headerValue(headers, "x-lico-nonce");
-    const bodyHash = headerValue(headers, "x-lico-body-sha256").toLowerCase();
-    const signature = headerValue(headers, "x-lico-signature");
+    const clientId = headerValue(headers, "x-meshrix-client-id");
+    const packageId = headerValue(headers, "x-meshrix-identity-package-id");
+    const processKeyId = headerValue(headers, "x-meshrix-process-key-id");
+    const timestamp = headerValue(headers, "x-meshrix-timestamp");
+    const nonce = headerValue(headers, "x-meshrix-nonce");
+    const bodyHash = headerValue(headers, "x-meshrix-body-sha256").toLowerCase();
+    const signature = headerValue(headers, "x-meshrix-signature");
     const capabilityKey = capabilityKeyFromHeaders(headers);
     if (!clientId || !packageId || !processKeyId || !timestamp || !nonce || !bodyHash || !signature || !capabilityKey) {
       return deny(401, "process_identity_headers_missing", "Process identity signature headers are required.");

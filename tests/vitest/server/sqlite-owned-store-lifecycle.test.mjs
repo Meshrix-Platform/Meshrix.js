@@ -12,7 +12,7 @@ import { createOrganizationModelStore } from "../../../packages/foundation/src/s
 const tempRoots = [];
 
 async function tempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-owned-sqlite-lifecycle-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-owned-sqlite-lifecycle-"));
   tempRoots.push(root);
   return root;
 }

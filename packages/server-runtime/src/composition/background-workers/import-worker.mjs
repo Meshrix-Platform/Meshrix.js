@@ -1,6 +1,6 @@
 import { createJobManager } from "../../jobs/jobs/job-manager.mjs";
 import { createProtocolEventRuntime } from "../../events/protocol-event-runtime.mjs";
-import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
+import { createProtocolEventBus } from "#meshrix/protocols/pubsub/event-bus";
 import { createQueuedJobWorkflowProvider } from "../queued-job-workflow-provider.mjs";
 import { createQueueApplicationPort } from "../queue-application-port.mjs";
 

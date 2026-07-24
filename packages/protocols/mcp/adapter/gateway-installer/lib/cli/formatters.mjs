@@ -98,21 +98,21 @@ export function appendRepairCommandLines(lines, result) {
 export function formatInstallResult(result) {
   if (result.skipped) {
     return [
-      "LicoMesh MCP install skipped.",
+      "Meshrix MCP install skipped.",
       "",
       result.reason || "No client configuration was changed.",
-      "Run later: lico-mcp server-config --set --url <lico-url>"
+      "Run later: meshrix-mcp server-config --set --url <meshrix-url>"
     ].join("\n");
   }
   if (result.cancelled) {
     return [
-      "LicoMesh MCP install cancelled.",
+      "Meshrix MCP install cancelled.",
       "",
       result.reason || "No client configuration was changed."
     ].join("\n");
   }
   const lines = [
-    result.ok ? "LicoMesh MCP install completed." : "LicoMesh MCP install completed with errors.",
+    result.ok ? "Meshrix MCP install completed." : "Meshrix MCP install completed with errors.",
     ""
   ];
   if (result.error) {
@@ -142,7 +142,7 @@ export function formatInstallResult(result) {
     lines.push(...formatTargetInstallLine(target, installed[target] || {}));
   }
   lines.push("", "Next:");
-  lines.push("  Run: lico-mcp doctor");
+  lines.push("  Run: meshrix-mcp doctor");
   lines.push("  Restart any selected agent app that was already running.");
   if (!result.ok) {
     lines.push("  Re-run failed clients after fixing the reason above.");
@@ -152,7 +152,7 @@ export function formatInstallResult(result) {
 
 export function formatErrorResult(result) {
   const lines = [
-    `LicoMesh MCP ${result.command || "command"} failed.`,
+    `Meshrix MCP ${result.command || "command"} failed.`,
     "",
     `Reason: ${result.error || "Command failed."}`
   ];
@@ -166,20 +166,20 @@ export function formatErrorResult(result) {
 
 export function formatRegisterResult(result) {
   return [
-    "LicoMesh MCP hub registered.",
+    "Meshrix MCP hub registered.",
     "",
     `MCP URL: ${result.mcpUrl || (result.baseUrl ? `${result.baseUrl}/mcp` : "unknown")}`,
     `Verified handshake: ${result.verifiedHandshake || "yes"}`,
     `Local registry: ${formatLocalPathForDisplay(result.discoveryManifest)}`,
     "",
     "Next:",
-    "  lico-mcp install"
+    "  meshrix-mcp install"
   ].join("\n");
 }
 
 export function formatUninstallResult(result) {
   const lines = [
-    result.ok ? "LicoMesh MCP uninstall completed." : "LicoMesh MCP uninstall completed with errors.",
+    result.ok ? "Meshrix MCP uninstall completed." : "Meshrix MCP uninstall completed with errors.",
     ""
   ];
   if (result.error) {
@@ -204,7 +204,7 @@ export function formatUninstallResult(result) {
 export function formatDoctorResult(result) {
   const checks = result.checks || {};
   const lines = [
-    result.ok ? "LicoMesh MCP doctor passed." : "LicoMesh MCP doctor found issues.",
+    result.ok ? "Meshrix MCP doctor passed." : "Meshrix MCP doctor found issues.",
     "",
     `  [${checks.signedDiscovery?.ok ? "OK" : "FAIL"}] Signed discovery${checks.signedDiscovery?.baseUrl ? `: ${checks.signedDiscovery.baseUrl}` : ""}`,
     `  [${checks.discovery?.ok ? "OK" : "FAIL"}] Discovery${checks.discovery?.httpUrl ? `: ${checks.discovery.httpUrl}` : ""}`,
@@ -232,16 +232,16 @@ export function formatDoctorResult(result) {
 export function formatServerConfigResult(result) {
   if (result.reset) {
     return [
-      "LicoMesh MCP server config reset.",
+      "Meshrix MCP server config reset.",
       "",
       `Local registry: ${formatLocalPathForDisplay(result.path)}`,
-      "Next install will scan for a signed LicoMesh server again."
+      "Next install will scan for a signed Meshrix server again."
     ].join("\n");
   }
   if (result.profiles) {
     const names = Object.keys(result.profiles);
     return [
-      "LicoMesh MCP server config.",
+      "Meshrix MCP server config.",
       "",
       `Active profile: ${result.activeName || "(none)"}`,
       `Profiles: ${names.length ? names.join(", ") : "(none)"}`,
@@ -249,7 +249,7 @@ export function formatServerConfigResult(result) {
     ].join("\n");
   }
   return [
-    "LicoMesh MCP server config updated.",
+    "Meshrix MCP server config updated.",
     "",
     `Active profile: ${result.activeName || result.profile?.name || "default"}`,
     `MCP URL: ${result.profile?.mcpUrl || (result.profile?.baseUrl ? `${result.profile.baseUrl}/mcp` : "")}`,

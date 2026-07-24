@@ -25,8 +25,8 @@ const durableWorkflowRuntimeMock = vi.hoisted(() => ({
   listWorkflows: vi.fn(async () => ({ items: [] }))
 }));
 
-vi.mock("#lico/product-api", async () => {
-  const actual = await vi.importActual("#lico/product-api");
+vi.mock("#meshrix/product-api", async () => {
+  const actual = await vi.importActual("#meshrix/product-api");
   return {
     ...actual,
     createDurableWorkflowSubstrate: vi.fn(() => durableWorkflowRuntimeMock),
@@ -44,10 +44,10 @@ vi.mock("#lico/product-api", async () => {
 
 import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs";
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.mjs";
-import { serverToken } from "#lico/product-api";
+import { serverToken } from "#meshrix/product-api";
 
 async function withTempUserData(callback) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-manager-focused-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-manager-focused-extra-"));
   try {
     return await callback(userDataPath);
   } finally {
@@ -78,7 +78,7 @@ async function seedPersistedJob(userDataPath, jobId, meta, result = null) {
   await fs.writeFile(path.join(jobDir, "meta.json"), JSON.stringify(currentMeta), "utf8");
   if (result !== null) {
     await fs.writeFile(path.join(jobDir, "result.json"), JSON.stringify({
-      format: "lico.job-terminal",
+      format: "meshrix.job-terminal",
       schema: "job-terminal-envelope",
       job: currentMeta,
       result

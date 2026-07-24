@@ -168,7 +168,7 @@ describe("required report validator", () => {
   });
 
   it("projects one complete release provenance owner for every required report", () => {
-    const plan = createPlatformAcceptancePlan(undefined, { selectedProfile: "core" });
+    const plan = createPlatformAcceptancePlan(undefined, { selectedProfile: "enterprise-single-node" });
     expect(plan.releaseEvidenceInventory).toHaveLength(ACCEPTANCE_REQUIRED_REPORTS.length);
     expect(plan.releaseEvidenceInventory.every((entry) =>
       entry.provenanceSchemaVersion === RELEASE_REPORT_PROVENANCE_SCHEMA &&
@@ -240,7 +240,7 @@ describe("required report validator", () => {
   });
 
   it("stamps command-owned generation provenance and preserves payload integrity", async () => {
-    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-release-provenance-"));
+    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-provenance-"));
     const reportPath = "build/reports/observability-runtime-acceptance.json";
     const spec = requiredReportSpec(reportPath);
     const report = {
@@ -255,7 +255,7 @@ describe("required report validator", () => {
       checkpointDigest: `sha256:${"a".repeat(64)}`,
       requirements: ["REQ-REL-011"],
       privacyFinalization: {
-        finalizer: "licomesh-core-observability",
+        finalizer: "meshrix-core-observability",
         redactionApplied: true,
         privacyScanPassed: true,
         atomicPublication: true
@@ -341,7 +341,7 @@ describe("required report validator", () => {
       checkpointDigest: `sha256:${"c".repeat(64)}`,
       requirements: ["REQ-REL-011"],
       privacyFinalization: {
-        finalizer: "licomesh-core-observability",
+        finalizer: "meshrix-core-observability",
         redactionApplied: true,
         privacyScanPassed: true,
         atomicPublication: true
@@ -720,7 +720,7 @@ describe("platform acceptance foundation ownership", () => {
   });
 
   it("creates a sanitized plan with canonical rather than host-derived parallelism", () => {
-    const plan = createPlatformAcceptancePlan(undefined, { selectedProfile: "core" });
+    const plan = createPlatformAcceptancePlan(undefined, { selectedProfile: "enterprise-single-node" });
     const serialized = JSON.stringify(plan);
 
     expect(plan.status).toBe("planned");

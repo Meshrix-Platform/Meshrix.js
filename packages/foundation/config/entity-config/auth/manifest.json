@@ -1,6 +1,6 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
-  "entityType": "lico.console-auth.entities",
+  "entityType": "meshrix.console-auth.entities",
   "description": "Human-maintainable console authorization configuration. Roles are scope bundles; runtime authorization evaluates scopes and policies.",
   "groups": [
     {

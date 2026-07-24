@@ -5,7 +5,7 @@ import {
   irreversibleSecurityDigest,
   summarizeSecurityValue
 } from "../../observability/runtime-logger.mjs";
-import { LICO_ROOT_ORGANIZATION_ID } from "../authorization/organization-model.mjs";
+import { MESHRIX_ROOT_ORGANIZATION_ID } from "../authorization/organization-model.mjs";
 import {
   CONSOLE_CSRF_COOKIE,
   CONSOLE_SESSION_COOKIE,
@@ -304,7 +304,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       displayName: "Owner",
       password,
       roleId: "owner",
-      orgId: LICO_ROOT_ORGANIZATION_ID,
+      orgId: MESHRIX_ROOT_ORGANIZATION_ID,
       enabled: true
     });
     return {
@@ -438,7 +438,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         roleLabel: role.label,
         scopes: [...role.scopes],
         tenantId: row.tenant_id || "default",
-        orgId: row.org_id || LICO_ROOT_ORGANIZATION_ID,
+        orgId: row.org_id || MESHRIX_ROOT_ORGANIZATION_ID,
         teamIds: parseJson(row.team_ids_json, []),
         departmentIds: parseJson(row.department_ids_json, []),
         allowedWorkspaceIds: parseJson(row.allowed_workspace_ids_json, []),
@@ -496,7 +496,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       salt,
       input.enabled === false ? 0 : 1,
       normalizeTenantId(input.tenantId),
-      String(input.orgId || LICO_ROOT_ORGANIZATION_ID).trim(),
+      String(input.orgId || MESHRIX_ROOT_ORGANIZATION_ID).trim(),
       stringifyJson(stringsFrom(input.teamIds)),
       stringifyJson(stringsFrom(input.departmentIds)),
       stringifyJson(stringsFrom(input.allowedWorkspaceIds)),
@@ -645,7 +645,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       enabled: patch.enabled !== undefined ? (patch.enabled === false ? 0 : 1) : undefined,
       tenantId: patch.tenantId !== undefined ? normalizeTenantId(patch.tenantId) : undefined,
       orgId: patch.orgId !== undefined
-        ? String(patch.orgId || LICO_ROOT_ORGANIZATION_ID).trim()
+        ? String(patch.orgId || MESHRIX_ROOT_ORGANIZATION_ID).trim()
         : undefined,
       teamIds: patch.teamIds !== undefined ? stringsFrom(patch.teamIds) : undefined,
       departmentIds: patch.departmentIds !== undefined ? stringsFrom(patch.departmentIds) : undefined,
@@ -957,7 +957,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       !operation?.skipCsrf &&
       !safeRequestMethod(method);
     if (needsCsrf) {
-      const csrf = String(request?.headers?.["x-lico-csrf"] || "").trim();
+      const csrf = String(request?.headers?.["x-meshrix-csrf"] || "").trim();
       if (!csrf || !timingSafeStringEqual(csrf, session.csrfToken)) {
         audit({
           user: session.user,

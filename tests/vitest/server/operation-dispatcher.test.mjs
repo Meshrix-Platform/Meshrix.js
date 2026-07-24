@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   OPERATION_PROOF_PROFILES,
   decorateServerApiOperations
-} from "#lico/contracts/operations/operation-decorators";
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
+} from "#meshrix/contracts/operations/operation-decorators";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
 import {
   dispatchInternalOperation,
   dispatchOperation,
   dispatchRpcOperation,
   findProxyRegisteredApiRequest,
   shouldProxyRegisteredApiRequest
-} from "#lico/server-runtime/composition/dispatch-operation";
+} from "#meshrix/server-runtime/composition/dispatch-operation";
 
 function createResponse() {
   return {

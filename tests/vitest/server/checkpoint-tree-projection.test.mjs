@@ -17,11 +17,11 @@ import {
   restoreCheckpointTree,
   startCheckpointTree,
   upsertCheckpointNode
-} from "#lico/foundation/checkpoint/tree/checkpoint-tree-projection";
-import { createLicoPactiumRuntime } from "#lico/foundation/checkpoint/tree/pactium-substrate-preflight";
+} from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
+import { createLicoPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
 
 async function withTempUserData(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-checkpoint-tree-projection-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-checkpoint-tree-projection-extra-"));
   try {
     return await testCase(userDataPath);
   } finally {
@@ -36,7 +36,7 @@ describe("checkpoint-tree store behavior", () => {
       const failingStorage = {
         ...baseStorage,
         async putProtocolObject(scope, key, value) {
-          if (scope === "licomesh-checkpoint-tree") {
+          if (scope === "meshrix-checkpoint-tree") {
             throw new Error("injected checkpoint projection failure");
           }
           return baseStorage.putProtocolObject(scope, key, value);

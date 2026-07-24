@@ -1,6 +1,6 @@
 import { reactive, ref, type Ref } from "vue";
 import type { WsWorkspace } from "../types/workspaces";
-import { errorMessage } from "@lico/ui-console/error-message";
+import { errorMessage } from "@meshrix/ui-console/error-message";
 import * as workspacesClient from "../lib/workspaces-client";
 import type { ConsoleConfirmAction } from "./console-confirm-controller";
 

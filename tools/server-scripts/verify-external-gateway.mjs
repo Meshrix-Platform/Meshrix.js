@@ -39,9 +39,9 @@ assert.equal(
   false,
   "unselected plugins must not publish contributed ingress routes"
 );
-assert.match(caddy.config, /reverse_proxy @lico_streaming/);
+assert.match(caddy.config, /reverse_proxy @meshrix_streaming/);
 assert.match(caddy.config, /flush_interval -1/);
-assert.match(caddy.config, /X-LicoMesh-Gateway caddy/);
+assert.match(caddy.config, /X-Meshrix-Gateway caddy/);
 assert.match(caddy.config, /\{http\.request\.uuid\}/);
 assert.match(caddy.config, /http:\/\/127\.0\.0\.1:7228 http:\/\/127\.0\.0\.1:7229/);
 
@@ -73,14 +73,14 @@ assert.equal(
 
 const nginx = renderExternalGatewayConfig({ ...baseInput, adapterId: "nginx" });
 assert.equal(nginx.profile.gatewayMode.adapterId, "nginx");
-assert.match(nginx.config, /upstream lico_backend/);
+assert.match(nginx.config, /upstream meshrix_backend/);
 assert.match(nginx.config, /server 127\.0\.0\.1:7228;/);
 assert.match(nginx.config, /server 127\.0\.0\.1:7229;/);
 assert.match(nginx.config, /proxy_buffering off;/);
 assert.match(nginx.config, /proxy_request_buffering off;/);
 assert.match(nginx.config, /proxy_set_header Upgrade \$http_upgrade;/);
-assert.match(nginx.config, /proxy_set_header X-LicoMesh-Gateway nginx;/);
-assert.match(nginx.config, /proxy_set_header X-LicoMesh-Gateway-Request-Id \$request_id;/);
+assert.match(nginx.config, /proxy_set_header X-Meshrix-Gateway nginx;/);
+assert.match(nginx.config, /proxy_set_header X-Meshrix-Gateway-Request-Id \$request_id;/);
 
 function parseLastJsonPayload(stdout = "") {
   const text = String(stdout || "").trim();
@@ -145,7 +145,7 @@ assert.equal(getExternalGatewayAdapter("example-edge").fileName, "example-edge.c
 const example = renderExternalGatewayConfig({ ...baseInput, adapterId: "example-edge" });
 assert.match(example.config, /example-edge/);
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-external-gateway-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-external-gateway-"));
 try {
   const fixtureCaddyBin = path.join(tempRoot, "fixture-caddy");
   await fs.writeFile(fixtureCaddyBin, "#!/bin/sh\nexit 0\n", "utf8");
@@ -190,7 +190,7 @@ try {
   );
   assert.equal(runtimePlan.status, 0, runtimePlan.stderr || runtimePlan.stdout);
   const runtimePlanPayload = parseLastJsonPayload(runtimePlan.stdout);
-  assert.match(runtimePlanPayload.cacheRoot, /lico-external-gateway-/);
+  assert.match(runtimePlanPayload.cacheRoot, /meshrix-external-gateway-/);
   assert.equal(runtimePlanPayload.cached, false);
 
   const runtimePull = spawnSync(
@@ -235,7 +235,7 @@ try {
       encoding: "utf8",
       env: {
         ...process.env,
-        LICO_DISABLE_NATIVE_RUNTIME_INSTALL: "1",
+        MESHRIX_DISABLE_NATIVE_RUNTIME_INSTALL: "1",
         PATH: "/usr/bin:/bin"
       }
     }

@@ -1,4 +1,4 @@
-import { fetchWithPinnedDns } from "@lico/foundation/security/outbound-egress-policy";
+import { fetchWithPinnedDns } from "@meshrix/foundation/security/outbound-egress-policy";
 import {
   MAX_AGENT_GATEWAY_RESPONSE_BYTES,
   asArray,

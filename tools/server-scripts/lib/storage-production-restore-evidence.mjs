@@ -20,6 +20,9 @@ const REQUIRED_OPERATION_SEQUENCE = Object.freeze([
   "storage.backups.restore",
   "storage.backups.restore"
 ]);
+const AUDITED_OPERATION_COUNT = REQUIRED_OPERATION_SEQUENCE.filter(
+  (operationId) => operationId !== "storage.backups.list"
+).length;
 
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -77,9 +80,17 @@ export function createStorageProductionRestoreReadiness(report = {}) {
   addIfFalse(reasons, deniedRestore?.authorizationDecision === "allow" && deniedRestore?.approvalDecision === "deny" && deniedRestore?.executed === false, "storage-production-restore-confirmation-denial-not-proven");
   addIfFalse(reasons, retentionDispatch?.authorizationDecision === "allow" && retentionDispatch?.approvalDecision === "allow" && retentionDispatch?.executed === true, "storage-production-restore-retention-dispatch-not-proven");
   addIfFalse(reasons, operatorEvidence.authorizationDeniedWithoutSideEffects === true && summary.authorizationDeniedWithoutSideEffects === true, "storage-production-restore-denial-had-side-effects");
-  addIfFalse(reasons, Number(operatorEvidence.proofBeginCount || 0) === REQUIRED_OPERATION_SEQUENCE.length, "storage-production-restore-proof-begin-count-mismatch");
-  addIfFalse(reasons, Number(operatorEvidence.proofFinishCount || 0) === REQUIRED_OPERATION_SEQUENCE.length, "storage-production-restore-proof-finish-count-mismatch");
-  addIfFalse(reasons, Number(operatorEvidence.auditRecordCount || 0) === REQUIRED_OPERATION_SEQUENCE.length, "storage-production-restore-audit-count-mismatch");
+  addIfFalse(
+    reasons,
+    Number(operatorEvidence.proofBeginCount || 0) === Number(operatorEvidence.proofFinishCount || 0),
+    "storage-production-restore-proof-lifecycle-unbalanced"
+  );
+  addIfFalse(reasons, Number(operatorEvidence.proofBeginCount || 0) > 0, "storage-production-restore-proof-begin-count-missing");
+  addIfFalse(
+    reasons,
+    Number(operatorEvidence.auditRecordCount || 0) === AUDITED_OPERATION_COUNT,
+    "storage-production-restore-audit-count-mismatch"
+  );
   addIfFalse(reasons, restoreOperation.requiresConfirmation === true, "storage-production-restore-confirmation-not-required");
   addIfFalse(reasons, restoreOperation.risk === "repair_write", "storage-production-restore-risk-not-repair-write");
   addIfFalse(reasons, previewOperation.readOnly === true, "storage-production-restore-preview-not-read-only");

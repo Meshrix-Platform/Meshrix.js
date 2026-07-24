@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
 export const WORKSPACE_CONTRIBUTION_PROTOCOL_VERSION = "v0.0.1:workspace:contribution-2";

@@ -10,6 +10,158 @@ This runbook covers local startup, container startup, verification, and operatio
 
 The default runtime is self-contained. Optional middleware integrations are enabled explicitly for deployment-specific extensions.
 
+## Private-Deployment Dependency Admission
+
+Meshrix is delivered to enterprises for private deployment. Dependency
+admission therefore protects an operator's continuing right to install,
+redistribute, operate, maintain, back up, restore, modify, and upgrade the
+delivered system without an unexpected third-party commercial condition.
+Source availability, popularity, or current zero-cost use is not sufficient
+evidence of acceptability.
+
+This gate applies to:
+
+- direct and transitive source dependencies;
+- bundled libraries, binaries, base images, containers, and downloaded tools;
+- Operators, charts, deployment templates, installers, and release assets;
+- default, optional, example, development, test, and observability components
+  that enter a source or release candidate; and
+- a new version, edition, module, plugin, or distribution of an already
+  admitted project.
+
+A generic protocol adapter is not an adoption of every compatible product only
+when Meshrix does not bundle, download, require, select by default, or make a
+licensing claim for the operator-supplied service.
+
+### Authority and maturity baseline
+
+License compliance is necessary but does not establish technical authority.
+Default enterprise profiles must use established projects with durable public
+governance, current security maintenance, broad production evidence, and an
+operational ecosystem appropriate to the workload. Repository popularity,
+vendor marketing, a single large deployment, protocol compatibility, or an
+open-source license alone is not sufficient.
+
+A baseline dependency must satisfy every applicable condition:
+
+1. it has a current supported release line, a published security contact and
+   update process, immutable release artifacts, and documented upgrade and
+   rollback procedures;
+2. its governance, release authority, trademarks, and maintainer continuity
+   are public and are not subject to an unresolved single-vendor or ownership
+   dispute;
+3. independent organizations have documented production operation, including
+   failure, recovery, backup or replay, observability, and capacity behavior
+   relevant to the selected role;
+4. its standard protocol and data format permit replacement without moving
+   Meshrix governance or business authority into the dependency; and
+5. the exact artifact passes Meshrix conformance, failure injection,
+   migration, resource-bound, and private-deployment tests.
+
+In addition, a default dependency needs at least one authority anchor:
+
+- an Apache Software Foundation Top-Level Project, not an incubating project;
+- a CNCF Graduated project or a direct subproject governed by one;
+- a neutrally governed Linux Foundation project with active maintainers and
+  production users from multiple independent organizations;
+- PostgreSQL Global Development Group ownership or an active, long-lived
+  PostgreSQL community project listed by the PostgreSQL project; or
+- a documented de facto industry standard with multiple independent
+  production adopters, at least five years of maintained releases, a public
+  security process, and no unresolved control or relicensing risk.
+
+CNCF Sandbox projects, Apache Incubator projects, personal projects, and
+single-vendor open-core components do not enter a default profile. A CNCF
+Incubating project may be evaluated only as a non-default extension when no
+Graduated or Top-Level alternative meets the capability, and it still requires
+independent production evidence and a tested replacement path. If no candidate
+passes both the license and authority gates, the capability remains unselected;
+maintainers must not lower either gate merely to fill a matrix cell.
+
+### License baseline
+
+The initial license allowlist is intentionally narrow:
+
+- Apache License 2.0;
+- BSD 2-Clause and BSD 3-Clause;
+- MIT;
+- GNU GPL version 2 or version 3; and
+- the PostgreSQL License as an explicit project exception after an exact
+  permissive-license review.
+
+AGPL and LGPL are distinct license families and are not admitted as GPL by
+name similarity. A dual-licensed artifact must have one explicitly selected
+allowlisted option. A mixed-license artifact must pass for every component
+that is distributed. GPL code must remain process- or service-separated unless
+an explicit compatibility review permits linkage, and every distribution must
+satisfy the applicable source, notice, and modification obligations.
+
+An allowlisted license is necessary but not sufficient. Reject a candidate
+when any of the following is true:
+
+- source-available, proprietary, custom, trial, or delayed-conversion terms
+  restrict production use, field of use, revenue, organization size, cluster
+  size, user count, geography, resale, hosting, managed service, competition,
+  or redistribution;
+- production operation, security maintenance, or a required capability needs
+  a license key, account registration, mandatory telemetry, paid entitlement,
+  recurring renewal, or commercial edition;
+- dual, mixed, or edition-specific licensing leaves the rights of the exact
+  source, binary, container, chart, Operator, plugin, or management component
+  unclear;
+- a material licensing, copyright, trademark, project-control, or governance
+  dispute creates a credible redistribution, operation, upgrade, or
+  maintenance-continuity risk;
+- the maintainers withdraw supported community artifacts, archive the required
+  repository, stop a usable security-update path, or direct production users
+  to a separately licensed product;
+- the release artifact, its source, its license and notice files, and its SBOM
+  cannot be bound to the same immutable version and digest; or
+- approval would require an enterprise customer to obtain a separate license,
+  accept new third-party terms, disclose unrelated source, or assume an
+  unresolved interpretation.
+
+Unknown, conflicting, or incomplete evidence is a rejection. Maintainers must
+not use a disclaimer, an optional-install label, a customer-supplied image, or
+an instruction to contact the vendor as a substitute for admission.
+Existing presence is not approval or grandfathering: an artifact that has not
+passed this gate must be removed, replaced, or admitted before it can enter the
+next release candidate.
+
+### Admission and upgrade evidence
+
+Before a dependency enters a change or release candidate, record and review:
+
+1. the exact upstream owner, repository, version, source revision, artifact,
+   image digest, and selected edition;
+2. the authoritative license text, SPDX expression, notices, bundled
+   third-party inventory, and release-candidate SBOM;
+3. production, redistribution, hosting, trademark, support, security-update,
+   registration, telemetry, and renewal terms;
+4. current maintenance and governance status, including public relicensing or
+   ownership disputes; and
+5. an offline private-deployment path that does not require vendor approval or
+   a vendor control plane.
+
+Review a fixed artifact, never a floating tag. Every upgrade or distribution
+change is a new admission decision. A scanner may collect evidence but cannot
+resolve ambiguous legal or commercial terms; ambiguity remains denied until a
+competent review records a safe conclusion.
+
+If an admitted upstream later changes its terms or develops a material
+commercial or governance risk:
+
+1. stop upgrades and prevent the affected artifact from entering a new release
+   candidate;
+2. preserve the immutable source, license, notices, SBOM, and digest that prove
+   the rights of the last admitted artifact;
+3. select and verify a risk-free replacement behind the existing Core-owned
+   port or protocol boundary;
+4. migrate once, remove the affected implementation and product-specific
+   defaults, and verify that no release surface still installs it; and
+5. do not require existing private-deployment users to purchase a license or
+   accept the upstream's new terms as the migration path.
+
 ## Local Startup
 
 ```bash
@@ -53,7 +205,7 @@ For a local deployment that also serves the Web Console, select the UI image
 target explicitly:
 
 ```bash
-LICO_BUILD_TARGET=runtime-ui LICO_SERVER_WITH_UI=1 docker compose up -d --build
+MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --build
 ```
 
 Create the reproducible server source archive and its SHA-256 checksum with:
@@ -66,11 +218,11 @@ The command writes to `build/packages`. This is a source package: it excludes
 installed dependencies and container images, so a target host still needs
 network access while building the container image.
 
-Set `LICO_HOST_PORT` to change the loopback host port. The Compose contract uses
+Set `MESHRIX_HOST_PORT` to change the loopback host port. The Compose contract uses
 that same value for bootstrap, advertised, and active service URLs while the
 container continues to listen on port `7228`. The host publish address remains
-`127.0.0.1` by default. An isolated VM may set `LICO_BIND_ADDRESS=0.0.0.0` and
-`LICO_ADVERTISED_HOST` to its VM-local DNS name when host access is required;
+`127.0.0.1` by default. An isolated VM may set `MESHRIX_BIND_ADDRESS=0.0.0.0` and
+`MESHRIX_ADVERTISED_HOST` to its VM-local DNS name when host access is required;
 do not use a non-loopback bind on an untrusted network. Its 90-second stop grace period
 covers the runtime's two-phase request drain and cancellation budget. Compose
 also reports container health from the loopback `/api/healthz` endpoint.
@@ -80,15 +232,15 @@ server and Web Console. Start that immutable image directly so the local
 Compose build definition cannot silently replace it:
 
 ```bash
-docker pull ghcr.io/licoland/licomesh:<version>
-docker volume create licomesh-server-data
+docker pull ghcr.io/licoland/meshrix:<version>
+docker volume create meshrix-server-data
 docker run -d \
-  --name licomesh-server \
+  --name meshrix-server \
   --restart unless-stopped \
   --stop-timeout 90 \
   --publish 127.0.0.1:7228:7228 \
-  --mount source=licomesh-server-data,target=<container-data-dir> \
-  ghcr.io/licoland/licomesh:<version>
+  --mount source=meshrix-server-data,target=<container-data-dir> \
+  ghcr.io/licoland/meshrix:<version>
 ```
 
 Before an unreliable-network deployment window, prepare the npm artifact cache:
@@ -97,7 +249,7 @@ Before an unreliable-network deployment window, prepare the npm artifact cache:
 npm run server:prepare:npm-cache
 ```
 
-Container verification builds the Docker image with BuildKit dependency caches, starts compose, serves the real container, verifies MCP initialize, tools/list, `lico.capabilities.list`, `system.health`, destructive rejection, and cleanup:
+Container verification builds the Docker image with BuildKit dependency caches, starts compose, serves the real container, verifies MCP initialize, tools/list, `meshrix.capabilities.list`, `system.health`, destructive rejection, and cleanup:
 
 ```bash
 npm run server:verify:deployment-flow
@@ -210,16 +362,16 @@ semantic version tags, serializes all release runs globally, and fails unless
 the tagged commit is verifiably contained in the canonical `release` branch.
 The workflow runs the canonical acceptance authority before any publication.
 
-LicoMesh `0.0.1` has an exact registry dependency on `pactium@0.5.0`. Publish
+Meshrix `0.0.1` has an exact registry dependency on `pactium@0.5.0`. Publish
 that Pactium version first and confirm registry visibility before creating the
-LicoMesh tag:
+Meshrix tag:
 
 ```bash
 npm view pactium@0.5.0 version --registry=https://registry.npmjs.org/
 ```
 
-The LicoMesh clean-install and container gates intentionally fail while that
-version is absent. This is a publication ordering requirement, not a LicoArc or
+The Meshrix clean-install and container gates intentionally fail while that
+version is absent. This is a publication ordering requirement, not a MeshrixUp or
 non-current-platform support blocker.
 
 The workflow stages a multi-platform container and compares the intended OCI
@@ -258,7 +410,7 @@ registry signatures, SLSA provenance attestations, and monotonic `latest` or
 `next` state. A missing or older tag on an existing version fails closed because
 GitHub OIDC trusted publishing cannot repair dist-tags; a newer tag is preserved.
 Missing versions are then published by dependency topology with the root
-`licomesh` package last, and every registry postcondition is reverified.
+`meshrix` package last, and every registry postcondition is reverified.
 The published set is then installed without lifecycle scripts and checked with
 `npm audit signatures`, which cryptographically verifies registry signatures
 and provenance attestations. The GitHub Release becomes public only after this
@@ -414,15 +566,15 @@ The production drill writes `build/reports/storage-production-restore-drill/late
 
 ## Operation Proof Evidence Policy
 
-Operation proof evidence is governed by `LICO_OPERATION_PROOF_EVIDENCE_POLICY` and
-`LICO_OPERATION_PROOF_SIGNER_SECRET`. The policy defaults to `development`, which
+Operation proof evidence is governed by `MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY` and
+`MESHRIX_OPERATION_PROOF_SIGNER_SECRET`. The policy defaults to `development`, which
 produces non-verifiable operation proof entries.
 
 Set the policy to `production` only when a signer secret is configured:
 
 ```bash
-export LICO_OPERATION_PROOF_EVIDENCE_POLICY=production
-export LICO_OPERATION_PROOF_SIGNER_SECRET=<redacted-secret>
+export MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY=production
+export MESHRIX_OPERATION_PROOF_SIGNER_SECRET=<redacted-secret>
 ```
 
 A production policy without a configured signer fails closed before operation
@@ -450,7 +602,7 @@ To rotate the signer secret:
 
 1. Provision the new secret under a fresh environment variable.
 2. Deploy with both old and new secrets available and the new secret configured
-   as `LICO_OPERATION_PROOF_SIGNER_SECRET`.
+   as `MESHRIX_OPERATION_PROOF_SIGNER_SECRET`.
 3. Verify the proof substrate verifier passes against the new secret.
 4. Remove the old secret from the deployment environment.
 5. Record the rotation in the deployment audit log.

@@ -42,8 +42,8 @@ vi.mock("../../../packages/server-runtime/src/jobs/jobs/job-runner.mjs", () => {
   };
 });
 
-vi.mock("#lico/product-api", async () => {
-  const actual = await vi.importActual("#lico/product-api");
+vi.mock("#meshrix/product-api", async () => {
+  const actual = await vi.importActual("#meshrix/product-api");
   return {
     ...actual,
     createDurableWorkflowSubstrate: vi.fn(() => durableWorkflowRuntimeMock),
@@ -59,10 +59,10 @@ import {
   createJobManager,
 } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.mjs";
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.mjs";
-import { serverToken } from "#lico/product-api";
+import { serverToken } from "#meshrix/product-api";
 
 async function withTempUserData(callback) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-job-manager-final-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-manager-final-extra-"));
   try {
     return await callback(userDataPath);
   } finally {

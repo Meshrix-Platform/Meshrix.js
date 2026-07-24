@@ -1,7 +1,7 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
   "updatedAt": "2026-04-30T00:00:00.000Z",
-  "description": "LicoMesh import file type dictionary. Add or remove extensions here instead of editing code.",
+  "description": "Meshrix import file type dictionary. Add or remove extensions here instead of editing code.",
   "includeUnknownReadableText": true,
   "plainTextFallbackExtension": ".txt",
   "readableTextDetection": {

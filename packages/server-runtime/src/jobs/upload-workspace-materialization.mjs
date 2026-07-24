@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 
 export const UPLOAD_WORKSPACE_MATERIALIZATION_SCHEMA_VERSION =

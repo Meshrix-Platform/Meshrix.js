@@ -18,7 +18,7 @@ export function shellQuote(value) {
 }
 
 export function connectorLaunchSpec() {
-  const configured = String(process.env.LICO_MCP_CONNECTOR_COMMAND || "").trim();
+  const configured = String(process.env.MESHRIX_MCP_CONNECTOR_COMMAND || "").trim();
   if (configured) {
     const resolved = path.resolve(configured);
     if (path.isAbsolute(configured) && existsSync(resolved)) {

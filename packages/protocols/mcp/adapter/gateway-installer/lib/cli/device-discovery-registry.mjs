@@ -3,9 +3,9 @@ import path from "node:path";
 
 import {
   DEFAULT_DISCOVERY_REGISTRY,
-  LICO_MCP_DISCOVERY_FILE_ENV,
-  LICO_MCP_DISCOVERY_URL_ENV,
-  LICO_MCP_URL_ENV
+  MESHRIX_MCP_DISCOVERY_FILE_ENV,
+  MESHRIX_MCP_DISCOVERY_URL_ENV,
+  MESHRIX_MCP_URL_ENV
 } from "./constants.mjs";
 import { option } from "./basic-utils.mjs";
 import { expandHomePath } from "./connector-process.mjs";
@@ -14,7 +14,7 @@ export function discoveryRegistryPath(options = {}) {
   const selected = option(
     options,
     "discovery-file",
-    process.env[LICO_MCP_DISCOVERY_FILE_ENV] || DEFAULT_DISCOVERY_REGISTRY
+    process.env[MESHRIX_MCP_DISCOVERY_FILE_ENV] || DEFAULT_DISCOVERY_REGISTRY
   );
   return path.resolve(expandHomePath(selected));
 }
@@ -25,9 +25,9 @@ export function deviceDiscoveryPaths(options = {}) {
 
 export function deviceDiscoveryEnv({ baseUrl, primaryPath }) {
   return {
-    [LICO_MCP_URL_ENV]: `${baseUrl}/mcp`,
-    [LICO_MCP_DISCOVERY_URL_ENV]: `${baseUrl}/.well-known/lico/mcp.json`,
-    [LICO_MCP_DISCOVERY_FILE_ENV]: primaryPath
+    [MESHRIX_MCP_URL_ENV]: `${baseUrl}/mcp`,
+    [MESHRIX_MCP_DISCOVERY_URL_ENV]: `${baseUrl}/.well-known/meshrix/mcp.json`,
+    [MESHRIX_MCP_DISCOVERY_FILE_ENV]: primaryPath
   };
 }
 

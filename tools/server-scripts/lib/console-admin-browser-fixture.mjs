@@ -117,7 +117,7 @@ export function dynamicAdminRouteEntries(consoleEntries = []) {
 }
 
 export async function verifyEmptyPluginSelection({ browser, distPath, repoRoot }) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-console-empty-plugins-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-console-empty-plugins-"));
   let server = null;
   let context = null;
   try {

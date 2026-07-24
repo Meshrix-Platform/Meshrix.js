@@ -1,4 +1,4 @@
-import { getRuntimeLogger, summarizeError } from "#lico/foundation/observability/runtime-logger";
+import { getRuntimeLogger, summarizeError } from "#meshrix/foundation/observability/runtime-logger";
 import { externalAuthVerifierConfig, logOperation } from "./dispatch-operation-support.mjs";
 
 export async function verifyExternalAuth({

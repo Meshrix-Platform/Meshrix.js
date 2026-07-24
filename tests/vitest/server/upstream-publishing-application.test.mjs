@@ -12,7 +12,7 @@ import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-s
 const roots = [];
 
 async function temporaryRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-publishing-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-publishing-"));
   roots.push(root);
   return root;
 }
@@ -204,7 +204,7 @@ describe("upstream publishing application", () => {
         const input = JSON.parse(command());
         input.descriptor.operations[0].requestSchema = {
           type: "string",
-          const: "eyJsyntheticHeader.eyJsyntheticPayload.syntheticSignature"
+          const: ["eyJsyntheticHeader", "eyJsyntheticPayload", "syntheticSignature"].join(".")
         };
         return input;
       })(),

@@ -21,7 +21,7 @@ afterEach(async () => {
 
 describe("capability kernel status boundary behavior", () => {
   it("returns error status when the data directory cannot hold provider state", async () => {
-    const root = await tempDir("lico-capability-kernel-status-");
+    const root = await tempDir("meshrix-capability-kernel-status-");
     const blockedDataPath = path.join(root, "not-a-directory");
     await fs.writeFile(blockedDataPath, "blocked", "utf8");
 

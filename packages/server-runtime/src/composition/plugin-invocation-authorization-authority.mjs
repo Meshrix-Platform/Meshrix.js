@@ -1,7 +1,7 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-const SCHEMA = "licomesh.plugin-invocation-authorization/1";
+const SCHEMA = "meshrix.plugin-invocation-authorization/1";
 const DEFAULT_TTL_MS = 30_000;
 const MAX_TTL_MS = 120_000;
 const ALLOWED_AUDIENCES = new Set(["owner-process-identity", "controlled-execution"]);

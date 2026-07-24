@@ -23,10 +23,10 @@ import {
   maintenanceVerifierLogger
 } from "./lib/maintenance-agent-verifier-harness.mjs";
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-maintenance-agent-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-maintenance-agent-"));
 const lockManager = new MemoryLockManager();
-const previousModelCredentialMasterKey = process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY;
-process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY ||= crypto
+const previousModelCredentialMasterKey = process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY;
+process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY ||= crypto
   .createHash("sha256")
   .update(tempRoot)
   .digest("hex");
@@ -403,7 +403,7 @@ try {
       event.input.apply === true &&
       event.input.confirm === true &&
       event.input.safetyConfirm === true &&
-      event.headers["x-lico-safety-confirm"] === "true"
+      event.headers["x-meshrix-safety-confirm"] === "true"
     ));
   } finally {
     await plannerGateway.close();
@@ -424,9 +424,9 @@ try {
   console.log("[maintenance-agent] ok");
 } finally {
   if (previousModelCredentialMasterKey === undefined) {
-    delete process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY;
+    delete process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY;
   } else {
-    process.env.LICO_MODEL_CREDENTIAL_MASTER_KEY = previousModelCredentialMasterKey;
+    process.env.MESHRIX_MODEL_CREDENTIAL_MASTER_KEY = previousModelCredentialMasterKey;
   }
   lockManager.destroy();
   await fs.rm(tempRoot, { recursive: true, force: true });

@@ -34,7 +34,7 @@ const {
           <circle r="6" fill="#fef100" opacity="0.6"/>
         </svg>
         <div>
-          <h1 class="auth-brand-name">LicoMesh</h1>
+          <h1 class="auth-brand-name">Meshrix</h1>
           <p class="brand-subtitle">{{ tt('服务端控制台') }}</p>
         </div>
         <button

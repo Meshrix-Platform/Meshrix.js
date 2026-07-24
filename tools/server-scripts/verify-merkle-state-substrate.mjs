@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createDataStructureSubstrate } from "#lico/foundation/checkpoint/tree/data-structure-substrate";
+import { createDataStructureSubstrate } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-merkle-state-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-"));
 
 try {
   const provider = createDataStructureSubstrate({ userDataPath });

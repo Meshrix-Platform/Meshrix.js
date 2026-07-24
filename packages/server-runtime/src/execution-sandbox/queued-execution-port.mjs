@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { sandboxDigest } from "#lico/foundation/execution-sandbox/contracts";
+import { sandboxDigest } from "#meshrix/foundation/execution-sandbox/contracts";
 
 export const SANDBOX_EXECUTION_PORT_ID = "SandboxExecutionPort";
 
@@ -55,7 +55,7 @@ export async function createQueuedSandboxExecutionPort({
       executionStateOwner: "sandbox-execution-broker"
     },
     policy: {
-      policyVersion: "licomesh.sandbox-execution-queue-policy/1",
+      policyVersion: "meshrix.sandbox-execution-queue-policy/1",
       maxInFlight,
       maxAttempts: 1
     },
@@ -124,7 +124,7 @@ export async function createQueuedSandboxExecutionPort({
         ...(Number.isFinite(parsedDeadline) ? { expiresAtMs: parsedDeadline } : {}),
         actor: { system: "sandbox-execution-port" },
         reason: "sandbox_execution_queued",
-        policyVersion: "licomesh.sandbox-execution-queue-policy/1"
+        policyVersion: "meshrix.sandbox-execution-queue-policy/1"
       });
       void queue.requestDispatch().catch((error) => {
         if (record.settled) return;

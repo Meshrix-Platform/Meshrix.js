@@ -24,13 +24,13 @@ const DEFAULT_DIRECT_BASE_URL = "http://127.0.0.1:7228";
 let externalGatewayModulePromise = null;
 
 function defaultGatewayRuntimeCacheRoot(env = process.env) {
-  const explicit = String(env.LICO_GATEWAY_RUNTIME_CACHE_DIR || "").trim();
+  const explicit = String(env.MESHRIX_GATEWAY_RUNTIME_CACHE_DIR || "").trim();
   if (explicit) {
     return path.resolve(explicit);
   }
   const xdgCacheHome = String(env.XDG_CACHE_HOME || "").trim();
   const cacheHome = xdgCacheHome ? path.resolve(xdgCacheHome) : path.join(os.homedir(), ".cache");
-  return path.join(cacheHome, "lico", "external-gateway");
+  return path.join(cacheHome, "meshrix", "external-gateway");
 }
 
 function loadExternalGateway() {
@@ -66,7 +66,7 @@ function parseArgs(argv = []) {
 }
 
 function printUsageAndExit(code = 0) {
-  console.log(`LicoMesh Agent Traffic Gateway
+  console.log(`Meshrix Agent Traffic Gateway
 
 Usage:
   node tools/server-scripts/external-gateway.mjs list
@@ -80,9 +80,9 @@ Usage:
 
 Options:
   --gateway             Gateway adapter. Default: ${DEFAULT_GATEWAY_ADAPTER}
-  --direct-base-url     Direct LicoMesh endpoint kept as required fallback. Default: ${DEFAULT_DIRECT_BASE_URL}
+  --direct-base-url     Direct Meshrix endpoint kept as required fallback. Default: ${DEFAULT_DIRECT_BASE_URL}
   --public-base-url     Gateway public endpoint. Default: ${DEFAULT_GATEWAY_BASE_URL}
-  --upstream            Upstream LicoMesh endpoints, comma-separated. Default: direct-base-url
+  --upstream            Upstream Meshrix endpoints, comma-separated. Default: direct-base-url
   --listen-host         Gateway listen host. Default: public-base-url host
   --listen-port         Gateway listen port. Default: public-base-url port
   --server-name         Nginx server_name / Caddy host label. Default: public-base-url host
@@ -457,9 +457,9 @@ async function installGatewayRuntime(args = {}) {
   if (plan.runtimeUrl) {
     const archivePath = path.join(plan.runtimeRoot, "downloads", path.basename(new URL(plan.runtimeUrl).pathname) || `${plan.adapterId}-runtime`);
     await downloadTrustedFile(plan.runtimeUrl, archivePath, {
-      expectedSha256: args["runtime-sha256"] || process.env.LICO_GATEWAY_RUNTIME_SHA256 || "",
+      expectedSha256: args["runtime-sha256"] || process.env.MESHRIX_GATEWAY_RUNTIME_SHA256 || "",
       allowUnsafe: args["allow-unsafe-runtime-download"] === true ||
-        process.env.LICO_RUNTIME_ALLOW_UNSAFE_DOWNLOADS === "1"
+        process.env.MESHRIX_RUNTIME_ALLOW_UNSAFE_DOWNLOADS === "1"
     });
     await fs.chmod(archivePath, 0o755).catch(() => {});
     if (!looksLikeArchive(archivePath)) {

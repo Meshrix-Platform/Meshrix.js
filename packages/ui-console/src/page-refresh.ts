@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted } from "vue";
 import { createConsoleWindowEventChannel } from "./console-window-event-channel";
 
-export const PAGE_REFRESH_EVENT = "lico:page-refresh";
+export const PAGE_REFRESH_EVENT = "meshrix:page-refresh";
 
 export type PageRefreshContext = {
   viewId: string;

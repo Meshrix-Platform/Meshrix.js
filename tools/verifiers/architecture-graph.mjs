@@ -23,7 +23,7 @@ const EXCLUDED_SEGMENTS = new Set([
   "build",
   "coverage",
   "dist",
-  "licomesh-data",
+  "meshrix-data",
   "node_modules",
   "vendor"
 ]);
@@ -356,7 +356,7 @@ function specifierKind(specifier) {
 function specifierFamily(specifier) {
   if (specifier.startsWith(".")) return "relative";
   if (specifier.startsWith("#")) return "package-import";
-  if (specifier.startsWith("@lico/")) return "workspace-package";
+  if (specifier.startsWith("@meshrix/")) return "workspace-package";
   if (specifier.startsWith("node:") || BUILTINS.has(specifier)) return "builtin";
   if (specifier.startsWith("@") || /^[A-Za-z0-9_~-]/.test(specifier)) return "external-package";
   return "unsupported";
@@ -469,8 +469,8 @@ function markdownReport(report) {
     `- Nodes: ${report.graph.summary.totalNodes}`,
     `- Edges: ${report.graph.summary.totalEdges}`,
     `- Relative edges: ${report.graph.summary.relativeEdgeCount}`,
-    `- Package-import (#lico/*) edges: ${report.graph.summary.packageImportEdgeCount}`,
-    `- Workspace-package (@lico/*) edges: ${report.graph.summary.workspacePackageEdgeCount}`,
+    `- Package-import (#meshrix/*) edges: ${report.graph.summary.packageImportEdgeCount}`,
+    `- Workspace-package (@meshrix/*) edges: ${report.graph.summary.workspacePackageEdgeCount}`,
     `- Dynamic internal edges: ${report.graph.summary.dynamicInternalEdgeCount}`,
     `- Unresolved internal imports: ${report.graph.summary.unresolvedImportCount}`,
     `- Workspace dependency findings: ${report.graph.summary.manifestDependencyViolationCount}`,

@@ -9,7 +9,7 @@ const selfPath = path.relative(root, new URL(import.meta.url).pathname);
 const scanRoots = ["apps", "packages", "crates", "content", "fixtures", "docs", "tests"];
 const ignoredDirectories = new Set([
   ".git",
-  ".licomesh-server-data",
+  ".meshrix-server-data",
   "node_modules",
   "build",
   "dist",

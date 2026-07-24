@@ -18,7 +18,7 @@ import {
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const reportPath = path.join(repoRoot, "build", "reports", "gateway-platform-profile.json");
-const reportNotBeforeMs = Number(process.env.LICO_RELEASE_EVIDENCE_NOT_BEFORE_MS || 0);
+const reportNotBeforeMs = Number(process.env.MESHRIX_RELEASE_EVIDENCE_NOT_BEFORE_MS || 0);
 const REQUIRED_PROFILE_REPORTS = Object.freeze([
   "build/reports/mcp-gateway-load.json",
   UPSTREAM_FIXTURE_TRANSIT_REPORT_PATH,

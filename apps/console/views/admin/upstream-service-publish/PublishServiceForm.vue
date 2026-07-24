@@ -3,7 +3,7 @@ import { ref } from "vue";
 import JsonConfigFileEditor from "../../../components/JsonConfigFileEditor.vue";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../components/ConsoleInlineAlert.vue";
-import LicoTabs, { type LicoTab } from "../../../components/LicoTabs.vue";
+import MeshrixTabs, { type MeshrixTab } from "../../../components/MeshrixTabs.vue";
 import { descriptorObjectFields, type PublishDescriptorForm } from "./publish-form-model";
 
 defineOptions({ name: "PublishServiceForm" });
@@ -30,7 +30,7 @@ const form = props.form;
 const activeTab = ref("basic");
 const operationError = ref("");
 const referenceError = ref("");
-const formTabs: LicoTab[] = [
+const formTabs: MeshrixTab[] = [
   { key: "basic", label: "Basic" },
   { key: "operations", label: "Service operations" },
   { key: "references", label: "References" },
@@ -145,7 +145,7 @@ function removeReference(index: number) {
 
 <template>
   <section class="publish-form">
-    <LicoTabs v-model="activeTab" :tabs="formTabs" size="small" aria-label="Service editor sections" />
+    <MeshrixTabs v-model="activeTab" :tabs="formTabs" size="small" aria-label="Service editor sections" />
 
     <div v-if="activeTab === 'basic'" class="tab-content" role="tabpanel" aria-label="Basic service settings">
       <label class="form-field">

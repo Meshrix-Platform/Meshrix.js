@@ -3,9 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
-import { PROTOCOL_OPERATION_DEFINITIONS } from "#lico/contracts/operations/protocol-operation-definitions";
-import { operationFeatureId } from "#lico/contracts/operations/operation-feature-resolution";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
+import { PROTOCOL_OPERATION_DEFINITIONS } from "#meshrix/contracts/operations/protocol-operation-definitions";
+import { operationFeatureId } from "#meshrix/contracts/operations/operation-feature-resolution";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.mjs";
 import {
   MCP_DISCOVERY_TOOL_NAME,
@@ -69,7 +69,7 @@ async function mcpCapabilityOperations(catalog) {
       name: MCP_DISCOVERY_TOOL_NAME,
       arguments: {
         apiVersion: MCP_INTERFACE_VERSION,
-        operation: "lico.capabilities.list",
+        operation: "meshrix.capabilities.list",
         input: {}
       }
     }

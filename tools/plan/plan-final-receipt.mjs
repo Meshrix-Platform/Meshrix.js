@@ -1,9 +1,15 @@
 import crypto from "node:crypto";
 import path from "node:path";
 
-import { requirePlatformAcceptanceProfile } from "../server-scripts/lib/platform-acceptance-contract.mjs";
+import {
+  finalValidationBinding,
+  normalizePlanProfiles,
+  parentIntegrationBinding,
+  planReceiptKey,
+  profilesContain,
+} from "./plan-dependency-map.mjs";
 
-export const RECEIPT_SCHEMA = "licomesh.plan-final-receipt.v3";
+export const RECEIPT_SCHEMA = "v0.0.1:meshrix:plan-final-receipt-4";
 export const REPORT_DIGEST_ALGORITHM = "canonical-json-without-observation-time";
 const ABSOLUTE_PATH_PATTERN = /(?:^|[\s"'`=(])(?:\/(?:Users|home|private|var|tmp)\/|[A-Za-z]:\\)/u;
 const VOLATILE_REPORT_KEYS = new Set(["checkedAt", "generatedAt"]);
@@ -91,17 +97,24 @@ function currentEvidenceRefs(finalNode) {
 
 function currentPrerequisiteReceipts(
   mapPlan,
-  prerequisiteReceiptsByPlan = {},
+  finalProfiles,
+  prerequisiteReceiptsByKey = {},
   prerequisiteContractReceiptsByKey = {},
-  candidateReceiptPlans = new Set()
+  candidateReceiptKeys = new Set()
 ) {
-  return (mapPlan.prerequisite_receipts ?? []).map((receipt) => {
+  return (mapPlan.prerequisite_receipts ?? []).flatMap((receipt) => {
     requireCondition(receipt && typeof receipt === "object", "Prerequisite receipt declaration is invalid");
     requireCondition(receipt.kind === "contract" || receipt.kind === "final_validation", "Prerequisite receipt kind is invalid");
-    const key = `${receipt.plan}\u0000${receipt.node_id}\u0000${receipt.kind}`;
+    const profiles = normalizePlanProfiles(receipt.profiles, "Prerequisite receipt profiles are invalid");
+    if (!profiles.some((profile) => finalProfiles.includes(profile))) return [];
+    requireCondition(
+      profilesContain(finalProfiles, profiles),
+      "Prerequisite receipt spans more than one final-validation profile owner",
+    );
+    const key = planReceiptKey(receipt.plan, receipt.node_id, receipt.kind);
     const accepted = receipt.kind === "contract"
       ? prerequisiteContractReceiptsByKey[key]
-      : prerequisiteReceiptsByPlan[receipt.plan];
+      : prerequisiteReceiptsByKey[key];
     requireCondition(accepted && typeof accepted === "object", `Prerequisite ${receipt.kind} receipt is missing`);
     requireCondition(accepted.plan === receipt.plan, "Prerequisite receipt plan identity is mismatched");
     requireCondition(
@@ -110,28 +123,35 @@ function currentPrerequisiteReceipts(
     );
     requireCondition(
       receipt.kind === "contract"
-        ? accepted.schema_version === "licomesh.plan-contract-receipt.v1" && accepted.kind === "contract"
+        ? accepted.schema_version === "v0.0.1:meshrix:plan-contract-receipt-1" && accepted.kind === "contract"
         : accepted.schema_version === RECEIPT_SCHEMA && accepted.role === "final_validation",
       "Prerequisite receipt kind is mismatched"
     );
     requireCondition(accepted.status === "completed", "Prerequisite receipt is not completed");
+    if (receipt.kind === "final_validation") {
+      requireCondition(
+        profilesContain(accepted.profiles, profiles),
+        "Prerequisite receipt profiles are mismatched",
+      );
+    }
     requireCondition(accepted.privacy_safe === true && privacySafeTree(accepted), "Prerequisite receipt is privacy-unsafe");
     requireCondition(
       receipt.kind === "contract"
         ? accepted.verified === true
-        : accepted.proof_anchor?.verified === true || candidateReceiptPlans.has(receipt.plan),
+        : accepted.proof_anchor?.verified === true || candidateReceiptKeys.has(key),
       "Prerequisite receipt is not verified"
     );
     requireCondition(
       accepted.receipt_digest === canonicalDigest(receiptFacts(accepted)),
       "Prerequisite receipt digest is stale"
     );
-    return {
+    return [{
       plan: String(receipt?.plan || ""),
       node_id: String(receipt?.node_id || ""),
       kind: String(receipt?.kind || ""),
+      profiles,
       receipt_digest: accepted.receipt_digest
-    };
+    }];
   });
 }
 
@@ -153,46 +173,46 @@ export function buildPlanFinalReceipt({
   planText = "",
   checkpointsText,
   finalNode,
-  selectedProfile,
   repositoryRevision = finalNode?.commit?.delivered || "",
   repositoryTreeDigest = "",
   commandDagDigest = "",
   ownedReportsInventoryDigest = "",
-  prerequisiteReceiptsByPlan = {},
+  prerequisiteReceiptsByKey = {},
   prerequisiteContractReceiptsByKey = {},
-  candidateReceiptPlans = new Set()
+  candidateReceiptKeys = new Set()
 }) {
   requireCondition(mapPlan?.directory === undefined || mapPlan.directory === planDirectory, "Plan directory and DependencyMap identity are mismatched");
-  requireCondition(finalNode?.id === mapPlan.final_validation_node_id, "Final node identity is mismatched");
+  const finalBinding = finalValidationBinding(mapPlan, finalNode?.id);
   requireCondition(finalNode?.role === "final_validation", "Final node role must be final_validation");
   requireCondition(finalNode.status === "completed", "Final node must be completed before receipt reduction");
   requireCondition(finalNode.acceptance_criteria?.length > 0 && finalNode.acceptance_criteria.every((criterion) => criterion.checked === true), "Final node has unchecked acceptance criteria");
   requireCondition(finalNode.requirements?.length > 0, "Final node requirements are missing");
   requireCondition(finalNode.platform, "Final node platform is missing");
   requireCondition(finalNode.commit?.delivered, "Final node source revision (commit.delivered) is missing");
-  requireCondition(selectedProfile, "Selected profile is missing");
-  selectedProfile = requirePlatformAcceptanceProfile(selectedProfile);
+  const profiles = normalizePlanProfiles(finalBinding.profiles, "Final receipt profiles are invalid");
+  const parentIntegration = parentIntegrationBinding(mapPlan, finalNode.id);
   const evidenceRefs = currentEvidenceRefs(finalNode);
   requireCondition(evidenceRefs.length > 0, "Final node has no privacy-safe evidence references");
   const prerequisites = currentPrerequisiteReceipts(
     mapPlan,
-    prerequisiteReceiptsByPlan,
+    profiles,
+    prerequisiteReceiptsByKey,
     prerequisiteContractReceiptsByKey,
-    candidateReceiptPlans
+    candidateReceiptKeys
   );
   const receipt = {
     schema_version: RECEIPT_SCHEMA,
     plan: planDirectory,
-    final_node_id: mapPlan.final_validation_node_id,
+    final_node_id: finalNode.id,
     parent_contract_node_id: mapPlan.parent_contract_node_id,
-    parent_integration_node_id: mapPlan.parent_integration_node_id,
+    parent_integration_node_id: parentIntegration?.parent_node_id ?? null,
     plan_digest: digest(planText),
     checkpoint_digest: digest(checkpointsText),
     final_node_digest: canonicalDigest(finalNode),
     status: finalNode.status,
     role: finalNode.role,
     platform: finalNode.platform,
-    selected_profile: selectedProfile,
+    profiles,
     requirements: [...finalNode.requirements],
     checked_criteria: finalNode.acceptance_criteria.map((criterion, index) => ({ index, checked: true, text: criterion.text })),
     evidence_refs: evidenceRefs,
@@ -238,7 +258,6 @@ export function assertReceiptPlanCurrent(receipt, context) {
   assertReceiptIntegrity(receipt);
   assertReceiptCandidateCurrent(receipt, {
     ...context,
-    selectedProfile: receipt.selected_profile,
     repositoryRevision: receipt.repository_revision,
     repositoryTreeDigest: receipt.repository_tree_digest,
     commandDagDigest: receipt.command_dag_digest,

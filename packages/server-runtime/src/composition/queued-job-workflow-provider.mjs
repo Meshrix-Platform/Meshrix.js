@@ -1,8 +1,8 @@
-import { normalizeQueueDedupeKey } from "@lico/foundation/work-queue/index";
+import { normalizeQueueDedupeKey } from "@meshrix/foundation/work-queue/index";
 
 export const QUEUED_JOB_WORKFLOW_PROVIDER_PROTOCOL_VERSION = "v0.0.1:workflow:job-workflow-work-queue-1";
 export const JOB_WORK_QUEUE_DEFINITION_ID = "queue.jobs.import-parse";
-export const JOB_WORK_QUEUE_LABEL = "lico.jobs.import-parse";
+export const JOB_WORK_QUEUE_LABEL = "meshrix.jobs.import-parse";
 export const JOB_WORK_QUEUE_DEFINITION_VERSION = 2;
 export const JOB_WORK_QUEUE_POLICY_VERSION = "v0.0.1:workflow:job-work-queue-policy-1";
 const JOB_WORK_QUEUE_PRIORITY = 0;
@@ -73,8 +73,8 @@ export async function createQueuedJobWorkflowProvider({
   consumerEnabled = true,
   deletionWaitTimeoutMs = 30_000,
   deletionPollIntervalMs = 25,
-  dispatchBatchSize = Number(process.env.LICO_WORK_QUEUE_DISPATCH_BATCH_SIZE || 8),
-  maxInFlight = process.env.LICO_WORK_QUEUE_MAX_IN_FLIGHT || 64
+  dispatchBatchSize = Number(process.env.MESHRIX_WORK_QUEUE_DISPATCH_BATCH_SIZE || 8),
+  maxInFlight = process.env.MESHRIX_WORK_QUEUE_MAX_IN_FLIGHT || 64
 } = {}) {
   const manager = requireManager(jobManager);
   if (!queueApplicationPort || typeof queueApplicationPort.registerQueue !== "function") {

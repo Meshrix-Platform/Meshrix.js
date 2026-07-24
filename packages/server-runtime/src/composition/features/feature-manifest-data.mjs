@@ -12,7 +12,7 @@ export {
 
 export const FEATURE_MANIFEST = Object.freeze({
   schemaVersion: "v0.0.1:schema:definition-1",
-  label: "LicoMesh FeatureManifest",
+  label: "Meshrix FeatureManifest",
   groups: Object.freeze([
     "core",
     "security",
@@ -247,12 +247,11 @@ export const FEATURE_MANIFEST = Object.freeze({
       package: {
         includePaths: [
           "packages/protocols/mcp",
-          "packages/protocols/mcp/adapter/native-installer",
-          "tools/server-scripts/verify-downstream-mcp-product-e2e.mjs"
+          "packages/protocols/mcp/adapter/native-installer"
         ],
         excludePaths: []
       },
-      tests: { suites: ["tools/server-scripts/verify-downstream-mcp-product-e2e.mjs"] }
+      tests: { suites: ["tools/verifiers/downstream-mcp-completeness-audit.mjs"] }
     },
     {
       featureId: "context-runtime-core",
@@ -427,14 +426,6 @@ export const FEATURE_MANIFEST = Object.freeze({
       label: "Local Shared Space and agent workspace",
       group: "agent",
       dependsOn: ["agent-workspace-core"],
-      defaultEnabled: false
-    },
-    {
-      featureId: "client-link",
-      pluginId: "client-link",
-      label: "Client Link connectivity product",
-      group: "client",
-      dependsOn: ["operation-dispatcher", "console-shell", "operation-permission-core", "security-permissions"],
       defaultEnabled: false
     },
     {

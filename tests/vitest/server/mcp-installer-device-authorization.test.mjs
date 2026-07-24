@@ -1,7 +1,7 @@
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { stableStringify } from "../../../packages/protocols/mcp/adapter/mcp-identity.mjs";
+import { stableStringify } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-identity.mjs";
 
 const processIdentityStoreMocks = vi.hoisted(() => ({
   deleteProcessIdentity: vi.fn(async () => {}),
@@ -15,12 +15,12 @@ const processIdentityStoreMocks = vi.hoisted(() => ({
 const uninstallAdapterMocks = vi.hoisted(() => ({
   runClientAdapter: vi.fn(async ({ action }) => ({
     result: action === "uninstall" ? { removed: true, installed: false } : { installed: true },
-    adapter: { coordinate: "@licomesh/agent-codex-adapter@0.0.1" },
+    adapter: { coordinate: "@meshrix/agent-codex-adapter@0.0.1" },
     cache: { hit: true }
   })),
   describeClientAdapter: vi.fn(async () => ({
     result: { commandNames: ["node"] },
-    adapter: { coordinate: "@licomesh/agent-codex-adapter@0.0.1" },
+    adapter: { coordinate: "@meshrix/agent-codex-adapter@0.0.1" },
     cache: { hit: true }
   })),
   writeDeviceDiscovery: vi.fn(async () => "<discovery-manifest>"),
@@ -49,8 +49,8 @@ vi.mock("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/devic
 vi.mock("../../../tools/server-scripts/test-auth-helper.mjs", () => ({
   authHeaders: () => ({
     Cookie: verifierAuthMocks.auth.cookie,
-    "x-lico-csrf": verifierAuthMocks.auth.csrf,
-    "x-lico-safety-confirm": "true"
+    "x-meshrix-csrf": verifierAuthMocks.auth.csrf,
+    "x-meshrix-safety-confirm": "true"
   }),
   installAuthenticatedFetch: verifierAuthMocks.installAuthenticatedFetch,
   installedAuthFor: verifierAuthMocks.installedAuthFor
@@ -69,7 +69,7 @@ import { MCP_INTERFACE_VERSION, MCP_STABLE_TOOL_NAME } from "../../../packages/p
 import { createProcessIdentityClaim } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/process-identity-request.mjs";
 import { issueVerifierLocalMcpGrant } from "../../../tools/server-scripts/lib/local-mcp-device-authorization.mjs";
 
-const originalToken = process.env.LICO_MCP_TOKEN;
+const originalToken = process.env.MESHRIX_MCP_TOKEN;
 
 function jsonResponse(status, payload) {
   return new Response(JSON.stringify(payload), {
@@ -94,7 +94,7 @@ function createIssuerFixture(baseUrl, serverId) {
     async response(url, init = {}) {
       if (url === `${baseUrl}/api/mcp/discovery`) {
         return jsonResponse(200, {
-          name: "LicoMesh",
+          name: "Meshrix",
           interfaceVersion: MCP_INTERFACE_VERSION,
           stableToolName: MCP_STABLE_TOOL_NAME,
           identity,
@@ -108,7 +108,7 @@ function createIssuerFixture(baseUrl, serverId) {
           nonce,
           identity,
           server: {
-            name: "LicoMesh",
+            name: "Meshrix",
             serverId,
             interfaceVersion: MCP_INTERFACE_VERSION,
             stableToolName: MCP_STABLE_TOOL_NAME
@@ -163,15 +163,15 @@ afterEach(() => {
   verifierAuthMocks.installAuthenticatedFetch.mockReset();
   verifierAuthMocks.installedAuthFor.mockReset();
   if (originalToken === undefined) {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
   } else {
-    process.env.LICO_MCP_TOKEN = originalToken;
+    process.env.MESHRIX_MCP_TOKEN = originalToken;
   }
 });
 
 describe("native MCP installer device authorization", () => {
   it("keeps the one-time claim in memory and consumes an approved request", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const fetchMock = vi.fn(async (_url, init = {}) => {
       if (fetchMock.mock.calls.length === 1) {
@@ -205,7 +205,7 @@ describe("native MCP installer device authorization", () => {
             processKey: { processKeyId: "process-key-1" }
           }
         },
-        toolsets: ["lico.runtime.read"],
+        toolsets: ["meshrix.runtime.read"],
         scopes: ["runtime:read"]
       });
     });
@@ -227,7 +227,7 @@ describe("native MCP installer device authorization", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0][0]).toBe("http://127.0.0.1:7391/api/mcp/local-grant/requests");
     const createBody = JSON.parse(fetchMock.mock.calls[0][1].body);
-    const claimToken = fetchMock.mock.calls[1][1].headers["x-lico-authorization-claim"];
+    const claimToken = fetchMock.mock.calls[1][1].headers["x-meshrix-authorization-claim"];
     expect(createBody.claimTokenHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(createBody.claimTokenHash).toBe(
       createHash("sha256").update(claimToken, "utf8").digest("hex")
@@ -239,7 +239,7 @@ describe("native MCP installer device authorization", () => {
     expect(fetchMock.mock.calls[1][0]).toBe(
       "http://127.0.0.1:7391/api/mcp/local-grant/requests/mcp_auth_req_test/consume"
     );
-    expect(fetchMock.mock.calls[2][1].headers["x-lico-authorization-claim"]).toBe(claimToken);
+    expect(fetchMock.mock.calls[2][1].headers["x-meshrix-authorization-claim"]).toBe(claimToken);
     expect(processIdentityStoreMocks.saveProcessIdentity).toHaveBeenCalledOnce();
     expect(processIdentityStoreMocks.saveProcessIdentity).toHaveBeenCalledWith(
       "codex",
@@ -248,7 +248,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("retries an interrupted consume with the same claim and persists the recovered response once", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const fetchMock = vi.fn(async (_url, init = {}) => {
       const callNumber = fetchMock.mock.calls.length;
@@ -292,14 +292,14 @@ describe("native MCP installer device authorization", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[1][1].headers["x-lico-authorization-claim"]).toBe(
-      fetchMock.mock.calls[2][1].headers["x-lico-authorization-claim"]
+    expect(fetchMock.mock.calls[1][1].headers["x-meshrix-authorization-claim"]).toBe(
+      fetchMock.mock.calls[2][1].headers["x-meshrix-authorization-claim"]
     );
     expect(processIdentityStoreMocks.saveProcessIdentity).toHaveBeenCalledOnce();
   });
 
   it("revokes every newly issued batch grant when local credential persistence is partial", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const issuer = createIssuerFixture("http://127.0.0.1:7391", "server-batch-persistence");
     const records = {};
@@ -377,7 +377,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("uses an explicitly supplied existing grant without starting device authorization", async () => {
-    process.env.LICO_MCP_TOKEN = "provided-grant-token";
+    process.env.MESHRIX_MCP_TOKEN = "provided-grant-token";
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -393,7 +393,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("reuses a same-issuer stored grant and refuses to overwrite it for another server", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     const issuerA = createIssuerFixture("http://127.0.0.1:7391", "server-existing-a");
     const issuerB = createIssuerFixture("http://127.0.0.1:7392", "server-existing-b");
     processIdentityStoreMocks.loadProcessIdentity.mockResolvedValue(
@@ -436,7 +436,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("surfaces a missing uninstall credential without minting a replacement grant", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -458,7 +458,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("reuses the persisted grant after a proxy restart without reauthorizing", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     processIdentityStoreMocks.loadProcessIdentity.mockResolvedValue({
       grantToken: "stored-grant-token",
       privateKeyPem: "stored-private-key",
@@ -469,7 +469,7 @@ describe("native MCP installer device authorization", () => {
 
     const firstLaunch = await resolveProxyCredentials({ target: "codex" });
     const restartedLaunch = await resolveProxyCredentials({ target: "codex" });
-    process.env.LICO_MCP_TOKEN = "provided-restart-token";
+    process.env.MESHRIX_MCP_TOKEN = "provided-restart-token";
     const explicitLaunch = await resolveProxyCredentials({ target: "codex" });
 
     expect(firstLaunch).toMatchObject({ target: "codex", token: "stored-grant-token", tokenSource: "credential-store" });
@@ -480,7 +480,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("rejects bearer-only Orb and remote installation before device authorization starts", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -519,7 +519,7 @@ describe("native MCP installer device authorization", () => {
     uninstallAdapterMocks.runClientAdapter.mockRejectedValueOnce(new Error("simulated client install failure"));
     const fetchMock = vi.fn(async (url, init = {}) => {
       if (url === `${issuer.baseUrl}/mcp`) {
-        return jsonResponse(200, { result: { serverInfo: { name: "LicoMesh" } } });
+        return jsonResponse(200, { result: { serverInfo: { name: "Meshrix" } } });
       }
       return await issuer.response(url, init) || jsonResponse(200, { ok: true, targets: ["codex"] });
     });
@@ -565,7 +565,7 @@ describe("native MCP installer device authorization", () => {
     uninstallAdapterMocks.runClientAdapter.mockRejectedValueOnce(new Error("simulated repair failure"));
     const fetchMock = vi.fn(async (url) =>
       url === `${issuer.baseUrl}/mcp`
-        ? jsonResponse(200, { result: { serverInfo: { name: "LicoMesh" } } })
+        ? jsonResponse(200, { result: { serverInfo: { name: "Meshrix" } } })
         : jsonResponse(500, { ok: false })
     );
     vi.stubGlobal("fetch", fetchMock);
@@ -588,7 +588,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("notifies two uninstall targets independently before deleting only the confirmed credential", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     const issuerA = createIssuerFixture("http://127.0.0.1:7391", "server-a");
     const issuerB = createIssuerFixture("http://127.0.0.1:7392", "server-b");
     const identities = {
@@ -658,7 +658,7 @@ describe("native MCP installer device authorization", () => {
   });
 
   it("reports credential deletion failure after server removal instead of claiming local cleanup", async () => {
-    delete process.env.LICO_MCP_TOKEN;
+    delete process.env.MESHRIX_MCP_TOKEN;
     const issuer = createIssuerFixture("http://127.0.0.1:7391", "server-delete-failure");
     processIdentityStoreMocks.loadProcessIdentity.mockResolvedValue(
       storedIdentity("codex", "codex-delete-failure-token", {
@@ -727,19 +727,19 @@ describe("native MCP installer device authorization", () => {
     const consumeHeaders = fetchMock.mock.calls[2][1].headers;
     expect(createHeaders).toMatchObject({
       Cookie: "",
-      "x-lico-csrf": "",
-      "x-lico-safety-confirm": ""
+      "x-meshrix-csrf": "",
+      "x-meshrix-safety-confirm": ""
     });
     expect(approveHeaders).toMatchObject({
       Cookie: verifierAuthMocks.auth.cookie,
-      "x-lico-csrf": verifierAuthMocks.auth.csrf,
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-csrf": verifierAuthMocks.auth.csrf,
+      "x-meshrix-safety-confirm": "true"
     });
     expect(consumeHeaders).toMatchObject({
       Cookie: "",
-      "x-lico-csrf": "",
-      "x-lico-safety-confirm": ""
+      "x-meshrix-csrf": "",
+      "x-meshrix-safety-confirm": ""
     });
-    expect(consumeHeaders["x-lico-authorization-claim"]).toMatch(/^[A-Za-z0-9_-]{32,128}$/u);
+    expect(consumeHeaders["x-meshrix-authorization-claim"]).toMatch(/^[A-Za-z0-9_-]{32,128}$/u);
   });
 });

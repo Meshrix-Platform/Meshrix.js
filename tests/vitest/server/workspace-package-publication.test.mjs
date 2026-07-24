@@ -13,28 +13,28 @@ function readPackage(relativeDirectory) {
 }
 
 describe("workspace package publication boundary", () => {
-  it("publishes the LicoMesh Core package from the LicoLand GitHub organization", () => {
+  it("publishes the Meshrix Core package from the LicoLand GitHub organization", () => {
     expect(rootPackage).toMatchObject({
-      name: "licomesh",
-      description: expect.stringContaining("LicoMesh"),
-      author: "LicoMesh Maintainers",
+      name: "meshrix",
+      description: expect.stringContaining("Meshrix"),
+      author: "Meshrix Maintainers",
       repository: {
         type: "git",
-        url: "git+https://github.com/LicoLand/LicoMesh.git"
+        url: "git+https://github.com/LicoLand/Meshrix.git"
       },
       bugs: {
-        url: "https://github.com/LicoLand/LicoMesh/issues"
+        url: "https://github.com/LicoLand/Meshrix/issues"
       },
-      homepage: "https://github.com/LicoLand/LicoMesh#readme"
+      homepage: "https://meshrix.io"
     });
   });
 
-  it("retains the shared @lico package and #lico import namespaces", () => {
+  it("retains the shared @meshrix package and #meshrix import namespaces", () => {
     const foundationWorkspace = "packages/foundation";
 
     expect(rootPackage.workspaces).toContain(foundationWorkspace);
-    expect(readPackage(foundationWorkspace).name).toBe("@lico/foundation");
-    expect(rootPackage.imports["#lico/foundation/*"]).toBe(
+    expect(readPackage(foundationWorkspace).name).toBe("@meshrix/foundation");
+    expect(rootPackage.imports["#meshrix/foundation/*"]).toBe(
       "./packages/foundation/src/*.mjs"
     );
   });
@@ -56,7 +56,7 @@ describe("workspace package publication boundary", () => {
         ...manifest.optionalDependencies,
         ...manifest.peerDependencies
       })) {
-        if (dependencyName.startsWith("@lico/")) {
+        if (dependencyName.startsWith("@meshrix/")) {
           expect(dependencyVersion, `${manifest.name} -> ${dependencyName}`).toBe(rootPackage.version);
         }
       }
@@ -96,7 +96,7 @@ describe("workspace package publication boundary", () => {
       if (!readPackage(rootPackage.workspaces.find((directory) => readPackage(directory).name === artifact.name)).private) {
         expect(files).toContain("README.md");
       }
-      if (artifact.name === "@lico/foundation") {
+      if (artifact.name === "@meshrix/foundation") {
         expect(files).toContain("config/entity-config/auth/console-roles.json");
         expect(files).toContain("config/entity-config/tools/scopes/auth-admin.json");
       }

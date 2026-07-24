@@ -30,10 +30,10 @@ export type AppearancePresetValidationResult =
   | { ok: false; errors: string[] };
 
 export const DEFAULT_LIGHT_APPEARANCE_PRESET_ID = "geek-light-blue";
-export const DEFAULT_DARK_APPEARANCE_PRESET_ID = "lico-crystal";
+export const DEFAULT_DARK_APPEARANCE_PRESET_ID = "meshrix-crystal";
 export const BUILT_IN_APPEARANCE_PRESET_ORDER = [
   "default-system",
-  "lico-crystal",
+  "meshrix-crystal",
   "geek-light-blue",
   "catppuccin-latte",
   "github-light",
@@ -54,7 +54,7 @@ const builtInAppearancePresetConfigValues = Object.entries(
   .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
   .map(([, value]) => value);
 
-export const APPEARANCE_PRESET_CATALOG_CHANGED_EVENT = "lico:appearance-preset-catalog-changed";
+export const APPEARANCE_PRESET_CATALOG_CHANGED_EVENT = "meshrix:appearance-preset-catalog-changed";
 
 const idPattern = /^[a-z0-9][a-z0-9-]{1,63}$/;
 const hexColorPattern = /^#[0-9a-fA-F]{6}$/;

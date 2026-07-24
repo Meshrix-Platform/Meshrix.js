@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-import { controlledRef, sandboxDigest } from "#lico/foundation/execution-sandbox/contracts";
+import { controlledRef, sandboxDigest } from "#meshrix/foundation/execution-sandbox/contracts";
 import { createOciSandboxBackend } from "./oci-backend.mjs";
 
 const FIXED_CANDIDATES = Object.freeze({
@@ -38,6 +38,10 @@ function resolveExecutablePath(command, {
   return "";
 }
 
+function resolveCandidateBinary(candidate, platform = process.platform) {
+  return resolveExecutablePath(candidate.binary, { platform });
+}
+
 function fixedRootlessProbe(candidate, { timeoutMs = 2_000 } = {}) {
   const args = candidate.engine === "podman"
     ? ["info", "--format", "{{.Host.Security.Rootless}}"]
@@ -54,7 +58,7 @@ function fixedRootlessProbe(candidate, { timeoutMs = 2_000 } = {}) {
       resolve(value);
     };
     try {
-      child = spawn(candidate.binary, args, {
+      child = spawn(resolveCandidateBinary(candidate) || candidate.binary, args, {
         env: { PATH: process.env.PATH || "" },
         stdio: ["ignore", "pipe", "ignore"],
         windowsHide: true
@@ -114,7 +118,7 @@ export function createTrustedOciProviderAdapters({
     const ensureBackend = () => {
       backend ||= backendFactory({
         id: candidate.id,
-        binary: candidate.binary,
+        binary: resolveCandidateBinary(candidate, platform),
         engine: candidate.engine,
         runtimeClass: candidate.runtimeClass
       });
@@ -211,9 +215,11 @@ export async function createOciBackendConformanceTarget({
       continue;
     }
     if (!/^[a-f0-9]{64}$/u.test(String(executableIdentityDigest || ""))) continue;
+    const resolvedBinary = resolveCandidateBinary(candidate, platform);
+    if (!resolvedBinary) continue;
     const backend = backendFactory({
       id: candidate.id,
-      binary: candidate.binary,
+      binary: resolvedBinary,
       engine: candidate.engine,
       runtimeClass: candidate.runtimeClass
     });
@@ -234,7 +240,7 @@ export async function createOciBackendConformanceTarget({
       id: candidate.id,
       providerClass: candidate.providerClass,
       engine: candidate.engine,
-      binary: candidate.binary,
+      binary: resolvedBinary,
       isolationClass: "hardened-oci",
       serviceIdentityRef,
       executableIdentityDigest,

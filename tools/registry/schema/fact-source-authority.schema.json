@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/schemas/fact-source-authority.schema.json",
+  "$id": "https://schemas.meshrix.example/schemas/fact-source-authority.schema.json",
   "title": "Fact Source Authority Registry",
   "type": "object",
   "required": ["$schema", "version", "policy", "authorities"],

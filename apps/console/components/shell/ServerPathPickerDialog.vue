@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
 import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
 

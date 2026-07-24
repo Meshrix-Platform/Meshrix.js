@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { canonicalHash } from "@lico/foundation/serialization/canonical-json";
+import { canonicalHash } from "@meshrix/foundation/serialization/canonical-json";
 
 const sendJsonMock = vi.hoisted(() => vi.fn((response, status, payload) => {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -31,17 +31,17 @@ const traceContextFromRequestMock = vi.hoisted(() => vi.fn(() => ({
   traceId: "trace-request"
 })));
 
-vi.mock("@lico/foundation/observability/runtime-logger", () => ({
+vi.mock("@meshrix/foundation/observability/runtime-logger", () => ({
   getRuntimeLogger: getRuntimeLoggerMock,
   summarizeError: summarizeErrorMock,
   summarizeForLog: summarizeForLogMock
 }));
 
-vi.mock("@lico/foundation/observability/trace-context", () => ({
+vi.mock("@meshrix/foundation/observability/trace-context", () => ({
   traceContextFromRequest: traceContextFromRequestMock
 }));
 
-vi.mock("@lico/protocols/http/http-utils", () => ({
+vi.mock("@meshrix/protocols/http/http-utils", () => ({
   sendJson: sendJsonMock
 }));
 
@@ -291,7 +291,7 @@ async function callRouter(router, {
 }
 
 async function withTempUserDataPath(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-permission-more-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-permission-more-extra-"));
   try {
     return await testCase(userDataPath);
   } finally {
@@ -416,7 +416,7 @@ describe("native MCP device authorization store", () => {
             body: { targets: ["codex"], processIdentities: { codex: { processPublicKeyPem: "public-key" } } },
             summary: {
               targets: ["codex"],
-              toolsets: ["lico.runtime.read"],
+              toolsets: ["meshrix.runtime.read"],
               maxRisk: "read_only",
               processKeyFingerprints: [{ target: "codex", fingerprint: "sha256:fingerprint" }]
             }
@@ -1627,8 +1627,8 @@ describe("operation-permission http router (behavior)", () => {
       request: createRequest({
         headers: {
           host: "127.0.0.1:7228",
-          "x-lico-client-kind": "lico-client",
-          "x-lico-client-id": "lico-test-client"
+          "x-meshrix-client-kind": "meshrix-client",
+          "x-meshrix-client-id": "meshrix-test-client"
         }
       }),
       response,
@@ -1661,7 +1661,7 @@ describe("operation-permission http router (behavior)", () => {
     const result = await callRouter(router, {
       method: "POST",
       path: "/api/operation-permission/v1/pending-operations/pending-1/resolve",
-      headers: { "x-lico-safety-confirm": "true" },
+      headers: { "x-meshrix-safety-confirm": "true" },
       body: {
         resolution: "approved",
         resolvedBy: "payload-spoof",

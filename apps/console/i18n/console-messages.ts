@@ -1,6 +1,6 @@
 export const consoleMessages = {
   "zh-CN": {
-    appTitle: "LicoMesh 服务端控制台",
+    appTitle: "Meshrix 服务端控制台",
     loading: "正在初始化",
     connecting: "正在连接服务端…",
     close: "关闭",
@@ -125,7 +125,7 @@ export const consoleMessages = {
     },
   },
   en: {
-    appTitle: "LicoMesh Server Console",
+    appTitle: "Meshrix Server Console",
     loading: "Initializing",
     connecting: "Connecting to server...",
     close: "Close",

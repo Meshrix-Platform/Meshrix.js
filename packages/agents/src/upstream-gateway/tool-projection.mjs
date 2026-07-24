@@ -9,11 +9,11 @@ import {
 import { compileUpstreamOperationCapability } from "./operation-capability.mjs";
 
 function gatewayToolsetsForRisk(risk = "read_only") {
-  if (risk === "read_only") return ["lico.gateway.read"];
+  if (risk === "read_only") return ["meshrix.gateway.read"];
   if (risk === "repair_write" || risk === "destructive") {
-    return ["lico.gateway.write", "lico.gateway.maintain"];
+    return ["meshrix.gateway.write", "meshrix.gateway.maintain"];
   }
-  return ["lico.gateway.write"];
+  return ["meshrix.gateway.write"];
 }
 
 export function publicUpstreamMcpTool({ service = {}, tool = {} } = {}) {

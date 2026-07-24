@@ -130,7 +130,7 @@ async function main() {
     bootstrap,
     generatedAt
   });
-  const manifestPath = path.join(outputDir, "lico-mcp-release.json");
+  const manifestPath = path.join(outputDir, "meshrix-mcp-release.json");
   const latestPath = path.join(outputDir, "latest.json");
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await fs.writeFile(latestPath, `${JSON.stringify(manifest, null, 2)}\n`);

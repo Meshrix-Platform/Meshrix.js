@@ -14,7 +14,7 @@ import { translateDownstreamClientInboundRequest } from "./request-helpers.mjs";
 
 export class DownstreamClientAspectService {
   constructor({
-    serviceId = "lico.downstream-client-aspect",
+    serviceId = "meshrix.downstream-client-aspect",
     frameworks = null,
     frameworkOverrides = [],
     layers = null,

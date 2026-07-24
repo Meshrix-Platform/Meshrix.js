@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { triggerBrowserDownload } from "../../../apps/console/lib/browser-downloads";
 
-const objectUrl = "blob:lico-download";
+const objectUrl = "blob:meshrix-download";
 let originalCreateObjectURL: typeof URL.createObjectURL | undefined;
 let originalRevokeObjectURL: typeof URL.revokeObjectURL | undefined;
 let originalDocumentDescriptor: PropertyDescriptor | undefined;

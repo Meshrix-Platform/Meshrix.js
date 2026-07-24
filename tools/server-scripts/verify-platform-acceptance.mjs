@@ -6,7 +6,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import {
-  PLATFORM_ACCEPTANCE_REPORT_PATH
+  PLATFORM_ACCEPTANCE_REPORT_PATH,
+  PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST
 } from "./lib/platform-acceptance-report-catalog.mjs";
 import {
   PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS,
@@ -78,6 +79,7 @@ import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/pr
 import { reportPayloadDigest } from "../../packages/foundation/src/observability/sensitive-report-scan.mjs";
 import {
   ACCEPTANCE_GENERATION_POINTER,
+  clearAccidentalCoreWorktree,
   createAcceptanceGenerationWorkspace,
   publishAcceptanceGeneration,
   removeAcceptanceGenerationWorkspace,
@@ -260,6 +262,7 @@ export function createPlatformAcceptancePlan(
     requirementEvidence: PLATFORM_ACCEPTANCE_REQUIREMENT_EVIDENCE,
     planReceiptPreflight: {
       consumerPlan: "end-to-end-release/release-acceptance",
+      planProfile: "enterprise-single-node",
       requiredKind: "final_validation",
       verifier: "tools/server-scripts/lib/platform-acceptance-plan-receipts.mjs",
     },
@@ -294,7 +297,7 @@ async function runAcceptanceWorker() {
   await Promise.all(ACCEPTANCE_REQUIRED_REPORTS.map(removeReport));
   const commandEnv = {
     ...process.env,
-    LICO_ACCEPTANCE_STARTED_AT_MS: String(startedAt.getTime())
+    MESHRIX_ACCEPTANCE_STARTED_AT_MS: String(startedAt.getTime())
   };
   const { results, schedule: executedSchedule } = await runReleaseCommandDag({
     commands: PLATFORM_ACCEPTANCE_COMMANDS,
@@ -319,7 +322,7 @@ async function runAcceptanceWorker() {
   const reportWriteAudit = createCurrentRunReportDriftAudit({
     beforeSnapshot: reportTreeBefore,
     afterSnapshot: reportTreeAfter,
-    allowedReports: [...ACCEPTANCE_REQUIRED_REPORTS, REPORT_PATH]
+    allowedReports: [...ACCEPTANCE_REQUIRED_REPORTS, ...PLATFORM_ACCEPTANCE_REPORT_WRITE_ALLOWLIST, REPORT_PATH]
   });
 
   const expectedProvenanceByPath = await stampReleaseReportProvenance({
@@ -406,21 +409,21 @@ async function runAcceptanceWorker() {
       missingEvidence.push(code);
     }
   }
-  const skipLedgerAnchor = String(process.env.LICO_ACCEPTANCE_SKIP_LEDGER_ANCHOR || "").trim() === "1";
+  const skipLedgerAnchor = String(process.env.MESHRIX_ACCEPTANCE_SKIP_LEDGER_ANCHOR || "").trim() === "1";
   let ledgerAnchor = {
     ledgerEventId: "",
     workspaceId: "",
     recordedAt: "",
     reportDigestCount: 0,
-    error: skipLedgerAnchor ? "skipped:LICO_ACCEPTANCE_SKIP_LEDGER_ANCHOR=1" : "",
+    error: skipLedgerAnchor ? "skipped:MESHRIX_ACCEPTANCE_SKIP_LEDGER_ANCHOR=1" : "",
     verification: null
   };
   if (!skipLedgerAnchor && planReceiptPreflightReady) {
     const { createOperationProofSubstrate } = await import(
-      "#lico/foundation/proof/proof-substrate/index"
+      "#meshrix/foundation/proof/proof-substrate/index"
     );
-    const acceptanceLedgerDir = process.env.LICO_ACCEPTANCE_PROOF_LEDGER_DIR
-      ? path.resolve(process.env.LICO_ACCEPTANCE_PROOF_LEDGER_DIR)
+    const acceptanceLedgerDir = process.env.MESHRIX_ACCEPTANCE_PROOF_LEDGER_DIR
+      ? path.resolve(process.env.MESHRIX_ACCEPTANCE_PROOF_LEDGER_DIR)
       : repoPath("build/acceptance-proof-ledger");
     const proofSubstrate = createOperationProofSubstrate({ dataDir: acceptanceLedgerDir });
     try {
@@ -430,7 +433,7 @@ async function runAcceptanceWorker() {
         selectedProfile
       });
       const releaseId = String(
-        process.env.LICO_ACCEPTANCE_RELEASE_ID ||
+        process.env.MESHRIX_ACCEPTANCE_RELEASE_ID ||
         `platform-acceptance:${new Date().toISOString()}`
       );
       ledgerAnchor = {
@@ -514,7 +517,7 @@ async function runAcceptanceWorker() {
     verifier: "tools/server-scripts/verify-platform-acceptance.mjs",
     algorithm: {
       commandExecutionMode: "dag-parallel-full-aggregation",
-      commandExecution: "Run LicoMesh acceptance commands through a DAG with parallel downstream-gateway, upstream-gateway, and platform-capability layers, respecting dependencies and resource locks.",
+      commandExecution: "Run Meshrix acceptance commands through a DAG with parallel downstream-gateway, upstream-gateway, and platform-capability layers, respecting dependencies and resource locks.",
       evidenceReduction: "Validate every Core acceptance-required report against the exact required-report schema, verifier, timestamp, leak-scan, ready-field, and reducer registry, then bind every checked Core capability criterion to a command that passed in this same DAG run. Client implementations, cryptographic evidence, platform adoption, and product receipts are not inputs; verifier-health failures and Core-actionable gaps remain release failures.",
       finalRegression: "Run private deployment open platform E2E only after the required upstream/downstream/platform acceptance dependencies pass."
     },
@@ -634,14 +637,15 @@ async function runAcceptanceOrchestrator(selectedProfile) {
         `[platform-acceptance] generation=${paths.id} published=${ACCEPTANCE_GENERATION_POINTER}`
       );
     } finally {
-      await removeAcceptanceGenerationWorkspace(paths);
+      await clearAccidentalCoreWorktree(repoRoot, paths.workspace);
+      await removeAcceptanceGenerationWorkspace(paths, { repoRoot });
     }
   });
 }
 
 async function main() {
   const { planOnly, selectedProfile } = parseArgs(process.argv.slice(2));
-  if (planOnly || process.env.LICO_ACCEPTANCE_GENERATION_WORKER === "1") {
+  if (planOnly || process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1") {
     await runAcceptanceWorker();
     return;
   }
@@ -652,7 +656,7 @@ const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURL
 
 if (isDirectRun) {
   main().catch(async (error) => {
-    const generationWorker = process.env.LICO_ACCEPTANCE_GENERATION_WORKER === "1";
+    const generationWorker = process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1";
     if (!generationWorker) {
       console.error(sanitizeError(error));
       process.exit(1);

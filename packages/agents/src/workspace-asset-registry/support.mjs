@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
-import { ServerConfig } from "@lico/foundation/config/server-config";
+import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import path from "node:path";
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 
 export const WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION = "v0.0.1:workspace:asset-registry-1";
 export const WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION = "v0.0.1:workspace:asset-operation-1";

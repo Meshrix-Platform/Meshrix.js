@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { controlledLocalSourceRoots } from "@lico/foundation/security/local-path-boundary";
+import { controlledLocalSourceRoots } from "@meshrix/foundation/security/local-path-boundary";
 
 const PATH_BROWSER_MAX_ENTRIES = 600;
 const PATH_BROWSER_IGNORED_NAMES = new Set([
@@ -50,10 +50,10 @@ export function createPathBrowserRoots({ userDataPath, distPath } = {}) {
   };
 
   addRoot("当前项目", process.cwd());
-  addRoot("LicoMesh 数据目录", userDataPath);
-  addRoot("LicoMesh 前端构建", distPath);
+  addRoot("Meshrix 数据目录", userDataPath);
+  addRoot("Meshrix 前端构建", distPath);
   for (const root of controlledLocalSourceRoots({ userDataPath })) {
-    addRoot("LicoMesh 受控本机来源", root);
+    addRoot("Meshrix 受控本机来源", root);
   }
 
   return [...roots.values()];

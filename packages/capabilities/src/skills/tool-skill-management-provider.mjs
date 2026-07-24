@@ -68,7 +68,7 @@ export function createToolSkillManagementProvider({
 
   async function loadMcpWorkspaceDirectory({ request, context = {}, signal = null }) {
     const result = await executeTool({
-      toolId: "lico.agentWorkspace.list",
+      toolId: "meshrix.agentWorkspace.list",
       input: {},
       request,
       context: {
@@ -326,7 +326,7 @@ export function createToolSkillManagementProvider({
     if (provided) {
       return `${provided} (${target})`;
     }
-    return `LicoMesh MCP ${target || "local agent"}`;
+    return `Meshrix MCP ${target || "local agent"}`;
   }
 
   function grantValuesFitByteLimit(values = [], maxBytes = 512) {
@@ -392,7 +392,7 @@ export function createToolSkillManagementProvider({
       toolAllow,
       toolDeny,
       metadata: {
-        issuedBy: "lico-mcp-local-pairing",
+        issuedBy: "meshrix-mcp-local-pairing",
         connectorVersion: String(body.connectorVersion || "").trim().slice(0, 128),
         autoUpdate: Boolean(body.autoUpdate),
         authorizationBatchTargetCount: targetCount,
@@ -420,8 +420,8 @@ export function createToolSkillManagementProvider({
         maxRisk: resolved.maxRisk || "read_only"
       },
       reason: targetCount > 1
-        ? "Issued by batched local LicoMesh MCP connector pairing."
-        : "Issued by local LicoMesh MCP connector pairing."
+        ? "Issued by batched local Meshrix MCP connector pairing."
+        : "Issued by local Meshrix MCP connector pairing."
       });
     } catch (error) {
       await securityPermissions.processIdentity.revokeIssuedLocalMcpClientIdentityPackage({
@@ -826,7 +826,7 @@ export function createToolSkillManagementProvider({
     try {
       authorizationRequest = current.store.createMcpAuthorizationRequest({
         request,
-        clientName: canonicalBody.label || `LicoMesh MCP ${prepared.targets.join(", ")}`,
+        clientName: canonicalBody.label || `Meshrix MCP ${prepared.targets.join(", ")}`,
         requestedScopes: prepared.resolved.requiredScopes,
         requestedTools: prepared.resolved.toolIds,
         reason: `Authorize native MCP installation for ${prepared.targets.join(", ")}.`,
@@ -891,7 +891,7 @@ export function createToolSkillManagementProvider({
     if (!isDirectMcpClientRequest(request)) {
       return localMcpPairingDenied("MCP installation authorization requires a direct client connection.");
     }
-    const claimToken = String(request?.headers?.["x-lico-authorization-claim"] || "").trim();
+    const claimToken = String(request?.headers?.["x-meshrix-authorization-claim"] || "").trim();
     if (!/^[A-Za-z0-9_-]{32,128}$/u.test(claimToken)) {
       return localMcpAuthorizationStatusResponse("not_found");
     }
@@ -1131,7 +1131,7 @@ export function createToolSkillManagementProvider({
     const nextGrant = await store.updateGrant(authorizedGrant.id, {
       enabled: remainingTargets.length > 0 ? authorizedGrant.enabled !== false : false,
       metadata: nextMetadata,
-      reason: authorizedGrant.reason || "Updated by local LicoMesh MCP connector uninstall."
+      reason: authorizedGrant.reason || "Updated by local Meshrix MCP connector uninstall."
     });
     const updated = nextGrant
       ? [{
@@ -1183,7 +1183,8 @@ export function createToolSkillManagementProvider({
   async function resolveMcpAuthorizationRequest(input = {}, { authSession = null } = {}) {
     const current = requirePlatform();
     const requestId = String(input.requestId || input["request-id"] || input.id || "").trim();
-    const resolution = String(input.resolution || "").trim();
+    const resolutionInput = String(input.resolution || "").trim();
+    const resolution = resolutionInput === "denied" ? "rejected" : resolutionInput;
     const resolvedBy = String(
       authSession?.user?.userId || authSession?.user?.id || authSession?.user?.username || ""
     ).trim();

@@ -18,10 +18,10 @@ export const OPERATION_PERMISSION_PROTOCOL_CONSISTENCY = Object.freeze({
   mcpInterfaceVersion: "v0.0.1:mcp:interface-1",
   agentProfileId: "verify-operation-permission-protocol-agent",
   serviceIdPrefix: verifierOpaqueServiceId("verify-op-permission-protocol"),
-  readTool: "lico.gateway.metrics",
-  writeTool: "lico.gateway.forward",
-  approvalTool: "lico.tagManagement.tags.upsert",
-  forbiddenConfigMutationTool: "lico.gateway.externalServices.register",
+  readTool: "meshrix.gateway.metrics",
+  writeTool: "meshrix.gateway.forward",
+  approvalTool: "meshrix.tagManagement.tags.upsert",
+  forbiddenConfigMutationTool: "meshrix.gateway.externalServices.register",
   requiredTagOperations: Object.freeze([
     "tag_management.tags.list",
     "tag_management.tags.get",
@@ -70,7 +70,7 @@ export const OPERATION_PERMISSION_PROTOCOL_CONSISTENCY = Object.freeze({
 });
 
 export async function createOperationPermissionProtocolConsistencyHarness() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-permission-protocol-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-permission-protocol-"));
   const dynamicSecretNeedles = new Set([userDataPath, os.homedir()].filter(Boolean));
   const mcpIdentityByToken = new Map();
   const report = {
@@ -80,7 +80,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() {
     algorithm: {
       registration: "Compare the generated operation registry, protocol definitions, and generated capability artifact with the required tag_management.* and Operation Permission operation set.",
       parity: "Start a real local HTTP server and exercise the same Operation Permission runtime through HTTP, JSON-RPC console passthrough, and MCP tools/call.",
-      discoveryRefresh: "Open a real MCP SSE stream, update a live grant and a live tag governance policy, then require notifications/tools/list_changed and refreshed lico.capabilities.list output.",
+      discoveryRefresh: "Open a real MCP SSE stream, update a live grant and a live tag governance policy, then require notifications/tools/list_changed and refreshed meshrix.capabilities.list output.",
       destructiveChecks: "Insufficient grant, stale policy approval, revoked grant, per-grant rate limit, malformed authorization surface, and unauthorized discovery are checked without mocks or synthetic stores."
     },
     tests: [],
@@ -118,7 +118,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() {
     }
     text = text.replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
     text = text.replace(/"token"\s*:\s*"[^"]+"/gi, "\"token\":\"[redacted]\"");
-    text = text.replace(/lico_[A-Za-z0-9_-]{12,}/g, "lico_[redacted]");
+    text = text.replace(/meshrix_[A-Za-z0-9_-]{12,}/g, "meshrix_[redacted]");
     text = text.replace(/\b(?:grant|tool_exec|trace|pending_op|token_family)_[A-Za-z0-9_-]{8,}\b/g, "[redacted-id]");
     return text;
   }
@@ -139,7 +139,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() {
     }
     assert.equal(/Bearer\s+(?!\[redacted\])\S+/i.test(value), false, `${label} leaked bearer token`);
     assert.equal(/"token"\s*:\s*"(?!\[redacted\])[^"]+"/i.test(value), false, `${label} leaked token field`);
-    assert.equal(/lico_[A-Za-z0-9_-]{12,}/.test(value), false, `${label} leaked token-like value`);
+    assert.equal(/meshrix_[A-Za-z0-9_-]{12,}/.test(value), false, `${label} leaked token-like value`);
   }
 
   function assertNoLeak(value, label = "payload") {
@@ -281,7 +281,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() {
   async function consoleGrant(input = {}) {
     const response = await fetchJson("/api/operation-permission/v1/grants", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-lico-safety-confirm": "true" },
+      headers: { "Content-Type": "application/json", "x-meshrix-safety-confirm": "true" },
       body: JSON.stringify(input),
       allowSecretPayload: true,
       expectedStatuses: [201]
@@ -455,7 +455,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() {
   }
 
   async function capabilities(token, id = 1) {
-    const payload = await callMcp(token, "lico.discovery", "lico.capabilities.list", {}, id);
+    const payload = await callMcp(token, "meshrix.discovery", "meshrix.capabilities.list", {}, id);
     assert.equal(payload.error, undefined, JSON.stringify(safeEvidence(payload.error || {})));
     return mcpPayload(payload);
   }
@@ -472,7 +472,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() {
         route,
         body: "",
         extraHeaders: {
-          "X-LicoMesh-Mcp-Proxy-Session": "protocolconsistency01"
+          "X-Meshrix-Mcp-Proxy-Session": "protocolconsistency01"
         }
       }),
       signal: controller.signal

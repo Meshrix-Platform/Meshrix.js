@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import {
   MCP_PROXY_SESSION_HEADER_LOWER,
   normalizeMcpProxySessionId
-} from "#lico/contracts/mcp-catalog-delivery";
+} from "#meshrix/contracts/mcp-catalog-delivery";
 import { jsonRpcError } from "./http-mcp-adapter-response.mjs";
 
 const DEFAULT_MAX_IN_FLIGHT = 1_024;

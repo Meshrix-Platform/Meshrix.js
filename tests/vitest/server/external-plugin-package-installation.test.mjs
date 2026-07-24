@@ -174,45 +174,9 @@ async function expectVerifiedConsoleAsset({ deployment, registry, runtime, recei
 }
 
 describe("external plugin package installation", () => {
-  const clientLinkPackagePath = String(process.env.LICO_TEST_CLIENT_LINK_PACKAGE || "").trim();
-  const sharedSpacePackagePath = String(process.env.LICO_TEST_SHARED_SPACE_PACKAGE || "").trim();
-  const skillHubPackagePath = String(process.env.LICO_TEST_SKILL_HUB_PACKAGE || "").trim();
-  const codingGithubPackagePath = String(process.env.LICO_TEST_CODING_GITHUB_PACKAGE || "").trim();
-
-  (clientLinkPackagePath ? it : it.skip)("installs and activates Client Link from an explicitly supplied closed package", async () => {
-    const { deployment, packageDigest, receipt, registry, runtime } = await installAndActivatePackage({
-      packagePath: clientLinkPackagePath,
-      pluginId: "client-link",
-      configuration: { enabledSubmodules: ["client-runtime"], submodules: {} }
-    });
-    expect(receipt).toMatchObject({
-      schemaVersion: "licomesh.plugin-package-installation-receipt.v1",
-      pluginId: "client-link",
-      packageDigest,
-      generation: 1,
-      state: "active"
-    });
-    expect(runtime.plugins.loadedPlugins).toEqual([{ id: "client-link", version: "0.0.1" }]);
-    expect(Object.keys(runtime.contributions.operations)).toHaveLength(9);
-    expect(Object.keys(runtime.contributions.routes)).toHaveLength(9);
-    expect(Object.keys(runtime.contributions.mcpTools)).toHaveLength(9);
-    expect(runtime.contributions.consoleEntries["admin.clients"]).toMatchObject({
-      pluginId: "client-link",
-      implementation: {
-        componentId: "client-link/ClientsView",
-        assetPath: "console/index.mjs",
-        assetExport: "mountPluginConsole"
-      }
-    });
-    await expectVerifiedConsoleAsset({
-      deployment,
-      registry,
-      runtime,
-      receipt,
-      entryId: "admin.clients",
-      componentId: "client-link/ClientsView"
-    });
-  });
+  const sharedSpacePackagePath = String(process.env.MESHRIX_TEST_SHARED_SPACE_PACKAGE || "").trim();
+  const skillHubPackagePath = String(process.env.MESHRIX_TEST_SKILL_HUB_PACKAGE || "").trim();
+  const codingGithubPackagePath = String(process.env.MESHRIX_TEST_CODING_GITHUB_PACKAGE || "").trim();
 
   (sharedSpacePackagePath ? it : it.skip)("installs and activates Shared Space from an explicitly supplied closed package", async () => {
     const { deployment, packageDigest, receipt, registry, runtime } = await installAndActivatePackage({
@@ -224,7 +188,7 @@ describe("external plugin package installation", () => {
       }
     });
     expect(receipt).toMatchObject({
-      schemaVersion: "licomesh.plugin-package-installation-receipt.v1",
+      schemaVersion: "v0.0.1:meshrix:plugin-package-installation-receipt-1",
       pluginId: "shared-space",
       packageDigest,
       generation: 1,
@@ -267,7 +231,7 @@ describe("external plugin package installation", () => {
       }
     });
     expect(receipt).toMatchObject({
-      schemaVersion: "licomesh.plugin-package-installation-receipt.v1",
+      schemaVersion: "v0.0.1:meshrix:plugin-package-installation-receipt-1",
       pluginId: "skill-hub",
       packageDigest,
       generation: 1,
@@ -309,7 +273,7 @@ describe("external plugin package installation", () => {
       }
     });
     expect(receipt).toMatchObject({
-      schemaVersion: "licomesh.plugin-package-installation-receipt.v1",
+      schemaVersion: "v0.0.1:meshrix:plugin-package-installation-receipt-1",
       pluginId: "coding-github",
       packageDigest,
       generation: 1,
@@ -337,15 +301,10 @@ describe("external plugin package installation", () => {
     });
   });
 
-  ([clientLinkPackagePath, sharedSpacePackagePath, skillHubPackagePath, codingGithubPackagePath].every(Boolean) ? it : it.skip)(
-    "loads all four verified external plugin packages into one Core deployment without contribution conflicts",
+  ([sharedSpacePackagePath, skillHubPackagePath, codingGithubPackagePath].every(Boolean) ? it : it.skip)(
+    "loads all verified external plugin packages into one Core deployment without contribution conflicts",
     async () => {
       const { deployment, receipts, runtime } = await installAndActivatePackages([
-        {
-          packagePath: clientLinkPackagePath,
-          pluginId: "client-link",
-          configuration: { enabledSubmodules: ["client-runtime"], submodules: {} }
-        },
         {
           packagePath: sharedSpacePackagePath,
           pluginId: "shared-space",
@@ -372,17 +331,16 @@ describe("external plugin package installation", () => {
           }
         }
       ]);
-      expect(receipts).toHaveLength(4);
+      expect(receipts).toHaveLength(3);
       expect(deployment.loadedPlugins.map(({ id, version }) => ({ id, version }))).toEqual(expect.arrayContaining([
-        { id: "client-link", version: "0.0.1" },
         { id: "shared-space", version: "0.0.1" },
         { id: "skill-hub", version: "0.0.1" },
         { id: "coding-github", version: "0.0.1" }
       ]));
-      expect(Object.keys(runtime.contributions.operations)).toHaveLength(74);
-      expect(Object.keys(runtime.contributions.routes)).toHaveLength(74);
-      expect(Object.keys(runtime.contributions.mcpTools)).toHaveLength(74);
-      expect(Object.keys(runtime.contributions.consoleEntries)).toHaveLength(4);
+      expect(Object.keys(runtime.contributions.operations)).toHaveLength(65);
+      expect(Object.keys(runtime.contributions.routes)).toHaveLength(65);
+      expect(Object.keys(runtime.contributions.mcpTools)).toHaveLength(65);
+      expect(Object.keys(runtime.contributions.consoleEntries)).toHaveLength(3);
     }
   );
 });

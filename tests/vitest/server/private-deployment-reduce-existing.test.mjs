@@ -16,7 +16,7 @@ import {
 
 describe("private deployment existing-evidence reduction", () => {
   it("does not remove or execute child evidence while producing a fail-closed aggregate", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-reduce-existing-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-reduce-existing-"));
     const childPath = path.join(root, ...PRIVATE_DEPLOYMENT_REQUIRED_REPORTS[0].split("/"));
     const sentinel = "{\"sentinel\":true}\n";
     await fs.mkdir(path.dirname(childPath), { recursive: true });

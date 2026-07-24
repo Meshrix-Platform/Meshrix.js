@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -8,7 +8,7 @@ import {
   queueStateMutation,
   stateFileKey,
   waitForStateIdle
-} from "@lico/foundation/storage/state-coordinator";
+} from "@meshrix/foundation/storage/state-coordinator";
 
 export const AGENT_MEMORY_PROTOCOL_VERSION = "v0.0.1:agent:memory-1";
 

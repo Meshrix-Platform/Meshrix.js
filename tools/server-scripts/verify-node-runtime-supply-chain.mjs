@@ -9,8 +9,8 @@ import { Readable } from "node:stream";
 import { assertNoLeak } from "./lib/report-evidence-safety.mjs";
 
 const REPORT_PATH = "build/reports/node-runtime-supply-chain.json";
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-node-runtime-supply-chain-"));
-process.env.LICO_MCP_NODE_RUNTIME_CACHE_DIR = path.join(tempRoot, "cache");
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-node-runtime-supply-chain-"));
+process.env.MESHRIX_MCP_NODE_RUNTIME_CACHE_DIR = path.join(tempRoot, "cache");
 
 const report = {
   schemaVersion: "v1:node-runtime-supply-chain-report",
@@ -79,7 +79,7 @@ try {
   assert.equal(evidence.signerFingerprint, lock.signer.fingerprint);
   record("official Node checksum signature and pinned signer verify", "passed", evidence);
 
-  const cacheDir = process.env.LICO_MCP_NODE_RUNTIME_CACHE_DIR;
+  const cacheDir = process.env.MESHRIX_MCP_NODE_RUNTIME_CACHE_DIR;
   const checksumsPath = path.join(cacheDir, `${lock.version}-${lock.checksumsFile}`);
   const signaturePath = path.join(cacheDir, `${lock.version}-${lock.signatureFile}`);
   const keyPath = path.join(cacheDir, `${lock.signer.fingerprint}.asc`);

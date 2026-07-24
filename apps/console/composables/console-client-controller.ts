@@ -6,7 +6,7 @@ import {
   clientConnectionDetail,
   clientConnectionMethodLabel,
   clientStatusLabel,
-} from "@lico/ui-console/console-client-display-utils";
+} from "@meshrix/ui-console/console-client-display-utils";
 import { alignmentStateLabels } from "./console-defaults";
 import { formatMachineDate, parseTime } from "./console-format-utils";
 
@@ -110,7 +110,7 @@ export function createConsoleClientController(options: ConsoleClientControllerOp
     };
     const timestamp = formatMachineDate(exportedAt, "full").replace(/[: ]/g, "-");
     downloadTextFile(
-      `lico-clients-${timestamp}.json`,
+      `meshrix-clients-${timestamp}.json`,
       `${JSON.stringify(payload, null, 2)}\n`,
       "application/json;charset=utf-8",
     );

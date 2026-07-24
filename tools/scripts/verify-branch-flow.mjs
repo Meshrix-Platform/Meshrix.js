@@ -88,7 +88,7 @@ export function evaluateBranchFlow({
     if (resolvedBaseRef === "main") {
       return {
         ok: false,
-        message: `main is not an active LicoMesh long-lived branch; use ${LONG_LIVED_BRANCHES.join(", ")}.`
+        message: `main is not an active Meshrix long-lived branch; use ${LONG_LIVED_BRANCHES.join(", ")}.`
       };
     }
     if (resolvedBaseRef === "nightly") {
@@ -196,10 +196,10 @@ function readEventPayload(eventPath) {
 
 function sameRepositoryPullRequest(baseRef, headRef) {
   return {
-    repository: { full_name: "example/licomesh" },
+    repository: { full_name: "example/meshrix" },
     pull_request: {
       base: { ref: baseRef },
-      head: { ref: headRef, repo: { full_name: "example/licomesh" } }
+      head: { ref: headRef, repo: { full_name: "example/meshrix" } }
     }
   };
 }
@@ -268,10 +268,10 @@ export function runBranchFlowSelfTest() {
         baseRef: "nightly",
         headRef: "feature/ci-policy",
         payload: {
-          repository: { full_name: "example/licomesh" },
+          repository: { full_name: "example/meshrix" },
           pull_request: {
             base: { ref: "nightly" },
-            head: { ref: "feature/ci-policy", repo: { full_name: "fork/licomesh" } }
+            head: { ref: "feature/ci-policy", repo: { full_name: "fork/meshrix" } }
           }
         }
       }

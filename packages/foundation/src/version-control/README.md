@@ -1,6 +1,6 @@
 # Version Governance Module
 
-`packages/foundation/src/version-control` is the infrastructure boundary for LicoMesh version governance. It owns the shared vocabulary, registry facts, scan rules, and gates for platform, protocol, schema, runtime capability, and migration-path versions.
+`packages/foundation/src/version-control` is the infrastructure boundary for Meshrix version governance. It owns the shared vocabulary, registry facts, scan rules, and gates for platform, protocol, schema, runtime capability, and migration-path versions.
 
 ## Layer
 
@@ -15,7 +15,7 @@
 - Scan contract: `packages/foundation/src/version-control/version-scan.mjs`
 - Naming verifier: `node tools/server-scripts/verify-version-naming.mjs`
 - Verifier: `npm run verify:version-registry`
-- Runtime artifact store root: `.licomesh-server-data/artifacts`
+- Runtime artifact store root: `.meshrix-server-data/artifacts`
 - Platform version baseline: `v0.0.1`
 - Governed version format: `v<platform-version>:<domain>:<subsection>-<version>`
 
@@ -30,14 +30,14 @@ A governed version has exactly three segments after tokenization: the platform v
 3. Preserve adjacent-version migration rules, compatibility windows, retirement state, and evidence references.
 4. Maintain a Version Compatibility Table for `consumerRef -> providerRef` compatibility facts.
 5. Export compatibility projections for UI, diagnostics, and release-readiness consumers without making those consumers the source of truth.
-6. Reference materialized version artifacts in `.licomesh-server-data/artifacts` without treating that artifact store as the configuration authority.
+6. Reference materialized version artifacts in `.meshrix-server-data/artifacts` without treating that artifact store as the configuration authority.
 
 ## Identity
 
-- Version artifact IDs use stable dotted names such as `lico.platform`, `lico.protocol.mcp`, `lico.store.operation-permission`, and `lico.policy.authorization`.
+- Version artifact IDs use stable dotted names such as `meshrix.platform`, `meshrix.protocol.mcp`, `meshrix.store.operation-permission`, and `meshrix.policy.authorization`.
 - Version artifact references use `artifactId@v<platform-version>:<domain>:<subsection>-<version>`.
 - The platform version segment is shared across the platform baseline; the domain segment groups versions such as `workspace`, `risk-control`, `state-machine`, `storage`, or `mcp`; the subsection segment identifies the independently incrementing governed object.
-- Examples: `lico.platform@v0.0.1:platform:assembly-1`, `lico.protocol.mcp@v0.0.1:mcp:interface-1`, and `lico.state-machine.version-artifact-lifecycle@v0.0.1:state-machine:version-artifact-1`.
+- Examples: `meshrix.platform@v0.0.1:platform:assembly-1`, `meshrix.protocol.mcp@v0.0.1:mcp:interface-1`, and `meshrix.state-machine.version-artifact-lifecycle@v0.0.1:state-machine:version-artifact-1`.
 
 ## Lifecycle
 

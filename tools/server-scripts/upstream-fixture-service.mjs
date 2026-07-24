@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Deterministic upstream service fixture for LicoMesh gateway verification.
+// Deterministic upstream service fixture for Meshrix gateway verification.
 //
 // Standalone HTTP mode (REST API + OpenAPI document + MCP JSON-RPC at /mcp):
 //   node tools/server-scripts/upstream-fixture-service.mjs --mode http --port 8091
 // MCP stdio mode (newline-delimited JSON-RPC on stdin/stdout):
 //   node tools/server-scripts/upstream-fixture-service.mjs --mode mcp-stdio
 //
-// When the token environment variable (default LICO_UPSTREAM_FIXTURE_TOKEN) is
+// When the token environment variable (default MESHRIX_UPSTREAM_FIXTURE_TOKEN) is
 // set, HTTP endpoints under /api and /mcp require `Authorization: Bearer <token>`
 // and the session.identity surfaces report a hash proof of the received token.
 import {

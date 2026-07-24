@@ -13,7 +13,7 @@ import {
   requestTargetOrigin
 } from "../../../packages/foundation/src/security/auth/console-auth-support.mjs";
 
-const originalTrustedProxies = process.env.LICO_TRUSTED_PROXIES;
+const originalTrustedProxies = process.env.MESHRIX_TRUSTED_PROXIES;
 
 function requestFrom(remoteAddress, forwardedFor = "") {
   return {
@@ -25,15 +25,15 @@ function requestFrom(remoteAddress, forwardedFor = "") {
 afterEach(() => {
   vi.useRealTimers();
   if (originalTrustedProxies === undefined) {
-    delete process.env.LICO_TRUSTED_PROXIES;
+    delete process.env.MESHRIX_TRUSTED_PROXIES;
   } else {
-    process.env.LICO_TRUSTED_PROXIES = originalTrustedProxies;
+    process.env.MESHRIX_TRUSTED_PROXIES = originalTrustedProxies;
   }
 });
 
 describe("HTTP middleware client IP normalization", () => {
   it("keeps rotating spoofed forwarded addresses from direct loopback in one rate-limit bucket", () => {
-    delete process.env.LICO_TRUSTED_PROXIES;
+    delete process.env.MESHRIX_TRUSTED_PROXIES;
     const limiter = createFixedWindowRateLimiter({
       limit: 1,
       windowMs: 60_000,
@@ -50,7 +50,7 @@ describe("HTTP middleware client IP normalization", () => {
   });
 
   it("honors a valid forwarded chain only for an explicitly trusted socket peer", () => {
-    process.env.LICO_TRUSTED_PROXIES = "10.0.0.9, 192.0.2.4";
+    process.env.MESHRIX_TRUSTED_PROXIES = "10.0.0.9, 192.0.2.4";
 
     expect(normalizeClientIp(requestFrom(
       "10.0.0.9",
@@ -79,7 +79,7 @@ describe("HTTP middleware client IP normalization", () => {
   });
 
   it("uses the same explicit proxy trust boundary for authorization, cookies, and origin resolution", () => {
-    delete process.env.LICO_TRUSTED_PROXIES;
+    delete process.env.MESHRIX_TRUSTED_PROXIES;
     const directLoopback = {
       headers: {
         host: "127.0.0.1:7228",
@@ -95,7 +95,7 @@ describe("HTTP middleware client IP normalization", () => {
     expect(isSecureRequest(directLoopback)).toBe(false);
     expect(requestTargetOrigin(directLoopback)).toBe("http://127.0.0.1:7228");
 
-    process.env.LICO_TRUSTED_PROXIES = "127.0.0.1";
+    process.env.MESHRIX_TRUSTED_PROXIES = "127.0.0.1";
     expect(clientIpFromRequest(directLoopback)).toBe("203.0.113.10");
     expect(isTrustedProxy(directLoopback)).toBe(true);
     expect(isSecureRequest(directLoopback)).toBe(true);

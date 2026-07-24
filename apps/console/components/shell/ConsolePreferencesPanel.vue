@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
 import type { OptionBarModelValue, OptionBarValue } from "../../types/app";
 

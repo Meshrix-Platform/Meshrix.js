@@ -44,16 +44,16 @@ function runCommand(command, args, options = {}) {
 }
 
 export function buildServerStartupArgs(passthroughArgs = []) {
-  return ["apps/server/bin/lico.mjs", ...passthroughArgs, "--with-ui"];
+  return ["apps/server/bin/meshrix.mjs", ...passthroughArgs, "--with-ui"];
 }
 
 export async function startConsole({ argv = process.argv.slice(2), cwd = process.cwd(), env = process.env } = {}) {
-  console.log("Building LicoMesh server console...");
+  console.log("Building Meshrix server console...");
   await runCommand("npm", ["run", "build"], { cwd, env });
 
   const finalArgs = buildServerStartupArgs(argv);
 
-  console.log("Starting LicoMesh server with console...");
+  console.log("Starting Meshrix server with console...");
   const serverProcess = spawn("node", finalArgs, {
     cwd,
     stdio: "inherit",

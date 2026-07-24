@@ -24,7 +24,7 @@ export const UPSTREAM_RESPONSE_REPRESENTATION_MODES: readonly [
 ];
 export function isUpstreamRequestRepresentationMode(value: unknown): boolean;
 export function isUpstreamResponseRepresentationMode(value: unknown): boolean;
-export const PORTABLE_UPSTREAM_SERVICE_KIND: "lico.upstream-service";
+export const PORTABLE_UPSTREAM_SERVICE_KIND: "meshrix.upstream-service";
 export const PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION: "v0.0.1:upstream-service:portable-import-2";
 export const UPSTREAM_SERVICE_DESCRIPTOR_FIELDS: readonly [
   "serviceProtocol", "label", "description", "baseUrl", "endpoints", "healthPath",

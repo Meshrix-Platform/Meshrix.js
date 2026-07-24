@@ -2,8 +2,8 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const nativeInstallPath = fileURLToPath(new URL("../../packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh", import.meta.url));
-const nativeWindowsInstallPath = fileURLToPath(new URL("../../packages/protocols/mcp/adapter/native-installer/lico-mcp-install.ps1", import.meta.url));
+const nativeInstallPath = fileURLToPath(new URL("../../packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh", import.meta.url));
+const nativeWindowsInstallPath = fileURLToPath(new URL("../../packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1", import.meta.url));
 const requestedArgs = process.argv.slice(2);
 const forwardedArgs = requestedArgs[0] === "install" ? requestedArgs.slice(1) : requestedArgs;
 const command = process.platform === "win32" ? "powershell" : "sh";

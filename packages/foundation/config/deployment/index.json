@@ -1,7 +1,7 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
-  "kind": "lico.deployment.entry-index",
-  "purpose": "Single deployment entry index for the public LicoMesh gateway platform.",
+  "kind": "meshrix.deployment.entry-index",
+  "purpose": "Single deployment entry index for the public Meshrix gateway platform.",
   "agentDisclosure": {
     "openOrder": [
       {
@@ -12,7 +12,7 @@
       {
         "id": "main-service-dockerfile",
         "path": "Dockerfile",
-        "why": "Authoritative LicoMesh server container build and runtime command."
+        "why": "Authoritative Meshrix server container build and runtime command."
       },
       {
         "id": "main-service-source-package",
@@ -22,7 +22,7 @@
       {
         "id": "deployment-container-flow",
         "path": "tools/server-scripts/verify-deployment-container-flow.mjs",
-        "why": "Fresh-container deployment proof for LicoMesh, including resumable dependency cache, Docker BuildKit cache mounts, Core compose startup, optional-plugin absence, MCP baseline, destructive rejection, and cleanup."
+        "why": "Fresh-container deployment proof for Meshrix, including resumable dependency cache, Docker BuildKit cache mounts, Core compose startup, optional-plugin absence, MCP baseline, destructive rejection, and cleanup."
       }
     ],
     "sectionHints": {
@@ -40,7 +40,7 @@
     "npmRegistry": "https://registry.npmjs.org/",
     "mainService": {
       "dockerfile": "Dockerfile",
-      "imageName": "licomesh-server",
+      "imageName": "meshrix-server",
       "buildTarget": "runtime",
       "buildArgs": {
         "NODE_BASE_IMAGE": "node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203",
@@ -56,11 +56,11 @@
         "host": "0.0.0.0",
         "port": 7228,
         "hostPublishAddress": "127.0.0.1",
-        "hostPublishAddressEnv": "LICO_BIND_ADDRESS",
-        "advertisedHostEnv": "LICO_ADVERTISED_HOST",
+        "hostPublishAddressEnv": "MESHRIX_BIND_ADDRESS",
+        "advertisedHostEnv": "MESHRIX_ADVERTISED_HOST",
         "dataPath": "data",
         "codexHome": "codex-home",
-        "user": "lico",
+        "user": "meshrix",
         "uid": 10001,
         "gid": 10001,
         "allowPublicConsole": true,
@@ -80,7 +80,7 @@
         {
           "id": "server-data",
           "containerPath": "data",
-          "purpose": "Persistent LicoMesh server data, logs, jobs, and configured upstream service runtime evidence."
+          "purpose": "Persistent Meshrix server data, logs, jobs, and configured upstream service runtime evidence."
         }
       ]
     }

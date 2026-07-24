@@ -3,7 +3,7 @@ import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
 import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
 import { formatMachineDate } from '../../composables/console-format-utils';
 import DataTable from '../../components/DataTable.vue';
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import StatusPill from '../../components/StatusPill.vue';
 const {
   adminView,

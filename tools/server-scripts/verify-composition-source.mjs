@@ -16,7 +16,7 @@ import { scanPublicArtifact } from "./lib/public-artifact-boundary.mjs";
 
 const sourceRoot = process.cwd();
 const reportPath = path.join(sourceRoot, "build", "reports", "composition-source.json");
-const manifestPath = path.join(sourceRoot, "lico-source-package-manifest.json");
+const manifestPath = path.join(sourceRoot, "meshrix-source-package-manifest.json");
 const KEY_SYNTAX_FILES = Object.freeze([
   "tools/server-scripts/start-server.mjs",
   "tools/server-scripts/package-server-source.mjs",
@@ -105,7 +105,7 @@ const findings = [];
 const manifest = await readJson(manifestPath).catch((error) => {
   findings.push({
     code: "manifest_unreadable",
-    detail: "lico-source-package-manifest.json",
+    detail: "meshrix-source-package-manifest.json",
     errorCode: String(error?.code || "invalid_json")
   });
   return null;

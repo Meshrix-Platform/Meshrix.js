@@ -4,7 +4,7 @@ Strategy Management is the read-only policy evaluation surface used to explain w
 
 ## Current Boundary
 
-- Server operations are exposed as `strategy.*` over HTTP/RPC and Operation Permission catalog tools under `lico.strategy.*`.
+- Server operations are exposed as `strategy.*` over HTTP/RPC and Operation Permission catalog tools under `meshrix.strategy.*`.
 - The core edition includes Strategy Management by default.
 - All current strategy operations are read-only previews. They do not call model providers, enqueue work, mutate workflow state, forward upstream traffic, or execute tools.
 - Strategy operations require `console:read` through the normal Operation Permission path when exposed as catalog-backed tools.

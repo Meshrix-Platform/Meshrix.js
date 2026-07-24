@@ -1,11 +1,11 @@
 {
-  "name": "@lico/ui-console",
+  "name": "@meshrix/ui-console",
   "version": "0.0.1",
-  "description": "LicoMesh reusable console components, typed API clients, route registry",
+  "description": "Meshrix reusable console components, typed API clients, route registry",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "packages/ui-console"
   },
   "engines": {

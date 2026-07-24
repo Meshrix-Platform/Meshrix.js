@@ -1,8 +1,8 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ServerConfig } from "@lico/foundation/config/server-config";
+import { ServerConfig } from "@meshrix/foundation/config/server-config";
 
 export const WORKSPACE_GOVERNANCE_PROTOCOL_VERSION = "v0.0.1:workspace:governance-1";
 

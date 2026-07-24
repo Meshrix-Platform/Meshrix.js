@@ -18,17 +18,17 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const SECURITY_DESIGN_PATH = "docs/functionality/SECURITY-AUTHORIZATION.md";
 
 const originalCapabilityKernelEnv = {
-  LICO_TOOL_GRANT_CAPABILITY_KEY_PROVIDER: process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_PROVIDER,
-  LICO_TOOL_GRANT_BINDING_GUARD_PROVIDER: process.env.LICO_TOOL_GRANT_BINDING_GUARD_PROVIDER,
-  LICO_OPAQUE_CAPABILITY_KEY_PROVIDER: process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER,
-  LICO_CAPABILITY_BINDING_GUARD_PROVIDER: process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER
+  MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER,
+  MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER,
+  MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER: process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER,
+  MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER: process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER
 };
 
 function useIsolatedCapabilityKernelForVerifier() {
-  process.env.LICO_TOOL_GRANT_CAPABILITY_KEY_PROVIDER = "local-file";
-  process.env.LICO_TOOL_GRANT_BINDING_GUARD_PROVIDER = "local-file";
-  process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER = "local-file";
-  process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER = "local-file";
+  process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER = "local-file";
+  process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER = "local-file";
+  process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER = "local-file";
+  process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER = "local-file";
 }
 
 function restoreCapabilityKernelEnv() {
@@ -53,8 +53,8 @@ function mcpRequest(method, params = {}, id = 1) {
 function apiKeyHeaders(token) {
   return {
     "Content-Type": "application/json",
-    "X-LicoMesh-Api-Key": token,
-    "X-Lico-MCP-Target": "codex"
+    "X-Meshrix-Api-Key": token,
+    "X-Meshrix-MCP-Target": "codex"
   };
 }
 
@@ -202,7 +202,7 @@ async function assertSecurityGateSeparation() {
   assert.doesNotMatch(mcpReleaseVerifier, /assertNoPublicLocalStdioExposure|must not expose local stdio transport/);
 }
 async function assertMcpPublicPayloadLockdown() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-security-local-stdio-mcp-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-security-local-stdio-mcp-"));
   useIsolatedCapabilityKernelForVerifier();
   const server = await startHttpServer({
     userDataPath,
@@ -262,10 +262,10 @@ async function assertMcpPublicPayloadLockdown() {
     assertNoPublicLocalStdioExposure(toolsList.payload.result, "MCP tools/list result");
 
     const capabilitiesBody = JSON.stringify(mcpRequest("tools/call", {
-      name: "lico.discovery",
+      name: "meshrix.discovery",
       arguments: {
         apiVersion: "v0.0.1:mcp:interface-1",
-        operation: "lico.capabilities.list"
+        operation: "meshrix.capabilities.list"
       }
     }, 3));
     const capabilities = await fetchJson(`${server.url}/mcp`, {

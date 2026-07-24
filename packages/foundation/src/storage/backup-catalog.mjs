@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fsNative from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { writePrivateFileAtomic } from "./private-file-atomic.mjs";
 
 export const STORAGE_BACKUP_CATALOG_SCHEMA = "v0.0.1:storage:backup-catalog-1";

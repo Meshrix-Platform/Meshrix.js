@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { irreversibleSecurityDigest } from "#lico/runtime-logger";
+import { irreversibleSecurityDigest } from "#meshrix/runtime-logger";
 
 export function isPlainObject(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;

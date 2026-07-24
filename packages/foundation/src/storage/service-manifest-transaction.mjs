@@ -19,7 +19,7 @@ const REQUEST_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const INITIALIZATION_LOCK_STALE_MS = 60_000;
 export const SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS = 256;
 const RECEIPT_REF_PATTERN =
-  /^urn:lico:storage-manifest-receipt:[a-f0-9]{64}$/u;
+  /^urn:meshrix:storage-manifest-receipt:[a-f0-9]{64}$/u;
 const EXPECTED_TABLES = Object.freeze([
   "manifest_authority_meta",
   "manifest_blobs",
@@ -184,7 +184,7 @@ function requestOutcome({
     serviceRevision,
     setRevision,
     setDigest,
-    receiptRef: `urn:lico:storage-manifest-receipt:${receiptDigest}`
+    receiptRef: `urn:meshrix:storage-manifest-receipt:${receiptDigest}`
   });
 }
 

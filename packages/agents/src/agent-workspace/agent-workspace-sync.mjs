@@ -2,7 +2,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { getRuntimeLogger } from "@lico/foundation/observability/runtime-logger";
+import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
 import {
   AGENT_WORKSPACE_PROTOCOL_VERSION,
   asArray,

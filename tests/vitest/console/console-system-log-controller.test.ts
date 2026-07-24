@@ -104,7 +104,7 @@ describe("console system log controller", () => {
 
     expect(browserEffectsMock.downloadTextFile).toHaveBeenCalledTimes(1);
     const [fileName, content, contentType] = browserEffectsMock.downloadTextFile.mock.calls[0];
-    expect(fileName).toMatch(/^lico-system-logs-.*\.csv$/);
+    expect(fileName).toMatch(/^meshrix-system-logs-.*\.csv$/);
     expect(contentType).toBe("text/csv;charset=utf-8");
     expect(content.startsWith("\uFEFF")).toBe(true);
     expect(content).toContain('"beta"');

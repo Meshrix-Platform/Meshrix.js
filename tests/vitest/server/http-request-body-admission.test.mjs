@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const handleLicoMcpHttpRequestMock = vi.hoisted(() => vi.fn(async () => false));
 
-vi.mock("#lico/protocols/mcp/adapter/http-mcp-adapter", () => ({
+vi.mock("#meshrix/protocols/mcp/adapter/http-mcp-adapter", () => ({
   configureMcpNotificationBus: vi.fn(),
   handleLicoMcpHttpRequest: handleLicoMcpHttpRequestMock,
   MCP_LOCAL_AUTHORIZATION_MAX_BODY_BYTES: 128 * 1024

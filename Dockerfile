@@ -1,4 +1,4 @@
-# LicoMesh server container.
+# Meshrix server container.
 # Deployment preset index: packages/foundation/config/deployment/index.json
 ARG NODE_BASE_IMAGE=node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
 
@@ -26,10 +26,10 @@ RUN --mount=type=cache,target=${ROOTFS}var/cache/apt,sharing=locked \
     && apt-get install -y --no-install-recommends python3 make g++
 
 ARG NPM_REGISTRY=https://registry.npmjs.org/
-RUN --mount=type=cache,id=licomesh-core-npm,target=${ROOTFS}var/cache/licomesh/npm,sharing=locked \
+RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm,sharing=locked \
     npm config set registry "${NPM_REGISTRY}" \
     && npm_config_build_from_source=true npm_config_nodedir="${ROOTFS}usr/local" npm ci --foreground-scripts --loglevel=info \
-      --cache="${ROOTFS}var/cache/licomesh/npm" \
+      --cache="${ROOTFS}var/cache/meshrix/npm" \
       --fetch-retries=5 \
       --fetch-retry-factor=2 \
       --fetch-retry-mintimeout=20000 \
@@ -38,11 +38,11 @@ RUN --mount=type=cache,id=licomesh-core-npm,target=${ROOTFS}var/cache/licomesh/n
 
 FROM deps AS npm-package-verifier
 
-RUN --mount=type=cache,id=licomesh-core-npm,target=${ROOTFS}var/cache/licomesh/npm,sharing=locked \
-    test -d "${ROOTFS}var/cache/licomesh/npm/_cacache" \
-    && mkdir -p "${ROOTFS}opt/lico-npm-cache" \
-    && cp -a "${ROOTFS}var/cache/licomesh/npm/_cacache" "${ROOTFS}opt/lico-npm-cache/_cacache" \
-    && chmod -R a+rX "${ROOTFS}opt/lico-npm-cache"
+RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm,sharing=locked \
+    test -d "${ROOTFS}var/cache/meshrix/npm/_cacache" \
+    && mkdir -p "${ROOTFS}opt/meshrix-npm-cache" \
+    && cp -a "${ROOTFS}var/cache/meshrix/npm/_cacache" "${ROOTFS}opt/meshrix-npm-cache/_cacache" \
+    && chmod -R a+rX "${ROOTFS}opt/meshrix-npm-cache"
 
 FROM deps AS build
 
@@ -69,38 +69,38 @@ RUN npm prune --omit=dev
 FROM ${NODE_BASE_IMAGE} AS runtime
 
 ARG ROOTFS=/
-ARG LICO_SOURCE_REPOSITORY
-ARG LICO_SOURCE_REF
-ARG LICO_SOURCE_COMMIT
+ARG MESHRIX_SOURCE_REPOSITORY
+ARG MESHRIX_SOURCE_REF
+ARG MESHRIX_SOURCE_COMMIT
 
-LABEL org.opencontainers.image.source="https://github.com/${LICO_SOURCE_REPOSITORY}" \
-      org.opencontainers.image.revision="${LICO_SOURCE_COMMIT}" \
-      org.opencontainers.image.ref.name="${LICO_SOURCE_REF}"
+LABEL org.opencontainers.image.source="https://github.com/${MESHRIX_SOURCE_REPOSITORY}" \
+      org.opencontainers.image.revision="${MESHRIX_SOURCE_COMMIT}" \
+      org.opencontainers.image.ref.name="${MESHRIX_SOURCE_REF}"
 
 ENV NODE_ENV=production \
-    LICO_SERVER_PORT=7228 \
+    MESHRIX_SERVER_PORT=7228 \
     CODEX_HOME=../codex-home \
     PATH=./node_modules/.bin:$PATH
 
-RUN groupadd --system --gid 10001 lico \
-    && useradd --system --uid 10001 --gid lico --home-dir "${ROOTFS}home/lico" --create-home --shell "${ROOTFS}usr/sbin/nologin" lico
+RUN groupadd --system --gid 10001 meshrix \
+    && useradd --system --uid 10001 --gid meshrix --home-dir "${ROOTFS}home/meshrix" --create-home --shell "${ROOTFS}usr/sbin/nologin" meshrix
 
 WORKDIR app
 
-COPY --chown=lico:lico --from=build app/package.json app/package-lock.json ./
-COPY --chown=lico:lico --from=build app/LICENSE ./LICENSE
-COPY --chown=lico:lico --from=build app/node_modules ./node_modules
-COPY --chown=lico:lico --from=build app/apps/server ./apps/server
-COPY --chown=lico:lico --from=build app/apps/console/package.json ./apps/console/package.json
-COPY --chown=lico:lico --from=build app/packages ./packages
-COPY --chown=lico:lico --from=build app/content ./content
-COPY --chown=lico:lico --from=build app/tools ./tools
-COPY --chown=lico:lico --from=build app/docs ./docs
+COPY --chown=meshrix:meshrix --from=build app/package.json app/package-lock.json ./
+COPY --chown=meshrix:meshrix --from=build app/LICENSE ./LICENSE
+COPY --chown=meshrix:meshrix --from=build app/node_modules ./node_modules
+COPY --chown=meshrix:meshrix --from=build app/apps/server ./apps/server
+COPY --chown=meshrix:meshrix --from=build app/apps/console/package.json ./apps/console/package.json
+COPY --chown=meshrix:meshrix --from=build app/packages ./packages
+COPY --chown=meshrix:meshrix --from=build app/content ./content
+COPY --chown=meshrix:meshrix --from=build app/tools ./tools
+COPY --chown=meshrix:meshrix --from=build app/docs ./docs
 
 RUN mkdir -p data ../codex-home \
-    && chown -R lico:lico data ../codex-home
+    && chown -R meshrix:meshrix data ../codex-home
 
-USER lico
+USER meshrix
 
 EXPOSE 7228
 
@@ -112,11 +112,11 @@ FROM runtime AS runtime-ui
 
 USER root
 
-COPY --chown=lico:lico --from=build-ui app/build/dist ./build/dist
+COPY --chown=meshrix:meshrix --from=build-ui app/build/dist ./build/dist
 
 RUN test -f ./build/dist/index.html
 
-USER lico
+USER meshrix
 
 CMD ["node", "tools/server-scripts/start-server.mjs", "--with-ui", "--host", "0.0.0.0", "--port", "7228", "--data-dir", "data", "--allow-public-console"]
 

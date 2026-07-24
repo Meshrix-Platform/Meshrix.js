@@ -143,11 +143,11 @@ function selectedHostEnvironment() {
 }
 
 async function runProbe({ reportPath, freshContainer, requiredReleaseProbe = false }) {
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-npm-package-installability-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-package-installability-"));
 const isolatedHome = path.join(tempRoot, "home");
 const isolatedTemp = path.join(tempRoot, "tmp");
 const isolatedCache = path.join(tempRoot, "npm-cache");
-const isolatedData = path.join(tempRoot, "lico-data");
+const isolatedData = path.join(tempRoot, "meshrix-data");
 const isolatedCodexHome = path.join(tempRoot, "codex-home");
 const isolatedNpmrc = path.join(tempRoot, "npmrc");
 await Promise.all([
@@ -158,7 +158,7 @@ await Promise.all([
   isolatedCodexHome
 ].map((directory) => fs.mkdir(directory, { recursive: true })));
 if (freshContainer === true) {
-  await fs.access("/opt/lico-npm-cache/_cacache");
+  await fs.access("/opt/meshrix-npm-cache/_cacache");
 }
 await fs.writeFile(isolatedNpmrc, "", "utf8");
 const probeEnvironment = {
@@ -171,7 +171,7 @@ const probeEnvironment = {
   XDG_CONFIG_HOME: path.join(isolatedHome, ".config"),
   XDG_CACHE_HOME: path.join(isolatedHome, ".cache"),
   CODEX_HOME: isolatedCodexHome,
-  LICO_USER_DATA_DIR: isolatedData,
+  MESHRIX_USER_DATA_DIR: isolatedData,
   NODE_OPTIONS: "",
   npm_config_userconfig: isolatedNpmrc,
   npm_config_cache: isolatedCache,
@@ -204,11 +204,11 @@ try {
   const rootPackage = JSON.parse(await fs.readFile("package.json", "utf8"));
   const releaseSet = await discoverReleaseSet({ rootDir: process.cwd() });
   assert.equal(releaseSet.version, rootPackage.version, "npm_package_release_set_version_mismatch");
-  const expectedBin = "apps/server/bin/lico.mjs";
+  const expectedBin = "apps/server/bin/meshrix.mjs";
   const expectedServerBin = "tools/server-scripts/start-server.mjs";
-  assert.equal(rootPackage.bin?.lico, expectedBin, "npm_package_cli_bin_contract_invalid");
+  assert.equal(rootPackage.bin?.meshrix, expectedBin, "npm_package_cli_bin_contract_invalid");
   assert.equal(
-    rootPackage.bin?.["licomesh-server"],
+    rootPackage.bin?.["meshrix-server"],
     expectedServerBin,
     "npm_package_server_bin_contract_invalid"
   );
@@ -231,7 +231,7 @@ try {
   }
   const workspaceNames = workspacePackages.map(({ name }) => name).sort();
   const rootInternalDependencies = Object.keys(rootPackage.dependencies || {})
-    .filter((name) => name.startsWith("@lico/"))
+    .filter((name) => name.startsWith("@meshrix/"))
     .sort();
   assert.deepEqual(
     rootInternalDependencies,
@@ -248,7 +248,7 @@ try {
   record("root package declares the complete version-locked workspace release set", "passed", {
     workspacePackageCount: workspacePackages.length,
     releasePackageCount: releaseSet.packages.length,
-    connectorPackageIncluded: releaseSet.packages.some(({ name }) => name === "lico-mcp-connector"),
+    connectorPackageIncluded: releaseSet.packages.some(({ name }) => name === "meshrix-mcp-connector"),
     versionLocked: true,
     bundledDependencies: false,
     rootInstallLifecycleHooks: false
@@ -293,7 +293,7 @@ try {
     tarballPaths.push(path.join(packDirectory, filename));
   }
   const rootArtifact = packedArtifacts.find(({ name }) => name === rootPackage.name);
-  const connectorArtifact = packedArtifacts.find(({ name }) => name === "lico-mcp-connector");
+  const connectorArtifact = packedArtifacts.find(({ name }) => name === "meshrix-mcp-connector");
   assert.ok(rootArtifact, "npm_package_root_artifact_missing");
   assert.ok(connectorArtifact, "npm_package_connector_artifact_missing");
   const rootFiles = rootArtifact.files.map((entry) => String(entry.path));
@@ -312,6 +312,10 @@ try {
   assert.ok(
     connectorFiles.includes("lib/mcp-proxy-session.mjs"),
     "npm_package_connector_runtime_source_missing"
+  );
+  assert.ok(
+    connectorFiles.includes("mcp-identity.mjs"),
+    "npm_package_connector_identity_source_missing"
   );
   record("release-set tarballs are source-portable and exclude host artifacts", "passed", {
     packageCount: packedArtifacts.length,
@@ -333,7 +337,7 @@ try {
   await fs.writeFile(
     path.join(consumerDirectory, "package.json"),
     `${JSON.stringify({
-      name: "lico-package-verifier",
+      name: "meshrix-package-verifier",
       private: true,
       version: "0.0.0",
       dependencies: releaseSetDependencies
@@ -343,7 +347,7 @@ try {
   const registryMirror = freshContainer === true
     ? await createLockBackedNpmRegistry({
         lockPath: "package-lock.json",
-        cacheRoot: "/opt/lico-npm-cache"
+        cacheRoot: "/opt/meshrix-npm-cache"
       })
     : null;
   const installRegistry = registryMirror?.registry || OFFICIAL_NPM_REGISTRY;
@@ -373,21 +377,21 @@ try {
   const help = await runProbeStage(
     "npm_package_cli_help_failed",
     npmCommand(),
-    npmArgs(["exec", "--offline", "--", "lico", "--help"]),
+    npmArgs(["exec", "--offline", "--", "meshrix", "--help"]),
     { cwd: consumerDirectory }
   );
   assert.match(help.stdout, /Usage:/u, "npm_package_cli_help_failed");
   const interfaces = await runProbeStage(
     "npm_package_cli_offline_interface_failed",
     npmCommand(),
-    npmArgs(["exec", "--offline", "--", "lico", "interfaces", "--format", "markdown"]),
+    npmArgs(["exec", "--offline", "--", "meshrix", "interfaces", "--format", "markdown"]),
     { cwd: consumerDirectory }
   );
   assert.match(interfaces.stdout, /jobs\.list/u, "npm_package_cli_offline_interface_failed");
   const serverHelp = await runProbeStage(
     "npm_package_server_cli_help_failed",
     npmCommand(),
-    npmArgs(["exec", "--offline", "--", "licomesh-server", "--help"]),
+    npmArgs(["exec", "--offline", "--", "meshrix-server", "--help"]),
     { cwd: consumerDirectory }
   );
   assert.match(
@@ -398,11 +402,11 @@ try {
   const connectorVersion = await runProbeStage(
     "npm_package_connector_cli_failed",
     npmCommand(),
-    npmArgs(["exec", "--offline", "--", "lico-mcp", "version", "--json"]),
+    npmArgs(["exec", "--offline", "--", "meshrix-mcp", "version", "--json"]),
     { cwd: consumerDirectory, classifyRuntime: true }
   );
   const connectorPayload = JSON.parse(connectorVersion.stdout);
-  assert.equal(connectorPayload.packageName, "lico-mcp-connector", "npm_package_connector_identity_invalid");
+  assert.equal(connectorPayload.packageName, "meshrix-mcp-connector", "npm_package_connector_identity_invalid");
   assert.equal(connectorPayload.packageVersion, rootPackage.version, "npm_package_connector_version_invalid");
   record("clean consumer install runs the packaged CLI", "passed", {
     cliHelp: true,
@@ -420,7 +424,7 @@ try {
     consumerDirectory,
     "node_modules",
     ".bin",
-    process.platform === "win32" ? "licomesh-server.cmd" : "licomesh-server"
+    process.platform === "win32" ? "meshrix-server.cmd" : "meshrix-server"
   );
   await fs.access(installedServerBin, fsSync.constants.X_OK);
   await runProbeStage(
@@ -476,7 +480,7 @@ try {
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   } finally {
-    await fs.rm(tempRoot, { recursive: true, force: true });
+    await fs.rm(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
   }
 }
 
@@ -496,14 +500,26 @@ async function writeDefaultReport(report) {
   await fs.writeFile(DEFAULT_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
+function resolveRepositoryRoot() {
+  const acceptanceRoot = String(process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT || "").trim();
+  if (acceptanceRoot) {
+    return path.resolve(acceptanceRoot);
+  }
+  const gitDir = String(process.env.GIT_DIR || "").trim();
+  if (gitDir) {
+    return path.dirname(gitDir);
+  }
+  return process.cwd();
+}
+
 async function runContainerAuthority() {
   const wrapperTempRoot = await fs.mkdtemp(
-    path.join(os.tmpdir(), "lico-npm-package-container-authority-")
+    path.join(os.tmpdir(), "meshrix-npm-package-container-authority-")
   );
   const evidenceDirectory = path.join(wrapperTempRoot, "evidence");
   const evidencePath = path.join(evidenceDirectory, "npm-package-installability.json");
   await fs.mkdir(evidenceDirectory, { recursive: true });
-  const verifierImageTag = `licomesh-npm-package-verifier:${process.pid}-${Date.now()}`;
+  const verifierImageTag = `meshrix-npm-package-verifier:${process.pid}-${Date.now()}`;
   let verifierImageId = "";
 
   try {
@@ -515,7 +531,7 @@ async function runContainerAuthority() {
       "npm_package_container_image_not_pinned"
     );
 
-    const repoRoot = process.cwd();
+    const repoRoot = resolveRepositoryRoot();
     const builtImage = await runStage(
       "npm_package_fresh_container_build_failed",
       "docker",

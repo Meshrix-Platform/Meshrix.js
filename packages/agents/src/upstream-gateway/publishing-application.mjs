@@ -12,15 +12,15 @@ import {
   UPSTREAM_SERVICE_DESCRIPTOR_FIELDS,
   UPSTREAM_SERVICE_ENDPOINT_FIELDS,
   UPSTREAM_SERVICE_OPERATION_FIELDS
-} from "@lico/contracts/upstream-service-publishing";
+} from "@meshrix/contracts/upstream-service-publishing";
 import {
   canonicalizeTypedReferenceManifest,
   SERVICE_MANIFEST_SCHEMA_VERSION
-} from "@lico/foundation/storage/storage-ports";
+} from "@meshrix/foundation/storage/storage-ports";
 import { parseWithDuplicateRejection, rejectPollutionKeys, rejectUnsafeUnicode } from "./manifest-compiler.mjs";
 import { compilePayloadTransport } from "./payload-contract.mjs";
 
-export { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "@lico/contracts/upstream-service-publishing";
+export { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "@meshrix/contracts/upstream-service-publishing";
 
 const COMMAND_FIELDS = new Set([
   "schemaVersion",
@@ -526,7 +526,7 @@ export function createUpstreamPublishingApplication({
     authorizeRead(authenticated);
     return {
       ...authenticated,
-      ownerRef: `urn:lico:subject:${digest("upstream-owner", authenticated.subjectId)}`
+      ownerRef: `urn:meshrix:subject:${digest("upstream-owner", authenticated.subjectId)}`
     };
   }
 
@@ -535,7 +535,7 @@ export function createUpstreamPublishingApplication({
   }
 
   function publicationFor(record, candidateSnapshot, publishedSnapshot) {
-    const publicationRef = `urn:lico:upstream-publication:${digest(
+    const publicationRef = `urn:meshrix:upstream-publication:${digest(
       "upstream-publication",
       record.serviceId,
       record.serviceRevision,
@@ -623,7 +623,7 @@ export function createUpstreamPublishingApplication({
       }
       authorize(authenticated, command.action);
       const serviceId = commandServiceId(command, authenticated.subjectId);
-      const ownerRef = `urn:lico:subject:${digest("upstream-owner", authenticated.subjectId)}`;
+      const ownerRef = `urn:meshrix:subject:${digest("upstream-owner", authenticated.subjectId)}`;
       const snapshot = await readerPort.getSnapshot({ signal });
       const existing = snapshot.getService(serviceId);
 
@@ -633,7 +633,7 @@ export function createUpstreamPublishingApplication({
       existingOwnership(existing, ownerRef);
       const descriptor = descriptorFromCommand(command, existing);
       const serviceKeyRef = existing?.manifest?.metadata?.serviceKeyRef ||
-        `urn:lico:service-key:${digest("upstream-service-key", command.serviceKey)}`;
+        `urn:meshrix:service-key:${digest("upstream-service-key", command.serviceKey)}`;
       const manifest = canonicalizeTypedReferenceManifest(
         nextManifest({ command, descriptor, existing, ownerRef, serviceKeyRef })
       ).manifest;
@@ -643,8 +643,8 @@ export function createUpstreamPublishingApplication({
         event: "upstream.publishing.request.accepted",
         action: command.action,
         ownerRef,
-        serviceRef: `urn:lico:service:${digest("upstream-service-ref", serviceId)}`,
-        requestRef: `urn:lico:request:${requestDigest}`
+        serviceRef: `urn:meshrix:service:${digest("upstream-service-ref", serviceId)}`,
+        requestRef: `urn:meshrix:request:${requestDigest}`
       }));
 
       let outcome;
@@ -669,7 +669,7 @@ export function createUpstreamPublishingApplication({
         manifestDigest: outcome.manifestDigest,
         receiptRef: outcome.receiptRef,
         publication: Object.freeze({
-          publicationRef: `urn:lico:upstream-publication:${digest(
+          publicationRef: `urn:meshrix:upstream-publication:${digest(
             "upstream-publication",
             serviceId,
             outcome.serviceRevision,

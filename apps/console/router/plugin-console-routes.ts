@@ -94,7 +94,7 @@ function pluginConsoleComponentLoader(
           dispose = null;
         });
         return () => h("div", {
-          class: "lico-plugin-console-host",
+          class: "meshrix-plugin-console-host",
           ref: mountElement,
         }, failure.value || undefined);
       },

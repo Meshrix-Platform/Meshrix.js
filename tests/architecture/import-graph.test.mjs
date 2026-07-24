@@ -82,7 +82,7 @@ async function test() {
   assert.ok(
     graph.edges.some((edge) => (
       edge.from === "apps/server/runtime/http-server.mjs" &&
-      edge.specifier === "#lico/server-runtime/composition/http-application-assembly" &&
+      edge.specifier === "#meshrix/server-runtime/composition/http-application-assembly" &&
       edge.to === "packages/server-runtime/src/composition/http-application-assembly.mjs"
     )),
     "the HTTP application adapter must delegate provider wiring to the server composition assembly"
@@ -140,7 +140,7 @@ async function test() {
       from: "packages/server-runtime/src/state/example.mjs",
       fromLayer: "server-runtime",
       to: "packages/agents/src/example.mjs",
-      specifier: "#lico/agents/example"
+      specifier: "#meshrix/agents/example"
     }, [syntheticRuntimeConstraint]).map((constraint) => constraint.id),
     [syntheticRuntimeConstraint.id],
     "cross-layer wiring outside server composition must match the registered constraint"
@@ -150,7 +150,7 @@ async function test() {
       from: "packages/server-runtime/src/composition/example.mjs",
       fromLayer: "server-runtime",
       to: "packages/agents/src/example.mjs",
-      specifier: "#lico/agents/example"
+      specifier: "#meshrix/agents/example"
     }, [syntheticRuntimeConstraint]),
     [],
     "server composition must remain the explicit cross-layer wiring boundary"
@@ -160,7 +160,7 @@ async function test() {
       from: "packages/ui-console/src/example.mjs",
       fromLayer: "ui-console",
       to: "packages/agents/src/workspace-governance/index.mjs",
-      specifier: "@lico/agents/workspace-governance/index"
+      specifier: "@meshrix/agents/workspace-governance/index"
     }, [{
       id: "ui-console-stateful-providers-require-composition",
       fromPattern: "packages/ui-console/src/**",
@@ -177,7 +177,7 @@ async function test() {
       from: "packages/protocols/http/controllers/example.mjs",
       fromLayer: "protocols",
       to: "packages/foundation/src/security/security-permissions-provider.mjs",
-      specifier: "#lico/foundation/security/security-permissions-provider"
+      specifier: "#meshrix/foundation/security/security-permissions-provider"
     }, [{
       id: "http-controllers-require-composed-security-ports",
       fromPattern: "packages/protocols/http/controllers/**",
@@ -212,7 +212,7 @@ async function test() {
       from: "plugins/example/console/View.vue",
       fromLayer: "plugin-console",
       to: "packages/ui-console/src/page-refresh.ts",
-      specifier: "@lico/ui-console/page-refresh"
+      specifier: "@meshrix/ui-console/page-refresh"
     }, [syntheticConstraint]),
     [],
     "public package exports must remain allowed even when they resolve into a workspace package"
@@ -261,8 +261,8 @@ async function test() {
   );
 
   assert.ok(
-    graph.edges.some((edge) => edge.family === "workspace-package" && edge.specifier.startsWith("@lico/")),
-    "the graph must cover @lico/* workspace package imports"
+    graph.edges.some((edge) => edge.family === "workspace-package" && edge.specifier.startsWith("@meshrix/")),
+    "the graph must cover @meshrix/* workspace package imports"
   );
   assert.ok(
     graph.summary.relativeEdgeCount > 0,
@@ -270,11 +270,11 @@ async function test() {
   );
   assert.ok(
     graph.summary.packageImportEdgeCount > 0,
-    "architecture graph reports must count #lico/* package-import edges"
+    "architecture graph reports must count #meshrix/* package-import edges"
   );
   assert.ok(
     graph.summary.workspacePackageEdgeCount > 0,
-    "architecture graph reports must count @lico/* workspace-package edges"
+    "architecture graph reports must count @meshrix/* workspace-package edges"
   );
   assert.ok(
     Number.isInteger(graph.summary.dynamicInternalEdgeCount),
@@ -297,8 +297,8 @@ async function test() {
   console.log(`  Nodes: ${graph.summary.totalNodes}`);
   console.log(`  Edges: ${graph.summary.totalEdges}`);
   console.log(`  Relative: ${graph.summary.relativeEdgeCount}`);
-  console.log(`  #lico/*: ${graph.summary.packageImportEdgeCount}`);
-  console.log(`  @lico/*: ${graph.summary.workspacePackageEdgeCount}`);
+  console.log(`  #meshrix/*: ${graph.summary.packageImportEdgeCount}`);
+  console.log(`  @meshrix/*: ${graph.summary.workspacePackageEdgeCount}`);
   console.log(`  Dynamic: ${graph.summary.dynamicInternalEdgeCount}`);
   console.log(`  Constraints: ${graph.constraints.length} rules`);
   console.log(`  Violations: ${violations.length}`);

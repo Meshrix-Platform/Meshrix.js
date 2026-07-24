@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/repo-layout.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/repo-layout.schema.json",
   "title": "Repo Layout Registry",
   "description": "Canonical description of every top-level repository entry and its classification.",
   "type": "object",

@@ -1,21 +1,21 @@
 /**
- * OTel Semantic Convention Fields — LicoMesh Baseline
+ * OTel Semantic Convention Fields — Meshrix Baseline
  *
  * SINGLE SOURCE OF TRUTH for OpenTelemetry-aligned field names used across
- * LicoMesh observability touchpoints.  All loggers, tracers, audit reports,
+ * Meshrix observability touchpoints.  All loggers, tracers, audit reports,
  * and metrics SHOULD reference these exported constants rather than
  * hard-coding string literals.
  *
  * Fields follow the OpenTelemetry semantic conventions where applicable
- * and extend them with "lico.*" namespaced attributes for LicoMesh-specific
+ * and extend them with "meshrix.*" namespaced attributes for Meshrix-specific
  * concepts not covered by the standard.
  *
  * USAGE:
  *   import { OTEL_SEMANTIC_FIELDS } from "../core/devops/observability/otel-semantic-fields.mjs";
  *
  *   runtimeLogger.info("operation.proof.lifecycle", {
- *     [OTEL_SEMANTIC_FIELDS.serviceName]: "licomesh-server",
- *     [OTEL_SEMANTIC_FIELDS.licoOperationId]: operation.id,
+ *     [OTEL_SEMANTIC_FIELDS.serviceName]: "meshrix-server",
+ *     [OTEL_SEMANTIC_FIELDS.meshrixOperationId]: operation.id,
  *   });
  *
  * REGISTRATION FLOW:
@@ -46,11 +46,11 @@ export const OTEL_SEMANTIC_FIELDS = Object.freeze({
   // ── Gen AI ──────────────────────────────────────────────────────────────
   genAiOperationName: "gen_ai.operation.name",
 
-  // ── LicoMesh extensions ─────────────────────────────────────────────────
-  licoOperationId: "lico.operation.id",
-  licoWorkspaceId: "lico.workspace.id",
-  licoCapabilityId: "lico.capability.id",
-  licoReceiptId: "lico.receipt.id",
-  licoCommandName: "lico.command.name",
-  licoAuditReportId: "lico.audit.report_id",
+  // ── Meshrix extensions ─────────────────────────────────────────────────
+  meshrixOperationId: "meshrix.operation.id",
+  meshrixWorkspaceId: "meshrix.workspace.id",
+  meshrixCapabilityId: "meshrix.capability.id",
+  meshrixReceiptId: "meshrix.receipt.id",
+  meshrixCommandName: "meshrix.command.name",
+  meshrixAuditReportId: "meshrix.audit.report_id",
 });
