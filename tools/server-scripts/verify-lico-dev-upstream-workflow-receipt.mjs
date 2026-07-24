@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const RECEIPT_PATH = "tools/registry/lico-dev-upstream-workflow-receipt.json";
-const TRUSTED_RECEIPT_DIGEST = "sha256:cd853b1a26a98d5fbf87c19e60fe4b10ae4d2f6d8493b1158c5f0008e7957f5a";
+const TRUSTED_RECEIPT_DIGEST = "sha256:3bb54c582e4209d4bf9804a7e697862a4f414fe8eb0b90efd72bc7262a435a69";
 const SHA256 = /^sha256:[a-f0-9]{64}$/;
 const GIT_SHA1 = /^[a-f0-9]{40}$/;
 const DENIED_KEYS = /^(?:rawOutput|stdout|stderr|username|hostname|credential|token|secretValue|ciphertext)$/i;
