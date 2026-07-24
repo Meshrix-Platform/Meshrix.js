@@ -12,6 +12,8 @@
 
 </div>
 
+English is the normative language of this repository's documentation; [简体中文](README.zh-CN.md) is the localized language version.
+
 ---
 
 ## Overview
