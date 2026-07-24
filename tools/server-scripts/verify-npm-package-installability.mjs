@@ -480,7 +480,7 @@ try {
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
     await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   } finally {
-    await fs.rm(tempRoot, { recursive: true, force: true });
+    await fs.rm(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
   }
 }
 
