@@ -64,7 +64,7 @@ if ($PSBoundParameters.ContainsKey("RejectedRawToken")) {
   Write-Failure "Raw tokens are not accepted in process arguments. Use -TokenStdin or an exported token environment variable."
 }
 
-foreach ($Argument in @($RemainingArgs)) {
+foreach ($Argument in @($RemainingArgs) | Where-Object { $null -ne $_ }) {
   if ($Argument -eq "--token" -or $Argument.StartsWith("--token=")) {
     Write-Failure "Raw tokens are not accepted in process arguments. Use -TokenStdin or an exported token environment variable."
   }
