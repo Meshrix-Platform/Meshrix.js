@@ -4,6 +4,10 @@ This file records user-visible release changes.
 
 ## Unreleased
 
+- Completed the one-pass migration of the core repository to the Meshrix
+  naming and boundary authority; LicoMesh identifiers are retired across
+  source, packages, workflows, and documentation.
+
 - Replaced the uniform two-event operation-proof policy with explicit `full`,
   `receipt`, `on-change`, and reasoned `excluded` profiles; read-only success
   paths now use one terminal receipt, and stable console-state reads write
