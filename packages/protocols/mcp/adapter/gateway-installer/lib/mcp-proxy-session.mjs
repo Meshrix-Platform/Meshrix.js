@@ -4,7 +4,7 @@ import {
   MCP_PROXY_SESSION_HEADER_LOWER,
   MCP_PROXY_SESSION_MAX_BYTES,
   normalizeMcpProxySessionId
-} from "#lico/contracts/mcp-catalog-delivery";
+} from "#meshrix/contracts/mcp-catalog-delivery";
 
 export {
   MCP_PROXY_SESSION_HEADER,

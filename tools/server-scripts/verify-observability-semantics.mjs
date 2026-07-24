@@ -2,7 +2,7 @@
 /**
  * verify-observability-semantics.mjs — OTel Semantic Conventions Baseline
  *
- * Defines the OTel semantic convention baseline for LicoMesh and verifies
+ * Defines the OTel semantic convention baseline for Meshrix and verifies
  * that key observability touchpoints (operation dispatch, MCP gateway,
  * CLI dispatch, layout audit) produce logs/traces with stable field names
  * aligned to OpenTelemetry semantic conventions.
@@ -36,7 +36,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const VERIFIER = "tools/server-scripts/verify-observability-semantics.mjs";
 const COMMAND_ID = "observability-semantics";
 const REPORT_SCHEMA_VERSION = "v0.0.1:observability:semantics-0.2.0";
-const PLAN_FILE = "docs/plans/end-to-end-release/platform-foundation/runtime-observability-convergence/Plan.md";
+const PLAN_FILE = "docs/plans/end-to-end-release/enterprise-single-node/Plan.md";
 const REQUIREMENTS = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const SOURCE_FILES = Object.freeze([
   "packages/foundation/src/observability/otel-semantic-fields.mjs",
@@ -72,9 +72,9 @@ const SEMANTIC_CONVENTIONS = Object.freeze({
     group: "gen_ai",
     fields: ["gen_ai.operation.name"],
   },
-  lico: {
-    group: "lico",
-    fields: ["lico.operation.id", "lico.workspace.id", "lico.capability.id", "lico.receipt.id", "lico.command.name", "lico.audit.report_id"],
+  meshrix: {
+    group: "meshrix",
+    fields: ["meshrix.operation.id", "meshrix.workspace.id", "meshrix.capability.id", "meshrix.receipt.id", "meshrix.command.name", "meshrix.audit.report_id"],
   },
 });
 
@@ -86,7 +86,7 @@ const TOUCHPOINTS = Object.freeze([
   {
     name: "Operation Dispatcher",
     files: ["packages/server-runtime/src/composition/"],
-    expectedGroups: ["service", "lico"],
+    expectedGroups: ["service", "meshrix"],
     critical: true,
   },
   {
@@ -98,13 +98,13 @@ const TOUCHPOINTS = Object.freeze([
   {
     name: "Layout Audit",
     files: ["tools/server-scripts/verify-layout-audit.mjs", "tools/server-scripts/verify-layout-manifest-consistency.mjs"],
-    expectedGroups: ["service", "vcs", "lico"],
+    expectedGroups: ["service", "vcs", "meshrix"],
     critical: false,
   },
   {
     name: "Runtime Logger",
     files: ["packages/foundation/src/observability/runtime-logger.mjs"],
-    expectedGroups: ["service", "process", "ci", "genai", "lico"],
+    expectedGroups: ["service", "process", "ci", "genai", "meshrix"],
     critical: true,
   },
 ]);
@@ -347,7 +347,7 @@ async function main() {
 
   const revision = await computeVerifierSourceRevision(repoRoot, SOURCE_FILES);
   const provenance = {
-    producer: "licomesh-core-observability",
+    producer: "meshrix-core-observability",
     commandId: COMMAND_ID,
     sourceRevision: revision
   };

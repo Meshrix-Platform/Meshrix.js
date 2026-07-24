@@ -152,6 +152,10 @@ function createProofRecorder() {
     async finishLifecycle(input = {}) {
       calls.push({ kind: "finish", operationId: input.entry?.operationId || "", status: input.status || "" });
       return { ...(input.entry || {}), status: input.status || "" };
+    },
+    async recordReceipt(input = {}) {
+      calls.push({ kind: "receipt", operationId: input.operationId || "" });
+      return { ledgerEventId: `storage-receipt-${calls.length}` };
     }
   };
 }
@@ -246,7 +250,7 @@ function createStorageOperationHarness(storageProvider, dispatchEvidence) {
 
 async function main() {
   const runId = createRunId();
-  const runDir = path.join(reportRoot, runId);
+  const runDir = path.join(workRoot, runId);
   const reportPath = path.join(runDir, "report.json");
   const userDataPath = path.join(workRoot, runId, "user-data");
   const selectedRestorePaths = ["metadata", "objects", "settings.json", "jobs", "upload-sessions"];
@@ -325,7 +329,7 @@ async function main() {
     assert.equal(listBefore.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
     const deniedCreate = await operationHarness.execute({
       operationId: "storage.backups.create",
-      input: { label: "authorization-denied" },
+      input: {},
       authorizeOperation: async () => ({
         ok: false,
         status: 403,
@@ -339,9 +343,7 @@ async function main() {
     assert.equal(listAfterDeniedCreate.backups.length, listBefore.backups.length, "denied backup creation must have zero storage side effects");
     const { payload: backup } = await operationHarness.execute({
       operationId: "storage.backups.create",
-      input: {
-        label: "private-deployment-storage-restore-drill"
-      }
+      input: {}
     });
     assert.equal(backup.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
     const { payload: retention } = await operationHarness.execute({
@@ -358,10 +360,10 @@ async function main() {
     const backupManifestPath = path.join(userDataPath, "backups", backup.backupId, "backup-manifest.json");
     const backupManifest = await readJson(backupManifestPath);
     assert.equal(backupManifest.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
-    assert.equal(backupManifest.consistency?.sqlite, "sqlite-online-backup");
+    assert.equal(backupManifest.consistency?.sqlite, "copy-on-write-baseline-with-sqlite-online-page-backup");
     assert.equal(backupManifest.consistency?.manifestIntegrity, "size-and-sha256-per-file");
     assert.equal(
-      backupManifest.files.some((entry) => entry.relativePath === "metadata/lico.sqlite"),
+      backupManifest.files.some((entry) => entry.relativePath === "metadata/meshrix.sqlite"),
       true,
       "backup manifest must retain the SQLite metadata file"
     );
@@ -475,6 +477,9 @@ async function main() {
     assert.match(restoredObject.toString("utf8"), /baseline payload/);
     assert.equal(restoredSummary.objectCount, baselineSummary.objectCount);
     assert.match(unrelatedDrift, /left intentionally outside selected restore paths/);
+    const auditedOperationCount = dispatchEvidence.operationSequence.filter(
+      (operationId) => operationId !== "storage.backups.list"
+    ).length;
     const operatorDrillReady = runbookPromotion.missingTokenCount === 0 &&
       guardedRestore.result.ok === false &&
       guardedRestore.payload.safety?.requiresConfirmation === true &&
@@ -491,7 +496,7 @@ async function main() {
       listAfterDeniedCreate.backups.length === listBefore.backups.length &&
       retention.status === "applied" &&
       dispatchEvidence.proofBeginCount === dispatchEvidence.proofFinishCount &&
-      dispatchEvidence.auditRecordCount === dispatchEvidence.operationSequence.length;
+      dispatchEvidence.auditRecordCount === auditedOperationCount;
 
     const report = {
       schemaVersion: REPORT_SCHEMA_VERSION,

@@ -2,12 +2,12 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { checkpointTreeId as buildCheckpointTreeId } from "#lico/foundation/checkpoint/tree/checkpoint-tree-projection";
+import { checkpointTreeId as buildCheckpointTreeId } from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
 import {
   ensurePrivateDir,
   writePrivateFileAtomic
-} from "@lico/foundation/storage/private-file-atomic";
-import { assertServerToken, resolveWithin } from "#lico/client-strings";
+} from "@meshrix/foundation/storage/private-file-atomic";
+import { assertServerToken, resolveWithin } from "#meshrix/client-strings";
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.mjs";
 
 export const SESSION_SCHEMA_VERSION = "v0.0.1:storage:checkpoint-upload-session-schema-1";

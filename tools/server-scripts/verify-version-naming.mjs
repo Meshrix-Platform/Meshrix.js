@@ -15,14 +15,14 @@ const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 const forbiddenPatterns = [
   {
-    id: "non-governed-lico-version-token",
-    pattern: /\b(?:lico|external-kd)\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.v[0-9]+\b/g,
-    message: "Use Governed Version String instead of lico.*.vN or external-kd.*.vN."
+    id: "non-governed-meshrix-version-token",
+    pattern: /\b(?:meshrix|external-kd)\.[a-zA-Z0-9][a-zA-Z0-9.-]*\.v[0-9]+\b/g,
+    message: "Use Governed Version String instead of meshrix.*.vN or external-kd.*.vN."
   },
   {
     id: "non-governed-dotted-strategy-version",
-    pattern: /\b(?!licomesh\.)[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+\.v[0-9]+\b/g,
-    message: "Use Governed Version String for platform-governed dotted .vN names; licomesh.* public protocol and schema names are out of this registry boundary."
+    pattern: /\b(?!meshrix\.)[a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+\.v[0-9]+\b/g,
+    message: "Use Governed Version String for platform-governed dotted .vN names; meshrix.* public protocol and schema names are out of this registry boundary."
   },
   {
     id: "bare-schema-version-field",
@@ -59,7 +59,7 @@ function collectGovernedVersionShapeFindings() {
 function isAllowedPublicProtocolMatch(check, text, match) {
   if (check.id !== "non-governed-dotted-strategy-version") return false;
   const index = match.index || 0;
-  if (text.slice(Math.max(0, index - 32), index).endsWith("licomesh.")) {
+  if (text.slice(Math.max(0, index - 32), index).endsWith("meshrix.")) {
     return true;
   }
   const prefix = text.slice(Math.max(0, index - "application/".length), index);

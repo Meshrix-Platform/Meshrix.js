@@ -7,7 +7,7 @@ import { createSqliteProtocolEventStore } from "../../../packages/server-runtime
 
 async function withTempUserData(testCase) {
   const userDataPath = await fs.mkdtemp(
-    path.join(os.tmpdir(), "lico-event-bus-focused-")
+    path.join(os.tmpdir(), "meshrix-event-bus-focused-")
   );
   try {
     return await testCase(userDataPath);

@@ -43,7 +43,7 @@ const {
   acquireStorageMaintenanceLock,
   acquireStorageRuntimeLease
 } = await import(process.argv[1]);
-const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-lifecycle-failure-"));
+const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-lifecycle-failure-"));
 const lockRoot = path.join(root, "locks");
 const leasePath = path.join(lockRoot, "storage-runtime.lease");
 const maintenancePath = path.join(lockRoot, "storage-backup-restore.lock");

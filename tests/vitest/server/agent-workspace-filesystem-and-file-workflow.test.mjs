@@ -100,7 +100,7 @@ function createCheckpointTreeApi() {
 }
 
 async function withRuntime(fn, options = {}) {
-  const root = await tempDir("lico-agent-workspace-final-extra-12-");
+  const root = await tempDir("meshrix-agent-workspace-final-extra-12-");
   const runtime = createAgentWorkspace({
     userDataPath: root,
     defaultCanAccessAll: true,

@@ -1,4 +1,4 @@
-import { apiCapabilityId } from "@lico/foundation/security/authorization/authorization-engine";
+import { apiCapabilityId } from "@meshrix/foundation/security/authorization/authorization-engine";
 import {
   headerValue,
   isLocalMcpGrant,
@@ -138,9 +138,9 @@ export function createGrantProcessIdentityMethods(ctx, { appendGrantEvent }) {
     appendGrantEvent(grant.id, "mcp_process_identity_denied", {
       reasonCode: verification.reasonCode || "process_identity_denied",
       status: verification.status || 401,
-      clientId: headerValue(request, "x-lico-client-id"),
-      packageId: headerValue(request, "x-lico-identity-package-id"),
-      processKeyId: headerValue(request, "x-lico-process-key-id"),
+      clientId: headerValue(request, "x-meshrix-client-id"),
+      packageId: headerValue(request, "x-meshrix-identity-package-id"),
+      processKeyId: headerValue(request, "x-meshrix-process-key-id"),
       sourceIp: sourceIpFromRequest(request),
       userAgent: headerValue(request, "user-agent")
     });
@@ -168,9 +168,9 @@ export function createGrantProcessIdentityMethods(ctx, { appendGrantEvent }) {
       details: {
         status: verification.status || 401,
         error: verification.error || "Process identity denied.",
-        clientId: headerValue(request, "x-lico-client-id"),
-        packageId: headerValue(request, "x-lico-identity-package-id"),
-        processKeyId: headerValue(request, "x-lico-process-key-id")
+        clientId: headerValue(request, "x-meshrix-client-id"),
+        packageId: headerValue(request, "x-meshrix-identity-package-id"),
+        processKeyId: headerValue(request, "x-meshrix-process-key-id")
       }
     });
     return verification;

@@ -15,10 +15,10 @@ afterEach(async () => {
 
 describe("isolated plugin process host", () => {
   it("imports and invokes plugin code outside the main process with bidirectional host RPC", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-isolated-plugin-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-isolated-plugin-"));
     roots.push(root);
     const modulePath = path.join(root, "runtime.mjs");
-    const marker = "licomesh-isolated-plugin-marker";
+    const marker = "meshrix-isolated-plugin-marker";
     delete globalThis[marker];
     await fs.writeFile(modulePath, `
 globalThis[${JSON.stringify(marker)}] = process.pid;

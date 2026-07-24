@@ -27,10 +27,10 @@ import {
 } from "./lib/mcp-proxy-transport-evidence.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const connectorScript = path.join(repoRoot, "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs");
+const connectorScript = path.join(repoRoot, "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs");
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-proxy-transport-server-"));
-const installerHome = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-proxy-transport-home-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-proxy-transport-server-"));
+const installerHome = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-proxy-transport-home-"));
 const redactionNeedles = new Set([
   userDataPath,
   installerHome,
@@ -48,9 +48,9 @@ const report = {
   verifier: MCP_PROXY_TRANSPORT_VERIFIER,
   startedAt: new Date().toISOString(),
   algorithm: {
-    transport: "Spawn the published lico-mcp proxy command as a child process and exchange JSON-RPC 2.0 messages over newline-delimited MCP stdio frames.",
+    transport: "Spawn the published meshrix-mcp proxy command as a child process and exchange JSON-RPC 2.0 messages over newline-delimited MCP stdio frames.",
     identity: "For every release target, create a real local MCP grant and persist the returned process identity package into an isolated file-backed process identity store before launching the proxy.",
-    protocol: "Verify initialize, tools/list, and lico.discovery tools/call through the proxy process for every target listed by MCP_SUPPORTED_TARGETS.",
+    protocol: "Verify initialize, tools/list, and meshrix.discovery tools/call through the proxy process for every target listed by MCP_SUPPORTED_TARGETS.",
     redaction: "Report only target names, counts, statuses, and non-secret protocol booleans; temp roots, tokens, paths, and authorization material are scanned before write."
   },
   targets: [],
@@ -75,8 +75,8 @@ function redactText(value = "") {
   }
   text = text.replace(/Bearer\s+(?!\[redacted\])(?:[A-Za-z0-9._~+/=-]{8,})/giu, "Bearer [redacted]");
   text = text.replace(/"token"\s*:\s*"[^"]+"/giu, "\"token\":\"[redacted]\"");
-  text = text.replace(/"X-LicoMesh-Api-Key"\s*:\s*"[^"]+"/giu, "\"X-LicoMesh-Api-Key\":\"[redacted]\"");
-  text = text.replace(/\blico_[A-Za-z0-9_-]{12,}\b/gu, "lico_[redacted]");
+  text = text.replace(/"X-Meshrix-Api-Key"\s*:\s*"[^"]+"/giu, "\"X-Meshrix-Api-Key\":\"[redacted]\"");
+  text = text.replace(/\bmeshrix_[A-Za-z0-9_-]{12,}\b/gu, "meshrix_[redacted]");
   return text;
 }
 
@@ -96,8 +96,8 @@ function assertNoLeakText(text = "", label = "text") {
   }
   assert.equal(/Bearer\s+(?!\[redacted\])(?:[A-Za-z0-9._~+/=-]{8,})/iu.test(value), false, `${label} leaked a bearer token`);
   assert.equal(/"token"\s*:\s*"(?!\[redacted\])[^"]+"/iu.test(value), false, `${label} leaked a token field`);
-  assert.equal(/"X-LicoMesh-Api-Key"\s*:\s*"(?!\[redacted\])[^"]+"/iu.test(value), false, `${label} leaked an MCP API key`);
-  assert.equal(/\blico_[A-Za-z0-9_-]{12,}\b/u.test(value), false, `${label} leaked a LicoMesh token-like value`);
+  assert.equal(/"X-Meshrix-Api-Key"\s*:\s*"(?!\[redacted\])[^"]+"/iu.test(value), false, `${label} leaked an MCP API key`);
+  assert.equal(/\bmeshrix_[A-Za-z0-9_-]{12,}\b/u.test(value), false, `${label} leaked a Meshrix token-like value`);
 }
 
 function failureEvidence(error) {
@@ -105,7 +105,7 @@ function failureEvidence(error) {
     errorName: error instanceof Error ? error.name : typeof error,
     reasonCode: String(error?.reasonCode || ""),
     code: String(error?.code || ""),
-    message: process.env.LICO_VERIFY_VERBOSE ? redactText(error?.message || String(error || "")) : ""
+    message: process.env.MESHRIX_VERIFY_VERBOSE ? redactText(error?.message || String(error || "")) : ""
   };
 }
 
@@ -166,7 +166,7 @@ async function verifyTargetProxyTransport(target) {
   const grant = await createLocalGrant(target);
   const env = {
     ...installerProcessEnv(installerHome),
-    LICO_MCP_TOKEN: grant.token
+    MESHRIX_MCP_TOKEN: grant.token
   };
   const proxy = createMcpProxyStdioClient({
     connectorScript,
@@ -184,7 +184,7 @@ async function verifyTargetProxyTransport(target) {
       capabilities: profile.capabilities,
       clientInfo: profile.clientInfo
     }, { id: 0 });
-    assert.equal(initialize.result?.serverInfo?.name, "LicoMesh");
+    assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
     assert.equal(initialize.result?.capabilities?.tools?.listChanged, true);
     await proxy.notify("notifications/initialized", {}, {
       omitParams: profile.initializedParamsOmitted === true
@@ -198,7 +198,7 @@ async function verifyTargetProxyTransport(target) {
     assertExpectedOutlets(tools, EXPECTED_CORE_OUTLETS);
 
     const health = await proxy.request("tools/call", {
-      name: "lico.discovery",
+      name: "meshrix.discovery",
       arguments: {
         apiVersion: MCP_INTERFACE_VERSION,
         operation: "system.health",
@@ -273,7 +273,7 @@ try {
   trackRedaction(server.url);
   await installAuthenticatedFetch(server);
 
-  console.log("=== MCP Proxy Transport: real lico-mcp proxy stdio verifier ===");
+  console.log("=== MCP Proxy Transport: real meshrix-mcp proxy stdio verifier ===");
   for (const target of MCP_SUPPORTED_TARGETS) {
     process.stdout.write(`  ${target} proxy stdio initialize/list/call ... `);
     try {
@@ -299,7 +299,7 @@ try {
   }
 } catch (error) {
   console.error(`FAIL: ${redactText(error?.message || String(error))}`);
-  if (process.env.LICO_VERIFY_VERBOSE) {
+  if (process.env.MESHRIX_VERIFY_VERBOSE) {
     console.error(redactText(error?.stack || String(error)));
   }
   exitCode = 1;

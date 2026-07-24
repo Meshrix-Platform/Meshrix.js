@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 
 import AgentModelOptionBar from "../../../apps/console/components/AgentModelOptionBar.vue";
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import DataTable from "../../../apps/console/components/DataTable.vue";
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import SegmentedToggle from "../../../apps/console/components/SegmentedToggle.vue";
 import SplitToggleCard from "../../../apps/console/components/SplitToggleCard.vue";
 import {
@@ -95,7 +95,7 @@ const ElTableStub = defineComponent({
       h(
         "div",
         {
-          class: "lico-data-table el-table",
+          class: "meshrix-data-table el-table",
           "data-row-key": typeof props.rowKey === "function" ? "function" : String(props.rowKey ?? ""),
           "data-empty-text": String(props.emptyText ?? ""),
           "data-loading": String(Boolean(props.loading)),
@@ -293,7 +293,7 @@ describe("console common components behavior", () => {
       },
     });
 
-    const table = wrapper.find(".lico-data-table");
+    const table = wrapper.find(".meshrix-data-table");
     expect(table.attributes("data-row-key")).toBe("function");
     expect(table.attributes("data-empty-text")).toBe("暂无数据");
     expect(wrapper.find(".table-slot").text()).toBe("列内容");

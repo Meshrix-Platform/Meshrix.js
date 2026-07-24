@@ -1241,7 +1241,7 @@
     },
     {
       "id": "upstream-gateway.external-compatibility",
-      "label": "Optional upstream gateway real external HTTPS compatibility probe (opt in with LICO_UPSTREAM_EXTERNAL_COMPAT=1)",
+      "label": "Optional upstream gateway real external HTTPS compatibility probe (opt in with MESHRIX_UPSTREAM_EXTERNAL_COMPAT=1)",
       "owner": "platform",
       "package": "server-runtime",
       "level": "integration",

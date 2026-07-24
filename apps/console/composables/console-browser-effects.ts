@@ -100,7 +100,7 @@ export function showFloatingElementFeedback(
   const rect = target.getBoundingClientRect();
   const bubble = doc.createElement("div");
   bubble.textContent = message;
-  bubble.className = options.className || "lico-copy-bubble";
+  bubble.className = options.className || "meshrix-copy-bubble";
   bubble.style.left = `${rect.left + rect.width / 2}px`;
   bubble.style.top = `${rect.top}px`;
   doc.body.appendChild(bubble);

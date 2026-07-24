@@ -5,7 +5,7 @@ import {
   queueStateMutation,
   waitForStateIdle
 } from "../state/state-coordinator.mjs";
-import { buildBootstrapPayload } from "@lico/protocols/http/bootstrap-payload";
+import { buildBootstrapPayload } from "@meshrix/protocols/http/bootstrap-payload";
 
 const DEFAULT_DISCOVERY_CONFIG = {
   serverId: "",

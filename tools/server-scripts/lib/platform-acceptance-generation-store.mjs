@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -25,11 +25,11 @@ import {
   PLATFORM_ACCEPTANCE_GENERATION_ROOT
 } from "./platform-acceptance-report-catalog.mjs";
 
-export const ACCEPTANCE_GENERATION_SCHEMA = "licomesh.platform-acceptance-generation.v1";
-export const ACCEPTANCE_GENERATION_POINTER_SCHEMA = "licomesh.platform-acceptance-generation-pointer.v1";
+export const ACCEPTANCE_GENERATION_SCHEMA = "v0.0.1:meshrix:platform-acceptance-generation-1";
+export const ACCEPTANCE_GENERATION_POINTER_SCHEMA = "v0.0.1:meshrix:platform-acceptance-generation-pointer-1";
 export const ACCEPTANCE_GENERATION_ROOT = PLATFORM_ACCEPTANCE_GENERATION_ROOT;
 export const ACCEPTANCE_GENERATION_POINTER = PLATFORM_ACCEPTANCE_GENERATION_POINTER_PATH;
-export const ACCEPTANCE_EXECUTION_LEASE_SCHEMA = "licomesh.platform-acceptance-execution-lease.v1";
+export const ACCEPTANCE_EXECUTION_LEASE_SCHEMA = "v0.0.1:meshrix:platform-acceptance-execution-lease-1";
 export const ACCEPTANCE_GENERATION_BUDGETS = Object.freeze({
   maxEntries: 256,
   maxEntryBytes: 32 * 1024 * 1024,
@@ -214,18 +214,55 @@ async function withPublicationLock(root, action) {
 }
 
 function workspaceCopyFilter(repoRoot) {
-  const excluded = new Set([".git", "build", "node_modules"]);
+  const excludedTopLevel = new Set([".git", "node_modules"]);
+  const allowedBuildPrefixes = ["build/plan-proof-ledger"];
   return (sourcePath) => {
     const relativePath = path.relative(repoRoot, sourcePath);
     if (!relativePath) return true;
+    const normalized = relativePath.split(path.sep).join("/");
     const [firstSegment] = relativePath.split(path.sep);
-    return !excluded.has(firstSegment);
+    if (excludedTopLevel.has(firstSegment)) return false;
+    if (firstSegment === "build") {
+      if (normalized === "build") return true;
+      return allowedBuildPrefixes.some((prefix) =>
+        normalized === prefix || normalized.startsWith(`${prefix}/`));
+    }
+    return true;
   };
+}
+
+const WORKSPACE_PACKAGE_SCOPE = "@meshrix";
+
+async function linkWorkspaceNodeModules(repoRoot, workspace) {
+  const sourceRoot = path.join(repoRoot, "node_modules");
+  const targetRoot = path.join(workspace, "node_modules");
+  const localPackages = path.join(workspace, "packages");
+  await fs.mkdir(targetRoot, { recursive: true, mode: 0o700 });
+  const entries = await fs.readdir(sourceRoot);
+  for (const entry of entries) {
+    if (entry === WORKSPACE_PACKAGE_SCOPE) continue;
+    await fs.symlink(path.join(sourceRoot, entry), path.join(targetRoot, entry), "junction");
+  }
+  const scopeSource = path.join(sourceRoot, WORKSPACE_PACKAGE_SCOPE);
+  const scopeTarget = path.join(targetRoot, WORKSPACE_PACKAGE_SCOPE);
+  await fs.mkdir(scopeTarget, { recursive: true, mode: 0o700 });
+  const scopeEntries = await fs.readdir(scopeSource).catch((error) => {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  });
+  const localEntries = await fs.readdir(localPackages).catch(() => []);
+  const localNames = new Set(localEntries);
+  await Promise.all(scopeEntries.map(async (entry) => {
+    const localPackage = path.join(localPackages, entry);
+    const stats = localNames.has(entry) ? await fs.stat(localPackage).catch(() => null) : null;
+    const source = stats?.isDirectory() ? localPackage : path.join(scopeSource, entry);
+    await fs.symlink(source, path.join(scopeTarget, entry), "junction");
+  }));
 }
 
 export async function createAcceptanceGenerationWorkspace(repoRoot, { id } = {}) {
   const selectedId = id || generationId();
-  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), `lico-acceptance-${selectedId}-`));
+  const workspace = await fs.mkdtemp(path.join(os.tmpdir(), `meshrix-acceptance-${selectedId}-`));
   const baseGenerationId = await currentGenerationId(
     path.join(repoRoot, ACCEPTANCE_GENERATION_POINTER)
   );
@@ -240,7 +277,16 @@ export async function createAcceptanceGenerationWorkspace(repoRoot, { id } = {})
     const dependencyRoot = path.join(repoRoot, "node_modules");
     const stats = await fs.stat(dependencyRoot);
     if (!stats.isDirectory()) throw new Error("not a directory");
-    await fs.symlink(dependencyRoot, path.join(paths.workspace, "node_modules"), "junction");
+    await linkWorkspaceNodeModules(repoRoot, paths.workspace);
+    const gitDir = path.join(repoRoot, ".git");
+    const gitStats = await fs.stat(gitDir).catch(() => null);
+    if (gitStats?.isDirectory()) {
+      await fs.writeFile(
+        path.join(paths.workspace, ".git"),
+        `gitdir: ${gitDir}\n`,
+        { encoding: "utf8", mode: 0o644 }
+      );
+    }
   } catch (error) {
     await fs.rm(paths.workspace, { recursive: true, force: true });
     if (error?.message === "not a directory" || error?.code === "ENOENT") {
@@ -264,10 +310,9 @@ export async function runAcceptanceGenerationWorker({
       cwd: workspace,
       env: {
         ...env,
-        GIT_DIR: path.join(repoRoot, ".git"),
-        GIT_WORK_TREE: workspace,
-        LICO_ACCEPTANCE_PROOF_LEDGER_DIR: path.join(repoRoot, "build", "acceptance-proof-ledger"),
-        LICO_ACCEPTANCE_GENERATION_WORKER: "1"
+        MESHRIX_ACCEPTANCE_REPOSITORY_ROOT: repoRoot,
+        MESHRIX_ACCEPTANCE_PROOF_LEDGER_DIR: path.join(repoRoot, "build", "acceptance-proof-ledger"),
+        MESHRIX_ACCEPTANCE_GENERATION_WORKER: "1"
       },
       stdio,
       windowsHide: true
@@ -754,6 +799,32 @@ export async function resolveCurrentAcceptanceGeneration(repoRoot, {
   return { pointer, manifest, generationRoot };
 }
 
-export async function removeAcceptanceGenerationWorkspace(paths) {
+export async function clearAccidentalCoreWorktree(repoRoot, workspace = "") {
+  const configured = spawnSync("git", ["config", "--get", "core.worktree"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    windowsHide: true
+  });
+  const value = String(configured.stdout || "").trim();
+  if (!value) {
+    return;
+  }
+  const normalizedWorkspace = String(workspace || "").trim();
+  if (
+    (normalizedWorkspace && path.resolve(value) === path.resolve(normalizedWorkspace)) ||
+    value.includes("meshrix-acceptance-")
+  ) {
+    spawnSync("git", ["config", "--unset", "core.worktree"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      windowsHide: true
+    });
+  }
+}
+
+export async function removeAcceptanceGenerationWorkspace(paths, { repoRoot = "" } = {}) {
+  if (repoRoot) {
+    await clearAccidentalCoreWorktree(repoRoot, paths.workspace);
+  }
   await fs.rm(paths.workspace, { recursive: true, force: true });
 }

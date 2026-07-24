@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { AgentModelConfig } from "../../../lib/types";
 import { useAgentModelEntryCardContext } from "../../../composables/agentModelEntryCardContext";
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import ConfigFoldCard from "../../ConfigFoldCard.vue";
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 
 defineProps<{
   entry: AgentModelConfig;

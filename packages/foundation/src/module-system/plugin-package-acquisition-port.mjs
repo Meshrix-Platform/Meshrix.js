@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { assertPluginPackageSource } from "@lico/contracts/plugins/plugin-package-source";
+import { assertPluginPackageSource } from "@meshrix/contracts/plugins/plugin-package-source";
 
 function digest(bytes) {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;

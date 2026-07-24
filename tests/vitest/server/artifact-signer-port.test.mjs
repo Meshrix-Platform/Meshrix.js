@@ -34,7 +34,7 @@ function stableJson(value) {
 }
 
 async function fixture() {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-artifact-signer-test-"));
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-artifact-signer-test-"));
   roots.push(dataDir);
   const { privateKey } = generateKeyPairSync("ed25519");
   const privateKeyJwk = privateKey.export({ format: "jwk" });

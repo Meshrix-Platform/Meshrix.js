@@ -15,7 +15,7 @@ import {
   CANONICAL_JSON_VERSION,
   canonicalEqual,
   canonicalJson
-} from "@lico/contracts/serialization/canonical-json";
+} from "@meshrix/contracts/serialization/canonical-json";
 
 const CANONICAL_VERSION = CANONICAL_JSON_VERSION;
 

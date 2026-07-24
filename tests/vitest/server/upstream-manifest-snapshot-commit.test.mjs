@@ -14,7 +14,7 @@ import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-s
 const roots = [];
 
 async function temporaryRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-snapshot-commit-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-snapshot-commit-"));
   roots.push(root);
   return root;
 }
@@ -63,7 +63,7 @@ function snapshot(setRevision, entries) {
 
 const BASE_OPERATION = Object.freeze({
   id: "gateway.health",
-  toolId: "lico.gateway.health",
+  toolId: "meshrix.gateway.health",
   label: "Gateway health",
   featureId: "core-platform",
   requiredScopes: ["gateway:read"],
@@ -71,7 +71,7 @@ const BASE_OPERATION = Object.freeze({
   safety: { risk: "read_only" },
   target: { controller: "system", method: "health" },
   http: { method: "GET", path: "/api/gateway/v1/health" },
-  toolsets: ["lico.gateway.read"]
+  toolsets: ["meshrix.gateway.read"]
 });
 
 async function platformHarness() {
@@ -174,7 +174,7 @@ describe("upstream manifest snapshot commit", () => {
     let grants = [{
       id: "grant-audience-refresh",
       scopes: ["gateway:read"],
-      toolsets: ["lico.gateway.read"],
+      toolsets: ["meshrix.gateway.read"],
       maxRisk: "read_only",
       dynamicCapabilities: [],
       allowedServiceIds: [operation._meta.serviceId]
@@ -248,7 +248,7 @@ describe("upstream manifest snapshot commit", () => {
       label: "Plugin fixture read",
       featureId: "core-platform",
       pluginId: "fixture-plugin",
-      toolsets: ["lico.gateway.read"]
+      toolsets: ["meshrix.gateway.read"]
     });
     platform.refreshOperations([BASE_OPERATION, pluginOperation]);
     const toolIds = new Set(platform.catalog().tools.map((tool) => tool.id));

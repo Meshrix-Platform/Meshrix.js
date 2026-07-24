@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import { assertPluginPackageSource } from "@lico/contracts/plugins/plugin-package-source";
-import { assertPluginPackageTransition } from "@lico/contracts/plugins/plugin-package-state";
-import { createPluginPackageReceipt } from "@lico/contracts/plugins/plugin-package-receipt";
+import { assertPluginPackageSource } from "@meshrix/contracts/plugins/plugin-package-source";
+import { assertPluginPackageTransition } from "@meshrix/contracts/plugins/plugin-package-state";
+import { createPluginPackageReceipt } from "@meshrix/contracts/plugins/plugin-package-receipt";
 import { createPluginPackageAcquisitionPort } from "./plugin-package-acquisition-port.mjs";
 import { createPluginPackageCustody } from "./plugin-package-custody.mjs";
 import { validatePluginPackageArchive } from "./plugin-package-validator.mjs";

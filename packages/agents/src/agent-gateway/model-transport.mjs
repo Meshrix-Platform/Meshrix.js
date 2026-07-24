@@ -152,8 +152,8 @@ function normalizeLicoThinkingMode(value) {
 }
 
 function applyLicoThinkingMode(parameters = {}, config = {}, input = {}) {
-  const mode = normalizeLicoThinkingMode(parameters.lico_thinking_mode);
-  delete parameters.lico_thinking_mode;
+  const mode = normalizeLicoThinkingMode(parameters.meshrix_thinking_mode);
+  delete parameters.meshrix_thinking_mode;
   if (!mode) {
     return parameters;
   }

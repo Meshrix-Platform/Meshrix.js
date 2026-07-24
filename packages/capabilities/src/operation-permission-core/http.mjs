@@ -2,8 +2,8 @@ import {
   getRuntimeLogger,
   summarizeError,
   summarizeForLog
-} from "@lico/foundation/observability/runtime-logger";
-import { sendJson } from "@lico/protocols/http/http-utils";
+} from "@meshrix/foundation/observability/runtime-logger";
+import { sendJson } from "@meshrix/protocols/http/http-utils";
 import { OPERATION_PERMISSION_API_PREFIX } from "./catalog.mjs";
 import {
   parseJsonBody,
@@ -75,8 +75,8 @@ export function createOperationPermissionHttpRouter({
 
   function hasSafetyConfirm(request) {
     const value = String(
-      request?.headers?.["x-lico-safety-confirm"] ||
-        request?.headers?.["x-lico-confirm"] ||
+      request?.headers?.["x-meshrix-safety-confirm"] ||
+        request?.headers?.["x-meshrix-confirm"] ||
         ""
     ).toLowerCase();
     return ["1", "true", "yes"].includes(value);
@@ -93,7 +93,7 @@ export function createOperationPermissionHttpRouter({
       schemaVersion: "v0.0.1:schema:definition-1",
       error: {
         code: "confirmation_required",
-        message: "Operation Permission grant changes require x-lico-safety-confirm: true."
+        message: "Operation Permission grant changes require x-meshrix-safety-confirm: true."
       }
     });
     return false;
@@ -251,7 +251,7 @@ export function createOperationPermissionHttpRouter({
         requestUrl: url,
         requestMethod: normalizedMethod,
         signal,
-        context: sanitizeExternalToolContext(payload.context, { transport: "lico-client-http" }),
+        context: sanitizeExternalToolContext(payload.context, { transport: "meshrix-client-http" }),
         dryRun: suffix === "/dry-run" || payload.dryRun === true
       });
       return complete(result.status || 500, result.payload);
@@ -274,7 +274,7 @@ export function createOperationPermissionHttpRouter({
             context: sanitizeExternalToolContext({
               ...plainObject(payload.context),
               ...plainObject(call.context)
-            }, { transport: "lico-client-http-batch" }),
+            }, { transport: "meshrix-client-http-batch" }),
             dryRun: payload.dryRun === true || call.dryRun === true
           })).payload
         );

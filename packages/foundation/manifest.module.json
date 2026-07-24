@@ -5,14 +5,14 @@
   "owner": "platform",
   "directory": "packages/foundation",
   "publicApi": [
-    "#lico/foundation/security/*",
-    "#lico/foundation/config/*",
-    "#lico/foundation/storage/*",
-    "#lico/foundation/proof/*",
-    "#lico/foundation/checkpoint/*",
-    "#lico/foundation/workflow/*",
-    "#lico/foundation/observability/*",
-    "#lico/foundation/module-system/*"
+    "#meshrix/foundation/security/*",
+    "#meshrix/foundation/config/*",
+    "#meshrix/foundation/storage/*",
+    "#meshrix/foundation/proof/*",
+    "#meshrix/foundation/checkpoint/*",
+    "#meshrix/foundation/workflow/*",
+    "#meshrix/foundation/observability/*",
+    "#meshrix/foundation/module-system/*"
   ],
   "operations": ["security.*", "proof.*", "checkpoint.*", "workflow.*", "storage.*", "config.*", "observability.*"],
   "stateStores": [],

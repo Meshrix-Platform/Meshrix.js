@@ -33,7 +33,7 @@ import {
 const roots = [];
 
 async function tempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-retention-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-retention-"));
   roots.push(root);
   return root;
 }
@@ -84,7 +84,7 @@ describe("storage maintenance coordinator", () => {
   });
 
   it("rejects oversized queue construction before scheduling or proportional allocation", () => {
-    const root = path.join(os.tmpdir(), "lico-storage-oversized-queue");
+    const root = path.join(os.tmpdir(), "meshrix-storage-oversized-queue");
     expect(() => runStorageMaintenanceMutation(
       root,
       async () => null,
@@ -158,7 +158,7 @@ describe("storage backup retention", () => {
     expect(result.status).toBe("not_configured");
     expect(result.deletedBackupIds).toEqual([]);
     expect(result.receipt).toMatchObject({
-      schema: "licomesh.storage.receipt",
+      schema: "meshrix.storage.receipt",
       kind: "backup-retention",
       status: "not_configured",
       redacted: true,
@@ -234,7 +234,7 @@ describe("storage backup retention", () => {
     const quarantineRoot = path.join(transactionRoot, "quarantine");
     await fs.mkdir(path.join(quarantineRoot, backupId), { recursive: true });
     await fs.writeFile(path.join(transactionRoot, "retention-journal.json"), JSON.stringify({
-      schema: "licomesh.storage.retention-journal",
+      schema: "meshrix.storage.retention-journal",
       transactionId,
       phase: "prepared",
       policyDigest: digestForTest("startup-retention"),

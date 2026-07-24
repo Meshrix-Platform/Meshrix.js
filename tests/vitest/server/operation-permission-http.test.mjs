@@ -13,13 +13,13 @@ const getRuntimeLoggerMock = vi.hoisted(() => vi.fn(() => ({
   error: vi.fn()
 })));
 
-vi.mock("@lico/foundation/observability/runtime-logger", () => ({
+vi.mock("@meshrix/foundation/observability/runtime-logger", () => ({
   getRuntimeLogger: getRuntimeLoggerMock,
   summarizeError: summarizeErrorMock,
   summarizeForLog: summarizeForLogMock
 }));
 
-vi.mock("@lico/protocols/http/http-utils", () => ({
+vi.mock("@meshrix/protocols/http/http-utils", () => ({
   sendJson: sendJsonMock
 }));
 
@@ -239,7 +239,7 @@ describe("operation permission http behavior", () => {
       }))
     };
     const router = createOperationPermissionHttpRouter({ platform, securityPermissions, logger: getRuntimeLoggerMock() });
-    const confirmed = { "x-lico-safety-confirm": "true" };
+    const confirmed = { "x-meshrix-safety-confirm": "true" };
 
     await callRouter(router, { method: "POST", path: "/api/operation-permission/v1/grants/missing/rotate", headers: confirmed });
     expect(sendJsonMock).toHaveBeenLastCalledWith(expect.any(Object), 404, {
@@ -399,7 +399,7 @@ describe("operation permission http behavior", () => {
       }))
     };
     const router = createOperationPermissionHttpRouter({ platform, securityPermissions, logger: null });
-    const confirmed = { "x-lico-safety-confirm": "yes" };
+    const confirmed = { "x-meshrix-safety-confirm": "yes" };
 
     await callRouter(router, {
       method: "POST",

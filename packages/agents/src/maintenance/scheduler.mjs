@@ -1,5 +1,5 @@
 import { computeNextRunAt, saveMaintenanceAgentConfig } from "./config.mjs";
-import { summarizeError } from "@lico/foundation/observability/runtime-logger";
+import { summarizeError } from "@meshrix/foundation/observability/runtime-logger";
 
 export function createMaintenanceScheduler({
   userDataPath,

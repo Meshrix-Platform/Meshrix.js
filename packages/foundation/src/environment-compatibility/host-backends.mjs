@@ -61,7 +61,7 @@ export function windowsDpapiCommand({
   env = process.env,
   commandAvailableFn = commandAvailable
 } = {}) {
-  const configured = text(env.LICO_WINDOWS_DPAPI_COMMAND);
+  const configured = text(env.MESHRIX_WINDOWS_DPAPI_COMMAND);
   if (configured) {
     return configured;
   }

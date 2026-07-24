@@ -1,4 +1,4 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import path from "node:path";
 import { createHash } from "node:crypto";
 

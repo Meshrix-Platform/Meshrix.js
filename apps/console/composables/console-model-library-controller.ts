@@ -194,7 +194,7 @@ export function createConsoleModelLibraryController(options: ConsoleModelLibrary
       providerSettings: redactedProviderSettingsForAgentExport(normalizedEntry),
     };
     downloadTextFile(
-      `lico-agent-${safeDownloadName(normalizedEntry.label || modelEntryStatusKey(normalizedEntry), "model")}-${timestamp}.json`,
+      `meshrix-agent-${safeDownloadName(normalizedEntry.label || modelEntryStatusKey(normalizedEntry), "model")}-${timestamp}.json`,
       `${JSON.stringify(exportPayload, null, 2)}\n`,
       "application/json;charset=utf-8",
     );

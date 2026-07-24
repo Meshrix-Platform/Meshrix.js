@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { hashClientString, serverToken } from "#lico/client-strings";
+import { hashClientString, serverToken } from "#meshrix/client-strings";
 
 const ZIP_CENTRAL_DIRECTORY_HEADER = 0x02014b50;
 const ZIP_END_OF_CENTRAL_DIRECTORY = 0x06054b50;
@@ -160,12 +160,12 @@ export function verifyUploadedFiles(payload = {}, { resolveArchiveBatchIdentity 
     const sourceName = String(file?.name || "");
     const sourceRelativePath = String(file?.relativePath || sourceName || `upload-${index + 1}`);
     const originalFileName = path.posix.basename(sourceRelativePath || sourceName || `upload-${index + 1}`);
-    const sourceNameHash = hashClientString(sourceName, "lico_upload.name");
-    const sourceRelativePathHash = hashClientString(sourceRelativePath, "lico_upload.relative_path");
+    const sourceNameHash = hashClientString(sourceName, "meshrix_upload.name");
+    const sourceRelativePathHash = hashClientString(sourceRelativePath, "meshrix_upload.relative_path");
     const extension = inferUploadedExtension(buffer);
     const fileToken = serverToken(
       "upload_file",
-      "lico",
+      "meshrix",
       index,
       sourceRelativePathHash,
       sha256,
@@ -188,7 +188,7 @@ export function verifyUploadedFiles(payload = {}, { resolveArchiveBatchIdentity 
           ? file.sourceMetadata
           : {},
       mediaType: "application/octet-stream",
-      clientMediaTypeHash: hashClientString(file?.mediaType || "", "lico_upload.media_type"),
+      clientMediaTypeHash: hashClientString(file?.mediaType || "", "meshrix_upload.media_type"),
       sourceNameHash,
       sourceRelativePathHash,
       sha256,

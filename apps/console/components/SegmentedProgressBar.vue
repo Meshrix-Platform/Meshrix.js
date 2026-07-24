@@ -63,7 +63,7 @@ const gridColumns = computed(() =>
 
 <template>
   <div
-    class="lico-segmented-progress"
+    class="meshrix-segmented-progress"
     :data-size="size"
     :data-show-labels="showLabels"
     role="progressbar"
@@ -77,35 +77,35 @@ const gridColumns = computed(() =>
     <div
       v-for="segment in normalizedSegments"
       :key="segment.key"
-      class="lico-segmented-progress-segment"
+      class="meshrix-segmented-progress-segment"
       :data-state="segment.state"
       :title="segment.label"
     >
-      <span class="lico-segmented-progress-bar" aria-hidden="true" />
+      <span class="meshrix-segmented-progress-bar" aria-hidden="true" />
       <small v-if="showLabels">{{ segment.label }}</small>
     </div>
   </div>
 </template>
 
 <style scoped>
-.lico-segmented-progress {
+.meshrix-segmented-progress {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
   align-items: start;
 }
 
-.lico-segmented-progress[data-size="compact"] {
+.meshrix-segmented-progress[data-size="compact"] {
   gap: var(--space-2);
 }
 
-.lico-segmented-progress-segment {
+.meshrix-segmented-progress-segment {
   display: grid;
   gap: 7px;
   min-width: 0;
 }
 
-.lico-segmented-progress-bar {
+.meshrix-segmented-progress-bar {
   display: block;
   height: 8px;
   border-radius: var(--radius-full);
@@ -115,22 +115,22 @@ const gridColumns = computed(() =>
     box-shadow var(--dur-med) var(--ease-std);
 }
 
-.lico-segmented-progress-segment[data-state="active"] .lico-segmented-progress-bar {
+.meshrix-segmented-progress-segment[data-state="active"] .meshrix-segmented-progress-bar {
   background: var(--brand);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 26%, transparent);
 }
 
-.lico-segmented-progress-segment[data-state="complete"] .lico-segmented-progress-bar {
+.meshrix-segmented-progress-segment[data-state="complete"] .meshrix-segmented-progress-bar {
   background: var(--success);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--success) 28%, transparent);
 }
 
-.lico-segmented-progress-segment[data-state="failed"] .lico-segmented-progress-bar {
+.meshrix-segmented-progress-segment[data-state="failed"] .meshrix-segmented-progress-bar {
   background: var(--danger);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--danger) 28%, transparent);
 }
 
-.lico-segmented-progress-segment small {
+.meshrix-segmented-progress-segment small {
   min-width: 0;
   color: var(--text-muted);
   font-size: var(--text-xs);
@@ -140,15 +140,15 @@ const gridColumns = computed(() =>
   overflow-wrap: anywhere;
 }
 
-.lico-segmented-progress-segment[data-state="active"] small {
+.meshrix-segmented-progress-segment[data-state="active"] small {
   color: var(--brand);
 }
 
-.lico-segmented-progress-segment[data-state="complete"] small {
+.meshrix-segmented-progress-segment[data-state="complete"] small {
   color: var(--success);
 }
 
-.lico-segmented-progress-segment[data-state="failed"] small {
+.meshrix-segmented-progress-segment[data-state="failed"] small {
   color: var(--danger);
 }
 </style>

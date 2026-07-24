@@ -1,4 +1,4 @@
-# LicoMesh Work Queue
+# Meshrix Work Queue
 
 `packages/foundation/src/work-queue` owns the platform infrastructure queue primitive.
 

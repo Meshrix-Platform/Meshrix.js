@@ -5,10 +5,24 @@ import {
   scanText
 } from "../../../tools/config-scanner.mjs";
 
+const scanKey = Buffer.alloc(32, 7);
+
+function macosHome(username, ...parts) {
+  return ["", "Users", username, ...parts].join("/");
+}
+
+function linuxHome(username, ...parts) {
+  return ["", "home", username, ...parts].join("/");
+}
+
+function windowsHome(username, ...parts) {
+  return ["C:", "Users", username, ...parts].join("\\");
+}
+
 describe("repository local-info hygiene report redaction", () => {
   it("records only location, category, length, and an irreversible fingerprint", () => {
     const sensitiveValue = ["/", "Users", "/", "fixture-account", "/", "private-project"].join("");
-    const findings = scanText("fixtures/local-path.txt", sensitiveValue, Buffer.alloc(32, 7));
+    const findings = scanText("fixtures/local-path.txt", sensitiveValue, scanKey);
 
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({
@@ -59,5 +73,77 @@ describe("repository local-info hygiene report redaction", () => {
 
     expect(thrown).toBeInstanceOf(Error);
     expect(thrown.message).not.toContain(unsafeFile);
+  });
+});
+
+describe("repository local-info hygiene home-path classification", () => {
+  it("allows syntactic username placeholders on macOS, Linux, and Windows", () => {
+    const placeholderPaths = [
+      macosHome("<user>", "project"),
+      macosHome("$USER", "project"),
+      macosHome("${USER}", "project"),
+      macosHome("{{user}}", "project"),
+      linuxHome("<user>", "project"),
+      linuxHome("$USER", "project"),
+      linuxHome("${USER}", "project"),
+      linuxHome("{{user}}", "project"),
+      windowsHome("<user>", "project"),
+      windowsHome("%USERNAME%", "project"),
+      windowsHome("${USERNAME}", "project"),
+      windowsHome("{{user}}", "project")
+    ];
+
+    for (const [index, placeholderPath] of placeholderPaths.entries()) {
+      expect(scanText(`fixtures/placeholder-home-${index}.txt`, placeholderPath, scanKey)).toEqual([]);
+    }
+  });
+
+  it("reports realistic ASCII account names, including bare user and example", () => {
+    const realisticPaths = [
+      ["developer-macos-home-path", macosHome("user", "project")],
+      ["developer-macos-home-path", macosHome("example", "project")],
+      ["developer-macos-home-path", macosHome("_service", "project")],
+      ["developer-linux-home-path", linuxHome("user", "project")],
+      ["developer-linux-home-path", linuxHome("example", "project")],
+      ["developer-linux-home-path", linuxHome("daemon$", "project")],
+      ["windows-user-profile-path", windowsHome("user", "project")],
+      ["windows-user-profile-path", windowsHome("service.name", "project")],
+      ["windows-user-profile-path", windowsHome("example", "project")]
+    ];
+
+    for (const [expectedRule, realisticPath] of realisticPaths) {
+      expect(scanText("fixtures/real-home.txt", realisticPath, scanKey)).toMatchObject([
+        { rule: expectedRule }
+      ]);
+    }
+  });
+
+  it("still reports a real account when a later path component is a placeholder", () => {
+    const realisticPaths = [
+      ["developer-macos-home-path", macosHome("fixture-account", "<repo-root>")],
+      ["developer-linux-home-path", linuxHome("fixture-account", "<repo-root>")],
+      ["windows-user-profile-path", windowsHome("fixture-account", "<repo-root>")]
+    ];
+
+    for (const [expectedRule, realisticPath] of realisticPaths) {
+      expect(scanText("fixtures/real-home-placeholder-tail.txt", realisticPath, scanKey)).toMatchObject([
+        { rule: expectedRule }
+      ]);
+    }
+  });
+
+  it("does not partially match invalid account components", () => {
+    const invalidUsernames = [
+      ".hidden",
+      "-prefixed",
+      "trailing.",
+      "name@placeholder"
+    ];
+
+    for (const invalidUsername of invalidUsernames) {
+      expect(scanText("fixtures/invalid-home.txt", macosHome(invalidUsername), scanKey)).toEqual([]);
+      expect(scanText("fixtures/invalid-home.txt", linuxHome(invalidUsername), scanKey)).toEqual([]);
+      expect(scanText("fixtures/invalid-home.txt", windowsHome(invalidUsername), scanKey)).toEqual([]);
+    }
   });
 });

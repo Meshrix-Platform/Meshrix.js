@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/docs.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/docs.schema.json",
   "title": "Docs Registry",
   "description": "Canonical list of every generated documentation entry point and its source registry.",
   "type": "object",

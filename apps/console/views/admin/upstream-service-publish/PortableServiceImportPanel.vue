@@ -7,7 +7,7 @@ import {
   PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
   parsePortableUpstreamServiceImport,
   type PortableUpstreamServiceImport,
-} from "@lico/contracts/upstream-service-publishing";
+} from "@meshrix/contracts/upstream-service-publishing";
 
 defineOptions({ name: "PortableServiceImportPanel" });
 

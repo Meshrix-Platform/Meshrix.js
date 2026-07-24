@@ -114,7 +114,7 @@ describe("External Gateway registry and normalization", () => {
     });
     expect(profile.gatewayMode.upstreams).toEqual([
       {
-        id: "lico-upstream-1",
+        id: "meshrix-upstream-1",
         url: "http://upstream-a.example.invalid:7228",
         protocol: "http",
         host: "upstream-a.example.invalid",
@@ -122,7 +122,7 @@ describe("External Gateway registry and normalization", () => {
         authority: "upstream-a.example.invalid:7228"
       },
       {
-        id: "lico-upstream-2",
+        id: "meshrix-upstream-2",
         url: "https://upstream-b.example.invalid",
         protocol: "https",
         host: "upstream-b.example.invalid",
@@ -150,7 +150,7 @@ describe("External Gateway registry and normalization", () => {
         bodyLimit: "16m"
       }),
       expect.objectContaining({
-        routeId: "lico-http",
+        routeId: "meshrix-http",
         path: "/",
         trafficClass: "default"
       })
@@ -176,7 +176,7 @@ describe("External Gateway registry and normalization", () => {
         gatewayUrl: "https://gateway.example.invalid:8443/api/console"
       }),
       expect.objectContaining({
-        routeId: "lico-http",
+        routeId: "meshrix-http",
         directUrl: "https://direct.example.invalid:9443",
         gatewayUrl: "https://gateway.example.invalid:8443"
       })
@@ -242,11 +242,11 @@ describe("traffic gateway rendering", () => {
       ]
     });
 
-    expect(caddy).toContain("@lico_streaming path /api/healthz /mcp /mcp/* /");
-    expect(caddy).toContain("reverse_proxy @lico_streaming http://upstream-a.example.invalid:7228 http://upstream-b.example.invalid:7229 {");
+    expect(caddy).toContain("@meshrix_streaming path /api/healthz /mcp /mcp/* /");
+    expect(caddy).toContain("reverse_proxy @meshrix_streaming http://upstream-a.example.invalid:7228 http://upstream-b.example.invalid:7229 {");
     expect(caddy).toContain("flush_interval -1");
-    expect(caddy).toContain("header_up X-LicoMesh-Gateway caddy");
-    expect(caddy).toContain("header_up X-LicoMesh-Gateway-Request-Id {http.request.uuid}");
+    expect(caddy).toContain("header_up X-Meshrix-Gateway caddy");
+    expect(caddy).toContain("header_up X-Meshrix-Gateway-Request-Id {http.request.uuid}");
 
     const nginx = renderNginxConfig({
       adapterId: "nginx",
@@ -286,7 +286,7 @@ describe("traffic gateway rendering", () => {
     expect(nginx).toContain("location ^~ /api/console {");
     expect(nginx).toContain("proxy_buffering off;");
     expect(nginx).toContain("proxy_request_buffering off;");
-    expect(nginx).toContain("proxy_set_header X-LicoMesh-Gateway nginx;");
+    expect(nginx).toContain("proxy_set_header X-Meshrix-Gateway nginx;");
   });
 
   it("registers and renders a custom adapter", () => {
@@ -338,16 +338,16 @@ describe("traffic gateway rendering", () => {
 
 describe("traffic gateway runtime planning and validation", () => {
   it("resolves runtime plans from env, explicit cache roots, and runtime URLs", () => {
-    const homedirSpy = vi.spyOn(os, "homedir").mockReturnValue("/private/lico");
+    const homedirSpy = vi.spyOn(os, "homedir").mockReturnValue("/private/meshrix");
 
-    expect(getDefaultExternalGatewayRuntimeCacheRoot({ LICO_GATEWAY_RUNTIME_CACHE_DIR: " /tmp/lico-cache " })).toBe(
-      path.resolve("/tmp/lico-cache")
+    expect(getDefaultExternalGatewayRuntimeCacheRoot({ MESHRIX_GATEWAY_RUNTIME_CACHE_DIR: " /tmp/meshrix-cache " })).toBe(
+      path.resolve("/tmp/meshrix-cache")
     );
-    expect(getDefaultExternalGatewayRuntimeCacheRoot({ XDG_CACHE_HOME: " /private/lico/.cache-home " })).toBe(
-      path.join(path.resolve("/private/lico/.cache-home"), "lico", "external-gateway")
+    expect(getDefaultExternalGatewayRuntimeCacheRoot({ XDG_CACHE_HOME: " /private/meshrix/.cache-home " })).toBe(
+      path.join(path.resolve("/private/meshrix/.cache-home"), "meshrix", "external-gateway")
     );
     expect(getDefaultExternalGatewayRuntimeCacheRoot({})).toBe(
-      path.join("/private/lico/.cache", "lico", "external-gateway")
+      path.join("/private/meshrix/.cache", "meshrix", "external-gateway")
     );
     expect(homedirSpy).toHaveBeenCalled();
 
@@ -355,15 +355,15 @@ describe("traffic gateway runtime planning and validation", () => {
       {
         adapter: "NGINX.CONF",
         platform: "linux-arm64",
-        cacheRoot: "/tmp/lico/.cache/gateway-runtime",
+        cacheRoot: "/tmp/meshrix/.cache/gateway-runtime",
         runtimeBinary: " /opt/nginx/bin/nginx ",
         runtimeUrl: " https://downloads.example.invalid/nginx.tar.gz "
       },
       {
-        LICO_NGINX_BINARY: "/env/ignored",
-        LICO_GATEWAY_RUNTIME_BINARY: "/env/runtime-binary",
-        LICO_NGINX_RUNTIME_URL: "https://env.example.invalid/nginx.tar.gz",
-        LICO_GATEWAY_RUNTIME_URL: "https://env.example.invalid/runtime.tar.gz"
+        MESHRIX_NGINX_BINARY: "/env/ignored",
+        MESHRIX_GATEWAY_RUNTIME_BINARY: "/env/runtime-binary",
+        MESHRIX_NGINX_RUNTIME_URL: "https://env.example.invalid/nginx.tar.gz",
+        MESHRIX_GATEWAY_RUNTIME_URL: "https://env.example.invalid/runtime.tar.gz"
       }
     );
 
@@ -372,10 +372,10 @@ describe("traffic gateway runtime planning and validation", () => {
       protocol: EXTERNAL_GATEWAY_PROTOCOL_VERSION,
       adapterId: "nginx",
       platform: "linux-arm64",
-      cacheRoot: "/tmp/lico/.cache/gateway-runtime",
-      runtimeRoot: "/tmp/lico/.cache/gateway-runtime/runtimes/nginx/linux-arm64",
-      binDir: "/tmp/lico/.cache/gateway-runtime/runtimes/nginx/linux-arm64/bin",
-      cachedExecutablePath: "/tmp/lico/.cache/gateway-runtime/runtimes/nginx/linux-arm64/bin/nginx",
+      cacheRoot: "/tmp/meshrix/.cache/gateway-runtime",
+      runtimeRoot: "/tmp/meshrix/.cache/gateway-runtime/runtimes/nginx/linux-arm64",
+      binDir: "/tmp/meshrix/.cache/gateway-runtime/runtimes/nginx/linux-arm64/bin",
+      cachedExecutablePath: "/tmp/meshrix/.cache/gateway-runtime/runtimes/nginx/linux-arm64/bin/nginx",
       executableName: "nginx",
       configuredBinary: "/opt/nginx/bin/nginx",
       runtimeUrl: "https://downloads.example.invalid/nginx.tar.gz",
@@ -405,7 +405,7 @@ describe("traffic gateway runtime planning and validation", () => {
         },
         upstreams: [
           {
-            id: "lico-upstream-1",
+            id: "meshrix-upstream-1",
             url: DEFAULT_DIRECT_BASE_URL,
             protocol: "http",
             host: "127.0.0.1",
@@ -420,7 +420,7 @@ describe("traffic gateway runtime planning and validation", () => {
       },
       trustedHeaderPolicy: {
         trustedOnlyFrom: ["loopback"],
-        gatewayHeaders: ["X-LicoMesh-Gateway"],
+        gatewayHeaders: ["X-Meshrix-Gateway"],
         directModeStripsGatewayOnlyHeaders: false
       },
       routes: [

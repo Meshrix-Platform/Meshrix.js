@@ -24,7 +24,7 @@ import {
 const tempRoots = [];
 
 async function tempDir() {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-agent-sync-policy-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-agent-sync-policy-"));
   tempRoots.push(dir);
   return dir;
 }

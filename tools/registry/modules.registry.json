@@ -10,7 +10,7 @@
       "chineseName": "契约",
       "description": "Operation and module contracts.",
       "publicApi": [
-        "#lico/contracts/*"
+        "#meshrix/contracts/*"
       ]
     },
     {
@@ -21,7 +21,7 @@
       "chineseName": "基础设施",
       "description": "Security, state, configuration, and governance primitives.",
       "publicApi": [
-        "#lico/foundation/*"
+        "#meshrix/foundation/*"
       ]
     },
     {
@@ -31,7 +31,7 @@
       "directory": "packages/agents",
       "description": "Agent gateway and local agent workspace primitives.",
       "publicApi": [
-        "#lico/agents/*"
+        "#meshrix/agents/*"
       ]
     },
     {
@@ -41,7 +41,7 @@
       "directory": "packages/capabilities",
       "description": "Operation Permission and capability catalog.",
       "publicApi": [
-        "#lico/capabilities/*"
+        "#meshrix/capabilities/*"
       ]
     },
     {
@@ -51,7 +51,7 @@
       "directory": "packages/protocols/mcp",
       "description": "MCP gateway adapter.",
       "publicApi": [
-        "#lico/protocols/*"
+        "#meshrix/protocols/*"
       ]
     },
     {
@@ -61,7 +61,7 @@
       "directory": "packages/server-runtime",
       "description": "Server composition runtime.",
       "publicApi": [
-        "#lico/server-runtime/*"
+        "#meshrix/server-runtime/*"
       ]
     },
     {
@@ -71,18 +71,18 @@
       "directory": "packages/ui-console",
       "description": "Shared console domain services and portable UI contracts.",
       "publicApi": [
-        "#lico/ui-console/*",
-        "#lico/ui-console/bridge-http",
-        "#lico/ui-console/page-refresh",
-        "#lico/ui-console/rpc-client",
-        "#lico/ui-console/error-message",
-        "#lico/ui-console/binary-checkbox",
-        "#lico/ui-console/workspaces-view-context",
-        "#lico/ui-console/server-console-shell-context",
-        "#lico/ui-console/console-format-utils",
-        "#lico/ui-console/console-client-display-utils",
-        "#lico/ui-console/option-bar",
-        "#lico/ui-console/status-pill"
+        "#meshrix/ui-console/*",
+        "#meshrix/ui-console/bridge-http",
+        "#meshrix/ui-console/page-refresh",
+        "#meshrix/ui-console/rpc-client",
+        "#meshrix/ui-console/error-message",
+        "#meshrix/ui-console/binary-checkbox",
+        "#meshrix/ui-console/workspaces-view-context",
+        "#meshrix/ui-console/server-console-shell-context",
+        "#meshrix/ui-console/console-format-utils",
+        "#meshrix/ui-console/console-client-display-utils",
+        "#meshrix/ui-console/option-bar",
+        "#meshrix/ui-console/status-pill"
       ]
     },
     {

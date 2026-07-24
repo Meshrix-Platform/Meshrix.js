@@ -12,7 +12,7 @@
         try {
           var presets = {
             'default-system': true,
-            'lico-crystal': true,
+            'meshrix-crystal': true,
             'geek-light-blue': true,
             'catppuccin-latte': true,
             'github-light': true,
@@ -26,16 +26,16 @@
             'monokai': true,
             'cyberpunk': true
           };
-          var preset = localStorage.getItem('lico-appearance-preset');
+          var preset = localStorage.getItem('meshrix-appearance-preset');
           if (!presets[preset]) {
             preset = 'default-system';
-            localStorage.setItem('lico-appearance-preset', preset);
+            localStorage.setItem('meshrix-appearance-preset', preset);
           }
           document.documentElement.dataset.appearancePreset = preset;
         } catch (e) {}
       })();
     </script>
-    <title>LicoMesh &mdash; Traceable Shared Workspace for AI Agents</title>
+    <title>Meshrix &mdash; Traceable Shared Workspace for AI Agents</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   </head>
   <body translate="no" class="notranslate">

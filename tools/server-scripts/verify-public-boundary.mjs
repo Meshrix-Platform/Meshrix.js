@@ -28,7 +28,7 @@ const PROCESS_DOCUMENTATION_PATH_PREFIXES = Object.freeze([
 ]);
 
 const REQUIRED_GITIGNORE_ENTRIES = Object.freeze([
-  "/licomesh-data/",
+  "/meshrix-data/",
   "/build/",
   "/cache/",
   "/docs/plans/",
@@ -44,7 +44,7 @@ const PRIVATE_MONOREPO_SOURCE_ROOTS = new Set(["apps", "packages", "tools"]);
 const PROHIBITED = [
   {
     id: "restricted client repository marker",
-    pattern: new RegExp(`${escaped(join("Lico"))}-${escaped(join("Arc"))}`, "iu")
+    pattern: new RegExp(`${escaped(join("Meshrix"))}-${escaped(join("Arc"))}`, "iu")
   },
   {
     id: "restricted client wording",
@@ -72,7 +72,7 @@ const PROHIBITED = [
   },
   {
     id: "restricted client native crate path",
-    pattern: new RegExp(escaped(`${join("crates")}/${join("lico")}-${join("client")}-${join("native")}`), "u")
+    pattern: new RegExp(escaped(`${join("crates")}/${join("meshrix")}-${join("client")}-${join("native")}`), "u")
   },
   {
     id: "restricted client contract path",

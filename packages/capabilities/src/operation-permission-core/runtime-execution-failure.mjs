@@ -1,4 +1,4 @@
-import { summarizeError } from "@lico/foundation/observability/runtime-logger";
+import { summarizeError } from "@meshrix/foundation/observability/runtime-logger";
 import { nowIso, sourceIpFromRequest } from "./runtime-common.mjs";
 
 export async function completeToolExecutionFailure({

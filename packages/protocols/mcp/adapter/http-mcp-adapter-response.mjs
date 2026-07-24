@@ -79,8 +79,8 @@ export function publicMcpEnvelopeString(value, workspaceDirectory = null) {
     .replace(/(^|[\s"'=:(])((?:\/(?:Users|home|root|private|var|tmp|opt|usr|Volumes)\/)[^\s"',)\]}]+)/g, "$1[server-internal-path]")
     .replace(/(^|[\s"'=:(])([A-Za-z]:[\\/][^\s"',)\]}]+)/g, "$1[server-internal-path]")
     .replace(/\b(Authorization\s*:\s*Bearer\s+)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
-    .replace(/\b(X-LicoMesh-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
-    .replace(/\b(x-lico-tool-token\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
+    .replace(/\b(X-Meshrix-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
+    .replace(/\b(x-meshrix-tool-token\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/(^|[\s"'=:(])(--token(?:=|\s+))[^\s"',;)\]}]+/gi, "$1$2<redacted-token>")
     .replace(/\b(token|access_token|refresh_token|api_key|apiKey|secret|password)=([^\s"',;)\]}]+)/gi, "$1=<redacted-secret>");
 }
@@ -120,7 +120,7 @@ function isSensitiveMcpEnvelopeKey(key = "") {
     "idtoken",
     "apikey",
     "xlicoapikey",
-    "xlicomeshapikey",
+    "xmeshrixapikey",
     "xlicotooltoken",
     "secret",
     "clientsecret",

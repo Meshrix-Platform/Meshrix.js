@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.mjs",
   "openapi": "3.1.0",
   "info": {
-    "title": "LicoMesh API",
+    "title": "Meshrix API",
     "version": "v1.0.0",
     "description": "Generated from packages/contracts/src/operations/operation-registry.mjs"
   },
@@ -210,6 +210,12 @@
                   "label"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "tagId": {
                     "type": "string"
                   },
@@ -302,6 +308,12 @@
                 "properties": {
                   "tagId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -346,6 +358,12 @@
                 "properties": {
                   "tagId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -412,7 +430,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -498,7 +523,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -559,7 +591,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -620,7 +659,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -683,7 +729,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -744,7 +797,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -807,7 +867,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -868,7 +935,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -909,6 +983,12 @@
                 "properties": {
                   "approvalId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1054,6 +1134,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -1183,6 +1269,12 @@
                   "path"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -1237,6 +1329,12 @@
                   "path"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -1286,7 +1384,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -1465,6 +1570,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1509,6 +1620,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1553,6 +1670,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1597,6 +1720,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1641,6 +1770,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1685,6 +1820,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1729,6 +1870,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1773,6 +1920,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1817,6 +1970,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1861,6 +2020,12 @@
                 "properties": {
                   "contributionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1907,6 +2072,12 @@
                   "title"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -1967,6 +2138,12 @@
                   "proposalId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -2022,7 +2199,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -2102,6 +2286,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -2187,9 +2377,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -2283,6 +2470,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -2368,9 +2561,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -2414,6 +2604,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -2499,9 +2695,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -2676,6 +2869,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -2761,9 +2960,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -2807,6 +3003,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -2892,9 +3094,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -2938,6 +3137,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -3023,9 +3228,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -3069,6 +3271,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -3154,9 +3362,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -3200,6 +3405,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -3285,9 +3496,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -3331,6 +3539,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -3416,9 +3630,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -3462,6 +3673,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -3547,9 +3764,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -3855,6 +4069,12 @@
                   "workspaceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "workspaceId": {
                     "type": "string"
                   },
@@ -3940,9 +4160,6 @@
                     "type": "boolean"
                   },
                   "overwrite": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
                     "type": "boolean"
                   }
                 }
@@ -4125,6 +4342,12 @@
                   "nodeId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "treeId": {
                     "type": "string"
                   },
@@ -4182,6 +4405,12 @@
                   "nodeId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "treeId": {
                     "type": "string"
                   },
@@ -4272,7 +4501,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -4310,7 +4546,14 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                },
                 "required": []
               }
             }
@@ -4373,6 +4616,12 @@
                 "additionalProperties": false,
                 "required": [],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "serviceId": {
                     "type": "string"
                   },
@@ -4413,6 +4662,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -4481,6 +4736,12 @@
                   "serviceId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "operationKey": {
                     "type": "string"
                   },
@@ -4518,6 +4779,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -4561,6 +4828,12 @@
                   "serviceId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "operationKey": {
                     "type": "string"
                   },
@@ -4598,6 +4871,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -4643,6 +4922,12 @@
                   "serviceId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "operationKey": {
                     "type": "string"
                   },
@@ -4680,6 +4965,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -4725,6 +5016,12 @@
                   "serviceId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "operationKey": {
                     "type": "string"
                   },
@@ -4762,6 +5059,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -4917,6 +5220,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -4959,6 +5268,12 @@
                   "serviceId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "serviceId": {
                     "type": "string"
                   },
@@ -4999,6 +5314,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -5048,6 +5369,12 @@
                   "operationKey": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "artifactId": {
                     "type": "string"
                   },
@@ -5082,6 +5409,12 @@
                   },
                   "limit": {
                     "type": "number"
+                  },
+                  "approved": {
+                    "type": "boolean"
+                  },
+                  "approvalApproved": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -5227,6 +5560,12 @@
                   "alertId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "acknowledgedBy": {
                     "type": "string"
                   }
@@ -5293,6 +5632,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "retentionDays": {
                     "type": "number"
                   }
@@ -5428,6 +5773,12 @@
                 "additionalProperties": false,
                 "required": [],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "config": {
                     "type": "object"
                   },
@@ -5572,7 +5923,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -5673,7 +6031,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -5799,7 +6164,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -5837,7 +6209,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -5875,7 +6254,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -5961,7 +6347,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -5999,7 +6392,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6110,7 +6510,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6156,6 +6563,12 @@
                   },
                   "wait": {
                     "type": "boolean"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -6200,6 +6613,12 @@
                     "type": "string"
                   },
                   "wait": {
+                    "type": "boolean"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
                     "type": "boolean"
                   }
                 }
@@ -6300,6 +6719,12 @@
                   },
                   "wait": {
                     "type": "boolean"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -6347,6 +6772,12 @@
                   },
                   "reason": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -6407,6 +6838,12 @@
                   "password"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "username": {
                     "type": "string",
                     "minLength": 1
@@ -6453,7 +6890,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6514,7 +6958,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6557,6 +7008,12 @@
                 "properties": {
                   "userId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -6663,7 +7120,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6774,7 +7238,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6812,7 +7283,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6900,7 +7378,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -6943,6 +7428,12 @@
                 "properties": {
                   "sessionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -6981,6 +7472,12 @@
                   "defaultIdentityHash"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "claimToken": {
                     "type": "string"
                   },
@@ -7066,6 +7563,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "processKeyId": {
                     "type": "string"
                   },
@@ -7120,6 +7623,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "reason": {
                     "type": "string"
                   },
@@ -7170,7 +7679,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7238,6 +7754,12 @@
                 "properties": {
                   "clientId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -7300,7 +7822,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7363,6 +7892,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "selectedComponentIds": {
                     "type": "array",
                     "items": {
@@ -7420,7 +7955,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7481,7 +8023,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7544,7 +8093,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7582,7 +8138,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7620,7 +8183,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7658,7 +8228,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7719,7 +8296,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -7842,6 +8426,12 @@
                   },
                   "engine": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   },
                   "query": {
                     "type": "string"
@@ -8583,6 +9173,12 @@
                   },
                   "timeoutMs": {
                     "type": "number"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -8667,6 +9263,12 @@
                   },
                   "timeoutMs": {
                     "type": "number"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -8709,6 +9311,12 @@
                 "properties": {
                   "agentId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -8990,6 +9598,12 @@
                   "toolId"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "toolId": {
                     "type": "string",
                     "minLength": 1,
@@ -8997,9 +9611,6 @@
                   },
                   "input": {
                     "type": "object"
-                  },
-                  "confirm": {
-                    "type": "boolean"
                   },
                   "idempotencyKey": {
                     "type": "string",
@@ -9047,6 +9658,12 @@
                   "calls"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "calls": {
                     "type": "array",
                     "items": {
@@ -9199,6 +9816,12 @@
                 "additionalProperties": false,
                 "required": [],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "grantId": {
                     "type": "string",
                     "minLength": 1,
@@ -9372,6 +9995,12 @@
                     "minLength": 1,
                     "maxLength": 512
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "label": {
                     "type": "string",
                     "minLength": 1,
@@ -9537,6 +10166,12 @@
                 "properties": {
                   "grantId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -9583,6 +10218,12 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 512
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   },
                   "reason": {
                     "type": "string",
@@ -9802,7 +10443,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -9897,6 +10545,12 @@
                   "pendingOperationId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "resolution": {
                     "type": "string",
                     "enum": [
@@ -9953,6 +10607,12 @@
                   "claimTokenHash"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "claimTokenHash": {
                     "type": "string",
                     "pattern": "^[a-f0-9]{64}$"
@@ -10059,10 +10719,15 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "requestId",
                   "resolution"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "requestId": {
                     "type": "string"
                   },
@@ -10075,6 +10740,27 @@
                   },
                   "reason": {
                     "type": "string"
+                  },
+                  "clientName": {
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "toolsets": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "toolAllow": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -10170,6 +10856,12 @@
                   },
                   "pruneOrphanObjects": {
                     "type": "boolean"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -10231,8 +10923,18 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": []
               }
             }
           }
@@ -10274,11 +10976,14 @@
                   "confirm"
                 ],
                 "properties": {
-                  "policy": {
-                    "type": "object"
-                  },
                   "confirm": {
                     "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "policy": {
+                    "type": "object"
                   }
                 }
               }
@@ -10317,8 +11022,20 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [],
-                "properties": {}
+                "required": [
+                  "backupId"
+                ],
+                "properties": {
+                  "backupId": {
+                    "type": "string"
+                  },
+                  "includePaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
@@ -10355,8 +11072,26 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [],
-                "properties": {}
+                "required": [
+                  "backupId"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "backupId": {
+                    "type": "string"
+                  },
+                  "includePaths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
@@ -10494,7 +11229,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -10537,6 +11279,12 @@
                 "properties": {
                   "alertId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -10576,7 +11324,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -10617,6 +11372,12 @@
                   "title"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "title": {
                     "type": "string"
                   },
@@ -10718,6 +11479,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -10762,6 +11529,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   },
                   "folderPath": {
                     "type": "string"
@@ -10887,6 +11660,12 @@
                 "properties": {
                   "sessionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -10931,6 +11710,12 @@
                 "properties": {
                   "sessionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11019,6 +11804,12 @@
                 "properties": {
                   "sessionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11063,6 +11854,12 @@
                 "properties": {
                   "sessionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11111,6 +11908,12 @@
                   },
                   "submissionId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11159,6 +11962,12 @@
                   },
                   "issueId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11226,6 +12035,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11294,6 +12109,12 @@
                   "workspaceId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "folderPath": {
                     "type": "string"
                   },
@@ -11356,6 +12177,12 @@
                   },
                   "recursive": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11452,6 +12279,12 @@
                   "workspaceId": {
                     "type": "string"
                   },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "path": {
                     "type": "string"
                   },
@@ -11509,6 +12342,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   },
                   "sourcePath": {
                     "type": "string",
@@ -11619,6 +12458,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11688,6 +12533,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11732,6 +12583,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11776,6 +12633,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11820,6 +12683,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11864,6 +12733,12 @@
                 "properties": {
                   "workspaceId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -11926,7 +12801,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -11964,7 +12846,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -12059,6 +12948,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "contextProfileId": {
                     "type": "string"
                   },
@@ -12169,6 +13064,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "sessionId": {
                     "type": "string"
                   },
@@ -12177,9 +13078,6 @@
                   },
                   "reason": {
                     "type": "string"
-                  },
-                  "confirm": {
-                    "type": "boolean"
                   }
                 },
                 "required": []
@@ -12245,7 +13143,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -12288,6 +13193,12 @@
                   "files"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "checkpoint": {
                     "type": "object"
                   },
@@ -12377,6 +13288,12 @@
                   },
                   "fileIndex": {
                     "type": "number"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -12416,7 +13333,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -12482,6 +13406,12 @@
                   "expectedWorkspaceRevision"
                 ],
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "uploadSessionId": {
                     "type": "string"
                   },
@@ -12563,6 +13493,12 @@
                 "properties": {
                   "requestRef": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -12652,6 +13588,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "reason": {
                     "type": "string"
                   }
@@ -12694,6 +13636,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "reason": {
                     "type": "string"
                   }
@@ -12736,6 +13684,12 @@
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
                   "reason": {
                     "type": "string"
                   }
@@ -12778,7 +13732,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -12816,7 +13777,14 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [],
-                "properties": {}
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           }
@@ -12882,6 +13850,12 @@
                 "properties": {
                   "jobId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -12926,6 +13900,12 @@
                 "properties": {
                   "jobId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -12970,6 +13950,12 @@
                 "properties": {
                   "jobId": {
                     "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
                   }
                 }
               }

@@ -55,7 +55,7 @@ export class McpAgentFrameworkAdapterLayer {
       reasonCode: "",
       communication: {
         protocol: "mcp",
-        direction: "agent-to-lico",
+        direction: "agent-to-meshrix",
         transport: "client-config",
         targetRole: "downstream-client"
       },

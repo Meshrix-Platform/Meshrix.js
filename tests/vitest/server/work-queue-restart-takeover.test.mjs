@@ -31,7 +31,7 @@ async function runRestartFixture(args) {
 function definition() {
   return createQueueDefinitionRegistry().registerQueueDefinition({
     queueDefinitionId: DEFINITION_ID,
-    label: "lico.jobs.import-parse",
+    label: "meshrix.jobs.import-parse",
     ownerCapability: "platform.job-workflow"
   });
 }
@@ -64,7 +64,7 @@ function createStore(userDataPath, timeSource) {
 
 describe("work queue restart takeover", () => {
   it("reloads a stable definition in a fresh process and fences the stale lease", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-process-restart-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-process-restart-"));
     try {
       const seeded = await runRestartFixture(["seed", userDataPath]);
       await new Promise((resolve) => setTimeout(resolve, 80));
@@ -88,7 +88,7 @@ describe("work queue restart takeover", () => {
   });
 
   it("enforces absolute work expiry before claim, renewal, and terminal completion", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-expiry-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-expiry-"));
     const timeSource = createManualQueueTimeSource(5_000);
     const store = createStore(userDataPath, timeSource);
     try {
@@ -162,7 +162,7 @@ describe("work queue restart takeover", () => {
   });
 
   it("keeps definition identity stable, reclaims an expired lease, and fences late completion", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-work-queue-restart-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-work-queue-restart-"));
     const timeSource = createManualQueueTimeSource(1_000);
     const queueDefinition = definition();
     const admission = resolved(queueDefinition, { jobId: "job-1", versionNumber: 1 });

@@ -175,7 +175,7 @@ async function main() {
 
   // ── Build the provenance document ─────────────────────────────────────────
   const provenance = {
-    schemaVersion: "v0.0.1:lico:provenance-2",
+    schemaVersion: "v0.0.1:meshrix:provenance-2",
     generatedAt: new Date().toISOString(),
     git: {
       sha,

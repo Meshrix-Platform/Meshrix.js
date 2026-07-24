@@ -5,7 +5,7 @@ export const UPSTREAM_MCP_GATEWAY_READINESS_SOURCE =
   "tools/server-scripts/lib/upstream-mcp-gateway-evidence.mjs#createUpstreamMcpGatewayReadiness";
 
 export const UPSTREAM_MCP_GATEWAY_REQUIRED_TEST_NAMES = Object.freeze([
-  "load stdio MCP upstream service from server config",
+  "load stdio MCP upstream service from the durable manifest snapshot",
   "create local agent grant with upstream MCP visibility",
   "downstream MCP tools/list exposes upstream MCP tool",
   "downstream MCP tools/call reaches upstream MCP tools/call",

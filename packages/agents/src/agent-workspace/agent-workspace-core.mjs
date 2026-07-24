@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -8,11 +8,11 @@ export const AGENT_WORKSPACE_PROTOCOL_VERSION = "v0.0.1:workspace:agent-workspac
 export const AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION = "v0.0.1:workspace:context-bundle-1";
 export const AGENT_SESSION_THREAD_VERSION = "v0.0.1:agent:session-thread-1";
 export const CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES = workspaceIntegerLimit(
-  "LICO_AGENT_WORKSPACE_CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES",
+  "MESHRIX_AGENT_WORKSPACE_CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES",
   { defaultValue: 2 * 1024 * 1024, minimum: 1024, maximum: 64 * 1024 * 1024 }
 );
 export const CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES = workspaceIntegerLimit(
-  "LICO_AGENT_WORKSPACE_CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES",
+  "MESHRIX_AGENT_WORKSPACE_CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES",
   {
     defaultValue: 16 * 1024 * 1024,
     minimum: CONTEXT_BUNDLE_COMPRESSED_MAX_BYTES,
@@ -20,7 +20,7 @@ export const CONTEXT_BUNDLE_UNCOMPRESSED_MAX_BYTES = workspaceIntegerLimit(
   }
 );
 export const WORKSPACE_FILE_MAX_BYTES = workspaceIntegerLimit(
-  "LICO_AGENT_WORKSPACE_FILE_MAX_BYTES",
+  "MESHRIX_AGENT_WORKSPACE_FILE_MAX_BYTES",
   { defaultValue: 8 * 1024 * 1024, minimum: 1024, maximum: 64 * 1024 * 1024 }
 );
 export const DANGEROUS_WORKSPACE_EXTENSIONS = new Set([

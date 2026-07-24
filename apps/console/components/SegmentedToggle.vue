@@ -28,7 +28,7 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
 
 <template>
   <div
-    class="lico-segmented-toggle"
+    class="meshrix-segmented-toggle"
     :class="[`size-${size || 'default'}`]"
     role="tablist"
     :aria-label="ariaLabel || '选项切换'"
@@ -37,7 +37,7 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
     <button
       v-for="option in options"
       :key="String(option.value)"
-      class="lico-segmented-toggle-tab"
+      class="meshrix-segmented-toggle-tab"
       :class="{ active: modelValue === option.value }"
       type="button"
       role="tab"
@@ -50,7 +50,7 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
 </template>
 
 <style scoped>
-.lico-segmented-toggle {
+.meshrix-segmented-toggle {
   display: grid;
   gap: var(--space-1);
   width: min(360px, 100%);
@@ -62,25 +62,25 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
   margin: 0 auto;
 }
 
-.lico-segmented-toggle.size-small {
+.meshrix-segmented-toggle.size-small {
   min-height: 36px;
   width: auto;
 }
-.lico-segmented-toggle.size-small .lico-segmented-toggle-tab {
+.meshrix-segmented-toggle.size-small .meshrix-segmented-toggle-tab {
   min-height: 28px;
   font-size: var(--text-sm);
 }
 
-.lico-segmented-toggle.size-large {
+.meshrix-segmented-toggle.size-large {
   width: min(500px, 100%);
   min-height: 52px;
 }
-.lico-segmented-toggle.size-large .lico-segmented-toggle-tab {
+.meshrix-segmented-toggle.size-large .meshrix-segmented-toggle-tab {
   min-height: 44px;
   font-size: var(--text-md);
 }
 
-.lico-segmented-toggle-tab {
+.meshrix-segmented-toggle-tab {
   min-width: 0;
   min-height: 36px;
   border: 0;
@@ -97,13 +97,13 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
   justify-content: center;
 }
 
-.lico-segmented-toggle-tab:hover,
-.lico-segmented-toggle-tab:focus-visible {
+.meshrix-segmented-toggle-tab:hover,
+.meshrix-segmented-toggle-tab:focus-visible {
   color: var(--brand);
   background: var(--bg-surface);
 }
 
-.lico-segmented-toggle-tab.active {
+.meshrix-segmented-toggle-tab.active {
   color: var(--text-on-brand);
   background: var(--brand);
   box-shadow: 0 2px 6px var(--brand-shadow);

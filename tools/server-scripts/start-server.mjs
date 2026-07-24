@@ -5,7 +5,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { startHttpServer } from "../../apps/server/runtime/http-server.mjs";
 
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { DEFAULT_SERVER_PORT } from "../../packages/foundation/src/config/server-env.mjs";
 import {
   resolveDeploymentProfileId,
@@ -256,7 +256,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 function printUsageAndExit(code = 0) {
-  console.log(`LicoMesh Server
+  console.log(`Meshrix Server
 
 Usage:
   node tools/server-scripts/start-server.mjs [--runtime-config /path/to/runtime-instance.json] [--host 0.0.0.0] [--port ${DEFAULT_SERVER_PORT}] [--data-dir /path/to/data] [--with-ui] [--profile minimal|default] [--edition core|standard|integrations]
@@ -265,12 +265,12 @@ Options:
   --runtime-config          显式运行时实例配置 JSON；client-local supervisor 路径必须传入
   --require-runtime-config  未传 --runtime-config 时直接失败
   --expected-runtime-kind   校验 runtime-config.runtimeKind，例如 client-local
-  --host                    监听地址，默认读取 LICO_SERVER_HOST，否则使用 127.0.0.1
-  --allow-public-console    允许监听非回环地址；等价于 LICO_ALLOW_PUBLIC_CONSOLE=1
-  --port                    监听端口，默认读取 LICO_SERVER_PORT，否则使用 ${DEFAULT_SERVER_PORT}
+  --host                    监听地址，默认读取 MESHRIX_SERVER_HOST，否则使用 127.0.0.1
+  --allow-public-console    允许监听非回环地址；等价于 MESHRIX_ALLOW_PUBLIC_CONSOLE=1
+  --port                    监听端口，默认读取 MESHRIX_SERVER_PORT，否则使用 ${DEFAULT_SERVER_PORT}
   --strict-port             端口被占用时直接失败，不自动尝试后续端口
   --ready-file              将私有启动状态原子写入显式文件（0600）；默认不创建
-  --data-dir                数据目录，默认读取 LICO_SERVER_DATA_DIR，否则读取 ~/.licomesh-server.json，最后使用 ~/licomesh-data
+  --data-dir                数据目录，默认读取 MESHRIX_SERVER_DATA_DIR，否则读取 ~/.meshrix-server.json，最后使用 ~/meshrix-data
   --with-ui                 同时提供 build/dist 前端页面；build/dist 不存在时会报错
   --profile                 运行档位：default|minimal，默认 default
   --edition                 功能 edition：core|standard|integrations
@@ -294,7 +294,7 @@ Options:
 
 const args = parseArgs(process.argv.slice(2));
 
-readyFilePath = String(args["ready-file"] || process.env.LICO_SERVER_READY_FILE || "").trim();
+readyFilePath = String(args["ready-file"] || process.env.MESHRIX_SERVER_READY_FILE || "").trim();
 if (readyFilePath) {
   readyFilePath = path.resolve(readyFilePath);
   removeReadyFile({ strict: true });
@@ -304,13 +304,13 @@ if (args.help) {
   printUsageAndExit(0);
 }
 
-const runtimeConfigPath = String(args["runtime-config"] || args.runtimeConfig || process.env.LICO_RUNTIME_CONFIG || "").trim();
-if ((args["require-runtime-config"] === true || enabledFlag(process.env.LICO_REQUIRE_RUNTIME_CONFIG)) && !runtimeConfigPath) {
+const runtimeConfigPath = String(args["runtime-config"] || args.runtimeConfig || process.env.MESHRIX_RUNTIME_CONFIG || "").trim();
+if ((args["require-runtime-config"] === true || enabledFlag(process.env.MESHRIX_REQUIRE_RUNTIME_CONFIG)) && !runtimeConfigPath) {
   throw new Error("必须显式传入 --runtime-config。");
 }
 const runtimeConfig = readRuntimeConfig(runtimeConfigPath);
 const runtimeConfigObject = runtimeConfig.config;
-const expectedRuntimeKind = String(args["expected-runtime-kind"] || process.env.LICO_EXPECTED_RUNTIME_KIND || "").trim();
+const expectedRuntimeKind = String(args["expected-runtime-kind"] || process.env.MESHRIX_EXPECTED_RUNTIME_KIND || "").trim();
 const runtimeKind = String(configValue(runtimeConfigObject, ["runtimeKind", "runtime.kind", "kind"]) || "").trim();
 if (expectedRuntimeKind && runtimeKind !== expectedRuntimeKind) {
   throw new Error(`运行时配置类型不匹配：期望 ${expectedRuntimeKind}，实际 ${runtimeKind || "<missing>"}`);
@@ -321,7 +321,7 @@ const host = String(optionValue({
   argKeys: ["host"],
   config: runtimeConfigObject,
   configKeys: ["host", "server.host"],
-  env: "LICO_SERVER_HOST",
+  env: "MESHRIX_SERVER_HOST",
   fallback: "127.0.0.1"
 })).trim();
 const port = normalizePort(optionValue({
@@ -329,7 +329,7 @@ const port = normalizePort(optionValue({
   argKeys: ["port"],
   config: runtimeConfigObject,
   configKeys: ["port", "server.port"],
-  env: "LICO_SERVER_PORT",
+  env: "MESHRIX_SERVER_PORT",
   fallback: DEFAULT_SERVER_PORT
 }), DEFAULT_SERVER_PORT);
 if (port === 0 && !readyFilePath) {
@@ -342,7 +342,7 @@ const strictPort = optionFlag({
   argKeys: ["strict-port", "strictPort"],
   config: runtimeConfigObject,
   configKeys: ["strictPort", "strict-port", "server.strictPort", "runtime.strictPort"],
-  env: "LICO_SERVER_STRICT_PORT",
+  env: "MESHRIX_SERVER_STRICT_PORT",
   fallback: false
 });
 const userDataPath = optionPath({
@@ -351,7 +351,7 @@ const userDataPath = optionPath({
   config: runtimeConfigObject,
   configKeys: ["dataDir", "data-dir", "server.dataDir", "server.data-dir"],
   configDir: runtimeConfig.dir,
-  env: "LICO_SERVER_DATA_DIR",
+  env: "MESHRIX_SERVER_DATA_DIR",
   fallback: ServerConfig.getDataDir()
 });
 const withUi = optionFlag({
@@ -359,7 +359,7 @@ const withUi = optionFlag({
   argKeys: ["with-ui", "withUi"],
   config: runtimeConfigObject,
   configKeys: ["withUi", "with-ui", "server.withUi", "server.with-ui"],
-  env: "LICO_SERVER_WITH_UI",
+  env: "MESHRIX_SERVER_WITH_UI",
   fallback: false
 });
 const runtimeOptions = {
@@ -368,7 +368,7 @@ const runtimeOptions = {
     argKeys: ["profile"],
     config: runtimeConfigObject,
     configKeys: ["profile", "runtime.profile"],
-    env: "LICO_SERVER_PROFILE",
+    env: "MESHRIX_SERVER_PROFILE",
     fallback: "default"
   })).trim(),
   edition: String(optionValue({
@@ -376,7 +376,7 @@ const runtimeOptions = {
     argKeys: ["edition"],
     config: runtimeConfigObject,
     configKeys: ["edition", "runtime.edition"],
-    env: "LICO_EDITION",
+    env: "MESHRIX_EDITION",
     fallback: ""
   })).trim(),
   featureProfile: optionPath({
@@ -385,7 +385,7 @@ const runtimeOptions = {
     config: runtimeConfigObject,
     configKeys: ["featureProfile", "feature-profile", "runtime.featureProfile", "runtime.feature-profile"],
     configDir: runtimeConfig.dir,
-    env: "LICO_FEATURE_PROFILE",
+    env: "MESHRIX_FEATURE_PROFILE",
     fallback: ""
   }),
   allowPublicConsole: optionFlag({
@@ -393,7 +393,7 @@ const runtimeOptions = {
     argKeys: ["allow-public-console", "allowPublicConsole"],
     config: runtimeConfigObject,
     configKeys: ["allowPublicConsole", "allow-public-console", "runtime.allowPublicConsole", "runtime.allow-public-console"],
-    env: "LICO_ALLOW_PUBLIC_CONSOLE",
+    env: "MESHRIX_ALLOW_PUBLIC_CONSOLE",
     fallback: false
   }),
   enabledPlugins: resolveEnabledPluginSelection(runtimeConfigObject),
@@ -404,17 +404,17 @@ const runtimeOptions = {
   mountModules: {}
 };
 const discoveryOptions = {
-  serverId: String(optionValue({ args, argKeys: ["server-id", "serverId"], config: runtimeConfigObject, configKeys: ["discovery.serverId"], env: "LICO_SERVER_ID", fallback: "" })).trim(),
-  serverLabel: String(optionValue({ args, argKeys: ["server-label", "serverLabel"], config: runtimeConfigObject, configKeys: ["discovery.serverLabel"], env: "LICO_SERVER_LABEL", fallback: "" })).trim(),
-  bootstrapBaseUrl: String(optionValue({ args, argKeys: ["bootstrap-url", "bootstrapUrl"], config: runtimeConfigObject, configKeys: ["discovery.bootstrapBaseUrl", "discovery.bootstrapUrl"], env: "LICO_BOOTSTRAP_URL", fallback: "" })).trim(),
-  advertisedBaseUrl: String(optionValue({ args, argKeys: ["advertised-base-url", "advertisedBaseUrl"], config: runtimeConfigObject, configKeys: ["discovery.advertisedBaseUrl"], env: "LICO_ADVERTISED_BASE_URL", fallback: "" })).trim(),
-  activeServiceUrl: String(optionValue({ args, argKeys: ["active-service-url", "activeServiceUrl"], config: runtimeConfigObject, configKeys: ["discovery.activeServiceUrl"], env: "LICO_ACTIVE_SERVICE_URL", fallback: "" })).trim(),
-  forwardBaseUrl: String(optionValue({ args, argKeys: ["forward-to-url", "forwardBaseUrl"], config: runtimeConfigObject, configKeys: ["discovery.forwardBaseUrl"], env: "LICO_FORWARD_TO_URL", fallback: "" })).trim(),
-  mode: String(optionValue({ args, argKeys: ["discovery-mode", "discoveryMode"], config: runtimeConfigObject, configKeys: ["discovery.mode"], env: "LICO_DISCOVERY_MODE", fallback: "" })).trim(),
-  configVersion: String(optionValue({ args, argKeys: ["config-version", "configVersion"], config: runtimeConfigObject, configKeys: ["discovery.configVersion"], env: "LICO_DISCOVERY_CONFIG_VERSION", fallback: "" })).trim(),
-  refreshIntervalSeconds: optionValue({ args, argKeys: ["refresh-interval-seconds", "refreshIntervalSeconds"], config: runtimeConfigObject, configKeys: ["discovery.refreshIntervalSeconds"], env: "LICO_DISCOVERY_REFRESH_INTERVAL_SECONDS", fallback: "" }),
-  checkInIntervalSeconds: optionValue({ args, argKeys: ["check-in-interval-seconds", "checkInIntervalSeconds"], config: runtimeConfigObject, configKeys: ["discovery.checkInIntervalSeconds"], env: "LICO_DISCOVERY_CHECK_IN_INTERVAL_SECONDS", fallback: "" }),
-  offlineAfterSeconds: optionValue({ args, argKeys: ["offline-after-seconds", "offlineAfterSeconds"], config: runtimeConfigObject, configKeys: ["discovery.offlineAfterSeconds"], env: "LICO_DISCOVERY_OFFLINE_AFTER_SECONDS", fallback: "" })
+  serverId: String(optionValue({ args, argKeys: ["server-id", "serverId"], config: runtimeConfigObject, configKeys: ["discovery.serverId"], env: "MESHRIX_SERVER_ID", fallback: "" })).trim(),
+  serverLabel: String(optionValue({ args, argKeys: ["server-label", "serverLabel"], config: runtimeConfigObject, configKeys: ["discovery.serverLabel"], env: "MESHRIX_SERVER_LABEL", fallback: "" })).trim(),
+  bootstrapBaseUrl: String(optionValue({ args, argKeys: ["bootstrap-url", "bootstrapUrl"], config: runtimeConfigObject, configKeys: ["discovery.bootstrapBaseUrl", "discovery.bootstrapUrl"], env: "MESHRIX_BOOTSTRAP_URL", fallback: "" })).trim(),
+  advertisedBaseUrl: String(optionValue({ args, argKeys: ["advertised-base-url", "advertisedBaseUrl"], config: runtimeConfigObject, configKeys: ["discovery.advertisedBaseUrl"], env: "MESHRIX_ADVERTISED_BASE_URL", fallback: "" })).trim(),
+  activeServiceUrl: String(optionValue({ args, argKeys: ["active-service-url", "activeServiceUrl"], config: runtimeConfigObject, configKeys: ["discovery.activeServiceUrl"], env: "MESHRIX_ACTIVE_SERVICE_URL", fallback: "" })).trim(),
+  forwardBaseUrl: String(optionValue({ args, argKeys: ["forward-to-url", "forwardBaseUrl"], config: runtimeConfigObject, configKeys: ["discovery.forwardBaseUrl"], env: "MESHRIX_FORWARD_TO_URL", fallback: "" })).trim(),
+  mode: String(optionValue({ args, argKeys: ["discovery-mode", "discoveryMode"], config: runtimeConfigObject, configKeys: ["discovery.mode"], env: "MESHRIX_DISCOVERY_MODE", fallback: "" })).trim(),
+  configVersion: String(optionValue({ args, argKeys: ["config-version", "configVersion"], config: runtimeConfigObject, configKeys: ["discovery.configVersion"], env: "MESHRIX_DISCOVERY_CONFIG_VERSION", fallback: "" })).trim(),
+  refreshIntervalSeconds: optionValue({ args, argKeys: ["refresh-interval-seconds", "refreshIntervalSeconds"], config: runtimeConfigObject, configKeys: ["discovery.refreshIntervalSeconds"], env: "MESHRIX_DISCOVERY_REFRESH_INTERVAL_SECONDS", fallback: "" }),
+  checkInIntervalSeconds: optionValue({ args, argKeys: ["check-in-interval-seconds", "checkInIntervalSeconds"], config: runtimeConfigObject, configKeys: ["discovery.checkInIntervalSeconds"], env: "MESHRIX_DISCOVERY_CHECK_IN_INTERVAL_SECONDS", fallback: "" }),
+  offlineAfterSeconds: optionValue({ args, argKeys: ["offline-after-seconds", "offlineAfterSeconds"], config: runtimeConfigObject, configKeys: ["discovery.offlineAfterSeconds"], env: "MESHRIX_DISCOVERY_OFFLINE_AFTER_SECONDS", fallback: "" })
 };
 const distPath = withUi ? defaultDistPath : "";
 

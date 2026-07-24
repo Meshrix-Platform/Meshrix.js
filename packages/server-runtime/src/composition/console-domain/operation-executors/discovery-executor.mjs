@@ -1,10 +1,10 @@
 
-import { hashClientString, serverToken } from "@lico/foundation/security/client-strings";
-import { buildBootstrapPayload } from "@lico/protocols/http/bootstrap-payload";
+import { hashClientString, serverToken } from "@meshrix/foundation/security/client-strings";
+import { buildBootstrapPayload } from "@meshrix/protocols/http/bootstrap-payload";
 import {
   buildClientConnectionList,
   buildConsoleDiscoveryConfig
-} from "@lico/protocols/http/api-facade";
+} from "@meshrix/protocols/http/api-facade";
 import { publishProtocolEvent, requireClientRegistryService, requireDiscoveryPort, result } from "./shared.mjs";
 
 export function hasClientSuppliedString(value, keys) {

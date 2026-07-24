@@ -15,12 +15,12 @@ function usage() {
 Options:
   --port <n>            Kill listeners on a server port. Can be repeated.
   --vite-port <n>       Alias for --port, intended for local Vite dev server.
-  --data-dir <path>     Data dir used by LicoMesh service processes.
+  --data-dir <path>     Data dir used by Meshrix service processes.
   --project-root <path> Project root used for command-line matching.
   --launch-label <name> Best-effort launchctl bootout for a user service label.
   --launch-plist <path> Best-effort launchctl bootout for a LaunchAgent plist.
-  --process-only        Stop matched LicoMesh processes; do not kill port listeners.
-  --global              Kill any LicoMesh process matching the project root, regardless of data-dir.
+  --process-only        Stop matched Meshrix processes; do not kill port listeners.
+  --global              Kill any Meshrix process matching the project root, regardless of data-dir.
   --quiet               Reduce informational output.
   --help                Show help.`);
 }
@@ -201,7 +201,7 @@ function commandHasDataDir(commandLine, dataDir) {
   const normalized = dataDir.replace(/\\/g, "/");
   return text.includes(`--data-dir ${normalized}`)
     || text.includes(`--data-dir=${normalized}`)
-    || text.includes(`LICO_SERVER_DATA_DIR=${normalized}`);
+    || text.includes(`MESHRIX_SERVER_DATA_DIR=${normalized}`);
 }
 
 function commandIsVite(commandLine) {
@@ -317,7 +317,7 @@ function stopPids(pids, options) {
   }
   const remaining = unique.filter(processAlive);
   if (remaining.length > 0) {
-    log(options, `[clean] force stopping stale LicoMesh process(es): ${remaining.join(" ")}`);
+    log(options, `[clean] force stopping stale Meshrix process(es): ${remaining.join(" ")}`);
     for (const pid of remaining) {
       terminatePid(pid, true);
     }
@@ -340,7 +340,7 @@ function killPortListeners(port, options, resolved) {
     }
   }
   if (externalPids.length > 0) {
-    log(options, `[clean] port ${port} is occupied by non-LicoMesh process(es); refusing to stop them`);
+    log(options, `[clean] port ${port} is occupied by non-Meshrix process(es); refusing to stop them`);
     for (const pid of externalPids) {
       describeProcess(pid, options);
     }
@@ -348,10 +348,10 @@ function killPortListeners(port, options, resolved) {
     return;
   }
   if (ownPids.length === 0) {
-    log(options, `[clean] port ${port} has no LicoMesh-owned listeners`);
+    log(options, `[clean] port ${port} has no Meshrix-owned listeners`);
     return;
   }
-  log(options, `[clean] stopping LicoMesh-owned listeners on port ${port}: ${ownPids.join(" ")}`);
+  log(options, `[clean] stopping Meshrix-owned listeners on port ${port}: ${ownPids.join(" ")}`);
   stopPids(ownPids, options);
 }
 
@@ -387,10 +387,10 @@ try {
     .filter((item) => pidIsLicoOwned(item, options, resolved))
     .map((item) => item.pid);
   if (stalePids.length > 0) {
-    log(options, `[clean] stopping stale LicoMesh service processes: ${stalePids.join(" ")}`);
+    log(options, `[clean] stopping stale Meshrix service processes: ${stalePids.join(" ")}`);
     stopPids(stalePids, options);
   } else {
-    log(options, `[clean] no stale LicoMesh service processes for ${dataDir}`);
+    log(options, `[clean] no stale Meshrix service processes for ${dataDir}`);
   }
 
   if (options.processOnly) {
@@ -403,7 +403,7 @@ try {
       killPortListeners(port, options, resolved);
     }
   }
-  log(options, "[clean] existing LicoMesh service cleanup complete");
+  log(options, "[clean] existing Meshrix service cleanup complete");
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;

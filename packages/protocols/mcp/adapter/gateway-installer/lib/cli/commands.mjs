@@ -76,7 +76,7 @@ export async function registerCommand(options) {
     priorityInstall: guidance.priorityInstallCommand,
     verifiedHandshake: resolvedOptions.__licoDiscovery?.handshake?.payload?.identity?.keyId || "",
     serverConfig: profile.profile,
-    note: "Discovered and registered the signed LicoMesh MCP endpoint without installing it into any client."
+    note: "Discovered and registered the signed Meshrix MCP endpoint without installing it into any client."
   };
 }
 
@@ -144,7 +144,7 @@ export async function doctorCommand(options) {
   const settings = installerOptions(resolvedOptions);
   const discovered = resolvedOptions.__licoDiscovery || null;
   const token = await resolveToken(resolvedOptions, { required: false });
-  const target = normalizeTarget(option(resolvedOptions, "target", process.env.LICO_MCP_TARGET || ""));
+  const target = normalizeTarget(option(resolvedOptions, "target", process.env.MESHRIX_MCP_TARGET || ""));
   const deviceManifestPath = discoveryRegistryPath(resolvedOptions);
   const discovery = await fetchJson(`${settings.baseUrl}/api/mcp/discovery`);
   const initialize = await ensureService(settings.baseUrl);
@@ -163,7 +163,7 @@ export async function doctorCommand(options) {
       ok: discovery.ok,
       status: discovery.status,
       installerPackage: discovery.payload?.installer?.packageName || "",
-      httpUrl: discovery.payload?.mcpServers?.lico?.httpUrl || ""
+      httpUrl: discovery.payload?.mcpServers?.meshrix?.httpUrl || ""
     },
     initialize: {
       ok: true,
@@ -181,13 +181,13 @@ export async function doctorCommand(options) {
       skipped: true,
       toolCount: 0,
       stableOutletSet: false,
-      reason: "Set LICO_MCP_TOKEN or use --token-stdin to verify tools/list."
+      reason: "Set MESHRIX_MCP_TOKEN or use --token-stdin to verify tools/list."
     },
     systemHealth: {
       ok: false,
       skipped: true,
       healthy: false,
-      reason: "Set LICO_MCP_TOKEN or use --token-stdin to verify tools/call system.health."
+      reason: "Set MESHRIX_MCP_TOKEN or use --token-stdin to verify tools/call system.health."
     },
     deviceManifest: {
       ok: false,
@@ -272,7 +272,7 @@ export async function discoverCommand(options) {
   const baseUrl = installerOptions(resolvedOptions).baseUrl;
   const discovery = await fetchJson(`${baseUrl}/api/mcp/discovery`);
   if (!discovery.ok) {
-    throw new Error(`LicoMesh MCP discovery failed: HTTP ${discovery.status}`);
+    throw new Error(`Meshrix MCP discovery failed: HTTP ${discovery.status}`);
   }
   return {
     ...discovery.payload,
@@ -356,7 +356,7 @@ export async function identityStoreSelfTestCommand(options = {}) {
   }
 }
 
-export const LICO_MCP_COMMAND_REGISTRY = Object.freeze({
+export const MESHRIX_MCP_COMMAND_REGISTRY = Object.freeze({
   install: installCommand,
   register: registerCommand,
   proxy: proxyCommand,

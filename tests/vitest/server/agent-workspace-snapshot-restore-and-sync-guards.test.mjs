@@ -56,7 +56,7 @@ function createMerkleState({
 }
 
 async function withRuntime(fn, options = {}) {
-  const root = await tempDir("lico-agent-workspace-final-seventh-extra-");
+  const root = await tempDir("meshrix-agent-workspace-final-seventh-extra-");
   const runtime = createAgentWorkspace({
     userDataPath: root,
     defaultCanAccessAll: true,

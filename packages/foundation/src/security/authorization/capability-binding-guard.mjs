@@ -37,9 +37,9 @@ export {
 } from "./capability-binding-guard-core.mjs";
 
 export function createCapabilityBindingGuard({
-  backend = process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER || "auto",
-  alias = process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS || DEFAULT_ALIAS,
-  dataDir = process.env.LICO_CAPABILITY_BINDING_GUARD_DATA_DIR || ""
+  backend = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER || "auto",
+  alias = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS || DEFAULT_ALIAS,
+  dataDir = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_DATA_DIR || ""
 } = {}) {
   const resolvedBackend = resolveAutoBindingGuardBackend(backend);
   const storageBackend = backend === "auto" ? "auto" : resolvedBackend;

@@ -12,12 +12,12 @@ export function upstreamProjectedOperationId(serviceId, operationKey) {
 
 function projectedToolsets(capability) {
   // Only attach toolsets whose configured maxRisk can host the projected risk.
-  // Destructive ops need lico.gateway.maintain (maxRisk destructive); write alone is filtered out by OP catalog.
-  if (capability.risk === "read_only") return ["lico.gateway.read"];
+  // Destructive ops need meshrix.gateway.maintain (maxRisk destructive); write alone is filtered out by OP catalog.
+  if (capability.risk === "read_only") return ["meshrix.gateway.read"];
   if (capability.risk === "repair_write" || capability.risk === "destructive") {
-    return ["lico.gateway.maintain"];
+    return ["meshrix.gateway.maintain"];
   }
-  return ["lico.gateway.write"];
+  return ["meshrix.gateway.write"];
 }
 
 function projectedForwardInputSchema(operation = {}) {

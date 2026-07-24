@@ -1,16 +1,16 @@
-# LicoMesh Product
+# Meshrix Product
 
-This document explains what the LicoMesh framework does. It is a product-level overview, not a replacement for protocol, architecture, configuration, or verification documentation. Implementation facts remain owned by the responsibility documents, registries, and verifiers under `docs/`, `packages/`, and `tools/`.
+This document explains what the Meshrix framework does. It is a product-level overview, not a replacement for protocol, architecture, configuration, or verification documentation. Implementation facts remain owned by the responsibility documents, registries, and verifiers under `docs/`, `packages/`, and `tools/`.
 
-## What LicoMesh Is
+## What Meshrix Is
 
-LicoMesh is an open-source, private-deployable agent gateway framework. It runs as a Node.js server and brings upstream services, agent clients, workspace assets, verified plugin packages, runtime jobs, audit, and operator controls into governed operation boundaries.
+Meshrix is an open-source, private-deployable agent gateway framework. It runs as a Node.js server and brings upstream services, agent clients, workspace assets, verified plugin packages, runtime jobs, audit, and operator controls into governed operation boundaries.
 
 Its core role is to let operators configure services and capabilities inside their own deployment environment, then expose those capabilities safely to authorized users, the console, and agent clients through HTTP, RPC, MCP, and console surfaces.
 
 ## Problems It Solves
 
-LicoMesh is built for teams that need privately deployed agent capabilities:
+Meshrix is built for teams that need privately deployed agent capabilities:
 
 - Connect external upstream services through one server-side gateway instead of giving every agent direct service credentials.
 - Represent MCP tools, console actions, service calls, file operations, plugin actions, and maintenance actions as governed operations.
@@ -35,13 +35,13 @@ LicoMesh is built for teams that need privately deployed agent capabilities:
 
 ## Downstream Agent Clients
 
-At the product level, LicoMesh exposes governed downstream access to agent clients through MCP. The current documented downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi.
+At the product level, Meshrix exposes governed downstream access to agent clients through MCP. The current documented downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi.
 
 The protocol-level adapter scope, compatibility status, and verification requirements are maintained by `docs/protocols/PROTOCOLS.md`, `docs/COMPATIBILITY.md`, and the relevant functionality documents.
 
 ## Product Boundary
 
-LicoMesh's product boundary is the server-side governance layer in a private deployment:
+Meshrix's product boundary is the server-side governance layer in a private deployment:
 
 - It owns server configuration, operation exposure, permission decisions, execution dispatch, audit, metrics, runtime status, and evidence generation.
 - It binds upstream service credentials through server-side configuration and local `secret://` references, and redacts public responses, audit records, and reports.
@@ -50,12 +50,13 @@ LicoMesh's product boundary is the server-side governance layer in a private dep
 
 ## What It Is Not
 
-LicoMesh is not:
+Meshrix is not:
 
 - A hosted SaaS platform. The default assumption is that operators run the server in their own environment.
 - A model provider. Model calls execute through the gateway only after the relevant provider and feature are configured.
 - A general source-code version control, release approval, or release-note system.
 - A client cryptography implementation.
+- A communication or messaging platform. Client communication relay capabilities are optional, decoupled extensions developed outside the Core product line; when deployed, they enter only through the same governed provider and plugin boundaries as any other extension.
 - A direct tool bypass around permissions. Any surface that can read, write, invoke an external service, mutate package lifecycle state, administer runtime state, or run maintenance actions should pass through the shared governance path.
 
 ## Current Status

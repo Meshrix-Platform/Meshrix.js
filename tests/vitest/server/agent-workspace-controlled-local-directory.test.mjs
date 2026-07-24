@@ -8,7 +8,7 @@ import { createAgentWorkspace } from "../../../packages/agents/src/agent-workspa
 
 describe("agent workspace controlled local-directory Host capability", () => {
   it("is absent by default and available only after generic capability enablement", () => {
-    const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "lico-agent-workspace-capability-"));
+    const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-agent-workspace-capability-"));
     let disabledRuntime;
     let enabledRuntime;
     try {

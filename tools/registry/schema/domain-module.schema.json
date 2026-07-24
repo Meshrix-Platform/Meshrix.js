@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/domain-module.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/domain-module.schema.json",
   "title": "Domain Package Manifest",
   "description": "Verifiable ownership manifest for a domain package's current source roots, dependencies, public API, and executable test evidence.",
   "type": "object",
@@ -46,7 +46,7 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^#lico/[a-z][a-z0-9-]*/\\*$"
+        "pattern": "^#meshrix/[a-z][a-z0-9-]*/\\*$"
       }
     },
     "dependsOn": {

@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { openSqliteDatabase } from "../../storage/sqlite-database.mjs";
-import { createAuthorizationEngine } from "#lico/authorization-engine";
+import { createAuthorizationEngine } from "#meshrix/authorization-engine";
 import { createAuthorizationGovernanceStore } from "../authorization/authorization-governance-store.mjs";
 import { createAuthorizationStore } from "../authorization/authorization-store.mjs";
 import {

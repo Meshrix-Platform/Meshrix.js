@@ -13,7 +13,7 @@ import {
 
 describe("current source tree digest", () => {
   it("changes for tracked and untracked source content while honoring projection exclusions", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-source-tree-digest-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-source-tree-digest-"));
     try {
       spawnSync("git", ["init", "-q"], { cwd: root });
       await fs.writeFile(path.join(root, "tracked.txt"), "one\n");
@@ -36,7 +36,7 @@ describe("current source tree digest", () => {
   });
 
   it("uses verified package provenance when the deployed source has no Git metadata", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-packaged-source-digest-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-packaged-source-digest-"));
     try {
       const content = Buffer.from("packaged source\n", "utf8");
       const entry = {
@@ -49,7 +49,7 @@ describe("current source tree digest", () => {
         .digest("hex");
       const sourceRevision = "a".repeat(40);
       await fs.writeFile(path.join(root, entry.path), content);
-      await fs.writeFile(path.join(root, "lico-source-package-manifest.json"), JSON.stringify({
+      await fs.writeFile(path.join(root, "meshrix-source-package-manifest.json"), JSON.stringify({
         schemaVersion: "v0.0.1:release:source-package-manifest-4",
         sourceRevision,
         sourceTreeDigest: `sha256:${packageSha256}`,

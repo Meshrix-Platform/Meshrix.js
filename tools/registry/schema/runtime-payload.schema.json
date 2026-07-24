@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/runtime-payload.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/runtime-payload.schema.json",
   "title": "Runtime Payloads Registry",
   "description": "Canonical list of heavy runtime payloads excluded from the npm package and downloaded at runtime.",
   "type": "object",

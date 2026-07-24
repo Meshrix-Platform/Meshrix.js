@@ -4,13 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AgentConfigRegistry } from "@lico/agents/agent-configs/config-registry";
+import { AgentConfigRegistry } from "@meshrix/agents/agent-configs/config-registry";
 import {
   publicAgentGatewayRegistry,
   resolveAgentGatewayConfig
-} from "@lico/agents/agent-gateway/index";
-import { probeModelConnection } from "@lico/agents/agent-gateway/model-probe/index";
-import { loadSettings, saveSettings, normalizeSettings, getSettingsPath } from "@lico/server-runtime/composition/settings";
+} from "@meshrix/agents/agent-gateway/index";
+import { probeModelConnection } from "@meshrix/agents/agent-gateway/model-probe/index";
+import { loadSettings, saveSettings, normalizeSettings, getSettingsPath } from "@meshrix/server-runtime/composition/settings";
 import {
   applyAgentModelPatch,
   mergeSettingsForModelProbe,
@@ -28,7 +28,7 @@ const settingsPort = Object.freeze({
 
 beforeEach(() => {
   vi.stubEnv(
-    "LICO_MODEL_CREDENTIAL_MASTER_KEY",
+    "MESHRIX_MODEL_CREDENTIAL_MASTER_KEY",
     "test-only-model-credential-master-key-material"
   );
 });
@@ -67,10 +67,10 @@ function configuredOpenAiAgent(overrides = {}) {
 
 function runConcurrentSettingsSave({ userDataPath, agentId }) {
   const source = `
-    import { saveSettings } from "@lico/server-runtime/composition/settings";
-    const agentId = process.env.LICO_TEST_AGENT_ID;
+    import { saveSettings } from "@meshrix/server-runtime/composition/settings";
+    const agentId = process.env.MESHRIX_TEST_AGENT_ID;
     try {
-      const saved = await saveSettings(process.env.LICO_TEST_USER_DATA_PATH, {
+      const saved = await saveSettings(process.env.MESHRIX_TEST_USER_DATA_PATH, {
         modelLibraryRevision: 1,
         modelLibraryEntries: ["openai"],
         modelLibraryAgents: [{
@@ -101,8 +101,8 @@ function runConcurrentSettingsSave({ userDataPath, agentId }) {
       cwd: path.resolve(import.meta.dirname, "../../.."),
       env: {
         ...process.env,
-        LICO_TEST_USER_DATA_PATH: userDataPath,
-        LICO_TEST_AGENT_ID: agentId
+        MESHRIX_TEST_USER_DATA_PATH: userDataPath,
+        MESHRIX_TEST_AGENT_ID: agentId
       },
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -121,9 +121,9 @@ function runConcurrentSettingsSave({ userDataPath, agentId }) {
 
 function runConcurrentRegistryReplace({ rootPath, agentId }) {
   const source = `
-    import { AgentConfigRegistry } from "@lico/agents/agent-configs/config-registry";
-    const agentId = process.env.LICO_TEST_AGENT_ID;
-    const registry = new AgentConfigRegistry({ rootPath: process.env.LICO_TEST_REGISTRY_ROOT });
+    import { AgentConfigRegistry } from "@meshrix/agents/agent-configs/config-registry";
+    const agentId = process.env.MESHRIX_TEST_AGENT_ID;
+    const registry = new AgentConfigRegistry({ rootPath: process.env.MESHRIX_TEST_REGISTRY_ROOT });
     try {
       await registry.replaceFromModelLibraryAgents([{
         uid: agentId,
@@ -151,8 +151,8 @@ function runConcurrentRegistryReplace({ rootPath, agentId }) {
       cwd: path.resolve(import.meta.dirname, "../../.."),
       env: {
         ...process.env,
-        LICO_TEST_REGISTRY_ROOT: rootPath,
-        LICO_TEST_AGENT_ID: agentId
+        MESHRIX_TEST_REGISTRY_ROOT: rootPath,
+        MESHRIX_TEST_AGENT_ID: agentId
       },
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -171,7 +171,7 @@ function runConcurrentRegistryReplace({ rootPath, agentId }) {
 
 describe("canonical model provider runtime", () => {
   it("probes the explicitly selected OpenAI agent through the real gateway transport", async () => {
-    const userDataPath = await temporaryRoot("lico-model-provider");
+    const userDataPath = await temporaryRoot("meshrix-model-provider");
     const apiPatch = normalizeAgentModelPayload({
       tokenHeader: "Authorization",
       tokenPrefix: "Bearer "
@@ -184,12 +184,12 @@ describe("canonical model provider runtime", () => {
       const body = JSON.parse(init.body);
       expect(body.model).toBe("example-model");
       expect(body.messages).toEqual([
-        expect.objectContaining({ role: "user", content: expect.stringContaining("LicoProbeOK") })
+        expect.objectContaining({ role: "user", content: expect.stringContaining("MeshrixProbeOK") })
       ]);
       return new Response(JSON.stringify({
         id: "response-1",
         model: "example-model",
-        choices: [{ finish_reason: "stop", message: { content: "LicoProbeOK" } }]
+        choices: [{ finish_reason: "stop", message: { content: "MeshrixProbeOK" } }]
       }), {
         status: 200,
         headers: { "content-type": "application/json" }
@@ -215,7 +215,7 @@ describe("canonical model provider runtime", () => {
       provider: "openai",
       model: "example-model",
       statusCode: 200,
-      answerSnippet: "LicoProbeOK"
+      answerSnippet: "MeshrixProbeOK"
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -289,7 +289,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("persists agent credentials only in the canonical registry and redacts projections", async () => {
-    const rootPath = await temporaryRoot("lico-agent-config-registry");
+    const rootPath = await temporaryRoot("meshrix-agent-config-registry");
     const registry = new AgentConfigRegistry({ rootPath });
     const entry = configuredOpenAiAgent();
     await registry.replaceFromModelLibraryAgents([entry]);
@@ -322,7 +322,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("keeps the previous generation intact when replacement staging fails", async () => {
-    const rootPath = await temporaryRoot("lico-agent-config-rollback");
+    const rootPath = await temporaryRoot("meshrix-agent-config-rollback");
     const registry = new AgentConfigRegistry({ rootPath });
     const entry = configuredOpenAiAgent();
     await registry.replaceFromModelLibraryAgents([entry]);
@@ -347,7 +347,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("rejects case-fold identity collisions without changing the active generation", async () => {
-    const rootPath = await temporaryRoot("lico-agent-config-collision");
+    const rootPath = await temporaryRoot("meshrix-agent-config-collision");
     const registry = new AgentConfigRegistry({ rootPath });
     const entry = configuredOpenAiAgent({
       uid: "Agent_X",
@@ -370,7 +370,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("commits one cross-process current-pointer replacement per expected revision", async () => {
-    const rootPath = await temporaryRoot("lico-agent-config-cross-process-cas");
+    const rootPath = await temporaryRoot("meshrix-agent-config-cross-process-cas");
     const registry = new AgentConfigRegistry({ rootPath });
     await registry.replaceFromModelLibraryAgents([configuredOpenAiAgent()]);
 
@@ -398,7 +398,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("never preserves or sends a redacted credential after its provider origin changes", async () => {
-    const rootPath = await temporaryRoot("lico-agent-credential-binding");
+    const rootPath = await temporaryRoot("meshrix-agent-credential-binding");
     const registry = new AgentConfigRegistry({ rootPath });
     const current = configuredOpenAiAgent({ baseUrl: "https://old.example.test/v1" });
     await registry.replaceFromModelLibraryAgents([current]);
@@ -436,7 +436,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("keeps registry-owned model records out of the main settings document", async () => {
-    const userDataPath = await temporaryRoot("lico-settings-ownership");
+    const userDataPath = await temporaryRoot("meshrix-settings-ownership");
     const entry = configuredOpenAiAgent();
     await saveSettings(userDataPath, {
       modelLibraryRevision: 0,
@@ -453,7 +453,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("rolls back registry and split settings when a multi-document save fails", async () => {
-    const userDataPath = await temporaryRoot("lico-settings-transaction-rollback");
+    const userDataPath = await temporaryRoot("meshrix-settings-transaction-rollback");
     const original = configuredOpenAiAgent();
     await saveSettings(userDataPath, {
       modelLibraryRevision: 0,
@@ -496,7 +496,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("rejects stale model-library snapshots with revision compare-and-swap", async () => {
-    const userDataPath = await temporaryRoot("lico-model-library-cas");
+    const userDataPath = await temporaryRoot("meshrix-model-library-cas");
     const original = configuredOpenAiAgent();
     const first = await saveSettings(userDataPath, {
       modelLibraryRevision: 0,
@@ -523,7 +523,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("serializes cross-process settings and model-pointer compare-and-swap", async () => {
-    const userDataPath = await temporaryRoot("lico-settings-cross-process-cas");
+    const userDataPath = await temporaryRoot("meshrix-settings-cross-process-cas");
     await saveSettings(userDataPath, {
       modelLibraryRevision: 0,
       modelLibraryEntries: ["openai"],
@@ -562,7 +562,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("recovers a prepared cross-document transaction after process termination", async () => {
-    const userDataPath = await temporaryRoot("lico-settings-crash-recovery");
+    const userDataPath = await temporaryRoot("meshrix-settings-crash-recovery");
     const original = configuredOpenAiAgent();
     await saveSettings(userDataPath, {
       modelLibraryRevision: 0,
@@ -642,7 +642,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("keeps module bindings and profiles attached to registry-owned agents across save and load", async () => {
-    const userDataPath = await temporaryRoot("lico-settings-agent-bindings");
+    const userDataPath = await temporaryRoot("meshrix-settings-agent-bindings");
     const entry = configuredOpenAiAgent({
       moduleAccess: { mode: "selected", moduleIds: ["gatewayRouting"] }
     });
@@ -698,7 +698,7 @@ describe("canonical model provider runtime", () => {
   });
 
   it("projects the same readiness rules for all five runtime providers", async () => {
-    const userDataPath = await temporaryRoot("lico-provider-readiness");
+    const userDataPath = await temporaryRoot("meshrix-provider-readiness");
     const providers = ["openai", "deepseek", "openrouter", "copilot", "local-model"];
     const entries = providers.map((provider) => configuredOpenAiAgent({
       uid: `agent_${provider.replace(/-/gu, "_")}`,

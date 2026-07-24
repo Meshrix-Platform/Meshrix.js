@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 
-import { createLocalPluginPackageSource } from "@lico/contracts/plugins/plugin-package-source";
+import { createLocalPluginPackageSource } from "@meshrix/contracts/plugins/plugin-package-source";
 
 const DEFAULT_MAX_BYTES = 16 * 1024 * 1024;
 

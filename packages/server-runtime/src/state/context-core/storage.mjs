@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
-import { atomicWriteJson } from "#lico/state-coordinator";
-import { appendBoundedJsonLine, readJsonlTail } from "#lico/foundation/storage/bounded-jsonl";
+import { atomicWriteJson } from "#meshrix/state-coordinator";
+import { appendBoundedJsonLine, readJsonlTail } from "#meshrix/foundation/storage/bounded-jsonl";
 
 const CONTEXT_RECORDS_MAX_BYTES = 16 * 1024 * 1024;
 

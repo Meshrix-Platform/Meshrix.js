@@ -270,7 +270,7 @@ async function stopFixtureChild() {
 }
 
 try {
-  userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-fixture-transit-"));
+  userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-fixture-transit-"));
   redactionNeedles.add(userDataPath);
   const started = await runPhase("fixture-http-startup", () => startFixtureHttpChild());
   fixtureChild = started.child;
@@ -645,13 +645,13 @@ try {
     label: "Fixture downstream agent",
     type: "machine",
     scopes: GATEWAY_SCOPES,
-    toolsets: ["lico.gateway.read", "lico.gateway.write"],
+    toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
     dynamicCapabilities: [...grantBindings.dynamicCapabilities],
     allowedServiceIds: [...grantBindings.allowedServiceIds],
     allowedSecretBindings: [...grantBindings.allowedSecretBindings],
     metadata: {
       agentId: "fixture-downstream-agent",
-      profileId: "lico.mcp.opencode",
+      profileId: "meshrix.mcp.opencode",
       mcpTarget: "opencode",
       maxRisk: "safe_write"
     }

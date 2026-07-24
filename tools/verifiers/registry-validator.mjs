@@ -94,7 +94,7 @@ function validatePublicApi(data) {
   const validStatuses = new Set(['active']);
   for (const alias of data.aliases) {
     if (!alias.alias) issues.push('public-api: alias missing alias field');
-    else if (!alias.alias.startsWith('#lico/')) issues.push(`public-api: alias "${alias.alias}" does not start with #lico/`);
+    else if (!alias.alias.startsWith('#meshrix/')) issues.push(`public-api: alias "${alias.alias}" does not start with #meshrix/`);
 
     if (!alias.targetPath) issues.push(`public-api: alias "${alias.alias}" missing targetPath`);
     if (!alias.status || !validStatuses.has(alias.status)) {

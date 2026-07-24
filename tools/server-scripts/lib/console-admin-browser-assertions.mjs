@@ -135,7 +135,7 @@ export function createConsoleAdminBrowserAssertions({ repoRoot, screenshotRoot }
     text = text.replace(/[A-Za-z]:\\[^\s"'`]+/gu, "[redacted-path]");
     text = text.replace(/Bearer\s+\S+/giu, "Bearer [redacted]");
     text = text.replace(/"token"\s*:\s*"[^"]+"/giu, "\"token\":\"[redacted]\"");
-    text = text.replace(/lico_[A-Za-z0-9_-]{12,}/gu, "lico_[redacted]");
+    text = text.replace(/meshrix_[A-Za-z0-9_-]{12,}/gu, "meshrix_[redacted]");
     text = text.replace(/\bgrant_[a-z0-9]{6,}_[a-f0-9]{8,}\b/giu, "grant_[redacted]");
     text = text.replace(/\b(?:tool_exec|pending_op)_[A-Za-z0-9_-]{8,}\b/gu, "[redacted-runtime-id]");
     text = text.replace(/\btrace_[A-Fa-f0-9]{8,}\b/gu, "trace_[redacted]");

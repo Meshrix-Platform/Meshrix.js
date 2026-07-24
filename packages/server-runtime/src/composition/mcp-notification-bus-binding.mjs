@@ -1,4 +1,4 @@
-import { configureMcpNotificationBus } from "#lico/protocols/mcp/adapter/http-mcp-adapter";
+import { configureMcpNotificationBus } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
 import {
   broadcastMcpNotification,
   registerMcpSseConnection,

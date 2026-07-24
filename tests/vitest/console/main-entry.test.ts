@@ -69,7 +69,7 @@ describe("console main entry behavior", () => {
   });
 
   it("uses the stored console language before mounting", async () => {
-    window.localStorage.setItem("lico-language", "en");
+    window.localStorage.setItem("meshrix-language", "en");
     const app = {
       use: vi.fn(),
       component: vi.fn(),

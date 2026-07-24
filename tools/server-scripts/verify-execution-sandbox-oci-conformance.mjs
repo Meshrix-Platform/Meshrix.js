@@ -12,18 +12,18 @@ import {
   SANDBOX_PROVIDER_CONFORMANCE_SCHEMA,
   SANDBOX_REQUEST_SCHEMA,
   sandboxDigest
-} from "@lico/foundation/execution-sandbox/contracts";
-import { createSandboxExecutionBroker } from "@lico/server-runtime/execution-sandbox/broker";
-import { createOciBackendConformanceTarget } from "@lico/server-runtime/execution-sandbox/trusted-oci-provider-adapters";
+} from "@meshrix/foundation/execution-sandbox/contracts";
+import { createSandboxExecutionBroker } from "@meshrix/server-runtime/execution-sandbox/broker";
+import { createOciBackendConformanceTarget } from "@meshrix/server-runtime/execution-sandbox/trusted-oci-provider-adapters";
 import {
   loadTrustedSandboxProviderReceipts,
   writeTrustedSandboxProviderReceipts
-} from "@lico/server-runtime/execution-sandbox/trusted-provider-receipt-store";
-import { createSandboxProviderConformanceReceipt } from "@lico/server-runtime/execution-sandbox/trusted-provider-resolver";
+} from "@meshrix/server-runtime/execution-sandbox/trusted-provider-receipt-store";
+import { createSandboxProviderConformanceReceipt } from "@meshrix/server-runtime/execution-sandbox/trusted-provider-resolver";
 import {
   createTrustedSandboxProviderResolver,
   REQUIRED_SANDBOX_PROVIDER_RESTRICTIONS
-} from "@lico/server-runtime/execution-sandbox/trusted-provider-resolver";
+} from "@meshrix/server-runtime/execution-sandbox/trusted-provider-resolver";
 import { createSourceEvidenceContext } from "./lib/source-tree-digest.mjs";
 
 const REPORT_SCHEMA = "v0.0.1:execution-sandbox:oci-conformance-report-1";
@@ -364,7 +364,7 @@ const result = {
   nonRootIdentity: typeof process.getuid === "function" && process.getuid() > 0,
   immutableInputReadable: input === "isolated-input",
   immutableInputWriteDenied: deniedWrite("probe-input.txt"),
-  rootFilesystemWriteDenied: deniedWrite("/etc/lico-sandbox-write-probe"),
+  rootFilesystemWriteDenied: deniedWrite("/etc/meshrix-sandbox-write-probe"),
   capabilitiesDropped: Boolean(capEff) && /^0+$/u.test(capEff),
   noNewPrivileges,
   seccompFilterActive,
@@ -1026,7 +1026,7 @@ export async function runExecutionSandboxOciConformance({
   let report;
   try {
     await preflightRunner(target);
-    root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-sandbox-oci-conformance-"));
+    root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-sandbox-oci-conformance-"));
     const probeResults = await Promise.allSettled([
       probeRunner(target, root, `conformance-${crypto.randomUUID()}`),
       probeRunner(target, root, `conformance-${crypto.randomUUID()}`)

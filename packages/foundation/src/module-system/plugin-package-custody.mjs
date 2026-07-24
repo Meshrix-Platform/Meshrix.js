@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { createVerifiedPluginPackage } from "@lico/contracts/plugins/verified-plugin-package";
+import { createVerifiedPluginPackage } from "@meshrix/contracts/plugins/verified-plugin-package";
 
 function digestFileName(digest) {
   return String(digest || "").replace(/^sha256:/u, "");

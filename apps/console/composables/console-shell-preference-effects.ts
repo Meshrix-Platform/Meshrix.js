@@ -24,7 +24,7 @@ export type { AppearancePresetConfig, AppearancePresetId };
 
 export const appearancePresetIds: AppearancePresetId[] = builtInAppearancePresetConfigs.map((config) => config.id);
 
-const APPEARANCE_PRESET_KEY = "lico-appearance-preset";
+const APPEARANCE_PRESET_KEY = "meshrix-appearance-preset";
 const LANGUAGE_KEY = CONSOLE_LANGUAGE_KEY;
 let activeSystemMediaQuery: MediaQueryList | null = null;
 let activeSystemListener: (() => void) | null = null;

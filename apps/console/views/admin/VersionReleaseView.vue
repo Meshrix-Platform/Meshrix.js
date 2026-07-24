@@ -2,7 +2,7 @@
 import { onMounted, ref } from "vue";
 import VersionReleaseBaselineCard from "../../components/admin/version-release/VersionReleaseBaselineCard.vue";
 import VersionReleaseReadinessCard from "../../components/admin/version-release/VersionReleaseReadinessCard.vue";
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import {
   loadVersionReleaseSnapshot,
   type ProductionHealthResponse,

@@ -1,4 +1,4 @@
-import { sendJson } from "#lico/http-utils";
+import { sendJson } from "#meshrix/http-utils";
 import { authSubjectFromSession } from "./jobs-controller-access.mjs";
 
 function parseJsonRequestBody(requestBody) {

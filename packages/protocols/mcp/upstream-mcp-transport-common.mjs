@@ -130,7 +130,7 @@ export function initializeParams(config = {}) {
     protocolVersion: requestedProtocolVersion(config),
     capabilities: {},
     clientInfo: {
-      name: "LicoMesh Upstream MCP Gateway",
+      name: "Meshrix Upstream MCP Gateway",
       version: "0.0.1"
     }
   };

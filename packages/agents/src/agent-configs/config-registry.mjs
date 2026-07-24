@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { writePrivateFileAtomic } from "@lico/foundation/storage/private-file-atomic";
+import { writePrivateFileAtomic } from "@meshrix/foundation/storage/private-file-atomic";
 import {
   modelCredentialBindingKey,
   normalizeModelEndpoint,

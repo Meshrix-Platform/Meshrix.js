@@ -31,7 +31,7 @@ export async function createPluginDeploymentAuditCatalog({
   const pluginCatalog = await loadPluginRegistry({ artifactAuthority: artifactFixture.authority });
   const enabledPluginIds = pluginCatalog.listPlugins().map((plugin) => plugin.id).sort();
   const deployment = pluginCatalog.resolveDeployment({ enabledPluginIds });
-  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-audit-"));
+  const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-audit-"));
   let pluginRuntime = null;
 
   try {

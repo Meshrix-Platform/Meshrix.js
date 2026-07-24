@@ -1,12 +1,12 @@
-import { getJson, sendJson } from "@lico/ui-console/bridge-http";
-import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "@lico/contracts/upstream-service-publishing";
+import { getJson, sendJson } from "@meshrix/ui-console/bridge-http";
+import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "@meshrix/contracts/upstream-service-publishing";
 import type {
   TypedServiceReference,
   UpstreamPayloadTransport,
   UpstreamRequestRepresentationMode,
   UpstreamResponseRepresentationMode,
   UpstreamServiceDescriptor,
-} from "@lico/contracts/upstream-service-publishing";
+} from "@meshrix/contracts/upstream-service-publishing";
 
 export { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION };
 export type {

@@ -1,12 +1,12 @@
 
 import crypto from "node:crypto";
-import { safeUrlSummary } from "@lico/agents/agent-gateway/shared";
+import { safeUrlSummary } from "@meshrix/agents/agent-gateway/shared";
 import {
   modelCredentialBindingKey,
   normalizeModelEndpoint,
   normalizeModelTokenHeader,
   normalizeModelTokenPrefix
-} from "@lico/agents/agent-configs/credential-binding";
+} from "@meshrix/agents/agent-configs/credential-binding";
 import { publishProtocolEvent } from "./shared.mjs";
 
 function settingsPortFrom(context = {}) {

@@ -5,9 +5,9 @@ import process from "node:process";
 
 class ServerConfigManager {
   constructor() {
-    this.explicitConfigPath = Boolean(process.env.LICO_CONFIG_FILE);
+    this.explicitConfigPath = Boolean(process.env.MESHRIX_CONFIG_FILE);
     this.configPath =
-      process.env.LICO_CONFIG_FILE || path.join(os.homedir(), ".licomesh-server.json");
+      process.env.MESHRIX_CONFIG_FILE || path.join(os.homedir(), ".meshrix-server.json");
     this.config = this.loadConfig();
   }
 
@@ -24,9 +24,9 @@ class ServerConfigManager {
           ? "invalid_json"
           : "config_read_failed";
       console.warn(`[server-config] load failed code=${failureCode}`);
-      if (this.explicitConfigPath && !process.env.LICO_SERVER_DATA_DIR) {
-        const error = new Error("Explicit Lico server config could not be read.");
-        error.code = "lico_server_config_read_failed";
+      if (this.explicitConfigPath && !process.env.MESHRIX_SERVER_DATA_DIR) {
+        const error = new Error("Explicit Meshrix server config could not be read.");
+        error.code = "meshrix_server_config_read_failed";
         throw error;
       }
     }
@@ -34,7 +34,7 @@ class ServerConfigManager {
   }
 
   getDataDir() {
-    return process.env.LICO_SERVER_DATA_DIR || this.config.dataDir || path.join(os.homedir(), "licomesh-data");
+    return process.env.MESHRIX_SERVER_DATA_DIR || this.config.dataDir || path.join(os.homedir(), "meshrix-data");
   }
 }
 

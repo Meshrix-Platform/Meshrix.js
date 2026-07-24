@@ -157,10 +157,10 @@ async function loadReleaseState(rootDir) {
   const internalNames = new Set();
   for (const workspace of workspaceRecords) {
     const name = String(workspace.record.value.name || "");
-    if (!name.startsWith("@lico/")) {
+    if (!name.startsWith("@meshrix/")) {
       throw releaseError(
         "release_workspace_name_invalid",
-        `${workspace.manifestPath} must declare an @lico/* package name.`
+        `${workspace.manifestPath} must declare an @meshrix/* package name.`
       );
     }
     if (internalNames.has(name)) {
@@ -190,7 +190,7 @@ function synchronizeInternalDependencies(value, version) {
     const dependencies = value?.[field];
     if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) continue;
     for (const name of Object.keys(dependencies)) {
-      if (name.startsWith("@lico/")) dependencies[name] = version;
+      if (name.startsWith("@meshrix/")) dependencies[name] = version;
     }
   }
 }
@@ -269,7 +269,7 @@ function validateInternalDependencies({ value, relativePath }, version, internal
     const dependencies = value?.[field];
     if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) continue;
     for (const [name, dependencyVersion] of Object.entries(dependencies)) {
-      if (!name.startsWith("@lico/")) continue;
+      if (!name.startsWith("@meshrix/")) continue;
       if (!internalNames.has(name)) {
         addFinding(findings, relativePath, "release_internal_dependency_unknown", `${field}:${name}`);
       } else if (dependencyVersion !== version) {

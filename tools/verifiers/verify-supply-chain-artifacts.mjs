@@ -173,7 +173,7 @@ async function expectFailure(operation, label) {
 }
 
 export async function runNegativeSelfTest() {
-  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-supply-chain-"));
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-supply-chain-"));
   const outputDir = path.join(temporaryRoot, "artifacts");
   try {
     const lockfileText = await fs.readFile(path.join(repoRoot, "package-lock.json"), "utf8");

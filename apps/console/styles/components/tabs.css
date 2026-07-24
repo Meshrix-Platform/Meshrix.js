@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   LicoTabs — Unified Tab Component
+   MeshrixTabs — Unified Tab Component
    ═══════════════════════════════════════════════════════════════════════════
    Proper tabbed interface: the active tab "connects" to the content panel
    below by interrupting the tab bar's bottom border line.
@@ -16,7 +16,7 @@
 
 /* ─── Tab Bar Container ──────────────────────────────────────────────────── */
 
-.lico-tabs {
+.meshrix-tabs {
   position: relative;
   display: flex;
   align-items: flex-end;
@@ -26,7 +26,7 @@
   margin: 0;
 }
 
-.lico-tabs--scrollable {
+.meshrix-tabs--scrollable {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -35,7 +35,7 @@
 
 /* ─── Individual Tab — Line Variant ──────────────────────────────────────── */
 
-.lico-tabs--line .lico-tab {
+.meshrix-tabs--line .meshrix-tab {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -56,29 +56,29 @@
     border-color var(--dur-fast) var(--ease-std);
 }
 
-.lico-tabs--line .lico-tab:hover:not(.lico-tab--disabled) {
+.meshrix-tabs--line .meshrix-tab:hover:not(.meshrix-tab--disabled) {
   color: var(--text-primary);
   border-bottom-color: var(--border-strong);
 }
 
-.lico-tabs--line .lico-tab--active {
+.meshrix-tabs--line .meshrix-tab--active {
   color: var(--brand);
   font-weight: var(--font-semibold);
   border-bottom-color: var(--brand);
 }
 
-.lico-tabs--line .lico-tab--active:hover {
+.meshrix-tabs--line .meshrix-tab--active:hover {
   border-bottom-color: var(--brand);
 }
 
 /* ─── Individual Tab — Card Variant ──────────────────────────────────────── */
 
-.lico-tabs--card {
+.meshrix-tabs--card {
   gap: var(--space-1-5);
   padding: 0 var(--space-1);
 }
 
-.lico-tabs--card .lico-tab {
+.meshrix-tabs--card .meshrix-tab {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -101,12 +101,12 @@
     border-color var(--dur-fast) var(--ease-std);
 }
 
-.lico-tabs--card .lico-tab:hover:not(.lico-tab--disabled) {
+.meshrix-tabs--card .meshrix-tab:hover:not(.meshrix-tab--disabled) {
   color: var(--text-primary);
   background: var(--bg-surface);
 }
 
-.lico-tabs--card .lico-tab--active {
+.meshrix-tabs--card .meshrix-tab--active {
   color: var(--brand);
   font-weight: var(--font-semibold);
   background: var(--bg-surface);
@@ -114,30 +114,30 @@
   border-bottom-color: var(--bg-surface);  /* "connects" to content panel */
 }
 
-.lico-tabs--card .lico-tab--draft {
+.meshrix-tabs--card .meshrix-tab--draft {
   border-style: dashed;
 }
 
 /* ─── Tab States ─────────────────────────────────────────────────────────── */
 
-.lico-tab--disabled {
+.meshrix-tab--disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.lico-tab__label {
+.meshrix-tab__label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.lico-tab__meta {
+.meshrix-tab__meta {
   font-size: var(--text-xs);
   font-weight: var(--font-bold);
   color: var(--text-muted);
 }
 
-.lico-tab__close {
+.meshrix-tab__close {
   display: inline-grid;
   width: 18px;
   height: 18px;
@@ -154,26 +154,26 @@
     color var(--dur-fast) var(--ease-std);
 }
 
-.lico-tab__close:hover {
+.meshrix-tab__close:hover {
   background: var(--danger-tint);
   color: var(--danger);
 }
 
 /* ─── Size Variants ──────────────────────────────────────────────────────── */
 
-.lico-tabs--small .lico-tab {
+.meshrix-tabs--small .meshrix-tab {
   padding: var(--space-2) var(--space-3);
   font-size: var(--text-sm);
 }
 
-.lico-tabs--compact .lico-tab {
+.meshrix-tabs--compact .meshrix-tab {
   padding: var(--space-1-5) var(--space-2-5);
   font-size: var(--text-sm);
 }
 
 /* ─── Focus ──────────────────────────────────────────────────────────────── */
 
-.lico-tab:focus-visible {
+.meshrix-tab:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: -2px;
   border-radius: var(--radius-xs);

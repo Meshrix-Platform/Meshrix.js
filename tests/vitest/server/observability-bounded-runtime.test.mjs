@@ -49,7 +49,7 @@ describe("bounded observability primitives", () => {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "observability-report-finalizer-"));
     const filePath = path.join(directory, "report.json");
     const provenance = {
-      producer: "licomesh-core-observability",
+      producer: "meshrix-core-observability",
       commandId: "test-report",
       sourceRevision: "sha256:test-source"
     };

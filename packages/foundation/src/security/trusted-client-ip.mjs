@@ -15,7 +15,7 @@ function normalizeNetworkIp(value = "") {
   return isIP(normalized) ? normalized.toLowerCase() : "";
 }
 
-function trustedProxySet(value = process.env.LICO_TRUSTED_PROXIES || "") {
+function trustedProxySet(value = process.env.MESHRIX_TRUSTED_PROXIES || "") {
   if (value instanceof Set || Array.isArray(value)) {
     const entries = value instanceof Set ? [...value] : value;
     return new Set(entries.map(normalizeNetworkIp).filter(Boolean));
@@ -63,7 +63,7 @@ export function isLoopbackAddress(value = "") {
 }
 
 export function isTrustedProxyAddress(value = "", {
-  trustedProxies = process.env.LICO_TRUSTED_PROXIES || ""
+  trustedProxies = process.env.MESHRIX_TRUSTED_PROXIES || ""
 } = {}) {
   const remoteAddress = normalizeNetworkIp(value);
   return Boolean(remoteAddress) && trustedProxySet(trustedProxies).has(remoteAddress);
@@ -71,7 +71,7 @@ export function isTrustedProxyAddress(value = "", {
 
 export function clientIpFromRequest(request, {
   unknown = "",
-  trustedProxies = process.env.LICO_TRUSTED_PROXIES || ""
+  trustedProxies = process.env.MESHRIX_TRUSTED_PROXIES || ""
 } = {}) {
   const remoteAddress = normalizeNetworkIp(
     request?.socket?.remoteAddress ||

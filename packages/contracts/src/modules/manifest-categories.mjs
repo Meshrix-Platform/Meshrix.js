@@ -4,7 +4,7 @@ export const ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS = Object.freeze([
   Object.freeze({
     categoryId: "foundation",
     label: "基础模块",
-    description: "Platform substrate that cannot be removed without breaking LicoMesh runtime and hydration mechanics."
+    description: "Platform substrate that cannot be removed without breaking Meshrix runtime and hydration mechanics."
   }),
   Object.freeze({
     categoryId: "core-capability",
@@ -66,8 +66,8 @@ export const DOCUMENTATION_ASSET_CLASSIFICATIONS = Object.freeze([
     assetId: "architecture-html-diagrams",
     classification: "developer-documentation",
     paths: Object.freeze([
-      "docs/architecture/LICOMESH-SYSTEM-ARCHITECTURE.html",
-      "docs/architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html"
+      "docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html",
+      "docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html"
     ]),
     purpose: "Human-readable architecture diagrams for system layers, service capability flow, and hydration status.",
     factAuthority: "source-material-for-architecture-facts"

@@ -5,11 +5,11 @@ import { PACTIUM_PROTOCOL } from "pactium";
 import { describe, expect, it } from "vitest";
 import {
   createPactiumStateSubstrate,
-} from "#lico/foundation/checkpoint/tree/merkle-state-substrate";
-import { createLicoPactiumRuntime } from "#lico/foundation/checkpoint/tree/pactium-substrate-preflight";
+} from "#meshrix/foundation/checkpoint/tree/merkle-state-substrate";
+import { createLicoPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
 
 async function withTempSubstrate(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-merkle-state-vitest-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-vitest-"));
   const substrate = createPactiumStateSubstrate({ userDataPath });
   try {
     return await testCase({ userDataPath, substrate });
@@ -253,7 +253,7 @@ describe("merkle state substrate", () => {
   });
 
   it("rolls back state root, event, ledger, and receipt when a compound commit fails", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-merkle-state-rollback-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-rollback-"));
     const baseRuntime = createLicoPactiumRuntime({ userDataPath, storageBackend: "sqlite" });
     const failingRuntime = {
       ...baseRuntime,
@@ -283,7 +283,7 @@ describe("merkle state substrate", () => {
   });
 
   it("serializes event, state, and LSM aggregate mutations across runtime instances", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-merkle-state-concurrent-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-concurrent-"));
     const substrates = Array.from({ length: 16 }, () => createPactiumStateSubstrate({ userDataPath }));
     try {
       await Promise.all(Array.from({ length: 32 }, (_, index) =>
@@ -337,7 +337,7 @@ describe("merkle state substrate", () => {
   });
 
   it("rejects durable state commits on non-transactional Pactium JSON storage", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-merkle-state-json-gate-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-json-gate-"));
     const runtime = createLicoPactiumRuntime({ userDataPath, storageBackend: "json" });
     const substrate = createPactiumStateSubstrate({ userDataPath, pactiumRuntime: runtime });
     try {

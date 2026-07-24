@@ -191,7 +191,7 @@ function createUpstreamGatewayE2eReadiness(report = {}, relativePath = "") {
   if (summary.downstreamMcpDistributionVerified !== true) {
     reasons.push("upstream-gateway-e2e-downstream-mcp-distribution-coverage-missing");
   }
-  if (summary.downstreamMcpDistributionOperation !== "lico.gateway.forward") {
+  if (summary.downstreamMcpDistributionOperation !== "meshrix.gateway.forward") {
     reasons.push("upstream-gateway-e2e-downstream-mcp-distribution-operation-mismatch");
   }
   if (summary.concurrentMcpForwardingVerified !== true) {

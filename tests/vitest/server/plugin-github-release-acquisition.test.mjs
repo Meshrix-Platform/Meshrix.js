@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "vitest";
 
-import { createGitHubReleasePluginPackageSource } from "#lico/contracts/plugins/plugin-package-source";
-import { createPluginPackageAcquisition } from "#lico/foundation/module-system/plugin-package-acquisition";
-import { createGitHubReleasePluginPackageAcquisition } from "#lico/foundation/module-system/github-release-plugin-package-source";
-import { createPluginPackageLifecycle } from "#lico/foundation/module-system/plugin-package-lifecycle";
-import { createPluginPackageCustody } from "#lico/foundation/module-system/plugin-package-custody";
+import { createGitHubReleasePluginPackageSource } from "#meshrix/contracts/plugins/plugin-package-source";
+import { createPluginPackageAcquisition } from "#meshrix/foundation/module-system/plugin-package-acquisition";
+import { createGitHubReleasePluginPackageAcquisition } from "#meshrix/foundation/module-system/github-release-plugin-package-source";
+import { createPluginPackageLifecycle } from "#meshrix/foundation/module-system/plugin-package-lifecycle";
+import { createPluginPackageCustody } from "#meshrix/foundation/module-system/plugin-package-custody";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -240,7 +240,7 @@ describe("github release plugin package acquisition", () => {
     const acquisition = createPluginPackageAcquisition({
       github: { fetchImpl: fixture.fetchImpl }
     });
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-gh-acq-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-gh-acq-"));
     try {
       const lifecycle = createPluginPackageLifecycle({
         custody: createPluginPackageCustody({ rootDir: path.join(root, "custody") }),

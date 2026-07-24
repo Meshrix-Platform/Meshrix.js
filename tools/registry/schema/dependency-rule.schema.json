@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/dependency-rule.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/dependency-rule.schema.json",
   "title": "Dependency Rules Registry",
   "description": "Cross-layer dependency constraints and exceptions.",
   "type": "object",

@@ -3,8 +3,8 @@ import { createHash } from "node:crypto";
 import {
   PLUGIN_BUNDLE_MANIFEST_FILENAME,
   normalizePluginBundleManifest
-} from "@lico/contracts/plugins/plugin-bundle-manifest";
-import { createVerifiedPluginPackage } from "@lico/contracts/plugins/verified-plugin-package";
+} from "@meshrix/contracts/plugins/plugin-bundle-manifest";
+import { createVerifiedPluginPackage } from "@meshrix/contracts/plugins/verified-plugin-package";
 import { extractPluginPackageTarGz, sha256Digest } from "./plugin-package-tar.mjs";
 
 function sanitize(message) {

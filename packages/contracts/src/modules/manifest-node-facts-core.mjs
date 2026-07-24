@@ -66,9 +66,9 @@ export const CORE_ARCHITECTURE_NODE_FACTS = Object.freeze([
       functionItems: ["client credential projection", "MCP credential projection", "secretRef only"]
     },
     {
-      moduleId: "credential-to-lico-client",
+      moduleId: "credential-to-meshrix-client",
       parentModuleId: "credential-distribution",
-      label: "To LicoMesh Client",
+      label: "To Meshrix Client",
       hydration: "optional",
       hydratable: true,
       functionItems: ["client credential projection", "secretRef only"]

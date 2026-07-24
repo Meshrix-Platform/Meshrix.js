@@ -65,7 +65,7 @@ function argumentValue(name, fallback = "") {
 }
 
 async function expectedConnectorFiles() {
-  const fixed = ["package.json", "README.md", "LICENSE", "mcp-release-targets.mjs", "bin/lico-mcp.mjs"];
+  const fixed = ["package.json", "README.md", "LICENSE", "mcp-release-targets.mjs", "bin/meshrix-mcp.mjs"];
   return sorted([...fixed, ...await listFilesRecursively(connectorRoot, "lib")]);
 }
 
@@ -81,25 +81,25 @@ function generatedPortableExecutables(platform) {
     ""
   ].join("\n");
   return new Map([
-    ["lico-mcp", [
+    ["meshrix-mcp", [
       "#!/usr/bin/env sh",
       "set -e",
       "DIR=$(CDPATH= cd -- \"$(dirname -- \"$0\")\" && pwd)",
-      "export LICO_MCP_CONNECTOR_COMMAND=\"$DIR/lico-mcp\"",
-      `exec \"$DIR/runtime/${runtimeExecutableName}\" \"$DIR/app/bin/lico-mcp.mjs\" \"$@\"`,
+      "export MESHRIX_MCP_CONNECTOR_COMMAND=\"$DIR/meshrix-mcp\"",
+      `exec \"$DIR/runtime/${runtimeExecutableName}\" \"$DIR/app/bin/meshrix-mcp.mjs\" \"$@\"`,
       ""
     ].join("\n")],
-    ["lico-mcp.ps1", [
+    ["meshrix-mcp.ps1", [
       "$ErrorActionPreference = 'Stop'",
       "$DIR = Split-Path -Parent $MyInvocation.MyCommand.Path",
-      "$env:LICO_MCP_CONNECTOR_COMMAND = Join-Path $DIR 'lico-mcp.ps1'",
-      `& (Join-Path $DIR 'runtime\\${runtimeExecutableName}') (Join-Path $DIR 'app\\bin\\lico-mcp.mjs') @args`,
+      "$env:MESHRIX_MCP_CONNECTOR_COMMAND = Join-Path $DIR 'meshrix-mcp.ps1'",
+      `& (Join-Path $DIR 'runtime\\${runtimeExecutableName}') (Join-Path $DIR 'app\\bin\\meshrix-mcp.mjs') @args`,
       "exit $LASTEXITCODE",
       ""
     ].join("\r\n")],
-    ["install.command", commandScript("lico-mcp-install.sh", "install")],
-    ["uninstall.command", commandScript("lico-mcp-uninstall.sh")],
-    ["doctor.command", commandScript("lico-mcp-install.sh", "doctor")]
+    ["install.command", commandScript("meshrix-mcp-install.sh", "install")],
+    ["uninstall.command", commandScript("meshrix-mcp-uninstall.sh")],
+    ["doctor.command", commandScript("meshrix-mcp-install.sh", "doctor")]
   ]);
 }
 
@@ -139,15 +139,15 @@ async function verifyPortableArchive({
     "LICENSE",
     "THIRD_PARTY_NOTICES.txt",
     "README.txt",
-    "lico-mcp",
-    "lico-mcp.ps1",
+    "meshrix-mcp",
+    "meshrix-mcp.ps1",
     "install.command",
     "uninstall.command",
     "doctor.command",
-    "lico-mcp-install.sh",
-    "lico-mcp-uninstall.sh",
-    "lico-mcp-install.ps1",
-    "lico-mcp-uninstall.ps1",
+    "meshrix-mcp-install.sh",
+    "meshrix-mcp-uninstall.sh",
+    "meshrix-mcp-install.ps1",
+    "meshrix-mcp-uninstall.ps1",
     runtimeName,
     "licenses/node/NODE_RUNTIME.lock.json",
     ...appFiles.map((name) => `app/${name}`)
@@ -170,15 +170,15 @@ async function verifyPortableArchive({
     "mcp_release_portable_directory_set_mismatch"
   );
   const executableFiles = new Set([
-    "lico-mcp",
-    "lico-mcp.ps1",
+    "meshrix-mcp",
+    "meshrix-mcp.ps1",
     "install.command",
     "uninstall.command",
     "doctor.command",
-    "lico-mcp-install.sh",
-    "lico-mcp-uninstall.sh",
+    "meshrix-mcp-install.sh",
+    "meshrix-mcp-uninstall.sh",
     runtimeName,
-    "app/bin/lico-mcp.mjs"
+    "app/bin/meshrix-mcp.mjs"
   ]);
   for (const directory of tarArchive.directories) {
     assert.equal(tarArchive.modes.get(directory), "drwxr-xr-x", `mcp_release_directory_mode_invalid:${directory}`);
@@ -208,10 +208,10 @@ async function verifyPortableArchive({
     nodeRuntimeLockPath
   );
   for (const scriptName of [
-    "lico-mcp-install.sh",
-    "lico-mcp-uninstall.sh",
-    "lico-mcp-install.ps1",
-    "lico-mcp-uninstall.ps1"
+    "meshrix-mcp-install.sh",
+    "meshrix-mcp-uninstall.sh",
+    "meshrix-mcp-install.ps1",
+    "meshrix-mcp-uninstall.ps1"
   ]) {
     await assertArchiveSourceFile(
       tarPath,
@@ -294,7 +294,7 @@ function parseChecksumIndex(text) {
 }
 
 async function verifyReproducibleConnectorTarball(inputDir, expectedName, expectedDigest) {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-release-repack-"));
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-release-repack-"));
   try {
     const npmCli = resolveNpmCliInvocation();
     const { stdout } = await run(
@@ -392,7 +392,7 @@ async function buildCanonicalManifest({
   channel,
   generatedAt
 }) {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-release-manifest-"));
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-release-manifest-"));
   try {
     const bootstrap = await createBootstrapInstaller({ outputDir: temporary, packageJson: connectorPackage });
     const portables = [];
@@ -415,7 +415,7 @@ async function buildCanonicalManifest({
         zipSha256: zipArchiveName ? checksumIndex.get(zipArchiveName) : null,
         zipSizeBytes: zipStat?.size ?? null,
         rootName,
-        executable: "lico-mcp",
+        executable: "meshrix-mcp",
         includesNodeRuntime: true,
         bundledNodeVersion: nodeRuntimeLock.version,
         projectLicensePath: "LICENSE",
@@ -488,7 +488,7 @@ async function main() {
   );
   const actualFiles = sorted(entries.map((entry) => entry.name));
   const [manifestText, latestText, packageText, nodeRuntimeLockText] = await Promise.all([
-    fs.readFile(path.join(inputDir, "lico-mcp-release.json"), "utf8"),
+    fs.readFile(path.join(inputDir, "meshrix-mcp-release.json"), "utf8"),
     fs.readFile(path.join(inputDir, "latest.json"), "utf8"),
     fs.readFile(path.join(connectorRoot, "package.json"), "utf8"),
     fs.readFile(nodeRuntimeLockPath, "utf8")
@@ -531,12 +531,12 @@ async function main() {
     .filter((platform) => zipPlatforms.has(platform))
     .map((platform) => `${connectorPackage.name}-${connectorPackage.version}-${platform}.zip`);
   const canonicalBootstrapFiles = [
-    "lico-mcp-install.sh",
-    "lico-mcp-uninstall.sh",
-    "lico-mcp-install.zh-CN.sh",
-    "lico-mcp-uninstall.zh-CN.sh",
-    "lico-mcp-install.ps1",
-    "lico-mcp-uninstall.ps1"
+    "meshrix-mcp-install.sh",
+    "meshrix-mcp-uninstall.sh",
+    "meshrix-mcp-install.zh-CN.sh",
+    "meshrix-mcp-uninstall.zh-CN.sh",
+    "meshrix-mcp-install.ps1",
+    "meshrix-mcp-uninstall.ps1"
   ];
   assertExactSet(declaredFiles, [
     canonicalConnectorTarball,
@@ -546,7 +546,7 @@ async function main() {
     "SHA256SUMS",
     "RELEASE_SHA256SUMS",
     "RELEASE_SHA256SUMS.sigstore.json",
-    "lico-mcp-release.json",
+    "meshrix-mcp-release.json",
     "latest.json"
   ], "mcp_release_declared_asset_set_mismatch");
   const expectedFiles = declaredFiles.filter((name) => !outerReleaseFiles.has(name));
@@ -592,12 +592,12 @@ async function main() {
   await verifyReproducibleConnectorTarball(inputDir, connectorTarball, manifest.connector.sha256);
 
   const bootstrapSources = [
-    { assetName: manifest.bootstrap?.scriptName, sourceName: "lico-mcp-install.sh", digest: manifest.bootstrap?.sha256 },
-    { assetName: manifest.bootstrap?.uninstallScriptName, sourceName: "lico-mcp-uninstall.sh", digest: manifest.bootstrap?.uninstallSha256 },
-    { assetName: manifest.bootstrap?.localized?.zhCN?.scriptName, sourceName: "lico-mcp-install.sh", digest: manifest.bootstrap?.localized?.zhCN?.sha256 },
-    { assetName: manifest.bootstrap?.localized?.zhCN?.uninstallScriptName, sourceName: "lico-mcp-uninstall.sh", digest: manifest.bootstrap?.localized?.zhCN?.uninstallSha256 },
-    { assetName: manifest.bootstrap?.windows?.scriptName, sourceName: "lico-mcp-install.ps1", digest: manifest.bootstrap?.windows?.sha256 },
-    { assetName: manifest.bootstrap?.windows?.uninstallScriptName, sourceName: "lico-mcp-uninstall.ps1", digest: manifest.bootstrap?.windows?.uninstallSha256 }
+    { assetName: manifest.bootstrap?.scriptName, sourceName: "meshrix-mcp-install.sh", digest: manifest.bootstrap?.sha256 },
+    { assetName: manifest.bootstrap?.uninstallScriptName, sourceName: "meshrix-mcp-uninstall.sh", digest: manifest.bootstrap?.uninstallSha256 },
+    { assetName: manifest.bootstrap?.localized?.zhCN?.scriptName, sourceName: "meshrix-mcp-install.sh", digest: manifest.bootstrap?.localized?.zhCN?.sha256 },
+    { assetName: manifest.bootstrap?.localized?.zhCN?.uninstallScriptName, sourceName: "meshrix-mcp-uninstall.sh", digest: manifest.bootstrap?.localized?.zhCN?.uninstallSha256 },
+    { assetName: manifest.bootstrap?.windows?.scriptName, sourceName: "meshrix-mcp-install.ps1", digest: manifest.bootstrap?.windows?.sha256 },
+    { assetName: manifest.bootstrap?.windows?.uninstallScriptName, sourceName: "meshrix-mcp-uninstall.ps1", digest: manifest.bootstrap?.windows?.uninstallSha256 }
   ];
   assertExactSet(
     bootstrapSources.map(({ assetName }) => assetName),

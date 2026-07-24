@@ -1,4 +1,4 @@
-import { getJson, postJson, putBinaryJson } from "@lico/ui-console/bridge-http";
+import { getJson, postJson, putBinaryJson } from "@meshrix/ui-console/bridge-http";
 import type { UploadSessionResponse } from "./types";
 
 export function createUploadSession(payload: Record<string, unknown>) {

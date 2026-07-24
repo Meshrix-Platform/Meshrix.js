@@ -31,9 +31,9 @@ function provenanceFor(platform) {
           frontend: "dockerfile.v0",
           args: {
             target: "runtime-ui",
-            "build-arg:LICO_SOURCE_REPOSITORY": "Acme/LicoMesh",
-            "build-arg:LICO_SOURCE_REF": "refs/tags/v1.2.3",
-            "build-arg:LICO_SOURCE_COMMIT": COMMIT
+            "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix",
+            "build-arg:MESHRIX_SOURCE_REF": "refs/tags/v1.2.3",
+            "build-arg:MESHRIX_SOURCE_COMMIT": COMMIT
           }
         },
         environment: { platform }
@@ -47,7 +47,7 @@ function provenanceFor(platform) {
         "https://mobyproject.org/buildkit@v1#metadata": {
           vcs: {
             revision: COMMIT,
-            source: "https://github.com/Acme/LicoMesh.git"
+            source: "https://github.com/Acme/Meshrix.git"
           }
         }
       },
@@ -65,10 +65,10 @@ function sbomFor(platform) {
       spdxVersion: "SPDX-2.3",
       SPDXID: "SPDXRef-DOCUMENT",
       dataLicense: "CC0-1.0",
-      name: `lico-${platform.replace("/", "-")}`,
+      name: `meshrix-${platform.replace("/", "-")}`,
       documentNamespace: `https://example.invalid/spdx/${platform.replace("/", "-")}`,
       creationInfo: { creators: ["Tool: buildkit"] },
-      packages: [{ SPDXID: "SPDXRef-Package-lico", name: "lico" }],
+      packages: [{ SPDXID: "SPDXRef-Package-meshrix", name: "meshrix" }],
       relationships: []
     }
   };
@@ -76,15 +76,15 @@ function sbomFor(platform) {
 
 function fixture() {
   return {
-    image: "ghcr.io/acme/licomesh",
+    image: "ghcr.io/acme/meshrix",
     digest: ROOT_DIGEST,
-    target: "ghcr.io/acme/licomesh:1.2.3",
-    candidate: `ghcr.io/acme/licomesh:candidate-${COMMIT}`,
+    target: "ghcr.io/acme/meshrix:1.2.3",
+    candidate: `ghcr.io/acme/meshrix:candidate-${COMMIT}`,
     reused: false,
-    repository: "Acme/LicoMesh",
+    repository: "Acme/Meshrix",
     sourceRef: "refs/tags/v1.2.3",
     sourceCommit: COMMIT,
-    workflowRef: "Acme/LicoMesh/.github/workflows/release.yml@refs/tags/v1.2.3",
+    workflowRef: "Acme/Meshrix/.github/workflows/release.yml@refs/tags/v1.2.3",
     manifestDescriptorText: JSON.stringify({ digest: ROOT_DIGEST, mediaType: MEDIA_TYPE }),
     manifestText: JSON.stringify({
       schemaVersion: 2,
@@ -138,15 +138,15 @@ function mutateJson(source, mutate) {
 describe("release image evidence authority", () => {
   it("requires one explicit value for every authority input", () => {
     const args = [
-      "--image", "ghcr.io/acme/licomesh",
+      "--image", "ghcr.io/acme/meshrix",
       "--digest", ROOT_DIGEST,
-      "--target", "ghcr.io/acme/licomesh:1.2.3",
-      "--candidate", `ghcr.io/acme/licomesh:candidate-${COMMIT}`,
+      "--target", "ghcr.io/acme/meshrix:1.2.3",
+      "--candidate", `ghcr.io/acme/meshrix:candidate-${COMMIT}`,
       "--reused", "false",
-      "--repository", "Acme/LicoMesh",
+      "--repository", "Acme/Meshrix",
       "--source-ref", "refs/tags/v1.2.3",
       "--source-commit", COMMIT,
-      "--workflow-ref", "Acme/LicoMesh/.github/workflows/release.yml@refs/tags/v1.2.3",
+      "--workflow-ref", "Acme/Meshrix/.github/workflows/release.yml@refs/tags/v1.2.3",
       "--manifest-descriptor", "descriptor.json",
       "--manifest", "manifest.json",
       "--provenance", "provenance.json",
@@ -155,7 +155,7 @@ describe("release image evidence authority", () => {
       "--state-output", "state.json"
     ];
     expect(parseReleaseImageAuthorityArguments(args)).toMatchObject({
-      image: "ghcr.io/acme/licomesh",
+      image: "ghcr.io/acme/meshrix",
       digest: ROOT_DIGEST,
       reused: false,
       manifestDescriptor: "descriptor.json",
@@ -172,10 +172,10 @@ describe("release image evidence authority", () => {
     const authority = buildReleaseImageAuthority(input);
     expect(authority).toMatchObject({
       schemaVersion: RELEASE_IMAGE_AUTHORITY_SCHEMA,
-      repository: "Acme/LicoMesh",
+      repository: "Acme/Meshrix",
       sourceCommit: COMMIT,
       sourceRef: "refs/tags/v1.2.3",
-      image: "ghcr.io/acme/licomesh",
+      image: "ghcr.io/acme/meshrix",
       digest: ROOT_DIGEST,
       platforms: RELEASE_IMAGE_PLATFORMS,
       provenancePredicateType: "https://slsa.dev/provenance/v0.2",
@@ -219,7 +219,7 @@ describe("release image evidence authority", () => {
     const input = fixture();
     input.provenanceText = mutateJson(input.provenanceText, (provenance) => {
       provenance["linux/amd64"].SLSA.invocation.parameters.args[
-        "build-arg:LICO_SOURCE_COMMIT"
+        "build-arg:MESHRIX_SOURCE_COMMIT"
       ] = `prefix-${COMMIT}-suffix`;
     });
     expect(() => buildReleaseImageAuthority(input)).toThrowError(
@@ -231,10 +231,10 @@ describe("release image evidence authority", () => {
     const input = fixture();
     input.provenanceText = mutateJson(input.provenanceText, (provenance) => {
       provenance["linux/arm64"].SLSA.invocation.parameters.args[
-        "build-arg:LICO_SOURCE_REPOSITORY"
+        "build-arg:MESHRIX_SOURCE_REPOSITORY"
       ] = "Acme/Elsewhere";
       provenance["linux/arm64"].SLSA.invocation.parameters.args[
-        "build-arg:LICO_SOURCE_REF"
+        "build-arg:MESHRIX_SOURCE_REF"
       ] = "refs/tags/v9.9.9";
     });
     expect(() => buildReleaseImageAuthority(input)).toThrowError(

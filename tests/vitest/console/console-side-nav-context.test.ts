@@ -56,8 +56,8 @@ afterEach(() => {
 
 describe("console side nav width bounds", () => {
   it("clamps persisted and setter widths while preserving main content space", async () => {
-    window.localStorage.setItem("lico:console:sideNavWidth", "99999");
-    window.localStorage.setItem("lico:console:sideNavDirectoryWidth", "99999");
+    window.localStorage.setItem("meshrix:console:sideNavWidth", "99999");
+    window.localStorage.setItem("meshrix:console:sideNavDirectoryWidth", "99999");
 
     const { context } = mountContext("workspaces");
     await nextTick();
@@ -101,8 +101,8 @@ describe("console side nav width bounds", () => {
   });
 
   it("falls back safely when browser storage is empty, malformed, or unavailable", () => {
-    window.localStorage.setItem("lico:console:sideNavWidth", "   ");
-    window.localStorage.setItem("lico:console:sideNavDirectoryWidth", "not-a-number");
+    window.localStorage.setItem("meshrix:console:sideNavWidth", "   ");
+    window.localStorage.setItem("meshrix:console:sideNavDirectoryWidth", "not-a-number");
     const first = mountContext();
 
     expect(first.context.sideNavWidth.value).toBe(220);

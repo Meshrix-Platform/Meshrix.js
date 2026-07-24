@@ -1,4 +1,4 @@
-import { unifiedRegistrationForTask } from "#lico/product-api";
+import { unifiedRegistrationForTask } from "#meshrix/product-api";
 import { CHECKPOINT_FILE_SAMPLE_LIMIT } from "./job-manager-validation.mjs";
 
 export function cloneCheckpointReceipt(receipt, { includeFiles = false } = {}) {

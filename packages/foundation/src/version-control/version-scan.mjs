@@ -26,6 +26,11 @@ export const IGNORED_VERSION_SCAN_FILES = Object.freeze([
   "package-lock.json"
 ]);
 
+export const IGNORED_VERSION_SCAN_PREFIXES = Object.freeze([
+  "docs/plans/",
+  "docs/reports/"
+]);
+
 const GOVERNED_NAME_SOURCE =
   "(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?";
 const GOVERNED_VERSIONED_NAME_SOURCE = `${GOVERNED_NAME_SOURCE}-[0-9]+(?:\\.[0-9]+)*`;
@@ -81,6 +86,7 @@ export function shouldSkipVersionScanPath(relativePath, {
   excludedRelativePaths = []
 } = {}) {
   if (excludedRelativePaths.includes(relativePath)) return true;
+  if (IGNORED_VERSION_SCAN_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) return true;
   if (IGNORED_VERSION_SCAN_FILES.includes(path.basename(relativePath))) return true;
   return relativePath.split("/").some((part) => IGNORED_VERSION_SCAN_PATH_PARTS.includes(part));
 }

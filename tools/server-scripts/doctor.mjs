@@ -1,7 +1,7 @@
 import path from "node:path";
 import process from "node:process";
 import { runStorageDoctor } from "../../packages/foundation/src/storage/ops-tools.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   describeCapabilityBindingGuardStatus,
   describeCapabilityKernelStatus

@@ -1,7 +1,7 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
-export const PLUGIN_BUNDLE_MANIFEST_SCHEMA = "licomesh.plugin-bundle.manifest.v1";
+export const PLUGIN_BUNDLE_MANIFEST_SCHEMA = "v0.0.1:meshrix:plugin-bundle-manifest-1";
 export const PLUGIN_BUNDLE_MANIFEST_FILENAME = "plugin.bundle.json";
 
 const PLUGIN_ID_PATTERN = /^[a-z][a-z0-9-]*$/u;

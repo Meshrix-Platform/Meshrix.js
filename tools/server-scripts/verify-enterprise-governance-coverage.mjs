@@ -37,7 +37,7 @@ const PRIVATE_ROOT_PATTERNS = Object.freeze([
   /\bpackages\/private\b/iu,
   /\bprivate-product\b/iu,
   /\bproprietary-runtime\b/iu,
-  /\blicomesh-private\b/iu
+  /\bmeshrix-private\b/iu
 ]);
 
 function repoPath(...parts) {
@@ -271,7 +271,7 @@ function assertNoReportLeak(report) {
 }
 
 async function verifyLayeredApprovalModel() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-governance-layers-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-governance-layers-"));
   const tagManagementStore = createTagStoreAdapter({ userDataPath });
   const governance = createAuthorizationGovernanceStore({
     userDataPath,
@@ -378,7 +378,7 @@ async function verifyLayeredApprovalModel() {
 }
 
 async function verifyPendingApprovalRequirementsPersistence() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-pending-approval-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-pending-approval-"));
   const store = createOperationPermissionStore({
     userDataPath,
     capabilityKeyProvider: { close() {} },
@@ -401,7 +401,7 @@ async function verifyPendingApprovalRequirementsPersistence() {
       pendingOperationId: "pending-layered-approval",
       traceId: "trace-layered-approval",
       toolExecutionId: "tool-exec-layered-approval",
-      toolId: "lico.gateway.forward",
+      toolId: "meshrix.gateway.forward",
       toolVersion: "v1",
       toolsetIds: ["gateway"],
       operationId: "gateway.forward",
@@ -422,7 +422,7 @@ async function verifyPendingApprovalRequirementsPersistence() {
       pendingOperationId: "pending-projection-only-approval",
       traceId: "trace-projection-only-approval",
       toolExecutionId: "tool-exec-projection-only-approval",
-      toolId: "lico.gateway.forward",
+      toolId: "meshrix.gateway.forward",
       toolVersion: "v1",
       toolsetIds: ["gateway"],
       operationId: "gateway.forward",
@@ -490,7 +490,7 @@ async function verifyPendingApprovalApproverGuard() {
     pendingOperationId: "pending-layer-guard",
     status: "pending",
     traceId: "trace-layer-guard",
-    toolId: "lico.gateway.forward",
+    toolId: "meshrix.gateway.forward",
     grantId: "grant-layer-guard",
     profileId: "profile-guard",
     context: { transport: "verifier" },
