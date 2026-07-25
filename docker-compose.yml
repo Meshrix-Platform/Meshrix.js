@@ -4,6 +4,7 @@
 # Usage:
 #   docker compose up -d
 #   MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --build
+#   docker compose --profile format-convert up -d (optional converter service)
 #
 # The default build remains API-only. Select runtime-ui explicitly to build and
 # serve the Vue Console. The service binds to 127.0.0.1.
@@ -42,6 +43,26 @@ services:
       - meshrix-server-data:/app/data
       # Optional, read-only host Codex configuration:
       # - ${HOME}/.codex:/codex-home:ro
+
+  # Optional file-parser/format-convert upstream service used by
+  # docs/examples/file-parser-format-convert.upstream.json. Its build context
+  # lives in the sibling Meshrix-Services repository, so this file references
+  # the pre-built image; build it once from that checkout:
+  #   cd ../Meshrix-Services/file-parser/format-convert && make image
+  # The service stays on the internal Compose network, where the server
+  # reaches it as http://format-convert:8080.
+  format-convert:
+    image: ${MESHRIX_FORMAT_CONVERT_IMAGE_NAME:-meshrix-format-convert:local}
+    container_name: ${MESHRIX_FORMAT_CONVERT_CONTAINER_NAME:-meshrix-format-convert}
+    restart: unless-stopped
+    profiles:
+      - format-convert
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /readyz HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200'"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   meshrix-server-data:

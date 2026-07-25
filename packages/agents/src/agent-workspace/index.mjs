@@ -389,7 +389,8 @@ export function createAgentWorkspace({
     createWorkspaceFolder,
     listWorkspaceFiles,
     workspaceFileMetadata,
-    downloadWorkspaceFile
+    downloadWorkspaceFile,
+    openWorkspaceFileReadStream
   } = readFileApi;
 
   const writeFileApi = createAgentWorkspaceFileWriteApi({
@@ -667,6 +668,7 @@ export function createAgentWorkspace({
     writeWorkspaceFile,
     patchWorkspaceFile,
     downloadWorkspaceFile,
+    openWorkspaceFileReadStream,
     deleteWorkspaceFile,
     moveWorkspaceFile,
     ...(controlledLocalDirectoryHostEnabled ? {

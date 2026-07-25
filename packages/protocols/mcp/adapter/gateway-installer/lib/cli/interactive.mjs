@@ -12,6 +12,7 @@ import {
   sha256Hex
 } from "./process-identity-request.mjs";
 import { fetchJson } from "./http-json-client.mjs";
+import { resolveGrantRequestFields } from "./grant-request.mjs";
 import { redactToken } from "./installer-output-safety.mjs";
 import { canUseInstallTui, installerOptions } from "./installer-options.mjs";
 import { isGenericRemoteLocation } from "./scan-candidates.mjs";
@@ -474,6 +475,13 @@ async function assertNoStoredGrantWillBeOverwritten(targets) {
   }
 }
 
+function echoRequestedGrantSummary(grantRequest) {
+  if (!grantRequest?.explicit) {
+    return;
+  }
+  process.stderr.write(`MCP grant request: ${grantRequest.summary}\n`);
+}
+
 export async function requestLocalMcpGrant(options, { targets = [], autoUpdate = false } = {}) {
   const settings = installerOptions(options);
   const targetList = [...new Set(targets.map(normalizeTarget).filter(Boolean))];
@@ -481,14 +489,17 @@ export async function requestLocalMcpGrant(options, { targets = [], autoUpdate =
     throw new Error("Local MCP grants require exactly one target for process identity binding.");
   }
   const target = targetList[0];
+  const grantRequest = resolveGrantRequestFields(options);
   await assertNoStoredGrantWillBeOverwritten(targetList);
   const processIdentityClaim = createProcessIdentityClaim(target);
+  echoRequestedGrantSummary(grantRequest);
   const responsePayload = await requestApprovedLocalMcpGrant(options, {
     targets: targetList,
     label: `Meshrix MCP ${targetList.length ? targetList.map(targetLabel).join(", ") : "local agent"}`,
     connectorVersion: packageJson.version,
     processIdentity: processIdentityClaim.request,
-    autoUpdate
+    autoUpdate,
+    ...grantRequest.fields
   });
   if (!responsePayload?.token || !responsePayload?.processIdentity?.clientIdentityPackage) {
     throw new Error("Failed to request local Meshrix MCP process identity package.");
@@ -567,6 +578,7 @@ export async function requestLocalMcpGrantBatch(options, { targets = [], autoUpd
   if (targetList.length === 0) {
     throw new Error("Local MCP grants require at least one target.");
   }
+  const grantRequest = resolveGrantRequestFields(options);
   await assertNoStoredGrantWillBeOverwritten(targetList);
   if (targetList.length === 1) {
     const grant = await requestLocalMcpGrant(options, { targets: targetList, autoUpdate });
@@ -589,12 +601,14 @@ export async function requestLocalMcpGrantBatch(options, { targets = [], autoUpd
   const processIdentities = Object.fromEntries(
     Object.entries(claimsByTarget).map(([target, claim]) => [target, claim.request])
   );
+  echoRequestedGrantSummary(grantRequest);
   const responsePayload = await requestApprovedLocalMcpGrant(options, {
     targets: targetList,
     label: `Meshrix MCP ${targetList.map(targetLabel).join(", ")}`,
     connectorVersion: packageJson.version,
     processIdentities,
-    autoUpdate
+    autoUpdate,
+    ...grantRequest.fields
   });
   if (responsePayload?.ok === false || !responsePayload?.targetGrants) {
     throw new Error("Failed to request batched local Meshrix MCP process identity packages.");

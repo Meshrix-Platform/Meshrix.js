@@ -14,15 +14,15 @@ packages/protocols/mcp/adapter/native-installer/
 Canonical installer entrypoints:
 
 ```bash
-packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target openclaw,codex,claude-code,antigravity,opencode,pi --json
-packages/protocols/mcp/adapter/native-installer/meshrix-mcp-uninstall.sh --target openclaw,codex,claude-code,antigravity,opencode,pi
+packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh --target openclaw,codex,claude-code,antigravity,opencode,pi,kimi --json
+packages/protocols/mcp/adapter/native-installer/meshrix-mcp-uninstall.sh --target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
 ```
 
 Windows uses PowerShell only:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-install.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi -Json
-powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi
+powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-install.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi,kimi -Json
+powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
 ```
 
 Supported targets are supplied by pinned client-adapter packages published from Meshrix-Plugins. Core retains only the target catalog, adapter protocol, package integrity/cache policy, authorization, credential, proxy, and lifecycle transaction. Client commands, configuration formats, probes, and mutations are not implemented in Core.

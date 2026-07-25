@@ -44,4 +44,4 @@ isolation, connector proxy, and lifecycle transaction.
 
 Optional middleware integrations become compatibility targets through code, configuration, documentation, and verifier updates.
 
-Supported connector-managed client targets in this release: OpenClaw, Codex, Claude Code, Antigravity, and OpenCode.
+Supported connector-managed client targets in this release: OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI.
