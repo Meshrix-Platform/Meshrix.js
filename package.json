@@ -184,6 +184,7 @@
     "release:package-server-source": "node tools/server-scripts/package-server-source.mjs",
     "release:prepare": "node tools/server-scripts/prepare-release.mjs",
     "verify:release-definition": "node tools/server-scripts/verify-release-definition.mjs",
+    "verify:release-journey": "node tools/server-scripts/verify-release-journey.mjs",
     "release:publish-npm": "node tools/server-scripts/publish-release-set.mjs",
     "release:prepare-node-runtime-source-evidence": "node tools/server-scripts/prepare-node-runtime-source-evidence.mjs",
     "release:generate-provenance": "node tools/server-scripts/generate-provenance.mjs",

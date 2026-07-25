@@ -50,5 +50,10 @@
   "localVerification": {
     "engine": "podman",
     "evidenceAuthority": "local-only"
+  },
+  "journeyGate": {
+    "commandId": "verify:release-journey",
+    "required": true,
+    "report": "build/reports/release-journey.json"
   }
 }

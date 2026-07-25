@@ -401,6 +401,43 @@ npm run verify:release-definition
 npm run release:prepare -- --check
 ```
 
+Every release tag must also pass the mandatory release journey gate:
+
+```bash
+npm run verify:release-journey
+```
+
+The gate re-runs the release-defining scenario deterministically on an
+isolated Docker Compose stack: it builds and starts the server plus the
+`format-convert` profile on a free loopback port with
+`MESHRIX_ADVERTISED_BASE_URL` set to the mapped URL, bootstraps the
+containerized owner account, publishes
+`docs/examples/file-parser-format-convert.upstream.json` through the
+authenticated control plane, seeds the client-adapter cache, installs the MCP
+connector for the `kimi` target with the write-capable journey grant, approves
+the device authorization through the console API, drives the MCP journey over
+the real connector stdio proxy (create workspace, read the internal
+`workspaceId` from the response, upload the tracked Chinese UTF-8 fixture
+from `tools/server-scripts/lib/release-journey-fixture.mjs`, convert it through
+a governed `workspace:` artifact reference, assert the `[resource_link, text]`
+result), downloads the PDF by following the returned resource_link URL with
+the connector `fetch` command, and verifies `%PDF-` magic, byte bounds,
+embedded Noto CJK fonts, and full ToUnicode coverage of the fixture's Han
+codepoints. It writes `build/reports/release-journey.json` with per-step
+receipts and exits nonzero on any failure; cleanup (connector uninstall and
+grant revocation, compose `down -v`, temporary secrets and work directories)
+always runs. The gate needs Docker, the format-convert image (built
+automatically from the sibling `../Meshrix-Services` checkout when missing,
+or pass `--image-name`), and the kimi client adapter source (default
+`../Meshrix-Plugins/plugins/agents/kimi`; override with
+`MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE` or `--adapter-source`). Useful flags:
+`--plan`, `--keep-stack`, `--port`, `--adapter-source`, `--image-name`,
+`--json`. The gate proves the install-to-download client journey works end to
+end; it is not the enterprise acceptance reducer and does not replace it —
+`verify:acceptance` remains the platform readiness authority. In
+`.github/workflows/release.yml` the `journey` job runs this gate after the
+`verify` job and before asset assembly and every publish job.
+
 `.github/workflows/release.yml` is the sole publication path. It runs only for
 semantic version tags, serializes all release runs globally, and fails unless
 the tagged commit is verifiably contained in the canonical `release` branch.

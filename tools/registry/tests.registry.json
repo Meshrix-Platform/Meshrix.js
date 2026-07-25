@@ -149,7 +149,8 @@
       "suites": [
         "release.npm-package-installability",
         "jobs.work-queue-postgres-container",
-        "open-platform.private-deployment-e2e"
+        "open-platform.private-deployment-e2e",
+        "release.journey-gate"
       ],
       "timeoutMs": 7200000
     },
@@ -1731,6 +1732,27 @@
       "coverageContribution": true,
       "artifacts": [
         "build/reports/downstream-agent-tool-loop.json"
+      ]
+    },
+    {
+      "id": "release.journey-gate",
+      "label": "Mandatory release journey gate: containerized upstream publish, connector install, MCP conversion journey, and PDF proof",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "e2e",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-release-journey.mjs"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/release-journey.json"
       ]
     },
     {

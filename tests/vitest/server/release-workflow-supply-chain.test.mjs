@@ -105,7 +105,7 @@ describe("release workflow supply-chain boundary", () => {
     expect(acceptanceJob).toContain("verify-platform-acceptance.mjs");
     expect(acceptanceJob).toContain("--field acceptance.profile");
     expect(acceptanceJob).toContain("environment: release-candidate");
-    expect(assembly).toContain("needs: [verify, platform-acceptance]");
+    expect(assembly).toContain("needs: [verify, platform-acceptance, journey]");
     const orderedJobOffsets = orderedJobs.map((jobId) => workflow.indexOf(`  ${jobId}:\n`));
     expect(orderedJobOffsets.every((offset) => offset > 0)).toBe(true);
     expect(orderedJobOffsets).toEqual([...orderedJobOffsets].sort((a, b) => a - b));
@@ -310,7 +310,7 @@ describe("release workflow supply-chain boundary", () => {
     const workflow = read(".github/workflows/release.yml");
     const uses = [...workflow.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)\s*(?:#.*)?$/gmu)]
       .map((match) => match[1]);
-    expect(uses).toHaveLength(37);
+    expect(uses).toHaveLength(42);
     expect(uses.every((value) => /@[a-f0-9]{40}$/u.test(value))).toBe(true);
     expect(workflow).toContain("--json-field container.platforms");
     expect(workflow).toContain('--platform "$platform_csv"');
