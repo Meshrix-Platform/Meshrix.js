@@ -686,9 +686,10 @@ export function createServiceManifestTransaction({
     await ensureAuthority(context);
     const db = openAuthorityDatabase(rootPath, { create: false });
     try {
-      return db.transaction(() => {
-        context.check();
-        const existingRequest = outcomeFromRow(db.prepare(`
+      try {
+        return db.transaction(() => {
+          context.check();
+          const existingRequest = outcomeFromRow(db.prepare(`
           SELECT * FROM manifest_requests WHERE request_digest=?
         `).get(requestDigest));
         const input = {
@@ -881,12 +882,24 @@ export function createServiceManifestTransaction({
           now(),
           recordBytes
         );
-        return Object.freeze({
-          outcome,
-          replayed: false,
-          changed: !unchanged
-        });
-      }).immediate();
+          return Object.freeze({
+            outcome,
+            replayed: false,
+            changed: !unchanged
+          });
+        }).immediate();
+      } catch (error) {
+        if (error?.code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+          const candidate = pointerFromMeta(metaRows(db), "candidate");
+          if (expectedSetRevision !== candidate.setRevision) {
+            throw serviceManifestError(
+              "storage_manifest_set_revision_stale",
+              "Service manifest expected set revision is stale."
+            );
+          }
+        }
+        throw error;
+      }
     } finally {
       db.close();
     }
