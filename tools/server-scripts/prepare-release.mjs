@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadReleaseDefinition } from "./verify-release-definition.mjs";
 
 const GATEWAY_INSTALLER_MANIFEST =
   "packages/protocols/mcp/adapter/gateway-installer/package.json";
@@ -493,7 +494,15 @@ export async function prepareRelease({
   check = false,
   date = currentReleaseDate()
 } = {}) {
-  const normalizedVersion = assertReleaseVersion(version);
+  const definition = await loadReleaseDefinition(path.resolve(rootDir)).catch(() => null);
+  const definedVersion = definition?.release?.version;
+  const normalizedVersion = assertReleaseVersion(version || definedVersion);
+  if (definedVersion && normalizedVersion !== definedVersion) {
+    throw releaseError(
+      "release_definition_version_mismatch",
+      "Requested version must match tools/registry/release-definition.registry.json."
+    );
+  }
   const normalizedDate = assertReleaseDate(date);
   const resolvedRoot = path.resolve(rootDir);
   const state = await loadReleaseState(resolvedRoot);
@@ -542,13 +551,13 @@ export async function prepareRelease({
 function usage() {
   return [
     "Usage:",
-    "  npm run release:prepare -- <semver>",
-    "  npm run release:prepare -- --check <semver>",
+    "  npm run release:prepare",
+    "  npm run release:prepare -- --check",
     "  npm run release:prepare -- --check --tag v<semver>",
     "",
     "Options:",
     "  --check       Validate without writing files.",
-    "  --tag TAG     Validate a v-prefixed release tag and use its version.",
+    "  --tag TAG     Validate that a v-prefixed tag matches the release definition.",
     "  --date DATE   Use YYYY-MM-DD for a newly created changelog entry.",
     "  --help        Show this help."
   ].join("\n");
@@ -597,7 +606,7 @@ export function parseReleaseArguments(argv) {
   if (tag && version) {
     throw releaseError("release_argument_conflict", "Use either a version or --tag, not both.");
   }
-  const resolvedVersion = tag ? releaseVersionFromTag(tag) : assertReleaseVersion(version);
+  const resolvedVersion = tag ? releaseVersionFromTag(tag) : (version ? assertReleaseVersion(version) : "");
   return { help: false, check, version: resolvedVersion, date: assertReleaseDate(date) };
 }
 

@@ -188,6 +188,8 @@ function createRuntimeFixture(overrides = {}) {
 
   const securityPermissions = {
     appendDecision: vi.fn(),
+    getGovernanceApproval: vi.fn(() => null),
+    listGovernanceApprovals: vi.fn(() => []),
     upsertGovernanceApproval: vi.fn(),
     revokeGovernanceApproval: vi.fn(),
     ...overrides.securityPermissions
@@ -725,6 +727,286 @@ describe("operation-permission runtime (behavior)", () => {
         }
       }
     });
+  });
+
+  it("revalidates the current grant before the dispatched operation effect", async () => {
+    let authorizationCall = 0;
+    const authorizeRequest = vi.fn(async () => {
+      authorizationCall += 1;
+      if (authorizationCall === 1) {
+        return {
+          ok: true,
+          grant: {
+            id: "grant-1",
+            label: "Grant 1",
+            scopes: ["tool:run"],
+            capabilities: [],
+            enabled: true,
+            revokedAt: "",
+            projectionFingerprint: "sha256:fixture-grant-projection",
+            policyIntegrity: { valid: true }
+          },
+          sourceIp: "127.0.0.1"
+        };
+      }
+      return {
+        ok: false,
+        status: 403,
+        reasonCode: "grant_revoked",
+        error: "Tool grant is no longer active."
+      };
+    });
+    const operationHandler = vi.fn();
+    const operationDispatcher = vi.fn(async ({ revalidateAuthorization, response }) => {
+      const currentAuthorization = await revalidateAuthorization();
+      if (!currentAuthorization.ok) {
+        response.writeHead(currentAuthorization.status, {
+          "content-type": "application/json; charset=utf-8"
+        });
+        response.end(JSON.stringify({
+          error: {
+            code: currentAuthorization.reasonCode,
+            message: currentAuthorization.error
+          }
+        }));
+        return { ok: false };
+      }
+      await operationHandler();
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ result: { ok: true } }));
+      return { ok: true };
+    });
+    const fixture = createRuntimeFixture({
+      store: { authorizeRequest },
+      runtime: { operationDispatcher }
+    });
+
+    const result = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest()
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 403 });
+    expect(authorizeRequest).toHaveBeenCalledTimes(2);
+    expect(authorizeRequest).toHaveBeenLastCalledWith(expect.objectContaining({
+      recordUse: false
+    }));
+    expect(operationHandler).not.toHaveBeenCalled();
+  });
+
+  it("revalidates the current policy before the dispatched operation effect", async () => {
+    let policyCall = 0;
+    const policyEngine = {
+      evaluate: vi.fn(async () => {
+        policyCall += 1;
+        return policyCall === 1
+          ? {
+              effect: "allow",
+              decisionId: "policy-initial",
+              reasonCode: "",
+              redactedReason: "",
+              missingScopes: [],
+              missingCapabilities: [],
+              missingToolsets: [],
+              grantPolicyRevision: 1,
+              governancePolicyRevision: { revision: 1 }
+            }
+          : {
+              effect: "deny",
+              decisionId: "policy-revoked",
+              reasonCode: "policy_revoked",
+              redactedReason: "Current policy denies execution.",
+              missingScopes: [],
+              missingCapabilities: [],
+              missingToolsets: [],
+              grantPolicyRevision: 2,
+              governancePolicyRevision: { revision: 2 }
+            };
+      })
+    };
+    const operationHandler = vi.fn();
+    const operationDispatcher = vi.fn(async ({ revalidateAuthorization, response }) => {
+      const currentAuthorization = await revalidateAuthorization();
+      if (!currentAuthorization.ok) {
+        response.writeHead(currentAuthorization.status, {
+          "content-type": "application/json; charset=utf-8"
+        });
+        response.end(JSON.stringify({
+          error: {
+            code: currentAuthorization.reasonCode,
+            message: currentAuthorization.error
+          }
+        }));
+        return { ok: false };
+      }
+      await operationHandler();
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ result: { ok: true } }));
+      return { ok: true };
+    });
+    const fixture = createRuntimeFixture({
+      policyEngine,
+      runtime: { operationDispatcher }
+    });
+
+    const result = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest()
+    });
+
+    expect(result).toMatchObject({ ok: false, status: 403 });
+    expect(policyEngine.evaluate).toHaveBeenCalledTimes(2);
+    expect(operationHandler).not.toHaveBeenCalled();
+  });
+
+  it("denies a queued effect when its governance approval is revoked before execution", async () => {
+    let releaseLockWait;
+    const lockWait = new Promise((resolve) => {
+      releaseLockWait = resolve;
+    });
+    let dispatchQueued;
+    const queued = new Promise((resolve) => {
+      dispatchQueued = resolve;
+    });
+    let revoked = false;
+    const requiredApproval = {
+      approvalLayers: ["department"],
+      operationBinding: {
+        ...operationBindingForTest(),
+        approvalActorId: "console-user-1"
+      }
+    };
+    const approvedPendingOperation = {
+      pendingOperationId: "pending-revoked-while-waiting",
+      operationId: "operation.alpha",
+      approvalScope: "approval:alpha",
+      status: "approved",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      grantId: "grant-1",
+      resolvedBy: "console-user-1",
+      requiredApproval,
+      approvalLayers: ["department"]
+    };
+    const operationHandler = vi.fn();
+    const operationDispatcher = vi.fn(async ({ revalidateAuthorization, response }) => {
+      dispatchQueued();
+      await lockWait;
+      const currentAuthorization = await revalidateAuthorization();
+      if (!currentAuthorization.ok) {
+        response.writeHead(currentAuthorization.status, {
+          "content-type": "application/json; charset=utf-8"
+        });
+        response.end(JSON.stringify({
+          error: {
+            code: currentAuthorization.reasonCode,
+            message: currentAuthorization.error
+          }
+        }));
+        return { ok: false };
+      }
+      await operationHandler();
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ result: { ok: true } }));
+      return { ok: true };
+    });
+    const fixture = createRuntimeFixture({
+      tool: { requiresApproval: true },
+      securityPermissions: {
+        getGovernanceApproval: vi.fn(() => ({
+          approvalId: "pending-pending-revoked-while-waiting",
+          effect: "allow",
+          approvalLayers: ["department"],
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          revokedAt: revoked ? "2026-07-25T00:00:00.000Z" : ""
+        }))
+      },
+      runtime: { operationDispatcher }
+    });
+
+    const execution = fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest(),
+      context: {
+        approval: { resolvedBy: "console-user-1" }
+      },
+      approvedPendingOperation
+    });
+    await queued;
+    revoked = true;
+    releaseLockWait();
+    const result = await execution;
+
+    expect(result).toMatchObject({ ok: false, status: 409 });
+    expect(operationHandler).not.toHaveBeenCalled();
+    expect(fixture.securityPermissions.getGovernanceApproval)
+      .toHaveBeenCalledWith("pending-pending-revoked-while-waiting");
+  });
+
+  it("allows a current confirmation fact after lock-time revalidation", async () => {
+    const requiredApproval = {
+      operationBinding: {
+        ...operationBindingForTest(),
+        approvalActorId: "console-user-1"
+      }
+    };
+    const approvedPendingOperation = {
+      pendingOperationId: "pending-confirmed-current",
+      operationId: "operation.alpha",
+      approvalScope: "approval:alpha",
+      status: "approved",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      grantId: "grant-1",
+      resolvedBy: "console-user-1",
+      requiredApproval,
+      approvalLayers: []
+    };
+    const operationHandler = vi.fn();
+    const operationDispatcher = vi.fn(async ({ revalidateAuthorization, response }) => {
+      const currentAuthorization = await revalidateAuthorization();
+      if (!currentAuthorization.ok) {
+        response.writeHead(currentAuthorization.status, {});
+        response.end(JSON.stringify({ error: currentAuthorization.reasonCode }));
+        return { ok: false };
+      }
+      await operationHandler();
+      response.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      response.end(JSON.stringify({ result: { ok: true } }));
+      return { ok: true };
+    });
+    const fixture = createRuntimeFixture({
+      tool: { requiresApproval: true },
+      policyEngine: {
+        evaluate: vi.fn(async () => ({
+          effect: "require_confirmation",
+          decisionId: "policy-confirm-current",
+          reasonCode: "confirmation_required",
+          redactedReason: "Confirmation is required.",
+          missingScopes: [],
+          missingCapabilities: [],
+          missingToolsets: [],
+          grantPolicyRevision: 1,
+          governancePolicyRevision: { revision: 1 }
+        }))
+      },
+      runtime: { operationDispatcher }
+    });
+
+    const result = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest(),
+      context: {
+        approval: { resolvedBy: "console-user-1" }
+      },
+      approvedPendingOperation
+    });
+
+    expect(result).toMatchObject({ ok: true, status: 200 });
+    expect(operationHandler).toHaveBeenCalledTimes(1);
+    expect(fixture.policyEngine.evaluate).toHaveBeenCalledTimes(2);
   });
 
   it("propagates a parent request abort and still waits for nested dispatch settlement", async () => {
@@ -1320,6 +1602,61 @@ describe("operation-permission runtime (behavior)", () => {
     expect(resumed.payload.pendingOperation.status).toBe("completed");
   });
 
+  it("atomically claims a pending approval so concurrent resumes execute the tool once", async () => {
+    const requiredApproval = createGovernanceRequiredApproval({ approvalLayers: ["department"] });
+    const pendingRecord = createGovernancePendingRecord(requiredApproval, {
+      pendingOperationId: "pending-concurrent-claim"
+    });
+    let currentPending = pendingRecord;
+    const fixture = createRuntimeFixture({
+      tool: { risk: "repair_write" },
+      store: {
+        getPendingOperation: vi.fn(() => currentPending),
+        resolvePendingOperation: vi.fn((entry) => {
+          if (entry.resolution === "approved" && currentPending.status !== "pending") {
+            return null;
+          }
+          if (entry.resolution !== "approved" && !["pending", "approved"].includes(currentPending.status)) {
+            return null;
+          }
+          currentPending = {
+            ...currentPending,
+            status: entry.resolution,
+            requiredApproval: entry.requiredApproval || currentPending.requiredApproval,
+            resolvedAt: currentPending.resolvedAt || "2026-06-05T00:00:00.000Z",
+            resumedToolExecutionId: entry.resumedToolExecutionId || ""
+          };
+          return currentPending;
+        })
+      }
+    });
+
+    const results = await Promise.all([
+      fixture.runtime.resumePendingOperation({
+        pendingOperationId: pendingRecord.pendingOperationId,
+        request: createRequest({ id: "req-concurrent-a" }),
+        resolvedBy: "console-user-1",
+        approver: createEligibleApprover(),
+        reason: "approve"
+      }),
+      fixture.runtime.resumePendingOperation({
+        pendingOperationId: pendingRecord.pendingOperationId,
+        request: createRequest({ id: "req-concurrent-b" }),
+        resolvedBy: "console-user-1",
+        approver: createEligibleApprover(),
+        reason: "approve"
+      })
+    ]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => result.status === 409)).toHaveLength(1);
+    expect(results.find((result) => result.status === 409)?.payload.error.code)
+      .toBe("pending_operation_replayed");
+    expect(dispatchOperationMock).toHaveBeenCalledTimes(1);
+    expect(fixture.securityPermissions.upsertGovernanceApproval).toHaveBeenCalledTimes(1);
+    expect(fixture.securityPermissions.revokeGovernanceApproval).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects pending approval rows when approval layers exist only as a stored projection", async () => {
     const requiredApproval = createGovernanceRequiredApproval({ approvalLayers: [] });
     const pendingRecord = createGovernancePendingRecord(requiredApproval, {
@@ -1755,6 +2092,11 @@ describe("operation-permission store boundaries (behavior)", () => {
           ...requiredApproval.operationBinding,
           approvalActorId: "console-user-1"
         });
+        expect(store.resolvePendingOperation({
+          pendingOperationId: "pending-required-source",
+          resolution: "approved",
+          resolvedBy: "console-user-2"
+        })).toBeNull();
       } finally {
         store.close();
       }

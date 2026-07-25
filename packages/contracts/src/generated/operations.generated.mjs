@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.mjs
  * Generator: tools/generators/generate-operation-artifacts.mjs
- * Hash: sha256:c29658db8d3fe661
+ * Hash: sha256:035f833071353f2f
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:c29658db8d3fe661";
+export const GENERATED_OPERATIONS_HASH = "sha256:035f833071353f2f";
 export const SERVER_API_OPERATIONS = [
   {
     "id": "readiness.baseline.status",
@@ -12698,8 +12698,24 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
-      "required": []
+      "required": [],
+      "properties": {
+        "treeId": {
+          "type": "string"
+        },
+        "fromTreeId": {
+          "type": "string"
+        },
+        "toTreeId": {
+          "type": "string"
+        },
+        "fromNodeId": {
+          "type": "string"
+        },
+        "toNodeId": {
+          "type": "string"
+        }
+      }
     },
     "safety": {
       "risk": "read_only",
@@ -13129,8 +13145,18 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {},
-      "required": []
+      "required": [
+        "treeId",
+        "nodeId"
+      ],
+      "properties": {
+        "treeId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        }
+      }
     },
     "safety": {
       "risk": "read_only",
@@ -13251,15 +13277,45 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
+      "required": [],
       "properties": {
         "confirm": {
           "type": "boolean"
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "auditId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "treeId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "preview": {
+          "type": "boolean"
         }
-      },
-      "required": []
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -13293,14 +13349,22 @@ export const SERVER_API_OPERATIONS = [
       "resourceKind": "workspace",
       "capabilityVerb": "scope",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "workspace",
       "capabilityVerb": "scope",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -13380,15 +13444,45 @@ export const SERVER_API_OPERATIONS = [
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
+      "required": [],
       "properties": {
         "confirm": {
           "type": "boolean"
         },
         "safetyConfirm": {
           "type": "boolean"
+        },
+        "auditId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "treeId": {
+          "type": "string"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "preview": {
+          "type": "boolean"
         }
-      },
-      "required": []
+      }
     },
     "safety": {
       "risk": "repair_write",
@@ -13422,14 +13516,22 @@ export const SERVER_API_OPERATIONS = [
       "resourceKind": "workspace",
       "capabilityVerb": "apply",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "resourceContext": {
       "capabilityDomain": "agent_workspace",
       "resourceKind": "workspace",
       "capabilityVerb": "apply",
       "effectKind": "repair-write",
-      "fieldMap": {}
+      "fieldMap": {
+        "workspaceId": [
+          "workspaceId"
+        ]
+      }
     },
     "proof": {
       "profile": "full",
@@ -21621,6 +21723,20 @@ export const SERVER_API_OPERATIONS = [
         }
       }
     },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "secret",
+      "recordInput": false,
+      "recordOutput": false
+    },
     "skipCsrf": true,
     "safety": {
       "risk": "safe_write",
@@ -21658,20 +21774,6 @@ export const SERVER_API_OPERATIONS = [
       "exclusionReason": "bootstrap-auth"
     },
     "concurrencySafe": false,
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
     "aspects": [
       "dispatch",
       "authorization",
@@ -21693,9 +21795,9 @@ export const SERVER_API_OPERATIONS = [
       "operationName": "auth_login"
     },
     "auditPolicy": {
-      "recordInput": true,
+      "recordInput": false,
       "recordOutput": false,
-      "metadataOnly": false,
+      "metadataOnly": true,
       "redaction": "default"
     }
   },

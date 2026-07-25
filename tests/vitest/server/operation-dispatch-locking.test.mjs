@@ -106,11 +106,116 @@ function dispatchInput(operation, handler) {
     url: new URL(operation.http.path, "http://127.0.0.1"),
     transport: "internal",
     actor: { type: "system" },
+    revalidateAuthorization: async () => ({ ok: true }),
     logger: { debug() {}, warn() {}, error() {} }
   };
 }
 
 describe("canonical operation dispatcher locking", () => {
+  it("revalidates current authorization after lock acquisition and denies a revoked waiter", async () => {
+    let finishAcquire;
+    const acquireGate = new Promise((resolve) => {
+      finishAcquire = resolve;
+    });
+    const release = vi.fn(async () => {});
+    const manager = {
+      config: { defaultTtlMs: 1_000, heartbeatIntervalMs: 100 },
+      acquire: vi.fn(async (lockKey) => {
+        await acquireGate;
+        return {
+          lockKey,
+          fencingToken: "fence_revalidation_revoked",
+          acquiredAt: new Date(),
+          expiresAt: new Date(Date.now() + 1_000),
+          released: false,
+          heartbeat: vi.fn(async () => {}),
+          release
+        };
+      })
+    };
+    const operation = unsafeOperation({ id: "unit.locked.authorization_revoked" });
+    const handler = vi.fn();
+    let authorized = true;
+    const authorizeOperation = vi.fn(async () => authorized
+      ? {
+          ok: true,
+          session: { user: { userId: "fixture-user", scopes: [] } },
+          authorizationDecision: { allowed: true, decisionId: "decision-current" }
+        }
+      : {
+          ok: false,
+          status: 403,
+          error: "authorization revoked",
+          authorizationDecision: { allowed: false, reasonCode: "grant_revoked" }
+        });
+    const response = createResponse();
+    const pending = dispatchOperation({
+      ...dispatchInput(operation, handler),
+      request: { headers: {} },
+      response,
+      transport: "http",
+      authorizeOperation,
+      revalidateAuthorization: undefined,
+      lockManager: manager
+    });
+
+    await vi.waitFor(() => {
+      expect(authorizeOperation).toHaveBeenCalledTimes(1);
+      expect(manager.acquire).toHaveBeenCalledTimes(1);
+    });
+    authorized = false;
+    finishAcquire();
+    const result = await pending;
+
+    expect(result).toMatchObject({ ok: false, statusCode: 403 });
+    expect(authorizeOperation).toHaveBeenCalledTimes(2);
+    expect(handler).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(403);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when execution authorization revalidation throws", async () => {
+    const manager = new MemoryLockManager({ defaultTtlMs: 1_000 });
+    managers.push(manager);
+    const operation = unsafeOperation({ id: "unit.locked.authorization_failure" });
+    const handler = vi.fn();
+    const response = createResponse();
+
+    const result = await dispatchOperation({
+      ...dispatchInput(operation, handler),
+      response,
+      revalidateAuthorization: vi.fn(async () => {
+        throw new Error("private authorization backend detail");
+      }),
+      lockManager: manager
+    });
+
+    expect(result).toMatchObject({ ok: false, statusCode: 503 });
+    expect(handler).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+    expect(Buffer.concat(response.chunks).toString("utf8"))
+      .not.toContain("private authorization backend detail");
+  });
+
+  it("fails closed before a protected effect when no execution revalidator is registered", async () => {
+    const manager = new MemoryLockManager({ defaultTtlMs: 1_000 });
+    managers.push(manager);
+    const operation = unsafeOperation({ id: "unit.locked.authorization_missing" });
+    const handler = vi.fn();
+    const response = createResponse();
+
+    const result = await dispatchOperation({
+      ...dispatchInput(operation, handler),
+      response,
+      revalidateAuthorization: undefined,
+      lockManager: manager
+    });
+
+    expect(result).toMatchObject({ ok: false, statusCode: 503 });
+    expect(handler).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(503);
+  });
+
   it("passes the caller signal through a concurrency-safe wrapper controller", async () => {
     const wrapperSource = SERVER_API_OPERATIONS.find((operation) => operation.id === "operation_permission.execute");
     const wrapper = {
@@ -327,21 +432,29 @@ describe("canonical operation dispatcher locking", () => {
       }
     };
 
+    const authorizeOperation = vi.fn(async () => ({
+      ok: true,
+      session: { user: { scopes: [] } },
+      authorizationDecision: { allowed: true, decisionId: "provider-lock-test" }
+    }));
+    const dispatchThroughProvider = (concurrencyScope) => provider.dispatchRegisteredHttpOperation({
+        controllers,
+        method: "POST",
+        url: new URL(operation.http.path, "http://127.0.0.1"),
+        request: { headers: {} },
+        response: createResponse(),
+        requestBody: Buffer.from("{}"),
+        authorizeOperation,
+        concurrencyScope
+      });
+
     const [first, second] = await Promise.all([
-      provider.dispatchInternalOperation({
-        controllers,
-        operationId: operation.id,
-        concurrencyScope: "untrusted-provider-scope-one"
-      }),
-      provider.dispatchInternalOperation({
-        controllers,
-        operationId: operation.id,
-        concurrencyScope: "untrusted-provider-scope-two"
-      })
+      dispatchThroughProvider("untrusted-provider-scope-one"),
+      dispatchThroughProvider("untrusted-provider-scope-two")
     ]);
 
-    expect(first.statusCode).toBe(200);
-    expect(second.statusCode).toBe(200);
+    expect(first).toBe(true);
+    expect(second).toBe(true);
     expect(maxInFlight).toBe(1);
     expect(lockContexts).toHaveLength(2);
     expect(lockContexts[0].fencingToken).not.toBe(lockContexts[1].fencingToken);

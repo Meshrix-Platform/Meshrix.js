@@ -119,40 +119,9 @@ export function createHttpServerLifecycle({ server, runtimeLogger, transportLimi
   };
 }
 
-async function dispatchStartupSnapshot(operationId, {
-  activeApiOperations,
-  controllers,
-  registeredCoreProvider,
-  operationAuditStore,
-  operationConcurrencyScope,
-  runtimeLogger,
-  input = {},
-  payloadFromResult = (result) => result.payload,
-  errorMessage = `Failed to build ${operationId} startup snapshot.`
-} = {}) {
-  const snapshot = await registeredCoreProvider.dispatchInternalOperation({
-    operations: activeApiOperations,
-    controllers,
-    operationId,
-    input,
-    operationAuditStore,
-    skipOperationProof: true,
-    concurrencyScope: operationConcurrencyScope,
-    logger: runtimeLogger,
-    actor: { type: "system", username: "server-runtime" }
-  });
-  if (snapshot.statusCode >= 400) {
-    throw new Error(snapshot.payload?.error || errorMessage);
-  }
-  return payloadFromResult(snapshot);
-}
-
 export async function publishStartupLifecycle({
-  activeApiOperations,
   controllers,
   registeredCoreProvider,
-  operationAuditStore,
-  operationConcurrencyScope,
   runtimeLogger,
   protocolEventBus,
   discoveryState,
@@ -173,31 +142,23 @@ export async function publishStartupLifecycle({
     },
     { type: "server.started" }
   );
-  const snapshotContext = {
-    activeApiOperations,
-    controllers,
-    registeredCoreProvider,
-    operationAuditStore,
-    operationConcurrencyScope,
-    runtimeLogger
-  };
-  const interfaceSnapshot = await dispatchStartupSnapshot("system.interfaces", snapshotContext);
+  const startupSnapshotPort = registeredCoreProvider.createStartupSnapshotPort({
+    controllers
+  });
+  const interfaceSnapshot = await startupSnapshotPort.readSystemInterfaces();
   await protocolEventBus.publish(
     "system.interfaces",
     interfaceSnapshot,
     { type: "system.interfaces.snapshot" }
   );
-  const discoveryConfigSnapshot = await dispatchStartupSnapshot("discovery.get_config", snapshotContext);
+  const discoveryConfigSnapshot = await startupSnapshotPort.readDiscoveryConfig();
   await protocolEventBus.publish(
     "discovery.config",
     discoveryConfigSnapshot,
     { type: "discovery.config.snapshot" }
   );
   if (isFeatureActive("agent-gateway")) {
-    const agentSyncConfigSnapshot = await dispatchStartupSnapshot("agent_sync.config.get", {
-      ...snapshotContext,
-      payloadFromResult: (result) => result.payload?.config || {}
-    });
+    const agentSyncConfigSnapshot = (await startupSnapshotPort.readAgentSyncConfig())?.config || {};
     await protocolEventBus.publish(
       "agent_sync.config",
       agentSyncConfigSnapshot,
@@ -207,7 +168,7 @@ export async function publishStartupLifecycle({
   if (exposedMaintenanceAgent) {
     await exposedMaintenanceAgent.start();
   }
-  const consoleStateSnapshot = await dispatchStartupSnapshot("system.console_state", snapshotContext);
+  const consoleStateSnapshot = await startupSnapshotPort.readConsoleState();
   await protocolEventBus.publish(
     "system.console_state",
     {
@@ -215,7 +176,7 @@ export async function publishStartupLifecycle({
     },
     { type: "system.console_state.snapshot" }
   );
-  const storageSummarySnapshot = await dispatchStartupSnapshot("storage.summary", snapshotContext);
+  const storageSummarySnapshot = await startupSnapshotPort.readStorageSummary();
   await protocolEventBus.publish(
     "storage.summary",
     storageSummarySnapshot,

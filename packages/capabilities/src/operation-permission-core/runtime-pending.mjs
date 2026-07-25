@@ -440,6 +440,39 @@ export function createPendingOperationRuntime({ store, executeTool, publishEvent
         }
       };
     }
+    const approvalBoundRequiredApproval = {
+      ...(pending.requiredApproval || {}),
+      operationBinding: {
+        ...(pending.requiredApproval?.operationBinding || {}),
+        approvalActorId: String(resolvedBy || "")
+      }
+    };
+    const approved = store.resolvePendingOperation({
+      pendingOperationId: pending.pendingOperationId,
+      resolution: "approved",
+      resolvedBy,
+      reason,
+      requiredApproval: approvalBoundRequiredApproval,
+      resultSummary: { type: "approval_decision", resolution: "approved" }
+    });
+    if (!approved) {
+      const replayed = store.getPendingOperation?.(pending.pendingOperationId);
+      return {
+        ok: false,
+        status: 409,
+        payload: {
+          schemaVersion: "v0.0.1:schema:definition-1",
+          status: "replayed",
+          terminalOutcome: "replayed",
+          priorStatus: replayed?.status || "resolved",
+          pendingOperation: replayed || undefined,
+          error: {
+            code: "pending_operation_replayed",
+            message: "Pending operation approval was already resolved and cannot be resumed again."
+          }
+        }
+      };
+    }
     if (approvalRecord) {
       try {
         await securityPermissions.upsertGovernanceApproval(approvalRecord);
@@ -471,23 +504,8 @@ export function createPendingOperationRuntime({ store, executeTool, publishEvent
         };
       }
     }
-    const approvalBoundRequiredApproval = {
-      ...(pending.requiredApproval || {}),
-      operationBinding: {
-        ...(pending.requiredApproval?.operationBinding || {}),
-        approvalActorId: String(resolvedBy || "")
-      }
-    };
-    const approved = store.resolvePendingOperation({
-      pendingOperationId: pending.pendingOperationId,
-      resolution: "approved",
-      resolvedBy,
-      reason,
-      requiredApproval: approvalBoundRequiredApproval,
-      resultSummary: { type: "approval_decision", resolution: "approved" }
-    });
     const approvedWithActorBinding = {
-      ...(approved || pending),
+      ...approved,
       requiredApproval: approvalBoundRequiredApproval
     };
     await publishEvent("tools.pending_operation", {
@@ -510,7 +528,7 @@ export function createPendingOperationRuntime({ store, executeTool, publishEvent
             approved: true,
             pendingOperationId: pending.pendingOperationId,
             resolvedBy,
-            resolvedAt: approved?.resolvedAt || nowIso()
+            resolvedAt: approved.resolvedAt || nowIso()
           },
           pendingOperationApproved: true
         },

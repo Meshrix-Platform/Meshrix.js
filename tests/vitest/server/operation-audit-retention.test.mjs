@@ -8,6 +8,8 @@ import {
   OperationAuditCapacityError,
   createOperationAuditStore
 } from "../../../packages/foundation/src/security/operation-audit.mjs";
+import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.mjs";
+import { auditOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-risk-control.mjs";
 
 const temporaryRoots = new Set();
 
@@ -42,6 +44,43 @@ afterEach(async () => {
 });
 
 describe("operation audit automatic bounded retention", () => {
+  it("keeps auth.login credentials out of audit input and its digest", async () => {
+    const { store } = await createStore();
+    const operation = SERVER_API_OPERATIONS.find(({ id }) => id === "auth.login");
+    const firstPassword = "synthetic-password-one";
+    const secondPassword = "synthetic-password-two";
+    try {
+      expect(operation?.audit).toMatchObject({
+        enabled: true,
+        metadataOnly: true,
+        recordInput: false
+      });
+      expect(operation?.log).toMatchObject({
+        recordInput: false,
+        redaction: "secret"
+      });
+
+      for (const password of [firstPassword, secondPassword]) {
+        auditOperation({
+          operationAuditStore: store,
+          operation,
+          transport: "test",
+          input: { username: "synthetic-user", password },
+          status: "denied"
+        });
+      }
+
+      const records = store.list({ operationId: "auth.login", limit: 10 });
+      expect(records).toHaveLength(2);
+      expect(records.map(({ redactedInput }) => redactedInput)).toEqual([{}, {}]);
+      expect(new Set(records.map(({ inputHash }) => inputHash)).size).toBe(1);
+      expect(JSON.stringify(records)).not.toContain(firstPassword);
+      expect(JSON.stringify(records)).not.toContain(secondPassword);
+    } finally {
+      store.close();
+    }
+  });
+
   it("automatically removes expired rows in bounded batches on append", async () => {
     const { store } = await createStore();
     try {

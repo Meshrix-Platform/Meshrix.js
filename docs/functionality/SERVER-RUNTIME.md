@@ -172,6 +172,12 @@ Operation Permission and maintenance timeouts abort queued acquisition and wait 
 
 HTTP request admission starts closed. The listener returns `503` until discovery activation and every startup lifecycle task complete, then the composition root opens admission once before returning the server handle. Shutdown permanently seals admission, drains requests, then aborts remaining operation signals and waits again. If an active task or task-owner close barrier still cannot settle, shutdown fails with the runtime lock and storage dependencies left open for a retry instead of closing them underneath running work. The maintenance worker accepts the same injected lock manager through the background-worker registry, waits for its active run before closing the Operation Permission store, and closes job, runtime, and event-bus dependencies only after task owners settle. Runtime, composition, maintenance-worker, and listen failures unwind initialized resources in reverse dependency order. SQLite-backed constructor failures close any database handle opened before schema or prepared-statement initialization failed.
 
+Startup event publication reads its five fixed platform projections through the
+Core-owned Startup Snapshot port. The port exposes named read methods only; it
+does not accept an operation identifier, actor, alternate registry, or generic
+internal dispatch request. Non-public operation dispatch without an explicit
+authorization path remains denied.
+
 ## Verification
 
 ```bash

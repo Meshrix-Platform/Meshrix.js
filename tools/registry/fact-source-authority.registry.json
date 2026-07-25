@@ -14,6 +14,32 @@
   },
   "authorities": [
     {
+      "id": "release-definition",
+      "factKey": "release.definition",
+      "domain": "Product release version, tag, channel, package manifest set, container platforms, acceptance profile, GitHub runner matrix, and local verification engine.",
+      "authorityPath": "tools/registry/release-definition.registry.json",
+      "authorityRole": "release-definition-authority",
+      "projectionPaths": [
+        "package.json",
+        "package-lock.json",
+        ".github/workflows/release.yml",
+        "docs/RUNBOOK.md"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-release-definition.mjs",
+        "tools/server-scripts/prepare-release.mjs",
+        ".github/workflows/release.yml"
+      ],
+      "verification": [
+        "npm run verify:release-definition",
+        "npm run verify:registry"
+      ],
+      "nonAuthorityBoundaries": [
+        "Git tags, package manifests, lockfiles, workflow expressions, reports, and documentation are projections and cannot redefine the release.",
+        "The platform acceptance command catalog continues to own its command DAG; this definition selects a registered profile only."
+      ]
+    },
+    {
       "id": "server-operation-registry",
       "factKey": "server.operations",
       "domain": "Server operation definitions, generated operation registry projection, API capability projection, Operation Permission tool capability projection, and route/OpenAPI generated artifacts.",

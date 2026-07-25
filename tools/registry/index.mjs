@@ -29,6 +29,7 @@ const REGISTRY_FILES = Object.freeze({
   'capabilities':          'capabilities/capabilities.registry.json',
   'open-platform-capability-matrix': 'open-platform-capability-matrix.json',
   'state-machine-integrity': 'state-machines/state-machine-integrity.registry.json',
+  'release-definition':      'release-definition.registry.json',
 });
 
 const SCHEMA_FILES = Object.freeze({
@@ -44,6 +45,7 @@ const SCHEMA_FILES = Object.freeze({
   'capabilities':          'schema/capability.schema.json',
   'open-platform-capability-matrix': 'schema/open-platform-capability-matrix.schema.json',
   'state-machine-integrity': 'schema/state-machine-integrity.schema.json',
+  'release-definition':      'schema/release-definition.schema.json',
 });
 
 /**

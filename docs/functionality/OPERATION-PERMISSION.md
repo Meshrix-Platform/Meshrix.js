@@ -64,6 +64,11 @@ Every bearer authorization reloads the current grant policy before execution. To
 
 Pending operations store approval requirements and approval layers as a redacted projection of the current Security Authorization/Governance decision. They are a projection of the approval policy source. `requiredApproval` is the approval fact source; `approvalLayers` is only the stored projection and must match `requiredApproval.approvalLayers` before runtime approval can proceed. The write path derives the stored projection only from `requiredApproval.approvalLayers`; caller-supplied `approvalLayers` is ignored for approval requirement derivation. Static console route authorization such as `runtime:admin` only admits a user to the pending-resolution endpoint; layer eligibility still comes from the same governance model. Before recording a governance approval, the runtime checks the current session user against the required user, team, department, or agent-binding facts, then verifies the original grant is still available. When a governance decision returns `needsApproval`, Operation Permission creates a pending operation with the contract-provided `requiredApproval` shape; approving it records the matching governance approval layer and replays the request through the same authorization evaluator, which either advances to the next required layer or allows execution.
 
+Final approval claims the pending record with one conditional state transition
+before recording the governance approval or dispatching the operation. Only the
+claim winner may continue; a concurrent or repeated approval is rejected as a
+replay and cannot reach the operation handler.
+
 ## Current External Execution Boundary
 
 Operation Permission v1 is the current external execution boundary. External agent clients call `/api/operation-permission/v1/execute`, `/api/operation-permission/v1/dry-run`, or `/api/operation-permission/v1/batch` with a grant token in `Authorization: Bearer <token>` or `x-meshrix-tool-token`; token policy handles grant state, scope, and binding decisions. MCP clients use the `/mcp` outlet projection for the same governed operations.

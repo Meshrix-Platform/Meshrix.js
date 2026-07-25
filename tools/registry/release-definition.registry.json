@@ -1,0 +1,54 @@
+{
+  "$schema": "./schema/release-definition.schema.json",
+  "version": "v0.0.1:registry:release-definition-1",
+  "product": "Meshrix",
+  "release": {
+    "version": "0.0.1",
+    "tag": "v0.0.1",
+    "channel": "stable"
+  },
+  "packages": {
+    "manifests": [
+      "package.json",
+      "packages/contracts/package.json",
+      "packages/foundation/package.json",
+      "packages/agents/package.json",
+      "packages/capabilities/package.json",
+      "packages/protocols/package.json",
+      "packages/server-runtime/package.json",
+      "packages/ui-console/package.json",
+      "apps/server/package.json",
+      "apps/console/package.json",
+      "packages/protocols/mcp/adapter/gateway-installer/package.json"
+    ]
+  },
+  "container": {
+    "target": "runtime-ui",
+    "platforms": [
+      "linux/amd64",
+      "linux/arm64"
+    ]
+  },
+  "acceptance": {
+    "profile": "enterprise-single-node",
+    "commandId": "platform-acceptance"
+  },
+  "github": {
+    "environment": "release-candidate",
+    "nodeVersion": "24.16.0",
+    "imageVerification": [
+      {
+        "platform": "linux/amd64",
+        "runner": "ubuntu-24.04"
+      },
+      {
+        "platform": "linux/arm64",
+        "runner": "ubuntu-24.04-arm"
+      }
+    ]
+  },
+  "localVerification": {
+    "engine": "podman",
+    "evidenceAuthority": "local-only"
+  }
+}

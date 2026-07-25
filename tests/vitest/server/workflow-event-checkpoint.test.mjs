@@ -31,10 +31,8 @@ import {
   createDurableWorkflowSubstrate,
   workflowId
 } from "../../../packages/foundation/src/workflow/durable-workflow-substrate.mjs";
-import {
-  dispatchInternalOperation,
-  dispatchOperation
-} from "#meshrix/server-runtime/composition/dispatch-operation";
+import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
+import { dispatchOperation } from "#meshrix/server-runtime/composition/dispatch-operation";
 
 function sha256(value) {
   return createHash("sha256").update(String(value)).digest("hex");
@@ -366,10 +364,13 @@ describe("workflow-event-checkpoint behavior", () => {
       }
     };
 
-    await expect(dispatchInternalOperation({
-      operationId: "unit.dispatch.missing",
-      operations: []
-    })).rejects.toThrow("Internal operation not registered: unit.dispatch.missing");
+    const startupSnapshots = createCorePlatformProvider({
+      operations: [],
+    }).createStartupSnapshotPort({
+      controllers: {}
+    });
+    await expect(startupSnapshots.readSystemInterfaces())
+      .rejects.toThrow("Startup snapshot operation not registered: system.interfaces");
 
     const auditStore = createAuditStore();
     const logger = createLogger();

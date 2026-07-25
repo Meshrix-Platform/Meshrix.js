@@ -41,6 +41,13 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
+The [What's Next register](WHATS-NEXT.md) is the canonical priority index for
+the ten highest-value active project problems. Its order is priority, and every
+entry must retain the background, objective problem, affected scenarios, and
+possible solution paths required by its maintenance standard. It summarizes
+tracked facts without replacing the owning implementation, architecture
+decision, execution plan, verifier, acceptance receipt, or release authority.
+
 ## Project Documents
 
 | Topic | Document |
@@ -56,6 +63,8 @@ maintenance, operational evidence, and workload-conformance gates.
 
 | Topic | Document |
 | --- | --- |
+| Highest-value open problems | [WHATS-NEXT.md](WHATS-NEXT.md) |
+| Release definition and publication | [RUNBOOK.md#release-definition-and-publication](RUNBOOK.md#release-definition-and-publication) |
 | Runtime operation | [RUNBOOK.md](RUNBOOK.md) |
 | Architecture | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
 | Generated system architecture | [architecture/MESHRIX-SYSTEM-ARCHITECTURE.html](architecture/MESHRIX-SYSTEM-ARCHITECTURE.html) |

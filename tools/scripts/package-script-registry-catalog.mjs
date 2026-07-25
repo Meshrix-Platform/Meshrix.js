@@ -298,6 +298,30 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     ],
     outputs: ["build/reports/release-authority-baseline.json"],
   },
+  "verify:release-definition": {
+    scriptName: "verify:release-definition", command: "npm run verify:release-definition", category: "verifier", subsystem: "release",
+    owner: "platform", tier: "release", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "release", expectedDurationClass: "fast",
+    inputs: [
+      "tools/registry/release-definition.registry.json",
+      "tools/registry/schema/release-definition.schema.json",
+      "tools/server-scripts/verify-release-definition.mjs",
+      "package.json",
+      "package-lock.json"
+    ],
+    outputs: [],
+  },
+  "server:verify:deployment-flow:podman": {
+    scriptName: "server:verify:deployment-flow:podman", command: "npm run server:verify:deployment-flow:podman", category: "verifier", subsystem: "deployment",
+    owner: "platform", tier: "external", sideEffects: "docker",
+    requiresFreshContainer: true, ciProfile: "external", expectedDurationClass: "extended",
+    inputs: [
+      "tools/server-scripts/verify-deployment-container-flow.mjs",
+      "docker-compose.yml",
+      "Dockerfile"
+    ],
+    outputs: ["build/reports/deployment-container-flow-podman.json"],
+  },
   "verify:upstream-service-publishing": {
     scriptName: "verify:upstream-service-publishing", command: "npm run verify:upstream-service-publishing", category: "verifier", subsystem: "upstream-gateway",
     owner: "platform", tier: "release", sideEffects: "build-output",

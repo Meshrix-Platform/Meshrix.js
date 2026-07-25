@@ -12694,8 +12694,24 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {},
-        "required": []
+        "required": [],
+        "properties": {
+          "treeId": {
+            "type": "string"
+          },
+          "fromTreeId": {
+            "type": "string"
+          },
+          "toTreeId": {
+            "type": "string"
+          },
+          "fromNodeId": {
+            "type": "string"
+          },
+          "toNodeId": {
+            "type": "string"
+          }
+        }
       },
       "safety": {
         "risk": "read_only",
@@ -13125,8 +13141,18 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
-        "properties": {},
-        "required": []
+        "required": [
+          "treeId",
+          "nodeId"
+        ],
+        "properties": {
+          "treeId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          }
+        }
       },
       "safety": {
         "risk": "read_only",
@@ -13247,15 +13273,45 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
+        "required": [],
         "properties": {
           "confirm": {
             "type": "boolean"
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "auditId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "treeId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "preview": {
+            "type": "boolean"
           }
-        },
-        "required": []
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -13289,14 +13345,22 @@
         "resourceKind": "workspace",
         "capabilityVerb": "scope",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "workspace",
         "capabilityVerb": "scope",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -13376,15 +13440,45 @@
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
+        "required": [],
         "properties": {
           "confirm": {
             "type": "boolean"
           },
           "safetyConfirm": {
             "type": "boolean"
+          },
+          "auditId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "treeId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "preview": {
+            "type": "boolean"
           }
-        },
-        "required": []
+        }
       },
       "safety": {
         "risk": "repair_write",
@@ -13418,14 +13512,22 @@
         "resourceKind": "workspace",
         "capabilityVerb": "apply",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "resourceContext": {
         "capabilityDomain": "agent_workspace",
         "resourceKind": "workspace",
         "capabilityVerb": "apply",
         "effectKind": "repair-write",
-        "fieldMap": {}
+        "fieldMap": {
+          "workspaceId": [
+            "workspaceId"
+          ]
+        }
       },
       "proof": {
         "profile": "full",
@@ -21617,6 +21719,20 @@
           }
         }
       },
+      "audit": {
+        "enabled": true,
+        "recordInput": false,
+        "recordOutput": false,
+        "metadataOnly": true,
+        "redaction": "default",
+        "write": true
+      },
+      "log": {
+        "enabled": true,
+        "redaction": "secret",
+        "recordInput": false,
+        "recordOutput": false
+      },
       "skipCsrf": true,
       "safety": {
         "risk": "safe_write",
@@ -21654,20 +21770,6 @@
         "exclusionReason": "bootstrap-auth"
       },
       "concurrencySafe": false,
-      "audit": {
-        "enabled": true,
-        "recordInput": true,
-        "recordOutput": false,
-        "metadataOnly": false,
-        "redaction": "default",
-        "write": true
-      },
-      "log": {
-        "enabled": true,
-        "redaction": "default",
-        "recordInput": true,
-        "recordOutput": false
-      },
       "aspects": [
         "dispatch",
         "authorization",
@@ -21689,9 +21791,9 @@
         "operationName": "auth_login"
       },
       "auditPolicy": {
-        "recordInput": true,
+        "recordInput": false,
         "recordOutput": false,
-        "metadataOnly": false,
+        "metadataOnly": true,
         "redaction": "default"
       }
     },

@@ -288,13 +288,15 @@ export async function createHttpApplicationAssembly({
     requirePlatformInterface(platformRegistry, "operation-proof-substrate.provider")?.value ||
     compositionRoot.operationProofSubstrate ||
     null;
+  let agentWorkspaceRef = null;
   const consoleOperationProviders = await createServerConsoleOperationProviders({
     userDataPath,
     securityPermissions,
     operationProofSubstrate: registeredOperationProofSubstrate,
     storageProvider: registeredStorageProvider,
     operationAuditStore,
-    getListenUrl: () => listenUrl
+    getListenUrl: () => listenUrl,
+    getAgentWorkspace: () => agentWorkspaceRef
   });
   registerStartupCleanup({ close: () => consoleOperationProviders.close() });
   const settingsPort = Object.freeze({
@@ -359,6 +361,7 @@ export async function createHttpApplicationAssembly({
     strategyManagementProvider,
     modelDecisionRuntime
   } = runtimeProviders;
+  agentWorkspaceRef = agentWorkspace;
   registerStartupCleanup({
     close: async () => {
       await maintenanceAgent?.close?.();
@@ -591,11 +594,8 @@ export async function createHttpApplicationAssembly({
 
   function startupLifecycleContext() {
     return {
-      activeApiOperations,
       controllers,
       registeredCoreProvider,
-      operationAuditStore,
-      operationConcurrencyScope,
       runtimeLogger,
       protocolEventBus,
       discoveryState,

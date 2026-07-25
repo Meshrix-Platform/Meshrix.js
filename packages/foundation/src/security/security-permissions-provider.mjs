@@ -196,7 +196,20 @@ export function createSecurityPermissionsProvider({
         error: "Process identity verifier is unavailable."
       };
     }
-    return processIdentity.verifySignedRequest(input);
+    const verification = await processIdentity.verifySignedRequest(input);
+    if (
+      verification?.ok !== true ||
+      typeof processIdentity.revalidateVerifiedRequest !== "function"
+    ) {
+      return verification;
+    }
+    return {
+      ...verification,
+      revalidateAuthorization: () => processIdentity.revalidateVerifiedRequest({
+        verification,
+        operation: input.operation || {}
+      })
+    };
   }
 
   return Object.freeze({
@@ -420,6 +433,9 @@ export function createSecurityPermissionsProvider({
     },
     listGovernanceApprovals(input = {}) {
       return resolvedAuthorizationGovernanceStore?.listApprovals?.(input) || [];
+    },
+    getGovernanceApproval(approvalId) {
+      return resolvedAuthorizationGovernanceStore?.getApproval?.(approvalId) || null;
     },
     upsertGovernanceApproval(input = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertApproval) {

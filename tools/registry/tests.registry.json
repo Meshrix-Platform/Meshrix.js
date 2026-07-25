@@ -269,6 +269,23 @@
       ]
     },
     {
+      "id": "release.definition",
+      "label": "Canonical product release definition and projection consistency",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-release-definition.mjs"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
       "id": "registry.version-naming",
       "label": "Governed version naming and legacy token rejection",
       "owner": "platform",
@@ -1736,6 +1753,29 @@
       "artifacts": [
         "build/reports/deployment-container-flow.json",
         "build/reports/npm-artifact-cache.json"
+      ]
+    },
+    {
+      "id": "container.deployment-flow-podman-local",
+      "label": "Local-only Podman compose deployment and MCP baseline verifier",
+      "owner": "platform",
+      "package": "deployment",
+      "level": "e2e",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-deployment-container-flow.mjs",
+        "--engine",
+        "podman"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "podman"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/deployment-container-flow-podman.json"
       ]
     },
     {

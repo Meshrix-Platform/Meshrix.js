@@ -4,8 +4,8 @@ import {
   decorateServerApiOperations
 } from "#meshrix/contracts/operations/operation-decorators";
 import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
+import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
 import {
-  dispatchInternalOperation,
   dispatchOperation,
   dispatchRpcOperation,
   findProxyRegisteredApiRequest,
@@ -68,6 +68,29 @@ function controllers(handler) {
       handle: handler
     }
   };
+}
+
+async function dispatchTestOperation({
+  operation,
+  operationControllers,
+  input = {},
+  ...options
+}) {
+  const response = createResponse();
+  const outcome = await dispatchOperation({
+    operation,
+    controllers: operationControllers,
+    request: {},
+    response,
+    input,
+    url: new URL(operation.http.path, "http://127.0.0.1"),
+    transport: "internal",
+    skipAuthorization: true,
+    revalidateAuthorization: vi.fn(async () => ({ ok: true })),
+    logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
+    ...options
+  });
+  return { outcome, response };
 }
 
 describe("operation dispatcher behavior", () => {
@@ -146,6 +169,12 @@ describe("operation dispatcher behavior", () => {
         policy: {},
         overwrite: false
       },
+      authorizeOperation: vi.fn(async () => ({
+        ok: true,
+        session: { user: { scopes: ["workspace:write"] } },
+        authorizationDecision: { allowed: true, decisionId: "workspace-submit-test" }
+      })),
+      revalidateAuthorization: vi.fn(async () => ({ ok: true })),
       url: new URL("http://127.0.0.1/api/workspace/assets/submit"),
       logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
     })).resolves.toMatchObject({ ok: true, statusCode: 201 });
@@ -239,22 +268,20 @@ describe("operation dispatcher behavior", () => {
     });
 
     const [left, right] = await Promise.all([
-      dispatchInternalOperation({
-        operations: [operation],
-        controllers: operationControllers,
-        operationId: operation.id,
+      dispatchTestOperation({
+        operation,
+        operationControllers,
         lockManager
       }),
-      dispatchInternalOperation({
-        operations: [operation],
-        controllers: operationControllers,
-        operationId: operation.id,
+      dispatchTestOperation({
+        operation,
+        operationControllers,
         lockManager
       })
     ]);
 
-    expect(left.statusCode).toBe(200);
-    expect(right.statusCode).toBe(200);
+    expect(left.outcome.statusCode).toBe(200);
+    expect(right.outcome.statusCode).toBe(200);
     expect(lockManager.acquire).not.toHaveBeenCalled();
     expect(maxInFlight).toBe(2);
   });
@@ -380,44 +407,48 @@ describe("operation dispatcher behavior", () => {
     }
   });
 
-  it("captures internal text and binary responses with case-insensitive headers", async () => {
+  it("captures fixed startup snapshot text and binary responses with case-insensitive headers", async () => {
     const textOperation = baseOperation({
-      id: "unit.internal.text",
+      id: "system.interfaces",
       http: { method: "POST", path: "/api/unit/text" }
     });
-    const textResult = await dispatchInternalOperation({
+    const textPort = createCorePlatformProvider({
       operations: [textOperation],
-      operationId: textOperation.id,
+    }).createStartupSnapshotPort({
       controllers: controllers(({ response }) => {
         response.setHeader("Content-Type", "text/plain; charset=utf-8");
         expect(response.getHeader("content-type")).toBe("text/plain; charset=utf-8");
         response.end("hello");
-      }),
-      input: { ignored: true },
-      logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
+      })
     });
-    expect(textResult.payload).toEqual({
+    expect(Object.keys(textPort)).toEqual([
+      "readSystemInterfaces",
+      "readDiscoveryConfig",
+      "readAgentSyncConfig",
+      "readConsoleState",
+      "readStorageSummary"
+    ]);
+    expect(textPort).not.toHaveProperty("dispatch");
+    expect(textPort).not.toHaveProperty("operationId");
+    await expect(textPort.readSystemInterfaces()).resolves.toEqual({
       contentType: "text/plain; charset=utf-8",
       text: "hello"
     });
 
     const binaryOperation = baseOperation({
-      id: "unit.internal.binary",
+      id: "storage.summary",
       http: { method: "POST", path: "/api/unit/binary" },
       binary: true
     });
-    const binaryResult = await dispatchInternalOperation({
+    const binaryPort = createCorePlatformProvider({
       operations: [binaryOperation],
-      operationId: binaryOperation.id,
+    }).createStartupSnapshotPort({
       controllers: controllers(({ response }) => {
         response.writeHead(206, { "Content-Type": "application/octet-stream" });
         response.write(Buffer.from([1, 2, 3]));
-      }),
-      input: {},
-      logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() }
+      })
     });
-    expect(binaryResult.statusCode).toBe(206);
-    expect(binaryResult.payload).toMatchObject({
+    await expect(binaryPort.readStorageSummary()).resolves.toMatchObject({
       contentType: "application/octet-stream",
       byteLength: 3,
       base64: "AQID"
@@ -660,13 +691,12 @@ describe("operation dispatcher behavior", () => {
       }))
     };
 
-    await dispatchInternalOperation({
-      operations: [operation],
-      controllers: controllers(({ response }) => {
+    await dispatchTestOperation({
+      operation,
+      operationControllers: controllers(({ response }) => {
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ privateValue: "not-proof-input" }));
       }),
-      operationId: operation.id,
       operationProofSubstrate
     });
 
@@ -691,9 +721,9 @@ describe("operation dispatcher behavior", () => {
     });
     const recordReceipt = vi.fn(async () => ({ disposition: "recorded", ledgerEventId: "change-entry" }));
 
-    await dispatchInternalOperation({
-      operations: [operation],
-      controllers: controllers(({ response }) => {
+    await dispatchTestOperation({
+      operation,
+      operationControllers: controllers(({ response }) => {
         response.__licoProofChangeProjection = {
           changeProjection: "console-state-v1",
           changeDigest: digest,
@@ -702,7 +732,6 @@ describe("operation dispatcher behavior", () => {
         response.writeHead(200, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ secret }));
       }),
-      operationId: operation.id,
       operationProofSubstrate: { recordReceipt }
     });
 
@@ -716,13 +745,12 @@ describe("operation dispatcher behavior", () => {
     expect(JSON.stringify(recordReceipt.mock.calls[0][0])).not.toContain(secret);
 
     recordReceipt.mockClear();
-    await dispatchInternalOperation({
-      operations: [operation],
-      controllers: controllers(({ response }) => {
+    await dispatchTestOperation({
+      operation,
+      operationControllers: controllers(({ response }) => {
         response.writeHead(200, {});
         response.end();
       }),
-      operationId: operation.id,
       operationProofSubstrate: { recordReceipt }
     });
     expect(recordReceipt).not.toHaveBeenCalled();

@@ -28,6 +28,10 @@ jobs:
         with:
           node-version: "24.16.0"
           cache: "npm"
+      - name: Validate the canonical release definition
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: npm run verify:release-definition -- --tag "$RELEASE_TAG"
       - name: Validate tag and atomic package release state
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -108,6 +112,7 @@ jobs:
     timeout-minutes: 395
     permissions:
       contents: read
+    environment: release-candidate
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -121,7 +126,9 @@ jobs:
       - name: Canonical platform acceptance authority
         env:
           MESHRIX_RELEASE_PARALLELISM: "4"
-        run: npm run verify:acceptance
+        run: >-
+          node tools/server-scripts/verify-platform-acceptance.mjs
+          --profile "$(node tools/server-scripts/verify-release-definition.mjs --field acceptance.profile)"
 
   assemble-release-assets:
     name: Assemble release assets without publication credentials
@@ -144,8 +151,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          channel="stable"
-          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then channel="next"; fi
+          channel="$(node tools/server-scripts/verify-release-definition.mjs --field release.channel)"
           source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
           node tools/server-scripts/mcp-release.mjs \
             --output-dir build/release/mcp \
@@ -199,8 +205,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          channel="stable"
-          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then channel="next"; fi
+          channel="$(node tools/server-scripts/verify-release-definition.mjs --field release.channel)"
           source_date_epoch="$(git show -s --format=%ct "$GITHUB_SHA")"
           node tools/server-scripts/verify-mcp-release-assets.mjs \
             --input-dir build/release/mcp \
@@ -309,6 +314,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image: ${{ steps.release-image.outputs.image }}
+      digest: ${{ steps.release-image.outputs.digest }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -324,7 +332,10 @@ jobs:
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           image="ghcr.io/${owner}/meshrix"
-          version="${GITHUB_REF_NAME#v}"
+          version="$(node tools/server-scripts/verify-release-definition.mjs --field release.version)"
+          platforms="$(node tools/server-scripts/verify-release-definition.mjs --json-field container.platforms)"
+          platform_csv="$(jq -r 'join(\",\")' <<<"$platforms")"
+          image_target="$(node tools/server-scripts/verify-release-definition.mjs --field container.target)"
           target="${image}:${version}"
           candidate_tag="candidate-${GITHUB_SHA}"
           inspect_digest() {
@@ -332,7 +343,7 @@ jobs:
             manifest="$(docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null)" || return 1
             raw="$(docker buildx imagetools inspect "$1" --raw)"
             platforms="$(jq -c '[.manifests[]?.platform | select(.os != "unknown") | "\(.os)/\(.architecture)"] | unique | sort' <<<"$raw")"
-            test "$platforms" = '["linux/amd64","linux/arm64"]' || {
+            test "$platforms" = "$(node tools/server-scripts/verify-release-definition.mjs --json-field container.platforms)" || {
               echo "release_image_platform_set_mismatch" >&2
               return 2
             }
@@ -346,8 +357,8 @@ jobs:
           else
             docker buildx create --name meshrix-release --driver docker-container --use
             docker buildx build \
-              --platform linux/amd64,linux/arm64 \
-              --target runtime-ui \
+              --platform "$platform_csv" \
+              --target "$image_target" \
               --build-arg "MESHRIX_SOURCE_REPOSITORY=${GITHUB_REPOSITORY}" \
               --build-arg "MESHRIX_SOURCE_REF=${GITHUB_REF}" \
               --build-arg "MESHRIX_SOURCE_COMMIT=${GITHUB_SHA}" \
@@ -446,9 +457,66 @@ jobs:
           retention-days: 1
           compression-level: 0
           overwrite: true
+
+  verify-release-image-native:
+    name: Native release image check (${{ matrix.platform }})
+    needs: [build-release-image]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Verify this native runner is declared by the release definition
+        env:
+          EXPECTED_PLATFORM: ${{ matrix.platform }}
+          EXPECTED_RUNNER: ${{ matrix.runner }}
+        run: |
+          node tools/server-scripts/verify-release-definition.mjs --json-field github.imageVerification \
+            | jq -e --arg platform "$EXPECTED_PLATFORM" --arg runner "$EXPECTED_RUNNER" \
+              'any(.[]; .platform == $platform and .runner == $runner)'
+      - name: Authenticate to the GitHub container registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Start and verify the immutable image on the native architecture
+        env:
+          IMAGE: ${{ needs.build-release-image.outputs.image }}
+          DIGEST: ${{ needs.build-release-image.outputs.digest }}
+          EXPECTED_PLATFORM: ${{ matrix.platform }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          container="meshrix-native-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          docker pull --platform "$EXPECTED_PLATFORM" "${IMAGE}@${DIGEST}"
+          docker run -d --name "$container" --publish 127.0.0.1:7228:7228 "${IMAGE}@${DIGEST}"
+          expected_arch="${EXPECTED_PLATFORM#linux/}"
+          actual_arch="$(docker inspect --format '{{.Architecture}}' "${IMAGE}@${DIGEST}")"
+          test "$actual_arch" = "$expected_arch"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:7228/api/healthz >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$container" >&2
+          exit 1
+
   sign-finalize-release:
     name: Sign and finalize immutable release assets
-    needs: [verify-release-inputs, build-release-image]
+    needs: [verify-release-inputs, build-release-image, verify-release-image-native]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

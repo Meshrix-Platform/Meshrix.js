@@ -8,11 +8,14 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[产品网站](https://meshrix.io) · [概览](#概览) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
+[产品网站](https://meshrix.io) · [概览](#概览) · [十大优先问题](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
 
 </div>
 
 本文件是 [README.md](README.md) 的本地化版本。英文是本仓库文档的规范语言，简体中文为本地化语言版本；如有歧义，以英文规范版本为准。
+
+> **当前优先级：** Meshrix 最有价值的十个未闭环问题按优先级维护在
+> [What's Next](docs/WHATS-NEXT.md)。开始规划、实现或评审项目工作前，请先查看该清单。
 
 ---
 
@@ -108,6 +111,7 @@ npm run mcp:doctor
 
 | 主题 | 文档 |
 | --- | --- |
+| 十大项目优先问题 | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
 | 产品定义 | [PRODUCT.md](PRODUCT.md) |
 | 文档索引 | [docs/README.md](docs/README.md) |
 | 架构 | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) |
