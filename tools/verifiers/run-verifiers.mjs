@@ -79,7 +79,18 @@ async function runProfile(profileName) {
     console.log(`\n[verify:${profileName}] ${step.label}`);
     try {
       await new Promise((resolve, reject) => {
-        const proc = spawn(step.cmd, step.args, { cwd: ROOT, stdio: 'inherit', shell: false });
+        const env = { ...process.env };
+        // npm exposes package allowScripts policy as a project-scoped CLI
+        // setting to nested npm processes. Current npm rejects that setting
+        // before `npm audit` can inspect the lockfile, so rely on the checked-in
+        // package policy and do not forward the synthesized CLI value.
+        delete env.npm_config_allow_scripts;
+        const proc = spawn(step.cmd, step.args, {
+          cwd: ROOT,
+          env,
+          stdio: 'inherit',
+          shell: false
+        });
         proc.on('close', (code) => {
           if (code === 0) resolve();
           else reject(new Error(`exit ${code}`));
