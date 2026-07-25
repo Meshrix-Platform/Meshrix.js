@@ -282,6 +282,12 @@ function runLinuxSecretServiceContainer() {
   return payload;
 }
 
+let linuxSecretServiceContainerProof;
+function controlledLinuxSecretServiceProof() {
+  linuxSecretServiceContainerProof ||= runLinuxSecretServiceContainer();
+  return linuxSecretServiceContainerProof;
+}
+
 await fs.mkdir(path.dirname(reportPath), { recursive: true });
 
 const nativeInstallerSource = await fs.readFile(path.join(repoRoot, nativeInstaller), "utf8");
@@ -338,10 +344,14 @@ record("explicit system mode does not read private file fallback", () => {
 record("current platform system credential store is release-ready", () => {
   const expectedBackends = currentPlatformSystemBackends();
   assert.notEqual(expectedBackends.length, 0, `${process.platform} has no supported MCP process identity system credential backend`);
-  const payload = runNodeSelfTest({
-    target: `verify-${process.platform}-system-credential`,
-    store: "system"
-  });
+  const headlessLinux = process.platform === "linux" &&
+    !String(process.env.DBUS_SESSION_BUS_ADDRESS || "").trim();
+  const payload = headlessLinux
+    ? controlledLinuxSecretServiceProof()
+    : runNodeSelfTest({
+        target: `verify-${process.platform}-system-credential`,
+        store: "system"
+      });
   assert.equal(payload.systemCredential, true);
   assert.equal(payload.fileFallback, false);
   assert.ok(
@@ -353,12 +363,13 @@ record("current platform system credential store is release-ready", () => {
     expectedBackends,
     storageBackend: payload.storageBackend,
     systemCredential: payload.systemCredential,
-    fileFallback: payload.fileFallback
+    fileFallback: payload.fileFallback,
+    controlledHeadlessProof: headlessLinux
   };
 });
 
 record("Linux container Secret Service stores process identity", () => {
-  const payload = runLinuxSecretServiceContainer();
+  const payload = controlledLinuxSecretServiceProof();
   return {
     storageBackend: payload.storageBackend,
     systemCredential: payload.systemCredential,
