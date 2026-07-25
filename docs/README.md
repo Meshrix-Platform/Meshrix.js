@@ -50,6 +50,7 @@ maintenance, operational evidence, and workload-conformance gates.
 | Code of conduct | [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
 | Security policy | [../SECURITY.md](../SECURITY.md) |
 | Changelog | [../CHANGELOG.md](../CHANGELOG.md) |
+| Governed release status | [releases/README.md](releases/README.md) |
 | License | [../LICENSE](../LICENSE) |
 
 ## Core Documents
