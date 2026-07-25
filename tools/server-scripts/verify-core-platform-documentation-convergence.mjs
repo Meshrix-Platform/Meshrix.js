@@ -72,8 +72,8 @@ const REQUIRED_TERMS = Object.freeze({
     "Required Verification"
   ],
   "docs/protocols/PROTOCOLS.md": [
-    "lico.discovery",
-    "lico.gateway",
+    "meshrix.discovery",
+    "meshrix.gateway",
     ...MCP_RELEASE_TARGET_LABELS
   ],
   "docs/COMPATIBILITY.md": [
@@ -82,8 +82,8 @@ const REQUIRED_TERMS = Object.freeze({
   "packages/protocols/mcp/adapter/native-installer/README.md": [
     ...MCP_SUPPORTED_TARGETS,
     "platform-native",
-    "lico-mcp-install.sh",
-    "lico-mcp-install.ps1"
+    "meshrix-mcp-install.sh",
+    "meshrix-mcp-install.ps1"
   ],
   "packages/protocols/mcp/adapter/gateway-installer/README.md": [
     ...MCP_SUPPORTED_TARGETS,

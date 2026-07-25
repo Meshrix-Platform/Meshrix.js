@@ -59,7 +59,7 @@ function evaluate(store, entityRef, extra = {}) {
 }
 
 async function main() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-universal-tag-policy-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-universal-tag-policy-"));
   const store = createTagStoreAdapter({ userDataPath });
   try {
     upsertTag(store, "governance:allow");

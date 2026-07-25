@@ -4,7 +4,7 @@ import {
   assertExistingLocalDirectoryWithinControlledRootsSync,
   assertPathWithinRootSync,
   resolveVirtualPathWithinRoot
-} from "@lico/foundation/security/local-path-boundary";
+} from "@meshrix/foundation/security/local-path-boundary";
 import {
   asArray,
   asObject,

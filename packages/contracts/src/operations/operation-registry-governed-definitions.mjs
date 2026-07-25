@@ -76,7 +76,9 @@ function upstreamGatewayInputSchema(required = []) {
       payload: { type: "object" },
       secretBindingId: { type: "string" },
       reason: { type: "string" },
-      limit: { type: "number" }
+      limit: { type: "number" },
+      approved: { type: "boolean" },
+      approvalApproved: { type: "boolean" }
     }
   };
 }

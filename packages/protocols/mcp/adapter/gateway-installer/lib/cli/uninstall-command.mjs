@@ -206,7 +206,7 @@ export async function waitAnyKey(promptText) {
 export async function uninstallTuiCommand(options) {
   const settings = installerOptions(options);
   const scan = await scanInstallTargets(options);
-  
+
   const manifestPath = discoveryRegistryPath(options);
   const manifest = await readJson(manifestPath, null);
   let installedTargets = [];
@@ -216,20 +216,20 @@ export async function uninstallTuiCommand(options) {
       .filter(([, status]) => status?.status === "installed")
       .map(([target]) => target);
   }
-  
+
   const filteredCandidates = scan.candidates.filter(c => installedTargets.includes(c.target));
-  
+
   if (filteredCandidates.length === 0) {
     console.log(`\x1b[2J\x1b[HLico MCP uninstall\n`);
     console.log(`Scanned ${scan.candidates.length} supported MCP clients.`);
-    console.log("None of these clients currently have LicoMesh MCP installed.");
+    console.log("None of these clients currently have Meshrix MCP installed.");
     await waitAnyKey("\nPress any key to escape...");
     return {
       ok: true,
       cancelled: true,
       packageName: packageJson.name,
       packageVersion: packageJson.version,
-      reason: "No installed LicoMesh MCP clients found to uninstall."
+      reason: "No installed Meshrix MCP clients found to uninstall."
     };
   }
 

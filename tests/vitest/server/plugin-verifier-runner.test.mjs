@@ -20,7 +20,7 @@ import {
 const temporaryRoots = [];
 
 async function fixtureRoot(source = "export default true;\n") {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-verifier-runner-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-verifier-runner-"));
   temporaryRoots.push(root);
   await fs.mkdir(path.join(root, "verifiers"), { recursive: true });
   await fs.writeFile(path.join(root, "verifiers", "check.mjs"), source, { mode: 0o600 });

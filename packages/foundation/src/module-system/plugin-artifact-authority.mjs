@@ -1,15 +1,15 @@
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-const ENVELOPE_SCHEMA = "licomesh.plugin-artifact-envelope/1";
-const INSTALL_JOURNAL_SCHEMA = "licomesh.plugin-artifact-install-journal/1";
-const REMOVAL_JOURNAL_SCHEMA = "licomesh.plugin-artifact-removal-journal/1";
-const CURRENT_SCHEMA = "licomesh.plugin-artifact-current/1";
-const TOMBSTONE_SCHEMA = "licomesh.plugin-artifact-tombstone/1";
+const ENVELOPE_SCHEMA = "meshrix.plugin-artifact-envelope/1";
+const INSTALL_JOURNAL_SCHEMA = "meshrix.plugin-artifact-install-journal/1";
+const REMOVAL_JOURNAL_SCHEMA = "meshrix.plugin-artifact-removal-journal/1";
+const CURRENT_SCHEMA = "meshrix.plugin-artifact-current/1";
+const TOMBSTONE_SCHEMA = "meshrix.plugin-artifact-tombstone/1";
 const METADATA_FILE = "plugin-artifact.json";
 const MAX_FILE_COUNT = 4096;
 const MAX_FILE_BYTES = 16 * 1024 * 1024;
@@ -59,7 +59,7 @@ export function pluginOwnerGenerationDigest({
   const artifactDigest = requiredDigest(rawArtifactDigest, "Plugin artifact owner digest");
   const artifactGeneration = generation(rawGeneration);
   return crypto.createHash("sha256").update(canonicalJson({
-    schemaVersion: "licomesh.plugin-owner-generation/1",
+    schemaVersion: "meshrix.plugin-owner-generation/1",
     pluginId: id,
     artifactDigest,
     artifactGeneration
@@ -710,7 +710,7 @@ export async function createPluginArtifactAuthority({
             await retireSupersededCode(expectedGeneration, expectedDigest);
           }
           await statePort.writeRecord("ledger", {
-            schemaVersion: "licomesh.plugin-lifecycle-ledger/1",
+            schemaVersion: "meshrix.plugin-lifecycle-ledger/1",
             pluginId: id,
             state: "active",
             operation: "",
@@ -755,7 +755,7 @@ export async function createPluginArtifactAuthority({
           await durableJson(currentPath, current, statePort);
           if (journal.operation === "update") await retireSupersededCode(current.generation, current.artifactDigest);
           await statePort.writeRecord("ledger", {
-            schemaVersion: "licomesh.plugin-lifecycle-ledger/1", pluginId: id, state: "active", operation: "",
+            schemaVersion: "meshrix.plugin-lifecycle-ledger/1", pluginId: id, state: "active", operation: "",
             idempotencyKey: "", requestDigest: "", generation: Math.max(current.generation, Number((await statePort.readRecord("ledger"))?.generation || 0))
           });
           await statePort.writeRecord("artifact-install-journal", { ...journal, phase: "completed" });

@@ -22,7 +22,7 @@ const roots = [];
 const kernels = [];
 
 async function tempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-custody-test-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-custody-test-"));
   roots.push(root);
   return root;
 }

@@ -2,7 +2,7 @@ import {
   controlledRef,
   sandboxDigest,
   SANDBOX_PROVIDER_CONFORMANCE_SCHEMA
-} from "#lico/foundation/execution-sandbox/contracts";
+} from "#meshrix/foundation/execution-sandbox/contracts";
 
 const PROVIDER_ORDER = new Map([
   ["rootless-podman", 0],

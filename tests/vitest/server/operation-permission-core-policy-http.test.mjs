@@ -16,13 +16,13 @@ const getRuntimeLoggerMock = vi.hoisted(() => vi.fn(() => ({
   error: vi.fn()
 })));
 
-vi.mock("@lico/foundation/observability/runtime-logger", () => ({
+vi.mock("@meshrix/foundation/observability/runtime-logger", () => ({
   getRuntimeLogger: getRuntimeLoggerMock,
   summarizeError: summarizeErrorMock,
   summarizeForLog: summarizeForLogMock
 }));
 
-vi.mock("@lico/protocols/http/http-utils", () => ({
+vi.mock("@meshrix/protocols/http/http-utils", () => ({
   sendJson: sendJsonMock
 }));
 
@@ -218,7 +218,7 @@ describe("operation-permission core policy and HTTP behavior", () => {
 
     const summary = await callRouter(router, {
       method: "GET",
-      path: "/api/operation-permission/v1/metrics/summary?limit=7&since=2026-01-01T00%3A00%3A00.000Z&until=2026-01-02T00%3A00%3A00.000Z&tool-id=lico.jobs.read&grant-id=grant-1&profile-id=profile-1&route=%2Fjobs%2Frun&transport=http&status=ok&status-code=200&completion-status=completed&bucket-seconds=30"
+      path: "/api/operation-permission/v1/metrics/summary?limit=7&since=2026-01-01T00%3A00%3A00.000Z&until=2026-01-02T00%3A00%3A00.000Z&tool-id=meshrix.jobs.read&grant-id=grant-1&profile-id=profile-1&route=%2Fjobs%2Frun&transport=http&status=ok&status-code=200&completion-status=completed&bucket-seconds=30"
     });
 
     expect(summary.handled).toBe(true);
@@ -232,7 +232,7 @@ describe("operation-permission core policy and HTTP behavior", () => {
       limit: 7,
       since: "2026-01-01T00:00:00.000Z",
       until: "2026-01-02T00:00:00.000Z",
-      toolId: "lico.jobs.read",
+      toolId: "meshrix.jobs.read",
       grantId: "grant-1",
       profileId: "profile-1",
       route: "/jobs/run",
@@ -250,7 +250,7 @@ describe("operation-permission core policy and HTTP behavior", () => {
           limit: 7,
           since: "2026-01-01T00:00:00.000Z",
           until: "2026-01-02T00:00:00.000Z",
-          toolId: "lico.jobs.read",
+          toolId: "meshrix.jobs.read",
           grantId: "[redacted]",
           profileId: "[redacted]",
           route: "<redacted-path>",

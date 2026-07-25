@@ -3,7 +3,7 @@ import {
   deleteCheckpointTree,
   removeImportCheckpoint,
   summarizeError,
-} from "#lico/product-api";
+} from "#meshrix/product-api";
 import { deleteUploadSession } from "../../state/upload-session-store.mjs";
 import { getJobDirectory, CLOSE_ABORT_MESSAGE, RECOVERY_STAGE_MESSAGE } from "./job-manager-validation.mjs";
 import { uploadSessionConsumptionComplete } from "../upload-session-consumption.mjs";

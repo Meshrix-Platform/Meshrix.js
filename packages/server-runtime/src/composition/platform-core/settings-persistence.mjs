@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { getAgentConfigRegistry } from "#lico/agents/agent-configs/config-registry";
-import { writePrivateFileAtomic } from "@lico/foundation/storage/private-file-atomic";
+import { getAgentConfigRegistry } from "#meshrix/agents/agent-configs/config-registry";
+import { writePrivateFileAtomic } from "@meshrix/foundation/storage/private-file-atomic";
 import {
   mutateState,
   waitForStateIdle

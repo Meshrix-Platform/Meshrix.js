@@ -1,11 +1,11 @@
 {
-  "name": "@lico/protocols",
+  "name": "@meshrix/protocols",
   "version": "0.0.1",
-  "description": "LicoMesh MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
+  "description": "Meshrix MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "packages/protocols"
   },
   "engines": {
@@ -13,21 +13,22 @@
   },
   "type": "module",
   "dependencies": {
-    "@lico/contracts": "0.0.1",
-    "@lico/foundation": "0.0.1"
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1"
   },
   "imports": {
-    "#lico/client-strings": "@lico/foundation/security/client-strings",
-    "#lico/contracts/*": "@lico/contracts/*",
-    "#lico/foundation/*": "@lico/foundation/*",
-    "#lico/http-response": "@lico/foundation/http/http-response",
-    "#lico/http-utils": "./http/http-utils.mjs",
-    "#lico/local-path-boundary": "@lico/foundation/security/local-path-boundary",
-    "#lico/operation-registry": "@lico/contracts/operations/operation-registry",
-    "#lico/runtime-logger": "@lico/foundation/observability/runtime-logger",
-    "#lico/state-coordinator": "@lico/foundation/storage/state-coordinator"
+    "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
+    "#meshrix/contracts/*": "@meshrix/contracts/*",
+    "#meshrix/foundation/*": "@meshrix/foundation/*",
+    "#meshrix/http-response": "@meshrix/foundation/http/http-response",
+    "#meshrix/http-utils": "./http/http-utils.mjs",
+    "#meshrix/local-path-boundary": "@meshrix/foundation/security/local-path-boundary",
+    "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
+    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
+    "./mcp/adapter/mcp-identity": "./mcp/adapter/gateway-installer/mcp-identity.mjs",
     "./mcp/*": "./mcp/*.mjs",
     "./agent-sync/*": "./agent-sync/*.mjs",
     "./downstream-client-aspect/*": "./downstream-client-aspect/*.mjs",

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { resolveLocalSecretPayload } from "@lico/foundation/security/secrets/local-secret-store";
+import { resolveLocalSecretPayload } from "@meshrix/foundation/security/secrets/local-secret-store";
 import {
   asArray,
   mcpServiceConfig,

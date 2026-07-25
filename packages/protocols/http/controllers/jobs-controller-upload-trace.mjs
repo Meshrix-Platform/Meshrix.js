@@ -1,4 +1,4 @@
-import { hashClientString } from "#lico/client-strings";
+import { hashClientString } from "#meshrix/client-strings";
 import { publishProtocolEvent } from "./jobs-controller-events.mjs";
 
 function hashForTrace(value, label) {

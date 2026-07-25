@@ -64,8 +64,8 @@
       "generator": "tools/generators/generate-architecture-diagram-digests.mjs",
       "authorityPath": "packages/contracts/src/modules/manifest.mjs",
       "projectionPaths": [
-        "docs/architecture/LICOMESH-SYSTEM-ARCHITECTURE.html",
-        "docs/architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html"
+        "docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html",
+        "docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html"
       ]
     }
   ],

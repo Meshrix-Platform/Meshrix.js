@@ -10,7 +10,7 @@ import { persistJobPayload } from "../../../packages/server-runtime/src/jobs/job
 
 async function withTempUserData(testCase) {
   const userDataPath = await fs.mkdtemp(
-    path.join(os.tmpdir(), "lico-job-projection-")
+    path.join(os.tmpdir(), "meshrix-job-projection-")
   );
   try {
     return await testCase(userDataPath);

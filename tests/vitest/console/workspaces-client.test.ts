@@ -7,7 +7,7 @@ const bridge = vi.hoisted(() => ({
   postJson: vi.fn(),
 }));
 
-vi.mock("@lico/ui-console/bridge-http", () => bridge);
+vi.mock("@meshrix/ui-console/bridge-http", () => bridge);
 
 import {
   previewWorkspaceCheckpointRestoreRequest,

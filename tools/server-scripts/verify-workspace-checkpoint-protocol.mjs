@@ -7,7 +7,7 @@ import {
   loadCheckpointTree,
   startCheckpointTree,
   upsertCheckpointNode
-} from "#lico/foundation/checkpoint/tree/checkpoint-tree-projection";
+} from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
 import { startHttpServer } from "../../apps/server/runtime/http-server.mjs";
 import { authHeaders, installAuthenticatedFetch } from "./test-auth-helper.mjs";
 
@@ -54,7 +54,7 @@ async function removeTempTree(targetPath) {
   }
 }
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-checkpoint-protocol-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-checkpoint-protocol-"));
 const treeId = checkpointTreeId("workspace-protocol", "verify");
 
 await startCheckpointTree({

@@ -4,6 +4,19 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { assertReceiptIntegrity } from "./plan-final-receipt.mjs";
+import {
+  acceptedFinalReceipt,
+  acceptedFinalReceiptEntries,
+  assertCurrentDependencyMapShape,
+  finalValidationBinding,
+  finalValidationBindings,
+  normalizePlanProfiles,
+  parentIntegrationBinding,
+  PLAN_PROFILE_SET,
+  profilesContain,
+  profilesEqual,
+} from "./plan-dependency-map.mjs";
+import { resolveGitRepoRoot } from "../server-scripts/lib/source-tree-digest.mjs";
 
 const modulePath = fileURLToPath(import.meta.url);
 const defaultRepoRoot = path.resolve(path.dirname(modulePath), "../..");
@@ -28,6 +41,31 @@ const SAFE_ROLE = /^[a-z][a-z0-9_]*$/u;
 const MAX_DIRECTORY_LENGTH = 512;
 const MAX_NODE_ID_LENGTH = 256;
 const MAX_REPOSITORY_LENGTH = 256;
+const MAX_PLAN_COUNT = 256;
+const MAX_CHECKPOINT_COUNT = 4096;
+const MAX_EDGE_COUNT = 16_384;
+
+export const PLAN_EXECUTION_RESOURCE_DISCIPLINE = Object.freeze({
+  id: "plan-execution-eligibility",
+  bounds: Object.freeze({
+    maxDirectoryLength: MAX_DIRECTORY_LENGTH,
+    maxNodeIdLength: MAX_NODE_ID_LENGTH,
+    maxRepositoryLength: MAX_REPOSITORY_LENGTH,
+    maxPlanCount: MAX_PLAN_COUNT,
+    maxCheckpointCount: MAX_CHECKPOINT_COUNT,
+    maxEdgeCount: MAX_EDGE_COUNT,
+  }),
+  scheduling: Object.freeze({
+    statusPriority: Object.freeze(["in_progress", "pending"]),
+  }),
+  caching: Object.freeze({
+    receiptValidation: "once-per-evaluation",
+  }),
+  lockOwnership: Object.freeze({
+    graphState: "evaluation-local",
+    inputMutation: "forbidden",
+  }),
+});
 
 export class PlanExecutionPolicyError extends Error {
   constructor(code, message) {
@@ -182,18 +220,19 @@ function assertLocalPlatformDirection(prerequisite, dependent) {
   );
 }
 
-function assertAcceptedFinalReceipt(mapPlan, finalNode) {
-  const receipt = mapPlan.accepted_final_receipt;
+function assertAcceptedFinalReceipt(mapPlan, finalNode, finalBinding) {
+  const receipt = acceptedFinalReceipt(mapPlan, finalNode.id);
   requireCondition(isRecord(receipt), "invalid_final_receipt", "completed Plan final is missing its accepted final receipt");
   requireCondition(
-    receipt.schema_version === "licomesh.plan-final-receipt.v3" &&
+    receipt.schema_version === "v0.0.1:meshrix:plan-final-receipt-4" &&
       receipt.plan === mapPlan.directory &&
-      receipt.final_node_id === mapPlan.final_validation_node_id &&
+      receipt.final_node_id === finalNode.id &&
       receipt.parent_contract_node_id === mapPlan.parent_contract_node_id &&
-      receipt.parent_integration_node_id === mapPlan.parent_integration_node_id &&
+      receipt.parent_integration_node_id === parentIntegrationBinding(mapPlan, finalNode.id)?.parent_node_id &&
       receipt.status === "completed" &&
       receipt.role === "final_validation" &&
-      receipt.platform === finalNode.platform,
+      receipt.platform === finalNode.platform &&
+      profilesEqual(receipt.profiles, finalBinding.profiles),
     "invalid_final_receipt",
     "accepted final receipt is not bound to the current Plan final",
   );
@@ -212,6 +251,7 @@ function nodeProjection(metadata, incoming) {
     status: metadata.node.status,
     role: metadata.node.role,
     platform: metadata.node.platform,
+    profiles: [...metadata.profiles],
     manifestIndex: metadata.manifestIndex,
     checkpointIndex: metadata.checkpointIndex,
     incomingDependencyCount: incoming.get(metadata.node.id).size,
@@ -252,9 +292,15 @@ export function evaluatePlanExecutionEligibility({
   checkpoints,
   checkpointsByDirectory,
   hostPlatform,
+  selectedProfile,
   requireAcceptedFinalReceipts = true,
 } = {}) {
   const normalizedHostPlatform = normalizeHostPlatform(hostPlatform);
+  requireCondition(
+    selectedProfile === undefined || PLAN_PROFILE_SET.has(selectedProfile),
+    "unknown_profile",
+    "unknown execution profile",
+  );
   const injectedCheckpoints = checkpoints ?? checkpointsByDirectory;
   requireCondition(
     checkpoints === undefined || checkpointsByDirectory === undefined || checkpoints === checkpointsByDirectory,
@@ -262,11 +308,11 @@ export function evaluatePlanExecutionEligibility({
     "multiple checkpoint collections were provided",
   );
   requireCondition(Array.isArray(manifest) && manifest.length > 0, "invalid_manifest", "Manifest must be a non-empty array");
-  requireCondition(
-    isRecord(dependencyMap) && Array.isArray(dependencyMap.plans),
-    "invalid_dependency_map",
-    "DependencyMap plans must be an array",
-  );
+  try {
+    assertCurrentDependencyMapShape(dependencyMap);
+  } catch {
+    fail("invalid_dependency_map", "DependencyMap schema or Plan entries are not current");
+  }
   const manifestByDirectory = new Map();
   const manifestIndexByDirectory = new Map();
   for (const [manifestIndex, manifestPlan] of manifest.entries()) {
@@ -310,10 +356,19 @@ export function evaluatePlanExecutionEligibility({
     if (mapPlan.parent !== null) {
       requirePlanDirectory(mapPlan.parent, "invalid_dependency_map");
     }
-    requireBoundedString(mapPlan.final_validation_node_id, {
-      code: "invalid_dependency_map",
-      message: "Plan final-validation checkpoint is missing",
-    });
+    let bindings;
+    try {
+      bindings = finalValidationBindings(mapPlan);
+      acceptedFinalReceiptEntries(mapPlan);
+    } catch {
+      fail("invalid_dependency_map", "Plan final-validation or receipt bindings are malformed");
+    }
+    for (const binding of bindings) {
+      requireBoundedString(binding.node_id, {
+        code: "invalid_dependency_map",
+        message: "Plan final-validation checkpoint is missing",
+      });
+    }
     requireCondition(Array.isArray(mapPlan.children), "invalid_dependency_map", "Plan children must be an array");
     const children = mapPlan.children.map((child) => requirePlanDirectory(child, "invalid_dependency_map"));
     requireCondition(new Set(children).size === children.length, "invalid_graph", "Plan contains a duplicate child reference");
@@ -334,7 +389,13 @@ export function evaluatePlanExecutionEligibility({
         "invalid_dependency_map",
         "cross-Plan receipt kind is invalid",
       );
-      return `${plan}\u0000${nodeId}\u0000${receipt.kind}`;
+      let receiptProfiles;
+      try {
+        receiptProfiles = normalizePlanProfiles(receipt.profiles, "invalid");
+      } catch {
+        fail("invalid_dependency_map", "cross-Plan receipt profiles are invalid");
+      }
+      return `${plan}\u0000${nodeId}\u0000${receipt.kind}\u0000${receiptProfiles.join(",")}`;
     });
     requireCondition(new Set(receiptKeys).size === receiptKeys.length, "invalid_graph", "Plan contains a duplicate prerequisite receipt");
     mapByDirectory.set(directory, mapPlan);
@@ -361,6 +422,10 @@ export function evaluatePlanExecutionEligibility({
 
   const planStates = new Map();
   const globalNodeMetadata = new Map();
+  const parentIntegrationNodeIds = new Set(
+    dependencyMap.plans.flatMap((plan) =>
+      (plan.parent_integrations ?? []).map((binding) => binding.parent_node_id)),
+  );
   for (const [directory] of mapByDirectory) {
     const manifestPlan = manifestByDirectory.get(directory);
     const nodes = checkpointCollection.get(directory);
@@ -399,6 +464,7 @@ export function evaluatePlanExecutionEligibility({
         manifestIndex: manifestIndexByDirectory.get(directory),
         checkpointIndex,
         repositoryClass,
+        profiles: new Set(),
       };
       nodesById.set(nodeId, normalizedNode);
       globalNodeMetadata.set(nodeId, metadata);
@@ -453,14 +519,22 @@ export function evaluatePlanExecutionEligibility({
     requireCondition(state.implementationRoots.length > 0, "invalid_graph", "Plan has no implementation entry checkpoint");
 
     const mapPlan = mapByDirectory.get(directory);
-    const finalNode = state.nodesById.get(mapPlan.final_validation_node_id);
-    requireCondition(finalNode?.role === "final_validation", "unknown_reference", "declared final-validation checkpoint is invalid");
-    requireCondition(finalNode.next.length === 0, "invalid_graph", "Plan final-validation checkpoint must be locally terminal");
-    const reducesToFinal = reverseReachableNodes(state, finalNode.id);
+    for (const binding of finalValidationBindings(mapPlan)) {
+      const finalNode = state.nodesById.get(binding.node_id);
+      requireCondition(finalNode?.role === "final_validation", "unknown_reference", "declared final-validation checkpoint is invalid");
+      requireCondition(finalNode.next.length === 0, "invalid_graph", "Plan final-validation checkpoint must be locally terminal");
+      const reducesToFinal = reverseReachableNodes(state, finalNode.id);
+      for (const nodeId of reducesToFinal) {
+        const metadata = globalNodeMetadata.get(nodeId);
+        if (!metadata || !participatesInPlanFinal(metadata.node, finalNode)) continue;
+        for (const profile of binding.profiles) metadata.profiles.add(profile);
+      }
+    }
     requireCondition(
-      state.nodes.filter((node) => participatesInPlanFinal(node, finalNode)).every((node) => reducesToFinal.has(node.id)),
+      state.nodes.filter((node) => node.status !== "skipped" && !parentIntegrationNodeIds.has(node.id))
+        .every((node) => globalNodeMetadata.get(node.id).profiles.size > 0),
       "invalid_graph",
-      "local checkpoint does not reduce to the declared Plan final-validation checkpoint",
+      "local checkpoint does not reduce to a declared Plan final-validation checkpoint",
     );
   }
 
@@ -496,11 +570,19 @@ export function evaluatePlanExecutionEligibility({
       );
       const receiptNode = planStates.get(receipt.plan).nodesById.get(receipt.node_id);
       requireCondition(receiptNode, "unknown_reference", "unknown cross-Plan receipt node reference");
+      const receiptProfiles = normalizePlanProfiles(receipt.profiles);
       if (receipt.kind === "final_validation") {
+        let providerBinding;
+        try {
+          providerBinding = finalValidationBinding(provider, receipt.node_id);
+        } catch {
+          fail("invalid_graph", "final-validation receipt does not identify a provider final checkpoint");
+        }
         requireCondition(
-          receipt.node_id === provider.final_validation_node_id && receiptNode.role === "final_validation",
+          receiptNode.role === "final_validation" &&
+            profilesContain(providerBinding.profiles, receiptProfiles),
           "invalid_graph",
-          "final-validation receipt does not identify its provider final checkpoint",
+          "final-validation receipt profile coverage is invalid",
         );
       } else {
         requireCondition(
@@ -509,14 +591,27 @@ export function evaluatePlanExecutionEligibility({
           "contract receipt does not identify a non-final contract checkpoint",
         );
       }
-      for (const implementationRoot of state.implementationRoots) {
+      requireCondition(
+        profilesContain([...globalNodeMetadata.get(receipt.node_id).profiles], receiptProfiles),
+        "invalid_graph",
+        "cross-Plan receipt provider does not cover the declared profiles",
+      );
+      const applicableRoots = state.implementationRoots.filter((implementationRoot) =>
+        receiptProfiles.some((profile) => globalNodeMetadata.get(implementationRoot.id).profiles.has(profile)));
+      requireCondition(applicableRoots.length > 0, "invalid_graph", "cross-Plan receipt has no applicable consumer");
+      for (const implementationRoot of applicableRoots) {
+        requireCondition(
+          profilesContain([...globalNodeMetadata.get(implementationRoot.id).profiles], receiptProfiles),
+          "invalid_graph",
+          "cross-Plan receipt spans multiple consumer final owners",
+        );
         addEdge(receipt.node_id, implementationRoot.id, "cross_plan_prerequisite");
       }
     }
 
     if (mapPlan.parent === null) {
       requireCondition(
-        mapPlan.parent_contract_node_id === null && mapPlan.parent_integration_node_id === null,
+        mapPlan.parent_contract_node_id === null && mapPlan.parent_integrations.length === 0,
         "invalid_graph",
         "root Plan must not declare parent checkpoints",
       );
@@ -533,38 +628,67 @@ export function evaluatePlanExecutionEligibility({
     );
     const parentState = planStates.get(mapPlan.parent);
     const parentContract = parentState.nodesById.get(mapPlan.parent_contract_node_id);
-    const parentIntegration = parentState.nodesById.get(mapPlan.parent_integration_node_id);
-    const childFinalNode = state.nodesById.get(mapPlan.final_validation_node_id);
     requireCondition(parentContract, "unknown_reference", "unknown parent contract checkpoint reference");
-    requireCondition(parentIntegration, "unknown_reference", "unknown parent integration checkpoint reference");
     requireCondition(
       parentContract.role === "implementation" || parentContract.role === "architecture_scaffold",
       "invalid_graph",
       "parent contract checkpoint is not a non-final contract",
     );
-    const expectedIntegrationRole = childFinalNode.platform === "any" ? "implementation" : "evidence";
-    requireCondition(
-      parentIntegration.role === expectedIntegrationRole,
-      "invalid_graph",
-      "parent integration checkpoint role does not match the child platform scope",
-    );
-    requireCondition(
-      parentIntegration.platform === childFinalNode.platform,
-      "platform_integration_mismatch",
-      "parent integration checkpoint must remain owned by the child final platform",
-    );
-    requireCondition(
-      hasLocalPath(parentState, parentContract.id, parentIntegration.id),
-      "invalid_graph",
-      "parent contract checkpoint does not precede its child integration checkpoint",
-    );
-    for (const implementationRoot of state.implementationRoots) {
-      addEdge(parentContract.id, implementationRoot.id, "parent_contract");
+    for (const binding of finalValidationBindings(mapPlan)) {
+      const integrationBinding = parentIntegrationBinding(mapPlan, binding.node_id);
+      const parentIntegration = parentState.nodesById.get(integrationBinding.parent_node_id);
+      const childFinalNode = state.nodesById.get(binding.node_id);
+      requireCondition(parentIntegration, "unknown_reference", "unknown parent integration checkpoint reference");
+      const expectedIntegrationRole = childFinalNode.platform === "any" ? "implementation" : "evidence";
+      requireCondition(
+        parentIntegration.role === expectedIntegrationRole,
+        "invalid_graph",
+        "parent integration checkpoint role does not match the child platform scope",
+      );
+      requireCondition(
+        parentIntegration.platform === childFinalNode.platform,
+        "platform_integration_mismatch",
+        "parent integration checkpoint must remain owned by the child final platform",
+      );
+      for (const profile of binding.profiles) {
+        globalNodeMetadata.get(parentIntegration.id).profiles.add(profile);
+      }
+      requireCondition(
+        profilesContain([...globalNodeMetadata.get(parentIntegration.id).profiles], binding.profiles),
+        "invalid_graph",
+        "parent integration checkpoint does not cover the child final profiles",
+      );
+      requireCondition(
+        hasLocalPath(parentState, parentContract.id, parentIntegration.id),
+        "invalid_graph",
+        "parent contract checkpoint does not precede its child integration checkpoint",
+      );
+      const applicableRoots = state.implementationRoots.filter((implementationRoot) =>
+        binding.profiles.some((profile) => globalNodeMetadata.get(implementationRoot.id).profiles.has(profile)));
+      for (const implementationRoot of applicableRoots) {
+        addEdge(parentContract.id, implementationRoot.id, "parent_contract");
+      }
+      addEdge(binding.node_id, parentIntegration.id, "parent_integration");
     }
-    addEdge(mapPlan.final_validation_node_id, parentIntegration.id, "parent_integration");
   }
 
   assertAcyclic(outgoing, incoming);
+
+  requireCondition(
+    planStates.size <= MAX_PLAN_COUNT,
+    "graph_budget_exceeded",
+    "Plan count exceeds the execution eligibility budget",
+  );
+  requireCondition(
+    globalNodeMetadata.size <= MAX_CHECKPOINT_COUNT,
+    "graph_budget_exceeded",
+    "checkpoint count exceeds the execution eligibility budget",
+  );
+  requireCondition(
+    edgeKinds.size <= MAX_EDGE_COUNT,
+    "graph_budget_exceeded",
+    "checkpoint edge count exceeds the execution eligibility budget",
+  );
 
   for (const [nodeId, metadata] of globalNodeMetadata) {
     if (metadata.node.status !== "completed") {
@@ -579,29 +703,33 @@ export function evaluatePlanExecutionEligibility({
     );
   }
 
-  const receiptValidatedPlans = new Set();
-  const requireAcceptedFinalReceipt = (directory) => {
-    if (receiptValidatedPlans.has(directory)) {
+  const receiptValidatedFinals = new Set();
+  const requireAcceptedFinalReceipt = (directory, finalNodeId) => {
+    const key = `${directory}\u0000${finalNodeId}`;
+    if (receiptValidatedFinals.has(key)) {
       return;
     }
     const mapPlan = mapByDirectory.get(directory);
-    const finalNode = planStates.get(directory).nodesById.get(mapPlan.final_validation_node_id);
+    const finalBinding = finalValidationBinding(mapPlan, finalNodeId);
+    const finalNode = planStates.get(directory).nodesById.get(finalNodeId);
     requireCondition(
       finalNode.status === "completed",
       "invalid_final_receipt",
       "accepted final receipt provider checkpoint is incomplete",
     );
-    assertAcceptedFinalReceipt(mapPlan, finalNode);
-    receiptValidatedPlans.add(directory);
+    assertAcceptedFinalReceipt(mapPlan, finalNode, finalBinding);
+    receiptValidatedFinals.add(key);
   };
 
   for (const [directory, mapPlan] of mapByDirectory) {
-    const finalNode = planStates.get(directory).nodesById.get(mapPlan.final_validation_node_id);
-    requireCondition(
-      finalNode.status === "completed" || mapPlan.accepted_final_receipt === undefined,
-      "invalid_final_receipt",
-      "incomplete Plan retains an accepted final receipt",
-    );
+    for (const { binding, receipt } of acceptedFinalReceiptEntries(mapPlan)) {
+      const finalNode = planStates.get(directory).nodesById.get(binding.node_id);
+      requireCondition(
+        finalNode.status === "completed" || receipt === undefined,
+        "invalid_final_receipt",
+        "incomplete Plan retains an accepted final receipt",
+      );
+    }
   }
 
   const eligible = [];
@@ -616,6 +744,9 @@ export function evaluatePlanExecutionEligibility({
 
   for (const metadata of globalNodeMetadata.values()) {
     if (!ELIGIBLE_STATUSES.has(metadata.node.status)) {
+      continue;
+    }
+    if (selectedProfile && !metadata.profiles.has(selectedProfile)) {
       continue;
     }
     candidateCount += 1;
@@ -637,7 +768,7 @@ export function evaluatePlanExecutionEligibility({
         for (const dependencyId of incoming.get(metadata.node.id)) {
           const dependency = globalNodeMetadata.get(dependencyId);
           if (dependency.node.role === "final_validation") {
-            requireAcceptedFinalReceipt(dependency.planDirectory);
+            requireAcceptedFinalReceipt(dependency.planDirectory, dependency.node.id);
           }
         }
       } catch (error) {
@@ -663,6 +794,7 @@ export function evaluatePlanExecutionEligibility({
 
   return {
     hostPlatform: normalizedHostPlatform,
+    selectedProfile: selectedProfile ?? null,
     candidateCount,
     eligible,
     deferred,
@@ -678,22 +810,26 @@ export function evaluatePlanExecutionEligibility({
 export async function loadPlanExecutionInputs({ repoRoot = defaultRepoRoot, planRoot } = {}) {
   const resolvedRepoRoot = path.resolve(repoRoot);
   const resolvedPlanRoot = path.resolve(planRoot ?? path.join(resolvedRepoRoot, "docs", "plans"));
+  const generationWorker = process.env.MESHRIX_ACCEPTANCE_GENERATION_WORKER === "1";
+  const gitRepoRoot = generationWorker ? resolveGitRepoRoot(resolvedRepoRoot) : resolvedRepoRoot;
   const [canonicalPlanRoot, packageText, gitStat] = await Promise.all([
     fs.realpath(resolvedPlanRoot),
     fs.readFile(path.join(resolvedRepoRoot, "package.json"), "utf8"),
-    fs.stat(path.join(resolvedRepoRoot, ".git")),
+    fs.stat(path.join(gitRepoRoot, ".git")),
   ]);
   const gitTopLevelResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-    cwd: resolvedRepoRoot,
+    cwd: gitRepoRoot,
     encoding: "utf8",
     windowsHide: true,
   });
   assertRepositoryIdentity({
     repoRoot: resolvedRepoRoot,
-    gitTopLevel: gitTopLevelResult.status === 0 ? gitTopLevelResult.stdout.trim() : "",
+    gitTopLevel: generationWorker
+      ? resolvedRepoRoot
+      : gitTopLevelResult.status === 0 ? gitTopLevelResult.stdout.trim() : "",
     planRoot: canonicalPlanRoot,
     packageManifest: JSON.parse(packageText),
-    gitMarkerPresent: gitStat.isDirectory() || gitStat.isFile(),
+    gitMarkerPresent: generationWorker || gitStat.isDirectory() || gitStat.isFile(),
   });
   const manifestPath = path.join(resolvedPlanRoot, "Manifest.json");
   const dependencyMapPath = path.join(resolvedPlanRoot, "end-to-end-release", "DependencyMap.json");
@@ -737,9 +873,9 @@ export function assertRepositoryIdentity({ repoRoot, gitTopLevel, planRoot, pack
     "repository root is not the current Git top-level",
   );
   requireCondition(
-    isRecord(packageManifest) && packageManifest.name === "licomesh",
+    isRecord(packageManifest) && packageManifest.name === "meshrix",
     "repository_identity_mismatch",
-    "repository root is not the LicoMesh Core package",
+    "repository root is not the Meshrix Core package",
   );
   requireCondition(
     path.resolve(planRoot ?? "") === path.join(resolvedRepoRoot, "docs", "plans"),

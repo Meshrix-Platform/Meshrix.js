@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
-import { evaluateOperationSafety } from "#lico/contracts/operations/operation-decorators";
-import { getRuntimeLogger, summarizeError, summarizeForLog } from "#lico/foundation/observability/runtime-logger";
+import { evaluateOperationSafety } from "#meshrix/contracts/operations/operation-decorators";
+import { getRuntimeLogger, summarizeError, summarizeForLog } from "#meshrix/foundation/observability/runtime-logger";
 import { childTraceContext, getTraceContext, runWithTraceContext,
-  setTraceContextOnRequest, traceContextFromRequest } from "#lico/foundation/observability/trace-context";
-import { createAuthorizationEngine } from "#lico/foundation/security/authorization/authorization-engine";
+  setTraceContextOnRequest, traceContextFromRequest } from "#meshrix/foundation/observability/trace-context";
+import { createAuthorizationEngine } from "#meshrix/foundation/security/authorization/authorization-engine";
 import { verifyExternalAuth } from "./dispatch-operation-auth.mjs";
 import {
   actorFromInput,

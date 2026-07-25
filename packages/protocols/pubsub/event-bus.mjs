@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import { getRuntimeLogger, summarizeError, summarizeForLog } from "#lico/runtime-logger";
-import { traceDetails } from "#lico/foundation/observability/trace-context";
+import { getRuntimeLogger, summarizeError, summarizeForLog } from "#meshrix/runtime-logger";
+import { traceDetails } from "#meshrix/foundation/observability/trace-context";
 
 const EVENT_SCHEMA_VERSION = "v0.0.1:pubsub:event-schema-1";
 const DEFAULT_LIMIT = 100;

@@ -3,7 +3,7 @@ import { constants as fileConstants } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { pathIsWithinRoot } from "#lico/foundation/security/local-path-boundary";
+import { pathIsWithinRoot } from "#meshrix/foundation/security/local-path-boundary";
 
 export const PLUGIN_WORKSPACE_ACCESS_METHODS = Object.freeze([
   "readTextFile",
@@ -160,7 +160,7 @@ export function createPluginWorkspaceAccess({ workspaceRoot, fileSystem = fs } =
         if (!pathIsWithinRoot(parentRealPath, rootRealPath)) {
           throw new Error("Plugin workspace parent is outside its boundary.");
         }
-        temporaryPath = path.join(parentPath, `.lico-write-${randomUUID()}.tmp`);
+        temporaryPath = path.join(parentPath, `.meshrix-write-${randomUUID()}.tmp`);
         handle = await source.open(
           temporaryPath,
           fileConstants.O_WRONLY |
@@ -185,5 +185,3 @@ export function createPluginWorkspaceAccess({ workspaceRoot, fileSystem = fs } =
     }
   });
 }
-
-

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import OptionBar from "@lico/ui-console/option-bar";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import { useWorkspacesViewContext } from "../../../composables/workspacesViewContext";
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
 

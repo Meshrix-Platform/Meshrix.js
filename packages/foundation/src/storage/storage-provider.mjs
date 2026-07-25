@@ -18,6 +18,10 @@ import {
 } from "./object-store.mjs";
 import { getStorageDatabasePath } from "./schema-manager.mjs";
 import { createServiceManifestStore } from "./service-manifest-store.mjs";
+import {
+  assertGovernedObjectStorageCapabilities,
+  GOVERNED_OBJECT_STORAGE_DISCIPLINE,
+} from "./governed-object-storage.mjs";
 import { createManifestCandidateAuthorityPort } from "./storage-ports.mjs";
 import { restoreStorageBackup } from "./restore-execution.mjs";
 import { runStorageMaintenanceMutation } from "./storage-maintenance-coordinator.mjs";
@@ -474,39 +478,21 @@ export function createStorageProvider({
       );
     },
     listCapabilities() {
-      return {
-        protocolVersion: STORAGE_PROTOCOL_VERSION,
-        capabilities: [
+      const capabilities = [
           {
             id: "storage-summary",
             kind: "projection",
             operations: ["getStorageSummary"]
           },
           {
-            id: "object-store",
-            kind: "blob-store",
-            operations: [
-              "putObject",
-              "putObjectsFromFiles",
-              "getObject",
-              "readObject",
-              "statObject",
-              "resolveStoredObjectPath"
-            ]
+            id: GOVERNED_OBJECT_STORAGE_DISCIPLINE.byteStore.capabilityId,
+            kind: GOVERNED_OBJECT_STORAGE_DISCIPLINE.byteStore.kind,
+            operations: [...GOVERNED_OBJECT_STORAGE_DISCIPLINE.byteStore.operations]
           },
           {
-            id: "storage-object-ownership",
-            kind: "metadata",
-            operations: [
-              "findObjectOwner",
-              "listObjectStoragePathsByOwner",
-              "deleteObjectRecordsByOwner",
-              "getDeletionOperationByOwnerId",
-              "upsertDeletionOperation",
-              "updateDeletionOperation",
-              "deleteDeletionOperation",
-              "listPendingDeletionOperations"
-            ]
+            id: GOVERNED_OBJECT_STORAGE_DISCIPLINE.ownershipAuthority.capabilityId,
+            kind: GOVERNED_OBJECT_STORAGE_DISCIPLINE.ownershipAuthority.kind,
+            operations: [...GOVERNED_OBJECT_STORAGE_DISCIPLINE.ownershipAuthority.operations]
           },
           {
             id: "maintenance",
@@ -530,7 +516,11 @@ export function createStorageProvider({
               "getDurableManifestCandidateAuthorityPort"
             ]
           }
-        ]
+        ];
+      assertGovernedObjectStorageCapabilities(capabilities);
+      return {
+        protocolVersion: STORAGE_PROTOCOL_VERSION,
+        capabilities,
       };
     }
   });

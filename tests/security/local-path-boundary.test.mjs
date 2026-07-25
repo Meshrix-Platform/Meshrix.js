@@ -12,7 +12,7 @@ import {
   pathIsWithinRoot,
 } from "../../packages/foundation/src/security/local-path-boundary.mjs";
 
-const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-local-path-boundary-"));
+const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-local-path-boundary-"));
 const allowedRoot = path.join(root, "allowed");
 const outsideRoot = path.join(root, "outside");
 const nestedDir = path.join(allowedRoot, "nested");

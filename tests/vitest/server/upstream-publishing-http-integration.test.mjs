@@ -32,8 +32,8 @@ async function login(baseUrl, username, password) {
     write: {
       cookie: cookieHeader(response),
       "content-type": "application/json",
-      "x-lico-csrf": payload.csrfToken,
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-csrf": payload.csrfToken,
+      "x-meshrix-safety-confirm": "true"
     }
   };
 }
@@ -77,7 +77,7 @@ afterEach(async () => {
 
 describe("production upstream publishing HTTP composition", () => {
   it("enforces auth, ownership, raw parsing, CAS and replay through the registered route", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-http-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-http-"));
     roots.push(userDataPath);
     const tagStore = createTagStoreAdapter({ userDataPath });
     const auth = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });
@@ -272,7 +272,7 @@ describe("production upstream publishing HTTP composition", () => {
     });
     servers.push({ close: () => new Promise((resolve) => upstream.close(resolve)) });
 
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-stream-http-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-stream-http-"));
     roots.push(userDataPath);
     const tagStore = createTagStoreAdapter({ userDataPath });
     const auth = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });

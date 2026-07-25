@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.mjs";
 import { startHttpServer } from "../../apps/server/runtime/http-server.mjs";
 import { authHeaders, installAuthenticatedFetch } from "./test-auth-helper.mjs";
@@ -43,7 +43,7 @@ for (const operationId of ["workspace.proposal.create", "workspace.proposal.appl
   assert.ok(catalog.tools.some((tool) => tool.operationId === operationId), `${operationId} must be exposed as a tool`);
 }
 
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-proposal-protocol-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-proposal-protocol-"));
 const server = await startHttpServer({
   userDataPath,
   distPath: "",

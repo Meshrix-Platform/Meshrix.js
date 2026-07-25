@@ -16,7 +16,7 @@ import { createVerifierOperationDispatcher } from "./lib/verifier-operation-disp
 const REPORT_PATH = "build/reports/mcp-authorization-request-filters.json";
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-auth-filters-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-auth-filters-"));
 const report = {
   schemaVersion: "v0.0.1:mcp:authorization-request-filters-report-1",
   verifier: "tools/server-scripts/verify-mcp-authorization-request-filters.mjs",
@@ -36,7 +36,7 @@ function safeEvidence(value = {}) {
     if (child.includes(userDataPath) || child.includes(os.homedir())) {
       return "[redacted-local-path]";
     }
-    if (/Bearer\s+\S+/i.test(child) || /lico_[a-z0-9_-]+=/i.test(child)) {
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[a-z0-9_-]+=/i.test(child)) {
       return "[redacted-secret]";
     }
     if (/mcp_auth_req|grant_|tool_exec|trace_/i.test(child)) {
@@ -51,7 +51,7 @@ function assertNoLeak(value, label = "payload") {
   assert.equal(serialized.includes(userDataPath), false, `${label} leaked verifier data path`);
   assert.equal(serialized.includes(os.homedir()), false, `${label} leaked user home path`);
   assert.equal(/Bearer\s+\S+/i.test(serialized), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[a-z0-9_-]+=/i.test(serialized), false, `${label} leaked cookie`);
+  assert.equal(/meshrix_[a-z0-9_-]+=/i.test(serialized), false, `${label} leaked cookie`);
 }
 
 async function writeReport() {
@@ -112,7 +112,7 @@ async function createRequest(clientName) {
   const response = provider.createMcpAuthorizationRequest({
     clientName,
     requestedScopes: ["gateway:read"],
-    requestedTools: ["lico.gateway.metrics"],
+    requestedTools: ["meshrix.gateway.metrics"],
     reason: "filter verifier"
   });
   assert.equal(response.status, "pending");
@@ -189,11 +189,11 @@ try {
       resolution: "approved",
       clientName: "approved-client",
       scopes: ["gateway:read"],
-      toolsets: ["lico.gateway.read"]
+      toolsets: ["meshrix.gateway.read"]
     });
     assert.equal(approved.status, 200, JSON.stringify(approved.payload, null, 2));
     const denied = await api("POST", `/api/console/mcp/authorization/requests/${encodeURIComponent(deniedId)}/resolve`, {
-      resolution: "rejected"
+      resolution: "denied"
     });
     assert.equal(denied.status, 200, JSON.stringify(denied.payload, null, 2));
 

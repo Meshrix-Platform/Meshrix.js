@@ -1,6 +1,6 @@
 
-import { AUTHORIZATION_PROTOCOL_VERSION } from "@lico/foundation/security/authorization/authorization-engine";
-import { SECURITY_PERMISSIONS_PROTOCOL_VERSION } from "@lico/foundation/security/security-permissions-provider";
+import { AUTHORIZATION_PROTOCOL_VERSION } from "@meshrix/foundation/security/authorization/authorization-engine";
+import { SECURITY_PERMISSIONS_PROTOCOL_VERSION } from "@meshrix/foundation/security/security-permissions-provider";
 import { protocolPayload, result, workspaceIdFrom } from "./shared.mjs";
 import { publishAuthorizationGovernanceUpdate } from "./authorization-governance-update.mjs";
 

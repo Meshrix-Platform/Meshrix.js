@@ -209,7 +209,7 @@ export function createConsoleSystemLogController(
       .join("\r\n");
     const timestamp = formatMachineDate(new Date().toISOString(), "full").replace(/[: ]/g, "-");
     downloadTextFile(
-      `lico-system-logs-${timestamp}.csv`,
+      `meshrix-system-logs-${timestamp}.csv`,
       `\uFEFF${csv}\r\n`,
       "text/csv;charset=utf-8",
     );

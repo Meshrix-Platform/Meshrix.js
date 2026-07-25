@@ -163,7 +163,7 @@ describe("capability binding guard behavior", () => {
       passphrase: "correct horse battery staple"
     })).rejects.toThrow();
 
-    const localDataDir = await tempDir("lico-cap-binding-recovery-local-");
+    const localDataDir = await tempDir("meshrix-cap-binding-recovery-local-");
     const localGuard = createCapabilityBindingGuard({
       backend: "local-file",
       dataDir: localDataDir,
@@ -193,7 +193,7 @@ describe("capability binding guard behavior", () => {
   });
 
   it("surfaces local-file lock timeout and state read errors", async () => {
-    const lockDataDir = await tempDir("lico-cap-binding-lock-");
+    const lockDataDir = await tempDir("meshrix-cap-binding-lock-");
     const lockAlias = "lock error alias";
     const lockGuard = createCapabilityBindingGuard({
       backend: "local-file",
@@ -231,7 +231,7 @@ describe("capability binding guard behavior", () => {
       Date.now = originalNow;
     }
 
-    const stateDataDir = await tempDir("lico-cap-binding-state-error-");
+    const stateDataDir = await tempDir("meshrix-cap-binding-state-error-");
     const stateAlias = "state error alias";
     const statePath = capabilityBindingGuardStatePath({ dataDir: stateDataDir, alias: stateAlias });
     await fs.promises.mkdir(path.dirname(statePath), { recursive: true });

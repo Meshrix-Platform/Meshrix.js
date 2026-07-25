@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import LicoTabs, { type LicoTab } from "../../components/LicoTabs.vue";
+import MeshrixTabs, { type MeshrixTab } from "../../components/MeshrixTabs.vue";
 import AuthorizationGovernanceCard from "../../components/admin/AuthorizationGovernanceCard.vue";
 import GrantToolRulePanel from "../../components/admin/operation-permission/GrantToolRulePanel.vue";
 import ToolGrantCreateCard from "../../components/admin/operation-permission/ToolGrantCreateCard.vue";
@@ -16,7 +16,7 @@ provideOperationPermissionView(operationPermissionView);
 const activeSection = ref("tokens");
 
 const locale = computed(() => resolveEffectiveConsoleLocale(currentConsoleLocale.value));
-const sectionTabs = computed<LicoTab[]>(() => [
+const sectionTabs = computed<MeshrixTab[]>(() => [
   { key: "tokens", label: localizeConsoleText("工具令牌", locale.value) },
   { key: "governance", label: localizeConsoleText("治理", locale.value) },
   { key: "verify", label: localizeConsoleText("策略验证", locale.value) },
@@ -26,7 +26,7 @@ const sectionTabs = computed<LicoTab[]>(() => [
 <template>
   <section class="operation-permission-layout">
     <header class="operation-permission-header">
-      <LicoTabs v-model="activeSection" :tabs="sectionTabs" variant="line" size="default" />
+      <MeshrixTabs v-model="activeSection" :tabs="sectionTabs" variant="line" size="default" />
     </header>
 
     <section v-if="activeSection === 'tokens'" class="operation-permission-stack">

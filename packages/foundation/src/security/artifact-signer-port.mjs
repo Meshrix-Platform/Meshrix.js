@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
 
 import { resolveLocalSecretPayload } from "./secrets/local-secret-store.mjs";

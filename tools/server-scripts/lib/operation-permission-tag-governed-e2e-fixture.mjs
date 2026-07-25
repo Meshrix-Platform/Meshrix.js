@@ -78,7 +78,11 @@ export async function seedTagGovernedUpstreamService({
             method: "POST",
             path: "/echo",
             risk: "safe_write",
-            requiredScopes: ["gateway:write"]
+            requiredScopes: ["gateway:write"],
+            payloadTransport: {
+              request: { mode: "structured_json", maxBytes: 1024 * 1024, mediaTypes: ["application/json"] },
+              response: { mode: "structured_json", maxBytes: 1024 * 1024, mediaTypes: ["application/json"] }
+            }
           },
           {
             operationKey: "approval",
@@ -86,7 +90,11 @@ export async function seedTagGovernedUpstreamService({
             path: "/echo",
             risk: "repair_write",
             requiredScopes: ["gateway:maintain"],
-            requiresApproval: true
+            requiresApproval: true,
+            payloadTransport: {
+              request: { mode: "structured_json", maxBytes: 1024 * 1024, mediaTypes: ["application/json"] },
+              response: { mode: "structured_json", maxBytes: 1024 * 1024, mediaTypes: ["application/json"] }
+            }
           }
         ]
       }

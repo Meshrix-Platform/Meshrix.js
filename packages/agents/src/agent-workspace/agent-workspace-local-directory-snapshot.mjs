@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { assertPathWithinRootSync } from "@lico/foundation/security/local-path-boundary";
+import { assertPathWithinRootSync } from "@meshrix/foundation/security/local-path-boundary";
 import {
   WORKSPACE_FILE_MAX_BYTES,
   asArray,
@@ -20,7 +20,7 @@ import {
 
 export const LOCAL_DIRECTORY_PREIMAGE_PROTOCOL_VERSION = "v0.0.1:workspace:local-directory-preimage-1";
 export const LOCAL_DIRECTORY_PREIMAGE_MAX_BYTES = workspaceIntegerLimit(
-  "LICO_AGENT_WORKSPACE_LOCAL_PREIMAGE_MAX_BYTES",
+  "MESHRIX_AGENT_WORKSPACE_LOCAL_PREIMAGE_MAX_BYTES",
   {
     defaultValue: 64 * 1024 * 1024,
     minimum: WORKSPACE_FILE_MAX_BYTES,
@@ -28,7 +28,7 @@ export const LOCAL_DIRECTORY_PREIMAGE_MAX_BYTES = workspaceIntegerLimit(
   }
 );
 export const LOCAL_DIRECTORY_PREIMAGE_MAX_ENTRIES = workspaceIntegerLimit(
-  "LICO_AGENT_WORKSPACE_LOCAL_PREIMAGE_MAX_ENTRIES",
+  "MESHRIX_AGENT_WORKSPACE_LOCAL_PREIMAGE_MAX_ENTRIES",
   { defaultValue: 5000, minimum: 1, maximum: 20000 }
 );
 export const LOCAL_DIRECTORY_PREIMAGE_MAX_ROOTS = 8;

@@ -3,17 +3,17 @@
   "label": "Maintenance Agent",
   "agentType": "maintenance",
   "toolsets": [
-    "lico.runtime.read",
-    "lico.storage.read",
-    "lico.jobs.read",
-    "lico.maintenance.read",
-    "lico.maintenance.run",
-    "lico.maintenance.maintain",
-    "lico.gateway.maintain"
+    "meshrix.runtime.read",
+    "meshrix.storage.read",
+    "meshrix.jobs.read",
+    "meshrix.maintenance.read",
+    "meshrix.maintenance.run",
+    "meshrix.maintenance.maintain",
+    "meshrix.gateway.maintain"
   ],
   "toolAllow": [],
   "toolDeny": [
-    "lico.admin"
+    "meshrix.admin"
   ],
   "maxRisk": "repair_write",
   "approvalPolicy": "confirm_repair",

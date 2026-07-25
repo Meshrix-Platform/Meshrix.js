@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
-import { normalizeKernelCapabilities } from "@lico/foundation/security/authorization/authorization-engine";
-import { redactOperationAuditValue } from "@lico/foundation/security/operation-audit";
+import { normalizeKernelCapabilities } from "@meshrix/foundation/security/authorization/authorization-engine";
+import { redactOperationAuditValue } from "@meshrix/foundation/security/operation-audit";
 import {
   credentialFromMetadata,
   normalizeDynamicUpstreamCapabilities,

@@ -129,7 +129,7 @@ describe("console browser effects", () => {
 
     expect(showFloatingElementFeedback(button, "Copied", { visibleMs: 10 })).toBe(true);
 
-    const bubble = document.querySelector(".lico-copy-bubble") as HTMLElement;
+    const bubble = document.querySelector(".meshrix-copy-bubble") as HTMLElement;
     expect(bubble.textContent).toBe("Copied");
     expect(bubble.style.left).toBe("30px");
     expect(bubble.style.top).toBe("20px");
@@ -138,7 +138,7 @@ describe("console browser effects", () => {
     vi.advanceTimersByTime(10);
     expect(bubble.style.opacity).toBe("0");
     vi.advanceTimersByTime(200);
-    expect(document.querySelector(".lico-copy-bubble")).toBeNull();
+    expect(document.querySelector(".meshrix-copy-bubble")).toBeNull();
   });
 
   it("copies text through clipboard and falls back to execCommand", async () => {
@@ -186,7 +186,7 @@ describe("console browser effects", () => {
     })).resolves.toBe(true);
 
     expect(writeText).toHaveBeenCalledWith("copy me");
-    expect(document.querySelector(".lico-copy-bubble")?.textContent).toBe("Copied");
+    expect(document.querySelector(".meshrix-copy-bubble")?.textContent).toBe("Copied");
   });
 
   it("scrolls and highlights config targets with timer cleanup", async () => {

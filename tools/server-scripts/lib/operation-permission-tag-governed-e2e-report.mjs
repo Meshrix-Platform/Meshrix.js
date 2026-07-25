@@ -50,7 +50,7 @@ export function createOperationPermissionTagGovernedE2eReportHarness({
     }
     text = text.replace(/Bearer\s+\S+/gi, "Bearer [redacted]");
     text = text.replace(/"token"\s*:\s*"[^"]+"/gi, "\"token\":\"[redacted]\"");
-    text = text.replace(/lico_[A-Za-z0-9_-]{12,}/g, "lico_[redacted]");
+    text = text.replace(/meshrix_[A-Za-z0-9_-]{12,}/g, "meshrix_[redacted]");
     text = text.replace(/\b(?:grant|tool_exec|trace|pending_op|workspace)_[A-Za-z0-9_-]{8,}\b/g, "[redacted-id]");
     return text;
   }
@@ -71,7 +71,7 @@ export function createOperationPermissionTagGovernedE2eReportHarness({
     }
     assert.equal(/Bearer\s+(?!\[redacted\])\S+/i.test(value), false, `${label} leaked bearer token`);
     assert.equal(/"token"\s*:\s*"(?!\[redacted\])[^"]+"/i.test(value), false, `${label} leaked token field`);
-    assert.equal(/lico_[A-Za-z0-9_-]{12,}/.test(value), false, `${label} leaked token-like value`);
+    assert.equal(/meshrix_[A-Za-z0-9_-]{12,}/.test(value), false, `${label} leaked token-like value`);
   }
 
   function assertNoLeak(value, label = "payload") {

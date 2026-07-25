@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AgentModelOptionBar from "../../components/AgentModelOptionBar.vue";
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
-import OptionBar from "@lico/ui-console/option-bar";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import StatusPill from "../../components/StatusPill.vue";
 import "./agent-assignment/agent-assignment.css";
 import { useAgentAssignmentView } from "./agent-assignment/useAgentAssignmentView";

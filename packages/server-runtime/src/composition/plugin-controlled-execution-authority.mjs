@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { writePrivateFileAtomic } from "../../../foundation/src/storage/private-file-atomic.mjs";
 
-const SCHEMA = "licomesh.plugin-controlled-task-authority/1";
+const SCHEMA = "meshrix.plugin-controlled-task-authority/1";
 const MAX_TASKS = 4096;
 
 function scope(input = {}) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import SplitToggleCard from "../../components/SplitToggleCard.vue";
 import StatusPill from "../../components/StatusPill.vue";
 import "./version-assembly/version-assembly.css";

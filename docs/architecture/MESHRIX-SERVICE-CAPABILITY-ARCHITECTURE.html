@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Meshrix Service Capability Architecture</title><style>
+  :root { color-scheme: light; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { margin: 0; color: #182026; background: #f7f8fa; }
+  main { max-width: 1180px; margin: 0 auto; padding: 32px 20px 56px; }
+  h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: 0; }
+  h2 { font-size: 22px; margin: 28px 0 12px; }
+  h3 { font-size: 16px; margin: 0 0 8px; }
+  p { line-height: 1.6; margin: 0 0 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .band { background: #fff; border: 1px solid #d8dee6; border-radius: 8px; padding: 16px; }
+  .layer { border-left: 4px solid #2f6fed; }
+  .module { border-left: 4px solid #2aa66a; }
+  .node { border-left: 4px solid #8a6fdf; }
+  .meta { color: #506070; font-size: 13px; }
+  code { background: #edf1f6; border: 1px solid #d8dee6; border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  ul { margin: 8px 0 0; padding-left: 18px; }
+  li { margin: 4px 0; line-height: 1.45; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d8dee6; }
+  th, td { text-align: left; border-bottom: 1px solid #e5e9ef; padding: 10px; vertical-align: top; }
+  th { background: #edf1f6; }
+</style><!-- architecture-facts-digest: sha256:5eb35c382a0c4667aef59b5feb21de191bf026b7ab07cbacd08ea2426a59d1aa -->
+</head>
+<body><main>
+<h1>Meshrix Service Capability Architecture</h1>
+<p>Authority: packages/contracts/src/modules/manifest.mjs. Projection-only diagram; digest sha256:5eb35c382a0c4667aef59b5feb21de191bf026b7ab07cbacd08ea2426a59d1aa.</p>
+<p>Service capability flow from local clients through MCP outlets, operation routing, data substrate, gateways, and operator-configured upstream applications.</p>
+<h2>Capability Layers</h2>
+<div class="grid">
+<section class="band layer">
+  <h3><span>Layer 1</span> 客户端类型</h3>
+  <ul><li>Agent Harness</li><li>Meshrix Client</li></ul>
+</section>
+
+<section class="band layer">
+  <h3><span>Layer 2</span> MCP 插件能力层</h3>
+  <ul><li>Discovery</li><li>Gateway</li><li>Verified Plugin Contributions</li><li>External Protocol Adapters</li></ul>
+</section>
+
+<section class="band layer">
+  <h3><span>Layer 3</span> 统一操作路由层</h3>
+  <ul><li>Operation Router</li><li>Policy Router</li><li>Capability Router</li></ul>
+</section>
+
+<section class="band layer">
+  <h3><span>Layer 4</span> 缓存与算法底座层</h3>
+  <ul><li>LSM Ingest Pipeline</li><li>CAS Block Store</li><li>Merkle DAG Manifests</li><li>Prefix / Range Index</li><li>State Commit / Projection</li></ul>
+</section>
+
+<section class="band layer">
+  <h3><span>Layer 5</span> 网关层</h3>
+  <ul><li>Operation Gateway</li><li>Service Gateway</li><li>Block Sync Gateway</li><li>Secret And Connection Gateway</li></ul>
+</section>
+
+<section class="band layer">
+  <h3><span>Layer 6</span> 外部应用</h3>
+  <ul><li>Operator-configured upstream APIs</li></ul>
+</section></div>
+<h2>Protocol Fields</h2>
+<table>
+  <thead><tr><th>Field ID</th><th>Label</th><th>Layer</th><th>Functions</th></tr></thead>
+  <tbody>
+<tr>
+  <td><code>meshrix.call</code></td>
+  <td>meshrix.call</td>
+  <td>Layer 3</td>
+  <td>统一操作调用入口<br>HTTP / RPC / CLI 的等价调用面</td>
+</tr>
+<tr>
+  <td><code>operationId</code></td>
+  <td>operationId</td>
+  <td>Layer 3</td>
+  <td>Operation Router 解析的操作标识<br>关联 subject、workspace 和 params</td>
+</tr></tbody>
+</table>
+</main></body></html>

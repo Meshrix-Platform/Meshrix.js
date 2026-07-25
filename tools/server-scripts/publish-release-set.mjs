@@ -119,7 +119,7 @@ function internalDependencyNames(manifest) {
       continue;
     }
     for (const name of Object.keys(dependencies)) {
-      if (name.startsWith("@lico/")) names.add(name);
+      if (name.startsWith("@meshrix/")) names.add(name);
     }
   }
   return [...names].sort((left, right) => left.localeCompare(right));
@@ -149,7 +149,7 @@ export function topologicallyOrderReleaseSet(packages) {
       if (!byName.has(dependencyName)) {
         throw publicationError(
           "release_set_internal_dependency_missing",
-          "Every internal @lico dependency must be part of the public release set."
+          "Every internal @meshrix dependency must be part of the public release set."
         );
       }
       if (!dependents.get(dependencyName).has(packageRecord.name)) {
@@ -243,11 +243,11 @@ export async function discoverReleaseSet({ rootDir = process.cwd() } = {}) {
         continue;
       }
       for (const [dependencyName, dependencyVersion] of Object.entries(dependencies)) {
-        if (!dependencyName.startsWith("@lico/")) continue;
+        if (!dependencyName.startsWith("@meshrix/")) continue;
         if (!releaseNames.has(dependencyName) || dependencyVersion !== version) {
           throw publicationError(
             "release_set_internal_dependency_invalid",
-            "Internal @lico dependencies must be present and locked to the release version."
+            "Internal @meshrix dependencies must be present and locked to the release version."
           );
         }
       }
@@ -705,7 +705,7 @@ async function verifyPublishedPackageSignatures(packages, temporaryRoot, runner)
   await fs.writeFile(
     path.join(auditDirectory, "package.json"),
     `${JSON.stringify({
-      name: "licomesh-release-set-signature-audit",
+      name: "meshrix-release-set-signature-audit",
       version: "0.0.0",
       private: true,
       dependencies
@@ -764,7 +764,7 @@ export async function publishReleaseSet({
   const tag = normalizeRequestedTag(releaseSet.version, requestedTag);
   if (!dryRun && !preflight) assertNoRawNpmToken(environment);
   const commandRunner = runner || createNpmRunner({ environment });
-  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-npm-release-set-"));
+  const temporaryRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-npm-release-set-"));
   const packDirectory = path.join(temporaryRoot, "tarballs");
   await fs.mkdir(packDirectory);
 

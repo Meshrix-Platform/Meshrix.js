@@ -1,8 +1,8 @@
-import { createMaintenanceAgentService } from "#lico/agents/maintenance/index";
-import { createOperationPermissionStore } from "#lico/capabilities/operation-permission-core/store";
+import { createMaintenanceAgentService } from "#meshrix/agents/maintenance/index";
+import { createOperationPermissionStore } from "#meshrix/capabilities/operation-permission-core/store";
 import { createJobManager } from "../../jobs/jobs/job-manager.mjs";
 import { createProtocolEventRuntime } from "../../events/protocol-event-runtime.mjs";
-import { createProtocolEventBus } from "#lico/protocols/pubsub/event-bus";
+import { createProtocolEventBus } from "#meshrix/protocols/pubsub/event-bus";
 import { createMaintenanceWorkQueueProvider } from "../maintenance-work-queue-provider.mjs";
 import { createQueueApplicationPort } from "../queue-application-port.mjs";
 import {
@@ -10,7 +10,7 @@ import {
   bindOperationDispatcher,
   loadSettings,
   loadDiscoveryConfig
-} from "#lico/product-api";
+} from "#meshrix/product-api";
 
 class MaintenanceWorkerCloseError extends Error {
   constructor(code) {

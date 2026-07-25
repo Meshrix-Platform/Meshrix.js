@@ -12,20 +12,23 @@ import {
   buildConsoleState,
   buildRuntimeInfo
 } from "../../../packages/protocols/http/api-facade.mjs";
+import {
+  createPolicyEnforcementPoint
+} from "../../../packages/foundation/src/security/authorization/pdp/policy-enforcement-point.mjs";
 import { executeDiscoveryOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/discovery-executor.mjs";
 import { executeStorageOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/storage-client-monitor-executors.mjs";
 
 const TOOLSET_RISK = Object.freeze({
-  "lico.runtime.read": "read_only",
-  "lico.storage.read": "read_only",
-  "lico.jobs.read": "read_only",
-  "lico.gateway.read": "read_only",
-  "lico.agent.workspace.read": "read_only",
-  "lico.result.export": "read_only",
-  "lico.gateway.write": "safe_write",
-  "lico.storage.write": "safe_write",
-  "lico.agent.workspace": "safe_write",
-  "lico.gateway.maintain": "repair_write"
+  "meshrix.runtime.read": "read_only",
+  "meshrix.storage.read": "read_only",
+  "meshrix.jobs.read": "read_only",
+  "meshrix.gateway.read": "read_only",
+  "meshrix.agent.workspace.read": "read_only",
+  "meshrix.result.export": "read_only",
+  "meshrix.gateway.write": "safe_write",
+  "meshrix.storage.write": "safe_write",
+  "meshrix.agent.workspace": "safe_write",
+  "meshrix.gateway.maintain": "repair_write"
 });
 
 const RISK_RANK = Object.freeze({
@@ -117,7 +120,7 @@ function createProvider({ securityPermissions } = {}) {
         type: "machine",
         enabled: true,
         metadata: {
-          issuedBy: "lico-mcp-local-pairing",
+          issuedBy: "meshrix-mcp-local-pairing",
           targets: ["codex"],
           mcpTarget: "codex"
         }
@@ -128,7 +131,7 @@ function createProvider({ securityPermissions } = {}) {
       type: "machine",
       enabled: true,
       metadata: {
-        issuedBy: "lico-mcp-local-pairing",
+        issuedBy: "meshrix-mcp-local-pairing",
         targets: ["codex"],
         mcpTarget: "codex"
       }
@@ -226,6 +229,30 @@ async function createLocalGrant(provider, body, headers = {}) {
 }
 
 describe("P2 security boundaries", () => {
+  it("does not treat a system actor or a caller-provided skip flag as authority", async () => {
+    const auditStore = { recordDecision: vi.fn(async () => {}) };
+    const pep = createPolicyEnforcementPoint({ auditStore });
+    const result = await pep.enforce({
+      operation: {
+        id: "security.system_actor_boundary",
+        risk: "safe_write",
+        requiredScopes: ["security:write"],
+        requiredCapabilities: ["cap:api:security.system_actor_boundary"]
+      },
+      subject: {
+        type: "system",
+        subjectId: "system-worker",
+        scopes: [],
+        capabilities: []
+      },
+      skipAuthorization: true
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.decision.reasonCode).toBe("missing_scopes");
+    expect(auditStore.recordDecision).toHaveBeenCalledOnce();
+  });
+
   it("defaults authenticated known local MCP targets to read-only toolsets", async () => {
     const authorizeOperation = vi.fn(async () => ({ ok: true }));
     const securityPermissions = processIdentityPermissions({ authorizeOperation });
@@ -239,14 +266,14 @@ describe("P2 security boundaries", () => {
     expect(result.status).toBe(201);
     expect(result.body.maxRisk).toBe("read_only");
     expect(result.body.toolsets).toEqual([
-      "lico.runtime.read",
-      "lico.storage.read",
-      "lico.jobs.read",
-      "lico.gateway.read",
-      "lico.agent.workspace.read",
-      "lico.result.export"
+      "meshrix.runtime.read",
+      "meshrix.storage.read",
+      "meshrix.jobs.read",
+      "meshrix.gateway.read",
+      "meshrix.agent.workspace.read",
+      "meshrix.result.export"
     ]);
-    expect(result.body.toolsets).not.toContain("lico.gateway.write");
+    expect(result.body.toolsets).not.toContain("meshrix.gateway.write");
     expect(result.body.toolsets).not.toContain("upstream-mcp");
     expect(result.body.targetMatch.matchedTargetDetails[0].maxRisk).toBe("read_only");
     expect(authorizeOperation).toHaveBeenCalledOnce();
@@ -338,7 +365,7 @@ describe("P2 security boundaries", () => {
       authSession: { user: { username: "owner" } }
     });
     const consumed = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: bridgeClientRequest({ "x-lico-authorization-claim": claimToken }),
+      request: bridgeClientRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: deviceRequest.body.requestId
     });
 
@@ -395,8 +422,8 @@ describe("P2 security boundaries", () => {
     const result = await provider.markLocalMcpGrantUninstalled({
       request: bridgeClientRequest({
         authorization: "Bearer test-token",
-        "x-lico-mcp-target": "codex",
-        "x-lico-process-key-id": "process-key"
+        "x-meshrix-mcp-target": "codex",
+        "x-meshrix-process-key-id": "process-key"
       }),
       requestBody,
       url: new URL("http://127.0.0.1:7391/api/mcp/local-uninstall"),
@@ -405,8 +432,8 @@ describe("P2 security boundaries", () => {
     const originMismatch = await provider.markLocalMcpGrantUninstalled({
       request: bridgeClientRequest({
         authorization: "Bearer test-token",
-        "x-lico-mcp-target": "codex",
-        "x-lico-process-key-id": "process-key",
+        "x-meshrix-mcp-target": "codex",
+        "x-meshrix-process-key-id": "process-key",
         origin: "https://example.invalid"
       }),
       requestBody,
@@ -416,8 +443,8 @@ describe("P2 security boundaries", () => {
     const forwarded = await provider.markLocalMcpGrantUninstalled({
       request: bridgeClientRequest({
         authorization: "Bearer test-token",
-        "x-lico-mcp-target": "codex",
-        "x-lico-process-key-id": "process-key",
+        "x-meshrix-mcp-target": "codex",
+        "x-meshrix-process-key-id": "process-key",
         "x-forwarded-port": "7391"
       }),
       requestBody,
@@ -442,7 +469,7 @@ describe("P2 security boundaries", () => {
       type: "machine",
       enabled: true,
       metadata: {
-        issuedBy: "lico-mcp-local-pairing",
+        issuedBy: "meshrix-mcp-local-pairing",
         targets: ["codex"],
         mcpTarget: "codex"
       }
@@ -480,13 +507,13 @@ describe("P2 security boundaries", () => {
 
     const result = await createLocalGrant(provider, {
       targets: ["codex", "opencode"],
-      toolsets: ["lico.gateway.write"],
+      toolsets: ["meshrix.gateway.write"],
       processIdentities: {
         codex: { processPublicKeyPem: "codex-public-key" },
         opencode: { processPublicKeyPem: "opencode-public-key" }
       }
     }, {
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-safety-confirm": "true"
     });
 
     expect(result.status).toBe(201);
@@ -514,10 +541,10 @@ describe("P2 security boundaries", () => {
 
     const result = await createLocalGrant(provider, {
       targets: ["codex"],
-      toolsets: ["lico.gateway.write"],
+      toolsets: ["meshrix.gateway.write"],
       processIdentity: { processPublicKeyPem: "public-key" }
     }, {
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-safety-confirm": "true"
     });
 
     expect(result.status).toBe(503);
@@ -554,7 +581,7 @@ describe("P2 security boundaries", () => {
         }),
         summary: expect.objectContaining({
           targets: ["codex"],
-          toolsets: expect.arrayContaining(["lico.runtime.read"]),
+          toolsets: expect.arrayContaining(["meshrix.runtime.read"]),
           maxRisk: "read_only"
         })
       })
@@ -569,14 +596,14 @@ describe("P2 security boundaries", () => {
     expect(store.createGrant).not.toHaveBeenCalled();
 
     const wrongClaim = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": `${claimToken}x` }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": `${claimToken}x` }),
       requestId: pending.body.requestId
     });
     expect(wrongClaim.status).toBe(404);
     expect(store.createGrant).not.toHaveBeenCalled();
 
     const issued = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": claimToken }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: pending.body.requestId
     });
     expect(issued.status).toBe(201);
@@ -585,7 +612,7 @@ describe("P2 security boundaries", () => {
     expect(store.createGrant).toHaveBeenCalledOnce();
 
     const replay = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": claimToken }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: pending.body.requestId
     });
     expect(replay).toEqual(issued);
@@ -676,7 +703,7 @@ describe("P2 security boundaries", () => {
     store.completeMcpAuthorizationRequest.mockReturnValueOnce(false);
 
     const result = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": claimToken }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: pending.body.requestId
     });
 
@@ -713,7 +740,7 @@ describe("P2 security boundaries", () => {
     });
 
     await expect(provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": claimToken }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: pending.body.requestId
     })).rejects.toThrow("completion persistence failed");
     expect(store.revokeGrant).toHaveBeenCalledWith(
@@ -749,7 +776,7 @@ describe("P2 security boundaries", () => {
     });
 
     const result = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": claimToken }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: pending.body.requestId
     });
 
@@ -781,7 +808,7 @@ describe("P2 security boundaries", () => {
     registry.setResolvedToolIds(["tool.after-approval"]);
 
     const result = await provider.consumeLocalMcpGrantAuthorizationRequest({
-      request: localPairingRequest({ "x-lico-authorization-claim": claimToken }),
+      request: localPairingRequest({ "x-meshrix-authorization-claim": claimToken }),
       requestId: pending.body.requestId
     });
 
@@ -895,7 +922,7 @@ describe("P2 security boundaries", () => {
       },
       storageProvider: {
         getStorageSummary: () => ({
-          databasePath: path.join(userDataPath, "metadata", "lico.sqlite"),
+          databasePath: path.join(userDataPath, "metadata", "meshrix.sqlite"),
           objectRootPath: path.join(userDataPath, "objects"),
           backendLocation: path.join(userDataPath, "storage"),
           databaseExists: true,
@@ -972,7 +999,7 @@ describe("P2 security boundaries", () => {
     const privateRoot = path.resolve("<user-data>");
     const storageProvider = {
       getStorageSummary: () => ({
-        databasePath: `${privateRoot}/metadata/lico.sqlite`,
+        databasePath: `${privateRoot}/metadata/meshrix.sqlite`,
         objectRootPath: `${privateRoot}/objects`,
         databaseExists: true,
         objectCount: 2,
@@ -983,7 +1010,7 @@ describe("P2 security boundaries", () => {
       }),
       runDoctor: async () => ({
         userDataPath: privateRoot,
-        databasePath: `${privateRoot}/metadata/lico.sqlite`,
+        databasePath: `${privateRoot}/metadata/meshrix.sqlite`,
         jobsRootPath: `${privateRoot}/jobs`,
         objectRootPath: `${privateRoot}/objects`,
         databasePresent: true,
@@ -997,7 +1024,7 @@ describe("P2 security boundaries", () => {
         },
         issues: {
           missingJobMeta: [{ jobId: "job-1", path: `${privateRoot}/jobs/job-1/meta.json` }],
-          databaseMissing: [{ databasePath: `${privateRoot}/metadata/lico.sqlite` }]
+          databaseMissing: [{ databasePath: `${privateRoot}/metadata/meshrix.sqlite` }]
         },
         healthy: false
       })

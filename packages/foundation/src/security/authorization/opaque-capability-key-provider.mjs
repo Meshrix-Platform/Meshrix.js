@@ -20,7 +20,7 @@ import {
 import {
   normalizeRegisteredToolCapabilities,
   unknownKernelCapabilities
-} from "#lico/authorization-engine";
+} from "#meshrix/authorization-engine";
 import {
   createMemoryCapabilityKeyBindingStore,
   createSealedCapabilityKernelStore
@@ -145,9 +145,9 @@ function createCommandLookupKeySource({
 }
 
 export function createOpaqueCapabilityKeyProvider({
-  backend = process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER || "auto",
-  alias = process.env.LICO_OPAQUE_CAPABILITY_KEY_ALIAS || DEFAULT_ALIAS,
-  dataDir = process.env.LICO_OPAQUE_CAPABILITY_KEY_DATA_DIR || "",
+  backend = process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER || "auto",
+  alias = process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_ALIAS || DEFAULT_ALIAS,
+  dataDir = process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_DATA_DIR || "",
   bindingStore = null,
   lookupKeySource = null,
   command = "",
@@ -170,11 +170,11 @@ export function createOpaqueCapabilityKeyProvider({
           alias,
           backend: ["macos-keychain", "local-file"].includes(resolvedBackend) ? resolvedBackend : "external-command",
           dataDir,
-          command: command || process.env.LICO_OPAQUE_CAPABILITY_KEY_COMMAND || process.execPath,
+          command: command || process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_COMMAND || process.execPath,
           args: args.length
             ? args
-            : command || process.env.LICO_OPAQUE_CAPABILITY_KEY_COMMAND
-            ? String(process.env.LICO_OPAQUE_CAPABILITY_KEY_ARGS || "").split(/\s+/).filter(Boolean)
+            : command || process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_COMMAND
+            ? String(process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_ARGS || "").split(/\s+/).filter(Boolean)
             : [helperScriptPath()],
           env
         }));

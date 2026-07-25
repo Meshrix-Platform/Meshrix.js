@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import fsSync from "node:fs";
 import path from "node:path";
-import { ServerConfig } from "@lico/foundation/config/server-config";
+import { ServerConfig } from "@meshrix/foundation/config/server-config";
 
 export const PRIVATE_DIRECTORY_MODE = 0o700;
 export const PRIVATE_FILE_MODE = 0o600;

@@ -41,7 +41,7 @@ async function readDoctorToken() {
       { code: "RAW_TOKEN_ARGUMENT_REJECTED" }
     );
   }
-  const tokenEnv = String(argValue("--token-env", "LICO_MCP_TOKEN")).trim();
+  const tokenEnv = String(argValue("--token-env", "MESHRIX_MCP_TOKEN")).trim();
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(tokenEnv)) {
     throw Object.assign(new Error("Invalid --token-env name."), { code: "TOKEN_ENV_NAME_INVALID" });
   }
@@ -58,7 +58,7 @@ async function readDoctorToken() {
 }
 
 function parseOrbStackTargets() {
-  const raw = String(process.env.LICO_MCP_ORBSTACK_TARGETS || "").trim();
+  const raw = String(process.env.MESHRIX_MCP_ORBSTACK_TARGETS || "").trim();
   if (!raw) {
     return [];
   }
@@ -117,10 +117,10 @@ function mcpRequest(method, params = {}, id = 1) {
 }
 
 async function readDeviceManifest() {
-  const manifestPath = process.env.LICO_MCP_DISCOVERY_FILE || path.join(os.homedir(), ".lico", "mcp", "servers.json");
+  const manifestPath = process.env.MESHRIX_MCP_DISCOVERY_FILE || path.join(os.homedir(), ".meshrix", "mcp", "servers.json");
   try {
     const payload = JSON.parse(await fs.readFile(manifestPath, "utf8"));
-    const server = payload?.servers?.lico || {};
+    const server = payload?.servers?.meshrix || {};
     const targets = server.targets || {};
     const installedTargets = Object.entries(targets)
       .filter(([, value]) => value?.status === "installed")
@@ -191,7 +191,7 @@ async function checkConfiguredOrbStackTargets(vmHealthUrl) {
     return {
       configured: false,
       targets: [],
-      reason: "Set LICO_MCP_ORBSTACK_TARGETS=vm:user[,vm:user] to verify OrbStack VM reachability."
+      reason: "Set MESHRIX_MCP_ORBSTACK_TARGETS=vm:user[,vm:user] to verify OrbStack VM reachability."
     };
   }
   return {
@@ -209,15 +209,15 @@ async function checkConfiguredOrbStackTargets(vmHealthUrl) {
 }
 
 async function discoverSignedBaseUrl() {
-  const explicitUrl = String(argValue("--url", process.env.LICO_MCP_BASE_URL || "")).trim();
-  const args = ["packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh", "discover-local", "--json"];
+  const explicitUrl = String(argValue("--url", process.env.MESHRIX_MCP_BASE_URL || "")).trim();
+  const args = ["packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh", "discover-local", "--json"];
   if (explicitUrl) {
     args.push("--url", explicitUrl);
   }
   const result = await run("sh", args);
   const payload = JSON.parse(result.stdout);
   if (!payload.ok || !payload.baseUrl) {
-    throw new Error(payload.reason || "No LicoMesh MCP hub discovered.");
+    throw new Error(payload.reason || "No Meshrix MCP hub discovered.");
   }
   return payload;
 }
@@ -225,12 +225,12 @@ async function discoverSignedBaseUrl() {
 const token = await readDoctorToken();
 const signedDiscovery = await discoverSignedBaseUrl();
 const baseUrl = String(signedDiscovery.baseUrl).replace(/\/+$/, "");
-const target = String(argValue("--target", process.env.LICO_MCP_TARGET || "")).trim();
+const target = String(argValue("--target", process.env.MESHRIX_MCP_TARGET || "")).trim();
 const headers = token
   ? {
       "Content-Type": "application/json",
-      "X-LicoMesh-Api-Key": token,
-      ...(target ? { "X-Lico-MCP-Target": target } : {})
+      "X-Meshrix-Api-Key": token,
+      ...(target ? { "X-Meshrix-MCP-Target": target } : {})
     }
   : { "Content-Type": "application/json" };
 
@@ -252,7 +252,7 @@ report.initialize = await jsonFetch(`${baseUrl}/mcp`, {
   body: JSON.stringify(mcpRequest("initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
-    clientInfo: { name: "lico-mcp-doctor", version: "1" }
+    clientInfo: { name: "meshrix-mcp-doctor", version: "1" }
   }))
 });
 
@@ -266,7 +266,7 @@ if (token) {
 	    method: "POST",
 	    headers,
 	    body: JSON.stringify(mcpRequest("tools/call", {
-	      name: "lico.discovery",
+	      name: "meshrix.discovery",
 	      arguments: {
 	        apiVersion: "v0.0.1:mcp:interface-1",
 	        operation: "system.health",
@@ -279,18 +279,18 @@ if (token) {
     ok: false,
     status: 0,
     statusText: "not_configured",
-    reason: "Set LICO_MCP_TOKEN, use --token-env NAME, or use --token-stdin to verify tools/list."
+    reason: "Set MESHRIX_MCP_TOKEN, use --token-env NAME, or use --token-stdin to verify tools/list."
   };
   report.systemHealth = {
     ok: false,
     status: 0,
     statusText: "not_configured",
-    reason: "Set LICO_MCP_TOKEN, use --token-env NAME, or use --token-stdin to verify tools/call system.health."
+    reason: "Set MESHRIX_MCP_TOKEN, use --token-env NAME, or use --token-stdin to verify tools/call system.health."
   };
 }
 
 report.deviceManifest = await readDeviceManifest();
-const vmHealthUrl = String(report.discovery.payload?.mcpServers?.lico?.vmHttpUrl || "")
+const vmHealthUrl = String(report.discovery.payload?.mcpServers?.meshrix?.vmHttpUrl || "")
   .replace(/\/mcp$/, "/api/healthz");
 report.orbStack = await checkConfiguredOrbStackTargets(vmHealthUrl);
 
@@ -321,8 +321,8 @@ console.log(JSON.stringify({
     discovery: {
       ok: report.discovery.ok,
       status: report.discovery.status,
-      httpUrl: report.discovery.payload?.mcpServers?.lico?.httpUrl || "",
-      vmHttpUrl: report.discovery.payload?.mcpServers?.lico?.vmHttpUrl || "",
+      httpUrl: report.discovery.payload?.mcpServers?.meshrix?.httpUrl || "",
+      vmHttpUrl: report.discovery.payload?.mcpServers?.meshrix?.vmHttpUrl || "",
       installerPackage: report.discovery.payload?.installer?.packageName || "",
       githubOneLineCommand: report.discovery.payload?.installer?.githubOneLineCommand || "",
       installerCommand: report.discovery.payload?.installer?.installCommand || "",

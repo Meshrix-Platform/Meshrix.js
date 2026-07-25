@@ -5,7 +5,7 @@ import type {
   WsSessionContext,
   WsSessionDetail,
 } from "../types/workspaces";
-import { errorMessage } from "@lico/ui-console/error-message";
+import { errorMessage } from "@meshrix/ui-console/error-message";
 import * as workspacesClient from "../lib/workspaces-client";
 
 type WorkspaceSessionControllerOptions = {

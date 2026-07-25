@@ -29,7 +29,7 @@ function nanosecondsToMilliseconds(value) {
 }
 
 const intervalMs = boundedInteger(
-  process.env.LICO_PERFORMANCE_OBSERVER_INTERVAL_MS,
+  process.env.MESHRIX_PERFORMANCE_OBSERVER_INTERVAL_MS,
   100,
   50,
   5_000

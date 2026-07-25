@@ -49,7 +49,7 @@ function definition(id = "demo.run", patch = {}) {
     id,
     feature: "system",
     featureId: "core-platform",
-    toolsets: ["lico.gateway.write"],
+    toolsets: ["meshrix.gateway.write"],
     label: id,
     target: { controller: "ignored", method: "ignored" },
     http: { method: "POST", path: `/api/${id.replaceAll(".", "/")}` },
@@ -71,7 +71,7 @@ function manifest(patch = {}) {
     features: ["core-platform"],
     operations: ["demo.run"],
     routes: [{ id: "demo.run.http", path: "/api/demo/run", kind: "http" }],
-    mcpTools: ["lico.demo.run"],
+    mcpTools: ["meshrix.demo.run"],
     consoleEntries: ["admin.demo"],
     stateMachines: [],
     verifierHooks: [{
@@ -125,10 +125,10 @@ function record(pluginId, kind, id, implementation) {
   return Object.freeze({ pluginId, kind, id, implementation: Object.freeze(implementation) });
 }
 
-function outletDescriptor(toolName = "lico.demo") {
+function outletDescriptor(toolName = "meshrix.demo") {
   return Object.freeze({
     toolName,
-    title: "LicoMesh Demo",
+    title: "Meshrix Demo",
     description: "Demo plugin outlet.",
     architectureCategory: "Demo",
     annotations: Object.freeze({ readOnlyHint: false, destructiveHint: false })
@@ -153,9 +153,9 @@ function enabledContributions(operationPatch = {}) {
       "demo.run.http": record("demo", "routes", "demo.run.http", { operationId: "demo.run" })
     },
     mcpTools: {
-      "lico.demo.run": record("demo", "mcpTools", "lico.demo.run", {
+      "meshrix.demo.run": record("demo", "mcpTools", "meshrix.demo.run", {
         operationId: "demo.run",
-        outlet: "lico.gateway"
+        outlet: "meshrix.gateway"
       })
     },
     consoleEntries: {
@@ -195,10 +195,10 @@ describe("plugin contribution registry", () => {
     expect(registry.activeOperations).toHaveLength(1);
     expect(registry.activeOperations[0]).toMatchObject({
       id: "demo.run",
-      toolId: "lico.demo.run",
+      toolId: "meshrix.demo.run",
       requiredScopes: ["demo:run"],
       target: { controller: "plugin", method: "executePluginOperation" },
-      _meta: { mcpOutlet: "lico.gateway" }
+      _meta: { mcpOutlet: "meshrix.gateway" }
     });
     expect(registry.publicRuntime().routes).toHaveLength(1);
     expect(registry.publicRuntime().mcpTools).toHaveLength(1);
@@ -469,8 +469,8 @@ describe("plugin contribution registry", () => {
   });
 
   it("projects opaque workspace methods and enforces the core-owned path boundary", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-workspace-"));
-    const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-workspace-outside-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-workspace-"));
+    const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-workspace-outside-"));
     try {
       await fs.writeFile(path.join(root, "existing.txt"), "before", "utf8");
       const outsideFile = path.join(outsideRoot, "outside.txt");
@@ -520,7 +520,7 @@ describe("plugin contribution registry", () => {
       await expect(fs.stat(path.join(outsideRoot, "created.txt"))).rejects.toMatchObject({ code: "ENOENT" });
       await workspaceAccess.writeTextFile({ path: "nested/created.txt", content: "after" });
       await expect(fs.readFile(path.join(root, "nested/created.txt"), "utf8")).resolves.toBe("after");
-      expect((await fs.readdir(path.join(root, "nested"))).some((name) => name.startsWith(".lico-write-"))).toBe(false);
+      expect((await fs.readdir(path.join(root, "nested"))).some((name) => name.startsWith(".meshrix-write-"))).toBe(false);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
       await fs.rm(outsideRoot, { recursive: true, force: true });
@@ -1147,12 +1147,12 @@ describe("plugin contribution registry", () => {
     wrongRoute.routes["demo.run.http"] = record("demo", "routes", "demo.run.http", { operationId: "missing" });
     expect(() => createRegistry(wrongRoute)).toThrow(/unavailable operation/u);
     const duplicateTool = enabledContributions();
-    duplicateTool.mcpTools["lico.demo.alias"] = record("demo", "mcpTools", "lico.demo.alias", {
+    duplicateTool.mcpTools["meshrix.demo.alias"] = record("demo", "mcpTools", "meshrix.demo.alias", {
       operationId: "demo.run",
-      outlet: "lico.gateway"
+      outlet: "meshrix.gateway"
     });
     expect(() => createRegistry(duplicateTool, {
-      manifests: [manifest({ mcpTools: ["lico.demo.run", "lico.demo.alias"] })]
+      manifests: [manifest({ mcpTools: ["meshrix.demo.run", "meshrix.demo.alias"] })]
     })).toThrow(/more than one MCP tool binding/u);
   });
 
@@ -1184,45 +1184,45 @@ describe("plugin contribution registry", () => {
 
   it("requires one consistent validated descriptor for each plugin-defined MCP outlet", () => {
     const valid = enabledContributions();
-    valid.mcpTools["lico.demo.run"] = record("demo", "mcpTools", "lico.demo.run", {
+    valid.mcpTools["meshrix.demo.run"] = record("demo", "mcpTools", "meshrix.demo.run", {
       operationId: "demo.run",
-      outlet: "lico.demo",
+      outlet: "meshrix.demo",
       outletDescriptor: outletDescriptor()
     });
     const registry = createRegistry(valid);
     expect(registry.activeOperations[0]._meta).toMatchObject({
-      mcpOutlet: "lico.demo",
-      mcpOutletDescriptor: { toolName: "lico.demo", architectureCategory: "Demo" }
+      mcpOutlet: "meshrix.demo",
+      mcpOutletDescriptor: { toolName: "meshrix.demo", architectureCategory: "Demo" }
     });
 
     const missing = enabledContributions();
-    missing.mcpTools["lico.demo.run"] = record("demo", "mcpTools", "lico.demo.run", {
+    missing.mcpTools["meshrix.demo.run"] = record("demo", "mcpTools", "meshrix.demo.run", {
       operationId: "demo.run",
-      outlet: "lico.demo"
+      outlet: "meshrix.demo"
     });
     expect(() => createRegistry(missing)).toThrow(/requires an outletDescriptor/u);
 
     const mismatched = enabledContributions();
-    mismatched.mcpTools["lico.demo.run"] = record("demo", "mcpTools", "lico.demo.run", {
+    mismatched.mcpTools["meshrix.demo.run"] = record("demo", "mcpTools", "meshrix.demo.run", {
       operationId: "demo.run",
-      outlet: "lico.demo",
-      outletDescriptor: outletDescriptor("lico.other")
+      outlet: "meshrix.demo",
+      outletDescriptor: outletDescriptor("meshrix.other")
     });
     expect(() => createRegistry(mismatched)).toThrow(/toolName must match outlet/u);
 
     const conflicting = enabledContributions();
-    conflicting.mcpTools["lico.demo.run"] = record("demo", "mcpTools", "lico.demo.run", {
+    conflicting.mcpTools["meshrix.demo.run"] = record("demo", "mcpTools", "meshrix.demo.run", {
       operationId: "demo.run",
-      outlet: "lico.demo",
+      outlet: "meshrix.demo",
       outletDescriptor: outletDescriptor()
     });
-    conflicting.mcpTools["lico.demo.alias"] = record("demo", "mcpTools", "lico.demo.alias", {
+    conflicting.mcpTools["meshrix.demo.alias"] = record("demo", "mcpTools", "meshrix.demo.alias", {
       operationId: "demo.run",
-      outlet: "lico.demo",
+      outlet: "meshrix.demo",
       outletDescriptor: { ...outletDescriptor(), title: "Conflicting Demo" }
     });
     expect(() => createRegistry(conflicting, {
-      manifests: [manifest({ mcpTools: ["lico.demo.run", "lico.demo.alias"] })]
+      manifests: [manifest({ mcpTools: ["meshrix.demo.run", "meshrix.demo.alias"] })]
     })).toThrow(/conflicting descriptors/u);
   });
 

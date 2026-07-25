@@ -25,7 +25,7 @@ const { consoleState, msg, tt } = useConsoleSideNavContext();
       <circle r="6" fill="#fef100" opacity="0.6"/>
     </svg>
     <div class="brand-text">
-      <h1>LicoMesh</h1>
+      <h1>Meshrix</h1>
       <p class="brand-subtitle">
         <span v-if="!consoleState" class="brand-loading-label" aria-live="polite">
           {{ msg.loading }}

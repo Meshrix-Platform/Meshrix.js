@@ -17,7 +17,7 @@ function normalizeMcp(value, frameworkId, inheritedCommands) {
     installMode,
     locations: Object.freeze(locations),
     configurationStrategy,
-    serverName: asText(mcp.serverName, "lico"),
+    serverName: asText(mcp.serverName, "meshrix"),
     commandNames: Object.freeze(uniqueStrings([...inheritedCommands, ...asArray(mcp.commandNames)])),
     metadata: Object.freeze({ public: Object.freeze(publicMetadata(mcp.metadata)) })
   });

@@ -12,7 +12,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  LICO_ARCHITECTURE_FACTS,
+  MESHRIX_ARCHITECTURE_FACTS,
   listArchitectureNodeFacts
 } from "../../packages/contracts/src/modules/manifest.mjs";
 
@@ -29,11 +29,11 @@ function toPosix(filePath) {
 
 export function computeArchitectureFactsDigest() {
   const payload = {
-    protocolVersion: LICO_ARCHITECTURE_FACTS.protocolVersion,
-    authority: LICO_ARCHITECTURE_FACTS.authority,
-    sourceDiagrams: [...LICO_ARCHITECTURE_FACTS.sourceDiagrams],
+    protocolVersion: MESHRIX_ARCHITECTURE_FACTS.protocolVersion,
+    authority: MESHRIX_ARCHITECTURE_FACTS.authority,
+    sourceDiagrams: [...MESHRIX_ARCHITECTURE_FACTS.sourceDiagrams],
     nodeIds: listArchitectureNodeFacts().map((node) => node.moduleId).sort(),
-    serviceFieldIds: LICO_ARCHITECTURE_FACTS.serviceCapabilityProtocolFields
+    serviceFieldIds: MESHRIX_ARCHITECTURE_FACTS.serviceCapabilityProtocolFields
       .map((field) => field.fieldId)
       .sort()
   };
@@ -69,7 +69,7 @@ function stampHtml(content, digest) {
 function main() {
   const check = process.argv.includes("--check");
   const digest = computeArchitectureFactsDigest();
-  const diagrams = LICO_ARCHITECTURE_FACTS.sourceDiagrams.map((relativePath) =>
+  const diagrams = MESHRIX_ARCHITECTURE_FACTS.sourceDiagrams.map((relativePath) =>
     path.resolve(ROOT, relativePath)
   );
 

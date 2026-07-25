@@ -6,7 +6,7 @@
  * registry files directly.
  *
  * Usage:
- *   import { loadRegistry, validateRegistry } from '#lico/tools/registry';
+ *   import { loadRegistry, validateRegistry } from '#meshrix/tools/registry';
  *   const modules = await loadRegistry('modules');
  */
 

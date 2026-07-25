@@ -79,7 +79,7 @@ async function latestReport(outputDir) {
 }
 
 const options = parseArgs(process.argv.slice(2));
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-runtime-recovery-export-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-runtime-recovery-export-"));
 const dataDir = path.join(tempRoot, "data");
 const outputDir = options.outputDir ? path.resolve(options.outputDir) : path.join(tempRoot, "out");
 
@@ -96,7 +96,7 @@ try {
   await writeFile(dataDir, "security/authorization/grants.json", JSON.stringify({ grants: [] }, null, 2));
   await writeFile(dataDir, "security/capability-kernel/verify.sealing-key", secretNeedles[1]);
   await writeFile(dataDir, "security/capability-kernel/verify.sealed.json", JSON.stringify({ sealed: true }, null, 2));
-  await writeFile(dataDir, "secrets/registry.json", JSON.stringify({ refs: { "secret://lico/test": { redacted: "***test" } } }, null, 2));
+  await writeFile(dataDir, "secrets/registry.json", JSON.stringify({ refs: { "secret://meshrix/test": { redacted: "***test" } } }, null, 2));
   await writeFile(dataDir, "secrets/values/fake.json", JSON.stringify({ payload: { ["token"]: secretNeedles[0] } }, null, 2));
   await writeFile(dataDir, "plugin-data/opaque-sensitive-payloads.json", JSON.stringify({ payloads: { pending: { prompt: secretNeedles[3] } } }, null, 2));
 

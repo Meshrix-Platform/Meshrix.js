@@ -119,11 +119,11 @@ export function extractEvidenceRefsFromText(value: string) {
 }
 
 export function evidenceRefHref(evidenceId: string) {
-  return `#lico-evidence-${encodeURIComponent(evidenceId)}`;
+  return `#meshrix-evidence-${encodeURIComponent(evidenceId)}`;
 }
 
 export function evidenceIdFromHref(href: string) {
-  const prefix = "#lico-evidence-";
+  const prefix = "#meshrix-evidence-";
   if (!String(href || "").startsWith(prefix)) {
     return "";
   }

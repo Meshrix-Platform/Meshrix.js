@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 async function createFixture() {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "lico-local-preimage-"));
+  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "meshrix-local-preimage-"));
   temporaryRoots.push(root);
   const mountRef = "mount-test";
   const workspace = { workspaceId: "workspace-test", ownerUserId: "owner-test" };
@@ -149,7 +149,7 @@ describe("agent workspace local-directory preimages", () => {
   it("rejects symlinks and files above the explicit preimage limit before mutation", async () => {
     const fixture = await createFixture();
     if (process.platform !== "win32") {
-      const outside = await fsp.mkdtemp(path.join(os.tmpdir(), "lico-local-preimage-outside-"));
+      const outside = await fsp.mkdtemp(path.join(os.tmpdir(), "meshrix-local-preimage-outside-"));
       temporaryRoots.push(outside);
       await fsp.writeFile(path.join(fixture.root, "target.txt"), "target\n", "utf8");
       await fsp.symlink(path.join(fixture.root, "target.txt"), path.join(fixture.root, "linked.txt"));

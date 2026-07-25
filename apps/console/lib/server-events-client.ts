@@ -1,7 +1,7 @@
 import {
   postJson,
   type BridgeRequestOptions,
-} from "@lico/ui-console/bridge-http";
+} from "@meshrix/ui-console/bridge-http";
 import type { EventSubscriptionResponse } from "./types";
 
 export type ServerEventSubscriptionParams = {

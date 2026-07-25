@@ -1,5 +1,5 @@
 import type { Bridge } from "./bridge-types";
-import { downloadFile } from "@lico/ui-console/bridge-http";
+import { downloadFile } from "@meshrix/ui-console/bridge-http";
 import {
   getAuthOidc,
   getAuthSession,
@@ -103,7 +103,7 @@ import {
   callAgentGateway,
 } from "./agent-gateway-client";
 
-export type { BridgeDownloadOptions, BridgeDownloadResult } from "@lico/ui-console/bridge-http";
+export type { BridgeDownloadOptions, BridgeDownloadResult } from "@meshrix/ui-console/bridge-http";
 export type { McpAuthorizationRequest } from "./authorization-governance-client";
 
 const browserBridge: Bridge = {

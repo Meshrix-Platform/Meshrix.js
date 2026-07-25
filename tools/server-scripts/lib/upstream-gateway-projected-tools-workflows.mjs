@@ -47,7 +47,7 @@ export async function runProjectedToolWorkflows({
   serviceId
 }) {
   await destructiveTest("upstream operations stay hidden and uncallable without an exact dynamic capability", async () => {
-    const token = await createGrant("verify-upstream-operation-tool-denied", ["lico.gateway.read", "lico.gateway.write"], {
+    const token = await createGrant("verify-upstream-operation-tool-denied", ["meshrix.gateway.read", "meshrix.gateway.write"], {
       dynamicCapabilities: [],
       allowedServiceIds: [serviceId]
     });
@@ -65,7 +65,7 @@ export async function runProjectedToolWorkflows({
   });
 
   await test("configured upstream operations are projected as MCP tools and execute through Operation Permission", async () => {
-    const token = await createGrant("verify-upstream-operation-tool", ["lico.gateway.read", "lico.gateway.write"]);
+    const token = await createGrant("verify-upstream-operation-tool", ["meshrix.gateway.read", "meshrix.gateway.write"]);
     const directToolName = `upstream.${serviceId}.echo`;
     const listed = await callMcpRaw(token, { method: "tools/list", params: {} }, 1013);
     const tools = listed.result?.tools || [];
@@ -116,7 +116,7 @@ export async function runProjectedToolWorkflows({
   });
 
   await destructiveTest("approval-required projected upstream tools create operation permission pending operations", async () => {
-    const token = await createGrant("verify-upstream-operation-tool-approval", ["lico.gateway.read", "lico.gateway.write", "lico.gateway.maintain"], {
+    const token = await createGrant("verify-upstream-operation-tool-approval", ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.gateway.maintain"], {
       scopes: ["gateway:read", "gateway:write", "gateway:maintain"],
       maxRisk: "repair_write"
     });

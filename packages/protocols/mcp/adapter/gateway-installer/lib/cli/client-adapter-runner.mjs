@@ -16,7 +16,7 @@ import {
 import { readJson, writeJson } from "./device-discovery-registry.mjs";
 import { redactSensitiveText } from "./installer-output-safety.mjs";
 
-export const CLIENT_ADAPTER_DESCRIPTOR_SCHEMA = "licomesh.client-adapter.descriptor.v1";
+export const CLIENT_ADAPTER_DESCRIPTOR_SCHEMA = "v0.0.1:meshrix:client-adapter-descriptor-1";
 export const CLIENT_ADAPTER_MAX_MESSAGE_BYTES = 256 * 1024;
 
 const CLIENT_ADAPTER_ACTIONS = new Set(["describe", "scan", "install", "verify", "uninstall"]);
@@ -44,7 +44,7 @@ function packageDirectory(root, packageName) {
 }
 
 export function defaultClientAdapterCacheRoot() {
-  return path.join(os.homedir(), ".lico", "mcp", "client-adapters");
+  return path.join(os.homedir(), ".meshrix", "mcp", "client-adapters");
 }
 
 function cachePaths(cacheRoot, target, version) {
@@ -110,7 +110,7 @@ async function validateInstalledPackage(tree, adapter) {
 async function readVerifiedCache(paths, adapter) {
   const metadata = await readJson(paths.metadata, null);
   if (
-    metadata?.schemaVersion !== "licomesh.client-adapter.cache.v1" ||
+    metadata?.schemaVersion !== "v0.0.1:meshrix:client-adapter-cache-1" ||
     metadata?.target !== adapter.target ||
     metadata?.coordinate !== adapter.coordinate ||
     !/^[a-f0-9]{64}$/u.test(String(metadata?.sha256 || ""))
@@ -202,7 +202,7 @@ export async function acquireClientAdapter({
     const installed = await validateInstalledPackage(stagingTree, adapter);
     const sha256 = await digestClientAdapterTree(stagingTree);
     await writeJson(path.join(stagingRoot, "cache.json"), {
-      schemaVersion: "licomesh.client-adapter.cache.v1",
+      schemaVersion: "v0.0.1:meshrix:client-adapter-cache-1",
       target,
       coordinate: adapter.coordinate,
       sha256

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { UPSTREAM_PUBLISHING_MAX_COMMAND_BYTES } from "@lico/contracts/upstream-service-publishing";
+import { UPSTREAM_PUBLISHING_MAX_COMMAND_BYTES } from "@meshrix/contracts/upstream-service-publishing";
 
 const POLLUTION_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 

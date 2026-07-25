@@ -28,13 +28,13 @@ export function createProtocolConsistencyTokenHeaders({
         })
       : {
           "Content-Type": "application/json",
-          "X-LicoMesh-Api-Key": token,
-          "X-Lico-MCP-Target": "codex"
+          "X-Meshrix-Api-Key": token,
+          "X-Meshrix-MCP-Target": "codex"
         };
     return {
       ...baseHeaders,
       Authorization: `Bearer ${token}`,
-      "X-Lico-Agent-Profile-Id": agentProfileId,
+      "X-Meshrix-Agent-Profile-Id": agentProfileId,
       ...extraHeaders
     };
   };

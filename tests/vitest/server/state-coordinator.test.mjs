@@ -16,11 +16,11 @@ import {
   setBoundedMapEntry,
   stateFileKey,
   waitForStateIdle
-} from "#lico/state-coordinator";
+} from "#meshrix/state-coordinator";
 import {
   appendBoundedJsonLine,
   readJsonlTail
-} from "#lico/foundation/storage/bounded-jsonl";
+} from "#meshrix/foundation/storage/bounded-jsonl";
 
 const tempRoots = [];
 
@@ -442,7 +442,7 @@ describe("state coordinator behavior", () => {
   });
 
   it("serializes dispatcher file writes, append helpers, and idle waits", async () => {
-    const root = await tempDir("lico-state-coordinator-");
+    const root = await tempDir("meshrix-state-coordinator-");
     const jsonPath = path.join(root, "nested", "state.json");
     const jsonlPath = path.join(root, "events", "events.jsonl");
     const dispatcher = createStateMutationDispatcher();
@@ -467,7 +467,7 @@ describe("state coordinator behavior", () => {
   });
 
   it("cleans temporary atomic writes and handles JSON fallback/error branches", async () => {
-    const root = await tempDir("lico-state-coordinator-files-");
+    const root = await tempDir("meshrix-state-coordinator-files-");
     const directoryTarget = path.join(root, "directory-target");
     await fs.mkdir(directoryTarget);
 
@@ -485,7 +485,7 @@ describe("state coordinator behavior", () => {
   });
 
   it("syncs private state bytes before rename and the parent directory after rename", async () => {
-    const root = await tempDir("lico-state-coordinator-durable-");
+    const root = await tempDir("meshrix-state-coordinator-durable-");
     const parentDirectory = path.join(root, "private-state");
     const targetPath = path.join(parentDirectory, "state.json");
     const events = [];
@@ -528,7 +528,7 @@ describe("state coordinator behavior", () => {
   });
 
   it("appends private durable JSONL and removes an unterminated torn tail", async () => {
-    const root = await tempDir("lico-state-coordinator-jsonl-");
+    const root = await tempDir("meshrix-state-coordinator-jsonl-");
     const eventPath = path.join(root, "private-events", "events.jsonl");
     const previousUmask = process.umask(0o022);
     try {
@@ -553,7 +553,7 @@ describe("state coordinator behavior", () => {
   });
 
   it("compacts bounded JSONL and reads only the retained tail", async () => {
-    const root = await tempDir("lico-bounded-jsonl-");
+    const root = await tempDir("meshrix-bounded-jsonl-");
     const eventPath = path.join(root, "events", "bounded.jsonl");
 
     for (let sequence = 0; sequence < 30; sequence += 1) {
@@ -584,7 +584,7 @@ describe("state coordinator behavior", () => {
   });
 
   it("can ignore atomic writes when the target directory is concurrently removed", async () => {
-    const root = await tempDir("lico-state-coordinator-missing-parent-");
+    const root = await tempDir("meshrix-state-coordinator-missing-parent-");
     const parentDirectory = path.join(root, "jobs", "job-1");
     const targetPath = path.join(parentDirectory, "meta.json");
 

@@ -18,7 +18,7 @@ import {
 } from "./lock-manager.mjs";
 
 const TABLE_DDL = `
-CREATE TABLE IF NOT EXISTS _lico_locks (
+CREATE TABLE IF NOT EXISTS _meshrix_locks (
   lock_key TEXT PRIMARY KEY,
   fencing_token TEXT NOT NULL,
   acquired_at TEXT NOT NULL,
@@ -27,14 +27,14 @@ CREATE TABLE IF NOT EXISTS _lico_locks (
   owner_pid INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_lico_locks_expires ON _lico_locks(expires_at);
+CREATE INDEX IF NOT EXISTS idx_meshrix_locks_expires ON _meshrix_locks(expires_at);
 
-CREATE TABLE IF NOT EXISTS _lico_lock_fence_sequence (
+CREATE TABLE IF NOT EXISTS _meshrix_lock_fence_sequence (
   singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
   value INTEGER NOT NULL CHECK (value >= 0)
 );
 
-INSERT OR IGNORE INTO _lico_lock_fence_sequence (singleton, value) VALUES (1, 0);
+INSERT OR IGNORE INTO _meshrix_lock_fence_sequence (singleton, value) VALUES (1, 0);
 `;
 
 export class SqliteLockBackendError extends Error {
@@ -87,19 +87,19 @@ export class SqliteLockManager extends LockManager {
   _init() {
     this.db.exec(TABLE_DDL);
     const cleanupKey = this.db.prepare(
-      "DELETE FROM _lico_locks WHERE lock_key = ? AND expires_at <= ?"
+      "DELETE FROM _meshrix_locks WHERE lock_key = ? AND expires_at <= ?"
     );
     const findLock = this.db.prepare(
-      "SELECT 1 FROM _lico_locks WHERE lock_key = ?"
+      "SELECT 1 FROM _meshrix_locks WHERE lock_key = ?"
     );
     const nextFence = this.db.prepare(`
-      UPDATE _lico_lock_fence_sequence
+      UPDATE _meshrix_lock_fence_sequence
       SET value = value + 1
       WHERE singleton = 1
       RETURNING CAST(value AS TEXT) AS value
     `);
     const insertLock = this.db.prepare(`
-      INSERT INTO _lico_locks (lock_key, fencing_token, acquired_at, expires_at, heartbeat_at, owner_pid)
+      INSERT INTO _meshrix_locks (lock_key, fencing_token, acquired_at, expires_at, heartbeat_at, owner_pid)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
     this._tryAcquire = this.db.transaction(({ lockKey, acquiredAtIso, expiresAtIso }) => {
@@ -335,7 +335,7 @@ export class SqliteLockManager extends LockManager {
     if (!handle || handle.released) return;
     try {
       const existing = this.db.prepare(
-        "SELECT fencing_token, expires_at FROM _lico_locks WHERE lock_key = ?"
+        "SELECT fencing_token, expires_at FROM _meshrix_locks WHERE lock_key = ?"
       ).get(handle.lockKey);
 
       if (!existing) {
@@ -347,13 +347,13 @@ export class SqliteLockManager extends LockManager {
         throw new LockFencingError(handle.lockKey, handle.fencingToken);
       }
       if (handle.expiresAt.getTime() <= Date.now() || Date.parse(existing.expires_at) <= Date.now()) {
-        this.db.prepare("DELETE FROM _lico_locks WHERE lock_key = ? AND fencing_token = ?")
+        this.db.prepare("DELETE FROM _meshrix_locks WHERE lock_key = ? AND fencing_token = ?")
           .run(handle.lockKey, handle.fencingToken);
         this._markExpired(handle);
         return;
       }
 
-      const result = this.db.prepare("DELETE FROM _lico_locks WHERE lock_key = ? AND fencing_token = ?")
+      const result = this.db.prepare("DELETE FROM _meshrix_locks WHERE lock_key = ? AND fencing_token = ?")
         .run(handle.lockKey, handle.fencingToken);
 
       if (result.changes === 0) {
@@ -377,7 +377,7 @@ export class SqliteLockManager extends LockManager {
     const lockKey = normalizeLockKey(key);
     try {
       this._cleanupKey(lockKey);
-      const row = this.db.prepare("SELECT 1 FROM _lico_locks WHERE lock_key = ?").get(lockKey);
+      const row = this.db.prepare("SELECT 1 FROM _meshrix_locks WHERE lock_key = ?").get(lockKey);
       return Boolean(row);
     } catch {
       this._metrics.totalBackendErrors++;
@@ -391,13 +391,13 @@ export class SqliteLockManager extends LockManager {
       this._markExpired(localEntry.handle);
     }
     this.db.prepare(
-      "DELETE FROM _lico_locks WHERE lock_key = ? AND expires_at < ?"
+      "DELETE FROM _meshrix_locks WHERE lock_key = ? AND expires_at < ?"
     ).run(key, new Date().toISOString());
   }
 
   _cleanupExpired() {
     this.db.prepare(
-      "DELETE FROM _lico_locks WHERE expires_at < ?"
+      "DELETE FROM _meshrix_locks WHERE expires_at < ?"
     ).run(new Date().toISOString());
     const now = Date.now();
     for (const { handle } of this._handles.values()) {
@@ -424,7 +424,7 @@ export class SqliteLockManager extends LockManager {
         let result;
         try {
           result = this.db.prepare(`
-            UPDATE _lico_locks
+            UPDATE _meshrix_locks
             SET expires_at = ?, heartbeat_at = ?
             WHERE lock_key = ? AND fencing_token = ? AND expires_at > ?
           `).run(
@@ -458,7 +458,7 @@ export class SqliteLockManager extends LockManager {
     entry.timer = setTimeout(() => {
       try {
         this.db.prepare(
-          "DELETE FROM _lico_locks WHERE lock_key = ? AND fencing_token = ? AND expires_at <= ?"
+          "DELETE FROM _meshrix_locks WHERE lock_key = ? AND fencing_token = ? AND expires_at <= ?"
         ).run(handle.lockKey, handle.fencingToken, new Date().toISOString());
       } catch {
         this._metrics.totalBackendErrors++;
@@ -511,7 +511,7 @@ export class SqliteLockManager extends LockManager {
     let deleteLock = null;
     try {
       deleteLock = this.db.prepare(
-        "DELETE FROM _lico_locks WHERE lock_key = ? AND fencing_token = ?"
+        "DELETE FROM _meshrix_locks WHERE lock_key = ? AND fencing_token = ?"
       );
     } catch {
       cleanupFailed = true;

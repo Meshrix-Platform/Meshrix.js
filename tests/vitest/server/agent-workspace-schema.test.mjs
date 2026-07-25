@@ -88,7 +88,7 @@ describe("agent workspace schema", () => {
   });
 
   it("keeps the workspace store empty until an authorized create operation", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-explicit-workspace-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-explicit-workspace-"));
     const runtime = createAgentWorkspace({ userDataPath });
     try {
       expect(runtime.listWorkspaces({ canAccessAll: true }).workspaces).toEqual([]);
@@ -111,8 +111,8 @@ describe("agent workspace schema", () => {
   });
 
   it("refuses to delete a workspace when its persisted custody path escapes the managed folder root", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-delete-boundary-"));
-    const outsidePath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-delete-outside-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-delete-boundary-"));
+    const outsidePath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-delete-outside-"));
     const runtime = createAgentWorkspace({ userDataPath });
     try {
       const workspace = runtime.createWorkspace({ title: "Boundary fixture" }).workspace;

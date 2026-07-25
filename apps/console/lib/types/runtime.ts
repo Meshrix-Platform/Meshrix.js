@@ -23,12 +23,12 @@ export type DiscoveryClientSummary = {
   bootstrapOnlyCount: number;
   offlineCount: number;
   unknownCount: number;
-  licoClientCount?: number;
+  meshrixClientCount?: number;
   mcpPluginCount?: number;
   alignableCount?: number;
 };
 
-export type ClientConnectionKind = "lico-client" | "mcp-plugin" | string;
+export type ClientConnectionKind = "meshrix-client" | "mcp-plugin" | string;
 
 export type DiscoveryClientRegistration = {
   clientId: string;

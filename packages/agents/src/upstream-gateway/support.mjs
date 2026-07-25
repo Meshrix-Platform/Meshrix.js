@@ -1,8 +1,8 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash, randomUUID } from "node:crypto";
 import fsSync from "node:fs";
 import path from "node:path";
-import { ServerConfig } from "@lico/foundation/config/server-config";
+import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import {
   createResponseProjectionUnavailableError,
   filterStructuredValue,
@@ -713,7 +713,7 @@ export function mcpToolReadOnly(tool = {}) {
 export function mcpToolRisk(tool = {}) {
   const annotations = object(tool.annotations);
   // MCP destructiveHint means high-impact / approval-worthy work.
-  // LicoMesh "destructive" is a hard dispatcher block; map to repair_write instead.
+  // Meshrix "destructive" is a hard dispatcher block; map to repair_write instead.
   if (annotations.destructiveHint === true) return "repair_write";
   return mcpToolReadOnly(tool) ? "read_only" : "safe_write";
 }

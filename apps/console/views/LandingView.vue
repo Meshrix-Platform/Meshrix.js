@@ -12,7 +12,7 @@ function goToConsole() {
     <div class="landing-center">
       <!-- Crystal Icon -->
       <div class="landing-crystal">
-        <svg viewBox="-150 -150 300 300" aria-label="LicoMesh">
+        <svg viewBox="-150 -150 300 300" aria-label="Meshrix">
           <defs>
             <linearGradient id="lp-gold" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stop-color="#fef100" />
@@ -47,7 +47,7 @@ function goToConsole() {
       </div>
 
       <!-- Title -->
-      <h1 class="landing-title">LICOMESH</h1>
+      <h1 class="landing-title">MESHRIX</h1>
       <p class="landing-tagline">Traceable Shared Workspace for AI Agents</p>
 
       <!-- Prismatic divider -->
@@ -61,7 +61,7 @@ function goToConsole() {
     <footer class="landing-footer">
       <span class="landing-version">v0.0.1</span>
       <span class="landing-divider">|</span>
-      <span>&copy; 2026 LicoMesh Contributors</span>
+      <span>&copy; 2026 Meshrix Contributors</span>
       <span class="landing-sep">&middot;</span>
       <span>GPL Licensed</span>
     </footer>

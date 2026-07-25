@@ -17,7 +17,7 @@ import { assertNoLeak } from "./lib/report-evidence-safety.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const reportPath = path.join(repoRoot, "build", "reports", "mcp-client-identity-proof.json");
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-mcp-identity-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-mcp-identity-"));
 
 function request(headers = {}, url = "/mcp") {
   return {
@@ -25,7 +25,7 @@ function request(headers = {}, url = "/mcp") {
     url,
     headers: {
       authorization: `Bearer ${globalThis.__token}`,
-      "x-lico-mcp-target": "opencode",
+      "x-meshrix-mcp-target": "opencode",
       ...headers
     },
     socket: { remoteAddress: "127.0.0.1" }
@@ -96,8 +96,8 @@ try {
     scopes: ["console:read"],
     capabilities: ["cap:api:mcp.request"],
     metadata: {
-      issuedBy: "lico-mcp-local-pairing",
-      mcpServer: "lico-mcp-server",
+      issuedBy: "meshrix-mcp-local-pairing",
+      mcpServer: "meshrix-mcp-server",
       clientTarget: "opencode",
       mcpTarget: "opencode",
       clientId: "opencode"

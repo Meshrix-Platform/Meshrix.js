@@ -8,7 +8,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const DEFAULT_CACHE_DIR = ".cache/lico/npm-artifacts";
+const DEFAULT_CACHE_DIR = ".cache/meshrix/npm-artifacts";
 const MANIFEST_FILE_NAME = "checkpoint-manifest.json";
 const REPORT_PATH = "build/reports/npm-artifact-cache.json";
 const DEFAULT_MAX_RETRIES = 4;

@@ -26,13 +26,13 @@ import {
   SERVICE_CAPABILITY_PROTOCOL_FIELDS
 } from "./manifest-service-capability.mjs";
 
-export const LICO_ARCHITECTURE_FACTS = Object.freeze({
+export const MESHRIX_ARCHITECTURE_FACTS = Object.freeze({
   schemaVersion: "v0.0.1:schema:definition-1",
   protocolVersion: ARCHITECTURE_FACT_MANIFEST_VERSION,
   authority: "packages/contracts/src/modules/manifest.mjs",
   sourceDiagrams: Object.freeze([
-    "docs/architecture/LICOMESH-SYSTEM-ARCHITECTURE.html",
-    "docs/architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html"
+    "docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html",
+    "docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html"
   ]),
   documentationAssets: DOCUMENTATION_ASSET_CLASSIFICATIONS,
   moduleCategoryDefinitions: ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS,

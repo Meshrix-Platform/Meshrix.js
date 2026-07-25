@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/schemas/test-suite.schema.json",
+  "$id": "https://schemas.meshrix.example/schemas/test-suite.schema.json",
   "title": "Test Suite Registry Entry",
   "type": "object",
   "required": ["profiles", "suites"],

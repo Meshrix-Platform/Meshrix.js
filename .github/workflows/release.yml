@@ -120,7 +120,7 @@ jobs:
         run: npm ci
       - name: Canonical platform acceptance authority
         env:
-          LICO_RELEASE_PARALLELISM: "4"
+          MESHRIX_RELEASE_PARALLELISM: "4"
         run: npm run verify:acceptance
 
   assemble-release-assets:
@@ -323,7 +323,7 @@ jobs:
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          image="ghcr.io/${owner}/licomesh"
+          image="ghcr.io/${owner}/meshrix"
           version="${GITHUB_REF_NAME#v}"
           target="${image}:${version}"
           candidate_tag="candidate-${GITHUB_SHA}"
@@ -341,23 +341,23 @@ jobs:
           if docker buildx imagetools inspect "$target" >/dev/null 2>&1; then
             digest="$(inspect_digest "$target")"
             jq -n --arg digest "$digest" '{"containerimage.digest": $digest}' \
-              > "$RUNNER_TEMP/lico-image-metadata.json"
+              > "$RUNNER_TEMP/meshrix-image-metadata.json"
             echo "reused=true" >> "$GITHUB_OUTPUT"
           else
-            docker buildx create --name licomesh-release --driver docker-container --use
+            docker buildx create --name meshrix-release --driver docker-container --use
             docker buildx build \
               --platform linux/amd64,linux/arm64 \
               --target runtime-ui \
-              --build-arg "LICO_SOURCE_REPOSITORY=${GITHUB_REPOSITORY}" \
-              --build-arg "LICO_SOURCE_REF=${GITHUB_REF}" \
-              --build-arg "LICO_SOURCE_COMMIT=${GITHUB_SHA}" \
+              --build-arg "MESHRIX_SOURCE_REPOSITORY=${GITHUB_REPOSITORY}" \
+              --build-arg "MESHRIX_SOURCE_REF=${GITHUB_REF}" \
+              --build-arg "MESHRIX_SOURCE_COMMIT=${GITHUB_SHA}" \
               --provenance=mode=max,version=v0.2 \
               --sbom=true \
-              --metadata-file "$RUNNER_TEMP/lico-image-metadata.json" \
+              --metadata-file "$RUNNER_TEMP/meshrix-image-metadata.json" \
               --tag "${image}:${candidate_tag}" \
               --push .
             digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' \
-              "$RUNNER_TEMP/lico-image-metadata.json")"
+              "$RUNNER_TEMP/meshrix-image-metadata.json")"
             resolved_digest="$(inspect_digest "${image}@${digest}")"
             test "$resolved_digest" = "$digest"
             echo "reused=false" >> "$GITHUB_OUTPUT"
@@ -407,10 +407,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/release/image build/release/control
-          provenance_file="$RUNNER_TEMP/lico-image-provenance.json"
-          sbom_file="$RUNNER_TEMP/lico-image-sbom.json"
-          manifest_file="$RUNNER_TEMP/lico-image-manifest.json"
-          manifest_descriptor_file="$RUNNER_TEMP/lico-image-manifest-descriptor.json"
+          provenance_file="$RUNNER_TEMP/meshrix-image-provenance.json"
+          sbom_file="$RUNNER_TEMP/meshrix-image-sbom.json"
+          manifest_file="$RUNNER_TEMP/meshrix-image-manifest.json"
+          manifest_descriptor_file="$RUNNER_TEMP/meshrix-image-manifest-descriptor.json"
           docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
             --format '{{json .Provenance}}' > "$provenance_file"
           docker buildx imagetools inspect "${IMAGE_NAME}@${IMAGE_DIGEST}" \
@@ -477,7 +477,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/licomesh" \
+          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/meshrix" \
           IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
           IMAGE_STATE="build/release/control/RELEASE_IMAGE_STATE.json" \
           node --input-type=module <<'NODE'
@@ -542,10 +542,10 @@ jobs:
           IMAGE_DIGEST: ${{ steps.release-image.outputs.digest }}
         run: |
           set -euo pipefail
-          provenance_file="$RUNNER_TEMP/lico-image-provenance.json"
-          sbom_file="$RUNNER_TEMP/lico-image-sbom.json"
-          manifest_file="$RUNNER_TEMP/lico-image-manifest.json"
-          manifest_descriptor_file="$RUNNER_TEMP/lico-image-manifest-descriptor.json"
+          provenance_file="$RUNNER_TEMP/meshrix-image-provenance.json"
+          sbom_file="$RUNNER_TEMP/meshrix-image-sbom.json"
+          manifest_file="$RUNNER_TEMP/meshrix-image-manifest.json"
+          manifest_descriptor_file="$RUNNER_TEMP/meshrix-image-manifest-descriptor.json"
           docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" \
             --format '{{json .Provenance}}' > "$provenance_file"
           docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" \
@@ -629,7 +629,7 @@ jobs:
           const actualNames = assets.map(({ name }) => name).sort();
           const releaseMetadataMatches =
             release.tag_name === process.env.GITHUB_REF_NAME
-            && release.name === `LicoMesh ${process.env.GITHUB_REF_NAME}`
+            && release.name === `Meshrix ${process.env.GITHUB_REF_NAME}`
             && release.body === fs.readFileSync(process.env.RELEASE_NOTES, "utf8")
             && release.prerelease === expectedPrerelease
             && (release.draft === true || release.immutable === true);
@@ -919,7 +919,7 @@ jobs:
             gh release edit "$GITHUB_REF_NAME" \
               --latest=false \
               --prerelease="$prerelease" \
-              --title "LicoMesh ${GITHUB_REF_NAME}" \
+              --title "Meshrix ${GITHUB_REF_NAME}" \
               --notes-file build/release/RELEASE_NOTES.md
             gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" --jq '.[].id' \
               | while IFS= read -r asset_id; do
@@ -932,7 +932,7 @@ jobs:
               --latest=false \
               --prerelease="$prerelease" \
               --verify-tag \
-              --title "LicoMesh ${GITHUB_REF_NAME}" \
+              --title "Meshrix ${GITHUB_REF_NAME}" \
               --notes-file build/release/RELEASE_NOTES.md
           fi
           echo "published=false" >> "$GITHUB_OUTPUT"
@@ -1033,7 +1033,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/licomesh" \
+          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/meshrix" \
           IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
           CHECKSUM_FILE="build/release/RELEASE_SHA256SUMS" \
           ASSET_MANIFEST="build/release/control/RELEASE_ASSETS.json" \
@@ -1216,7 +1216,7 @@ jobs:
             .sort((left, right) => left.name.localeCompare(right.name));
           if (
             release.tag_name !== process.env.EXPECTED_TAG
-            || release.name !== `LicoMesh ${process.env.EXPECTED_TAG}`
+            || release.name !== `Meshrix ${process.env.EXPECTED_TAG}`
             || release.body !== expectedBody
             || release.draft !== false
             || release.prerelease !== expectedPrerelease
@@ -1259,7 +1259,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/licomesh" \
+          EXPECTED_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/meshrix" \
           IMAGE_AUTHORITY="build/release/image/RELEASE_IMAGE.json" \
           node --input-type=module <<'NODE'
           import fs from "node:fs";

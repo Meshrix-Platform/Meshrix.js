@@ -1,7 +1,7 @@
 import {
   createDurableWorkflowSubstrate,
   getRuntimeLogger
-} from "#lico/product-api";
+} from "#meshrix/product-api";
 import { createActiveManifestIndex } from "./job-manager-core.mjs";
 import { createJobManagerArtifacts } from "./job-manager-artifact-events.mjs";
 import { createJobManagerQueue } from "./job-manager-queue-integration.mjs";
@@ -17,7 +17,7 @@ export function createJobManager({
   runtimeOptions = {},
   getRuntimeOptions = null,
   protocolEventBus = null,
-  processingEnabled = process.env.LICO_IMPORT_WORKER_EXTERNAL !== "1",
+  processingEnabled = process.env.MESHRIX_IMPORT_WORKER_EXTERNAL !== "1",
   logger = getRuntimeLogger()
 }) {
   const jobs = new Map();
@@ -32,7 +32,7 @@ export function createJobManager({
     throw error;
   }
   const workerConcurrency = normalizeWorkerConcurrency(
-    runtimeOptions?.workerConcurrency || process.env.LICO_JOB_WORKER_CONCURRENCY
+    runtimeOptions?.workerConcurrency || process.env.MESHRIX_JOB_WORKER_CONCURRENCY
   );
   const activeControllers = new Map();
   const dispatchingJobIds = new Set();

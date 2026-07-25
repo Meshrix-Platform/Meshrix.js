@@ -1,7 +1,7 @@
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
 import {
   validateInputSchema as validateGovernedInputSchema
-} from "#lico/capabilities/operation-permission-core/runtime-schema";
+} from "#meshrix/capabilities/operation-permission-core/runtime-schema";
 import { coerceValue, parseJsonObject } from "./dispatch-operation-support.mjs";
 import { createOperationRouteIndex } from "../routing/operation-route-index.mjs";
 import { normalizeRoutingPathname } from "../routing/radix-path-trie.mjs";

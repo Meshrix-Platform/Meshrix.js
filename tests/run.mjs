@@ -205,7 +205,7 @@ function splitCsv(value) {
 }
 
 function printHelp() {
-  console.log(`LicoMesh unified test runner
+  console.log(`Meshrix unified test runner
 
 Usage:
   node tests/run.mjs [--profile ${[...Object.keys(profileSuites), "changed"].filter((value, index, values) => values.indexOf(value) === index).join("|")}]
@@ -388,7 +388,7 @@ async function main() {
     ? startedAt.getTime() + profileTimeoutMs
     : null;
 
-  console.log(`LicoMesh test runner: profile=${options.profile} suites=${selectedIds.length}`);
+  console.log(`Meshrix test runner: profile=${options.profile} suites=${selectedIds.length}`);
   console.log(`Report directory: ${displayReportPath(defaultReportDir)}`);
   printFeatureConsistencyGate();
 
@@ -501,7 +501,7 @@ async function main() {
   const report = {
     schemaVersion: "v0.0.1:schema:definition-1",
     verifier: "tests/run.mjs",
-    runner: "lico-unified-test-runner",
+    runner: "meshrix-unified-test-runner",
     profile: options.profile,
     selectedSuites: selectedIds,
     options: {
@@ -529,7 +529,7 @@ async function main() {
   const timestamp = startedAt.toISOString().replace(/[:.]/gu, "-");
   const reportPath = options.report
     ? path.resolve(repoRoot, options.report)
-    : path.join(defaultReportDir, `lico-test-report-${timestamp}.json`);
+    : path.join(defaultReportDir, `meshrix-test-report-${timestamp}.json`);
   await writeJsonAtomic(reportPath, report);
   await writeJsonAtomic(path.join(defaultReportDir, "latest.json"), report);
 

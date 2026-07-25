@@ -38,6 +38,8 @@ Production execution remains denied until explicit configuration, current author
 
 ## Verification
 
+Workspace listing and mutation entry points include `workspace.file.list` and related Host operations.
+
 ```bash
 npm test -- --suite workspace.core-file-ops
 npm run verify:controlled-execution-sandbox

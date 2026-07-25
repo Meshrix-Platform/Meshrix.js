@@ -1,4 +1,4 @@
-# LicoMesh Tests
+# Meshrix Tests
 
 This directory stores repository-level test assets.
 

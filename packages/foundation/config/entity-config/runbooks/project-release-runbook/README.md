@@ -1,4 +1,4 @@
-# LicoMesh Project Release Runbook
+# Meshrix Project Release Runbook
 
 This built-in runbook prepares a release candidate for the repository-owned
 tag workflow. It does not publish packages, containers, tags, or GitHub Release

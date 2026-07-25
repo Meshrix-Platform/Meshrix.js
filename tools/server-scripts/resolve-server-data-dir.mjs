@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import path from "node:path";
 import process from "node:process";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 function parseArgs(argv) {
   const parsed = {};
@@ -29,7 +29,7 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
-const requestedDataDir = args["data-dir"] || process.env.LICO_SERVER_DATA_DIR || ServerConfig.getDataDir();
+const requestedDataDir = args["data-dir"] || process.env.MESHRIX_SERVER_DATA_DIR || ServerConfig.getDataDir();
 const resolvedDataDir = path.resolve(String(requestedDataDir));
 
 console.log(resolvedDataDir);

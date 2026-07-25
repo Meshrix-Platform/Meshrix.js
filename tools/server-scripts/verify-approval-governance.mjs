@@ -38,7 +38,7 @@ function safeEvidence(value = {}) {
     if (child.includes(os.homedir()) || child.includes("/var/folders")) {
       return "[redacted-local-path]";
     }
-    if (/Bearer\s+\S+/i.test(child) || /lico_[a-z0-9_-]+=/i.test(child)) {
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[a-z0-9_-]+=/i.test(child)) {
       return "[redacted-secret]";
     }
     if (/\b(?:grant_|pending_op|tool_exec|trace_)[A-Za-z0-9_-]{8,}\b/u.test(child)) {
@@ -63,7 +63,7 @@ function createPending(store, suffix, overrides = {}) {
     pendingOperationId: `pending-${suffix}`,
     traceId: `trace-${suffix}`,
     toolExecutionId: `tool-exec-${suffix}`,
-    toolId: "lico.gateway.forward",
+    toolId: "meshrix.gateway.forward",
     toolVersion: "v1",
     toolsetIds: ["gateway"],
     operationId: "gateway.forward",
@@ -239,7 +239,7 @@ async function proveTerminals(store) {
 }
 
 async function main() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-approval-governance-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-approval-governance-"));
   const report = {
     schemaVersion: "v0.0.1:authorization:approval-governance-report-1",
     verifier: "tools/server-scripts/verify-approval-governance.mjs",

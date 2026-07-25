@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import BinaryCheckbox from "@lico/ui-console/binary-checkbox";
+import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 
 type ChoiceCardOption = {
   value: string;

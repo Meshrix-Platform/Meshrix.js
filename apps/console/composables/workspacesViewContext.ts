@@ -1,7 +1,7 @@
 import {
   provideWorkspacesView as providePublicWorkspacesView,
   useWorkspacesViewContext as usePublicWorkspacesViewContext,
-} from "@lico/ui-console/workspaces-view-context";
+} from "@meshrix/ui-console/workspaces-view-context";
 import type { useWorkspacesConsole } from "./useWorkspacesConsole";
 
 export type WorkspacesViewContext = ReturnType<typeof useWorkspacesConsole>;

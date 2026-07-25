@@ -77,7 +77,7 @@ function insertPlaceholders(columns, offset = 0) {
 }
 
 export async function createPostgresWorkQueueStore({
-  connectionString = process.env.LICO_WORK_QUEUE_POSTGRES_URL || process.env.DATABASE_URL || "",
+  connectionString = process.env.MESHRIX_WORK_QUEUE_POSTGRES_URL || process.env.DATABASE_URL || "",
   pool = null,
   poolOptions = {},
   timeSource = systemQueueTimeSource,
@@ -87,7 +87,7 @@ export async function createPostgresWorkQueueStore({
   const resolvedPolicy = getPolicy(policy);
   const database = pool || new Pool({
     connectionString: connectionString || undefined,
-    max: Number(poolOptions.max || process.env.LICO_WORK_QUEUE_POSTGRES_POOL_MAX || 10),
+    max: Number(poolOptions.max || process.env.MESHRIX_WORK_QUEUE_POSTGRES_POOL_MAX || 10),
     idleTimeoutMillis: Number(poolOptions.idleTimeoutMillis || 30_000),
     connectionTimeoutMillis: Number(poolOptions.connectionTimeoutMillis || 10_000),
     ...poolOptions

@@ -4,7 +4,7 @@ This contract defines the Core-owned boundary for loading optional plugin artifa
 
 ## Closed one-plugin bundle
 
-External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `licomesh.plugin-bundle.manifest.v1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.mjs` path present in that inventory.
+External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `v0.0.1:meshrix:plugin-bundle-manifest-1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.mjs` path present in that inventory.
 
 `payloadDigest` binds the sorted payload file contents. The archive digest is recorded separately as `packageDigest` / `archiveDigest` after acquisition so the digest field never circularly hashes itself. Trust evidence is explicit (`configured-digest` or `ed25519` with an operator-configured public-key allow-list). Empty trust configuration admits nothing that requires a trusted key set.
 

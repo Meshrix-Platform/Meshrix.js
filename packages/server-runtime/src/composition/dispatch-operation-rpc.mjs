@@ -1,6 +1,6 @@
-import { SERVER_API_OPERATIONS } from "#lico/contracts/operations/operation-registry";
-import { sendJson } from "#lico/foundation/http/http-response";
-import { getRuntimeLogger, summarizeError, summarizeForLog } from "#lico/foundation/observability/runtime-logger";
+import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
+import { sendJson } from "#meshrix/foundation/http/http-response";
+import { getRuntimeLogger, summarizeError, summarizeForLog } from "#meshrix/foundation/observability/runtime-logger";
 import { createCapturedResponse, parseCapturedResult } from "./dispatch-operation-captured-response.mjs";
 import { dispatchOperation } from "./dispatch-operation-core.mjs";
 import { findRpcOperation, inputFromRequest } from "./dispatch-operation-input.mjs";

@@ -28,7 +28,7 @@ import {
 
 function publication(revision: number, digest = "a".repeat(64)) {
   return {
-    publicationRef: `urn:lico:upstream-publication:${revision}`,
+    publicationRef: `urn:meshrix:upstream-publication:${revision}`,
     status: "publishing" as const,
     candidateRevision: revision,
     candidateDigest: digest
@@ -45,7 +45,7 @@ beforeEach(() => {
     serviceRevision: 1,
     setRevision: 1,
     manifestDigest: "a".repeat(64),
-    receiptRef: "urn:lico:receipt:fixture",
+    receiptRef: "urn:meshrix:receipt:fixture",
     publication: publication(1),
     replayed: false
   });
@@ -106,10 +106,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     await importer.find("button").trigger("click");
     await flushPromises();
     expect((serviceKey.element as HTMLInputElement).value).toBe("existing-draft");
-    expect(importer.text()).toContain('kind must be "lico.upstream-service"');
+    expect(importer.text()).toContain('kind must be "meshrix.upstream-service"');
 
     await textarea.setValue(JSON.stringify({
-      kind: "lico.upstream-service",
+      kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
       serviceKey: "replacement",
       descriptor: {
@@ -137,7 +137,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     await flushPromises();
     const importer = wrapper.findComponent({ name: "PortableServiceImportPanel" });
     const fileText = JSON.stringify({
-      kind: "lico.upstream-service",
+      kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
       serviceKey: "inventory",
       descriptor: {
@@ -170,7 +170,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     await flushPromises();
     const importer = wrapper.findComponent({ name: "PortableServiceImportPanel" });
     await importer.find("textarea").setValue(JSON.stringify({
-      kind: "lico.upstream-service",
+      kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
       serviceKey: "inventory",
       descriptor: {
@@ -348,7 +348,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     });
     client.replaceUpstreamService.mockResolvedValue({
       ok: true, serviceId: "svc_fixture", state: "publishing", serviceRevision: 4, setRevision: 7,
-      manifestDigest: "b".repeat(64), receiptRef: "urn:lico:receipt:replace",
+      manifestDigest: "b".repeat(64), receiptRef: "urn:meshrix:receipt:replace",
       publication: publication(7, "b".repeat(64)), replayed: false
     });
 

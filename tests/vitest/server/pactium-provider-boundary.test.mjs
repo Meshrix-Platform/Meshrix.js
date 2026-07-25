@@ -9,24 +9,24 @@ import {
   createStoragePort
 } from "pactium";
 import { describe, expect, it } from "vitest";
-import { createDataStructureSubstrate } from "#lico/foundation/checkpoint/tree/data-structure-substrate";
+import { createDataStructureSubstrate } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
 import {
   createLicoPactiumRuntime,
   PACTIUM_MANIFEST_FILE
-} from "#lico/foundation/checkpoint/tree/pactium-substrate-preflight";
+} from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
 import {
   checkpointTreeId,
   loadCheckpointTree,
   queryCheckpointScope,
   startCheckpointTree
-} from "#lico/foundation/checkpoint/tree/checkpoint-tree-projection";
-import { createOperationProofSubstrate } from "#lico/foundation/proof/proof-substrate/index";
-import { serverToken } from "#lico/client-strings";
+} from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
+import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
+import { serverToken } from "#meshrix/client-strings";
 
 const execFileAsync = promisify(execFile);
 
 async function withTempDataDir(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-pactium-boundary-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-pactium-boundary-"));
   try {
     return await testCase(userDataPath);
   } finally {
@@ -83,7 +83,7 @@ async function descriptorsUnder(directoryPath) {
 }
 
 describe("Pactium provider boundary", () => {
-  it("uses Pactium behind LicoMesh facades without changing checkpoint ids or data dir", async () => {
+  it("uses Pactium behind Meshrix facades without changing checkpoint ids or data dir", async () => {
     await withTempDataDir(async (userDataPath) => {
       const provider = createDataStructureSubstrate({ userDataPath });
       let proofSubstrate = null;
@@ -162,12 +162,12 @@ describe("Pactium provider boundary", () => {
 
   it("delegates an empty storage backend to Pactium while preserving configuration precedence", async () => {
     await withTempDataDir(async (userDataPath) => {
-      const previousLicoBackend = process.env.LICO_PACTIUM_STORAGE_BACKEND;
+      const previousLicoBackend = process.env.MESHRIX_PACTIUM_STORAGE_BACKEND;
       const previousPactiumBackend = process.env.PACTIUM_STORAGE_BACKEND;
       const runtimes = [];
 
       try {
-        delete process.env.LICO_PACTIUM_STORAGE_BACKEND;
+        delete process.env.MESHRIX_PACTIUM_STORAGE_BACKEND;
         delete process.env.PACTIUM_STORAGE_BACKEND;
         const automaticRuntime = createLicoPactiumRuntime({
           dataDir: path.join(userDataPath, "automatic")
@@ -175,13 +175,13 @@ describe("Pactium provider boundary", () => {
         runtimes.push(automaticRuntime);
         expect(automaticRuntime.storage.storageBackend).toBe("auto");
 
-        process.env.LICO_PACTIUM_STORAGE_BACKEND = "json";
+        process.env.MESHRIX_PACTIUM_STORAGE_BACKEND = "json";
         process.env.PACTIUM_STORAGE_BACKEND = "auto";
-        const licoEnvironmentRuntime = createLicoPactiumRuntime({
-          dataDir: path.join(userDataPath, "lico-environment")
+        const meshrixEnvironmentRuntime = createLicoPactiumRuntime({
+          dataDir: path.join(userDataPath, "meshrix-environment")
         });
-        runtimes.push(licoEnvironmentRuntime);
-        expect(licoEnvironmentRuntime.storage.storageBackend).toBe("json");
+        runtimes.push(meshrixEnvironmentRuntime);
+        expect(meshrixEnvironmentRuntime.storage.storageBackend).toBe("json");
 
         const explicitRuntime = createLicoPactiumRuntime({
           dataDir: path.join(userDataPath, "explicit"),
@@ -190,7 +190,7 @@ describe("Pactium provider boundary", () => {
         runtimes.push(explicitRuntime);
         expect(explicitRuntime.storage.storageBackend).toBe("auto");
 
-        delete process.env.LICO_PACTIUM_STORAGE_BACKEND;
+        delete process.env.MESHRIX_PACTIUM_STORAGE_BACKEND;
         process.env.PACTIUM_STORAGE_BACKEND = "json";
         const pactiumEnvironmentRuntime = createLicoPactiumRuntime({
           dataDir: path.join(userDataPath, "pactium-environment")
@@ -201,7 +201,7 @@ describe("Pactium provider boundary", () => {
         for (const runtime of runtimes) {
           await runtime.close();
         }
-        restoreEnvironmentValue("LICO_PACTIUM_STORAGE_BACKEND", previousLicoBackend);
+        restoreEnvironmentValue("MESHRIX_PACTIUM_STORAGE_BACKEND", previousLicoBackend);
         restoreEnvironmentValue("PACTIUM_STORAGE_BACKEND", previousPactiumBackend);
       }
     });
@@ -243,8 +243,8 @@ describe("Pactium provider boundary", () => {
 
   it("releases owned SQLite descriptors after direct checkpoint calls, including failures", async () => {
     await withTempDataDir(async (userDataPath) => {
-      const previousBackend = process.env.LICO_PACTIUM_STORAGE_BACKEND;
-      process.env.LICO_PACTIUM_STORAGE_BACKEND = "sqlite";
+      const previousBackend = process.env.MESHRIX_PACTIUM_STORAGE_BACKEND;
+      process.env.MESHRIX_PACTIUM_STORAGE_BACKEND = "sqlite";
       try {
         const treeId = checkpointTreeId("descriptor", "direct-call");
         await startCheckpointTree({
@@ -262,7 +262,7 @@ describe("Pactium provider boundary", () => {
         const descriptorCount = await descriptorsUnder(userDataPath);
         if (descriptorCount !== null) expect(descriptorCount).toBe(0);
       } finally {
-        restoreEnvironmentValue("LICO_PACTIUM_STORAGE_BACKEND", previousBackend);
+        restoreEnvironmentValue("MESHRIX_PACTIUM_STORAGE_BACKEND", previousBackend);
       }
     });
   });

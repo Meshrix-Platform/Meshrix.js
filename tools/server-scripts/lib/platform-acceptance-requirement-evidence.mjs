@@ -18,7 +18,7 @@ const mapping = {
   [rel(9)]: { commandIds: ["job-work-queue", "job-work-queue-capacity", "work-queue-conformance", "work-queue-process-restart"] },
   [rel(10)]: { commandIds: ["audit-retention-redaction", "observability-semantics", "observability-runtime", "observability-coverage"] },
   [rel(11)]: { commandIds: ["better-plan", "foundation-tests"], aggregateFacts: ["receiptPreflightReady", "commandDagReady", "inventoryReady", "privacyReady"] },
-  [rel(12)]: { commandIds: ["downstream-mcp-audit", "downstream-mcp-product-e2e", "mcp-authorization-request-filters", "operation-permission-protocol-consistency"] },
+  [rel(12)]: { commandIds: ["downstream-mcp-audit", "mcp-authorization-request-filters", "operation-permission-protocol-consistency"] },
   [rel(13)]: { commandIds: ["mcp-client-identity-proof", "mcp-process-identity-credential-store", "mcp-installer-convergence", "mcp-release-target-scope"] },
   [rel(14)]: { commandIds: ["upstream-mcp-gateway", "upstream-gateway-e2e"] },
   [rel(15)]: { commandIds: ["console-administration", "console-admin-browser-visual", "console-gateway-mcp"] },
@@ -128,7 +128,7 @@ export function reducePlatformAcceptanceRequirementEvidence({
     });
   });
   return Object.freeze({
-    schemaVersion: "licomesh.platform-acceptance-requirement-evidence.v1",
+    schemaVersion: "v0.0.1:meshrix:platform-acceptance-requirement-evidence-1",
     sourceOfTruth: "tools/server-scripts/lib/platform-acceptance-requirement-evidence.mjs",
     requirementCount: nodes.length,
     readyCount: nodes.filter((node) => node.ready).length,

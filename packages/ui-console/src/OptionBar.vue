@@ -37,7 +37,7 @@ const props = withDefaults(defineProps<{
   filterable: false,
   teleported: true,
   persistent: false,
-  popperClass: "lico-select-popper",
+  popperClass: "meshrix-select-popper",
   disabled: false,
   clearable: false,
   size: "default",

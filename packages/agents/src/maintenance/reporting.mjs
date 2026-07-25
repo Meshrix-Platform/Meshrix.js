@@ -1,9 +1,9 @@
-import { canonicalJson as stableStringify } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableStringify } from "@meshrix/contracts/serialization/canonical-json";
 import crypto, { randomUUID } from "node:crypto";
 import { computeNextRunAt } from "./config.mjs";
 import { redactForMaintenanceAudit } from "./audit-store.mjs";
 import { planHashableShape } from "./policy.mjs";
-import { unifiedRegistrationForTask } from "@lico/foundation/unified-registration-core/unified-registration";
+import { unifiedRegistrationForTask } from "@meshrix/foundation/unified-registration-core/unified-registration";
 import { maintenanceWorkItemId } from "./work-queue-contract.mjs";
 
 export const EVENT_TYPES = {

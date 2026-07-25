@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { createAuthorizationEngine } from "#lico/authorization-engine";
+import { createAuthorizationEngine } from "#meshrix/authorization-engine";
 import {
   buildConsoleOperationAuthorizationContext,
   buildConsoleOperationAuthorizationInput

@@ -24,7 +24,7 @@ function sharedHubContract() {
 function githubOwnerRepo(packageJson) {
   const repositoryUrl = String(packageJson.repository?.url || "");
   const match = repositoryUrl.match(/github\.com[:/](.+?)(?:\.git)?$/);
-  return match?.[1] || "LicoLand/LicoMesh";
+  return match?.[1] || "LicoLand/Meshrix";
 }
 
 export function releaseGeneratedAtFromSourceDateEpoch(value) {
@@ -41,18 +41,18 @@ export function releaseGeneratedAtFromSourceDateEpoch(value) {
 }
 
 export async function createBootstrapInstaller({ outputDir, packageJson }) {
-  const scriptName = "lico-mcp-install.sh";
+  const scriptName = "meshrix-mcp-install.sh";
   const scriptPath = path.join(outputDir, scriptName);
-  const uninstallScriptName = "lico-mcp-uninstall.sh";
+  const uninstallScriptName = "meshrix-mcp-uninstall.sh";
   const uninstallScriptPath = path.join(outputDir, uninstallScriptName);
-  const zhCnScriptName = "lico-mcp-install.zh-CN.sh";
+  const zhCnScriptName = "meshrix-mcp-install.zh-CN.sh";
   const zhCnScriptPath = path.join(outputDir, zhCnScriptName);
-  const zhCnUninstallScriptName = "lico-mcp-uninstall.zh-CN.sh";
+  const zhCnUninstallScriptName = "meshrix-mcp-uninstall.zh-CN.sh";
   const zhCnUninstallScriptPath = path.join(outputDir, zhCnUninstallScriptName);
   const repo = githubOwnerRepo(packageJson);
-  const windowsScriptName = "lico-mcp-install.ps1";
+  const windowsScriptName = "meshrix-mcp-install.ps1";
   const windowsScriptPath = path.join(outputDir, windowsScriptName);
-  const windowsUninstallScriptName = "lico-mcp-uninstall.ps1";
+  const windowsUninstallScriptName = "meshrix-mcp-uninstall.ps1";
   const windowsUninstallScriptPath = path.join(outputDir, windowsUninstallScriptName);
   const nativeInstallerRoot = path.join(projectRoot, "packages/protocols/mcp/adapter/native-installer");
   await fs.copyFile(path.join(nativeInstallerRoot, scriptName), scriptPath);
@@ -128,7 +128,7 @@ export function releaseManifest({
     throw new Error("connector_node_engine_missing");
   }
   const portable = portables[0];
-  const portableCommand = "lico-mcp";
+  const portableCommand = "meshrix-mcp";
   const hasFallbackZip = Boolean(portable.zipArchiveName);
   const fallbackDownload = hasFallbackZip ? portable.zipArchiveName : portable.archiveName;
   const fallbackSizeBytes = hasFallbackZip ? portable.zipSizeBytes : portable.sizeBytes;
@@ -310,7 +310,7 @@ export function releaseManifest({
         "SHA256SUMS",
         "RELEASE_SHA256SUMS",
         "RELEASE_SHA256SUMS.sigstore.json",
-        "lico-mcp-release.json",
+        "meshrix-mcp-release.json",
         "latest.json"
       ]
     }

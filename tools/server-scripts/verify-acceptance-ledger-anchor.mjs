@@ -8,14 +8,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createOperationProofSubstrate } from "#lico/foundation/proof/proof-substrate/index";
+import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
 import {
   anchorAcceptanceEvidence,
   verifyAcceptanceEvidenceAnchor
 } from "./lib/platform-acceptance-ledger-anchor.mjs";
 
 async function main() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-acceptance-ledger-anchor-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-acceptance-ledger-anchor-"));
   const reportPath = path.join(root, "sample-report.json");
   await fs.writeFile(reportPath, `${JSON.stringify({
     schemaVersion: "v0.0.1:acceptance:platform-report-2",

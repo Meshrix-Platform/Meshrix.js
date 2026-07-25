@@ -1,7 +1,7 @@
 export const PLATFORM_ACCEPTANCE_DEFAULT_TIMEOUT_MS = 12 * 60 * 1000;
 export const PLATFORM_ACCEPTANCE_PARALLELISM = 4;
 export const PLATFORM_ACCEPTANCE_PROFILES = Object.freeze({
-  core: Object.freeze({ id: "core" })
+  "enterprise-single-node": Object.freeze({ id: "enterprise-single-node" }),
 });
 
 export function requirePlatformAcceptanceProfile(value) {
@@ -28,7 +28,7 @@ export function platformAcceptanceJobBudget(worstCaseTimeoutMs) {
 
 export const PLATFORM_ACCEPTANCE_STATE_MACHINE = Object.freeze({
   schemaVersion: "v0.0.1:state-machine:platform-acceptance-1",
-  id: "licomesh-platform-acceptance",
+  id: "meshrix-platform-acceptance",
   initialState: "initialized",
   terminalStates: ["accepted", "blocked", "failed"],
   states: [
@@ -73,7 +73,7 @@ export function commandLine(command = {}) {
 }
 
 export function normalizedParallelism(env = process.env) {
-  const configured = Number(env.LICO_ACCEPTANCE_PARALLELISM || env.LICO_RELEASE_PARALLELISM || "");
+  const configured = Number(env.MESHRIX_ACCEPTANCE_PARALLELISM || env.MESHRIX_RELEASE_PARALLELISM || "");
   if (Number.isFinite(configured) && configured > 0) {
     return Math.max(1, Math.trunc(configured));
   }

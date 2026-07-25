@@ -7,7 +7,7 @@ vi.mock("../../../packages/server-runtime/src/jobs/job-pipeline.mjs", () => ({
   createJobPipeline: createJobPipelineMock
 }));
 
-vi.mock("#lico/product-api", () => ({
+vi.mock("#meshrix/product-api", () => ({
   createServerRuntime: createServerRuntimeMock
 }));
 

@@ -1,12 +1,12 @@
 {
-  "name": "@lico/console",
+  "name": "@meshrix/console",
   "version": "0.0.1",
   "private": true,
-  "description": "LicoMesh Vue 3 server console — console workspace",
+  "description": "Meshrix Vue 3 server console — console workspace",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LicoLand/LicoMesh.git",
+    "url": "git+https://github.com/LicoLand/Meshrix.git",
     "directory": "apps/console"
   },
   "engines": {
@@ -15,8 +15,8 @@
   "type": "module",
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
-    "@lico/contracts": "0.0.1",
-    "@lico/ui-console": "0.0.1",
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/ui-console": "0.0.1",
     "element-plus": "^2.13.7",
     "marked": "^18.0.2",
     "vue": "^3.5.32",

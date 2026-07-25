@@ -51,8 +51,8 @@ export async function seedVerifierUpstreamServices({ userDataPath, services = []
         descriptor: descriptorFor(service)
       },
       metadata: {
-        ownerRef: "urn:lico:subject:upstream-verifier",
-        serviceKeyRef: `urn:lico:service-key:${digest(serviceId)}`,
+        ownerRef: "urn:meshrix:subject:upstream-verifier",
+        serviceKeyRef: `urn:meshrix:service-key:${digest(serviceId)}`,
         action: "verifier-seed"
       }
     };

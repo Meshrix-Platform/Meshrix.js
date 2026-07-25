@@ -9,7 +9,7 @@
  * definitions directory and registered as platform services for runtime access.
  *
  * @module register-state-machines
- * @package @lico/server-runtime
+ * @package @meshrix/server-runtime
  * @layer server-runtime/composition
  */
 

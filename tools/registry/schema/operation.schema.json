@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.licomesh.example/registry/schema/operation.schema.json",
+  "$id": "https://schemas.meshrix.example/registry/schema/operation.schema.json",
   "title": "Operation Registry",
   "description": "Canonical operation registry used to generate HTTP routes, RPC methods, capabilities, and OpenAPI artifacts.",
   "type": "object",

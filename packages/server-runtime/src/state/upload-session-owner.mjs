@@ -1,4 +1,4 @@
-import { hashClientString } from "#lico/client-strings";
+import { hashClientString } from "#meshrix/client-strings";
 
 function text(value) {
   return String(value || "").trim();

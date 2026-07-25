@@ -1,5 +1,5 @@
 import { buildBootstrapPayload } from "./bootstrap-payload.mjs";
-import { createReadinessBaselineProvider } from "@lico/foundation/observability/readiness-baseline/baseline-provider";
+import { createReadinessBaselineProvider } from "@meshrix/foundation/observability/readiness-baseline/baseline-provider";
 export { buildClientConnectionList } from "./client-connection-list.mjs";
 
 function emptyAgentSettingsProjection() {

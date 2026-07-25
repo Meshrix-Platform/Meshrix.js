@@ -100,7 +100,7 @@ async function createRegistry(services) {
 }
 
 async function createRegistryWithDataDir(services, options = {}) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-gateway-ssrf-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-gateway-ssrf-"));
   cleanupTasks.push(() => fs.rm(userDataPath, { recursive: true, force: true }));
   const registry = createUpstreamGatewayRegistry({ userDataPath, ...options });
   installUpstreamRuntimeServices(

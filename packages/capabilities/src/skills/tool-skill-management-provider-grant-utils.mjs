@@ -55,4 +55,3 @@ export function parseTime(value = "") {
   const parsed = Date.parse(compactText(value));
   return Number.isFinite(parsed) ? parsed : 0;
 }
-

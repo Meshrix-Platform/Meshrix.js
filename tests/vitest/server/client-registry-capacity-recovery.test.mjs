@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   DEFAULT_CLIENT_REGISTRATION_RETENTION_SECONDS,
-  MAX_LICO_CLIENT_REGISTRATIONS,
+  MAX_MESHRIX_CLIENT_REGISTRATIONS,
   createClientRegistryService,
   initializeClientRegistrySchema
 } from "../../../packages/server-runtime/src/state/client-registry-repository.mjs";
@@ -35,7 +35,7 @@ describe("public discovery client registry capacity recovery", () => {
     let now = Date.UTC(2025, 0, 1);
     const registry = createRegistry({ now: () => now });
 
-    for (let index = 0; index < MAX_LICO_CLIENT_REGISTRATIONS; index += 1) {
+    for (let index = 0; index < MAX_MESHRIX_CLIENT_REGISTRATIONS; index += 1) {
       expect(checkIn(registry, `expired-client-${index}`).ok).toBe(true);
     }
     expect(checkIn(registry, "capacity-probe")).toMatchObject({

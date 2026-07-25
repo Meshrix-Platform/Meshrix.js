@@ -48,7 +48,7 @@ function manifest(id, patch = {}) {
 }
 
 async function tempRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-plugin-test-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-test-"));
   roots.push(root);
   return root;
 }
@@ -89,7 +89,7 @@ async function loadFixtureRegistry(root) {
 }
 
 afterEach(async () => {
-  delete globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+  delete globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
   artifactFixturesByRoot.clear();
   await Promise.all(artifactFixtures.splice(0).map((fixture) => fixture.close()));
   await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })));
@@ -106,7 +106,7 @@ describe("plugin runtime", () => {
 const listeners = new Set();
 let contributions = { operations: { "demo.run": async () => ({ ok: true }) } };
 export async function activatePlugin({ manifest }) {
-  globalThis[Symbol.for("licomesh.plugin-runtime.test-events")] = async () => {
+  globalThis[Symbol.for("meshrix.plugin-runtime.test-events")] = async () => {
     contributions = { operations: {} };
     for (const listener of listeners) await listener(contributions);
   };
@@ -129,7 +129,7 @@ export async function activatePlugin({ manifest }) {
     const changes = [];
     const unsubscribe = runtime.onPluginContributionChange((change) => changes.push(change));
     expect(runtime.contributions.operations["demo.run"]).toBeDefined();
-    await globalThis[Symbol.for("licomesh.plugin-runtime.test-events")]();
+    await globalThis[Symbol.for("meshrix.plugin-runtime.test-events")]();
     expect(runtime.contributions.operations["demo.run"]).toBeUndefined();
     expect(changes).toHaveLength(1);
     expect(changes[0].pluginId).toBe("demo");
@@ -162,10 +162,10 @@ export async function activatePlugin({ manifest }) {
 
   it("never imports a production plugin when the isolated process host is unavailable", async () => {
     const root = await tempRoot();
-    const importMarker = Symbol.for("licomesh.plugin-runtime.production-import-marker");
+    const importMarker = Symbol.for("meshrix.plugin-runtime.production-import-marker");
     delete globalThis[importMarker];
     await writePlugin(root, manifest("demo", { runtime: { module: "./runtime.mjs" } }), `
-globalThis[Symbol.for("licomesh.plugin-runtime.production-import-marker")] = true;
+globalThis[Symbol.for("meshrix.plugin-runtime.production-import-marker")] = true;
 export async function activatePlugin({ manifest }) {
   return { id: manifest.id, mounts: {}, close() {} };
 }`);
@@ -450,13 +450,13 @@ export async function activatePlugin({ manifest }) {
 
   it("never imports disabled modules and closes selected modules in reverse dependency order", async () => {
     const root = await tempRoot();
-    const eventKey = Symbol.for("licomesh.plugin-runtime.test-events");
+    const eventKey = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("base", {
       runtime: { module: "./runtime.mjs" },
       mounts: { base: { id: "base.mount", kind: "document" } }
     }), `
-const events = globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 events.push("base:import");
 export async function activatePlugin({ manifest, onClose }) {
   events.push("base:activate");
@@ -475,7 +475,7 @@ export async function activatePlugin({ manifest, onClose }) {
         extensionRoutes: { txt: { mountName: "consumer", action: "extract" } }
       }
     }), `
-const events = globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 events.push("consumer:import");
 export async function activatePlugin({ manifest, onClose }) {
   events.push("consumer:activate");
@@ -509,10 +509,10 @@ export async function activatePlugin({ manifest, onClose }) {
 
   it("injects Host capabilities only when both the signed manifest and real user configuration grant them", async () => {
     const root = await tempRoot();
-    const eventKey = Symbol.for("licomesh.plugin-runtime.test-events");
+    const eventKey = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     const source = `
-const events = globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ manifest, context }) {
   events.push({
     id: manifest.id,
@@ -630,12 +630,12 @@ export async function activatePlugin({ manifest }) {
 
   it("unwinds earlier and in-progress resources when activation fails", async () => {
     const root = await tempRoot();
-    const eventKey = Symbol.for("licomesh.plugin-runtime.test-events");
+    const eventKey = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("alpha", {
       runtime: { module: "./runtime.mjs" }
     }), `
-const events = globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ manifest, onClose }) {
   events.push("alpha:activate");
   onClose(() => events.push("alpha:registered-close"));
@@ -644,7 +644,7 @@ export async function activatePlugin({ manifest, onClose }) {
     await writePlugin(root, manifest("beta", {
       runtime: { module: "./runtime.mjs" }
     }), `
-const events = globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ onClose }) {
   events.push("beta:activate");
   onClose(() => events.push("beta:registered-close"));
@@ -670,12 +670,12 @@ export async function activatePlugin({ onClose }) {
 
   it("surfaces close failure only after every registered cleanup has run", async () => {
     const root = await tempRoot();
-    const eventKey = Symbol.for("licomesh.plugin-runtime.test-events");
+    const eventKey = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("demo", {
       runtime: { module: "./runtime.mjs" }
     }), `
-const events = globalThis[Symbol.for("licomesh.plugin-runtime.test-events")];
+const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ manifest, onClose }) {
   onClose(() => events.push("registered-close"));
   return {

@@ -12,7 +12,7 @@ const storeRoots = new WeakMap();
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true }))); });
 
 async function store(options = {}) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-materialization-test-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-materialization-test-"));
   roots.push(userDataPath);
   const transactionStore = createUploadWorkspaceMaterializationTransactionStore({ userDataPath, ...options });
   storeRoots.set(transactionStore, userDataPath);
@@ -408,12 +408,39 @@ describe("upload workspace materialization transaction", () => {
   });
 
   it("renews a short saga lease throughout a slow mutation and prevents takeover", async () => {
-    const tx = await store({ leaseMs: 25 });
-    const h = await harness(tx, { delayMs: 70, leaseHeartbeatMs: 5 });
+    let clock = 100;
+    let renewalCount = 0;
+    let markMutationReached;
+    let releaseMutation;
+    const mutationReached = new Promise((resolve) => { markMutationReached = resolve; });
+    const mutationRelease = new Promise((resolve) => { releaseMutation = resolve; });
+    const tx = await store({ leaseMs: 25, now: () => clock });
+    const h = await harness(tx, {
+      leaseHeartbeatMs: 5,
+      afterMutation: async () => {
+        markMutationReached();
+        await mutationRelease;
+      }
+    });
     const admitted = await h.engine.submit(h.input);
-    const running = h.engine.execute({ requestRef: admitted.requestRef, ownerFence: "owner-1", renewLease: async () => {} });
-    await new Promise((resolve) => setTimeout(resolve, 40));
-    await expect(tx.begin(admitted.requestRef, { ownerFence: "owner-2" })).rejects.toMatchObject({ code: "materialization_fenced" });
+    const running = h.engine.execute({
+      requestRef: admitted.requestRef,
+      ownerFence: "owner-1",
+      renewLease: async () => { renewalCount += 1; }
+    });
+    await mutationReached;
+    clock = 120;
+    const renewalBeforeAdvance = renewalCount;
+    await vi.waitFor(() => {
+      expect(renewalCount).toBeGreaterThan(renewalBeforeAdvance);
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    clock = 130;
+    try {
+      await expect(tx.begin(admitted.requestRef, { ownerFence: "owner-2" })).rejects.toMatchObject({ code: "materialization_fenced" });
+    } finally {
+      releaseMutation();
+    }
     await expect(running).resolves.toMatchObject({ status: "completed" });
     tx.close();
   });

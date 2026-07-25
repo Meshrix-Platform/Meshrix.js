@@ -19,7 +19,7 @@ async function governedFixture({
   shareResult = { ok: true, workspace: { workspaceId: "workspace-target" } },
   shareThrows = false
 } = {}) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-share-governance-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-share-governance-"));
   temporaryRoots.push(userDataPath);
   const governance = createWorkspaceGovernanceRegistry({ userDataPath });
   await governance.upsertPolicy({
@@ -169,7 +169,7 @@ describe("agent workspace governed sharing", () => {
   });
 
   it("fails closed without inventing a default workspace governance policy", async () => {
-    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-workspace-share-unconfigured-"));
+    const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-workspace-share-unconfigured-"));
     temporaryRoots.push(userDataPath);
     const agentWorkspace = { shareWorkspace: vi.fn(() => ({ ok: true })) };
     const workspaceGovernanceRegistry = createWorkspaceGovernanceRegistry({ userDataPath });

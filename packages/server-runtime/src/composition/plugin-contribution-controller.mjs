@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { sendJson } from "#lico/foundation/http/http-response";
-import { custodyPromotionAuthorizationDigest } from "#lico/foundation/execution-sandbox/custody-contracts";
+import { sendJson } from "#meshrix/foundation/http/http-response";
+import { custodyPromotionAuthorizationDigest } from "#meshrix/foundation/execution-sandbox/custody-contracts";
 import { PLUGIN_WORKSPACE_ACCESS_METHODS } from "./plugin-workspace-access.mjs";
 import { PLUGIN_HOST_PORT_NAMES } from "./plugin-contribution-registry.mjs";
 import {

@@ -11,7 +11,7 @@ export type StoredServerAddresses = {
 };
 
 export const SERVER_ADDRESS_STORAGE_KEY = "v0.0.1:frontend:console-server-addresses-1";
-export const SERVER_ADDRESS_STORAGE_EVENT = "lico:console-server-addresses-updated";
+export const SERVER_ADDRESS_STORAGE_EVENT = "meshrix:console-server-addresses-updated";
 
 export const DEFAULT_SERVER_ADDRESS_STORAGE: StoredServerAddresses = {
   activeUrl: "",

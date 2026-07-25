@@ -84,7 +84,7 @@ describe("canonicalJson", () => {
   it("serializes governed transport collections deterministically", () => {
     expect(canonicalJson(new Map([["z", 1], ["a", 2]]))).toBe('{"a":2,"z":1}');
     expect(canonicalJson(new Set(["z", "a"]))).toBe('["a","z"]');
-    expect(canonicalJson(Buffer.from("lico", "utf8"))).toBe('"bGljbw=="');
+    expect(canonicalJson(Buffer.from("meshrix", "utf8"))).toBe('"bWVzaHJpeA=="');
   });
 
   it("fails closed for cycles and unsupported values", () => {

@@ -109,8 +109,8 @@ async function login(baseUrl, username, password) {
     write: {
       cookie,
       "content-type": "application/json",
-      "x-lico-csrf": payload.csrfToken,
-      "x-lico-safety-confirm": "true"
+      "x-meshrix-csrf": payload.csrfToken,
+      "x-meshrix-safety-confirm": "true"
     }
   };
 }
@@ -348,7 +348,7 @@ async function waitForServerPublished({ baseUrl, session, serviceId, authorityFa
     const publication = result.payload?.service?.publication;
     const terminal = publication?.terminal;
     if (result.status === 200 && publication?.status === "server_published" &&
-        /^urn:lico:upstream-publication:[a-f0-9]{64}$/u.test(String(publication.publicationRef || "")) &&
+        /^urn:meshrix:upstream-publication:[a-f0-9]{64}$/u.test(String(publication.publicationRef || "")) &&
         terminal?.sourceRevision === authorityFact.sourceRevision &&
         terminal?.sourceDigest === authorityFact.sourceDigest &&
         terminal?.catalogRevision === catalog.facts.catalogRevision &&
@@ -384,7 +384,7 @@ async function main() {
   };
   const fixture = await startLoopbackFixture();
   servers.push({ close: () => new Promise((resolve) => fixture.server.close(resolve)) });
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-publishing-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-publishing-"));
   roots.push(userDataPath);
   const manifestAuthority = createStorageProvider({ userDataPath }).getDurableManifestCandidateAuthorityPort();
 
@@ -515,7 +515,7 @@ async function main() {
     server,
     approvalAuth: ownerSession.approval,
     peerId: "audience-allowed",
-    toolsets: ["lico.gateway.read"],
+    toolsets: ["meshrix.gateway.read"],
     dynamicCapabilities: executionCapabilities,
     allowedServiceIds: [serviceId],
     allowedSecretBindings: credentialBindingIds,
@@ -525,14 +525,14 @@ async function main() {
     server,
     approvalAuth: ownerSession.approval,
     peerId: "audience-denied",
-    toolsets: ["lico.gateway.read"],
+    toolsets: ["meshrix.gateway.read"],
     maxRisk: "read_only"
   });
   const executionGrant = await issueNeutralMcpProtocolGrant({
     server,
     approvalAuth: ownerSession.approval,
     peerId: "execution",
-    toolsets: ["lico.gateway.write", "lico.gateway.read"],
+    toolsets: ["meshrix.gateway.write", "meshrix.gateway.read"],
     dynamicCapabilities: executionCapabilities,
     allowedServiceIds: [serviceId],
     allowedSecretBindings: credentialBindingIds,
@@ -542,7 +542,7 @@ async function main() {
     server,
     approvalAuth: ownerSession.approval,
     peerId: "audience-tag-denied",
-    toolsets: ["lico.gateway.write", "lico.gateway.read"],
+    toolsets: ["meshrix.gateway.write", "meshrix.gateway.read"],
     dynamicCapabilities: [capabilityId],
     allowedServiceIds: [serviceId],
     allowedSecretBindings: credentialBindingIds,
@@ -552,7 +552,7 @@ async function main() {
     server,
     approvalAuth: ownerSession.approval,
     peerId: "traffic",
-    toolsets: ["lico.gateway.write", "lico.gateway.read"],
+    toolsets: ["meshrix.gateway.write", "meshrix.gateway.read"],
     dynamicCapabilities: [capabilityId],
     allowedServiceIds: [serviceId],
     allowedSecretBindings: credentialBindingIds,
@@ -635,7 +635,7 @@ async function main() {
       headers: ownerSession.write,
       body: JSON.stringify({
         scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["lico.gateway.read", "lico.gateway.write"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         maxRisk: "safe_write",
         metadata: {
           maxRisk: "safe_write",
@@ -655,7 +655,7 @@ async function main() {
       headers: ownerSession.write,
       body: JSON.stringify({
         scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["lico.gateway.read", "lico.gateway.write"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         maxRisk: "safe_write",
         metadata: {
           maxRisk: "safe_write",
@@ -675,7 +675,7 @@ async function main() {
       headers: ownerSession.write,
       body: JSON.stringify({
         scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["lico.gateway.read", "lico.gateway.write"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         maxRisk: "safe_write",
         rateLimit: { perMinute: 1 },
         metadata: { maxRisk: "safe_write" },
@@ -698,7 +698,7 @@ async function main() {
       headers: ownerSession.write,
       body: JSON.stringify({
         scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["lico.gateway.read", "lico.gateway.write"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         maxRisk: "safe_write",
         metadata: {
           maxRisk: "safe_write",
@@ -961,7 +961,7 @@ async function main() {
       headers: ownerSession.write,
       body: JSON.stringify({
         scopes: ["gateway:read"],
-        toolsets: ["lico.gateway.read"],
+        toolsets: ["meshrix.gateway.read"],
         maxRisk: "read_only",
         metadata: { maxRisk: "read_only" },
         reason: "protocol_timeout_verification"
