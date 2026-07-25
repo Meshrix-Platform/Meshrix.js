@@ -207,13 +207,26 @@ export async function executeUpstreamToolViaGatewayForward({
   };
   const artifact = artifactResourceFrom(publicPayload);
   if (artifact) {
-    resultPayload.content = [{
-      type: "resource_link",
-      uri: artifact.uri,
-      name: artifact.name,
-      mimeType: artifact.mediaType,
-      size: Number(artifact.byteLength)
-    }];
+    const artifactReference = String(artifact.reference || "");
+    const artifactId = artifactReference.startsWith("artifact:")
+      ? artifactReference.slice("artifact:".length)
+      : "";
+    resultPayload.content = [
+      {
+        type: "resource_link",
+        uri: artifact.uri,
+        name: artifact.name,
+        mimeType: artifact.mediaType,
+        size: Number(artifact.byteLength)
+      },
+      {
+        type: "text",
+        text: `Artifact ready: ${artifact.name} (${artifact.mediaType}, ${Number(artifact.byteLength)} bytes). ` +
+          (artifactId
+            ? `Fetch it with meshrix-mcp fetch --artifact ${artifactId}.`
+            : "It can be fetched from the Meshrix gateway artifact download route.")
+      }
+    ];
   }
   return jsonRpcResult(id, mcpToolResult(resultPayload));
 }

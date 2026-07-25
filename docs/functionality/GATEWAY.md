@@ -56,7 +56,11 @@ references; and an
 file-conversion import example is
 [file-parser-format-convert.upstream.json](../examples/file-parser-format-convert.upstream.json).
 Import registers the already deployed service; it does not start the converter
-or install a plugin.
+or install a plugin. Publish assigns an opaque server-side service id
+(`svc_…`); compiled capability and projected MCP tool ids derive from that id
+(for example `cap:upstream:svc_…:convert` and `upstream.svc_….convert`), not
+from the descriptor `serviceKey`, so grants bind to the id returned by the
+publish response.
 
 ## Upstream Service Publishing Contract
 

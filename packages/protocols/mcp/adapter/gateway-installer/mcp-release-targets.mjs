@@ -32,7 +32,8 @@ export const MCP_CLIENT_TARGETS = Object.freeze([
   trustedAdapter("claude-code", "Claude Code"),
   trustedAdapter("antigravity", "Antigravity"),
   trustedAdapter("opencode", "OpenCode"),
-  trustedAdapter("pi", "Pi")
+  trustedAdapter("pi", "Pi"),
+  trustedAdapter("kimi", "Kimi CLI")
 ]);
 
 export const MCP_SUPPORTED_TARGETS = Object.freeze(MCP_CLIENT_TARGETS.map((item) => item.target));

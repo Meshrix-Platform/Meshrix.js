@@ -238,6 +238,9 @@ export function sanitizeMcpOutputValue(value, directory = workspaceDirectoryFrom
         continue;
       }
       const entry = directory.byId.get(String(child || ""));
+      // Keep the internal id next to the public ref: workspace:<id>:<path>
+      // artifact references require it and the HTTP responses already return it.
+      result[publicKey] = child;
       result[refKey] = entry?.ref || "workspace-hidden";
       if (key === "workspaceId" && entry) {
         result.workspaceIndex = entry.index;

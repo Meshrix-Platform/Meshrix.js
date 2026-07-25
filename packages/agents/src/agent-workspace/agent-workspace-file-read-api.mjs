@@ -278,11 +278,53 @@ export function createAgentWorkspaceFileReadApi({
     };
   }
 
+  async function openWorkspaceFileReadStream(input = {}) {
+    const access = workspaceForStorage(input);
+    if (!access.ok) {
+      return access;
+    }
+    let resolved;
+    try {
+      resolved = resolveWorkspacePath(
+        access.workspace,
+        input.path || input.relativePath || input.filePath || "",
+        { allowEmpty: false, requireExisting: true, allowDirectory: false }
+      );
+    } catch (error) {
+      return error?.code === "ENOENT"
+        ? { ok: false, status: 404, error: "文件不存在。" }
+        : { ok: false, status: 400, error: error.message };
+    }
+    const stat = fs.lstatSync(resolved.absolutePath);
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      return { ok: false, status: 400, error: "目标路径不是文件。" };
+    }
+    return {
+      protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
+      ok: true,
+      workspaceId: access.workspace.workspaceId,
+      relativePath: resolved.relativePath,
+      name: path.posix.basename(resolved.relativePath) || "artifact.bin",
+      byteLength: Number(stat.size || 0),
+      accessReceipt: createAccessReceipt({
+        workspaceId: access.workspace.workspaceId,
+        operationId: input.operationId || "workspace.file.read",
+        path: resolved.relativePath,
+        action: "workspace.read"
+      }),
+      open: ({ start, end } = {}) => fs.createReadStream(resolved.absolutePath, {
+        ...(Number.isSafeInteger(start) ? { start } : {}),
+        ...(Number.isSafeInteger(end) ? { end } : {})
+      })
+    };
+  }
+
 
   return {
     createWorkspaceFolder,
     listWorkspaceFiles,
     workspaceFileMetadata,
-    downloadWorkspaceFile
+    downloadWorkspaceFile,
+    openWorkspaceFileReadStream
   };
 }

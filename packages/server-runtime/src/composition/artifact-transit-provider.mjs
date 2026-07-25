@@ -52,6 +52,28 @@ function positiveLimit(value) {
   return limit;
 }
 
+export function createWorkspaceArtifactFileStore({ getAgentWorkspace } = {}) {
+  return Object.freeze({
+    resolveWorkspaceFile({ workspaceId, relativePath, owner, purpose } = {}) {
+      const agentWorkspace = typeof getAgentWorkspace === "function" ? getAgentWorkspace() : null;
+      if (typeof agentWorkspace?.openWorkspaceFileReadStream !== "function") {
+        return { ok: false, status: 503, error: "Workspace artifact transit is unavailable." };
+      }
+      return agentWorkspace.openWorkspaceFileReadStream({
+        workspaceId,
+        path: relativePath,
+        operationId: "upstream.artifact-transit",
+        purpose,
+        actorUserId: String(owner?.subjectId || owner?.userId || owner?.id || "").trim(),
+        userId: String(owner?.userId || "").trim(),
+        subjectId: String(owner?.subjectId || "").trim(),
+        username: String(owner?.username || "").trim(),
+        allowedWorkspaceIds: Array.isArray(owner?.allowedWorkspaceIds) ? owner.allowedWorkspaceIds : []
+      });
+    }
+  });
+}
+
 async function readMetadata(metadataPath) {
   try {
     const value = JSON.parse(await fsp.readFile(metadataPath, "utf8"));
@@ -65,6 +87,7 @@ async function readMetadata(metadataPath) {
 export async function createArtifactTransitProvider({
   userDataPath,
   uploadSessionStore,
+  workspaceFileStore = null,
   getListenUrl = () => "",
   now = () => Date.now()
 } = {}) {
@@ -108,8 +131,45 @@ export async function createArtifactTransitProvider({
 
   await cleanupExpired();
 
+  async function readWorkspaceFile(parsed, subject, purpose) {
+    if (typeof workspaceFileStore?.resolveWorkspaceFile !== "function") {
+      throw artifactError("artifact_workspace_unavailable", "Workspace artifact transit is unavailable.", 503);
+    }
+    const file = await workspaceFileStore.resolveWorkspaceFile({
+      workspaceId: parsed.id,
+      relativePath: parsed.path,
+      owner: subject,
+      purpose
+    });
+    if (!file || file.ok !== true) {
+      const status = Number(file?.status || 404);
+      if (status === 400) throw artifactError("artifact_reference_invalid", "Artifact reference is invalid.", 400);
+      if (status === 403) throw artifactError("artifact_owner_denied", "Artifact is unavailable.", 404);
+      if (status === 503) throw artifactError("artifact_workspace_unavailable", "Workspace artifact transit is unavailable.", 503);
+      throw artifactError("artifact_not_found", "Artifact is unavailable.", 404);
+    }
+    return file;
+  }
+
+  function workspaceMetadata(parsed, file, purpose) {
+    return Object.freeze({
+      reference: `workspace:${parsed.id}:${parsed.path}`,
+      kind: "workspace",
+      name: safeName(file.name),
+      mediaType: safeMediaType(file.mediaType),
+      byteLength: Number(file.byteLength || 0),
+      sha256: String(file.sha256 || ""),
+      purpose,
+      expiresAt: ""
+    });
+  }
+
   async function resolve(reference, subject, purpose = "read") {
     const parsed = parseArtifactTransitReference(reference);
+    if (parsed.kind === "workspace") {
+      const file = await readWorkspaceFile(parsed, subject, purpose);
+      return workspaceMetadata(parsed, file, purpose);
+    }
     if (parsed.kind === "upload") {
       const files = await uploadSessionStore.resolveUploadSessionFiles(userDataPath, parsed.id, { owner: subject });
       const file = files[parsed.fileIndex] || null;
@@ -154,8 +214,18 @@ export async function createArtifactTransitProvider({
   }
 
   async function openRead(reference, subject, purpose = "read", range = null) {
-    const metadata = await resolve(reference, subject, purpose);
     const parsed = parseArtifactTransitReference(reference);
+    const start = Number.isSafeInteger(range?.start) ? range.start : undefined;
+    const end = Number.isSafeInteger(range?.end) ? range.end : undefined;
+    if (parsed.kind === "workspace") {
+      const file = await readWorkspaceFile(parsed, subject, purpose);
+      if (typeof file.open !== "function") throw artifactError("artifact_not_found", "Artifact is unavailable.", 404);
+      return Object.freeze({
+        metadata: workspaceMetadata(parsed, file, purpose),
+        open: () => file.open({ start, end })
+      });
+    }
+    const metadata = await resolve(reference, subject, purpose);
     let sourcePath;
     if (parsed.kind === "upload") {
       const files = await uploadSessionStore.resolveUploadSessionFiles(userDataPath, parsed.id, { owner: subject });
@@ -164,8 +234,6 @@ export async function createArtifactTransitProvider({
       sourcePath = contentPath(parsed.id);
     }
     if (!sourcePath) throw artifactError("artifact_not_found", "Artifact is unavailable.", 404);
-    const start = Number.isSafeInteger(range?.start) ? range.start : undefined;
-    const end = Number.isSafeInteger(range?.end) ? range.end : undefined;
     return Object.freeze({
       metadata,
       open: () => fs.createReadStream(sourcePath, {

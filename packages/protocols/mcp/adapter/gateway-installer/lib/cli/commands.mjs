@@ -29,6 +29,7 @@ import {
   discoveryRegistryPath,
   readJson
 } from "./device-discovery-registry.mjs";
+import { fetchCommand } from "./fetch-command.mjs";
 import { fetchJson } from "./http-json-client.mjs";
 import { installerOptions } from "./installer-options.mjs";
 import { installCommand } from "./install-command.mjs";
@@ -365,6 +366,7 @@ export const MESHRIX_MCP_COMMAND_REGISTRY = Object.freeze({
   uninstall: uninstallCommand,
   doctor: doctorCommand,
   discover: discoverCommand,
+  fetch: fetchCommand,
   "server-config": serverConfigCommand,
   "identity-store-self-test": identityStoreSelfTestCommand
 });

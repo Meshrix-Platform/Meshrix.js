@@ -36,7 +36,7 @@ import {
   getUploadSession,
   resolveUploadSessionFiles
 } from "../state/upload-session-store.mjs";
-import { createArtifactTransitProvider } from "./artifact-transit-provider.mjs";
+import { createArtifactTransitProvider, createWorkspaceArtifactFileStore } from "./artifact-transit-provider.mjs";
 
 const UPSTREAM_MANIFEST_BOOTSTRAP_ATTEMPTS = 3;
 
@@ -205,7 +205,8 @@ export async function createServerConsoleOperationProviders({
   operationProofSubstrate,
   storageProvider,
   operationAuditStore,
-  getListenUrl = () => ""
+  getListenUrl = () => "",
+  getAgentWorkspace = () => null
 }) {
   const contributionRegistries = new Map();
   const ownedResources = [];
@@ -214,6 +215,7 @@ export async function createServerConsoleOperationProviders({
     const artifactTransitPort = await createArtifactTransitProvider({
       userDataPath,
       uploadSessionStore: uploadSessionReadPort,
+      workspaceFileStore: createWorkspaceArtifactFileStore({ getAgentWorkspace }),
       getListenUrl
     });
     ownedResources.push(artifactTransitPort);

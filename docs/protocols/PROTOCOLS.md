@@ -73,9 +73,12 @@ checks. Structured operations continue through the bounded JSON forwarding
 surface.
 
 MCP and other JSON-only callers never embed file bytes in JSON by default. They
-pass owner-bound `upload:` or `artifact:` references to a declared raw or
-multipart mapping. File-like results are committed as artifacts and projected
-as MCP `resource_link` content. The authenticated
+pass owner-bound `upload:`, `artifact:`, or `workspace:` references to a
+declared raw or multipart mapping. A `workspace:<workspaceId>:<relativePath>`
+reference resolves through the same owner-bound workspace access and
+path-containment rules as `workspace.file.download`. File-like results are
+committed as artifacts and projected as MCP `resource_link` content. The
+authenticated
 `GET|HEAD /api/gateway/v1/artifacts/:artifactId` route supports a single byte
 range and never exposes a host path or storage-provider URL.
 
@@ -104,7 +107,7 @@ The MCP adapter compares every request binding field with the authenticated gran
 
 ## Adapter Target Scope
 
-The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. Their implementations and compatibility evidence are external Meshrix-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
+The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Their implementations and compatibility evidence are external Meshrix-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
 
 MCP user-device installation begins at platform-native launchers: macOS and Linux
 use `meshrix-mcp-install.sh`, and Windows uses `meshrix-mcp-install.ps1` only. The

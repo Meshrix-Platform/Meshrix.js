@@ -75,6 +75,10 @@ const LOCAL_GRANT_TARGET_MATCH = Object.freeze({
   hermes: {
     toolsets: LOCAL_GRANT_READ_TOOLSETS,
     agentProfileId: "meshrix.mcp.hermes"
+  },
+  kimi: {
+    toolsets: LOCAL_GRANT_READ_TOOLSETS,
+    agentProfileId: "meshrix.mcp.kimi"
   }
 });
 

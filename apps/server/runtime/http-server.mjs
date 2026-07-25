@@ -202,7 +202,12 @@ export async function startHttpServer({
 
     const listenHost = typeof address.address === "string" ? address.address : host;
     const resolvedAdvertisedHost = advertisedHost || defaultAdvertisedHost(host);
-    const listenUrl = `http://${formatUrlHost(resolvedAdvertisedHost)}:${address.port}`;
+    // A configured advertised base URL wins over the socket bind address: with
+    // container port mapping the bind port is not externally reachable, so
+    // externally-facing URLs (artifact resource links, discovery metadata) must
+    // keep the advertised host and port.
+    const advertisedBaseUrl = String(discoveryOptions.advertisedBaseUrl || "").trim().replace(/\/+$/, "");
+    const listenUrl = advertisedBaseUrl || `http://${formatUrlHost(resolvedAdvertisedHost)}:${address.port}`;
     const discoveryState = await applicationAssembly.activateListeningEndpoint({
       resolvedListenUrl: listenUrl,
       discoveryOptions
