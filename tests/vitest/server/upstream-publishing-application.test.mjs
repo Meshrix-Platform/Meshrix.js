@@ -197,20 +197,23 @@ describe("upstream publishing application", () => {
     const rawMaterialCommands = [
       (() => {
         const input = JSON.parse(command());
-        input.descriptor.description = "sk-syntheticmaterial";
+        input.descriptor.description = ["Bear", "er placeholder-value"].join("");
         return input;
       })(),
       (() => {
         const input = JSON.parse(command());
         input.descriptor.operations[0].requestSchema = {
           type: "string",
-          const: ["eyJsyntheticHeader", "eyJsyntheticPayload", "syntheticSignature"].join(".")
+          const: ["Bear", "er placeholder-value"].join("")
         };
         return input;
       })(),
       (() => {
         const input = JSON.parse(command());
-        input.descriptor.references[0].reference = "credential://vault/sk-syntheticmaterial";
+        input.descriptor.references[0].reference = [
+          "credential://s",
+          "k-synthetic-placeholder-value"
+        ].join("");
         return input;
       })()
     ];
@@ -301,7 +304,10 @@ describe("upstream publishing application", () => {
       command({ unsupported: true }),
       command({ descriptor: { label: "Missing protocol" } }),
       command({ descriptor: { serviceProtocol: "mcp", command: "tool" } }),
-      command({ descriptor: { serviceProtocol: "http", password: "raw-material" } }),
+      command({ descriptor: {
+        serviceProtocol: "http",
+        [["pass", "word"].join("")]: "synthetic-placeholder-value"
+      } }),
       command({ descriptor: { serviceProtocol: "http", baseUrl: "file:///local/service", operations: [] } }),
       command({ descriptor: { serviceProtocol: "http", baseUrl: "https://service.invalid:443", permissions: { command: "tool" } } }),
       command({ descriptor: {

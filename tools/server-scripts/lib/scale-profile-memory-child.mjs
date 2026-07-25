@@ -15,6 +15,11 @@ import {
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const reportPath = path.resolve(String(process.argv[2] || ""));
+const SYNTHETIC_LOAD_TEST_SCOPE = Object.freeze({
+  tenantId: "synthetic-load-test-tenant",
+  workspaceId: "synthetic-load-test-workspace",
+  projectId: "synthetic-load-test-project",
+});
 
 async function main() {
   const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-scale-profile-memory-"));
@@ -56,9 +61,7 @@ async function main() {
     for (let index = 0; index < 32; index += 1) {
       await store.enqueue({
         queueDefinitionId: definition.queueDefinitionId,
-        tenantId: "tenant-scale-sample",
-        workspaceId: "workspace-scale",
-        projectId: "project-scale-sample",
+        ...SYNTHETIC_LOAD_TEST_SCOPE,
         payloadRef: { iteration: index },
       });
       await dispatcher.dispatchOnce();
