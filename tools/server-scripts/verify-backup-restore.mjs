@@ -40,7 +40,10 @@ async function verifyBackupRestore(tempRoot) {
   });
   assert.equal(backup.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
   assert.ok(backup.backupId.startsWith("backup_"));
-  assert.equal(backup.consistency.sqlite, "sqlite-online-backup");
+  assert.equal(
+    backup.consistency.sqlite,
+    "copy-on-write-baseline-with-sqlite-online-page-backup"
+  );
   assert.equal(backup.consistency.manifestIntegrity, "size-and-sha256-per-file");
   assert.equal(Object.hasOwn(backup, "sourceRoot"), false);
   assert.equal(Object.hasOwn(backup, "backupPath"), false);
@@ -137,6 +140,10 @@ async function verifyServiceManifestAuthority(tempRoot) {
   assert.equal(committed.setRevision, 1);
   assert.equal(committed.replayed, false);
   assert.equal((await store.writerPort.commitManifestSet(input)).replayed, true);
+  await store.acknowledgePublished({
+    setRevision: committed.setRevision,
+    setDigest: committed.setDigest
+  });
   const snapshot = await store.readerPort.getSnapshot();
   assert.equal(snapshot.setRevision, 1);
   assert.equal(snapshot.getService(serviceId).manifest.payload.operations[0].key, "probe");
