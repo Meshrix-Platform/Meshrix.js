@@ -39,7 +39,6 @@ export function createPolicyEnforcementPoint(options = {}) {
    * @param {object} [params.input] - Operation input
    * @param {object} [params.request] - HTTP request
    * @param {object} [params.context] - Additional context
-   * @param {boolean} [params.skipAuthorization=false] - Only for system actors
    * @param {string} [params.traceId]
    * @returns {Promise<{ allowed: boolean, decision: object, needsApproval: boolean, approvalReceipt: object|null }>}
    */
@@ -52,7 +51,6 @@ export function createPolicyEnforcementPoint(options = {}) {
       input = {},
       request = null,
       context = {},
-      skipAuthorization = false,
       traceId = "",
     } = params;
 
@@ -66,25 +64,6 @@ export function createPolicyEnforcementPoint(options = {}) {
       context,
       traceId,
     });
-
-    // System actors can skip authorization but it MUST be recorded
-    if (skipAuthorization && subject?.type === "system") {
-      const systemDecision = {
-        ...decision,
-        effect: "allow",
-        allowed: true,
-        reasonCode: "system_skip_authorization",
-        redactedReason: "Authorization skipped for system actor (recorded).",
-        skipAuthorization: true,
-      };
-      await _audit(systemDecision, context);
-      return {
-        allowed: true,
-        decision: systemDecision,
-        needsApproval: false,
-        approvalReceipt: null,
-      };
-    }
 
     // Check for existing approval receipt
     let approvalReceipt = null;
