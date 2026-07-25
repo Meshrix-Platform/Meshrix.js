@@ -311,6 +311,22 @@ const RAW_SCRIPT_REGISTRY = Object.freeze({
     ],
     outputs: [],
   },
+  "verify:release-journey": {
+    scriptName: "verify:release-journey", command: "npm run verify:release-journey", category: "verifier", subsystem: "release",
+    owner: "platform", tier: "release", sideEffects: "docker",
+    requiresFreshContainer: true, ciProfile: "release", expectedDurationClass: "extended",
+    inputs: [
+      "tools/server-scripts/verify-release-journey.mjs",
+      "tools/server-scripts/lib/release-journey-*.mjs",
+      "tools/server-scripts/lib/mcp-proxy-stdio-client.mjs",
+      "packages/protocols/mcp/adapter/gateway-installer/**",
+      "docker-compose.yml",
+      "Dockerfile",
+      "docs/examples/file-parser-format-convert.upstream.json",
+      "tools/server-scripts/lib/release-journey-fixture.mjs"
+    ],
+    outputs: ["build/reports/release-journey.json"],
+  },
   "server:verify:deployment-flow:podman": {
     scriptName: "server:verify:deployment-flow:podman", command: "npm run server:verify:deployment-flow:podman", category: "verifier", subsystem: "deployment",
     owner: "platform", tier: "external", sideEffects: "docker",

@@ -59,6 +59,55 @@ jobs:
           RELEASE_IMMUTABLE_ENABLED: ${{ vars.RELEASE_IMMUTABLE_ENABLED }}
         run: test "$RELEASE_IMMUTABLE_ENABLED" = "true"
 
+  journey:
+    name: Mandatory release journey gate (connector install, MCP conversion, PDF proof)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [verify]
+    permissions:
+      contents: read
+    steps:
+      # The three checkouts mirror the documented sibling layout
+      # (Meshrix, Meshrix-Services, Meshrix-Plugins) that the gate's defaults
+      # resolve. Cross-repository checkout uses the workflow token with
+      # persist-credentials disabled; it assumes the LicoLand sibling
+      # repositories are readable by that token (public repositories).
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          path: Meshrix
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          repository: LicoLand/Meshrix-Services
+          path: Meshrix-Services
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+          repository: LicoLand/Meshrix-Plugins
+          path: Meshrix-Plugins
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+          cache-dependency-path: Meshrix/package-lock.json
+      - name: Install dependencies
+        working-directory: Meshrix
+        run: npm ci
+      - name: Build the format-convert image (Noto CJK fonts)
+        working-directory: Meshrix-Services/file-parser/format-convert
+        run: make image
+      - name: Run the mandatory release journey gate
+        working-directory: Meshrix
+        run: npm run verify:release-journey -- --json
+      - name: Upload the journey gate report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-journey-report-${{ github.sha }}
+          path: Meshrix/build/reports/release-journey.json
+          if-no-files-found: error
+
   npm-package-portability:
     name: npm package portability (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
@@ -132,7 +181,7 @@ jobs:
 
   assemble-release-assets:
     name: Assemble release assets without publication credentials
-    needs: [verify, platform-acceptance]
+    needs: [verify, platform-acceptance, journey]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:

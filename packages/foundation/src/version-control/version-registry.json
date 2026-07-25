@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-07-24",
+  "updatedAt": "2026-07-25",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -5173,6 +5173,37 @@
               "evidenceId": "v0-0-1-meshrix-release-evidence-state-reduction-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-reducer.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.release-journey-report",
+      "kind": "report",
+      "description": "Governed version registry entry for meshrix.release-journey-report.",
+      "activeVersion": "v0.0.1:report:release-journey-1",
+      "versions": [
+        {
+          "version": "v0.0.1:report:release-journey-1",
+          "ref": "meshrix.release-journey-report@v0.0.1:report:release-journey-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-report-release-journey-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/release-journey-report.mjs"
+            },
+            {
+              "evidenceId": "v0-0-1-report-release-journey-1-verifier-1",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-release-journey.mjs"
             }
           ]
         }

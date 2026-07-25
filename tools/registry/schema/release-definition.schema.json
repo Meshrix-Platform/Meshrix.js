@@ -12,7 +12,8 @@
     "container",
     "acceptance",
     "github",
-    "localVerification"
+    "localVerification",
+    "journeyGate"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -96,6 +97,16 @@
       "properties": {
         "engine": { "const": "podman" },
         "evidenceAuthority": { "const": "local-only" }
+      },
+      "additionalProperties": false
+    },
+    "journeyGate": {
+      "type": "object",
+      "required": ["commandId", "required"],
+      "properties": {
+        "commandId": { "const": "verify:release-journey" },
+        "required": { "const": true },
+        "report": { "const": "build/reports/release-journey.json" }
       },
       "additionalProperties": false
     }

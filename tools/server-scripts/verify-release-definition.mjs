@@ -66,6 +66,21 @@ export async function verifyReleaseDefinition({
   if (JSON.stringify(verifiedPlatforms) !== JSON.stringify(platforms)) {
     fail("release_definition_runner_matrix_mismatch", "Every container platform needs a native GitHub runner.");
   }
+  // The journey gate is a mandatory release declaration. This verifier only
+  // checks the declaration and its wiring; the gate itself runs in the
+  // release workflow journey job, never during tag validation.
+  const journeyGate = definition?.journeyGate;
+  if (journeyGate?.commandId !== "verify:release-journey" || journeyGate?.required !== true) {
+    fail("release_definition_journey_gate_invalid", "The release requires the mandatory verify:release-journey gate declaration.");
+  }
+  const journeyCommand = String(rootPackage.scripts?.["verify:release-journey"] || "");
+  const journeyScriptPath = "tools/server-scripts/verify-release-journey.mjs";
+  if (journeyCommand !== `node ${journeyScriptPath}`) {
+    fail("release_definition_journey_gate_script_mismatch", "package.json must wire verify:release-journey to the journey gate verifier.");
+  }
+  await fs.access(path.join(rootDir, journeyScriptPath)).catch(() => {
+    fail("release_definition_journey_gate_script_missing", "The release journey gate verifier is missing.");
+  });
   return definition;
 }
 
