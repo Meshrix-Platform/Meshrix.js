@@ -598,10 +598,14 @@ export function createServiceManifestTransaction({
   async function ensureAuthority(context) {
     context.check();
     assertSafeDirectoryAncestry(rootPath);
-    const existing = openAuthorityDatabase(rootPath, { create: false });
-    if (existing) {
-      existing.close();
-      return;
+    try {
+      const existing = openAuthorityDatabase(rootPath, { create: false });
+      if (existing) {
+        existing.close();
+        return;
+      }
+    } catch (error) {
+      if (error?.code !== "storage_manifest_index_incomplete") throw error;
     }
     await withInitializationLock(rootPath, context, async () => {
       const db = openAuthorityDatabase(rootPath, { create: true });
