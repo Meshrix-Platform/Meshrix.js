@@ -4,7 +4,7 @@ import {
   ensurePrivateSqliteLocation,
   withPrivateFileCreationMask
 } from "../../storage/private-sqlite.mjs";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import {
   getTagStoreProvider,
   getTagStoreProviderDiagnostic

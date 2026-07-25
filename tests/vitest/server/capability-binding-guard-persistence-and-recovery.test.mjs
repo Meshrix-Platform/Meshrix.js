@@ -14,7 +14,7 @@ import { createCapabilityKey } from "../../../packages/foundation/src/security/a
 
 describe("capability binding guard boundary behavior", () => {
   it("persists local-file bindings through sealed state and sidecar sealing key", async () => {
-    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-"));
+    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-"));
     const alias = "unit/local file alias";
     const capabilityKey = createCapabilityKey();
     const guard = createCapabilityBindingGuard({
@@ -376,32 +376,32 @@ describe("capability binding guard boundary behavior", () => {
   });
 
   it("supports environment defaults for missing options and sanitizes alias-based persistence fields", async () => {
-    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-env-"));
-    const oldBackend = process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER;
-    const oldAlias = process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS;
-    const oldDataDir = process.env.LICO_CAPABILITY_BINDING_GUARD_DATA_DIR;
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-env-"));
+    const oldBackend = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER;
+    const oldAlias = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS;
+    const oldDataDir = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_DATA_DIR;
     const restore = () => {
       if (oldBackend === undefined) {
-        delete process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER;
+        delete process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER;
       } else {
-        process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER = oldBackend;
+        process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER = oldBackend;
       }
       if (oldAlias === undefined) {
-        delete process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS;
+        delete process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS;
       } else {
-        process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS = oldAlias;
+        process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS = oldAlias;
       }
       if (oldDataDir === undefined) {
-        delete process.env.LICO_CAPABILITY_BINDING_GUARD_DATA_DIR;
+        delete process.env.MESHRIX_CAPABILITY_BINDING_GUARD_DATA_DIR;
       } else {
-        process.env.LICO_CAPABILITY_BINDING_GUARD_DATA_DIR = oldDataDir;
+        process.env.MESHRIX_CAPABILITY_BINDING_GUARD_DATA_DIR = oldDataDir;
       }
     };
 
     try {
-      process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER = "local-file";
-      process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS = "unit env alias";
-      process.env.LICO_CAPABILITY_BINDING_GUARD_DATA_DIR = tempDir;
+      process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER = "local-file";
+      process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS = "unit env alias";
+      process.env.MESHRIX_CAPABILITY_BINDING_GUARD_DATA_DIR = tempDir;
 
       const guard = createCapabilityBindingGuard({});
       const capabilityKey = createCapabilityKey();
@@ -463,7 +463,7 @@ describe("capability binding guard boundary behavior", () => {
   });
 
   it("rejects local-file records that do not contain the current sealed state", async () => {
-    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-invalid-seal-"));
+    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-invalid-seal-"));
     const alias = "unit-local-invalid-seal";
     const statePath = capabilityBindingGuardStatePath({ dataDir, alias });
     const keyPath = statePath.replace(/\.sealed\.json$/, ".sealing-key");
@@ -487,7 +487,7 @@ describe("capability binding guard boundary behavior", () => {
 
   it("writes recovery package into local-file stores during import", async () => {
     const memorySource = createMemoryCapabilityBindingGuard({ alias: "unit-binding-recovery-src-local" });
-    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-recover-local-"));
+    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-recover-local-"));
     const localImport = createCapabilityBindingGuard({
       backend: "local-file",
       dataDir,
@@ -615,7 +615,7 @@ describe("capability binding guard boundary behavior", () => {
   });
 
   it("waits for in-flight state loads before applying file-backed mutations", async () => {
-    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-load-"));
+    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-load-"));
     const alias = "unit-binding-await-load";
     const bootstrap = createCapabilityBindingGuard({
       backend: "local-file",
@@ -694,7 +694,7 @@ describe("capability binding guard boundary behavior", () => {
   });
 
   it("rejects a local-file record whose state root does not match the current sealed state", async () => {
-    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-invalid-root-"));
+    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-invalid-root-"));
     const alias = "unit-local-file-invalid-root";
     const statePath = capabilityBindingGuardStatePath({ dataDir, alias });
     const bootstrap = createCapabilityBindingGuard({
@@ -724,7 +724,7 @@ describe("capability binding guard boundary behavior", () => {
   });
 
   it("falls back to local-file storage when pass-gpg write fails in auto backend flow", async () => {
-    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "lico-binding-guard-passgpg-"));
+    const dataDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "meshrix-binding-guard-passgpg-"));
     const alias = "unit-binding-passgpg-fallback";
     const bootstrap = createCapabilityBindingGuard({
       backend: "local-file",

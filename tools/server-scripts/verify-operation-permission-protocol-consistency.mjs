@@ -110,13 +110,13 @@ async function verifyAllowDenyAndApprovalParity() {
   const readGrant = await localMcpGrant({
     label: "Operation Permission protocol read verifier",
     grantMode: "read",
-    toolsets: ["lico.gateway.read"],
+    toolsets: ["meshrix.gateway.read"],
     maxRisk: "read_only"
   });
   const allowed = await callAllChannels({
     token: readGrant.token,
     toolId: READ_TOOL,
-    mcpToolName: "lico.gateway",
+    mcpToolName: "meshrix.gateway",
     operation: READ_TOOL,
     input: {},
     idBase: 200
@@ -126,7 +126,7 @@ async function verifyAllowDenyAndApprovalParity() {
   const denied = await callAllChannels({
     token: readGrant.token,
     toolId: WRITE_TOOL,
-    mcpToolName: "lico.gateway",
+    mcpToolName: "meshrix.gateway",
     operation: WRITE_TOOL,
     input: { serviceId: `${SERVICE_ID_PREFIX}-missing`, operationKey: "echo" },
     idBase: 300
@@ -136,7 +136,7 @@ async function verifyAllowDenyAndApprovalParity() {
   const adminGrant = await localMcpGrant({
     label: "Operation Permission protocol stale policy verifier",
     grantMode: "maintain",
-    toolsets: ["lico.gateway.admin", "lico.runtime.maintain", "lico.authorization.admin"],
+    toolsets: ["meshrix.gateway.admin", "meshrix.runtime.maintain", "meshrix.authorization.admin"],
     maxRisk: "repair_write"
   });
   const tagId = `custom:op-permission-protocol-${Date.now()}`;
@@ -158,7 +158,7 @@ async function verifyAllowDenyAndApprovalParity() {
   const approvalPayloads = {
     http: publicPayload("http", await operationHttp(adminGrant.token, APPROVAL_TOOL, approvalInputs.http)),
     rpc: publicPayload("rpc", await operationRpc(adminGrant.token, APPROVAL_TOOL, approvalInputs.rpc, 401)),
-    mcp: publicPayload("mcp", await callMcp(adminGrant.token, "lico.discovery", APPROVAL_TOOL, approvalInputs.mcp, 402, [200, 202]))
+    mcp: publicPayload("mcp", await callMcp(adminGrant.token, "meshrix.discovery", APPROVAL_TOOL, approvalInputs.mcp, 402, [200, 202]))
   };
   const approvalDecisions = Object.fromEntries(
     Object.entries(approvalPayloads).map(([channel, payload]) => [channel, classifyDecision(payload)])
@@ -178,7 +178,7 @@ async function verifyRevokedAndRateLimitParity() {
   const revokedGrant = await localMcpGrant({
     label: "Operation Permission protocol revoked verifier",
     grantMode: "read",
-    toolsets: ["lico.gateway.read"],
+    toolsets: ["meshrix.gateway.read"],
     maxRisk: "read_only"
   });
   const revoke = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(revokedGrant.grantId)}/revoke`, {
@@ -188,7 +188,7 @@ async function verifyRevokedAndRateLimitParity() {
   const revoked = await callAllChannels({
     token: revokedGrant.token,
     toolId: READ_TOOL,
-    mcpToolName: "lico.gateway",
+    mcpToolName: "meshrix.gateway",
     operation: READ_TOOL,
     input: {},
     idBase: 500
@@ -199,7 +199,7 @@ async function verifyRevokedAndRateLimitParity() {
     const grant = await consoleGrant({
       label: `Operation Permission protocol rate verifier ${channel}`,
       type: "machine",
-      toolsets: ["lico.gateway.read"],
+      toolsets: ["meshrix.gateway.read"],
       maxRisk: "read_only",
       rateLimit: { perMinute: 1 }
     });
@@ -211,8 +211,8 @@ async function verifyRevokedAndRateLimitParity() {
       await operationRpc(grant.token, READ_TOOL, {}, 601);
       return publicPayload("rpc", await operationRpc(grant.token, READ_TOOL, {}, 602));
     }
-    await callMcp(grant.token, "lico.gateway", READ_TOOL, {}, 603);
-    return publicPayload("mcp", await callMcp(grant.token, "lico.gateway", READ_TOOL, {}, 604));
+    await callMcp(grant.token, "meshrix.gateway", READ_TOOL, {}, 603);
+    return publicPayload("mcp", await callMcp(grant.token, "meshrix.gateway", READ_TOOL, {}, 604));
   }
 
   const ratePayloads = {
@@ -235,7 +235,7 @@ async function verifyMcpDiscoveryRefresh() {
   const grant = await localMcpGrant({
     label: "Operation Permission protocol discovery verifier",
     grantMode: "read",
-    toolsets: ["lico.gateway.read"],
+    toolsets: ["meshrix.gateway.read"],
     maxRisk: "read_only"
   });
   const sse = await openMcpSse(grant.token);
@@ -247,7 +247,7 @@ async function verifyMcpDiscoveryRefresh() {
 
     const update = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(grant.grantId)}`, {
       scopes: ["gateway:read", "gateway:write"],
-      toolsets: ["lico.gateway.read", "lico.gateway.write"],
+      toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
       maxRisk: "safe_write",
       metadata: { maxRisk: "safe_write" },
       reason: "verify-operation-permission-protocol-consistency"
@@ -343,7 +343,7 @@ try {
   await test("MCP discovery refreshes after grant and tag policy changes without leaking unauthorized operations", verifyMcpDiscoveryRefresh);
 } catch (error) {
   console.error(`FAIL: ${redactText(error?.message || String(error))}`);
-  if (process.env.LICO_VERIFY_VERBOSE) {
+  if (process.env.MESHRIX_VERIFY_VERBOSE) {
     console.error(redactText(error?.stack || String(error)));
   }
   exitCode = 1;

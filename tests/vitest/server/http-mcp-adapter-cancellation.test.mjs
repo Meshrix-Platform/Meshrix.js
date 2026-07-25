@@ -25,7 +25,7 @@ function requestBody(id, label) {
     id,
     method: "tools/call",
     params: {
-      name: "lico.discovery",
+      name: "meshrix.discovery",
       arguments: {
         operation: "fixture.wait",
         input: { label }

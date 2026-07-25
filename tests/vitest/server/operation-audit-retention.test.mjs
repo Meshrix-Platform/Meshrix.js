@@ -12,7 +12,7 @@ import {
 const temporaryRoots = new Set();
 
 async function createStore() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-operation-audit-retention-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-audit-retention-"));
   temporaryRoots.add(userDataPath);
   return {
     userDataPath,

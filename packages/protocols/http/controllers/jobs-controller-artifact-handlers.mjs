@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
-import { contentDispositionHeader, sendJson } from "#lico/http-utils";
+import { contentDispositionHeader, sendJson } from "#meshrix/http-utils";
 import {
   canAccessJob,
   canAccessRawObjectEntry,

@@ -128,15 +128,15 @@ describe("npm release-set publication", () => {
     const positions = new Map(names.map((name, index) => [name, index]));
 
     expect(names).toHaveLength(9);
-    expect(names).toContain("lico-mcp-connector");
-    expect(names).not.toContain("@lico/server");
-    expect(names).not.toContain("@lico/console");
-    expect(names.at(-1)).toBe("licomesh");
+    expect(names).toContain("meshrix-mcp-connector");
+    expect(names).not.toContain("@meshrix/server");
+    expect(names).not.toContain("@meshrix/console");
+    expect(names.at(-1)).toBe("meshrix");
 
     for (const packageRecord of releaseSet.packages) {
       for (const field of DEPENDENCY_FIELDS) {
         for (const dependencyName of Object.keys(packageRecord.manifest[field] || {})) {
-          if (!dependencyName.startsWith("@lico/")) continue;
+          if (!dependencyName.startsWith("@meshrix/")) continue;
           expect(positions.get(dependencyName), `${packageRecord.name} -> ${dependencyName}`)
             .toBeLessThan(positions.get(packageRecord.name));
         }

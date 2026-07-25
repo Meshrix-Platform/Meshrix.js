@@ -6,7 +6,7 @@
   "directory": "packages/agents",
   "description": "Agent configuration, gateway, workspace, collaboration, and maintenance features.",
   "publicApi": [
-    "#lico/agents/*"
+    "#meshrix/agents/*"
   ],
   "dependsOn": [
     "contracts",

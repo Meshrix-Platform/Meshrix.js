@@ -15,7 +15,7 @@ afterEach(async () => {
 
 describe("owner-bound upstream artifact transit", () => {
   it("streams an uploaded artifact as multipart, stores the response, and serves a byte range", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-artifact-transit-test-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-artifact-transit-test-"));
     cleanup.push(() => fs.rm(root, { recursive: true, force: true }));
     const uploadPath = path.join(root, "alice.txt");
     const uploadBytes = Buffer.from("Alice was beginning to get very tired.", "utf8");

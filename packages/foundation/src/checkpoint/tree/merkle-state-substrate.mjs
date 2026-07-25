@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { canonicalJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import {
   canonicalDecode,
   canonicalEncode,
@@ -12,7 +12,7 @@ import {
   protocolHashHex,
   normalizeCanonicalValue
 } from "pactium";
-import { serverToken } from "#lico/client-strings";
+import { serverToken } from "#meshrix/client-strings";
 import { queueStateMutation } from "../../storage/state-coordinator.mjs";
 import {
   normalizeLicoPactiumRuntime,
@@ -23,10 +23,10 @@ import { toPactiumCanonicalSafeValue } from "./pactium-canonical-safe.mjs";
 export const MERKLE_STATE_SUBSTRATE_PROTOCOL = PACTIUM_PROTOCOL;
 export const MERKLE_STATE_SUBSTRATE_PROVIDER = "pactium.verifiable-state-substrate";
 
-const STATE_ROOT_SCOPE = "licomesh-state-root";
-const STATE_COMMIT_SCOPE = "licomesh-state-commit";
-const EVENT_LOG_SCOPE = "licomesh-event-log";
-const LSM_SESSION_SCOPE = "licomesh-lsm-session";
+const STATE_ROOT_SCOPE = "meshrix-state-root";
+const STATE_COMMIT_SCOPE = "meshrix-state-commit";
+const EVENT_LOG_SCOPE = "meshrix-event-log";
+const LSM_SESSION_SCOPE = "meshrix-lsm-session";
 
 function substrateMutationError(code, message) {
   const error = new Error(message);
@@ -110,15 +110,15 @@ function normalizeCanonical(value) {
 }
 
 function hashValue(value) {
-  return protocolHash("licomesh.value", value);
+  return protocolHash("meshrix.value", value);
 }
 
 function storageKey(kind, value) {
-  return protocolHashHex(`licomesh.${kind}`, text(value, "default"));
+  return protocolHashHex(`meshrix.${kind}`, text(value, "default"));
 }
 
 function stateIndexDomain(scope) {
-  return `licomesh-state-${storageKey("state-scope", scope)}`;
+  return `meshrix-state-${storageKey("state-scope", scope)}`;
 }
 
 function normalizeIndexEntry(entry = {}) {
@@ -162,7 +162,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     const codec = text(options.codec, "pactium-canonical") === "raw" ? "raw" : "pactium-canonical";
     return storage.putBlock(value, {
       codec,
-      kind: text(options.kind || options.metadata?.kind, "licomesh.cas-block"),
+      kind: text(options.kind || options.metadata?.kind, "meshrix.cas-block"),
       refs: asArray(options.refs).map(text).filter(Boolean)
     });
   }
@@ -195,7 +195,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     async pin(rootCid, policy = {}) {
       const normalizedPolicy = normalizeCanonical(asObject(policy));
       pins.set(rootCid, normalizedPolicy);
-      await storage.putProtocolObject("licomesh-cas-pin", storageKey("cas-pin", rootCid), {
+      await storage.putProtocolObject("meshrix-cas-pin", storageKey("cas-pin", rootCid), {
         rootCid,
         policy: normalizedPolicy,
         pinnedAt: nowIso()
@@ -226,7 +226,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       const manifest = {
         protocol: PACTIUM_PROTOCOL,
         schema: PACTIUM_SCHEMA_VERSION,
-        manifestType: "licomesh.merkle-dag.manifest",
+        manifestType: "meshrix.merkle-dag.manifest",
         type: text(type, "manifest"),
         entries,
         refs: entries.map((entry) => entry.valueRef),
@@ -235,7 +235,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
       const block = await putBlock(manifest, {
         refs: manifest.refs,
-        kind: "licomesh.merkle-dag.manifest"
+        kind: "meshrix.merkle-dag.manifest"
       });
       return {
         ...manifest,
@@ -282,7 +282,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         valueHash: hashValue({ valueRef }),
         metadata
       });
-      const next = await indexEngine.put(indexRootCid, normalizedKey, entry, { domain: "licomesh-state" });
+      const next = await indexEngine.put(indexRootCid, normalizedKey, entry, { domain: "meshrix-state" });
       return {
         indexRootCid: next.root,
         root: next.root,
@@ -291,7 +291,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
     },
     async delete(indexRootCid, key) {
-      const next = await indexEngine.delete(indexRootCid, normalizePathKey(key), { domain: "licomesh-state" });
+      const next = await indexEngine.delete(indexRootCid, normalizePathKey(key), { domain: "meshrix-state" });
       return {
         indexRootCid: next.root,
         root: next.root,
@@ -320,7 +320,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         valueRef: entry?.valueRef || "",
         entry,
         indexRootCid: proof.indexRoot || indexRootCid,
-        proofHash: protocolHash("licomesh.index-proof", proof)
+        proofHash: protocolHash("meshrix.index-proof", proof)
       };
     }
   });
@@ -352,7 +352,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         prevEventHash: previous?.eventHash || "",
         createdAt: nowIso()
       };
-      event.eventHash = protocolHash("licomesh.state-event", {
+      event.eventHash = protocolHash("meshrix.state-event", {
         ...event,
         eventHash: undefined
       });
@@ -366,7 +366,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       const partitionId = text(input.partitionId || input.scope, "default");
       return withSerializedStorageMutation(
         storage,
-        `licomesh-event-log-${storageKey("event-partition", partitionId)}`,
+        `meshrix-event-log-${storageKey("event-partition", partitionId)}`,
         () => appendEventUnlocked(input)
       );
     },
@@ -379,7 +379,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       let previousHash = "";
       for (let index = 0; index < events.length; index += 1) {
         const event = events[index];
-        const expectedHash = protocolHash("licomesh.state-event", {
+        const expectedHash = protocolHash("meshrix.state-event", {
           ...event,
           eventHash: undefined
         });
@@ -463,14 +463,14 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       await saveStateRoot(scope, afterRoot);
       const event = await appendEventUnlocked({
         partitionId: scope,
-        operationId: input.operationId || "licomesh.state.commit",
+        operationId: input.operationId || "meshrix.state.commit",
         beforeRoot,
         afterRoot,
         contentRefs: input.contentRefs || [],
         payload: input.payload || {}
       });
       const envelope = await core.recordOperation({
-        operationId: input.operationId || "licomesh.state.commit",
+        operationId: input.operationId || "meshrix.state.commit",
         workspaceId: scope,
         idempotencyKey: text(input.idempotencyKey),
         input: asObject(input.payload),
@@ -531,7 +531,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         }
         await verifyRestoreLineage({ scope, targetRoot, allowedOperationIds: input.allowedOperationIds, anchor: input.anchor, maxSuffixEvents: input.maxSuffixEvents });
         await saveStateRoot(scope, targetRoot);
-        const operationId = input.operationId || "licomesh.state.root.restore";
+        const operationId = input.operationId || "meshrix.state.root.restore";
         const event = await appendEventUnlocked({
           partitionId: scope,
           operationId,
@@ -610,7 +610,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
 
   const lsmIngest = Object.freeze({
     async beginUploadSession(input = {}) {
-      return withSerializedStorageMutation(storage, "licomesh-lsm-sessions", async () => {
+      return withSerializedStorageMutation(storage, "meshrix-lsm-sessions", async () => {
       const sessions = await loadSessions();
       const uploadSessionId = serverToken("upload_session", input.scope || "default", nowIso(), randomUUID());
       const session = {
@@ -640,7 +640,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
     },
     async appendChunkRecord(uploadSessionId, record = {}) {
-      return withSerializedStorageMutation(storage, "licomesh-lsm-sessions", async () => {
+      return withSerializedStorageMutation(storage, "meshrix-lsm-sessions", async () => {
       const sessions = await loadSessions();
       const session = sessions[text(uploadSessionId)];
       if (!session) throw new Error("upload session missing");
@@ -666,7 +666,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       });
     },
     async flushMemTable(uploadSessionId) {
-      return withSerializedStorageMutation(storage, "licomesh-lsm-sessions", async () => {
+      return withSerializedStorageMutation(storage, "meshrix-lsm-sessions", async () => {
       const sessions = await loadSessions();
       const session = sessions[text(uploadSessionId)];
       if (!session) throw new Error("upload session missing");
@@ -681,7 +681,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
       const block = await putBlock(segment, {
         refs: records.map((record) => record.chunkCid),
-        kind: "licomesh.lsm-segment"
+        kind: "meshrix.lsm-segment"
       });
       segment.rootCid = block.cid;
       session.segments.push(segment);
@@ -727,7 +727,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
       const block = await putBlock(compacted, {
         refs: segments.map((segment) => segment.rootCid).filter(Boolean),
-        kind: "licomesh.lsm-compacted-segment"
+        kind: "meshrix.lsm-compacted-segment"
       });
       return {
         ...compacted,

@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
 import { assertQueueDefinitionCanEnqueue, normalizeStructuredQueueScope } from "./definitions.mjs";

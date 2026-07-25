@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { evaluateUniversalTagPolicy, hasUniversalTagPolicyRules } from "@lico/foundation/security/authorization/universal-tag-policy";
+import { evaluateUniversalTagPolicy, hasUniversalTagPolicyRules } from "@meshrix/foundation/security/authorization/universal-tag-policy";
 
 export const AUDIENCE_PUBLICATION_SCHEMA_VERSION = "v0.0.1:upstream-gateway:audience-publication-1";
 export const AUDIENCE_PUBLICATION_TOPIC = "upstream.audiences_published";
@@ -41,7 +41,7 @@ function operationAudienceFingerprint(operation = {}) {
  */
 export function opaqueAudiencePartitionKey({
   grantId = "",
-  serverIdentity = "lico",
+  serverIdentity = "meshrix",
   audienceDigest = ""
 } = {}) {
   const grant = text(grantId);
@@ -321,7 +321,7 @@ export function compileAudienceProjection({
   previousProjection = null,
   policyRevision = 0,
   tagRevision = 0,
-  serverIdentity = "lico"
+  serverIdentity = "meshrix"
 } = {}) {
   if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0) {
     throw new TypeError("Audience projection requires a monotonic source revision.");

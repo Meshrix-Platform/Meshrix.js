@@ -37,7 +37,7 @@ afterEach(async () => {
 });
 
 async function withTempUserData(handler) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-observability-alert-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-observability-alert-"));
   tempRoots.push(userDataPath);
   await handler(userDataPath);
 }

@@ -89,7 +89,7 @@ describe("strategy management provider", () => {
     const preview = vi.fn(async () => ({
       allowed: false,
       effect: "deny",
-      toolId: "lico.jobs.delete",
+      toolId: "meshrix.jobs.delete",
       reasonCode: "missing_required_scope",
       redactedReason: "Required authorization is unavailable.",
       missingScopes: ["jobs:write", "jobs:write"],
@@ -113,20 +113,20 @@ describe("strategy management provider", () => {
     });
 
     const decision = await provider.evaluateToolPolicy({
-      toolId: "  lico.jobs.delete  ",
+      toolId: "  meshrix.jobs.delete  ",
       grantId: "grant-reference"
     });
 
     expect(preview).toHaveBeenCalledTimes(1);
     expect(preview).toHaveBeenCalledWith({
-      toolId: "lico.jobs.delete",
+      toolId: "meshrix.jobs.delete",
       grantId: "grant-reference"
     });
     expect(decision).toMatchObject({
       policyType: "tool-policy",
       allowed: false,
       effect: "deny",
-      toolId: "lico.jobs.delete",
+      toolId: "meshrix.jobs.delete",
       reasonCode: "missing_required_scope",
       missingScopes: ["jobs:write"],
       governancePolicyRevision: {
@@ -159,7 +159,7 @@ describe("strategy management provider", () => {
       })
     });
 
-    const decision = await provider.evaluateToolPolicy({ toolId: "lico.jobs.delete" });
+    const decision = await provider.evaluateToolPolicy({ toolId: "meshrix.jobs.delete" });
 
     expect(decision.reasonCode).toHaveLength(256);
     expect(decision.redactedReason).toHaveLength(256);
@@ -170,7 +170,7 @@ describe("strategy management provider", () => {
   });
 
   it("returns a bounded denial when Operation Permission preview is unavailable", async () => {
-    const decision = await createProvider().evaluateToolPolicy({ toolId: "lico.jobs.delete" });
+    const decision = await createProvider().evaluateToolPolicy({ toolId: "meshrix.jobs.delete" });
 
     expect(decision).toMatchObject({
       policyType: "tool-policy",

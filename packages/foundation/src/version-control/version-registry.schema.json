@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://lico.local/packages/foundation/src/version-control/version-registry.schema.json",
+  "$id": "https://meshrix.local/packages/foundation/src/version-control/version-registry.schema.json",
   "x-governedVersion": "v0.0.1:version-governance:registry-schema-1",
-  "title": "LicoMesh Version Registry",
+  "title": "Meshrix Version Registry",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -28,7 +28,7 @@
     },
     "registryId": {
       "type": "string",
-      "const": "lico.version-registry"
+      "const": "meshrix.version-registry"
     },
     "protocolVersion": {
       "type": "string",
@@ -84,7 +84,7 @@
         },
         "artifactStoreRoot": {
           "type": "string",
-          "const": ".licomesh-server-data/artifacts"
+          "const": ".meshrix-server-data/artifacts"
         },
         "platformVersionBaseline": {
           "type": "string",
@@ -427,7 +427,7 @@
     },
     "artifactId": {
       "type": "string",
-      "pattern": "^lico(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$"
+      "pattern": "^meshrix(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$"
     },
     "governedVersion": {
       "type": "string",
@@ -435,7 +435,7 @@
     },
     "artifactRef": {
       "type": "string",
-      "pattern": "^lico(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+@v[0-9]+\\.[0-9]+\\.[0-9]+:(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?:(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?-[0-9]+(?:\\.[0-9]+)*$"
+      "pattern": "^meshrix(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+@v[0-9]+\\.[0-9]+\\.[0-9]+:(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?:(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?-[0-9]+(?:\\.[0-9]+)*$"
     }
   }
 }

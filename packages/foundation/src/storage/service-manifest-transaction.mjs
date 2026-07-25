@@ -19,7 +19,7 @@ const REQUEST_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const INITIALIZATION_LOCK_STALE_MS = 60_000;
 export const SERVICE_MANIFEST_MAX_UNPUBLISHED_SET_REVISIONS = 256;
 const RECEIPT_REF_PATTERN =
-  /^urn:lico:storage-manifest-receipt:[a-f0-9]{64}$/u;
+  /^urn:meshrix:storage-manifest-receipt:[a-f0-9]{64}$/u;
 const EXPECTED_TABLES = Object.freeze([
   "manifest_authority_meta",
   "manifest_blobs",
@@ -184,7 +184,7 @@ function requestOutcome({
     serviceRevision,
     setRevision,
     setDigest,
-    receiptRef: `urn:lico:storage-manifest-receipt:${receiptDigest}`
+    receiptRef: `urn:meshrix:storage-manifest-receipt:${receiptDigest}`
   });
 }
 
@@ -598,10 +598,14 @@ export function createServiceManifestTransaction({
   async function ensureAuthority(context) {
     context.check();
     assertSafeDirectoryAncestry(rootPath);
-    const existing = openAuthorityDatabase(rootPath, { create: false });
-    if (existing) {
-      existing.close();
-      return;
+    try {
+      const existing = openAuthorityDatabase(rootPath, { create: false });
+      if (existing) {
+        existing.close();
+        return;
+      }
+    } catch (error) {
+      if (error?.code !== "storage_manifest_index_incomplete") throw error;
     }
     await withInitializationLock(rootPath, context, async () => {
       const db = openAuthorityDatabase(rootPath, { create: true });
@@ -682,9 +686,10 @@ export function createServiceManifestTransaction({
     await ensureAuthority(context);
     const db = openAuthorityDatabase(rootPath, { create: false });
     try {
-      return db.transaction(() => {
-        context.check();
-        const existingRequest = outcomeFromRow(db.prepare(`
+      try {
+        return db.transaction(() => {
+          context.check();
+          const existingRequest = outcomeFromRow(db.prepare(`
           SELECT * FROM manifest_requests WHERE request_digest=?
         `).get(requestDigest));
         const input = {
@@ -877,12 +882,24 @@ export function createServiceManifestTransaction({
           now(),
           recordBytes
         );
-        return Object.freeze({
-          outcome,
-          replayed: false,
-          changed: !unchanged
-        });
-      }).immediate();
+          return Object.freeze({
+            outcome,
+            replayed: false,
+            changed: !unchanged
+          });
+        }).immediate();
+      } catch (error) {
+        if (error?.code === "SQLITE_CONSTRAINT_PRIMARYKEY") {
+          const candidate = pointerFromMeta(metaRows(db), "candidate");
+          if (expectedSetRevision !== candidate.setRevision) {
+            throw serviceManifestError(
+              "storage_manifest_set_revision_stale",
+              "Service manifest expected set revision is stale."
+            );
+          }
+        }
+        throw error;
+      }
     } finally {
       db.close();
     }

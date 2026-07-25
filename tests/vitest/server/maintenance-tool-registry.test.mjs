@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createMaintenanceToolRegistry } from "#lico/agents/maintenance/tool-registry";
+import { createMaintenanceToolRegistry } from "#meshrix/agents/maintenance/tool-registry";
 import { createMaintenanceRunExecutor } from "../../../packages/agents/src/maintenance/execution.mjs";
 import { createMaintenanceRun } from "../../../packages/agents/src/maintenance/reporting.mjs";
 

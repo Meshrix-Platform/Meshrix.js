@@ -1,7 +1,7 @@
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -21,7 +21,7 @@ function uniquePaths(values = []) {
   return paths;
 }
 
-function configuredRoots(envName = "LICO_ALLOWED_LOCAL_SOURCE_ROOTS") {
+function configuredRoots(envName = "MESHRIX_ALLOWED_LOCAL_SOURCE_ROOTS") {
   return uniquePaths(text(process.env[envName]).split(path.delimiter));
 }
 
@@ -151,7 +151,7 @@ export function assertExistingLocalDirectoryWithinControlledRootsSync(sourcePath
   const realPath = fsSync.realpathSync.native(absolutePath);
   const pairs = rootPairsSync(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
-    throw new Error(`${label}必须位于 LicoMesh 受控本机来源目录内。`);
+    throw new Error(`${label}必须位于 Meshrix 受控本机来源目录内。`);
   }
   return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair) => pair.rootPath) };
 }
@@ -180,7 +180,7 @@ export async function assertExistingLocalDirectoryWithinControlledRoots(sourcePa
   const realPath = await fs.realpath(absolutePath);
   const pairs = await rootPairs(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
-    throw new Error(`${label}必须位于 LicoMesh 受控本机来源目录内。`);
+    throw new Error(`${label}必须位于 Meshrix 受控本机来源目录内。`);
   }
   return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair) => pair.rootPath) };
 }
@@ -205,7 +205,7 @@ export async function assertExistingLocalFileWithinControlledRoots(filePath, {
   const realPath = await fs.realpath(absolutePath);
   const pairs = await rootPairs(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
-    throw new Error(`${label}必须位于 LicoMesh 受控本机来源目录内。`);
+    throw new Error(`${label}必须位于 Meshrix 受控本机来源目录内。`);
   }
   return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair) => pair.rootPath) };
 }

@@ -1,14 +1,14 @@
 import crypto from "node:crypto";
-import { normalizeQueueDedupeKey } from "@lico/foundation/work-queue/index";
+import { normalizeQueueDedupeKey } from "@meshrix/foundation/work-queue/index";
 import {
   maintenanceQueueContextRef,
   maintenanceWorkItemId
-} from "#lico/agents/maintenance/work-queue-contract";
+} from "#meshrix/agents/maintenance/work-queue-contract";
 
 export const MAINTENANCE_WORK_QUEUE_PROTOCOL_VERSION =
   "v0.0.1:workflow:maintenance-work-queue-1";
 export const MAINTENANCE_WORK_QUEUE_DEFINITION_ID = "queue.maintenance.runs";
-export const MAINTENANCE_WORK_QUEUE_LABEL = "lico.maintenance.runs";
+export const MAINTENANCE_WORK_QUEUE_LABEL = "meshrix.maintenance.runs";
 export const MAINTENANCE_WORK_QUEUE_DEFINITION_VERSION = 3;
 
 const MAINTENANCE_GOVERNANCE_REVISION = "maintenance-run-governance-1";

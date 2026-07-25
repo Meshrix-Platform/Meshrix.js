@@ -4,7 +4,7 @@ import { guardExists, listAllGuardIds, isStaticOnlyGuard, isGuardRuntimeSafe } f
 import { checkDefinitionSchema } from '../verification/state-machine-definition-schema.mjs';
 import { validateStateMachineTopology } from '../verification/state-machine-topology.mjs';
 import crypto from 'node:crypto';
-import { canonicalJson } from '@lico/contracts/serialization/canonical-json';
+import { canonicalJson } from '@meshrix/contracts/serialization/canonical-json';
 
 export { ERROR_CODES, StateMachineError } from './state-machine-errors.mjs';
 

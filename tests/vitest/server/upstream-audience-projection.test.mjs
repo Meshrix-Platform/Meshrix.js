@@ -54,7 +54,7 @@ function snapshot(setRevision, entries) {
 function grant({
   id,
   scopes = ["gateway:read"],
-  toolsets = ["lico.gateway.read"],
+  toolsets = ["meshrix.gateway.read"],
   dynamicCapabilities = null,
   allowedServiceIds = null,
   allowedSecretBindings = null,
@@ -367,7 +367,7 @@ describe("upstream audience projection", () => {
   it("builds opaque partition keys without embedding subjects or tags", () => {
     const key = opaqueAudiencePartitionKey({
       grantId: "grant-secret-subject",
-      serverIdentity: "lico",
+      serverIdentity: "meshrix",
       audienceDigest: "digest-1"
     });
     expect(key).not.toContain("grant-secret-subject");

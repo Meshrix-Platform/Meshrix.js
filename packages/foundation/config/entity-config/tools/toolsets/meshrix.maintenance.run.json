@@ -1,0 +1,10 @@
+{
+  "id": "meshrix.maintenance.run",
+  "label": "Maintenance Agent run",
+  "requiredScopes": [
+    "maintenance:run"
+  ],
+  "maxRisk": "safe_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

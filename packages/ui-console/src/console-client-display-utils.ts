@@ -28,7 +28,7 @@ export function clientConnectionMethodLabel(client: ConsoleClientConnectionRow) 
   if (client.connectionKind === "mcp-plugin") {
     return "MCP 服务";
   }
-  return String(client.connectionMethod || "lico-client 封装");
+  return String(client.connectionMethod || "meshrix-client 封装");
 }
 
 export function clientConnectionDetail(client: ConsoleClientConnectionRow) {

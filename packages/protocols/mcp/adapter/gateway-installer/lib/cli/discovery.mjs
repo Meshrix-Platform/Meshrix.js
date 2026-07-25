@@ -1,13 +1,13 @@
 import { randomBytes } from "node:crypto";
 
-import { verifyMcpHandshakeSignature } from "../../../mcp-identity.mjs";
+import { verifyMcpHandshakeSignature } from "../../mcp-identity.mjs";
 import { loadProcessIdentity } from "../process-identity-store.mjs";
 import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,
-  LICO_MCP_DISCOVERY_FILE_ENV,
-  LICO_MCP_DISCOVERY_URL_ENV,
-  LICO_MCP_URL_ENV,
+  MESHRIX_MCP_DISCOVERY_FILE_ENV,
+  MESHRIX_MCP_DISCOVERY_URL_ENV,
+  MESHRIX_MCP_URL_ENV,
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME,
@@ -31,7 +31,7 @@ export async function readLaunchctlEnv(name) {
 }
 
 export function explicitBaseUrl(options = {}) {
-  return normalizeBaseUrl(option(options, "url", process.env.LICO_MCP_BASE_URL || ""));
+  return normalizeBaseUrl(option(options, "url", process.env.MESHRIX_MCP_BASE_URL || ""));
 }
 
 export function baseUrlFromEndpoint(value) {
@@ -49,7 +49,7 @@ export function baseUrlFromEndpoint(value) {
     }
     if (
       parsed.pathname === "/api/mcp/discovery" ||
-      parsed.pathname === "/.well-known/lico/mcp.json" ||
+      parsed.pathname === "/.well-known/meshrix/mcp.json" ||
       parsed.pathname === "/api/mcp/handshake"
     ) {
       parsed.pathname = "/";
@@ -64,7 +64,7 @@ export function baseUrlFromEndpoint(value) {
 }
 
 export function parseScanPorts(options = {}) {
-  const raw = String(option(options, "scan-ports", process.env.LICO_MCP_SCAN_PORTS || "")).trim();
+  const raw = String(option(options, "scan-ports", process.env.MESHRIX_MCP_SCAN_PORTS || "")).trim();
   const values = raw
     ? raw.split(",").map((item) => Number(item.trim()))
     : DEFAULT_SCAN_PORTS;
@@ -96,9 +96,9 @@ export async function candidateBaseUrls(options = {}) {
   if (explicit) {
     return [explicit];
   }
-  const launchDiscoveryFile = await readLaunchctlEnv(LICO_MCP_DISCOVERY_FILE_ENV);
-  const launchDiscoveryUrl = await readLaunchctlEnv(LICO_MCP_DISCOVERY_URL_ENV);
-  const launchMcpUrl = await readLaunchctlEnv(LICO_MCP_URL_ENV);
+  const launchDiscoveryFile = await readLaunchctlEnv(MESHRIX_MCP_DISCOVERY_FILE_ENV);
+  const launchDiscoveryUrl = await readLaunchctlEnv(MESHRIX_MCP_DISCOVERY_URL_ENV);
+  const launchMcpUrl = await readLaunchctlEnv(MESHRIX_MCP_URL_ENV);
   const fileCandidates = uniqueValues([
     discoveryRegistryPath(options),
     launchDiscoveryFile
@@ -125,8 +125,8 @@ export async function candidateBaseUrls(options = {}) {
     `http://localhost:${port}`
   ]);
   return uniqueValues([
-    baseUrlFromEndpoint(process.env[LICO_MCP_URL_ENV]),
-    baseUrlFromEndpoint(process.env[LICO_MCP_DISCOVERY_URL_ENV]),
+    baseUrlFromEndpoint(process.env[MESHRIX_MCP_URL_ENV]),
+    baseUrlFromEndpoint(process.env[MESHRIX_MCP_DISCOVERY_URL_ENV]),
     baseUrlFromEndpoint(launchMcpUrl),
     baseUrlFromEndpoint(launchDiscoveryUrl),
     ...fromFiles,
@@ -141,14 +141,14 @@ export async function fetchLicoDiscovery(baseUrl) {
   const identity = payload.identity || null;
   if (
     !result.ok ||
-    payload.name !== "LicoMesh" ||
+    payload.name !== "Meshrix" ||
     payload.interfaceVersion !== MCP_INTERFACE_VERSION ||
     payload.stableToolName !== MCP_STABLE_TOOL_NAME ||
     identity?.algorithm !== "Ed25519" ||
     !identity?.publicKeyJwk ||
     !payload.handshake?.url
   ) {
-    throw new Error("not an LicoMesh MCP discovery response");
+    throw new Error("not an Meshrix MCP discovery response");
   }
   return payload;
 }
@@ -175,14 +175,14 @@ export async function verifyLicoHandshake(baseUrl, discovery) {
     result.payload?.ok !== true ||
     payload.schemaVersion !== "v0.0.1:mcp:handshake-1" ||
     payload.nonce !== nonce ||
-    payload.server?.name !== "LicoMesh" ||
+    payload.server?.name !== "Meshrix" ||
     payload.server?.interfaceVersion !== MCP_INTERFACE_VERSION ||
     payload.server?.stableToolName !== MCP_STABLE_TOOL_NAME ||
     payload.identity?.keyId !== discovery.identity?.keyId ||
     signature.algorithm !== "Ed25519" ||
     !verifyMcpHandshakeSignature({ publicKeyJwk, payload, signature: signature.value })
   ) {
-    throw new Error("LicoMesh MCP handshake signature verification failed");
+    throw new Error("Meshrix MCP handshake signature verification failed");
   }
   return {
     ok: true,
@@ -218,14 +218,14 @@ export async function discoverLicoHub(options = {}) {
   return {
     ok: false,
     attempts,
-    reason: "No signed LicoMesh MCP hub was discovered on this device."
+    reason: "No signed Meshrix MCP hub was discovered on this device."
   };
 }
 
 export async function optionsWithDiscoveredBaseUrl(options = {}) {
   const discovered = await discoverLicoHub(options);
   if (!discovered.ok) {
-    throw new Error(`${discovered.reason} Use --url only if you know the LicoMesh base URL; it will still be handshake-verified.`);
+    throw new Error(`${discovered.reason} Use --url only if you know the Meshrix base URL; it will still be handshake-verified.`);
   }
   return {
     ...options,
@@ -246,7 +246,7 @@ export async function publishLaunchctlEnv(env) {
     }
     return true;
   }
-  
+
   if (process.platform === "win32") {
     for (const [name, value] of Object.entries(env)) {
       await run("setx", [name, value], { allowFailure: true });
@@ -288,12 +288,12 @@ export async function ensureService(baseUrl) {
       params: {
         protocolVersion: "2025-06-18",
         capabilities: {},
-        clientInfo: { name: "lico-mcp-connector", version: packageJson.version }
+        clientInfo: { name: "meshrix-mcp-connector", version: packageJson.version }
       }
     })
   });
-  if (!initialize.ok || initialize.payload?.result?.serverInfo?.name !== "LicoMesh") {
-    throw new Error(`LicoMesh MCP is not available at ${baseUrl}/mcp.`);
+  if (!initialize.ok || initialize.payload?.result?.serverInfo?.name !== "Meshrix") {
+    throw new Error(`Meshrix MCP is not available at ${baseUrl}/mcp.`);
   }
   return initialize;
 }
@@ -302,7 +302,7 @@ export function authHeaders(token, target = "") {
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
-    "X-LicoMesh-Api-Key": token,
+    "X-Meshrix-Api-Key": token,
     ...mcpTargetHeaders(target)
   };
 }

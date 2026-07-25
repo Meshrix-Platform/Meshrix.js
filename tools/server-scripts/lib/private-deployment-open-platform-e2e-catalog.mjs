@@ -24,5 +24,5 @@ export const PRIVATE_ROOT_PATTERNS = Object.freeze([
   /\bpackages\/private\b/iu,
   /\bprivate-product\b/iu,
   /\bproprietary-runtime\b/iu,
-  /\blicomesh-private\b/iu
+  /\bmeshrix-private\b/iu
 ]);

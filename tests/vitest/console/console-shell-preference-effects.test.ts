@@ -36,12 +36,12 @@ describe("console shell preference effects behavior", () => {
 
   it("reads only supported stored appearance preset and language values", () => {
     browserWindowMock.readBrowserLocalStorageItem.mockImplementation((key: string) =>
-      key === "lico-appearance-preset" ? "sunset-ember" : null,
+      key === "meshrix-appearance-preset" ? "sunset-ember" : null,
     );
     expect(readStoredAppearancePreset()).toBe("sunset-ember");
 
     browserWindowMock.readBrowserLocalStorageItem.mockImplementation((key: string) =>
-      key === "lico-appearance-preset" ? "unknown" : null,
+      key === "meshrix-appearance-preset" ? "unknown" : null,
     );
     expect(readStoredAppearancePreset()).toBeNull();
 
@@ -74,8 +74,8 @@ describe("console shell preference effects behavior", () => {
     persistAppearancePreset("geek-light-blue");
     persistConsoleLanguage("zh-CN");
 
-    expect(browserWindowMock.writeBrowserLocalStorageItem).toHaveBeenCalledWith("lico-appearance-preset", "geek-light-blue");
-    expect(browserWindowMock.writeBrowserLocalStorageItem).toHaveBeenCalledWith("lico-language", "zh-CN");
+    expect(browserWindowMock.writeBrowserLocalStorageItem).toHaveBeenCalledWith("meshrix-appearance-preset", "geek-light-blue");
+    expect(browserWindowMock.writeBrowserLocalStorageItem).toHaveBeenCalledWith("meshrix-language", "zh-CN");
   });
 
   it("applies appearance through the document dataset", () => {

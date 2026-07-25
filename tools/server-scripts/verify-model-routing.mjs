@@ -38,7 +38,7 @@ function operationById(operations, id) {
   return operations.find((operation) => operation.id === id) || null;
 }
 
-const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-model-routing-"));
+const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-model-routing-"));
 
 try {
   const sourceOperation = operationById(SERVER_API_OPERATIONS, OPERATION_ID);
@@ -65,11 +65,11 @@ try {
   const catalog = createToolCatalog({ operations: SERVER_API_OPERATIONS });
   const tool = catalog.tools.find((item) => item.operationId === OPERATION_ID);
   assert.ok(tool, `${OPERATION_ID} must be exposed in Operation Permission catalog`);
-  assert.equal(tool.id, "lico.agentGateway.modelRouting.health");
+  assert.equal(tool.id, "meshrix.agentGateway.modelRouting.health");
   assert.deepEqual(tool.requiredScopes, ["console:read"]);
   assert.equal(tool.risk, "read_only");
   assert.equal(tool.readOnly, true);
-  assert.ok(tool.toolsets.includes("lico.console.read"));
+  assert.ok(tool.toolsets.includes("meshrix.console.read"));
 
   const routed = await runModelRouting({
     settings: {},

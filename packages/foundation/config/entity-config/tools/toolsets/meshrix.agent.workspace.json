@@ -1,0 +1,11 @@
+{
+  "id": "meshrix.agent.workspace",
+  "label": "Agent workspace",
+  "requiredScopes": [
+    "workspace:read",
+    "workspace:write"
+  ],
+  "maxRisk": "safe_write",
+  "grantable": true,
+  "defaultForAgents": false
+}

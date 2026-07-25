@@ -244,7 +244,7 @@
     {
       "id": "downstream-agent-tool-loop-evidence",
       "factKey": "downstream-agent.tool-loop-evidence",
-      "domain": "Deterministic downstream agent tool loop evidence for every MCP release target: target-specific initialize, initialized notification, tools/list, tools/call, and denial turns through real lico-mcp proxy child processes over newline-delimited stdio JSON-RPC.",
+      "domain": "Deterministic downstream agent tool loop evidence for every MCP release target: target-specific initialize, initialized notification, tools/list, tools/call, and denial turns through real meshrix-mcp proxy child processes over newline-delimited stdio JSON-RPC.",
       "authorityPath": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.mjs",
       "authorityRole": "fixture-evidence-reducer",
       "projectionPaths": [
@@ -260,14 +260,14 @@
         "npm run server:verify:script-registry"
       ],
       "nonAuthorityBoundaries": [
-        "Downstream projection or direct fixture access is not proof that local client targets work unless this reducer accepts the spawned lico-mcp proxy newline-delimited stdio report.",
+        "Downstream projection or direct fixture access is not proof that local client targets work unless this reducer accepts the spawned meshrix-mcp proxy newline-delimited stdio report.",
         "Raw credential material is not evidence; only redacted hashes and reducer-accepted proof fields may enter release evidence."
       ]
     },
     {
       "id": "mcp-proxy-transport-evidence",
       "factKey": "mcp-client.proxy-transport-evidence",
-      "domain": "MCP downstream client real lico-mcp proxy newline-delimited stdio transport evidence and release-target profile coverage readiness.",
+      "domain": "MCP downstream client real meshrix-mcp proxy newline-delimited stdio transport evidence and release-target profile coverage readiness.",
       "authorityPath": "tools/server-scripts/lib/mcp-proxy-transport-evidence.mjs",
       "authorityRole": "proxy-transport-evidence-reducer",
       "projectionPaths": [
@@ -282,7 +282,7 @@
         "npm run server:verify:script-registry"
       ],
       "nonAuthorityBoundaries": [
-        "Install/config discovery is not proof that the real lico-mcp proxy stdio transport works.",
+        "Install/config discovery is not proof that the real meshrix-mcp proxy stdio transport works.",
         "A direct HTTP MCP request is diagnostic only; release evidence must pass through the spawned proxy command and newline-delimited MCP stdio frames."
       ]
     },
@@ -363,8 +363,7 @@
       "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.mjs",
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [
-        "build/reports/controlled-execution-convergence-final.json",
-        "docs/plans/end-to-end-release/capability-runtime/controlled-execution-convergence/Checkpoints.json"
+        "build/reports/controlled-execution-convergence-final.json"
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-controlled-execution-convergence.mjs",

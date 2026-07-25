@@ -10,7 +10,7 @@ import { materializeSandboxInputs } from "../../../packages/server-runtime/src/e
 
 describe("sandbox streaming input staging", () => {
   it("stages bounded chunks directly into an immutable input file", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-sandbox-stage-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-sandbox-stage-"));
     const content = Buffer.alloc(2 * 1024 * 1024, 7);
     const contentDigest = crypto.createHash("sha256").update(content).digest("hex");
     const inputDigest = sandboxDigest([{ path: "bundle.bin", digest: contentDigest }]);
@@ -51,7 +51,7 @@ describe("sandbox streaming input staging", () => {
   });
 
   it("removes partial plaintext when the streamed digest is invalid", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-sandbox-stage-fail-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-sandbox-stage-fail-"));
     try {
       await expect(materializeSandboxInputs({
         request: {
@@ -77,7 +77,7 @@ describe("sandbox streaming input staging", () => {
   });
 
   it("enforces one disk budget across all declared inputs", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-sandbox-stage-global-bytes-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-sandbox-stage-global-bytes-"));
     const contents = new Map([
       ["custody:first", Buffer.from("first", "utf8")],
       ["custody:second", Buffer.from("second", "utf8")]
@@ -116,7 +116,7 @@ describe("sandbox streaming input staging", () => {
   });
 
   it.each(["fileCount", "inodes"])("enforces one %s budget across all declared inputs", async (limitName) => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), `lico-sandbox-stage-global-${limitName}-`));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), `meshrix-sandbox-stage-global-${limitName}-`));
     const content = Buffer.from("bounded", "utf8");
     const fileDigest = crypto.createHash("sha256").update(content).digest("hex");
     const inputDigest = sandboxDigest([{ path: "bundle.bin", digest: fileDigest }]);

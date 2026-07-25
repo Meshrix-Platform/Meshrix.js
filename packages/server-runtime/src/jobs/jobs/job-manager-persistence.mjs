@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
-import { atomicWriteJsonThroughState } from "#lico/product-api";
+import { atomicWriteJsonThroughState } from "#meshrix/product-api";
 import {
   getJobDirectory,
   getJobMetaPath,
@@ -17,7 +17,7 @@ function jobPersistenceError(code, jobId, message, cause = null) {
   return error;
 }
 
-const JOB_TERMINAL_FORMAT = "lico.job-terminal";
+const JOB_TERMINAL_FORMAT = "meshrix.job-terminal";
 const JOB_TERMINAL_SCHEMA = "job-terminal-envelope";
 const MAX_JOB_METADATA_BYTES = 256 * 1024;
 const MAX_JOB_PAYLOAD_BYTES = 64 * 1024 * 1024;

@@ -2,7 +2,7 @@ import { readonly, ref } from "vue";
 
 export type ConsoleLocale = "en" | "zh-CN";
 
-export const CONSOLE_LANGUAGE_KEY = "lico-language";
+export const CONSOLE_LANGUAGE_KEY = "meshrix-language";
 
 function readStoredInitialConsoleLocale(): ConsoleLocale | null {
   if (typeof window === "undefined") {

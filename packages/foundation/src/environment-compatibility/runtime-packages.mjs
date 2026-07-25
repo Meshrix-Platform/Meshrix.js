@@ -88,7 +88,7 @@ export function defaultJreSourceEntry({
     return {
       fileName: "jre-win32-arm64.zip",
       url: "",
-      unsupportedReason: "Windows ARM64 JRE auto-download is not bundled yet. Install Java 21+ locally or set LICO_JRE_DOWNLOAD_URL and LICO_JRE_DOWNLOAD_FILE to a trusted Windows ARM64 JRE zip."
+      unsupportedReason: "Windows ARM64 JRE auto-download is not bundled yet. Install Java 21+ locally or set MESHRIX_JRE_DOWNLOAD_URL and MESHRIX_JRE_DOWNLOAD_FILE to a trusted Windows ARM64 JRE zip."
     };
   }
   return {

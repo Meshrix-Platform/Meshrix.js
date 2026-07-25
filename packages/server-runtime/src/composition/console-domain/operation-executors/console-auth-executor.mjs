@@ -1,5 +1,5 @@
 
-import { hashClientString } from "@lico/foundation/security/client-strings";
+import { hashClientString } from "@meshrix/foundation/security/client-strings";
 import { appendConsoleLog, errorPayload, result } from "./shared.mjs";
 
 export function loginInputSummary(input = {}, request = null) {

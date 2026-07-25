@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { SERVER_API_OPERATIONS } from "#lico/operation-registry";
+import { SERVER_API_OPERATIONS } from "#meshrix/operation-registry";
 import { listStorageBackups } from "../../packages/foundation/src/storage/backup-query.mjs";
 import { createStorageBackup } from "../../packages/foundation/src/storage/backup-snapshot.mjs";
 import { BACKUP_RESTORE_PROTOCOL_VERSION } from "../../packages/foundation/src/storage/backup-contract.mjs";
@@ -16,7 +16,7 @@ import { SERVICE_MANIFEST_SCHEMA_VERSION } from "../../packages/foundation/src/s
 import {
   classifyProtocolSubstrateStorageArtifact,
   PROTOCOL_SUBSTRATE_STORAGE_CATEGORY
-} from "#lico/foundation/checkpoint/tree/data-structure-substrate";
+} from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.mjs";
 
 async function writeFixture(root, relativePath, content) {
@@ -40,7 +40,10 @@ async function verifyBackupRestore(tempRoot) {
   });
   assert.equal(backup.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
   assert.ok(backup.backupId.startsWith("backup_"));
-  assert.equal(backup.consistency.sqlite, "sqlite-online-backup");
+  assert.equal(
+    backup.consistency.sqlite,
+    "copy-on-write-baseline-with-sqlite-online-page-backup"
+  );
   assert.equal(backup.consistency.manifestIntegrity, "size-and-sha256-per-file");
   assert.equal(Object.hasOwn(backup, "sourceRoot"), false);
   assert.equal(Object.hasOwn(backup, "backupPath"), false);
@@ -137,6 +140,10 @@ async function verifyServiceManifestAuthority(tempRoot) {
   assert.equal(committed.setRevision, 1);
   assert.equal(committed.replayed, false);
   assert.equal((await store.writerPort.commitManifestSet(input)).replayed, true);
+  await store.acknowledgePublished({
+    setRevision: committed.setRevision,
+    setDigest: committed.setDigest
+  });
   const snapshot = await store.readerPort.getSnapshot();
   assert.equal(snapshot.setRevision, 1);
   assert.equal(snapshot.getService(serviceId).manifest.payload.operations[0].key, "probe");
@@ -176,15 +183,15 @@ function verifyOperationsAndTools() {
   assert.equal(operations.get("storage.backups.restore_preview").readOnly, true);
 
   const catalog = createToolCatalog({ operations: SERVER_API_OPERATIONS });
-  const restoreTool = catalog.tools.find((tool) => tool.id === "lico.storageBackups.restore");
+  const restoreTool = catalog.tools.find((tool) => tool.id === "meshrix.storageBackups.restore");
   assert.ok(restoreTool, "storage restore tool must be exposed");
   assert.equal(restoreTool.operationId, "storage.backups.restore");
-  assert.ok(restoreTool.toolsets.includes("lico.runtime.maintain"));
+  assert.ok(restoreTool.toolsets.includes("meshrix.runtime.maintain"));
   assert.ok(restoreTool.requiredScopes.includes("runtime:admin"));
 }
 
 async function main() {
-  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "lico-backup-restore-"));
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-backup-restore-"));
   try {
     await verifyBackupRestore(tempRoot);
     await verifyServiceManifestAuthority(tempRoot);

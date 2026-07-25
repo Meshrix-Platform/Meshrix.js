@@ -34,7 +34,7 @@ const TEXT_FILE_NAMES = new Set([
   "Dockerfile",
   "LICENSE",
   "NOTICE",
-  "lico-mcp"
+  "meshrix-mcp"
 ]);
 
 const FORBIDDEN_PATH_PREFIX_RULES = Object.freeze([
@@ -46,10 +46,10 @@ const FORBIDDEN_PATH_PREFIX_RULES = Object.freeze([
     ruleId: "local_runtime_data",
     prefixes: [
       ".cache",
-      ".lico-agent-history",
-      ".licomesh-server-data",
-      ".licomesh-data",
-      "licomesh-data"
+      ".meshrix-agent-history",
+      ".meshrix-server-data",
+      ".meshrix-data",
+      "meshrix-data"
     ]
   },
   {

@@ -1,4 +1,4 @@
-import { canonicalJson as stableJson } from "@lico/contracts/serialization/canonical-json";
+import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -609,7 +609,7 @@ function createSecretStorePort({ rootPath }) {
 
 export function createReadinessBaselineProvider({ userDataPath = "" } = {}) {
   if (!userDataPath) {
-    throw new Error("userDataPath is required for LicoMesh readiness baseline provider.");
+    throw new Error("userDataPath is required for Meshrix readiness baseline provider.");
   }
   const rootPath = path.join(userDataPath, "readiness-baseline");
   const configRegistry = createConfigRegistryPort({ rootPath });
@@ -643,8 +643,8 @@ export function createReadinessBaselineProvider({ userDataPath = "" } = {}) {
         externalState: "contract-mode adapters until real credentials are configured"
       },
       mcpOutlets: [
-        "lico.discovery",
-        "lico.gateway"
+        "meshrix.discovery",
+        "meshrix.gateway"
       ],
       storageStates: STORAGE_STATES,
       ports: [config, metadata, cacheSummary, queueSummary, artifact, secret]

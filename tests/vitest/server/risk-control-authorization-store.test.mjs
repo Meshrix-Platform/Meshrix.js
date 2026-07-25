@@ -30,7 +30,7 @@ async function tempDir(prefix) {
 }
 
 async function withAuthorizationStore(testCase) {
-  const userDataPath = await tempDir("lico-risk-control-store-extra-");
+  const userDataPath = await tempDir("meshrix-risk-control-store-extra-");
   const store = createAuthorizationStore({ userDataPath });
   try {
     return await testCase({ store, userDataPath });

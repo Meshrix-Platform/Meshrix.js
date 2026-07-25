@@ -19,7 +19,7 @@ export function installerOptions(options) {
     adapterCacheRoot: path.resolve(String(option(
       options,
       "adapter-cache",
-      process.env.LICO_MCP_ADAPTER_CACHE || defaultClientAdapterCacheRoot()
+      process.env.MESHRIX_MCP_ADAPTER_CACHE || defaultClientAdapterCacheRoot()
     )))
   };
 }

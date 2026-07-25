@@ -4,11 +4,15 @@ This file records user-visible release changes.
 
 ## Unreleased
 
+- Completed the one-pass migration of the core repository to the Meshrix
+  naming and boundary authority; LicoMesh identifiers are retired across
+  source, packages, workflows, and documentation.
+
 - Replaced the uniform two-event operation-proof policy with explicit `full`,
   `receipt`, `on-change`, and reasoned `excluded` profiles; read-only success
   paths now use one terminal receipt, and stable console-state reads write
   nothing after Pactium atomically confirms an unchanged projection digest.
-- Removed LicoMesh proof-entry shadow storage and persisted raw request,
+- Removed Meshrix proof-entry shadow storage and persisted raw request,
   response, policy, and workspace-effect bodies; ledger facts and critical
   evidence now retain domain-separated commitments and necessary references.
 - Upgraded the proof substrate to Pactium 0.5.0 with normalized runtime state,
@@ -54,4 +58,4 @@ This file records user-visible release changes.
 - Documented the open platform boundary for private deployment.
 - Documented Operation Permission as the target permission boundary for governed operations.
 - Documented verified plugin packages, upstream forwarding, workspace assets, audit, approval, observability, and runtime deployment as open platform capabilities.
-- Moved the OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi client-specific adapters and compatibility ownership to independently packaged LicoMesh-Plugins artifacts; Core now retains only the generic adapter protocol, verified cache, authorization, credentials, proxy, and rollback boundary.
+- Moved the OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi client-specific adapters and compatibility ownership to independently packaged Meshrix-Plugins artifacts; Core now retains only the generic adapter protocol, verified cache, authorization, credentials, proxy, and rollback boundary.

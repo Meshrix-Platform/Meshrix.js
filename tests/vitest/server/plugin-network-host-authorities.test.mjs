@@ -23,7 +23,7 @@ async function lifecycle() {
 
 async function writeLedger(port, state, generation) {
   await port.runExclusive(() => port.writeRecord("ledger", {
-    schemaVersion: "licomesh.plugin-lifecycle-ledger/1",
+    schemaVersion: "meshrix.plugin-lifecycle-ledger/1",
     pluginId: "fixture",
     state,
     operation: state === "active" ? "" : "disable",

@@ -44,7 +44,7 @@ const tempRoots = [];
 const kernels = [];
 
 async function tempDir() {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-storage-provider-"));
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-storage-provider-"));
   tempRoots.push(dir);
   return dir;
 }
@@ -64,10 +64,10 @@ beforeEach(() => {
 describe("storage provider", () => {
   it("exposes only generic storage capabilities", () => {
     const storageKernel = {
-      databasePath: "/data/metadata/lico.sqlite",
+      databasePath: "/data/metadata/meshrix.sqlite",
       objectRootPath: "/data/objects",
       getStorageSummary: vi.fn(() => ({
-        databasePath: "/data/metadata/lico.sqlite",
+        databasePath: "/data/metadata/meshrix.sqlite",
         objectRootPath: "/data/objects",
         objectCount: 2
       }))
@@ -440,7 +440,7 @@ describe("storage provider", () => {
     const provider = createStorageProvider({ userDataPath: "/data" });
 
     expect(provider.getStorageSummary()).toEqual({
-      databasePath: "/data/metadata/lico.sqlite",
+      databasePath: "/data/metadata/meshrix.sqlite",
       objectRootPath: "/data/objects",
       databaseExists: false,
       objectCount: 0,
@@ -470,7 +470,7 @@ describe("storage provider", () => {
       expect((await fs.stat(path.join(userDataPath, "metadata"))).mode & 0o777).toBe(0o700);
       expect((await fs.stat(path.join(userDataPath, "objects"))).mode & 0o777).toBe(0o700);
       const sqliteFiles = (await fs.readdir(path.join(userDataPath, "metadata")))
-        .filter((name) => /^lico\.sqlite(?:-(?:wal|shm|journal))?$/u.test(name))
+        .filter((name) => /^meshrix\.sqlite(?:-(?:wal|shm|journal))?$/u.test(name))
         .map((name) => path.join(userDataPath, "metadata", name));
       expect(sqliteFiles.length).toBeGreaterThanOrEqual(1);
       for (const filePath of sqliteFiles) {
@@ -487,7 +487,7 @@ describe("storage provider", () => {
       const externalPath = path.join(userDataPath, "external.sqlite");
       await fs.mkdir(metadataPath, { recursive: true });
       await fs.writeFile(externalPath, "not-a-database", "utf8");
-      await fs.symlink(externalPath, path.join(metadataPath, "lico.sqlite"));
+      await fs.symlink(externalPath, path.join(metadataPath, "meshrix.sqlite"));
 
       expect(() => createStorageKernel({ userDataPath })).toThrow(
         expect.objectContaining({ code: "private_sqlite_boundary_invalid" })

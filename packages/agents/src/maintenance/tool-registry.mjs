@@ -1,12 +1,12 @@
 import {
   createTraceContext,
   setTraceContextOnRequest
-} from "@lico/foundation/observability/trace-context";
+} from "@meshrix/foundation/observability/trace-context";
 import {
   getRuntimeLogger,
   summarizeError
-} from "@lico/foundation/observability/runtime-logger";
-import { SERVER_API_OPERATIONS } from "@lico/contracts/operations/operation-registry";
+} from "@meshrix/foundation/observability/runtime-logger";
+import { SERVER_API_OPERATIONS } from "@meshrix/contracts/operations/operation-registry";
 
 function maintenanceTimeoutError(toolId) {
   const error = new Error(`维护工具执行超时：${toolId}`);
@@ -225,7 +225,7 @@ export function createMaintenanceToolRegistry({
         method: requestInfo.method,
         url: requestInfo.url.pathname,
         headers: shouldConfirm
-          ? { "x-lico-safety-confirm": "true", "x-lico-confirm": "true" }
+          ? { "x-meshrix-safety-confirm": "true", "x-meshrix-confirm": "true" }
           : {},
         socket: { remoteAddress: "maintenance-agent" }
       };

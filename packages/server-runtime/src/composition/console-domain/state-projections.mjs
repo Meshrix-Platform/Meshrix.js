@@ -1,5 +1,5 @@
-import { buildClientConnectionList } from "@lico/protocols/http/client-connection-list";
-import { modelLibraryAgentReadiness } from "@lico/agents/agent-gateway/policy-validation";
+import { buildClientConnectionList } from "@meshrix/protocols/http/client-connection-list";
+import { modelLibraryAgentReadiness } from "@meshrix/agents/agent-gateway/policy-validation";
 
 function stringValue(value) {
   return String(value || "").trim();

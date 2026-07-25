@@ -32,7 +32,7 @@
         "external_services."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "admin.upstream-services",
@@ -69,8 +69,8 @@
         "operation_permission."
       ],
       "mcpOutlets": [
-        "lico.discovery",
-        "lico.gateway"
+        "meshrix.discovery",
+        "meshrix.gateway"
       ],
       "allowedMcpTargets": "$MCP_SUPPORTED_TARGETS",
       "expectedConsoleFeatures": [
@@ -111,7 +111,7 @@
         "strategy."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "admin.strategy-management"
@@ -152,7 +152,7 @@
         "tag_management."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "admin.tag-management",
@@ -247,7 +247,7 @@
         "storage."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "admin.storage-control"
@@ -278,7 +278,7 @@
         "jobs."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "admin.jobs-control"
@@ -335,7 +335,7 @@
         "agent_gateway."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "admin.agent-config",
@@ -379,7 +379,7 @@
         "workspace.audit."
       ],
       "mcpOutlets": [
-        "lico.gateway"
+        "meshrix.gateway"
       ],
       "expectedConsoleFeatures": [
         "workspace.navigation",

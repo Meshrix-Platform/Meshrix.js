@@ -8,7 +8,7 @@ import {
   PACTIUM_PROTOCOL,
   PACTIUM_SCHEMA_VERSION
 } from "pactium";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { reconcileStorageRestoreTransactionsSync } from "../../storage/restore-transaction.mjs";
 import { acquireStorageRuntimeLease } from "../../storage/storage-lifecycle-lock.mjs";
 
@@ -91,7 +91,7 @@ export function createLicoPactiumRuntime({
 } = {}) {
   const resolvedDataDir = resolveLicoPactiumDataDir(userDataPath || dataDir);
   const resolvedStorageBackend = storageBackend ||
-    process.env.LICO_PACTIUM_STORAGE_BACKEND ||
+    process.env.MESHRIX_PACTIUM_STORAGE_BACKEND ||
     process.env.PACTIUM_STORAGE_BACKEND ||
     "";
   const ownsStorage = !storage;
@@ -120,7 +120,7 @@ export function createLicoPactiumRuntime({
     });
     resolvedIndexEngine = indexEngine || createVerifiableIndexEngine({
       storage: resolvedStorage,
-      domain: "licomesh"
+      domain: "meshrix"
     });
   } catch (error) {
     runtimeLease?.release();

@@ -9,7 +9,7 @@ function repoRoot() {
 }
 
 export function capabilitySecurityHelperScriptPath() {
-  return path.join(repoRoot(), "tools", "server-scripts", "lico-capability-security-helper.mjs");
+  return path.join(repoRoot(), "tools", "server-scripts", "meshrix-capability-security-helper.mjs");
 }
 
 function runCommandJson({ command, args = [], env = {}, input = {}, timeoutMs = 15000 } = {}) {
@@ -52,10 +52,10 @@ function runCommandJson({ command, args = [], env = {}, input = {}, timeoutMs = 
 
 export function createCommandCapabilitySecurityClient({
   dataDir = "",
-  backend = process.env.LICO_OPAQUE_CAPABILITY_KEY_PROVIDER || "auto",
-  alias = process.env.LICO_OPAQUE_CAPABILITY_KEY_ALIAS || "lico-tool-grants",
-  bindingBackend = process.env.LICO_CAPABILITY_BINDING_GUARD_PROVIDER || "auto",
-  bindingAlias = process.env.LICO_CAPABILITY_BINDING_GUARD_ALIAS || "lico-tool-bindings",
+  backend = process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER || "auto",
+  alias = process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants",
+  bindingBackend = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER || "auto",
+  bindingAlias = process.env.MESHRIX_CAPABILITY_BINDING_GUARD_ALIAS || "meshrix-tool-bindings",
   command = process.execPath,
   args = [capabilitySecurityHelperScriptPath()],
   env = {},

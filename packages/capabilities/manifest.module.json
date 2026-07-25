@@ -5,7 +5,7 @@
   "owner": "platform",
   "directory": "packages/capabilities",
   "description": "Communication-service discovery and governed Operation Permission capabilities.",
-  "publicApi": ["#lico/capabilities/*"],
+  "publicApi": ["#meshrix/capabilities/*"],
   "dependsOn": ["contracts", "foundation", "protocols"],
   "sourceOwnership": [
     {

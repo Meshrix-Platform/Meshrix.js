@@ -52,7 +52,7 @@ const APPROVAL_PROJECTED_TOOL_ID = `upstream.${APPROVAL_SERVICE_ID.replace(/[^A-
 const APPROVAL_SCOPES = ["gateway:read", "gateway:write", "gateway:maintain"];
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-mcp-gateway-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-mcp-gateway-"));
 const approvalFixtureToken = `fixture-approval-${randomBytes(18).toString("hex")}`;
 
 let server = null;
@@ -84,7 +84,7 @@ function safeEvidence(value = {}) {
       if (needle && child.includes(needle)) return "[redacted-sensitive-value]";
     }
     if (server?.url && child.includes(server.url)) return "[redacted-server-url]";
-    if (/Bearer\s+\S+/i.test(child) || /lico_[a-z0-9_-]+=/i.test(child)) return "[redacted-token]";
+    if (/Bearer\s+\S+/i.test(child) || /meshrix_[a-z0-9_-]+=/i.test(child)) return "[redacted-token]";
     return child;
   }));
 }
@@ -355,7 +355,7 @@ try {
         targets: ["opencode"],
         label: "verify-upstream-mcp-agent-grant",
         connectorVersion: "verify-upstream-mcp",
-        toolsets: ["lico.gateway.read", "lico.gateway.write"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
         dynamicCapabilities: ["records.search", "records.get"].map((upstreamToolName) =>
           compileUpstreamOperationCapability({ serviceId: SERVICE_ID, serviceProtocol: "mcp" }, {
             operationKey: "tools/call",
@@ -485,7 +485,7 @@ try {
         connectorVersion: "verify-upstream-mcp",
         grantMode: "maintain",
         maxRisk: "repair_write",
-        toolsets: ["lico.gateway.read", "lico.gateway.write", "lico.gateway.maintain"],
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.gateway.maintain"],
         scopes: APPROVAL_SCOPES,
         dynamicCapabilities: [approvalCapability.capabilityId],
         allowedServiceIds: [APPROVAL_SERVICE_ID],
@@ -554,7 +554,7 @@ try {
     const pending = await createApprovalPendingOperation();
     assert.equal(approvalFixtureHitCount(), beforeHits);
 
-    const rejected = await resolvePendingOperation(pending.pendingOperationId, "rejected");
+    const rejected = await resolvePendingOperation(pending.pendingOperationId, "denied");
     assert.equal(rejected.status, 200, JSON.stringify(rejected.payload, null, 2));
     assert.equal(rejected.payload.status, "denied", JSON.stringify(rejected.payload, null, 2));
     assert.equal(rejected.payload.terminalOutcome, "denied", JSON.stringify(rejected.payload, null, 2));
@@ -595,7 +595,7 @@ try {
     assert.equal(approvalFixtureHitCount(), beforeHits, "expired approval must not reach the upstream MCP service");
     assert.equal(approvalFixtureService.fixture.state.purged, false);
 
-    const duplicate = await resolvePendingOperation(pending.pendingOperationId, "rejected");
+    const duplicate = await resolvePendingOperation(pending.pendingOperationId, "denied");
     assert.equal(duplicate.status, 409, JSON.stringify(duplicate.payload, null, 2));
     assert.equal(approvalFixtureHitCount(), beforeHits, "re-resolving an expired operation must have no upstream side effect");
 

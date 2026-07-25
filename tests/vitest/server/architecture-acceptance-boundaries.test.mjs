@@ -22,8 +22,8 @@ describe("architecture and acceptance machine boundaries", () => {
   it("locks architecture diagrams to the architecture-facts digest", () => {
     const digest = computeArchitectureFactsDigest();
     for (const relativePath of [
-      "docs/architecture/LICOMESH-SYSTEM-ARCHITECTURE.html",
-      "docs/architecture/LICOMESH-SERVICE-CAPABILITY-ARCHITECTURE.html"
+      "docs/architecture/MESHRIX-SYSTEM-ARCHITECTURE.html",
+      "docs/architecture/MESHRIX-SERVICE-CAPABILITY-ARCHITECTURE.html"
     ]) {
       const html = fs.readFileSync(path.join(root, relativePath), "utf8");
       expect(html).toContain(`<!-- architecture-facts-digest: ${digest} -->`);

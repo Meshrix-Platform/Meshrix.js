@@ -15,8 +15,20 @@ import {
 } from "./lib/mcp-process-identity-credential-store-evidence.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const protocolInstaller = "packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs";
-const nativeInstaller = "packages/protocols/mcp/adapter/native-installer/lico-mcp-install.sh";
+
+function resolveRepositoryRoot() {
+  const acceptanceRoot = String(process.env.MESHRIX_ACCEPTANCE_REPOSITORY_ROOT || "").trim();
+  if (acceptanceRoot) {
+    return path.resolve(acceptanceRoot);
+  }
+  const gitDir = String(process.env.GIT_DIR || "").trim();
+  if (gitDir) {
+    return path.dirname(gitDir);
+  }
+  return repoRoot;
+}
+const protocolInstaller = "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs";
+const nativeInstaller = "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh";
 const reportPath = path.join(repoRoot, MCP_PROCESS_IDENTITY_CREDENTIAL_STORE_REPORT_PATH);
 
 function redactText(value = "") {
@@ -51,7 +63,7 @@ function runNodeSelfTest({ target, store, timeoutMs = 30000 } = {}) {
     cwd: repoRoot,
     env: {
       ...process.env,
-      LICO_MCP_PROCESS_IDENTITY_STORE: store
+      MESHRIX_MCP_PROCESS_IDENTITY_STORE: store
     },
     encoding: "utf8",
     timeout: timeoutMs,
@@ -67,7 +79,7 @@ function runNodeSelfTest({ target, store, timeoutMs = 30000 } = {}) {
 }
 
 function runExplicitSystemNoFileFallbackSelfTest({ timeoutMs = 30000 } = {}) {
-  const tempHome = fsSync.mkdtempSync(path.join(os.tmpdir(), "lico-mcp-pi-home-"));
+  const tempHome = fsSync.mkdtempSync(path.join(os.tmpdir(), "meshrix-mcp-pi-home-"));
   const script = `
     import { deleteProcessIdentity, loadProcessIdentity, saveProcessIdentity } from "./packages/protocols/mcp/adapter/gateway-installer/lib/process-identity-store.mjs";
     const target = "verify-explicit-system-no-file-fallback";
@@ -91,12 +103,12 @@ function runExplicitSystemNoFileFallbackSelfTest({ timeoutMs = 30000 } = {}) {
         }
       }
     };
-    process.env.LICO_MCP_PROCESS_IDENTITY_STORE = "file";
+    process.env.MESHRIX_MCP_PROCESS_IDENTITY_STORE = "file";
     await deleteProcessIdentity(target);
     await saveProcessIdentity(target, record);
-    process.env.LICO_MCP_PROCESS_IDENTITY_STORE = "system";
+    process.env.MESHRIX_MCP_PROCESS_IDENTITY_STORE = "system";
     const systemLoaded = await loadProcessIdentity(target);
-    process.env.LICO_MCP_PROCESS_IDENTITY_STORE = "file";
+    process.env.MESHRIX_MCP_PROCESS_IDENTITY_STORE = "file";
     const fileLoaded = await loadProcessIdentity(target);
     await deleteProcessIdentity(target);
     console.log(JSON.stringify({
@@ -111,7 +123,7 @@ function runExplicitSystemNoFileFallbackSelfTest({ timeoutMs = 30000 } = {}) {
       env: {
         ...process.env,
         HOME: tempHome,
-        LICO_MCP_PROCESS_IDENTITY_STORE: "file"
+        MESHRIX_MCP_PROCESS_IDENTITY_STORE: "file"
       },
       encoding: "utf8",
       timeout: timeoutMs,
@@ -149,7 +161,7 @@ function runDocker(args = [], { timeoutMs = 30000, allowFailure = false } = {}) 
 }
 
 function linuxSecretServiceImageName() {
-  return String(process.env.LICO_MCP_PROCESS_IDENTITY_LINUX_IMAGE || "licomesh-mcp-secret-service-proof:node24-bookworm").trim();
+  return String(process.env.MESHRIX_MCP_PROCESS_IDENTITY_LINUX_IMAGE || "meshrix-mcp-secret-service-proof:node24-bookworm").trim();
 }
 
 function dockerImageExists(image) {
@@ -181,7 +193,7 @@ function ensureLinuxSecretServiceImage() {
       ...process.env,
       DOCKER_BUILDKIT: process.env.DOCKER_BUILDKIT || "1"
     },
-    timeout: Number(process.env.LICO_MCP_PROCESS_IDENTITY_LINUX_IMAGE_BUILD_TIMEOUT_MS || 900000),
+    timeout: Number(process.env.MESHRIX_MCP_PROCESS_IDENTITY_LINUX_IMAGE_BUILD_TIMEOUT_MS || 900000),
     killSignal: "SIGKILL",
     maxBuffer: 64 * 1024 * 1024
   });
@@ -225,19 +237,20 @@ function runLinuxSecretServiceContainer() {
     throw new Error(`Docker daemon did not become ready for Linux Secret Service portability proof: ${daemon.error}`);
   }
   const image = ensureLinuxSecretServiceImage();
-  const containerTimeoutMs = Math.max(1000, Number(process.env.LICO_MCP_PROCESS_IDENTITY_LINUX_CONTAINER_TIMEOUT_MS || 300000));
+  const containerTimeoutMs = Math.max(1000, Number(process.env.MESHRIX_MCP_PROCESS_IDENTITY_LINUX_CONTAINER_TIMEOUT_MS || 300000));
   const containerTimeoutSeconds = Math.max(1, Math.ceil(containerTimeoutMs / 1000));
   const script = [
     "set -eu",
     "command -v dbus-run-session >/dev/null",
     "command -v secret-tool >/dev/null",
     "command -v gnome-keyring-daemon >/dev/null",
-    "dbus-run-session -- sh -lc 'printf pass | gnome-keyring-daemon --unlock >/dev/null 2>&1 || true; LICO_MCP_PROCESS_IDENTITY_STORE=linux-secret-service node packages/protocols/mcp/adapter/gateway-installer/bin/lico-mcp.mjs identity-store-self-test --target verify-linux-secret-service --json'"
+    "dbus-run-session -- sh -lc 'printf pass | gnome-keyring-daemon --unlock >/dev/null 2>&1 || true; MESHRIX_MCP_PROCESS_IDENTITY_STORE=linux-secret-service node packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs identity-store-self-test --target verify-linux-secret-service --json'"
   ].join(" && ");
+  const dockerRepoRoot = resolveRepositoryRoot();
   const result = spawnSync("docker", [
     "run",
     "--rm",
-    "-v", `${repoRoot}:/work:ro`,
+    "-v", `${dockerRepoRoot}:/work:ro`,
     "-w", "/work",
     image.image,
     "timeout",
@@ -246,7 +259,7 @@ function runLinuxSecretServiceContainer() {
     "-lc",
     script
   ], {
-    cwd: repoRoot,
+    cwd: dockerRepoRoot,
     encoding: "utf8",
     timeout: containerTimeoutMs + 15000,
     killSignal: "SIGKILL",
@@ -269,6 +282,12 @@ function runLinuxSecretServiceContainer() {
   return payload;
 }
 
+let linuxSecretServiceContainerProof;
+function controlledLinuxSecretServiceProof() {
+  linuxSecretServiceContainerProof ||= runLinuxSecretServiceContainer();
+  return linuxSecretServiceContainerProof;
+}
+
 await fs.mkdir(path.dirname(reportPath), { recursive: true });
 
 const nativeInstallerSource = await fs.readFile(path.join(repoRoot, nativeInstaller), "utf8");
@@ -287,7 +306,7 @@ function record(name, fn) {
 }
 
 record("native installer stays out of credential-store backend implementation", () => {
-  assert.match(nativeInstallerSource, /gateway-installer\/bin\/lico-mcp\.mjs/u);
+  assert.match(nativeInstallerSource, /gateway-installer\/bin\/meshrix-mcp\.mjs/u);
   assert.equal(/\beval\b/u.test(nativeInstallerSource), false);
   assert.equal(nativeInstallerSource.includes("macos-keychain"), false);
   assert.equal(nativeInstallerSource.includes("linux-secret-service"), false);
@@ -325,10 +344,14 @@ record("explicit system mode does not read private file fallback", () => {
 record("current platform system credential store is release-ready", () => {
   const expectedBackends = currentPlatformSystemBackends();
   assert.notEqual(expectedBackends.length, 0, `${process.platform} has no supported MCP process identity system credential backend`);
-  const payload = runNodeSelfTest({
-    target: `verify-${process.platform}-system-credential`,
-    store: "system"
-  });
+  const headlessLinux = process.platform === "linux" &&
+    !String(process.env.DBUS_SESSION_BUS_ADDRESS || "").trim();
+  const payload = headlessLinux
+    ? controlledLinuxSecretServiceProof()
+    : runNodeSelfTest({
+        target: `verify-${process.platform}-system-credential`,
+        store: "system"
+      });
   assert.equal(payload.systemCredential, true);
   assert.equal(payload.fileFallback, false);
   assert.ok(
@@ -340,12 +363,13 @@ record("current platform system credential store is release-ready", () => {
     expectedBackends,
     storageBackend: payload.storageBackend,
     systemCredential: payload.systemCredential,
-    fileFallback: payload.fileFallback
+    fileFallback: payload.fileFallback,
+    controlledHeadlessProof: headlessLinux
   };
 });
 
 record("Linux container Secret Service stores process identity", () => {
-  const payload = runLinuxSecretServiceContainer();
+  const payload = controlledLinuxSecretServiceProof();
   return {
     storageBackend: payload.storageBackend,
     systemCredential: payload.systemCredential,

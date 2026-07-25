@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
-import { atomicWriteJson } from "#lico/state-coordinator";
+import { atomicWriteJson } from "#meshrix/state-coordinator";
 import {
   appendBoundedJsonLine,
   readJsonlTail as readBoundedJsonlTail
-} from "#lico/foundation/storage/bounded-jsonl";
+} from "#meshrix/foundation/storage/bounded-jsonl";
 import { CONTEXT_COMPACTION_PROTOCOL_VERSION } from "./constants.mjs";
 import { nowIso } from "./validation.mjs";
 

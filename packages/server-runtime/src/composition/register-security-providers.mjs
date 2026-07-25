@@ -9,7 +9,7 @@
  * infrastructure is initialized but before API handlers begin serving requests.
  *
  * @module register-security-providers
- * @package @lico/server-runtime
+ * @package @meshrix/server-runtime
  * @layer server-runtime/composition
  */
 
@@ -21,7 +21,7 @@
  */
 export async function registerSecurityProviders({ userDataPath }) {
   const { registerTagStoreProvider: registerSingletonProvider } = await import(
-    "#lico/foundation/security/authorization/tag-store-provider-registry"
+    "#meshrix/foundation/security/authorization/tag-store-provider-registry"
   );
   const { createTagStoreAdapter } = await import(
     "../state/tags/tag-store.adapter.mjs"

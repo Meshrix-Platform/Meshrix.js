@@ -11,7 +11,7 @@ function cookieHeaderFrom(response) {
     typeof response.headers.getSetCookie === "function"
       ? response.headers.getSetCookie()
       : String(response.headers.get("set-cookie") || "")
-          .split(/,(?=\s*lico_)/)
+          .split(/,(?=\s*meshrix_)/)
           .filter(Boolean);
   return setCookies.map((cookie) => cookie.split(";")[0]).join("; ");
 }
@@ -96,11 +96,11 @@ function ensureFetchInstalled() {
 
     const method = String(init.method || input?.method || "GET").toUpperCase();
     if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-      if (!headers.has("x-lico-csrf")) {
-        headers.set("x-lico-csrf", rule.auth.csrf);
+      if (!headers.has("x-meshrix-csrf")) {
+        headers.set("x-meshrix-csrf", rule.auth.csrf);
       }
-      if (rule.safetyConfirm && !headers.has("x-lico-safety-confirm")) {
-        headers.set("x-lico-safety-confirm", "true");
+      if (rule.safetyConfirm && !headers.has("x-meshrix-safety-confirm")) {
+        headers.set("x-meshrix-safety-confirm", "true");
       }
     }
 
@@ -128,9 +128,9 @@ export async function installAuthenticatedFetch(server, options = {}) {
 
   ensureFetchInstalled();
   if (options.setProcessEnv !== false) {
-    process.env.LICO_CONSOLE_COOKIE = auth.cookie;
-    process.env.LICO_CONSOLE_CSRF = auth.csrf;
-    process.env.LICO_SAFETY_CONFIRM = options.safetyConfirm === false ? "" : "1";
+    process.env.MESHRIX_CONSOLE_COOKIE = auth.cookie;
+    process.env.MESHRIX_CONSOLE_CSRF = auth.csrf;
+    process.env.MESHRIX_SAFETY_CONFIRM = options.safetyConfirm === false ? "" : "1";
   }
   return auth;
 }
@@ -149,9 +149,9 @@ export function authHeaders(auth, { safetyConfirm = true, method = "GET" } = {})
     Cookie: auth.cookie
   };
   if (!["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase())) {
-    headers["x-lico-csrf"] = auth.csrf;
+    headers["x-meshrix-csrf"] = auth.csrf;
     if (safetyConfirm) {
-      headers["x-lico-safety-confirm"] = "true";
+      headers["x-meshrix-safety-confirm"] = "true";
     }
   }
   return headers;

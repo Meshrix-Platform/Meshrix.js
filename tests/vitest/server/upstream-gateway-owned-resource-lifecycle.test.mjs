@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const gatewayRuntimeFactory = vi.hoisted(() => vi.fn());
 const securityAlertStoreFactory = vi.hoisted(() => vi.fn());
 
-vi.mock("@lico/foundation/security/security-alerts", () => ({
+vi.mock("@meshrix/foundation/security/security-alerts", () => ({
   createSecurityAlertStore: securityAlertStoreFactory
 }));
 

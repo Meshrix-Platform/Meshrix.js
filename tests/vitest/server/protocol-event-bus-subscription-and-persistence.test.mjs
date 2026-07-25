@@ -6,7 +6,7 @@ import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event
 import { createSqliteProtocolEventStore } from "../../../packages/server-runtime/src/events/sqlite-protocol-event-store.mjs";
 
 async function withTempUserData(testCase) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-event-bus-extra-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-event-bus-extra-"));
   try {
     return await testCase(userDataPath);
   } finally {

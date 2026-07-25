@@ -104,7 +104,7 @@ function handle(message) {
   }
   if (message.method === "tools/call") {
     send({ jsonrpc: "2.0", id: message.id, result: { structuredContent: {
-      unrelatedServerEnvVisible: Boolean(process.env.LICO_UPSTREAM_ENV_ISOLATION_SENTINEL),
+      unrelatedServerEnvVisible: Boolean(process.env.MESHRIX_UPSTREAM_ENV_ISOLATION_SENTINEL),
       explicitlyAllowedEnvVisible: Boolean(process.env.MCP_ALLOWED_SENTINEL)
     } } });
   }
@@ -245,7 +245,7 @@ async function callMcp({ body, provider, upstreamGatewayRegistry, signal = null 
 }
 
 async function createRegistryForServices(services = []) {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-mcp-test-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-mcp-test-"));
   const registry = createUpstreamGatewayRegistry({ userDataPath });
   installUpstreamRuntimeServices(registry, services);
   return {
@@ -259,7 +259,7 @@ async function createRegistryForServices(services = []) {
 
 describe("upstream MCP gateway bridge", () => {
   it("maps plugin external-service MCP list and call through the governed session", async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lico-plugin-external-mcp-"));
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-external-mcp-"));
     const listTools = vi.fn(async () => ({
       tools: [{
         name: "repositories.get",
@@ -488,8 +488,8 @@ describe("upstream MCP gateway bridge", () => {
   });
 
   it("passes only execution baseline and explicitly configured values to stdio upstream services", async () => {
-    const previousSentinel = process.env.LICO_UPSTREAM_ENV_ISOLATION_SENTINEL;
-    process.env.LICO_UPSTREAM_ENV_ISOLATION_SENTINEL = "verifier-only-value";
+    const previousSentinel = process.env.MESHRIX_UPSTREAM_ENV_ISOLATION_SENTINEL;
+    process.env.MESHRIX_UPSTREAM_ENV_ISOLATION_SENTINEL = "verifier-only-value";
     const { registry, cleanup } = await createRegistryForServices([{
       serviceId: "environment-fixture",
       serviceProtocol: "mcp",
@@ -499,7 +499,7 @@ describe("upstream MCP gateway bridge", () => {
         command: process.execPath,
         args: ["-e", environmentStdioMcpFixtureScript()],
         env: {
-          MCP_ALLOWED_SENTINEL: "$LICO_UPSTREAM_ENV_ISOLATION_SENTINEL"
+          MCP_ALLOWED_SENTINEL: "$MESHRIX_UPSTREAM_ENV_ISOLATION_SENTINEL"
         },
         toolNamePrefix: "environment-fixture",
         timeoutMs: 5000
@@ -519,9 +519,9 @@ describe("upstream MCP gateway bridge", () => {
     } finally {
       await cleanup();
       if (previousSentinel === undefined) {
-        delete process.env.LICO_UPSTREAM_ENV_ISOLATION_SENTINEL;
+        delete process.env.MESHRIX_UPSTREAM_ENV_ISOLATION_SENTINEL;
       } else {
-        process.env.LICO_UPSTREAM_ENV_ISOLATION_SENTINEL = previousSentinel;
+        process.env.MESHRIX_UPSTREAM_ENV_ISOLATION_SENTINEL = previousSentinel;
       }
     }
   });
@@ -956,10 +956,10 @@ describe("upstream MCP gateway bridge", () => {
         id: 3,
         method: "tools/call",
         params: {
-          name: "lico.discovery",
+          name: "meshrix.discovery",
           arguments: {
             apiVersion: "v0.0.1:mcp:interface-1",
-            operation: "lico.capabilities.list",
+            operation: "meshrix.capabilities.list",
             input: {}
           }
         }
@@ -975,7 +975,7 @@ describe("upstream MCP gateway bridge", () => {
     for (const tool of capabilities.operations.filter((item) => item.name.startsWith("upstream."))) {
       expect(tool._meta).not.toHaveProperty("mcpOutlet");
     }
-    expect(Object.keys(capabilities.outlets)).toEqual(["lico.discovery"]);
+    expect(Object.keys(capabilities.outlets)).toEqual(["meshrix.discovery"]);
     expect(capabilities.outlets).not.toHaveProperty("upstream");
   });
 

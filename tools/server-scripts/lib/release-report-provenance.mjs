@@ -7,7 +7,7 @@ import { assertNoSensitiveReportLeak } from "./sensitive-report-scan.mjs";
 import { requiredReportSpec } from "./required-report-validator.mjs";
 
 export const RELEASE_REPORT_PROVENANCE_SCHEMA =
-  "licomesh.release-evidence.report-provenance.v1";
+  "v0.0.1:meshrix:release-evidence-report-provenance-1";
 
 function uniqueStrings(values = []) {
   return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
@@ -139,7 +139,19 @@ export async function stampReleaseReportProvenance({
       recordedAt,
       reportPayloadDigest: releaseEvidenceReportPayloadDigest(report)
     };
-    if (typeof report.payloadDigest === "string" && report.payloadDigest) {
+    if (report.resourceBudgets && Number.isFinite(Number(report.resourceBudgets.reportBytes))) {
+      let priorSize = -1;
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        const size = Buffer.byteLength(JSON.stringify(report), "utf8");
+        report.resourceBudgets.reportBytes = size;
+        if (typeof report.payloadDigest === "string" && report.payloadDigest) {
+          report.payloadDigest = reportPayloadDigest(report);
+        }
+        report.releaseEvidenceProvenance.reportPayloadDigest = releaseEvidenceReportPayloadDigest(report);
+        if (size === priorSize) break;
+        priorSize = size;
+      }
+    } else if (typeof report.payloadDigest === "string" && report.payloadDigest) {
       report.payloadDigest = reportPayloadDigest(report);
     }
     assertNoSensitiveReportLeak(report, `release report ${reportPath}`);

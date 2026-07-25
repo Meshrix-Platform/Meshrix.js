@@ -23,7 +23,7 @@ const preloadPath = path.join(
 
 function observation(sequence, overrides = {}) {
   return {
-    kind: "lico.performance.runtime-observation",
+    kind: "meshrix.performance.runtime-observation",
     schemaVersion: RUNTIME_PERFORMANCE_OBSERVATION_SCHEMA_VERSION,
     sequence,
     reason: "interval",
@@ -157,7 +157,7 @@ describe("gateway performance observation", () => {
     const messages = [];
     const environment = { ...process.env };
     delete environment.NODE_OPTIONS;
-    environment.LICO_PERFORMANCE_OBSERVER_INTERVAL_MS = "50";
+    environment.MESHRIX_PERFORMANCE_OBSERVER_INTERVAL_MS = "50";
     const child = spawn(process.execPath, [
       "--import",
       preloadPath,

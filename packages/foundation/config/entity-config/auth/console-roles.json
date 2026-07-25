@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "v0.0.1:lico-console:role-policy-1",
+  "schemaVersion": "v0.0.1:meshrix-console:role-policy-1",
   "description": "Console roles are configuration-only scope bundles. Feature-owned scope grants are projected only while their feature is active.",
   "featureScopeGrants": {},
   "roles": [

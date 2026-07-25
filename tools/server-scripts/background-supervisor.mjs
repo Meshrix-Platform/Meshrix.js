@@ -20,15 +20,15 @@ import {
   atomicWriteJson,
   queueStateMutation,
   stateFileKey
-} from "#lico/state-coordinator";
-import { loadSettings } from "#lico/settings";
+} from "#meshrix/state-coordinator";
+import { loadSettings } from "#meshrix/settings";
 import {
   createRuntimeLogger,
   setRuntimeLogger,
   summarizeError,
   summarizeForLog
-} from "#lico/runtime-logger";
-import { ServerConfig } from "#lico/server-config";
+} from "#meshrix/runtime-logger";
+import { ServerConfig } from "#meshrix/server-config";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -100,7 +100,7 @@ const args = parseArgs(process.argv.slice(2));
 const userDataPath = path.resolve(
   String(
     args["data-dir"] ||
-      process.env.LICO_SERVER_DATA_DIR ||
+      process.env.MESHRIX_SERVER_DATA_DIR ||
       ServerConfig.getDataDir()
   )
 );
@@ -123,7 +123,7 @@ const logger = createRuntimeLogger({
   userDataPath,
   runtimeOptions: {
     cwd: projectRoot,
-    logDir: args["log-dir"] || process.env.LICO_LOG_DIR || ""
+    logDir: args["log-dir"] || process.env.MESHRIX_LOG_DIR || ""
   },
   component: "background-supervisor"
 });
@@ -303,8 +303,8 @@ function spawnRole(role) {
     cwd: projectRoot,
     env: {
       ...process.env,
-      LICO_BACKGROUND_WORKER_ROLE: role,
-      LICO_IMPORT_WORKER_EXTERNAL: role === "import-worker" ? "0" : process.env.LICO_IMPORT_WORKER_EXTERNAL || ""
+      MESHRIX_BACKGROUND_WORKER_ROLE: role,
+      MESHRIX_IMPORT_WORKER_EXTERNAL: role === "import-worker" ? "0" : process.env.MESHRIX_IMPORT_WORKER_EXTERNAL || ""
     },
     stdio: ["ignore", "ignore", "ignore", "ipc"]
   });

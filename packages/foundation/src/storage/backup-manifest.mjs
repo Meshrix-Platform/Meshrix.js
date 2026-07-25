@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { ServerConfig } from "#lico/server-config";
+import { ServerConfig } from "#meshrix/server-config";
 import { reconcileStorageBackupCatalog } from "./backup-catalog.mjs";
 import {
   BACKUP_MANIFEST_FILE,

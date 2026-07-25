@@ -10,10 +10,10 @@ import { stagePluginArtifactVerificationFixture } from "../../../tools/server-sc
 import { createTestPluginProcessHost } from "./support/test-plugin-process-host.mjs";
 
 const roots = [];
-const captureKey = Symbol.for("licomesh.plugin-data-capability.capture");
+const captureKey = Symbol.for("meshrix.plugin-data-capability.capture");
 
 async function fixtureRoot() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-plugin-data-test-"));
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-data-test-"));
   roots.push(root);
   await fs.mkdir(path.join(root, "data"), { recursive: true });
   return root;
@@ -86,7 +86,7 @@ describe("plugin data capability", () => {
     const root = await fixtureRoot();
     globalThis[captureKey] = {};
     await writePlugin(root, `
-const capture = globalThis[Symbol.for("licomesh.plugin-data-capability.capture")];
+const capture = globalThis[Symbol.for("meshrix.plugin-data-capability.capture")];
 export async function activatePlugin({ manifest, context }) {
   capture.prototype = Object.getPrototypeOf(context.pluginData);
   capture.configurationFrozen = Object.isFrozen(context.configuration);

@@ -1,6 +1,6 @@
-import { getRuntimeLogger, summarizeForLog } from "@lico/foundation/observability/runtime-logger";
-import { traceContextFromRequest } from "@lico/foundation/observability/trace-context";
-import { canonicalHash } from "@lico/foundation/serialization/canonical-json";
+import { getRuntimeLogger, summarizeForLog } from "@meshrix/foundation/observability/runtime-logger";
+import { traceContextFromRequest } from "@meshrix/foundation/observability/trace-context";
+import { canonicalHash } from "@meshrix/foundation/serialization/canonical-json";
 import { approvalAlreadySatisfiesPolicy, nowIso, parseJsonObject, pendingResumeInput, policyRevisionSummary, randomId, sourceIpFromRequest, trustedApprovedPendingOperation } from "./runtime-common.mjs";
 import { denyInvalidInputExecution } from "./runtime-denials.mjs";
 import { completeDryRunExecution } from "./runtime-dry-run.mjs";

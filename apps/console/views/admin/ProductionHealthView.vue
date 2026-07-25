@@ -5,7 +5,7 @@ import ProductionGateTable from "../../components/admin/production-health/Produc
 import ProductionHealthBottomGrid from "../../components/admin/production-health/ProductionHealthBottomGrid.vue";
 import ProductionHealthHeroCard from "../../components/admin/production-health/ProductionHealthHeroCard.vue";
 import ProductionSectionGrid from "../../components/admin/production-health/ProductionSectionGrid.vue";
-import { usePageRefreshHandler } from "@lico/ui-console/page-refresh";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import {
   loadProductionHealthSnapshot,
   type ProductionHealthResponse,

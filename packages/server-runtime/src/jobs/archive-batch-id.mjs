@@ -1,4 +1,4 @@
-import { hashClientString, isServerToken, serverToken } from "#lico/product-api";
+import { hashClientString, isServerToken, serverToken } from "#meshrix/product-api";
 
 function stringValue(value) {
   return typeof value === "string" ? value.trim() : "";

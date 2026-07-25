@@ -31,7 +31,7 @@ async function readRuntimeLogs(logDir) {
   const entries = await fs.readdir(logDir, { withFileTypes: true }).catch(() => []);
   const records = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !/^lico-.+\.jsonl$/.test(entry.name)) {
+    if (!entry.isFile() || !/^meshrix-.+\.jsonl$/.test(entry.name)) {
       continue;
     }
     records.push(...await readJsonl(path.join(logDir, entry.name)));
@@ -75,8 +75,8 @@ async function removeTempDir(dirPath) {
 }
 
 async function main() {
-  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-trace-context-data-"));
-  const logDir = await fs.mkdtemp(path.join(os.tmpdir(), "lico-trace-context-logs-"));
+  const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-trace-context-data-"));
+  const logDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-trace-context-logs-"));
   let server = null;
   try {
     server = await startHttpServer({
@@ -91,7 +91,7 @@ async function main() {
     const auth = await installAuthenticatedFetch(server);
     const health = await requestJson(`${server.url}/api/healthz`);
     assert.equal(health.status, 200);
-    const healthTraceId = health.headers.get("x-licomesh-trace-id");
+    const healthTraceId = health.headers.get("x-meshrix-trace-id");
     assert.match(healthTraceId, /^trace_/);
 
     const settings = await requestJson(`${server.url}/api/settings`, {
@@ -103,7 +103,7 @@ async function main() {
       body: JSON.stringify({})
     });
     assert.equal(settings.status, 200);
-    const settingsTraceId = settings.headers.get("x-licomesh-trace-id");
+    const settingsTraceId = settings.headers.get("x-meshrix-trace-id");
     assert.match(settingsTraceId, /^trace_/);
 
     const maintenanceRun = await requestJson(`${server.url}/api/maintenance-agent/runs`, {
@@ -118,7 +118,7 @@ async function main() {
       })
     });
     assert.equal(maintenanceRun.status, 200);
-    const maintenanceTraceId = maintenanceRun.headers.get("x-licomesh-trace-id");
+    const maintenanceTraceId = maintenanceRun.headers.get("x-meshrix-trace-id");
     assert.match(maintenanceTraceId, /^trace_/);
 
     await new Promise((resolve) => setTimeout(resolve, 400));

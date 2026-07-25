@@ -5,17 +5,17 @@
 // from default and container acceptance gates, which run on the self-contained
 // fixture scenarios instead (verify-upstream-fixture-transit.mjs and
 // verify-downstream-agent-tool-loop.mjs). Opt in explicitly with:
-//   LICO_UPSTREAM_EXTERNAL_COMPAT=1 npm run verify:upstream-gateway-external
+//   MESHRIX_UPSTREAM_EXTERNAL_COMPAT=1 npm run verify:upstream-gateway-external
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-if (process.env.LICO_UPSTREAM_EXTERNAL_COMPAT !== "1") {
+if (process.env.MESHRIX_UPSTREAM_EXTERNAL_COMPAT !== "1") {
   console.log(
     "[upstream-gateway-external] skipped: this optional check contacts a real external HTTPS endpoint. " +
-    "Set LICO_UPSTREAM_EXTERNAL_COMPAT=1 to run it."
+    "Set MESHRIX_UPSTREAM_EXTERNAL_COMPAT=1 to run it."
   );
   process.exit(0);
 }
@@ -43,7 +43,7 @@ const EXTERNAL_RETRY_ATTEMPTS = 3;
 const EXTERNAL_RETRY_DELAY_MS = 750;
 
 const restoreCapabilityKernelEnv = useIsolatedCapabilityKernelForVerifier();
-const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "lico-upstream-external-"));
+const userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-upstream-external-"));
 const dynamicSecretNeedles = new Set();
 const mcpIdentityByToken = new Map();
 let server = null;
@@ -65,7 +65,7 @@ function externalServiceDescriptor() {
     baseUrl: `https://${EXTERNAL_HOST}:443`,
     healthPath: "/rate_limit",
     defaultHeaders: {
-      "user-agent": "LicoMesh-Upstream-Gateway-External-Verifier",
+      "user-agent": "Meshrix-Upstream-Gateway-External-Verifier",
       accept: "application/vnd.github+json"
     },
     trafficPolicy: { perMinute: 20, burst: 20 },
@@ -137,7 +137,7 @@ function safeEvidence(value = {}) {
     if (child.includes(userDataPath) || child.includes(os.homedir()) || child.includes(repoRoot)) {
       return "[redacted-local-path]";
     }
-    if (/Bearer\s+\S+/iu.test(child) || /lico_[a-z0-9_-]+=/iu.test(child)) {
+    if (/Bearer\s+\S+/iu.test(child) || /meshrix_[a-z0-9_-]+=/iu.test(child)) {
       return "[redacted-secret]";
     }
     return child;
@@ -153,7 +153,7 @@ function assertNoLeak(value, label = "payload") {
     assert.equal(needle ? serialized.includes(needle) : false, false, `${label} leaked dynamic secret`);
   }
   assert.equal(/Bearer\s+\S+/iu.test(serialized), false, `${label} leaked bearer token`);
-  assert.equal(/lico_[a-z0-9_-]+=/iu.test(serialized), false, `${label} leaked cookie`);
+  assert.equal(/meshrix_[a-z0-9_-]+=/iu.test(serialized), false, `${label} leaked cookie`);
 }
 
 function record(collection, name, status, evidence = {}) {
@@ -423,7 +423,7 @@ try {
 
     const token = await createGrant(
       "verify-upstream-external-forward",
-      ["lico.gateway.read", "lico.gateway.write"],
+      ["meshrix.gateway.read", "meshrix.gateway.write"],
       {
         dynamicCapabilities: [upstreamOperationCapabilityId(
           { serviceId: SERVICE_ID },
@@ -433,7 +433,7 @@ try {
       }
     );
     const mcpForwarded = await withExternalRetry(async () => {
-      const mcpPayload = await callMcp(token, "lico.gateway", "lico.gateway.forward", {
+      const mcpPayload = await callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
         serviceId: SERVICE_ID,
         operationKey: OPERATION_KEY
       }, 7201);

@@ -39,7 +39,7 @@ export const PRODUCTION_READINESS_GATES = Object.freeze([
 
 function productionGateParallelism(env = process.env) {
   const configured = Number(
-    env.LICO_PRODUCTION_READINESS_PARALLELISM || env.LICO_ACCEPTANCE_PARALLELISM || ""
+    env.MESHRIX_PRODUCTION_READINESS_PARALLELISM || env.MESHRIX_ACCEPTANCE_PARALLELISM || ""
   );
   if (Number.isFinite(configured) && configured > 0) {
     return Math.max(1, Math.trunc(configured));

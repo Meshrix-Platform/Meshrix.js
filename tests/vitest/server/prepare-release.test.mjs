@@ -21,65 +21,65 @@ async function writeJson(rootDir, relativePath, value) {
 }
 
 async function createFixture({ lockDependencyVersion = INITIAL_VERSION } = {}) {
-  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "licomesh-release-prepare-"));
+  const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-release-prepare-"));
   await writeJson(rootDir, "package.json", {
-    name: "licomesh",
+    name: "meshrix",
     version: INITIAL_VERSION,
     workspaces: WORKSPACES,
     dependencies: {
-      "@lico/contracts": INITIAL_VERSION,
+      "@meshrix/contracts": INITIAL_VERSION,
       "external-package": "^1.0.0"
     }
   });
   await writeJson(rootDir, "packages/contracts/package.json", {
-    name: "@lico/contracts",
+    name: "@meshrix/contracts",
     version: INITIAL_VERSION,
     schemaVersion: "fixture-schema-current"
   });
   await writeJson(rootDir, "apps/server/package.json", {
-    name: "@lico/server",
+    name: "@meshrix/server",
     version: INITIAL_VERSION,
     private: true,
     dependencies: {
-      "@lico/contracts": INITIAL_VERSION
+      "@meshrix/contracts": INITIAL_VERSION
     }
   });
   await writeJson(rootDir, GATEWAY_MANIFEST, {
-    name: "lico-mcp-connector",
+    name: "meshrix-mcp-connector",
     version: INITIAL_VERSION,
     type: "module"
   });
   await writeJson(rootDir, "package-lock.json", {
-    name: "licomesh",
+    name: "meshrix",
     version: INITIAL_VERSION,
     lockfileVersion: 3,
     packages: {
       "": {
-        name: "licomesh",
+        name: "meshrix",
         version: INITIAL_VERSION,
         workspaces: WORKSPACES,
         dependencies: {
-          "@lico/contracts": lockDependencyVersion,
+          "@meshrix/contracts": lockDependencyVersion,
           "external-package": "^1.0.0"
         }
       },
       "packages/contracts": {
-        name: "@lico/contracts",
+        name: "@meshrix/contracts",
         version: INITIAL_VERSION,
         schemaVersion: "fixture-schema-current"
       },
       "apps/server": {
-        name: "@lico/server",
+        name: "@meshrix/server",
         version: INITIAL_VERSION,
         dependencies: {
-          "@lico/contracts": lockDependencyVersion
+          "@meshrix/contracts": lockDependencyVersion
         }
       },
-      "node_modules/@lico/contracts": {
+      "node_modules/@meshrix/contracts": {
         resolved: "packages/contracts",
         link: true
       },
-      "node_modules/@lico/server": {
+      "node_modules/@meshrix/server": {
         resolved: "apps/server",
         link: true
       }
@@ -132,7 +132,7 @@ describe("release package version preparation", () => {
 
       expect(rootPackage.version).toBe(version);
       expect(rootPackage.dependencies).toEqual({
-        "@lico/contracts": version,
+        "@meshrix/contracts": version,
         "external-package": "^1.0.0"
       });
       expect(contracts).toMatchObject({
@@ -141,7 +141,7 @@ describe("release package version preparation", () => {
       });
       expect(server).toMatchObject({
         version,
-        dependencies: { "@lico/contracts": version }
+        dependencies: { "@meshrix/contracts": version }
       });
       expect(gateway.version).toBe(version);
       expect(lock.version).toBe(version);
@@ -149,9 +149,9 @@ describe("release package version preparation", () => {
       expect(lock.packages["packages/contracts"].version).toBe(version);
       expect(lock.packages["apps/server"]).toMatchObject({
         version,
-        dependencies: { "@lico/contracts": version }
+        dependencies: { "@meshrix/contracts": version }
       });
-      expect(lock.packages["node_modules/@lico/contracts"]).toEqual({
+      expect(lock.packages["node_modules/@meshrix/contracts"]).toEqual({
         resolved: "packages/contracts",
         link: true
       });

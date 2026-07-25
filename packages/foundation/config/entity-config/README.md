@@ -1,4 +1,4 @@
-# LicoMesh Entity Configs
+# Meshrix Entity Configs
 
 This directory stores human-maintainable configuration entities as folders and lightweight bundles.
 

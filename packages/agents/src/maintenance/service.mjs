@@ -26,7 +26,7 @@ import {
 import {
   getRuntimeLogger,
   summarizeForLog
-} from "@lico/foundation/observability/runtime-logger";
+} from "@meshrix/foundation/observability/runtime-logger";
 
 export function createMaintenanceAgentService({
   userDataPath,
@@ -43,7 +43,7 @@ export function createMaintenanceAgentService({
   operationConcurrencyScope = undefined,
   operationPermissionStore: incomingOperationPermissionStore = null,
   workQueuePort = null,
-  schedulerEnabled = process.env.LICO_MAINTENANCE_WORKER_EXTERNAL !== "1",
+  schedulerEnabled = process.env.MESHRIX_MAINTENANCE_WORKER_EXTERNAL !== "1",
   logger = getRuntimeLogger()
 }) {
   const auditStore = createMaintenanceAgentAuditStore({ userDataPath });

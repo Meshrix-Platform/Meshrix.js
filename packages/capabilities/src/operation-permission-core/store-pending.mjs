@@ -1,4 +1,4 @@
-import { redactOperationAuditValue } from "@lico/foundation/security/operation-audit";
+import { redactOperationAuditValue } from "@meshrix/foundation/security/operation-audit";
 import { rowToPendingOperation } from "./store-models.mjs";
 import {
   normalizePendingOperationStatus,

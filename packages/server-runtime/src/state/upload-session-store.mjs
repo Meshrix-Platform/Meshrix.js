@@ -6,13 +6,13 @@ import {
   finishCheckpointTree,
   startCheckpointTree,
   upsertCheckpointNode
-} from "#lico/foundation/checkpoint/tree/checkpoint-tree-projection";
+} from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
 import {
   assertServerToken,
   hashClientString,
   serverToken
-} from "#lico/client-strings";
-import { queueStateMutation } from "#lico/state-coordinator";
+} from "#meshrix/client-strings";
+import { queueStateMutation } from "#meshrix/state-coordinator";
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.mjs";
 import {
   UPLOAD_SESSION_MAX_CHUNK_BYTES,

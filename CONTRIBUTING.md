@@ -1,6 +1,6 @@
-# Contributing To LicoMesh
+# Contributing To Meshrix
 
-LicoMesh is an open, private-deployable gateway platform for agent access, upstream service forwarding, governed operations, and auditable collaboration.
+Meshrix is an open, private-deployable gateway platform for agent access, upstream service forwarding, governed operations, and auditable collaboration.
 
 Contributions must keep the repository serious, calm, pragmatic, and accurate. Changes should improve current runtime behavior, documentation accuracy, tests, or deployability. Do not add private product capabilities, secrets, local machine details, or speculative product claims.
 

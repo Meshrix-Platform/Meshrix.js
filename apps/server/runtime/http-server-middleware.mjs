@@ -1,5 +1,5 @@
-import { clientIpFromRequest } from "@lico/foundation/security/trusted-client-ip";
-import { sendJson } from "#lico/http-utils";
+import { clientIpFromRequest } from "@meshrix/foundation/security/trusted-client-ip";
+import { sendJson } from "#meshrix/http-utils";
 
 const DEFAULT_RATE_LIMIT_BUCKET_CAPACITY = 10_000;
 const MAX_RATE_LIMIT_BUCKET_CAPACITY = 100_000;
@@ -78,32 +78,32 @@ export function parsePositiveInt(value, fallback) {
 export function resolveHttpTransportLimits(runtimeOptions = {}) {
   const requestTimeoutMs = parsePositiveInt(
     runtimeOptions.httpRequestTimeoutMs,
-    parsePositiveInt(process.env.LICO_HTTP_REQUEST_TIMEOUT_MS, 300_000)
+    parsePositiveInt(process.env.MESHRIX_HTTP_REQUEST_TIMEOUT_MS, 300_000)
   );
   return Object.freeze({
     maxConnections: parsePositiveInt(
       runtimeOptions.httpMaxConnections,
-      parsePositiveInt(process.env.LICO_HTTP_MAX_CONNECTIONS, 2_000)
+      parsePositiveInt(process.env.MESHRIX_HTTP_MAX_CONNECTIONS, 2_000)
     ),
     requestTimeoutMs,
     headersTimeoutMs: Math.min(
       requestTimeoutMs,
       parsePositiveInt(
         runtimeOptions.httpHeadersTimeoutMs,
-        parsePositiveInt(process.env.LICO_HTTP_HEADERS_TIMEOUT_MS, 60_000)
+        parsePositiveInt(process.env.MESHRIX_HTTP_HEADERS_TIMEOUT_MS, 60_000)
       )
     ),
     keepAliveTimeoutMs: parsePositiveInt(
       runtimeOptions.httpKeepAliveTimeoutMs,
-      parsePositiveInt(process.env.LICO_HTTP_KEEP_ALIVE_TIMEOUT_MS, 5_000)
+      parsePositiveInt(process.env.MESHRIX_HTTP_KEEP_ALIVE_TIMEOUT_MS, 5_000)
     ),
     maxRequestsPerSocket: parsePositiveInt(
       runtimeOptions.httpMaxRequestsPerSocket,
-      parsePositiveInt(process.env.LICO_HTTP_MAX_REQUESTS_PER_SOCKET, 1_000)
+      parsePositiveInt(process.env.MESHRIX_HTTP_MAX_REQUESTS_PER_SOCKET, 1_000)
     ),
     maxHeadersCount: parsePositiveInt(
       runtimeOptions.httpMaxHeadersCount,
-      parsePositiveInt(process.env.LICO_HTTP_MAX_HEADERS_COUNT, 100)
+      parsePositiveInt(process.env.MESHRIX_HTTP_MAX_HEADERS_COUNT, 100)
     )
   });
 }
@@ -245,7 +245,7 @@ export function createFixedWindowRateLimiter({
 }
 
 export function normalizeClientIp(request, {
-  trustedProxies = process.env.LICO_TRUSTED_PROXIES || ""
+  trustedProxies = process.env.MESHRIX_TRUSTED_PROXIES || ""
 } = {}) {
   return clientIpFromRequest(request, { unknown: "unknown", trustedProxies });
 }
@@ -299,7 +299,7 @@ export function routeFromRequestUrl(value = "") {
 }
 
 export function metricTransportForRoute(route = "") {
-  if (route === "/mcp" || route.startsWith("/api/mcp") || route === "/.well-known/lico/mcp.json") {
+  if (route === "/mcp" || route.startsWith("/api/mcp") || route === "/.well-known/meshrix/mcp.json") {
     return "mcp";
   }
   if (route.startsWith("/api/operation-permission/v1")) {
@@ -317,31 +317,31 @@ export function numericHeader(value) {
 export function resolveHttpRateLimits(runtimeOptions = {}) {
   const httpRateLimitWindowMs = parsePositiveInt(
     runtimeOptions.httpRateLimitWindowMs,
-    parsePositiveInt(process.env.LICO_HTTP_RATE_LIMIT_WINDOW_MS, 60_000)
+    parsePositiveInt(process.env.MESHRIX_HTTP_RATE_LIMIT_WINDOW_MS, 60_000)
   );
   return {
     ip: {
       limit: parsePositiveInt(
         runtimeOptions.httpRateLimitPerIpPerMinute,
-        parsePositiveInt(process.env.LICO_HTTP_RATE_LIMIT_IP_PER_MINUTE, 1_200)
+        parsePositiveInt(process.env.MESHRIX_HTTP_RATE_LIMIT_IP_PER_MINUTE, 1_200)
       )
     },
     subject: {
       limit: parsePositiveInt(
         runtimeOptions.httpRateLimitPerSubjectPerMinute,
-        parsePositiveInt(process.env.LICO_HTTP_RATE_LIMIT_SUBJECT_PER_MINUTE, 1_000)
+        parsePositiveInt(process.env.MESHRIX_HTTP_RATE_LIMIT_SUBJECT_PER_MINUTE, 1_000)
       )
     },
     tenant: {
       limit: parsePositiveInt(
         runtimeOptions.httpRateLimitPerTenantPerMinute,
-        parsePositiveInt(process.env.LICO_HTTP_RATE_LIMIT_TENANT_PER_MINUTE, 4_000)
+        parsePositiveInt(process.env.MESHRIX_HTTP_RATE_LIMIT_TENANT_PER_MINUTE, 4_000)
       )
     },
     login: {
       limit: parsePositiveInt(
         runtimeOptions.httpRateLimitLoginPerIpPerMinute,
-        parsePositiveInt(process.env.LICO_HTTP_RATE_LIMIT_LOGIN_PER_MINUTE, 40)
+        parsePositiveInt(process.env.MESHRIX_HTTP_RATE_LIMIT_LOGIN_PER_MINUTE, 40)
       )
     },
     windowMs: Math.max(1_000, httpRateLimitWindowMs)
@@ -351,7 +351,7 @@ export function resolveHttpRateLimits(runtimeOptions = {}) {
 function parseAllowPublicConsoleFlag(runtimeOptions = {}) {
   const value =
     runtimeOptions.allowPublicConsole ??
-    process.env.LICO_ALLOW_PUBLIC_CONSOLE ??
+    process.env.MESHRIX_ALLOW_PUBLIC_CONSOLE ??
     "";
   return value === true || ["1", "true", "yes"].includes(String(value).trim().toLowerCase());
 }
@@ -374,6 +374,6 @@ export function assertSafeListenHost(host, runtimeOptions = {}) {
     return;
   }
   throw new Error(
-    "服务端默认只允许监听本机回环地址。若确需暴露到局域网/公网，请显式设置 LICO_ALLOW_PUBLIC_CONSOLE=1 或 --allow-public-console，并确保前置网络访问控制已配置。"
+    "服务端默认只允许监听本机回环地址。若确需暴露到局域网/公网，请显式设置 MESHRIX_ALLOW_PUBLIC_CONSOLE=1 或 --allow-public-console，并确保前置网络访问控制已配置。"
   );
 }

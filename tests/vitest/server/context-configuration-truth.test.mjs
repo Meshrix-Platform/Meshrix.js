@@ -114,7 +114,7 @@ function explicitContextProfile(profileId = "explicit-context-profile") {
 
 describe("context configuration truth", () => {
   it("keeps session memory bounded while preserving the newest valuable records", async () => {
-    const root = await temporaryRoot("lico-context-memory-retention-");
+    const root = await temporaryRoot("meshrix-context-memory-retention-");
     const agentMemory = createAgentMemory({
       userDataPath: root,
       maxStorageBytes: 4096,
@@ -165,7 +165,7 @@ describe("context configuration truth", () => {
   });
 
   it("persists only canonical complete profiles and never resolves by a model or legacy id alias", async () => {
-    const root = await temporaryRoot("lico-context-truth-");
+    const root = await temporaryRoot("meshrix-context-truth-");
     const runtime = createContextRuntime({
       userDataPath: root,
       agentMemory: createAgentMemory({ userDataPath: root })
@@ -211,7 +211,7 @@ describe("context configuration truth", () => {
     expect(() => normalizeCompactionPolicy({}, { strategy: "deterministic-extractive" }))
       .toThrow(/compactionPolicy.strategy/u);
 
-    const root = await temporaryRoot("lico-context-compaction-truth-");
+    const root = await temporaryRoot("meshrix-context-compaction-truth-");
     const runtime = createContextCompactionRuntime({
       userDataPath: root,
       agentMemory: createAgentMemory({ userDataPath: root })
@@ -221,7 +221,7 @@ describe("context configuration truth", () => {
   });
 
   it("requires composition to inject the AgentMemory port", async () => {
-    const root = await temporaryRoot("lico-context-memory-port-");
+    const root = await temporaryRoot("meshrix-context-memory-port-");
     expect(() => createContextCompactionRuntime({ userDataPath: root }))
       .toThrow(/explicit AgentMemory port/u);
     expect(() => createContextRuntime({ userDataPath: root }))

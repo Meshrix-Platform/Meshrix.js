@@ -1,4 +1,4 @@
-import { clientIpFromRequest, normalizeIpAddress } from "#lico/trusted-client-ip";
+import { clientIpFromRequest, normalizeIpAddress } from "#meshrix/trusted-client-ip";
 import { subjectCapabilities } from "./authorization-capabilities.mjs";
 import {
   deniedOutsideAllowed,
@@ -16,8 +16,8 @@ export function hasConfirmation(input = {}, request = null) {
     return true;
   }
   const header = String(
-    request?.headers?.["x-lico-confirm"] ||
-      request?.headers?.["x-lico-safety-confirm"] ||
+    request?.headers?.["x-meshrix-confirm"] ||
+      request?.headers?.["x-meshrix-safety-confirm"] ||
       ""
   ).toLowerCase();
   return ["1", "true", "yes"].includes(header);

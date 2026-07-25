@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
-import { deleteCheckpointTree, resolveStoredObjectPath, serverToken, summarizeForLog, traceDetails } from "#lico/product-api";
+import { deleteCheckpointTree, resolveStoredObjectPath, serverToken, summarizeForLog, traceDetails } from "#meshrix/product-api";
 import { deleteUploadSession } from "../../state/upload-session-store.mjs";
 import { getJobDirectory } from "./job-manager-validation.mjs";
 import { loadJobPayload, loadJobResult, persistJobMeta, persistJobPayload } from "./job-manager-persistence.mjs";

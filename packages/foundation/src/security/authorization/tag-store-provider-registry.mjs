@@ -26,7 +26,7 @@
  * ```
  *
  * @module tag-store-provider-registry
- * @package @lico/foundation
+ * @package @meshrix/foundation
  * @layer foundation/security
  */
 

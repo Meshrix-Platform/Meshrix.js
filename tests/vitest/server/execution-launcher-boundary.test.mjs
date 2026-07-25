@@ -31,11 +31,11 @@ describe("execution launcher boundary", () => {
 
   test("detects direct sandbox internals and dynamic host execution syntax", async () => {
     expect(await extractExecutionBoundarySyntax(`
-      import { createSandboxExecutionBroker } from "@lico/server-runtime/execution-sandbox/broker";
+      import { createSandboxExecutionBroker } from "@meshrix/server-runtime/execution-sandbox/broker";
       const options = { shell: true };
       eval("fixture");
     `)).toEqual({
-      internalImports: ["@lico/server-runtime/execution-sandbox/broker"],
+      internalImports: ["@meshrix/server-runtime/execution-sandbox/broker"],
       unsafeCalls: ["eval", "shell:true"]
     });
   });

@@ -13,7 +13,7 @@ __pycache__/
 .env
 .env.local
 .env.*.local
-licomesh-cloud-init.yaml
+meshrix-cloud-init.yaml
 .venv/
 .venv-pdf/
 .venv-paddleocr/
@@ -25,9 +25,9 @@ replay_pid*
 crash-*
 
 # App local data and generated workspace outputs
-.licomesh-server-data/
-/licomesh-data/
-/.lico-agent-history/
+.meshrix-server-data/
+/meshrix-data/
+/.meshrix-agent-history/
 /build/
 /cache/
 /outputs/

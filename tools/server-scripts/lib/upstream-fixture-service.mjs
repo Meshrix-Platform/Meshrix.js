@@ -1,9 +1,9 @@
 import crypto from "node:crypto";
 import http from "node:http";
 
-export const UPSTREAM_FIXTURE_SERVICE_NAME = "licomesh-upstream-fixture";
+export const UPSTREAM_FIXTURE_SERVICE_NAME = "meshrix-upstream-fixture";
 export const UPSTREAM_FIXTURE_SERVICE_VERSION = "0.0.1";
-export const UPSTREAM_FIXTURE_TOKEN_ENV = "LICO_UPSTREAM_FIXTURE_TOKEN";
+export const UPSTREAM_FIXTURE_TOKEN_ENV = "MESHRIX_UPSTREAM_FIXTURE_TOKEN";
 export const UPSTREAM_FIXTURE_CLI_PATH = "tools/server-scripts/upstream-fixture-service.mjs";
 export const UPSTREAM_FIXTURE_MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -467,9 +467,9 @@ export function upstreamFixtureOpenApiDocument() {
   return {
     openapi: "3.1.0",
     info: {
-      title: "LicoMesh upstream fixture service",
+      title: "Meshrix upstream fixture service",
       version: UPSTREAM_FIXTURE_SERVICE_VERSION,
-      description: "Deterministic upstream service fixture used by LicoMesh gateway verifiers."
+      description: "Deterministic upstream service fixture used by Meshrix gateway verifiers."
     },
     paths: {
       "/health": { get: { operationId: "health", responses: { 200: { description: "Service health" } } } },

@@ -1,6 +1,16 @@
 import { isIP } from "node:net";
 
 const compiledInputValidators = new WeakMap();
+const POLICY_ONLY_INPUT_KEYS = new Set(["tagPolicy"]);
+
+function operationInputForSchemaValidation(input = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+  return Object.fromEntries(
+    Object.entries(input).filter(([key]) => !POLICY_ONLY_INPUT_KEYS.has(key))
+  );
+}
 
 function schemaTypeList(schema = {}) {
   const rawType = schema.type;
@@ -406,17 +416,18 @@ export function compileInputSchema(operation) {
   const schema = operation.inputSchema || {};
   const topLevelTypes = schemaTypeList(schema);
   const validator = (input = {}) => {
+    const schemaInput = operationInputForSchemaValidation(input);
     if (topLevelTypes.length && !topLevelTypes.includes("object")) {
       return { ok: true };
     }
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
+    if (!schemaInput || typeof schemaInput !== "object" || Array.isArray(schemaInput)) {
       return {
         ok: false,
         error: `Tool operation ${operation.id} requires object input.`
       };
     }
     for (const key of schema.required || []) {
-      if (input[key] === undefined || input[key] === null || input[key] === "") {
+      if (schemaInput[key] === undefined || schemaInput[key] === null || schemaInput[key] === "") {
         return {
           ok: false,
           error: `Tool operation ${operation.id} missing required input: ${key}.`
@@ -427,7 +438,7 @@ export function compileInputSchema(operation) {
       ? schema.properties
       : {};
     if (schema.additionalProperties === false) {
-      const extraKeys = Object.keys(input).filter((key) => !Object.prototype.hasOwnProperty.call(properties, key));
+      const extraKeys = Object.keys(schemaInput).filter((key) => !Object.prototype.hasOwnProperty.call(properties, key));
       if (extraKeys.length) {
         return {
           ok: false,
@@ -438,7 +449,7 @@ export function compileInputSchema(operation) {
     return validateInputValueAgainstSchema({
       operationId: operation.id,
       schema,
-      value: input,
+      value: schemaInput,
       path: "input"
     });
   };
