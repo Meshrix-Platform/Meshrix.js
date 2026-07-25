@@ -99,7 +99,7 @@ async function verifyDocs() {
 
   const architecture = await read("docs/architecture/ARCHITECTURE.md");
   assert.ok(architecture.includes("`communication-service` belongs to the capability layer"));
-  assert.ok(architecture.includes("core communication-service provider does not import or register its implementation"));
+  assert.ok(architecture.includes("Core communication-service provider does not import or register product implementations"));
 }
 
 async function main() {
