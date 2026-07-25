@@ -359,7 +359,29 @@ export function createSystemController({
     return {
       ...authorization,
       actor,
-      authSession: { user: actor }
+      authSession: { user: actor },
+      revalidateAuthorization: async () => {
+        const currentAuthorization = await provider.authorizeRequest({
+          request,
+          requiredScopes: Array.isArray(externalAuth.requiredScopes) ? externalAuth.requiredScopes : [],
+          recordUse: false,
+          requestBody,
+          url,
+          method
+        });
+        if (
+          currentAuthorization.ok !== true ||
+          currentAuthorization.grant?.id !== grant.id
+        ) {
+          return {
+            ok: false,
+            status: currentAuthorization.status || 403,
+            reasonCode: currentAuthorization.reasonCode || "external_grant_stale",
+            error: currentAuthorization.error || "External grant is no longer authorized."
+          };
+        }
+        return currentAuthorization;
+      }
     };
   }
 

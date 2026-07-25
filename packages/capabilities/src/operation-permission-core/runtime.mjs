@@ -1,7 +1,7 @@
 import { getRuntimeLogger, summarizeForLog } from "@meshrix/foundation/observability/runtime-logger";
 import { traceContextFromRequest } from "@meshrix/foundation/observability/trace-context";
 import { canonicalHash } from "@meshrix/foundation/serialization/canonical-json";
-import { approvalAlreadySatisfiesPolicy, nowIso, parseJsonObject, pendingResumeInput, policyRevisionSummary, randomId, sourceIpFromRequest, trustedApprovedPendingOperation } from "./runtime-common.mjs";
+import { approvalAlreadySatisfiesPolicy, approvalLayers, nowIso, parseJsonObject, pendingResumeInput, policyRevisionSummary, randomId, sourceIpFromRequest, trustedApprovedPendingOperation } from "./runtime-common.mjs";
 import { denyInvalidInputExecution } from "./runtime-denials.mjs";
 import { completeDryRunExecution } from "./runtime-dry-run.mjs";
 import { appendAuthorizationDecision } from "./runtime-execution-support.mjs";
@@ -569,7 +569,13 @@ export function createToolExecutionRuntime({
     const approvalEffectAlreadyGranted =
       approvalAlreadySatisfiesCurrentPolicy &&
       (policy.effect === "needsApproval" || policy.effect === "require_approval");
-    if (!approvalEffectAlreadyGranted && !["allow", "dry_run_only"].includes(policy.effect)) {
+    const confirmationEffectAlreadyGranted =
+      policy.effect === "require_confirmation" && Boolean(trustedApproval);
+    if (
+      !approvalEffectAlreadyGranted &&
+      !confirmationEffectAlreadyGranted &&
+      !["allow", "dry_run_only"].includes(policy.effect)
+    ) {
       const durationMs = Date.now() - startedAtMs;
       logTool("warn", "operation_permission.execute.denied", {
         traceId,
@@ -675,7 +681,170 @@ export function createToolExecutionRuntime({
       const schemaValidation = validateInputSchema(operation, operationInput);
       if (!schemaValidation.ok) {
         return denyInvalidInput(schemaValidation);
-    }
+      }
+
+    const revalidateAuthorization = async () => {
+      let currentAuthorization = await store.authorizeRequest({
+        request,
+        requiredScopes: tool.requiredScopes,
+        tool,
+        context,
+        recordUse: false,
+        requestBody,
+        url: requestUrl,
+        method: requestMethod
+      });
+      if (!currentAuthorization.ok && authorizedGrant) {
+        const currentGrant = typeof store.getGrant === "function"
+          ? await Promise.resolve(store.getGrant(authorization.grant.id))
+          : null;
+        currentAuthorization =
+          currentGrant &&
+          currentGrant.id === authorization.grant.id &&
+          currentGrant.enabled !== false &&
+          !currentGrant.revokedAt &&
+          currentGrant.policyIntegrity?.valid !== false &&
+          currentGrant.projectionFingerprint
+            ? {
+                ok: true,
+                grant: currentGrant,
+                sourceIp: trustedApproval?.sourceIp || sourceIpFromRequest(request)
+              }
+            : {
+                ok: false,
+                status: 403,
+                reasonCode: "execution_grant_inactive",
+                error: "Tool grant is no longer active."
+              };
+      }
+      if (
+        !currentAuthorization.ok ||
+        currentAuthorization.grant?.id !== authorization.grant.id
+      ) {
+        return {
+          ok: false,
+          status: currentAuthorization.status || 403,
+          reasonCode: currentAuthorization.reasonCode || "execution_grant_denied",
+          error: currentAuthorization.error || "Tool grant authorization denied."
+        };
+      }
+
+      const currentPolicy = await policyEngine.evaluate({
+        tool,
+        grant: currentAuthorization.grant,
+        profile,
+        input,
+        request,
+        context,
+        dryRun: false,
+        traceId,
+        toolExecutionId
+      });
+      const currentPolicySummary = policyRevisionSummary(currentPolicy);
+      const capturedApproval =
+        trustedApproval &&
+        trustedApproval.status === "approved" &&
+        Boolean(trustedApproval.expiresAt) &&
+        Date.parse(trustedApproval.expiresAt) > Date.now()
+          ? trustedApproval
+          : null;
+      const requiredApprovalLayers = approvalLayers(capturedApproval || {});
+      const approvalActorId = String(
+        capturedApproval?.requiredApproval?.operationBinding?.approvalActorId || ""
+      );
+      const capturedResolvedBy = String(
+        capturedApproval?.resolvedBy ||
+        context?.approval?.resolvedBy ||
+        ""
+      );
+      const approvalActorCurrent = Boolean(
+        capturedApproval &&
+        approvalActorId &&
+        capturedResolvedBy &&
+        approvalActorId === capturedResolvedBy
+      );
+      let governanceApprovalCurrent =
+        requiredApprovalLayers.length === 0 && approvalActorCurrent;
+      if (capturedApproval && requiredApprovalLayers.length > 0) {
+        if (typeof securityPermissions?.getGovernanceApproval !== "function") {
+          return {
+            ok: false,
+            status: 503,
+            reasonCode: "governance_approval_store_unavailable",
+            error: "Governance approval store is unavailable."
+          };
+        }
+        const approvalId = `pending-${capturedApproval.pendingOperationId}`;
+        const currentApprovalRecord = await Promise.resolve(
+          securityPermissions.getGovernanceApproval(approvalId)
+        );
+        governanceApprovalCurrent = Boolean(
+          currentApprovalRecord &&
+          currentApprovalRecord.effect === "allow" &&
+          !currentApprovalRecord.revokedAt &&
+          Boolean(currentApprovalRecord.expiresAt) &&
+          Date.parse(currentApprovalRecord.expiresAt) > Date.now() &&
+          approvalActorCurrent &&
+          approvalLayers(currentApprovalRecord).every((layer) =>
+            requiredApprovalLayers.includes(layer)
+          ) &&
+          requiredApprovalLayers.every((layer) =>
+            approvalLayers(currentApprovalRecord).includes(layer)
+          )
+        );
+      }
+      const currentApproval =
+        capturedApproval && governanceApprovalCurrent
+          ? capturedApproval
+          : null;
+      const currentApprovalBinding = currentApproval?.requiredApproval?.operationBinding;
+      const approvalBindingCurrent =
+        !trustedApproval ||
+        (
+          currentApprovalBinding &&
+          currentApprovalBinding.bindingDigest === approvalOperationBinding.bindingDigest &&
+          Number(currentApprovalBinding.policyRevision?.grantPolicyRevision || 0) ===
+            currentPolicySummary.grantPolicyRevision &&
+          Number(currentApprovalBinding.policyRevision?.governancePolicyRevision || 0) ===
+            currentPolicySummary.governancePolicyRevision.revision
+        );
+      if (!approvalBindingCurrent) {
+        return {
+          ok: false,
+          status: 409,
+          reasonCode: "pending_approval_binding_stale",
+          error: "Pending approval no longer matches the current authorization policy."
+        };
+      }
+
+      const approvalSatisfiesPolicy =
+        approvalAlreadySatisfiesPolicy(currentPolicy, currentApproval);
+      const governanceApprovalSatisfied =
+        (currentPolicy.effect === "needsApproval" ||
+          currentPolicy.effect === "require_approval") &&
+        approvalSatisfiesPolicy;
+      const toolApprovalSatisfied =
+        tool.requiresApproval !== true || Boolean(currentApproval);
+      const policyAllowsExecution =
+        currentPolicy.effect === "allow" ||
+        (currentPolicy.effect === "require_confirmation" && Boolean(currentApproval)) ||
+        governanceApprovalSatisfied;
+      if (!policyAllowsExecution || !toolApprovalSatisfied) {
+        return {
+          ok: false,
+          status: currentPolicy.effect === "require_confirmation" ? 409 : 403,
+          reasonCode: currentPolicy.reasonCode || "execution_policy_denied",
+          error: currentPolicy.redactedReason || "Tool execution policy denied.",
+          authorizationDecision: currentPolicy
+        };
+      }
+      return {
+        ok: true,
+        grant: currentAuthorization.grant,
+        authorizationDecision: currentPolicy,
+        governancePolicyRevision: currentPolicy.governancePolicyRevision || null
+      };
+    };
 
     const previousAuthorization = request.__licoToolRuntimeAuthorization;
     request.__licoToolRuntimeAuthorization = {
@@ -726,6 +895,7 @@ export function createToolExecutionRuntime({
           transport: "operation-permission",
           method: operation.http?.method || "POST",
           authorizeOperation: null,
+          revalidateAuthorization,
           operationAuditStore,
           concurrencyScope: operationConcurrencyScope,
           logger,

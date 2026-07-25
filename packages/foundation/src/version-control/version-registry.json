@@ -5039,6 +5039,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.registry.release-definition",
+      "kind": "schema",
+      "description": "Governed version registry entry for meshrix.registry.release-definition.",
+      "activeVersion": "v0.0.1:registry:release-definition-1",
+      "versions": [
+        {
+          "version": "v0.0.1:registry:release-definition-1",
+          "ref": "meshrix.registry.release-definition@v0.0.1:registry:release-definition-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current canonical release definition contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-registry-release-definition-1-source-1",
+              "kind": "manifest",
+              "uri": "tools/registry/release-definition.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.registry.script-catalog",
       "kind": "schema",
       "description": "Governed version registry entry for meshrix.registry.script-catalog.",

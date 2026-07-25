@@ -4299,8 +4299,24 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
-                "required": []
+                "required": [],
+                "properties": {
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "fromTreeId": {
+                    "type": "string"
+                  },
+                  "toTreeId": {
+                    "type": "string"
+                  },
+                  "fromNodeId": {
+                    "type": "string"
+                  },
+                  "toNodeId": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -4463,8 +4479,18 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
-                "required": []
+                "required": [
+                  "treeId",
+                  "nodeId"
+                ],
+                "properties": {
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -4501,15 +4527,45 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
+                "required": [],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "auditId": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "preview": {
+                    "type": "boolean"
                   }
-                },
-                "required": []
+                }
               }
             }
           }
@@ -4546,15 +4602,45 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
+                "required": [],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "auditId": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "preview": {
+                    "type": "boolean"
                   }
-                },
-                "required": []
+                }
               }
             }
           }

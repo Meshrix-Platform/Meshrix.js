@@ -543,6 +543,75 @@ export function createProcessIdentityService({
     });
   }
 
+  async function revalidateVerifiedRequest({
+    verification = null,
+    operation = {}
+  } = {}) {
+    await mutationQueue.catch(() => {});
+    await load();
+    if (
+      verification?.ok !== true ||
+      !verification.client ||
+      !verification.capabilityKey
+    ) {
+      return deny(
+        401,
+        "process_identity_verification_required",
+        "Current process identity verification is required."
+      );
+    }
+    const current = findActiveClient({
+      clientId: verification.client.clientId,
+      packageId: verification.client.packageId,
+      processKeyId: verification.client.processKeyId
+    });
+    if (!current) {
+      return deny(
+        403,
+        "process_identity_package_not_active",
+        "Process identity package is no longer active."
+      );
+    }
+    const requiredCapabilities = operationRequiredCapabilities(operation);
+    const capabilityDecision = await resolvedCapabilityKeyProvider.verify({
+      capabilityKey: verification.capabilityKey,
+      requiredCapabilities,
+      includeRecordDetails: true
+    });
+    if (!capabilityDecision.ok) {
+      return deny(
+        403,
+        capabilityDecision.reasonCode || "process_identity_capability_denied",
+        "Process identity capability key is no longer authorized."
+      );
+    }
+    const bindingDecision = await resolvedBindingGuard.verifyCapabilityKeyBinding({
+      capabilityKey: verification.capabilityKey,
+      credentialId: current.capabilityCredentialId,
+      context: clientBindingContext(current)
+    });
+    const requireBinding = operation.processIdentity?.requireBinding !== false;
+    if (!bindingDecision.ok || (requireBinding && bindingDecision.applicable === false)) {
+      return deny(
+        403,
+        bindingDecision.reasonCode || "process_identity_binding_denied",
+        "Process identity capability binding is no longer authorized."
+      );
+    }
+    return {
+      ok: true,
+      applicable: true,
+      reasonCode: "process_identity_current",
+      client: current,
+      capabilityKey: verification.capabilityKey,
+      requiredCapabilities,
+      capabilityDecision,
+      bindingDecision,
+      actor: verification.actor,
+      authSession: verification.authSession
+    };
+  }
+
   async function rotateClientIdentityPackage({ request = null, input = {} } = {}) {
     const verification = request?.__licoProcessIdentity;
     if (!verification?.ok || !verification.client || !verification.capabilityKey) {
@@ -975,6 +1044,7 @@ export function createProcessIdentityService({
     issueLocalMcpClientIdentityPackage,
     revokeIssuedLocalMcpClientIdentityPackage,
     verifySignedRequest,
+    revalidateVerifiedRequest,
     rotateClientIdentityPackage,
     revokeClientIdentityPackage,
     verifyClientIdentityRevocationReceipt,

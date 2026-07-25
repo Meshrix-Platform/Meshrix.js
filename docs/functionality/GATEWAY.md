@@ -8,6 +8,34 @@ Authenticated maintainers publish closed service commands through `/api/gateway/
 
 The production composition binds the control-plane application service, canonical manifest compiler and writer, manifest observer, immutable gateway snapshot, Operation Permission catalog publication, scoped audience projection, and MCP catalog-delivery protocol. The console is a consumer of the public server API and is not a publication authority.
 
+## Deployment Profiles And Edge Boundary
+
+The self-contained Node.js listener is the implemented embedded profile. It
+can accept HTTP directly for local, development, desktop-adjacent, and bounded
+private deployments without requiring an external reverse proxy.
+
+For production deployments, an operator may place an independently admitted
+Nginx, Caddy, Envoy, or equivalent edge in front of Meshrix. The edge may own
+TLS, HTTP protocol negotiation, connection reuse, coarse-grained rate limits,
+load balancing, and standard edge observability. It does not parse Meshrix
+governance semantics and cannot authorize an operation, mint or consume a
+governed permit, resolve a credential, approve an action, or emit Meshrix
+governance evidence.
+
+Meshrix remains the semantic gateway in both profiles. It interprets HTTP,
+JSON-RPC, and MCP contracts; resolves registered operations; applies
+authentication, Operation Permission, tag, risk, approval, and traffic policy;
+injects scoped credentials at the protected sink; manages protocol sessions;
+and emits bounded redacted evidence. An external edge therefore augments the
+Node.js runtime instead of replacing the application gateway.
+
+No separate Go data plane is currently implemented. Any future data-plane
+service must be justified by representative load and saturation evidence,
+preserve the language-independent gateway contracts, and consume the same
+Core-minted governed permit at protected sinks. It cannot introduce a second
+policy engine, authorization authority, service-publication authority, or
+audit lifecycle.
+
 The console can load a portable service document with kind
 `meshrix.upstream-service` and schema version
 `v0.0.1:upstream-service:portable-import-2`. The document contains only a
@@ -21,7 +49,8 @@ a plugin, or embeds credential material.
 Every HTTP or JSON-RPC operation now publishes an explicit `payloadTransport`
 contract. `structured_json` retains bounded JSON validation and projection;
 `opaque_stream` carries native HTTP bytes; `artifact_body` and
-`artifact_multipart` resolve owner-bound upload or artifact references; and an
+`artifact_multipart` resolve owner-bound upload, artifact, or workspace-file
+references; and an
 `artifact` response is committed privately and returned to MCP as a
 `resource_link`. Files are not Base64-encoded by the gateway. The complete
 file-conversion import example is
@@ -133,7 +162,12 @@ only the safe representation headers admitted by the operation contract.
 
 JSON-only callers first use the authenticated upload-session API and pass a
 reference shaped as `upload:<sessionId>:<fileIndex>` to a projected artifact
-argument. Successful artifact responses carry an authenticated Core URI under
+argument. A file already held in a governed agent workspace may instead be
+passed as `workspace:<workspaceId>:<relativePath>`; resolution reuses the
+owner-bound workspace access check and workspace path-containment rules, so a
+caller without read authority over that workspace file is denied and traversal
+outside the workspace root fails closed. Successful artifact responses carry
+an authenticated Core URI under
 `GET /api/gateway/v1/artifacts/:artifactId`; `HEAD` and one RFC-style byte
 range are supported. Ownership is checked on every resolve and download.
 
@@ -160,7 +194,7 @@ Server protocol conformance uses a neutral downstream peer generated from the MC
 
 Native downstream installation obtains a grant through the local device-authorization request, authenticated console approval, and one-time claim consumption flow. The installer never receives a console cookie or CSRF token, and it does not treat loopback location or process identity as authorization. A user may instead provide an already issued grant through standard input or a named environment variable. Uninstall notification uses an existing grant and does not mint a replacement credential when none is available.
 
-The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. The catalog pins external packages from Meshrix-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
+The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. The catalog pins external packages from Meshrix-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
 
 Destructive fixture tools stay hidden from downstream projection. The approval verifier first proves that the pending call produced no upstream side effect, then resolves the shared pending operation and requires exactly one credential-bound upstream MCP call. Repeated approval is rejected without replay, while rejection and expiry leave the upstream hit count unchanged. The dedicated readiness reducer rejects reports that contain only `pending_approval` without the resume, exactly-once, no-side-effect, audit-correlation, and credential-binding evidence.
 

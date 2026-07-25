@@ -151,6 +151,10 @@ export function createPendingStoreMethods(ctx) {
       "payload_mismatch",
       "replayed"
     ].includes(normalizedResolution) ? timestamp : "";
+    const sourceStatuses = normalizedResolution === "approved"
+      ? ["pending"]
+      : ["pending", "approved"];
+    const sourceStatusPlaceholders = sourceStatuses.map(() => "?").join(", ");
     const info = db.prepare(`
       UPDATE tool_pending_operations
       SET status = ?,
@@ -162,7 +166,7 @@ export function createPendingStoreMethods(ctx) {
           resumed_tool_execution_id = CASE WHEN ? <> '' THEN ? ELSE resumed_tool_execution_id END,
           approval_requirements_json = CASE WHEN ? <> '' THEN ? ELSE approval_requirements_json END,
           completed_at = CASE WHEN ? <> '' THEN ? ELSE completed_at END
-      WHERE pending_operation_id = ? AND status IN ('pending', 'approved')
+      WHERE pending_operation_id = ? AND status IN (${sourceStatusPlaceholders})
     `).run(
       normalizedResolution,
       timestamp,
@@ -180,7 +184,8 @@ export function createPendingStoreMethods(ctx) {
       requiredApproval ? stringifyJson(approvalRequirements({ requiredApproval }).requiredApproval) : "",
       completedAt,
       completedAt,
-      String(pendingOperationId || "")
+      String(pendingOperationId || ""),
+      ...sourceStatuses
     );
     if (info.changes <= 0) {
       return null;

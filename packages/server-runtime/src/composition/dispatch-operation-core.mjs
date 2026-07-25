@@ -35,6 +35,24 @@ import {
 
 const dispatcherAuthorizationEngine = createAuthorizationEngine();
 
+function requiresExecutionAuthorizationRevalidation(operation = {}) {
+  return operation.public !== true && operation.readOnly !== true;
+}
+
+function executionAuthorizationDenied(decision = {}) {
+  return Object.freeze({
+    authorizationDenied: true,
+    statusCode: Number(decision.status || decision.statusCode || 403) || 403,
+    reasonCode: String(
+      decision.reasonCode ||
+      decision.authorizationDecision?.reasonCode ||
+      "execution_authorization_denied"
+    ),
+    error: String(decision.error || "Execution authorization denied."),
+    authorizationDecision: decision.authorizationDecision || null
+  });
+}
+
 export async function dispatchOperation({
   operation,
   controllers,
@@ -48,6 +66,7 @@ export async function dispatchOperation({
   method = operation?.http?.method || "POST",
   applyHttpQuery = true,
   authorizeOperation = null,
+  revalidateAuthorization = null,
   verifyProcessIdentity = null,
   operationAuditStore = null,
   operationProofSubstrate = null,
@@ -337,6 +356,7 @@ export async function dispatchOperation({
       !skipAuthorization &&
       operation.externalAuth !== true &&
       typeof authorizeOperation === "function";
+    let externalAuthVerification = null;
 
     if (!skipAuthorization && operation.externalAuth === true) {
       const verification = await verifyExternalAuth({
@@ -386,6 +406,7 @@ export async function dispatchOperation({
 	        notifyNarrowTransition(request, "operation.policy_deny", "policy_denied");
 	        return { ok: false, handled: true, statusCode: status, operation, input: operationInput, traceContext, riskControl: riskControlEnvelope };
 	      }
+	      externalAuthVerification = verification;
 	      if (request && typeof request === "object") {
 	        request.__licoExternalAuth = verification;
 	        const externalGrantRef = firstText(verification.grantRef, verification.grant?.id);
@@ -681,16 +702,14 @@ export async function dispatchOperation({
 	        traceContext,
 	        riskControl: riskControlEnvelope
 	      };
-	    } else if (operation.externalAuth !== true) {
+	    } else if (operation.externalAuth !== true && operation.public === true) {
 	      appendRiskGate({
-	        controlId: operation.public === true
-	          ? DISPATCHER_RISK_CONTROL_IDS.operationAuthorize
-	          : DISPATCHER_RISK_CONTROL_IDS.platformAuthorize,
+	        controlId: DISPATCHER_RISK_CONTROL_IDS.operationAuthorize,
 	        decision: "allow",
-	        reasonCode: operation.public === true ? "allowed_public_without_authorizer" : "internal_dispatch_authorized",
+	        reasonCode: "allowed_public_without_authorizer",
 	        details: {
 	          transport,
-	          publicAccess: operation.public === true
+	          publicAccess: true
 	        }
 	      });
 	    }
@@ -772,6 +791,18 @@ export async function dispatchOperation({
 
 	    notifyNarrowTransition(request, "operation.policy_allow", "policy_checked");
     await ensureProofLifecycleStarted({ reasonCode: "policy_allowed" });
+    const executionAuthorizationRevalidator =
+      typeof revalidateAuthorization === "function"
+        ? revalidateAuthorization
+        : shouldRunConsoleAuthorization
+          ? authorizeOperation
+          : processIdentityAuthorizes &&
+              typeof processIdentityVerification?.revalidateAuthorization === "function"
+            ? processIdentityVerification.revalidateAuthorization
+            : typeof externalAuthVerification?.revalidateAuthorization === "function"
+              ? externalAuthVerification.revalidateAuthorization
+              : null;
+    const protectedEffect = requiresExecutionAuthorizationRevalidation(operation);
     const governanceReceipt = Object.freeze({
       operationId: operation.id,
       authorized: true,
@@ -792,12 +823,47 @@ export async function dispatchOperation({
         concurrencySafe: operation.concurrencySafe === true,
         concurrencyGroup: operation.concurrencyGroup || operation.id
       });
-      await withOperationLock({
+      const executionResult = await withOperationLock({
         operation,
         lockManager,
         concurrencyScope,
         signal,
-        run: (operationLock) => {
+        run: async (operationLock) => {
+          if (protectedEffect) {
+            if (typeof executionAuthorizationRevalidator !== "function") {
+              return executionAuthorizationDenied({
+                status: 503,
+                reasonCode: "execution_authorizer_missing",
+                error: "Execution authorization revalidator is not registered."
+              });
+            }
+            let currentAuthorization;
+            try {
+              currentAuthorization = await executionAuthorizationRevalidator({
+                phase: "execution",
+                operation,
+                request,
+                requestBody,
+                url,
+                params,
+                input: operationInput,
+                method,
+                transport,
+                authSession,
+                actor,
+                signal: operationLock?.signal || signal
+              });
+            } catch {
+              return executionAuthorizationDenied({
+                status: 503,
+                reasonCode: "execution_authorization_failed",
+                error: "Execution authorization revalidation failed."
+              });
+            }
+            if (currentAuthorization?.ok !== true) {
+              return executionAuthorizationDenied(currentAuthorization);
+            }
+          }
 		          notifyNarrowTransition(request, "operation.execute_start", "executing");
 	          notifySideEffectStart(request);
 	          appendRiskGate({
@@ -826,6 +892,49 @@ export async function dispatchOperation({
 	          });
 	        }
 	      });
+      if (executionResult?.authorizationDenied === true) {
+        appendRiskGate({
+          controlId: DISPATCHER_RISK_CONTROL_IDS.operationAuthorize,
+          decision: "deny",
+          reasonCode: executionResult.reasonCode,
+          statusCode: executionResult.statusCode,
+          details: {
+            authorizationDecisionId: executionResult.authorizationDecision?.decisionId || "",
+            phase: "execution"
+          }
+        });
+        await finishProofWithAudit({
+          operationAuditStore,
+          operation,
+          transport,
+          authSession,
+          actor,
+          input: operationInput,
+          status: "denied",
+          statusCode: executionResult.statusCode,
+          error: executionResult.error
+        });
+        logOperation(logger, "warn", operationEventName(transport, "denied"), {
+          requestId: requestIdFromRequest(request),
+          operationId: operation.id,
+          reason: executionResult.reasonCode,
+          status: executionResult.statusCode
+        });
+        sendOperationDenied(response, executionResult.statusCode, {
+          error: "执行授权已失效。",
+          traceId: traceContext.traceId
+        });
+        notifyNarrowTransition(request, "operation.policy_deny", "policy_denied");
+        return {
+          ok: false,
+          handled: true,
+          statusCode: executionResult.statusCode,
+          operation,
+          input: operationInput,
+          traceContext,
+          riskControl: riskControlEnvelope
+        };
+      }
 	      const statusCode = response?.statusCode || 200;
 	      await finishProofWithAudit({
 	        operationAuditStore,

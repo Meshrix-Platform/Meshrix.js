@@ -146,12 +146,27 @@ describe("local MCP process identity rollback", () => {
         method: "POST",
         operation
       });
-      await expect(verify("before-rollback")).resolves.toMatchObject({ ok: true });
+      const verified = await verify("before-rollback");
+      expect(verified).toMatchObject({ ok: true });
+      await expect(service.revalidateVerifiedRequest({
+        verification: verified,
+        operation
+      })).resolves.toMatchObject({
+        ok: true,
+        reasonCode: "process_identity_current"
+      });
 
       await expect(service.revokeIssuedLocalMcpClientIdentityPackage({
         clientIdentityPackage: issued.clientIdentityPackage,
         reason: "test_batch_rollback"
       })).resolves.toMatchObject({ ok: true });
+      await expect(service.revalidateVerifiedRequest({
+        verification: verified,
+        operation
+      })).resolves.toMatchObject({
+        ok: false,
+        reasonCode: "process_identity_package_not_active"
+      });
       await expect(verify("after-rollback")).resolves.toMatchObject({
         ok: false,
         reasonCode: "process_identity_package_unknown"

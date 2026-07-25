@@ -208,6 +208,21 @@ target explicitly:
 MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --build
 ```
 
+The Compose file also defines an optional, profile-gated `format-convert`
+service for the file-parser/format-convert upstream example
+(`docs/examples/file-parser-format-convert.upstream.json`). A plain
+`docker compose up` never starts it. Its build context lives in the sibling
+Meshrix-Services repository, so the Compose file references the pre-built
+image: run `make image` in `file-parser/format-convert/` there, which tags
+`meshrix-format-convert:local`, then enable the profile:
+
+```bash
+docker compose --profile format-convert up -d
+```
+
+The service stays on the internal Compose network; the server reaches it as
+`http://format-convert:8080`.
+
 Create the reproducible server source archive and its SHA-256 checksum with:
 
 ```bash
@@ -254,6 +269,20 @@ Container verification builds the Docker image with BuildKit dependency caches, 
 ```bash
 npm run server:verify:deployment-flow
 ```
+
+For routine local verification, Podman uses the same Compose file and the same
+verifier:
+
+```bash
+podman machine init
+podman machine start
+npm run server:verify:deployment-flow:podman
+```
+
+Initialize the Podman machine only once. The Podman report is written separately
+as `build/reports/deployment-container-flow-podman.json`; it may establish
+`localVerificationReady`, but it deliberately cannot establish `releaseReady`.
+The canonical release acceptance path continues to own release evidence.
 
 ## Routine Verification
 
@@ -355,12 +384,31 @@ injection, and a complete retention cycle. Until a catalog-backed verifier
 proves that matrix for the selected storage engine, record the scope as
 non-converged rather than compensating with additional logs.
 
-## Release Publication
+## Release Definition and Publication
+
+`tools/registry/release-definition.registry.json` is the sole source for the
+product version, Git tag, release channel, package manifest set, container
+platforms, acceptance profile, GitHub native-runner matrix, and local container
+engine. Package manifests, the lockfile, workflow expressions, tags, reports,
+and this runbook are projections of that definition.
+
+Before creating a tag, update the definition, prepare all version projections,
+and verify them:
+
+```bash
+npm run release:prepare
+npm run verify:release-definition
+npm run release:prepare -- --check
+```
 
 `.github/workflows/release.yml` is the sole publication path. It runs only for
 semantic version tags, serializes all release runs globally, and fails unless
 the tagged commit is verifiably contained in the canonical `release` branch.
 The workflow runs the canonical acceptance authority before any publication.
+Its protected `release-candidate` GitHub environment is the review boundary.
+The immutable candidate image is built for both declared Linux platforms and
+must start successfully on native `ubuntu-24.04` amd64 and
+`ubuntu-24.04-arm` runners before signing.
 
 Meshrix `0.0.1` has an exact registry dependency on `pactium@0.5.0`. Publish
 that Pactium version first and confirm registry visibility before creating the

@@ -80,6 +80,7 @@ describe("release workflow supply-chain boundary", () => {
       "verify-macos-mcp-final-asset",
       "npm-registry-preflight",
       "build-release-image",
+      "verify-release-image-native",
       "sign-finalize-release",
       "prepare-release-draft",
       "publish-container-version",
@@ -94,13 +95,16 @@ describe("release workflow supply-chain boundary", () => {
     const assembly = jobSource(workflow, "assemble-release-assets");
     expect(workflow).toContain('tags: ["v*"]');
     expect(verification).toContain("npm run release:prepare -- --check --tag");
+    expect(verification).toContain("npm run verify:release-definition -- --tag");
     expect(workflow).not.toContain("workflow_dispatch:");
     expect(verifyJob).toBeGreaterThan(0);
     expect(firstPublicationJob).toBeGreaterThan(verifyJob);
     expect(verification).not.toContain("npm run verify:acceptance");
     expect(acceptanceJob).toContain("needs: [verify]");
     expect(acceptanceJob).toContain("MESHRIX_RELEASE_PARALLELISM: \"4\"");
-    expect(acceptanceJob).toContain("npm run verify:acceptance");
+    expect(acceptanceJob).toContain("verify-platform-acceptance.mjs");
+    expect(acceptanceJob).toContain("--field acceptance.profile");
+    expect(acceptanceJob).toContain("environment: release-candidate");
     expect(assembly).toContain("needs: [verify, platform-acceptance]");
     const orderedJobOffsets = orderedJobs.map((jobId) => workflow.indexOf(`  ${jobId}:\n`));
     expect(orderedJobOffsets.every((offset) => offset > 0)).toBe(true);
@@ -306,10 +310,17 @@ describe("release workflow supply-chain boundary", () => {
     const workflow = read(".github/workflows/release.yml");
     const uses = [...workflow.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)\s*(?:#.*)?$/gmu)]
       .map((match) => match[1]);
-    expect(uses).toHaveLength(36);
+    expect(uses).toHaveLength(37);
     expect(uses.every((value) => /@[a-f0-9]{40}$/u.test(value))).toBe(true);
-    expect(workflow).toContain("--platform linux/amd64,linux/arm64");
-    expect(workflow).toContain("--target runtime-ui");
+    expect(workflow).toContain("--json-field container.platforms");
+    expect(workflow).toContain('--platform "$platform_csv"');
+    expect(workflow).toContain('--target "$image_target"');
+    const nativeImage = jobSource(workflow, "verify-release-image-native");
+    expect(nativeImage).toContain("ubuntu-24.04-arm");
+    expect(nativeImage).toContain("docker run -d");
+    expect(nativeImage).toContain("/api/healthz");
+    expect(jobSource(workflow, "sign-finalize-release"))
+      .toContain("needs: [verify-release-inputs, build-release-image, verify-release-image-native]");
     expect(workflow).toContain("--provenance=mode=max,version=v0.2");
     expect(workflow).toContain(
       "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25"

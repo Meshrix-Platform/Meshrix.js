@@ -8,11 +8,15 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[Website](https://meshrix.io) · [Overview](#overview) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
+[Website](https://meshrix.io) · [Overview](#overview) · [Top 10 Priorities](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
 
 </div>
 
 English is the normative language of this repository's documentation; [简体中文](README.zh-CN.md) is the localized language version.
+
+> **Current priorities:** Meshrix's ten highest-value open problems, ranked by
+> priority, are maintained in [What's Next](docs/WHATS-NEXT.md). Read this
+> register before planning, implementing, or reviewing project work.
 
 ---
 
@@ -130,6 +134,7 @@ dependencies. See [Compatibility](docs/COMPATIBILITY.md) and
 
 | Topic | Document |
 | --- | --- |
+| Top 10 project priorities | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
 | Product definition | [PRODUCT.md](PRODUCT.md) |
 | Documentation index | [docs/README.md](docs/README.md) |
 | Architecture | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) |

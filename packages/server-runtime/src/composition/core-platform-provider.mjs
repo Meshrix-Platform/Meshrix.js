@@ -4,10 +4,12 @@ import {
 } from "../../../contracts/src/operations/operation-registry.mjs";
 import { PROTOCOL_OPERATION_IDS } from "../../../contracts/src/operations/protocol-operation-definitions.mjs";
 import {
-  dispatchInternalOperation as dispatchInternalOperationThroughDispatcher,
   dispatchRegisteredHttpOperation as dispatchRegisteredHttpOperationThroughDispatcher,
   dispatchRpcOperation as dispatchRpcOperationThroughDispatcher,
 } from "./dispatch-operation.mjs";
+import {
+  createStartupSnapshotPort as createStartupSnapshotPortThroughDispatcher,
+} from "./dispatch-operation-http.mjs";
 import {
   findProxyRegisteredApiRequest as findProxyRegisteredApiRequestThroughDispatcher,
 } from "./dispatch-operation-input.mjs";
@@ -233,8 +235,18 @@ export function createCorePlatformProvider({
           operations: [
             "dispatchRegisteredHttpOperation",
             "dispatchRpcOperation",
-            "dispatchInternalOperation",
             "shouldProxyRegisteredApiRequest",
+          ],
+        },
+        {
+          id: "startup-snapshot-port",
+          kind: "composition",
+          operations: [
+            "readSystemInterfaces",
+            "readDiscoveryConfig",
+            "readAgentSyncConfig",
+            "readConsoleState",
+            "readStorageSummary",
           ],
         },
         {
@@ -319,14 +331,11 @@ export function createCorePlatformProvider({
         ...proofSubstrateForDispatch(input),
       });
     },
-    dispatchInternalOperation(input = {}) {
-      const selection = effectiveOperationSelection(input);
-      return dispatchInternalOperationThroughDispatcher({
-        ...input,
+    createStartupSnapshotPort({ controllers } = {}) {
+      const selection = effectiveOperationSelection();
+      return createStartupSnapshotPortThroughDispatcher({
+        controllers,
         ...selection,
-        lockManager: operationLockManager,
-        concurrencyScope: boundOperationConcurrencyScope,
-        ...proofSubstrateForDispatch(input),
       });
     },
     listCapabilities,

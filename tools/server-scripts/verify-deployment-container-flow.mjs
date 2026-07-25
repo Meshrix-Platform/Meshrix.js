@@ -19,7 +19,15 @@ import {
 } from "./lib/local-mcp-verifier-identity.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const REPORT_PATH = "build/reports/deployment-container-flow.json";
+const engineIndex = process.argv.indexOf("--engine");
+const CONTAINER_ENGINE = engineIndex >= 0 ? String(process.argv[engineIndex + 1] || "") : "docker";
+if (!["docker", "podman"].includes(CONTAINER_ENGINE)) {
+  throw new Error("container_engine_must_be_docker_or_podman");
+}
+const IS_LOCAL_PODMAN = CONTAINER_ENGINE === "podman";
+const REPORT_PATH = IS_LOCAL_PODMAN
+  ? "build/reports/deployment-container-flow-podman.json"
+  : "build/reports/deployment-container-flow.json";
 const CACHE_DIR = ".cache/meshrix/npm-artifacts";
 const MCP_INTERFACE_VERSION = "v0.0.1:mcp:interface-1";
 const TOOLSETS = Object.freeze([
@@ -50,8 +58,10 @@ const report = {
   algorithm: {
     dependencyCache: "package-lock resolved artifact URLs are cached with HTTP Range resume and SRI integrity verification.",
     sourcePackage: "The canonical reproducible server source archive is expanded into an isolated temporary build context.",
-    dockerBuild: "Docker BuildKit builds the expanded source archive with cache mounts for apt and npm dependency stores.",
-    runtimeProbe: "docker compose builds and starts the real meshrix-server container, proves optional plugins are absent by default, then verifies the Core health, discovery, and MCP behavior.",
+    ...(IS_LOCAL_PODMAN
+      ? { containerBuild: "Podman Compose builds the expanded source archive with reusable dependency caches." }
+      : { dockerBuild: "Docker BuildKit builds the expanded source archive with cache mounts for apt and npm dependency stores." }),
+    runtimeProbe: `${CONTAINER_ENGINE} compose builds and starts the real meshrix-server container, proves optional plugins are absent by default, then verifies the Core health, discovery, and MCP behavior.`,
     destructiveChecks: "Malformed MCP JSON and unauthenticated tools/list must fail without crashing the container."
   },
   tests: [],
@@ -131,7 +141,13 @@ async function writeReport() {
   report.summary.cleanupOk = report.cleanup.composeDown === true && report.cleanup.sourcePackageWorkspace === true;
   report.summary.deploymentReady = report.summary.failedCount === 0 && report.summary.cleanupOk === true;
   report.summary.coverageReady = report.summary.deploymentReady;
-  report.summary.releaseReady = report.summary.deploymentReady;
+  if (IS_LOCAL_PODMAN) {
+    report.summary.localVerificationReady = report.summary.deploymentReady;
+    report.summary.releaseReady = false;
+    report.summary.evidenceAuthority = "local-only";
+  } else {
+    report.summary.releaseReady = report.summary.deploymentReady;
+  }
   report.summary.reportLeakScan = true;
   assertNoLeak(report, "deployment container flow report");
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
@@ -145,10 +161,10 @@ function failureEvidence(error) {
     status: Number(error?.status || 0) || 0,
     message: redactText(error?.message || "")
   };
-  if (error?.dockerDaemonWaitedMs !== undefined || error?.dockerDaemonAttempts !== undefined) {
-    evidence.dockerDaemonReady = false;
-    evidence.dockerDaemonWaitedMs = Number(error.dockerDaemonWaitedMs || 0);
-    evidence.dockerDaemonAttempts = Number(error.dockerDaemonAttempts || 0);
+  if (error?.containerEngineWaitedMs !== undefined || error?.containerEngineAttempts !== undefined) {
+    evidence.containerEngineReady = false;
+    evidence.containerEngineWaitedMs = Number(error.containerEngineWaitedMs || 0);
+    evidence.containerEngineAttempts = Number(error.containerEngineAttempts || 0);
   }
   return evidence;
 }
@@ -195,6 +211,7 @@ function run(command, args = [], options = {}) {
       MESHRIX_HOST_PORT: String(hostPort || ""),
       MESHRIX_CONTAINER_NAME: containerName,
       MESHRIX_IMAGE_NAME: imageName,
+      ...(IS_LOCAL_PODMAN ? { PODMAN_COMPOSE_PROVIDER: "podman-compose" } : {}),
       ...options.env
     }
   });
@@ -226,6 +243,7 @@ function runRaw(command, args = [], options = {}) {
       MESHRIX_HOST_PORT: String(hostPort || ""),
       MESHRIX_CONTAINER_NAME: containerName,
       MESHRIX_IMAGE_NAME: imageName,
+      ...(IS_LOCAL_PODMAN ? { PODMAN_COMPOSE_PROVIDER: "podman-compose" } : {}),
       ...options.env
     }
   });
@@ -246,13 +264,13 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.max(1, ms));
 }
 
-function waitForDockerDaemon({ timeoutMs = 120_000, intervalMs = 2500 } = {}) {
+function waitForContainerEngine({ timeoutMs = 120_000, intervalMs = 2500 } = {}) {
   const started = Date.now();
   let attempts = 0;
   let lastError = "";
   while (Date.now() - started <= timeoutMs) {
     attempts += 1;
-    const info = run("docker", ["info", "--format", "{{json .ServerVersion}}"], { allowFailure: true });
+    const info = run(CONTAINER_ENGINE, ["info"], { allowFailure: true });
     if (info.status === 0) {
       return {
         ready: true,
@@ -308,7 +326,7 @@ function waitForContainerHealthy(timeoutMs = 120_000) {
   let lastStatus = "unknown";
   while (Date.now() - started < timeoutMs) {
     const inspect = run(
-      "docker",
+      CONTAINER_ENGINE,
       ["inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}missing{{end}}", containerName],
       { allowFailure: true, cwd: deploymentRoot }
     );
@@ -434,7 +452,7 @@ const response = await fetch("http://127.0.0.1:7228/api/console/mcp/authorizatio
 const payload = await response.json().catch(() => ({}));
 console.log(JSON.stringify({ status: response.status, payload }));
 `;
-  const result = runRaw("docker", ["exec", containerName, "node", "--input-type=module", "-e", script]);
+  const result = runRaw(CONTAINER_ENGINE, ["exec", containerName, "node", "--input-type=module", "-e", script]);
   const approval = JSON.parse(result.stdout);
   assert.equal(approval.status, 200, JSON.stringify(safeEvidence(approval.payload)));
   assert.equal(approval.payload?.ok, true, JSON.stringify(safeEvidence(approval.payload)));
@@ -522,12 +540,12 @@ async function mcpToolCall(token, name, operation, input = {}, id = 100) {
 
 async function cleanupCompose() {
   if (projectName) {
-    const down = run("docker", ["compose", "-p", projectName, "down", "--volumes", "--remove-orphans"], {
+    const down = run(CONTAINER_ENGINE, ["compose", "-p", projectName, "down", "--volumes", "--remove-orphans"], {
       allowFailure: true,
       cwd: deploymentRoot
     });
     const imageRemove = imageName
-      ? run("docker", ["image", "rm", imageName], { allowFailure: true })
+      ? run(CONTAINER_ENGINE, ["image", "rm", imageName], { allowFailure: true })
       : { status: 0 };
     report.cleanup.composeDown = down.status === 0;
     report.cleanup.imageRemoveAttempted = Boolean(imageName);
@@ -591,7 +609,7 @@ try {
   baseUrl = `http://127.0.0.1:${hostPort}`;
   trackSecret(projectName, containerName, imageName, String(hostPort), baseUrl);
 
-  console.log("\n=== Container Deployment Flow: resumable cache, BuildKit, compose, MCP ===\n");
+  console.log(`\n=== Container Deployment Flow (${CONTAINER_ENGINE}): resumable cache, compose, MCP ===\n`);
 
   await test("deployment index docker preset points at the authoritative container flow", async () => {
     assert.equal(index.kind, "meshrix.deployment.entry-index");
@@ -661,19 +679,19 @@ try {
     };
   });
 
-  await test("docker compose builds starts and serves public readiness from the real container", async () => {
-    const daemon = waitForDockerDaemon();
+  await test(`${CONTAINER_ENGINE} compose builds starts and serves public readiness from the real container`, async () => {
+    const daemon = waitForContainerEngine();
     if (daemon.ready !== true) {
-      const error = new Error(`Docker daemon did not become ready for container deployment flow: ${daemon.error}`);
-      error.dockerDaemonWaitedMs = daemon.waitedMs;
-      error.dockerDaemonAttempts = daemon.attempts;
+      const error = new Error(`${CONTAINER_ENGINE} did not become ready for container deployment flow: ${daemon.error}`);
+      error.containerEngineWaitedMs = daemon.waitedMs;
+      error.containerEngineAttempts = daemon.attempts;
       throw error;
     }
-    const build = run("docker", ["compose", "-p", projectName, "build", "meshrix-server"], {
+    const build = run(CONTAINER_ENGINE, ["compose", "-p", projectName, "build", "meshrix-server"], {
       cwd: deploymentRoot,
       env: { MESHRIX_RUNTIME_CONFIG: "" }
     });
-    const up = run("docker", ["compose", "-p", projectName, "up", "-d", "meshrix-server"], {
+    const up = run(CONTAINER_ENGINE, ["compose", "-p", projectName, "up", "-d", "meshrix-server"], {
       cwd: deploymentRoot,
       env: { MESHRIX_RUNTIME_CONFIG: "" }
     });
@@ -686,9 +704,10 @@ try {
     }, { id: 1 });
     assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
     return {
-      dockerDaemonReady: true,
-      dockerDaemonWaitMs: daemon.waitedMs,
-      dockerDaemonAttempts: daemon.attempts,
+      containerEngine: CONTAINER_ENGINE,
+      containerEngineReady: true,
+      containerEngineWaitMs: daemon.waitedMs,
+      containerEngineAttempts: daemon.attempts,
       buildStatus: build.status,
       upStatus: up.status,
       readinessMs: readiness.waitedMs,

@@ -565,6 +565,8 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS = Object.freeze([
           password: { type: "string", minLength: 1 }
         }
       },
+      audit: { recordInput: false, metadataOnly: true },
+      log: { recordInput: false, redaction: "secret" },
       skipCsrf: true
     },
 {

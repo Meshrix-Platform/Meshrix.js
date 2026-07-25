@@ -16,6 +16,32 @@ const WORKSPACE_CHECKPOINT_RESTORE_SCHEMA = schema(["treeId", "nodeId"], {
   reason: { type: "string" }
 });
 
+const WORKSPACE_CHECKPOINT_DIFF_SCHEMA = schema([], {
+  treeId: { type: "string" },
+  fromTreeId: { type: "string" },
+  toTreeId: { type: "string" },
+  fromNodeId: { type: "string" },
+  toNodeId: { type: "string" }
+});
+
+const WORKSPACE_CHECKPOINT_SCOPE_SCHEMA = schema(["treeId", "nodeId"], {
+  treeId: { type: "string" },
+  nodeId: { type: "string" }
+});
+
+const WORKSPACE_OPERATION_REVERT_SCHEMA = schema([], {
+  auditId: { type: "string" },
+  workspaceId: { type: "string" },
+  treeId: { type: "string" },
+  nodeId: { type: "string" },
+  operationId: { type: "string" },
+  status: { type: "string" },
+  limit: { type: "integer" },
+  reason: { type: "string" },
+  dryRun: { type: "boolean" },
+  preview: { type: "boolean" }
+});
+
 export const WORKSPACE_ASSET_OPERATION_DEFINITIONS = Object.freeze([
 protocolOperation({
     id: "workspace.contribution.revoke",
@@ -301,7 +327,8 @@ protocolOperation({
     label: "生成 workspace checkpoint diff",
     targetMethod: "handleWorkspaceCheckpointDiff",
     path: "/api/workspace/checkpoints/diff",
-    scopes: ["workspace:read"]
+    scopes: ["workspace:read"],
+    inputSchema: WORKSPACE_CHECKPOINT_DIFF_SCHEMA
   }),
 protocolOperation({
     id: "workspace.checkpoint.restore.preview",
@@ -333,7 +360,8 @@ protocolOperation({
     label: "查询 workspace checkpoint 影响范围",
     targetMethod: "handleWorkspaceCheckpointScopeQuery",
     path: "/api/workspace/checkpoints/scope/query",
-    scopes: ["workspace:read"]
+    scopes: ["workspace:read"],
+    inputSchema: WORKSPACE_CHECKPOINT_SCOPE_SCHEMA
   }),
 protocolOperation({
     id: "workspace.operation.revert.scope",
@@ -344,7 +372,8 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: WORKSPACE_OPERATION_REVERT_SCHEMA
   }),
 protocolOperation({
     id: "workspace.operation.revert.apply",
@@ -355,6 +384,7 @@ protocolOperation({
     scopes: ["workspace:maintain"],
     risk: "repair_write",
     requiresConfirmation: true,
-    approvalScope: "workspace:maintain"
+    approvalScope: "workspace:maintain",
+    inputSchema: WORKSPACE_OPERATION_REVERT_SCHEMA
   })
 ]);

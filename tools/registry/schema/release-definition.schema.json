@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.meshrix.example/schemas/release-definition.schema.json",
+  "title": "Meshrix Release Definition",
+  "type": "object",
+  "required": [
+    "$schema",
+    "version",
+    "product",
+    "release",
+    "packages",
+    "container",
+    "acceptance",
+    "github",
+    "localVerification"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "minLength": 1 },
+    "product": { "const": "Meshrix" },
+    "release": {
+      "type": "object",
+      "required": ["version", "tag", "channel"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+        },
+        "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" },
+        "channel": { "enum": ["stable", "next"] }
+      },
+      "additionalProperties": false
+    },
+    "packages": {
+      "type": "object",
+      "required": ["manifests"],
+      "properties": {
+        "manifests": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+/package\\.json$|^package\\.json$" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "container": {
+      "type": "object",
+      "required": ["target", "platforms"],
+      "properties": {
+        "target": { "const": "runtime-ui" },
+        "platforms": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "enum": ["linux/amd64", "linux/arm64"] }
+        }
+      },
+      "additionalProperties": false
+    },
+    "acceptance": {
+      "type": "object",
+      "required": ["profile", "commandId"],
+      "properties": {
+        "profile": { "const": "enterprise-single-node" },
+        "commandId": { "const": "platform-acceptance" }
+      },
+      "additionalProperties": false
+    },
+    "github": {
+      "type": "object",
+      "required": ["environment", "nodeVersion", "imageVerification"],
+      "properties": {
+        "environment": { "const": "release-candidate" },
+        "nodeVersion": { "type": "string", "pattern": "^24\\.[0-9]+\\.[0-9]+$" },
+        "imageVerification": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["platform", "runner"],
+            "properties": {
+              "platform": { "enum": ["linux/amd64", "linux/arm64"] },
+              "runner": { "enum": ["ubuntu-24.04", "ubuntu-24.04-arm"] }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "localVerification": {
+      "type": "object",
+      "required": ["engine", "evidenceAuthority"],
+      "properties": {
+        "engine": { "const": "podman" },
+        "evidenceAuthority": { "const": "local-only" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
