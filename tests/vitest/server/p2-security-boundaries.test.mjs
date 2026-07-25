@@ -12,6 +12,9 @@ import {
   buildConsoleState,
   buildRuntimeInfo
 } from "../../../packages/protocols/http/api-facade.mjs";
+import {
+  createPolicyEnforcementPoint
+} from "../../../packages/foundation/src/security/authorization/pdp/policy-enforcement-point.mjs";
 import { executeDiscoveryOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/discovery-executor.mjs";
 import { executeStorageOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/storage-client-monitor-executors.mjs";
 
@@ -226,6 +229,30 @@ async function createLocalGrant(provider, body, headers = {}) {
 }
 
 describe("P2 security boundaries", () => {
+  it("does not treat a system actor or a caller-provided skip flag as authority", async () => {
+    const auditStore = { recordDecision: vi.fn(async () => {}) };
+    const pep = createPolicyEnforcementPoint({ auditStore });
+    const result = await pep.enforce({
+      operation: {
+        id: "security.system_actor_boundary",
+        risk: "safe_write",
+        requiredScopes: ["security:write"],
+        requiredCapabilities: ["cap:api:security.system_actor_boundary"]
+      },
+      subject: {
+        type: "system",
+        subjectId: "system-worker",
+        scopes: [],
+        capabilities: []
+      },
+      skipAuthorization: true
+    });
+
+    expect(result.allowed).toBe(false);
+    expect(result.decision.reasonCode).toBe("missing_scopes");
+    expect(auditStore.recordDecision).toHaveBeenCalledOnce();
+  });
+
   it("defaults authenticated known local MCP targets to read-only toolsets", async () => {
     const authorizeOperation = vi.fn(async () => ({ ok: true }));
     const securityPermissions = processIdentityPermissions({ authorizeOperation });
