@@ -67,6 +67,13 @@ function isAllowedPublicProtocolMatch(check, text, match) {
   return prefix === "application/" && /^\+(?:json|xml)(?:\b|$)/u.test(suffix);
 }
 
+function isAllowedOrganizationReleasePlanMatch(check, relativePath) {
+  return (
+    check.id === "bare-schema-version-field" &&
+    relativePath === "docs/releases/plan.json"
+  );
+}
+
 function verifyVersionNaming() {
   const findings = [];
   for (const filePath of collectVersionScanFiles({ repoRoot: defaultRepoRoot })) {
@@ -74,6 +81,7 @@ function verifyVersionNaming() {
     const text = fs.readFileSync(filePath, "utf8");
     for (const check of forbiddenPatterns) {
       for (const match of text.matchAll(check.pattern)) {
+        if (isAllowedOrganizationReleasePlanMatch(check, relativePath)) continue;
         if (isAllowedPublicProtocolMatch(check, text, match)) continue;
         findings.push({
           id: check.id,
