@@ -10,13 +10,13 @@ on:
 
 permissions:
   contents: read
-  issues: read
+  pull-requests: read
 
 jobs:
   version-governance:
-    uses: LicoLand/.github/.github/workflows/reusable-version-governance.yml@cbc1c4730d33ad15f6d7054939effaae93d79ec5
+    uses: LicoLand/.github/.github/workflows/reusable-version-governance.yml@834d4ee338062475b3401400e12c573fb05b4130
     with:
-      governance_ref: "cbc1c4730d33ad15f6d7054939effaae93d79ec5"
+      governance_ref: "834d4ee338062475b3401400e12c573fb05b4130"
       target_repository: ${{ github.repository }}
       target_ref: ${{ github.event.pull_request.head.sha || github.sha }}
       expected_repository: ${{ github.repository }}
