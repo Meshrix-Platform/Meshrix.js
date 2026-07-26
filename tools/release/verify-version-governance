@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-governance_ref="0875118889c39df343afeb6f4aa6e82f9690cc4d"
-expected_digest="cde1e2c6daa91b428249932571f7ad792158c9307db572a066d34b3e4bc91110"
+governance_ref="834d4ee338062475b3401400e12c573fb05b4130"
+expected_digest="d1c6ee491c88a3d154885aae0852725ed234edf8686c8f5abf12333af8adc708"
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd -- "$script_dir/../.." && pwd -P)"
