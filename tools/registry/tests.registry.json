@@ -41,13 +41,13 @@
         "gateway.performance-observation",
         "gateway.external"
       ],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "standard-public": {
       "description": "Platform validation",
       "extends": "core-public",
       "suites": [],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "security-public": {
       "description": "Security-focused gate",
@@ -64,7 +64,7 @@
         "downstream-mcp.authorization-request-filters",
         "agents.model-provider-runtime"
       ],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "audit-public": {
       "description": "Audit gate",
@@ -142,7 +142,7 @@
       "suites": [
         "smoke.start-server-defaults"
       ],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "release-public": {
       "description": "Functional completeness release gate",

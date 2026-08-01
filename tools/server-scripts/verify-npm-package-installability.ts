@@ -647,8 +647,16 @@ async function runContainerAuthority() : Promise<any> {
       };
     }
     await writeDefaultReport(report);
+    const containedFailureCode: any = report.tests
+      ?.find((test?: any) : any => test?.status === "failed")
+      ?.evidence?.errorCode;
+    const reportedFailureCode: any = /^npm_package_[a-z0-9_]+$/u.test(
+      String(containedFailureCode || "")
+    )
+      ? containedFailureCode
+      : failureCode(error);
     console.error(
-      `[npm-package-installability] failed code=${failureCode(error)} authority=fresh-container`
+      `[npm-package-installability] failed code=${reportedFailureCode} authority=fresh-container`
     );
     process.exitCode = 1;
   } finally {
