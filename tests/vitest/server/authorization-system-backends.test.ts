@@ -111,7 +111,7 @@ async function withMockedPlatform(platform?: any, action?: any) : Promise<any> {
 }
 
 function defaultBackendResponder({ command, args }: Record<string, any>) : any {
-  if (command === "/usr/bin/security") {
+  if (["security", "/usr/bin/security"].includes(command)) {
     return args.includes("find-generic-password")
       ? { code: 1, stderr: "The specified item could not be found" }
       : { code: 0, stdout: "" };
@@ -164,14 +164,14 @@ function commandHelperResponder({ command, input }: Record<string, any>) : any {
 }
 
 function failingBackendResponder({ command }: Record<string, any>) : any {
-  if (["/usr/bin/security", "keyctl", "secret-tool", "pass", "pwsh-fixture"].includes(command)) {
+  if (["security", "/usr/bin/security", "keyctl", "secret-tool", "pass", "pwsh-fixture"].includes(command)) {
     return { code: 5, stderr: `${command} failed intentionally` };
   }
   return { code: 5, stderr: "backend failed intentionally" };
 }
 
 function writeFailingBackendResponder({ command, args }: Record<string, any>) : any {
-  if (command === "/usr/bin/security") {
+  if (["security", "/usr/bin/security"].includes(command)) {
     return args.includes("find-generic-password")
       ? { code: 1, stderr: "The specified item could not be found" }
       : { code: 7, stderr: "keychain write failed intentionally" };

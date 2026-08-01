@@ -137,9 +137,12 @@ describe("PluginLifecycleStatePort durable filesystem lease", () : any => {
     });
     const events: any[] = [];
     let releaseFirst: any;
+    let markFirstStarted: any;
     const gate: any = new Promise((resolve?: any) : any => { releaseFirst = resolve; });
+    const firstStarted: any = new Promise((resolve?: any) : any => { markFirstStarted = resolve; });
     const first: any = input.port.runExclusive(async () : Promise<any> => {
       events.push("first:start");
+      markFirstStarted();
       await gate;
       await input.port.writeRecord("journal", { owner: "first" });
       events.push("first:end");
@@ -149,6 +152,7 @@ describe("PluginLifecycleStatePort durable filesystem lease", () : any => {
       await second.writeRecord("journal", { owner: "second" });
       events.push("second:end");
     });
+    await firstStarted;
     await new Promise((resolve?: any) : any => setTimeout(resolve, POLICY.heartbeatIntervalMs * 2));
     expect(events).toEqual(["first:start"]);
     releaseFirst();

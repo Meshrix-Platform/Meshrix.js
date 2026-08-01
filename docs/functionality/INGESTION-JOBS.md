@@ -257,7 +257,7 @@ responsibility of the Functional Release Gate.
 npm test -- --suite domains.manifest
 npm test -- --suite foundation.storage-object-lifecycle
 npm test -- --suite runtime.job-work-queue-recovery
-npx vitest run tests/vitest/server/upload-session-store.test.ts tests/vitest/server/http-request-body-admission.test.ts tests/vitest/server/workflow-event-checkpoint.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts
+npx vitest run tests/vitest/server/upload-session-store.test.ts tests/vitest/server/http-request-body-admission.test.ts tests/vitest/server/job-create-upload-session-only.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts
 node tools/server-scripts/verify-work-queue-conformance.ts
 node tools/server-scripts/verify-work-queue-process-restart.ts
 node tools/server-scripts/verify-job-work-queue.ts
