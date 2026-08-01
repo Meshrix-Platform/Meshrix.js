@@ -7,6 +7,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 import {
+  externalMemoryGrowth,
   positiveGrowth,
   theilSenSlope
 } from "./lib/resource-discipline-analysis.ts";
@@ -519,9 +520,9 @@ try {
     0,
     theilSenSlope(samples, (sample?: any) : any => sample.profile.inUseBytes)
   );
-  const externalGrowthBytes: any = positiveGrowth(
-    final.memory.external + final.memory.arrayBuffers,
-    initial.memory.external + initial.memory.arrayBuffers
+  const externalGrowthBytes: any = externalMemoryGrowth(
+    final.memory.external,
+    initial.memory.external
   );
   const rssGrowthBytes: any = positiveGrowth(final.memory.rss, initial.memory.rss);
   const storageGrowthBytes: any = positiveGrowth(storageFinal.bytes, storageBaseline.bytes);
