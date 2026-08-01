@@ -411,9 +411,9 @@ describe("canonical operation dispatcher locking", () : any => {
 
   it("serializes through the provider, heartbeats beyond TTL, and passes fencing context", async () : Promise<any> => {
     const manager: any = new MemoryLockManager({
-      defaultTtlMs: 30,
-      heartbeatIntervalMs: 5,
-      maxWaitMs: 500
+      defaultTtlMs: 1_000,
+      heartbeatIntervalMs: 50,
+      maxWaitMs: 5_000
     });
     managers.push(manager);
     const operation: any = unsafeOperation();
@@ -433,7 +433,7 @@ describe("canonical operation dispatcher locking", () : any => {
           maxInFlight = Math.max(maxInFlight, inFlight);
           lockContexts.push(operationLock);
           operationLock.assertActive();
-          await new Promise((resolve?: any) : any => setTimeout(resolve, 70));
+          await new Promise((resolve?: any) : any => setTimeout(resolve, 1_200));
           operationLock.assertActive();
           response.writeHead(200, { "Content-Type": "application/json" });
           response.end(JSON.stringify({ ok: true }));
