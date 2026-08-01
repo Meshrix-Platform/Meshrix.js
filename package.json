@@ -382,12 +382,12 @@
     "@meshrix/ui-console": "0.0.1",
     "better-sqlite3": "^12.9.0",
     "element-plus": "^2.13.7",
-    "es-module-lexer": "^2.1.0",
+    "es-module-lexer": "^2.3.1",
     "fflate": "^0.8.2",
     "marked": "^18.0.2",
     "p-limit": "^7.3.0",
     "pactium": "0.5.0",
-    "pg": "^8.21.0",
+    "pg": "^8.22.0",
     "undici": "^7.28.0",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"
@@ -399,13 +399,13 @@
     "@types/node": "^24.0.10",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vitest/coverage-v8": "^4.1.8",
-    "@vue/test-utils": "2.2.7",
+    "@vue/test-utils": "2.4.11",
     "cross-env": "^10.1.0",
-    "jsdom": "^29.1.1",
+    "jsdom": "^30.0.0",
     "openpgp": "^6.3.1",
     "typescript": "^5.8.3",
     "vite": "^8.1.4",
     "vitest": "^4.1.8",
-    "vue-tsc": "^3.3.7"
+    "vue-tsc": "^3.3.8"
   }
 }

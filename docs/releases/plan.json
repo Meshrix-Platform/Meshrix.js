@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LicoLand/.github/main/schemas/release-plan.schema.json",
+  "schemaVersion": 2,
+  "repository": "LicoLand/Meshrix",
+  "profile": "semver",
+  "currentVersion": "0.0.1",
+  "versionSources": [
+    {
+      "format": "json",
+      "path": "package.json",
+      "pointer": "/version"
+    }
+  ],
+  "changelog": "CHANGELOG.md",
+  "nextRelease": null,
+  "releases": [],
+  "components": []
+}
