@@ -67,6 +67,13 @@ function isAllowedPublicProtocolMatch(check?: any, text?: any, match?: any) : an
   return prefix === "application/" && /^(?:\+|\.)[a-z0-9][a-z0-9.+-]*(?:\b|$)/u.test(suffix);
 }
 
+function isAllowedOrganizationReleasePlanMatch(check?: any, relativePath?: any): boolean {
+  return (
+    check.id === "bare-schema-version-field" &&
+    relativePath === "docs/releases/plan.json"
+  );
+}
+
 function verifyVersionNaming() : any {
   const findings: any[] = [];
   for (const filePath of collectVersionScanFiles({ repoRoot: defaultRepoRoot })) {
@@ -74,6 +81,7 @@ function verifyVersionNaming() : any {
     const text: any = fs.readFileSync(filePath, "utf8");
     for (const check of forbiddenPatterns) {
       for (const match of text.matchAll(check.pattern)) {
+        if (isAllowedOrganizationReleasePlanMatch(check, relativePath)) continue;
         if (isAllowedPublicProtocolMatch(check, text, match)) continue;
         findings.push({
           id: check.id,

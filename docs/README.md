@@ -70,6 +70,7 @@ decision, execution plan, verifier, acceptance receipt, or release authority.
 | Code of conduct | [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
 | Security policy | [../SECURITY.md](../SECURITY.md) |
 | Changelog | [../CHANGELOG.md](../CHANGELOG.md) |
+| Governed release status | [releases/README.md](releases/README.md) |
 | License | [../LICENSE](../LICENSE) |
 
 ## Meshrix Technical Documents
