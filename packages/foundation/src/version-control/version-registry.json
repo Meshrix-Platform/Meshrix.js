@@ -9155,7 +9155,7 @@
             {
               "evidenceId": "v0-0-1-upstream-service-portable-import-2-test",
               "kind": "test",
-              "uri": "tests/vitest/console/portable-upstream-service-import.test.ts"
+              "uri": "tests/vitest/console/upstream-service-publish-view.test.ts"
             }
           ]
         }
