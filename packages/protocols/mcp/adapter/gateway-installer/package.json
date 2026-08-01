@@ -12,7 +12,7 @@
     "directory": "packages/protocols/mcp/adapter/gateway-installer"
   },
   "bin": {
-    "meshrix-mcp": "bin/meshrix-mcp.js"
+    "meshrix-mcp": "dist/bin/meshrix-mcp.js"
   },
   "files": [
     "dist/**/*",
