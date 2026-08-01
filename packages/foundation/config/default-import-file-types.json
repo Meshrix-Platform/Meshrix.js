@@ -398,7 +398,7 @@
           "label": "JavaScript",
           "extensions": [
             ".js",
-            ".mjs",
+            ".ts",
             ".cjs",
             ".jsx"
           ]
@@ -695,7 +695,7 @@
           "extensions": [
             ".ts",
             ".tsx",
-            ".mts",
+            ".ts",
             ".cts"
           ]
         },

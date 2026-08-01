@@ -90,6 +90,7 @@ WORKDIR app
 COPY --chown=meshrix:meshrix --from=build app/package.json app/package-lock.json ./
 COPY --chown=meshrix:meshrix --from=build app/LICENSE ./LICENSE
 COPY --chown=meshrix:meshrix --from=build app/node_modules ./node_modules
+COPY --chown=meshrix:meshrix --from=build app/dist ./dist
 COPY --chown=meshrix:meshrix --from=build app/apps/server ./apps/server
 COPY --chown=meshrix:meshrix --from=build app/apps/console/package.json ./apps/console/package.json
 COPY --chown=meshrix:meshrix --from=build app/packages ./packages
@@ -97,16 +98,21 @@ COPY --chown=meshrix:meshrix --from=build app/content ./content
 COPY --chown=meshrix:meshrix --from=build app/tools ./tools
 COPY --chown=meshrix:meshrix --from=build app/docs ./docs
 
-RUN mkdir -p data ../codex-home \
-    && chown -R meshrix:meshrix data ../codex-home
+RUN mkdir -p data backups ../codex-home \
+    && chown -R meshrix:meshrix data backups ../codex-home
 
 USER meshrix
 
 EXPOSE 7228
 
-VOLUME ["/app/data"]
+VOLUME ["/app/data", "/app/backups", "/codex-home"]
 
-CMD ["node", "tools/server-scripts/start-server.mjs", "--host", "0.0.0.0", "--port", "7228", "--data-dir", "data", "--allow-public-console"]
+STOPSIGNAL SIGTERM
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:7228/api/healthz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+CMD ["node", "dist/tools/server-scripts/start-server.js", "--host", "0.0.0.0", "--port", "7228", "--data-dir", "data", "--allow-public-console"]
 
 FROM runtime AS runtime-ui
 
@@ -118,6 +124,6 @@ RUN test -f ./build/dist/index.html
 
 USER meshrix
 
-CMD ["node", "tools/server-scripts/start-server.mjs", "--with-ui", "--host", "0.0.0.0", "--port", "7228", "--data-dir", "data", "--allow-public-console"]
+CMD ["node", "dist/tools/server-scripts/start-server.js", "--with-ui", "--host", "0.0.0.0", "--port", "7228", "--data-dir", "data", "--allow-public-console"]
 
 FROM runtime AS final

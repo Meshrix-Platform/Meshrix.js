@@ -1,47 +1,55 @@
-# Compatibility
+# Meshrix Compatibility
 
-This document records the open platform compatibility target for private deployment.
+This document records current compatibility targets and the evidence required
+for a support claim. [Status](STATUS.md) owns the product-wide intent,
+implementation, verification, release, and support result.
 
-| Area | Target |
-| --- | --- |
-| Runtime | Node.js server runtime using the version range in `package.json`. |
-| Packaging | npm scripts, Dockerfile, and compose file shipped by this repository. |
-| Storage | Local metadata and object storage by default. |
-| Console | Vue console served from the repository build. |
-| Protocols | HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocol surfaces. |
-| Downstream adapters | Pinned external Meshrix-Plugins packages for local connector-managed clients; Core contains only the generic adapter protocol and security boundary. |
-| Governance | Operation Permission, tag policy, approval, audit, metrics, and redaction. |
+## Claim rules
 
-## Release Verification Levels
+- A source path or configured target is an implementation fact, not support.
+- A passing focused check is verification for its exact scope, not a release.
+- A Functional Release Gate receipt applies only to its immutable candidate.
+- A source tag, npm package, container manifest, GitHub Release, and hosted
+  deployment are separate release or operation facts.
+- Environment support requires the same accepted candidate to pass the named
+  Real-Machine Verification Workflow for the exact system, architecture,
+  artifact, configuration, and deployment profile.
+- Client, plugin, and optional-service adoption evidence is independently
+  owned and cannot block or promote Meshrix acceptance.
 
-- **Published** means the target is assembled and verified by the canonical
-  release workflow.
-- **Current-host verified** means the release candidate was exercised on the
-  current development environment: macOS arm64, Node.js 24.16.0, npm 11, with
-  a Linux arm64 Docker runtime.
-- **Not in this release** means source support may exist, but the target does
-  not block publication and the release makes no runtime support claim for it.
+## Runtime and delivery matrix
 
-| Surface | Target | Status |
+| Surface | Current target | Current claim |
 | --- | --- | --- |
-| Core Node.js runtime | macOS arm64 with Node.js 24 | Current-host verified. |
-| npm release set | Seven public `@meshrix/*` workspaces, `meshrix-mcp-connector`, and `meshrix` | Canonical tag-workflow target; a required Node.js 22 clean install/start probe and credential-free all-package registry preflight complete before remote container mutation, and each package is later published or integrity-reverified. |
-| Server and Web Console container | Linux amd64 and arm64 | Canonical signed multi-platform publication target; both platform images are scanned with pinned Trivy and bound to platform-specific SLSA provenance and SPDX evidence. |
-| MCP Connector | macOS arm64 | Published target; the exact final archive, bundled Node runtime, launcher, installer delegation, and no-scan path execute on a required macOS arm64 tag-workflow runner. |
-| MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Not in this release. |
-| MCP client execution location | Local connector-managed process | Published target; OrbStack and remote-Linux direct HTTP registration are not in this release because they cannot attach the required process identity signature. Installation rejects them before device authorization. |
-| Upstream service publishing | Developer control plane through gateway, Operation Permission, and the published downstream protocol boundary | Supported by the production-path server gate and required positive report. Compatible consumer adoption is a separate support fact and is never a Core dependency. |
-| MeshrixUp | External desktop/mobile client implementing published protocols | Optional and independently released; its repository, implementation, build, plans, tests, reports, and receipts are not required for core startup, server implementation, or server release readiness. |
-| Pactium | Package `0.5.0`; protocol `pactium.v0.2`; data schema `pactium.v0.2.schema.latest` | Exact core dependency; storage selection is delegated to Pactium `auto` when the user leaves it unconfigured, and owned persistent ports use the idempotent async close contract. |
+| Enterprise single-node profile | `enterprise-single-node` private-deployment release profile | Pre-release target; release publication and environment support are currently unclaimed. |
+| Node.js runtime | Version range declared by `package.json` | Implemented target; no operating-system support claim is asserted here. |
+| Local source startup | Repository npm scripts and local server entry point | Development path; not a release or production-support claim. |
+| Server and Web Console container | Linux amd64 and arm64 OCI artifacts | Assembly and functional-verification target; native environment support remains unclaimed until its exact workflow passes. |
+| npm release set | Manifests named by the release definition | Publication target only; package publication must be proved independently for the immutable accepted candidate. |
+| MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact requires its own publication and environment receipt. |
+| Storage | Self-contained local storage by default; optional integrations only when explicitly configured | Local implementation target; an optional datastore has a separate compatibility claim. |
+| Production ingress | Administrator-owned TLS boundary conforming to the documented trusted-proxy contract | Functional target; one deployed proxy environment requires its own evidence. |
+| Backup and restore | Independent backup root and clean-root recovery journey | Required candidate closure; no recovery support claim is currently asserted. |
+| Upgrade and rollback | N-1 preflight, backup, migration, health admission, and failure rollback | Required candidate closure; no upgrade support claim is currently asserted. |
 
-## MCP Client Compatibility
+## Protocol and integration ownership
 
-Client availability, provider-account proof, configuration formats, and real
-client lifecycle evidence belong to the independently released adapter packages
-in Meshrix-Plugins. They do not block or promote a Core release. Core verifies
-only the neutral adapter protocol, package integrity/cache behavior, credential
-isolation, connector proxy, and lifecycle transaction.
+| Surface | Owner and boundary | Current claim |
+| --- | --- | --- |
+| HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocols | Meshrix protocol and technical documents | Implemented scope is defined only by the owning documents and schemas. |
+| Upstream service publishing | Meshrix server gateway and Operation Permission | Server-side functional target; compatible external-service adoption is independently owned. |
+| Downstream client protocol | Meshrix generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix release dependency. |
+| Client-specific adapters | Meshrix-Plugins | Catalog presence, packaging, publication, configuration, and real-client compatibility are separate facts owned there. |
+| LicoUp | Independent human-agent client product | No source, runtime, verification, release, or support dependency. Any adoption of a Meshrix protocol is LicoUp-owned compatibility evidence. |
+| MeshCore | Independent same-origin governed-effect product | Not a Meshrix component, backend, reduced distribution, or compatibility substitute. Its evidence cannot promote Meshrix. |
+| Optional parsers, providers, datastores, and service adapters | Owning plugin or service repository | Disabled or absent by default; each enabled path needs its own contract and evidence. |
+| Pactium | Exact dependency and protocol identities declared by Meshrix manifests and version registry | Dependency compatibility is limited to the exact declared identities; it does not establish Meshrix release or environment support. |
 
-Optional middleware integrations become compatibility targets through code, configuration, documentation, and verifier updates.
+## MCP client targets
 
-Supported connector-managed client targets in this release: OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI.
+Meshrix-Plugins may package adapters for OpenClaw, Codex, Claude Code,
+Antigravity, OpenCode, Pi, Kimi CLI, or other clients. Meshrix verifies
+only its neutral connector boundary. A client becomes supported only when the
+adapter owner names the exact client version and configuration, publishes the
+exact adapter artifact, and provides current lifecycle evidence. This
+repository does not currently make those client support claims.

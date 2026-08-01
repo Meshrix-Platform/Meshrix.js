@@ -54,7 +54,7 @@ export function selectedAgentFromOptions(
   options: AgentSelectorUiOption[],
   value?: string,
 ): AgentSelectorUiOption {
-  const selectedValue = String(value || "").trim();
+  const selectedValue: any = String(value || "").trim();
   if (!selectedValue) {
     return {
       value: "",
@@ -71,53 +71,53 @@ export function selectedAgentFromOptions(
       reason: "未分配",
     };
   }
-  return options.find((item) => item.value === selectedValue) || inactiveAgentModelOption(selectedValue);
+  return options.find((item?: any) : any => item.value === selectedValue) || inactiveAgentModelOption(selectedValue);
 }
 
 export function createConsoleAgentSelectorController(
   options: ConsoleAgentSelectorControllerOptions,
-) {
-  const agentSelectorOptions = computed<AgentSelectorUiOption[]>(() =>
+) : any {
+  const agentSelectorOptions: any = computed<AgentSelectorUiOption[]>(() : any =>
     (options.consoleState.value?.agentSelector?.options || []).map(normalizeAgentSelectorOption),
   );
 
-  function agentOptionsForModule(moduleId: string) {
-    return agentSelectorOptions.value.filter((option) =>
+  function agentOptionsForModule(moduleId: string) : any {
+    return agentSelectorOptions.value.filter((option?: any) : any =>
       option.moduleIds.includes("*") || option.moduleIds.includes(moduleId),
     );
   }
 
-  const gatewayAssistantAgentOptions = computed(() => agentOptionsForModule("agentTools"));
+  const gatewayAssistantAgentOptions: any = computed(() : any => agentOptionsForModule("agentTools"));
 
-  const agentModelOptionValueSet = computed(
-    () => new Set(agentSelectorOptions.value.map((item) => item.value)),
+  const agentModelOptionValueSet: any = computed(
+    () : any => new Set<any>(agentSelectorOptions.value.map((item?: any) : any => item.value)),
   );
 
-  function hasAgentModelOption(value?: string) {
-    const normalized = String(value || "").trim();
+  function hasAgentModelOption(value?: string) : any {
+    const normalized: any = String(value || "").trim();
     return Boolean(normalized && agentModelOptionValueSet.value.has(normalized));
   }
 
-  function validAgentModelAlias(value?: string) {
-    const normalized = String(value || "").trim();
+  function validAgentModelAlias(value?: string) : any {
+    const normalized: any = String(value || "").trim();
     return hasAgentModelOption(normalized) ? normalized : "";
   }
 
-  function currentAgentModelOptionLabel(value?: string) {
-    const normalized = String(value || "").trim();
+  function currentAgentModelOptionLabel(value?: string) : any {
+    const normalized: any = String(value || "").trim();
     if (!normalized) {
       return "";
     }
-    return agentSelectorOptions.value.find((item) => item.value === normalized)?.label ||
+    return agentSelectorOptions.value.find((item?: any) : any => item.value === normalized)?.label ||
       options.agentModelOptionLabelCache.value[normalized] ||
       "";
   }
 
-  function cacheAgentModelOptionLabels(items: Array<{ value: string; label?: string }>) {
+  function cacheAgentModelOptionLabels(items: Array<{ value: string; label?: string }>) : any {
     const next: Record<string, string> = {};
     for (const item of items) {
-      const value = String(item.value || "").trim();
-      const label = String(item.label || "").trim();
+      const value: any = String(item.value || "").trim();
+      const label: any = String(item.label || "").trim();
       if (value && label) {
         next[value] = label;
       }
@@ -125,7 +125,7 @@ export function createConsoleAgentSelectorController(
     options.agentModelOptionLabelCache.value = next;
   }
 
-  const selectedGatewayAssistantModel = computed(() =>
+  const selectedGatewayAssistantModel: any = computed(() : any =>
     selectedAgentFromOptions(gatewayAssistantAgentOptions.value, options.gatewayAssistantForm.value.modelAlias),
   );
 

@@ -41,13 +41,13 @@ function percentLabel(value: number, total: number) {
 const toolUsageRows = computed(() => {
   const total = Number(props.metricsState?.callsTotal || 0);
   return [
-    ...props.statusRows.map((row) => ({
+    ...props.statusRows.map((row: any) => ({
       dimension: "状态",
       label: row.label,
       value: Number(row.value || 0),
       rate: percentLabel(Number(row.value || 0), total),
     })),
-    ...props.riskRows.map((row) => ({
+    ...props.riskRows.map((row: any) => ({
       dimension: "风险",
       label: toolRiskLabel(row.label),
       value: Number(row.value || 0),
@@ -84,11 +84,11 @@ const toolUsageRows = computed(() => {
       </div>
       <div>
         <span>平均耗时</span>
-        <strong>{{ Math.round(metricsState?.averageDurationMs || 0) }}ms</strong>
+        <strong>{{ (metricsState?.callsTotal || 0) > 0 ? `${Math.round(metricsState?.averageDurationMs || 0)}ms` : "—" }}</strong>
       </div>
     </div>
 
-    <div class="job-table compact-job-table tool-stats-table">
+    <div v-if="toolUsageRows.length" class="job-table compact-job-table tool-stats-table">
       <div class="job-table-header">
         <span>维度</span>
         <span>项目</span>

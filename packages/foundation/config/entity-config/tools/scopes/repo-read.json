@@ -1,0 +1,5 @@
+{
+  "id": "repo:read",
+  "label": "Read governed repository resources",
+  "description": "Read repository metadata and governed review state without modifying the target."
+}

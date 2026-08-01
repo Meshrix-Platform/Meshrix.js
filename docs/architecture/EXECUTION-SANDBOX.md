@@ -6,7 +6,13 @@ This document defines the platform boundary for executing agent-controlled or ot
 
 An absent sandbox configuration remains absent. Its effective runtime state is non-executable and its public projection is `sandboxAvailable: false`. Provider resolution records observed capability separately and does not synthesize a user provider mode, allowed provider class, selection, image, policy profile, network grant, filesystem grant, or compatibility fallback. A trusted receipt is stored only after the operator runs the real OCI conformance verifier for the exact provider, runtime profile, policy revision, and required sandbox receipt; failed verification revokes the candidate receipt. Plugin package custody uses the Core opaque-custody boundary, while workspace file-safety evidence remains distinct from execution-isolation evidence.
 
-The contract verifier combines admission, lifecycle, opaque-custody, launcher-boundary, and trusted OCI receipt facts. The current source launcher audit is closed, but source closure does not replace a current live backend receipt or consumer integration proof. Current convergence is accepted only when `controlled-execution-sandbox` owns all four leaf reports and the `controlled-execution-convergence-final` reducer accepts their matching source provenance plus the exact current Plan receipts. That reducer emits only `controlledExecutionConvergenceReady`; it cannot claim consumer or platform readiness.
+The contract verifier combines admission, lifecycle, opaque-custody,
+launcher-boundary, and trusted OCI simulation facts. Current functional
+convergence is accepted only when `controlled-execution-sandbox` owns all four
+leaf reports and the `controlled-execution-convergence-final` reducer accepts
+their matching source provenance plus the exact current Plan receipts. That
+reducer emits only `controlledExecutionConvergenceReady`; it cannot establish
+an external provider Environment Support Claim.
 
 ## Scope And Trust Boundary
 
@@ -175,7 +181,11 @@ Discovery evaluates only core-trusted adapters and fixed installation or service
 
 The resolver caches only bounded redacted capability facts and invalidates selection when provider identity, service identity, health, policy revision, or conformance receipt changes. The public projection exposes only `sandboxAvailable`; it is true only for the ready state. An administrative projection may expose a redacted state, provider class, isolation class, enforceable capabilities, policy revision, and receipt reference, but never host paths, sockets, addresses, raw probe output, or machine identity.
 
-External runtimes remain deployment integrations rather than execution fallbacks. An unrestricted local-process adapter may exist only for explicitly trusted development diagnostics; it is not a conforming production sandbox, is never selected for governed execution, and cannot satisfy execution-sandbox readiness.
+External runtimes remain deployment integrations rather than execution
+fallbacks. An unrestricted local-process adapter may exist only for explicitly
+trusted development diagnostics; it is not a conforming production sandbox,
+is never selected for governed execution, and cannot satisfy the sandbox
+Functional Release Gate criteria.
 
 ## Opaque Custody When Execution Is Unavailable
 
@@ -197,7 +207,11 @@ Core workspace Host capabilities supply an immutable, authorized snapshot rather
 
 ### Agent And Maintenance Execution
 
-Maintenance automation, delegated CLI work, scanners, plugin adapters, and any other runtime child-process path must use the same port before the platform can claim complete execution isolation. A second plugin-local launcher, compatibility shell, or direct host-process path is a bypass and blocks readiness.
+Maintenance automation, delegated CLI work, scanners, plugin adapters, and any
+other runtime child-process path must use the same port before the functional
+release can claim complete execution isolation. A second plugin-local launcher,
+compatibility shell, or direct host-process path is a bypass and fails the
+Functional Release Gate.
 
 ## Failure Semantics
 
@@ -212,7 +226,8 @@ Maintenance automation, delegated CLI work, scanners, plugin adapters, and any o
 
 ## Required Verification
 
-Implementation readiness requires catalog-owned tests and redacted reports that prove the real product path, including:
+Functional acceptance requires catalog-owned tests and redacted reports that
+prove the product path, including:
 
 - empty configuration and explicit disabled-state denial with zero backend side effects;
 - trusted Podman, Docker, and registered-provider discovery, deterministic conforming selection, stale-cache invalidation, truthful `sandboxAvailable`, and redacted administrative status;
@@ -230,4 +245,11 @@ Implementation readiness requires catalog-owned tests and redacted reports that 
 - physical removal or disablement of each optional backend and each consuming plugin without exposing a bypass;
 - a source audit showing that every product runtime launcher for governed executable workloads enters through the core port.
 
-Run `npm run verify:controlled-execution-sandbox` for the contract, lifecycle, custody, launcher-boundary, and trusted-backend leaf checks. Then run `npm run verify:controlled-execution-convergence` to reduce the exact current leaf and Plan-receipt set. A passing Core final report does not complete an external plugin, Capability Runtime, or platform acceptance; each parent or consumer must validate its own exact integration receipt.
+Run `npm run verify:controlled-execution-sandbox` for the contract, lifecycle,
+custody, launcher-boundary, and trusted-backend leaf checks. Then run
+`npm run verify:controlled-execution-convergence` to reduce the exact current
+leaf and Plan-receipt set. These development-environment checks contribute to
+the Functional Release Gate. A passing Core report does not establish an
+external plugin or provider Environment Support Claim; each optional
+Real-Machine Verification Workflow validates its own exact integration
+receipt without changing functional acceptance.

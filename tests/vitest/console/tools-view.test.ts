@@ -4,18 +4,18 @@ import { computed, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ToolsView from "../../../apps/console/views/admin/ToolsView.vue";
 
-const shellContextMock = vi.hoisted(() => ({
+const shellContextMock: any = vi.hoisted(() : any => ({
   current: null as unknown,
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () => ({
-  useServerConsoleShellContext: () => shellContextMock.current,
+vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+  useServerConsoleShellContext: () : any => shellContextMock.current,
 }));
 
-function makeOperationPermissionConsole(overrides: Record<string, unknown> = {}) {
-  const selectedOperationPermissionToolId = ref("repo.status");
-  const selectedOperationPermissionToolsetId = ref("toolset.repo");
-  const operationPermissionTools = ref([
+function makeOperationPermissionConsole(overrides: Record<string, unknown> = {}) : any {
+  const selectedOperationPermissionToolId: any = ref("repo.status");
+  const selectedOperationPermissionToolsetId: any = ref("toolset.repo");
+  const operationPermissionTools: any = ref([
     {
       id: "repo.status",
       label: "Repository Status",
@@ -37,63 +37,63 @@ function makeOperationPermissionConsole(overrides: Record<string, unknown> = {})
       toolsets: ["toolset.repo"],
     },
   ]);
-  const operationPermissionMetricsState = ref({
+  const operationPermissionMetricsState: any = ref({
     averageDurationMs: 12.6,
     byStatus: { denied: 2 },
     callsTotal: 20,
     rateLimitedTotal: 1,
   });
-  const operationPermissionStatusRows = ref([
+  const operationPermissionStatusRows: any = ref([
     { label: "allowed", value: 10 },
     { label: "denied", value: 2 },
   ]);
-  const operationPermissionRiskRows = ref([
+  const operationPermissionRiskRows: any = ref([
     { label: "read_only", value: 8 },
     { label: "destructive", value: 1 },
   ]);
-  const operationPermissionToolsets = ref([
+  const operationPermissionToolsets: any = ref([
     { defaultForAgents: true, grantable: true, id: "toolset.repo", label: "Repository Tools" },
   ]);
-  const toolScopes = ref([{ id: "repo.read", label: "Repository Read" }]);
-  const operationPermissionToolGroups = computed(() =>
+  const toolScopes: any = ref([{ id: "repo.read", label: "Repository Read" }]);
+  const operationPermissionToolGroups: any = computed(() : any =>
     operationPermissionToolsets.value
-      .map((toolset) => {
-        const tools = operationPermissionTools.value.filter((tool) => tool.toolsets.includes(toolset.id));
+      .map((toolset?: any) : any => {
+        const tools: any = operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.includes(toolset.id));
         return {
-          activeToolCount: tools.filter((tool) => tool.status === "active").length,
+          activeToolCount: tools.filter((tool?: any) : any => tool.status === "active").length,
           defaultForAgents: toolset.defaultForAgents === true,
           description: "",
           grantable: toolset.grantable !== false,
           id: toolset.id,
-          internalToolCount: tools.filter((tool) => tool.status === "internal").length,
+          internalToolCount: tools.filter((tool?: any) : any => tool.status === "internal").length,
           label: toolset.label,
           maxRisk: "read_only",
           requiredScopes: ["repo.read"],
-          sampleToolIds: tools.map((tool) => tool.id),
+          sampleToolIds: tools.map((tool?: any) : any => tool.id),
           toolCount: tools.length,
           toolsetId: toolset.id,
           writeToolCount: 0,
         };
       })
-      .filter((group) => group.toolCount > 0),
+      .filter((group?: any) : any => group.toolCount > 0),
   );
-  const selectedOperationPermissionToolset = computed(
-    () => operationPermissionToolGroups.value.find((group) => group.id === selectedOperationPermissionToolsetId.value) || null,
+  const selectedOperationPermissionToolset: any = computed(
+    () : any => operationPermissionToolGroups.value.find((group?: any) : any => group.id === selectedOperationPermissionToolsetId.value) || null,
   );
-  const selectedOperationPermissionToolsetTools = computed(() =>
-    operationPermissionTools.value.filter((tool) => tool.toolsets.includes(selectedOperationPermissionToolsetId.value)),
+  const selectedOperationPermissionToolsetTools: any = computed(() : any =>
+    operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.includes(selectedOperationPermissionToolsetId.value)),
   );
 
   return {
-    activeOperationPermissionToolCount: computed(() =>
-      operationPermissionTools.value.filter((tool) => tool.status === "active").length,
+    activeOperationPermissionToolCount: computed(() : any =>
+      operationPermissionTools.value.filter((tool?: any) : any => tool.status === "active").length,
     ),
-    defaultAgentToolCount: computed(() =>
-      operationPermissionTools.value.filter((tool) => tool.toolsets.includes("toolset.repo")).length,
+    defaultAgentToolCount: computed(() : any =>
+      operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.includes("toolset.repo")).length,
     ),
     busyKey: ref(""),
-    internalOperationPermissionToolCount: computed(() =>
-      operationPermissionTools.value.filter((tool) => tool.status === "internal").length,
+    internalOperationPermissionToolCount: computed(() : any =>
+      operationPermissionTools.value.filter((tool?: any) : any => tool.status === "internal").length,
     ),
     policyPreviewGrantId: ref("grant-a"),
     policyPreviewProfileId: ref("profile-a"),
@@ -107,14 +107,14 @@ function makeOperationPermissionConsole(overrides: Record<string, unknown> = {})
     ]),
     previewToolPolicy: vi.fn(),
     refreshOperationPermission: vi.fn(),
-    selectToolForManagement: vi.fn((toolId: string) => {
+    selectToolForManagement: vi.fn((toolId: string) : any => {
       selectedOperationPermissionToolId.value = toolId;
     }),
     selectedOperationPermissionToolId,
     selectedOperationPermissionToolset,
     selectedOperationPermissionToolsetId,
     selectedOperationPermissionToolsetTools,
-    selectOperationPermissionToolset: vi.fn((toolsetId: string) => {
+    selectOperationPermissionToolset: vi.fn((toolsetId: string) : any => {
       selectedOperationPermissionToolsetId.value = toolsetId;
     }),
     toolGrants: ref([{ id: "grant-a" }]),
@@ -153,9 +153,9 @@ function makeOperationPermissionConsole(overrides: Record<string, unknown> = {})
   };
 }
 
-function mountToolsView(adminViewValue = "toolList", operationPermissionOverrides: Record<string, unknown> = {}) {
-  const adminView = ref(adminViewValue);
-  const operationPermissionConsole = makeOperationPermissionConsole(operationPermissionOverrides);
+function mountToolsView(adminViewValue: any = "toolList", operationPermissionOverrides: Record<string, unknown> = {}) : any {
+  const adminView: any = ref(adminViewValue);
+  const operationPermissionConsole: any = makeOperationPermissionConsole(operationPermissionOverrides);
   shellContextMock.current = {
     adminView,
     operationPermissionConsole,
@@ -167,12 +167,12 @@ function mountToolsView(adminViewValue = "toolList", operationPermissionOverride
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   shellContextMock.current = null;
 });
 
-describe("ToolsView behavior", () => {
-  it("renders tool list, governance controls, labels, fallbacks, and preview action", async () => {
+describe("ToolsView behavior", () : any => {
+  it("renders tool list, governance controls, labels, fallbacks, and preview action", async () : Promise<any> => {
     const { wrapper } = mountToolsView("toolList");
 
     expect(wrapper.text()).toContain("工具集");
@@ -191,7 +191,7 @@ describe("ToolsView behavior", () => {
     expect(wrapper.text()).toContain("无操作映射");
     expect(wrapper.text()).toContain("未知");
 
-    const governanceHarness = mountToolsView("toolGovernance");
+    const governanceHarness: any = mountToolsView("toolGovernance");
     expect(governanceHarness.wrapper.text()).toContain("档案 1");
     expect(governanceHarness.wrapper.text()).toContain("授权 1");
     expect(governanceHarness.wrapper.text()).toContain("\"decision\": \"allow\"");
@@ -205,7 +205,7 @@ describe("ToolsView behavior", () => {
     expect(governanceHarness.wrapper.find("button.tool-button").text()).toBe("评估中");
   });
 
-  it("renders empty tool catalog state", () => {
+  it("renders empty tool catalog state", () : any => {
     const { wrapper } = mountToolsView("toolList", {
       activeOperationPermissionToolCount: ref(0),
       internalOperationPermissionToolCount: ref(0),
@@ -224,7 +224,7 @@ describe("ToolsView behavior", () => {
     expect(wrapper.text()).not.toContain("\"decision\"");
   });
 
-  it("renders stats and audit rows with percentages and empty fallbacks", () => {
+  it("renders stats and audit rows with percentages and empty fallbacks", () : any => {
     const { wrapper } = mountToolsView("toolStats");
 
     expect(wrapper.text()).toContain("工具统计");
@@ -254,7 +254,7 @@ describe("ToolsView behavior", () => {
     expect(wrapper.text()).toContain("无 trace");
   });
 
-  it("renders empty stats and audit states when metrics have no rows", () => {
+  it("renders empty stats and audit states when metrics have no rows", () : any => {
     const { wrapper } = mountToolsView("toolStats", {
       activeOperationPermissionToolCount: ref(0),
       operationPermissionAuditItems: ref([]),

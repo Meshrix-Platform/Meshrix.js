@@ -11,6 +11,9 @@
 #
 # For production, place this behind a TLS-terminating reverse proxy and apply
 # network isolation. See README.md for full guidance.
+#
+# This file is the development/source compose definition and is not the offline
+# release artifact for enterprise single-node.
 # ==============================================================================
 services:
   meshrix-server:
@@ -19,9 +22,20 @@ services:
       dockerfile: Dockerfile
       target: ${MESHRIX_BUILD_TARGET:-runtime}
     image: ${MESHRIX_IMAGE_NAME:-meshrix-server:local}
+    pull_policy: ${MESHRIX_PULL_POLICY:-build}
     container_name: ${MESHRIX_CONTAINER_NAME:-meshrix-server}
     restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_signal: SIGTERM
     stop_grace_period: 90s
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,mode=1777
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7228/api/healthz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
@@ -36,13 +50,18 @@ services:
       MESHRIX_SERVER_DATA_DIR: data
       MESHRIX_SERVER_WITH_UI: "${MESHRIX_SERVER_WITH_UI:-0}"
       MESHRIX_RUNTIME_CONFIG: ${MESHRIX_RUNTIME_CONFIG:-}
+      MESHRIX_BACKUP_ROOT: /app/backups
       MESHRIX_BOOTSTRAP_URL: http://${MESHRIX_ADVERTISED_HOST:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}
       MESHRIX_ADVERTISED_BASE_URL: http://${MESHRIX_ADVERTISED_HOST:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}
       MESHRIX_ACTIVE_SERVICE_URL: http://${MESHRIX_ADVERTISED_HOST:-127.0.0.1}:${MESHRIX_HOST_PORT:-7228}
     volumes:
       - meshrix-server-data:/app/data
+      - meshrix-server-backups:/app/backups
+      - meshrix-codex-home:/codex-home
       # Optional, read-only host Codex configuration:
       # - ${HOME}/.codex:/codex-home:ro
+    networks:
+      - meshrix-core
 
   # Optional file-parser/format-convert upstream service used by
   # docs/examples/file-parser-format-convert.upstream.json. Its build context
@@ -63,6 +82,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - meshrix-core
 
 volumes:
   meshrix-server-data:
+  meshrix-server-backups:
+  meshrix-codex-home:
+
+networks:
+  meshrix-core: {}

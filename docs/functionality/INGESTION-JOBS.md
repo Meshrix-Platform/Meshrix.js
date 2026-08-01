@@ -248,8 +248,8 @@ Queue inspection, failed-work recovery, and projection rebuild operations await
 both the SQLite and asynchronous PostgreSQL contracts before returning their
 receipts. Their verifier reports contain command provenance, source revision,
 payload digest, and leak-scan results. These reports prove only their registered
-verification coverage; project release readiness remains the responsibility of
-the final platform acceptance reducer.
+verification coverage; project functional acceptance remains the
+responsibility of the Functional Release Gate.
 
 ## Verification
 
@@ -257,10 +257,10 @@ the final platform acceptance reducer.
 npm test -- --suite domains.manifest
 npm test -- --suite foundation.storage-object-lifecycle
 npm test -- --suite runtime.job-work-queue-recovery
-npx vitest run tests/vitest/server/upload-session-store.test.mjs tests/vitest/server/http-request-body-admission.test.mjs tests/vitest/server/workflow-event-checkpoint.test.mjs tests/vitest/server/job-pipeline-upload-session-persistence.test.mjs
-node tools/server-scripts/verify-work-queue-conformance.mjs
-node tools/server-scripts/verify-work-queue-process-restart.mjs
-node tools/server-scripts/verify-job-work-queue.mjs
-node tools/server-scripts/verify-upload-workspace-materialization.mjs
+npx vitest run tests/vitest/server/upload-session-store.test.ts tests/vitest/server/http-request-body-admission.test.ts tests/vitest/server/workflow-event-checkpoint.test.ts tests/vitest/server/job-pipeline-upload-session-persistence.test.ts
+node tools/server-scripts/verify-work-queue-conformance.ts
+node tools/server-scripts/verify-work-queue-process-restart.ts
+node tools/server-scripts/verify-job-work-queue.ts
+node tools/server-scripts/verify-upload-workspace-materialization.ts
 npm test
 ```

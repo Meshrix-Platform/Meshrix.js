@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createConsoleOpsMonitorController } from "../../../apps/console/composables/console-ops-monitor-controller";
 
-const opsMonitorClientMock = vi.hoisted(() => ({
+const opsMonitorClientMock: any = vi.hoisted(() : any => ({
   acknowledgeMonitorAlert: vi.fn(),
   getBackgroundProcesses: vi.fn(),
   getMonitorAlerts: vi.fn(),
@@ -10,7 +10,7 @@ const opsMonitorClientMock = vi.hoisted(() => ({
   saveMonitorAlertConfig: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/ops-monitor-client", () => ({
+vi.mock("../../../apps/console/lib/ops-monitor-client", () : any => ({
   acknowledgeMonitorAlert: opsMonitorClientMock.acknowledgeMonitorAlert,
   getBackgroundProcesses: opsMonitorClientMock.getBackgroundProcesses,
   getMonitorAlerts: opsMonitorClientMock.getMonitorAlerts,
@@ -18,7 +18,7 @@ vi.mock("../../../apps/console/lib/ops-monitor-client", () => ({
   saveMonitorAlertConfig: opsMonitorClientMock.saveMonitorAlertConfig,
 }));
 
-function makeBackgroundProcessStatus(overrides: Record<string, unknown> = {}) {
+function makeBackgroundProcessStatus(overrides: Record<string, unknown> = {}) : any {
   return {
     schemaVersion: "v0.0.1:schema:definition-1",
     ok: true,
@@ -31,7 +31,7 @@ function makeBackgroundProcessStatus(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeMonitorAlertState(overrides: Record<string, unknown> = {}) {
+function makeMonitorAlertState(overrides: Record<string, unknown> = {}) : any {
   return {
     schemaVersion: "v0.0.1:schema:definition-1",
     ok: true,
@@ -62,7 +62,7 @@ function makeMonitorAlertState(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeMaintenanceRun() {
+function makeMaintenanceRun() : any {
   return {
     runId: "run-maint",
     status: "running",
@@ -98,20 +98,20 @@ function makeMaintenanceRun() {
   };
 }
 
-function createFixture(overrides: Record<string, unknown> = {}) {
-  const busyKey = ref("");
-  const error = ref("");
-  const clearAllBusy = vi.fn(() => {
+function createFixture(overrides: Record<string, unknown> = {}) : any {
+  const busyKey: any = ref("");
+  const error: any = ref("");
+  const clearAllBusy: any = vi.fn(() : any => {
     busyKey.value = "";
   });
-  const setBusy = vi.fn((value: string) => {
+  const setBusy: any = vi.fn((value: string) : any => {
     busyKey.value = value;
   });
 
-  const allMaintenanceAgentRuns = overrides.allMaintenanceAgentRuns ?? ref([makeMaintenanceRun() as any]);
-  const canAdminMaintenanceAgent = overrides.canAdminMaintenanceAgent ?? ref(true);
-  const canReadMaintenanceAgent = overrides.canReadMaintenanceAgent ?? ref(true);
-  const consoleState = overrides.consoleState ??
+  const allMaintenanceAgentRuns: any = overrides.allMaintenanceAgentRuns ?? ref([makeMaintenanceRun() as any]);
+  const canAdminMaintenanceAgent: any = overrides.canAdminMaintenanceAgent ?? ref(true);
+  const canReadMaintenanceAgent: any = overrides.canReadMaintenanceAgent ?? ref(true);
+  const consoleState: any = overrides.consoleState ??
     ref({
       jobs: {
         items: [
@@ -139,7 +139,7 @@ function createFixture(overrides: Record<string, unknown> = {}) {
       },
     } as any);
 
-  const controller = createConsoleOpsMonitorController({
+  const controller: any = createConsoleOpsMonitorController({
     allMaintenanceAgentRuns,
     canAdminMaintenanceAgent,
     canReadMaintenanceAgent,
@@ -167,19 +167,19 @@ function createFixture(overrides: Record<string, unknown> = {}) {
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
   vi.clearAllMocks();
 });
 
-afterEach(() => {
+afterEach(() : any => {
   vi.clearAllTimers();
   vi.useRealTimers();
 });
 
-describe("console ops monitor controller", () => {
-  it("暴露告警汇总默认值并在无读权限时跳过刷新", async () => {
+describe("console ops monitor controller", () : any => {
+  it("暴露告警汇总默认值并在无读权限时跳过刷新", async () : Promise<any> => {
     const { controller, canReadMaintenanceAgent, error } = createFixture({
       canReadMaintenanceAgent: ref(false),
     });
@@ -202,9 +202,9 @@ describe("console ops monitor controller", () => {
     expect(error.value).toBe("");
   });
 
-  it("刷新后台进程与监控报警时区分静默和可见分支，并正确清理忙状态", async () => {
+  it("刷新后台进程与监控报警时区分静默和可见分支，并正确清理忙状态", async () : Promise<any> => {
     const { controller, clearAllBusy, setBusy, error } = createFixture();
-    const backgroundStatus = makeBackgroundProcessStatus({
+    const backgroundStatus: any = makeBackgroundProcessStatus({
       processes: [
         {
           role: "daemon",
@@ -219,7 +219,7 @@ describe("console ops monitor controller", () => {
         },
       ],
     });
-    const alertState = makeMonitorAlertState({
+    const alertState: any = makeMonitorAlertState({
       summary: {
         activeCount: 3,
         visibleCount: 2,
@@ -274,7 +274,7 @@ describe("console ops monitor controller", () => {
     expect(error.value).toBe("");
   });
 
-  it("确认告警支持权限分支、成功刷新状态与失败文案", async () => {
+  it("确认告警支持权限分支、成功刷新状态与失败文案", async () : Promise<any> => {
     const { controller, canAdminMaintenanceAgent, setBusy, error } = createFixture({
       canAdminMaintenanceAgent: ref(false),
     });
@@ -303,7 +303,7 @@ describe("console ops monitor controller", () => {
     expect(controller.monitorAlertSummary.value.activeCount).toBe(0);
   });
 
-  it("保存告警配置支持权限短路、JSON 解析失败和成功回写状态", async () => {
+  it("保存告警配置支持权限短路、JSON 解析失败和成功回写状态", async () : Promise<any> => {
     const { controller, canAdminMaintenanceAgent, error, setBusy } = createFixture({
       canAdminMaintenanceAgent: ref(false),
     });
@@ -319,7 +319,7 @@ describe("console ops monitor controller", () => {
     expect(opsMonitorClientMock.saveMonitorAlertConfig).not.toHaveBeenCalled();
     expect(error.value).toMatch(/Unexpected token|Expected property name/);
 
-    const nextState = makeMonitorAlertState({
+    const nextState: any = makeMonitorAlertState({
       summary: {
         ...makeMonitorAlertState().summary,
         activeCount: 4,
@@ -336,19 +336,19 @@ describe("console ops monitor controller", () => {
     expect(controller.monitorAlertConfigText.value).toContain('"rules"');
   });
 
-  it("恢复后台 Supervisor 时覆盖本地状态并在失败时回退到警报读取", async () => {
+  it("恢复后台 Supervisor 时覆盖本地状态并在失败时回退到警报读取", async () : Promise<any> => {
     const { controller, error } = createFixture();
-    const status = makeBackgroundProcessStatus({
+    const status: any = makeBackgroundProcessStatus({
       status: "failed",
       supervisor: { pid: 99, alive: false, status: "failed" },
     });
-    const monitorState = makeMonitorAlertState({
+    const monitorState: any = makeMonitorAlertState({
       summary: {
         ...makeMonitorAlertState().summary,
         activeCount: 5,
       },
     });
-    const fallbackMonitorState = makeMonitorAlertState({
+    const fallbackMonitorState: any = makeMonitorAlertState({
       summary: {
         ...makeMonitorAlertState().summary,
         activeCount: 2,
@@ -379,7 +379,7 @@ describe("console ops monitor controller", () => {
     expect(error.value).toBe("");
   });
 
-  it("恢复后台 Supervisor 的客户端请求失败会正确透传错误文本", async () => {
+  it("恢复后台 Supervisor 的客户端请求失败会正确透传错误文本", async () : Promise<any> => {
     const { controller, error } = createFixture();
     opsMonitorClientMock.recoverBackgroundSupervisor.mockRejectedValueOnce(new Error("recover failed"));
 
@@ -387,7 +387,7 @@ describe("console ops monitor controller", () => {
     expect(error.value).toBe("recover failed");
   });
 
-  it("分别汇总任务队列行和只读工作队列观察指标", async () => {
+  it("分别汇总任务队列行和只读工作队列观察指标", async () : Promise<any> => {
     const { allMaintenanceAgentRuns, controller } = createFixture({
       allMaintenanceAgentRuns: ref([makeMaintenanceRun() as any]),
       consoleState: ref({
@@ -429,7 +429,7 @@ describe("console ops monitor controller", () => {
       } as any),
     });
 
-    const closedRun = makeMaintenanceRun();
+    const closedRun: any = makeMaintenanceRun();
     closedRun.runId = "run-maint-closed";
     closedRun.status = "recovered";
     closedRun.unifiedRegistration.attributes.status = "recovered";
@@ -449,15 +449,15 @@ describe("console ops monitor controller", () => {
       closedRun as any,
     ];
 
-    const rows = controller.workQueueRows.value;
+    const rows: any = controller.workQueueRows.value;
     expect(controller.workQueueObservationState.value).toEqual({
       observed: true,
       itemCount: 2,
       statusCounts: { running: 1, interrupted: 1 },
     });
     expect(rows.length).toBe(5);
-    expect(rows.some((row) => row.rowId === "maintenance:run-maint")).toBe(true);
-    expect(rows.some((row) => row.rowId === "maintenance:run-maint-closed")).toBe(true);
+    expect(rows.some((row?: any) : any => row.rowId === "maintenance:run-maint")).toBe(true);
+    expect(rows.some((row?: any) : any => row.rowId === "maintenance:run-maint-closed")).toBe(true);
     expect(rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -472,7 +472,7 @@ describe("console ops monitor controller", () => {
       interrupted: 0,
       recovered: 1,
     });
-    expect(rows.some((row) => row.source === "maintenance-agent")).toBe(true);
-    expect(rows.some((row) => row.source === "split-job")).toBe(true);
+    expect(rows.some((row?: any) : any => row.source === "maintenance-agent")).toBe(true);
+    expect(rows.some((row?: any) : any => row.source === "split-job")).toBe(true);
   });
 });

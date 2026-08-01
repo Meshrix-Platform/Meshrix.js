@@ -18,30 +18,30 @@ type WorkspaceCheckpointControllerOptions = {
   reloadWorkspaceChain: () => Promise<void>;
 };
 
-function workspaceSnapshotNodes(tree: WsCheckpointTreeDetail | null) {
-  return Object.values(tree?.nodes ?? {})
-    .filter((node) => !!node?.metadata?.workspaceFileSnapshot)
-    .sort((left, right) =>
+function workspaceSnapshotNodes(tree: WsCheckpointTreeDetail | null) : any {
+  return (Object.values(tree?.nodes ?? {}) as any[])
+    .filter((node?: any) : any => !!node?.metadata?.workspaceFileSnapshot)
+    .sort((left?: any, right?: any) : any =>
       String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")),
     );
 }
 
-export function useWorkspaceCheckpointController(options: WorkspaceCheckpointControllerOptions) {
-  const workspaceCheckpointTrees = ref<WsCheckpointTreeSummary[]>([]);
-  const workspaceCheckpointDetail = ref<WsCheckpointTreeDetail | null>(null);
-  const workspaceCheckpointPreview = ref<WorkspaceConsolePayload | null>(null);
-  const workspaceCheckpointError = ref("");
-  const selectedCheckpointTreeId = ref("");
-  const selectedCheckpointNodeId = ref("");
+export function useWorkspaceCheckpointController(options: WorkspaceCheckpointControllerOptions) : any {
+  const workspaceCheckpointTrees: any = ref<WsCheckpointTreeSummary[]>([]);
+  const workspaceCheckpointDetail: any = ref<WsCheckpointTreeDetail | null>(null);
+  const workspaceCheckpointPreview: any = ref<WorkspaceConsolePayload | null>(null);
+  const workspaceCheckpointError: any = ref("");
+  const selectedCheckpointTreeId: any = ref("");
+  const selectedCheckpointNodeId: any = ref("");
 
-  const workspaceCheckpointNodes = computed<WsCheckpointNode[]>(() =>
+  const workspaceCheckpointNodes: any = computed<WsCheckpointNode[]>(() : any =>
     workspaceSnapshotNodes(workspaceCheckpointDetail.value),
   );
-  const workspaceCheckpointPreviewRestore = computed(() =>
+  const workspaceCheckpointPreviewRestore: any = computed(() : any =>
     workspaceCheckpointPreview.value?.workspaceFileRestore ?? null,
   );
 
-  function resetWorkspaceCheckpoints() {
+  function resetWorkspaceCheckpoints() : any {
     workspaceCheckpointTrees.value = [];
     workspaceCheckpointDetail.value = null;
     workspaceCheckpointPreview.value = null;
@@ -50,16 +50,16 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
     selectedCheckpointNodeId.value = "";
   }
 
-  async function loadWorkspaceCheckpoints(id: string) {
+  async function loadWorkspaceCheckpoints(id: string) : Promise<any> {
     workspaceCheckpointError.value = "";
     workspaceCheckpointPreview.value = null;
     workspaceCheckpointDetail.value = null;
     selectedCheckpointTreeId.value = "";
     selectedCheckpointNodeId.value = "";
     try {
-      const data = await workspacesClient.listWorkspaceCheckpointTrees(id);
+      const data: any = await workspacesClient.listWorkspaceCheckpointTrees(id);
       workspaceCheckpointTrees.value = data.items ?? [];
-      const firstTreeId = workspaceCheckpointTrees.value[0]?.treeId || "";
+      const firstTreeId: any = workspaceCheckpointTrees.value[0]?.treeId || "";
       if (firstTreeId) {
         await loadWorkspaceCheckpointTree(firstTreeId);
       }
@@ -69,14 +69,14 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
     }
   }
 
-  async function loadWorkspaceCheckpointTree(treeId: string) {
+  async function loadWorkspaceCheckpointTree(treeId: string) : Promise<any> {
     if (!treeId) return;
     workspaceCheckpointError.value = "";
     workspaceCheckpointPreview.value = null;
     selectedCheckpointTreeId.value = treeId;
     selectedCheckpointNodeId.value = "";
     try {
-      const tree = await workspacesClient.getWorkspaceCheckpointTree(treeId);
+      const tree: any = await workspacesClient.getWorkspaceCheckpointTree(treeId);
       workspaceCheckpointDetail.value = tree;
       selectedCheckpointNodeId.value = workspaceSnapshotNodes(tree)[0]?.nodeId || "";
     } catch (e: unknown) {
@@ -85,7 +85,7 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
     }
   }
 
-  async function previewWorkspaceCheckpointRestore(nodeId = selectedCheckpointNodeId.value) {
+  async function previewWorkspaceCheckpointRestore(nodeId: any = selectedCheckpointNodeId.value) : Promise<any> {
     if (!options.selectedId.value || !selectedCheckpointTreeId.value || !nodeId) return;
     options.setBusy("ws:checkpoint-preview");
     options.localError.value = "";
@@ -102,9 +102,9 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
     finally { options.clearBusy(); }
   }
 
-  async function restoreWorkspaceCheckpoint(nodeId = selectedCheckpointNodeId.value) {
+  async function restoreWorkspaceCheckpoint(nodeId: any = selectedCheckpointNodeId.value) : Promise<any> {
     if (!options.selectedId.value || !selectedCheckpointTreeId.value || !nodeId) return;
-    const ok = await options.confirmAction(
+    const ok: any = await options.confirmAction(
       "确认将该工作空间的物理文件夹回退到所选 checkpoint？当前文件差异会被 checkpoint restore 覆盖。",
       { tone: "danger" },
     );
@@ -114,7 +114,7 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
     workspaceCheckpointError.value = "";
     try {
       selectedCheckpointNodeId.value = nodeId;
-      const restored = await workspacesClient.restoreWorkspaceCheckpointRequest({
+      const restored: any = await workspacesClient.restoreWorkspaceCheckpointRequest({
         treeId: selectedCheckpointTreeId.value,
         nodeId,
         workspaceId: options.selectedId.value,
@@ -127,12 +127,12 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
     finally { options.clearBusy(); }
   }
 
-  function checkpointNodeFileCount(node: WsCheckpointNode) {
-    const files = node.metadata?.workspaceFileSnapshot?.files;
+  function checkpointNodeFileCount(node: WsCheckpointNode) : any {
+    const files: any = node.metadata?.workspaceFileSnapshot?.files;
     return Array.isArray(files) ? files.length : 0;
   }
 
-  function checkpointNodeBasePath(node: WsCheckpointNode) {
+  function checkpointNodeBasePath(node: WsCheckpointNode) : any {
     return String(node.metadata?.workspaceFileSnapshot?.basePath || "根目录");
   }
 

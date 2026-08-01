@@ -7,7 +7,7 @@
 // Production: Static assets should be served via a web server (e.g., Nginx)
 // with HTTPS reverse proxy to the backend API.
 // ==============================================================================
-import { DEFAULT_SERVER_PORT } from "./packages/foundation/src/config/server-env.mjs";
+import { DEFAULT_SERVER_PORT } from "./packages/foundation/src/config/server-env.ts";
 
 import path from "node:path";
 import vue from "@vitejs/plugin-vue";
@@ -44,6 +44,7 @@ export default defineConfig({
   root: webRoot,
   plugins: [vue()],
   resolve: {
+    conditions: ["source"],
     alias: {
       // Absolute imports from any depth: @/ -> apps/console/
       "@": webRoot,

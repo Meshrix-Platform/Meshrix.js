@@ -4,6 +4,7 @@
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "allowJs": false,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -11,6 +12,11 @@
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@meshrix/ui-console/*": ["packages/ui-console/src/*"],
+      "@meshrix/contracts/*": ["packages/contracts/src/*"]
+    },
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true

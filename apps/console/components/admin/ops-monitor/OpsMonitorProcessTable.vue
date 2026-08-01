@@ -27,7 +27,7 @@ const {
         <span>运行 {{ backgroundRunningCount }}</span>
       </div>
     </div>
-    <div class="job-table compact-job-table background-process-table ops-process-table">
+    <div v-if="backgroundProcesses.length" class="job-table compact-job-table background-process-table ops-process-table">
       <div class="job-table-header">
         <span>进程</span>
         <span>类型</span>

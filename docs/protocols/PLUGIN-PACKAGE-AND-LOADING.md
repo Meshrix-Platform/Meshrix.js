@@ -4,11 +4,11 @@ This contract defines the Core-owned boundary for loading optional plugin artifa
 
 ## Closed one-plugin bundle
 
-External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `v0.0.1:meshrix:plugin-bundle-manifest-1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.mjs` path present in that inventory.
+External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `v0.0.1:meshrix:plugin-bundle-manifest-1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.ts` path present in that inventory.
 
 `payloadDigest` binds the sorted payload file contents. The archive digest is recorded separately as `packageDigest` / `archiveDigest` after acquisition so the digest field never circularly hashes itself. Trust evidence is explicit (`configured-digest` or `ed25519` with an operator-configured public-key allow-list). Empty trust configuration admits nothing that requires a trusted key set.
 
-Contracts live under `packages/contracts/src/plugins/`. Validation, custody, acquisition port, and lifecycle live under `packages/foundation/src/module-system/plugin-package-*.mjs`. Contribution publication uses `packages/server-runtime/src/composition/plugin-contribution-transaction.mjs`.
+Contracts live under `packages/contracts/src/plugins/`. Validation, custody, acquisition port, and lifecycle live under `packages/foundation/src/module-system/plugin-package-*.ts`. Contribution publication uses `packages/server-runtime/src/composition/plugin-contribution-transaction.ts`.
 
 ## Source-neutral acquisition
 
@@ -18,7 +18,7 @@ Acquisition adapters stop at one byte-stream boundary. The acquisition port acce
 
 Production loading of already-installed artifacts also consumes an immutable installed-artifact snapshot. The Host validates the artifact against explicitly configured trusted Ed25519 public keys and admits only plugin identifiers listed in `runtime.enabledPlugins`. An absent trust set or plugin selection remains empty. Repository discovery, package-root search, implicit installation, manifest defaults, and feature flags cannot enable a plugin.
 
-Every executable installed-artifact manifest declares one normalized relative `.mjs` runtime entry contained by its artifact. Admission rejects path traversal, symbolic-link entries, unknown fields, duplicate claims, dependency cycles, missing dependencies, mount conflicts, and route conflicts. A deployment profile, when configured, binds the exact manifest identities, artifact digests, configuration identifiers, and dependency order. Profile drift fails before the server listens.
+Every executable installed-artifact manifest declares one normalized relative `.ts` runtime entry contained by its artifact. Admission rejects path traversal, symbolic-link entries, unknown fields, duplicate claims, dependency cycles, missing dependencies, mount conflicts, and route conflicts. A deployment profile, when configured, binds the exact manifest identities, artifact digests, configuration identifiers, and dependency order. Profile drift fails before the server listens.
 
 ## Lifecycle and contributions
 
@@ -38,14 +38,14 @@ Activation failure closes resources and already activated plugins in reverse dep
 | --- | --- |
 | Closed bundle / source / state / receipt contracts | `packages/contracts/src/plugins/` |
 | Archive codec, validator, custody, acquisition port, lifecycle | `packages/foundation/src/module-system/` |
-| Contribution generation publish/discard | `packages/server-runtime/src/composition/plugin-contribution-transaction.mjs` |
-| Installed-artifact registry and mount runtime | `packages/foundation/src/module-system/plugin-registry.mjs`, `plugin-runtime.mjs`, `mount-manager.mjs` |
+| Contribution generation publish/discard | `packages/server-runtime/src/composition/plugin-contribution-transaction.ts` |
+| Installed-artifact registry and mount runtime | `packages/foundation/src/module-system/plugin-registry.ts`, `plugin-runtime.ts`, `mount-manager.ts` |
 
 ## Verification
 
 ```bash
-node tools/server-scripts/verify-plugin-bundle-protocol.mjs
+node tools/server-scripts/verify-plugin-bundle-protocol.ts
 npm run verify:plugin-runtime
-npm run vitest -- tests/vitest/server/plugin-package-protocol.test.mjs
-npm run vitest -- tests/vitest/server/plugin-runtime.test.mjs
+npm run vitest -- tests/vitest/server/plugin-package-protocol.test.ts
+npm run vitest -- tests/vitest/server/plugin-runtime.test.ts
 ```

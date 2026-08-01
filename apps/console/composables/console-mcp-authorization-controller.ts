@@ -16,50 +16,70 @@ type ConsoleMcpAuthorizationControllerOptions = {
 
 export function createConsoleMcpAuthorizationController(
   options: ConsoleMcpAuthorizationControllerOptions,
-) {
-  const mcpAuthorizationRequests = ref<McpAuthorizationRequest[]>([]);
-  const mcpAuthorizationStatus = ref<McpAuthorizationStatus>("pending");
+) : any {
+  const mcpAuthorizationRequests: any = ref<McpAuthorizationRequest[]>([]);
+  const mcpAuthorizationStatus: any = ref<McpAuthorizationStatus>("pending");
   const mcpAuthorizationStatusOptionBarOptions: OptionBarOption[] = [
     { value: "pending", label: "待审批" },
     { value: "approved", label: "已批准" },
     { value: "rejected", label: "已拒绝" },
     { value: "all", label: "所有" },
   ];
+  let refreshGeneration: any = 0;
 
-  async function refreshMcpAuthorizationRequests() {
-    const busy = "mcp-authorization-requests:refresh";
+  async function refreshMcpAuthorizationRequests() : Promise<any> {
+    const generation: any = ++refreshGeneration;
+    const status: any = mcpAuthorizationStatus.value;
+    const busy: any = "mcp-authorization-requests:refresh";
     options.setBusy(busy);
     try {
-      const result = await listMcpAuthorizationRequests(mcpAuthorizationStatus.value);
-      mcpAuthorizationRequests.value = Array.isArray(result.requests) ? result.requests : [];
-    } catch (nextError) {
+      const result: any = await listMcpAuthorizationRequests(status);
+      if (generation !== refreshGeneration) return;
+      mcpAuthorizationRequests.value = Array.isArray(result.requests)
+        ? result.requests
+        : [];
+    } catch (nextError: any) {
+      if (generation !== refreshGeneration) return;
       mcpAuthorizationRequests.value = [];
       options.error.value =
-        nextError instanceof Error ? nextError.message : "加载 MCP 授权请求失败。";
+        nextError instanceof Error
+          ? nextError.message
+          : "加载 MCP 授权请求失败。";
     } finally {
-      options.clearBusy(busy);
+      if (generation === refreshGeneration) {
+        options.clearBusy(busy);
+      }
     }
   }
 
   async function resolveMcpAuthorizationRequest(
     requestId: string,
     resolution: "approved" | "rejected",
-  ) {
-    const busy = `mcp-authorization-requests:resolve:${requestId}`;
-    const request = mcpAuthorizationRequests.value.find((item) => item.requestId === requestId);
+  ) : Promise<any> {
+    const busy: any = `mcp-authorization-requests:resolve:${requestId}`;
+    const request: any = mcpAuthorizationRequests.value.find(
+      (item?: any) : any => item.requestId === requestId,
+    );
     options.setBusy(busy);
     try {
-      await resolveMcpAuthorizationRequestApi(requestId, {
+      const result: any = await resolveMcpAuthorizationRequestApi(requestId, {
         resolution,
         clientName: request?.clientName,
         scopes: request?.requestedScopes || [],
         toolsets: [],
         toolAllow: request?.requestedTools || [],
       });
+      if (result.ok !== true) {
+        throw new Error("MCP 授权请求未能完成。");
+      }
       await refreshMcpAuthorizationRequests();
-    } catch (nextError) {
+      return true;
+    } catch (nextError: any) {
       options.error.value =
-        nextError instanceof Error ? nextError.message : "处理 MCP 授权请求失败。";
+        nextError instanceof Error
+          ? nextError.message
+          : "处理 MCP 授权请求失败。";
+      return false;
     } finally {
       options.clearBusy(busy);
     }

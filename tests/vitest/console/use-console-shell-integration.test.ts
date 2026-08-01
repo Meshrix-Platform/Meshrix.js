@@ -13,7 +13,7 @@ import { emptyDiscovery, emptySettings } from "../../../apps/console/composables
 import {
   routeAccessPolicyForAdminView,
   routeAccessPolicyForView,
-} from "../../../apps/console/router/route-access-policy.mjs";
+} from "../../../apps/console/router/route-access-policy.ts";
 import type {
   ConsoleAuthSummary,
   EventSubscriptionResponse,
@@ -22,7 +22,7 @@ import type {
   SplitJob,
 } from "../../../apps/console/lib/types";
 
-const authClientMock = vi.hoisted(() => ({
+const authClientMock: any = vi.hoisted(() : any => ({
   getAuthSession: vi.fn(),
   getAuthOidc: vi.fn(),
   listAuthAudit: vi.fn(),
@@ -34,32 +34,32 @@ const authClientMock = vi.hoisted(() => ({
   saveAuthOidc: vi.fn(),
   updateAuthUser: vi.fn(),
 }));
-const consoleStateClientMock = vi.hoisted(() => ({
+const consoleStateClientMock: any = vi.hoisted(() : any => ({
   getServerConsoleState: vi.fn(),
 }));
-const serverEventsClientMock = vi.hoisted(() => ({
+const serverEventsClientMock: any = vi.hoisted(() : any => ({
   subscribeEvents: vi.fn(),
 }));
-const contextCompilerClientMock = vi.hoisted(() => ({
+const contextCompilerClientMock: any = vi.hoisted(() : any => ({
   getContextProfiles: vi.fn(),
   listContextBuildRecords: vi.fn(),
   previewContextPack: vi.fn(),
   runContextEvaluation: vi.fn(),
 }));
-const appearancePresetClientMock = vi.hoisted(() => ({
+const appearancePresetClientMock: any = vi.hoisted(() : any => ({
   fetchServerAppearancePresetConfigs: vi.fn(),
   importServerAppearancePresetText: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/auth-client", () => authClientMock);
-vi.mock("../../../apps/console/lib/console-state-client", () => consoleStateClientMock);
-vi.mock("../../../apps/console/lib/server-events-client", () => serverEventsClientMock);
-vi.mock("../../../apps/console/lib/context-compiler-client", () => contextCompilerClientMock);
-vi.mock("../../../apps/console/lib/appearance-presets-client", () => appearancePresetClientMock);
+vi.mock("../../../apps/console/lib/auth-client", () : any => authClientMock);
+vi.mock("../../../apps/console/lib/console-state-client", () : any => consoleStateClientMock);
+vi.mock("../../../apps/console/lib/server-events-client", () : any => serverEventsClientMock);
+vi.mock("../../../apps/console/lib/context-compiler-client", () : any => contextCompilerClientMock);
+vi.mock("../../../apps/console/lib/appearance-presets-client", () : any => appearancePresetClientMock);
 
-const TestRoute = defineComponent({
+const TestRoute: any = defineComponent({
   name: "TestRoute",
-  setup: () => () => h("div"),
+  setup: () : any => () : any => h("div"),
 });
 
 type ConsoleShell = ReturnType<typeof useServerConsoleShell>;
@@ -147,10 +147,10 @@ function makeConsoleState(marker: string, jobs: SplitJob[] = []): ServerConsoleS
     jobs: {
       summary: {
         totalCount: jobs.length,
-        queuedCount: jobs.filter((job) => job.status === "queued").length,
-        runningCount: jobs.filter((job) => job.status === "running").length,
-        completedCount: jobs.filter((job) => job.status === "completed").length,
-        failedCount: jobs.filter((job) => job.status === "failed").length,
+        queuedCount: jobs.filter((job?: any) : any => job.status === "queued").length,
+        runningCount: jobs.filter((job?: any) : any => job.status === "running").length,
+        completedCount: jobs.filter((job?: any) : any => job.status === "completed").length,
+        failedCount: jobs.filter((job?: any) : any => job.status === "failed").length,
       },
       items: jobs,
     },
@@ -226,20 +226,20 @@ function createTestRouter(): Router {
   });
 }
 
-async function waitForCondition(predicate: () => boolean, message: string) {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+async function waitForCondition(predicate: () => boolean, message: string) : Promise<any> {
+  for (let attempt: any = 0; attempt < 30; attempt += 1) {
     await flushPromises();
     if (predicate()) {
       return;
     }
-    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    await new Promise((resolve?: any) : any => window.setTimeout(resolve, 0));
   }
   throw new Error(message);
 }
 
 let wrapper: VueWrapper | null = null;
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
   window.localStorage.clear();
   authClientMock.getAuthSession.mockResolvedValue(makeAuthSummary());
@@ -251,20 +251,20 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
+afterEach(() : any => {
   wrapper?.unmount();
   wrapper = null;
   vi.restoreAllMocks();
 });
 
-describe("useConsole to useServerConsoleShell integration", () => {
-  it("loads server appearance presets only after authentication", async () => {
-    const isAuthenticated = ref(false);
-    const Harness = defineComponent({
+describe("useConsole to useServerConsoleShell integration", () : any => {
+  it("loads server appearance presets only after authentication", async () : Promise<any> => {
+    const isAuthenticated: any = ref(false);
+    const Harness: any = defineComponent({
       name: "ConsoleShellPreferencesHarness",
-      setup() {
+      setup() : any {
         useConsoleShellPreferences({ isAuthenticated });
-        return () => h("div");
+        return () : any => h("div");
       },
     });
     wrapper = mount(Harness);
@@ -278,13 +278,13 @@ describe("useConsole to useServerConsoleShell integration", () => {
     expect(appearancePresetClientMock.fetchServerAppearancePresetConfigs).toHaveBeenCalledTimes(1);
   });
 
-  it("runs real actions, applies refresh and event state, and falls back from a restricted route", async () => {
-    const router = createTestRouter();
+  it("runs real actions, applies refresh and event state, and falls back from a restricted route", async () : Promise<any> => {
+    const router: any = createTestRouter();
     await router.push("/admin/modules");
     await router.isReady();
 
-    const initialState = makeConsoleState("initial");
-    const refreshedState = makeConsoleState("refreshed");
+    const initialState: any = makeConsoleState("initial");
+    const refreshedState: any = makeConsoleState("refreshed");
     refreshedState.agentSelector = {
       schemaVersion: "v0.0.1:schema:definition-1",
       source: "test",
@@ -309,27 +309,27 @@ describe("useConsole to useServerConsoleShell integration", () => {
 
     let resolveEventSubscription!: (response: EventSubscriptionResponse) => void;
     serverEventsClientMock.subscribeEvents
-      .mockImplementationOnce(() => new Promise<EventSubscriptionResponse>((resolve) => {
+      .mockImplementationOnce(() : any => new Promise<EventSubscriptionResponse>((resolve?: any) : any => {
         resolveEventSubscription = resolve;
       }))
-      .mockImplementation(() => new Promise<EventSubscriptionResponse>(() => {}));
+      .mockImplementation(() : any => new Promise<EventSubscriptionResponse>(() : any => {}));
 
     let shell!: ConsoleShell;
-    const Harness = defineComponent({
+    const Harness: any = defineComponent({
       name: "ConsoleShellHarness",
-      setup() {
+      setup() : any {
         shell = useServerConsoleShell();
-        return () => h("div");
+        return () : any => h("div");
       },
     });
     wrapper = mount(Harness, { global: { plugins: [router] } });
 
     await waitForCondition(
-      () => shell.consoleState.value?.server.url === initialState.server.url,
+      () : any => shell.consoleState.value?.server.url === initialState.server.url,
       "console bootstrap did not apply server state",
     );
     await waitForCondition(
-      () => serverEventsClientMock.subscribeEvents.mock.calls.length === 1,
+      () : any => serverEventsClientMock.subscribeEvents.mock.calls.length === 1,
       "server event subscription did not start",
     );
 
@@ -342,9 +342,9 @@ describe("useConsole to useServerConsoleShell integration", () => {
     await shell.refreshState({ silent: true, forceDrafts: true });
     expect(consoleStateClientMock.getServerConsoleState).toHaveBeenCalledTimes(2);
     expect(shell.consoleState.value?.server.url).toBe(refreshedState.server.url);
-    expect(shell.ruleAuthoringModelOptions.value.map((option) => option.value)).toContain("rule-agent");
+    expect(shell.ruleAuthoringModelOptions.value.map((option?: any) : any => option.value)).toContain("rule-agent");
 
-    const eventJob = makeJob("event-job");
+    const eventJob: any = makeJob("event-job");
     resolveEventSubscription({
       cursor: 0,
       nextCursor: 2,
@@ -353,21 +353,21 @@ describe("useConsole to useServerConsoleShell integration", () => {
       events: [makeJobEvent(eventJob)],
     });
     await waitForCondition(
-      () => shell.consoleState.value?.jobs.items.some((job) => job.id === eventJob.id) === true,
+      () : any => shell.consoleState.value?.jobs.items.some((job?: any) : any => job.id === eventJob.id) === true,
       "job event did not update shell state",
     );
 
     shell.systemLogFilters.value.fuzzy = eventJob.id;
     await nextTick();
-    expect(shell.filteredSystemLogRows.value.map((row) => row.logId)).toContain(`job:${eventJob.id}`);
+    expect(shell.filteredSystemLogRows.value.map((row?: any) : any => row.logId)).toContain(`job:${eventJob.id}`);
 
     shell.sideNavCollapsed.value = true;
     shell.sideNavOpen.value = true;
     expect(shell.sideNavCollapsed.value).toBe(true);
     expect(shell.sideNavOpen.value).toBe(true);
 
-    const configurationAlert = shell.dashboardAlerts.value.find(
-      (alert) => alert.source === "configuration",
+    const configurationAlert: any = shell.dashboardAlerts.value.find(
+      (alert?: any) : any => alert.source === "configuration",
     );
     expect(configurationAlert).toBeDefined();
     await shell.openDashboardAlert(configurationAlert!);

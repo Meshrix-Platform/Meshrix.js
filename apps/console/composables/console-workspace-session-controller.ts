@@ -19,25 +19,25 @@ type WorkspaceSessionControllerOptions = {
   reloadWorkspaceList: () => Promise<void>;
 };
 
-function sessionLatestTimestamp(session: WsSession) {
+function sessionLatestTimestamp(session: WsSession) : any {
   return String(session.lastEvent?.createdAt || session.updatedAt || session.createdAt || "");
 }
 
-export function useWorkspaceSessionController(options: WorkspaceSessionControllerOptions) {
-  const selectedSessionId = ref("");
-  const selectedSession = ref<WsSessionDetail | null>(null);
-  const sessionContextData = ref<WsSessionContext | null>(null);
+export function useWorkspaceSessionController(options: WorkspaceSessionControllerOptions) : any {
+  const selectedSessionId: any = ref("");
+  const selectedSession: any = ref<WsSessionDetail | null>(null);
+  const sessionContextData: any = ref<WsSessionContext | null>(null);
 
-  const orderedSessions = computed(() =>
-    [...options.sessions.value].sort((left, right) => {
-      const timeCompare = sessionLatestTimestamp(right).localeCompare(sessionLatestTimestamp(left));
+  const orderedSessions: any = computed(() : any =>
+    [...options.sessions.value].sort((left?: any, right?: any) : any => {
+      const timeCompare: any = sessionLatestTimestamp(right).localeCompare(sessionLatestTimestamp(left));
       if (timeCompare !== 0) return timeCompare;
       return String(right.sessionId || "").localeCompare(String(left.sessionId || ""));
     }),
   );
 
-  const sessionItems = computed<HistorySessionPanelItem[]>(() =>
-    orderedSessions.value.map((session) => ({
+  const sessionItems: any = computed<HistorySessionPanelItem[]>(() : any =>
+    orderedSessions.value.map((session?: any) : any => ({
       id: session.sessionId,
       title: session.title || session.sessionId.slice(0, 12),
       meta: [
@@ -54,7 +54,7 @@ export function useWorkspaceSessionController(options: WorkspaceSessionControlle
     })),
   );
 
-  async function selectSession(id: string) {
+  async function selectSession(id: string) : Promise<any> {
     if (!id) return;
     options.setBusy("ws:session");
     options.localError.value = "";
@@ -70,12 +70,12 @@ export function useWorkspaceSessionController(options: WorkspaceSessionControlle
     finally { options.clearBusy(); }
   }
 
-  async function forkSession(id: string) {
+  async function forkSession(id: string) : Promise<any> {
     if (!id) return;
     options.setBusy("ws:fork");
     options.localError.value = "";
     try {
-      const result = await workspacesClient.forkWorkspaceSession(id);
+      const result: any = await workspacesClient.forkWorkspaceSession(id);
       await options.reloadWorkspaceList();
       if (result.session?.sessionId) {
         await selectSession(result.session.sessionId);

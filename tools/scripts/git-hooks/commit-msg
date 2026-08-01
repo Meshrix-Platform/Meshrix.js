@@ -2,4 +2,5 @@
 set -eu
 
 repo_root="$(git rev-parse --show-toplevel)"
-exec node "$repo_root/tools/scripts/verify-git-publication.mjs" --message-file "$1"
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=source"
+exec node "$repo_root/tools/scripts/verify-git-publication.ts" --message-file "$1"

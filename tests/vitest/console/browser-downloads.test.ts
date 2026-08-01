@@ -2,21 +2,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { triggerBrowserDownload } from "../../../apps/console/lib/browser-downloads";
 
-const objectUrl = "blob:meshrix-download";
+const objectUrl: any = "blob:meshrix-download";
 let originalCreateObjectURL: typeof URL.createObjectURL | undefined;
 let originalRevokeObjectURL: typeof URL.revokeObjectURL | undefined;
 let originalDocumentDescriptor: PropertyDescriptor | undefined;
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.useFakeTimers();
   originalCreateObjectURL = URL.createObjectURL;
   originalRevokeObjectURL = URL.revokeObjectURL;
   originalDocumentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
-  URL.createObjectURL = vi.fn(() => objectUrl);
+  URL.createObjectURL = vi.fn(() : any => objectUrl);
   URL.revokeObjectURL = vi.fn();
 });
 
-afterEach(() => {
+afterEach(() : any => {
   URL.createObjectURL = originalCreateObjectURL!;
   URL.revokeObjectURL = originalRevokeObjectURL!;
   if (originalDocumentDescriptor) {
@@ -26,13 +26,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("browser downloads behavior", () => {
-  it("creates an invisible anchor, clicks it, removes it, and revokes later", () => {
+describe("browser downloads behavior", () : any => {
+  it("creates an invisible anchor, clicks it, removes it, and revokes later", () : any => {
     const clicked: HTMLAnchorElement[] = [];
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) {
+    const clickSpy: any = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) : any {
       clicked.push(this);
     });
-    const blob = new Blob(["hello"], { type: "text/plain" });
+    const blob: any = new Blob(["hello"], { type: "text/plain" });
 
     triggerBrowserDownload(blob, "report.txt", { rel: "noopener", revokeDelayMs: 500 });
 
@@ -53,9 +53,9 @@ describe("browser downloads behavior", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(objectUrl);
   });
 
-  it("uses default rel and revokes immediately when revoke delay is zero", () => {
+  it("uses default rel and revokes immediately when revoke delay is zero", () : any => {
     const clicked: HTMLAnchorElement[] = [];
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) {
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) : any {
       clicked.push(this);
     });
 
@@ -68,22 +68,22 @@ describe("browser downloads behavior", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(objectUrl);
   });
 
-  it("removes the anchor and revokes when click throws", () => {
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+  it("removes the anchor and revokes when click throws", () : any => {
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() : any => {
       throw new Error("click blocked");
     });
 
-    expect(() => triggerBrowserDownload(new Blob(["x"]), "x.txt", { revokeDelayMs: 0 })).toThrow("click blocked");
+    expect(() : any => triggerBrowserDownload(new Blob(["x"]), "x.txt", { revokeDelayMs: 0 })).toThrow("click blocked");
     expect(document.querySelectorAll("a")).toHaveLength(0);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith(objectUrl);
   });
 
-  it("throws when no browser document is available", () => {
+  it("throws when no browser document is available", () : any => {
     Object.defineProperty(globalThis, "document", {
       configurable: true,
       value: undefined,
     });
 
-    expect(() => triggerBrowserDownload(new Blob(["x"]), "x.txt")).toThrow("浏览器下载环境不可用。");
+    expect(() : any => triggerBrowserDownload(new Blob(["x"]), "x.txt")).toThrow("浏览器下载环境不可用。");
   });
 });

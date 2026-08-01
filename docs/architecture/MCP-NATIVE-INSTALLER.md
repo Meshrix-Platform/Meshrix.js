@@ -118,5 +118,5 @@ sh -n packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh
 npm test -- --suite downstream-mcp.installer-convergence
 npm run verify:mcp-release-portable-assembly
 npm run verify:node-runtime-supply-chain
-npx vitest run tests/vitest/server/mcp-installer-device-authorization.test.mjs tests/vitest/server/p2-security-boundaries.test.mjs
+npx vitest run tests/vitest/server/mcp-installer-device-authorization.test.ts tests/vitest/server/p2-security-boundaries.test.ts
 ```

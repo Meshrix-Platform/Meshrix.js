@@ -17,15 +17,15 @@ type MonitorAlertDetailBullet = {
   text: string;
 };
 
-function splitMonitorAlertMessage(message: string) {
+function splitMonitorAlertMessage(message: string) : any {
   return String(message || "")
     .replace(/\s+/g, " ")
     .split(/(?<=[。；;])\s*/u)
-    .map((item) => item.replace(/[。；;]+$/u, "").trim())
+    .map((item?: any) : any => item.replace(/[。；;]+$/u, "").trim())
     .filter(Boolean);
 }
 
-function monitorAlertMessageLabel(text: string, index: number) {
+function monitorAlertMessageLabel(text: string, index: number) : any {
   if (/^(请|建议|检查|确认|修复|处理)/u.test(text)) {
     return "处理";
   }
@@ -38,21 +38,21 @@ function monitorAlertMessageLabel(text: string, index: number) {
   return index === 0 ? "详情" : "补充";
 }
 
-function isRecoveredMonitorAlert(alert: MonitorAlertItem) {
+function isRecoveredMonitorAlert(alert: MonitorAlertItem) : any {
   if (alert.ackRequired || alert.active === false || alert.status === "recovered") {
     return true;
   }
   return false;
 }
 
-function monitorAlertLifecycleText(alert: MonitorAlertItem, severityLabel: (severity: string) => string) {
+function monitorAlertLifecycleText(alert: MonitorAlertItem, severityLabel: (severity: string) => string) : any {
   if (isRecoveredMonitorAlert(alert)) {
     return "已恢复";
   }
   return alert.status || severityLabel(alert.severity);
 }
 
-function monitorAlertMergeKey(alert: MonitorAlertItem) {
+function monitorAlertMergeKey(alert: MonitorAlertItem) : any {
   return [
     alert.alertId,
     alert.resolvedAt || "",
@@ -61,21 +61,21 @@ function monitorAlertMergeKey(alert: MonitorAlertItem) {
   ].join(":");
 }
 
-function shouldIncludeMonitorAlertLifecycle(alert: MonitorAlertItem) {
+function shouldIncludeMonitorAlertLifecycle(alert: MonitorAlertItem) : any {
   return isRecoveredMonitorAlert(alert);
 }
 
-function isAcknowledgedMonitorAlert(alert: MonitorAlertItem) {
+function isAcknowledgedMonitorAlert(alert: MonitorAlertItem) : any {
   return Boolean(alert.acknowledgedAt && isRecoveredMonitorAlert(alert));
 }
 
-function uniqueMonitorAlerts(alerts: MonitorAlertItem[]) {
-  const seen = new Set<string>();
-  return alerts.filter((alert) => {
+function uniqueMonitorAlerts(alerts: MonitorAlertItem[]) : any {
+  const seen: any = new Set<string>();
+  return alerts.filter((alert?: any) : any => {
     if (isAcknowledgedMonitorAlert(alert)) {
       return false;
     }
-    const key = monitorAlertMergeKey(alert);
+    const key: any = monitorAlertMergeKey(alert);
     if (seen.has(key)) {
       return false;
     }
@@ -84,7 +84,7 @@ function uniqueMonitorAlerts(alerts: MonitorAlertItem[]) {
   });
 }
 
-export function useOpsMonitorViewConsole() {
+export function useOpsMonitorViewConsole() : any {
   const {
     acknowledgeMonitorAlert,
     activeMonitorAlerts,
@@ -101,21 +101,21 @@ export function useOpsMonitorViewConsole() {
     saveMonitorAlertConfig,
   } = useServerConsoleShellContext();
 
-  const monitorAlertRows = computed(() =>
+  const monitorAlertRows: any = computed(() : any =>
     uniqueMonitorAlerts([...activeMonitorAlerts.value, ...recentMonitorAlertHistory.value]),
   );
 
-  const visibleMonitorAlerts = computed(() =>
-    monitorAlertRows.value.filter((alert) => !isRecoveredMonitorAlert(alert)),
+  const visibleMonitorAlerts: any = computed(() : any =>
+    monitorAlertRows.value.filter((alert?: any) : any => !isRecoveredMonitorAlert(alert)),
   );
 
-  const monitorAlertHistoryRows = computed(() =>
-    monitorAlertRows.value.filter((alert) => isRecoveredMonitorAlert(alert)),
+  const monitorAlertHistoryRows: any = computed(() : any =>
+    monitorAlertRows.value.filter((alert?: any) : any => isRecoveredMonitorAlert(alert)),
   );
 
   function monitorAlertDetailBullets(
     alert: MonitorAlertItem,
-    includeLifecycle = false,
+    includeLifecycle: any = false,
   ): MonitorAlertDetailBullet[] {
     const bullets: MonitorAlertDetailBullet[] = [];
     if (includeLifecycle) {
@@ -124,11 +124,11 @@ export function useOpsMonitorViewConsole() {
     if (alert.resourceRef) {
       bullets.push({ label: "资源引用", text: alert.resourceRef });
     }
-    splitMonitorAlertMessage(alert.message).forEach((text, index) => {
+    splitMonitorAlertMessage(alert.message).forEach((text?: any, index?: any) : any => {
       bullets.push({ label: monitorAlertMessageLabel(text, index), text });
     });
-    const sourceParts = [alert.source, alert.role].filter(
-      (item, index, list) => item && list.indexOf(item) === index,
+    const sourceParts: any = [alert.source, alert.role].filter(
+      (item?: any, index?: any, list?: any) : any => item && list.indexOf(item) === index,
     );
     if (sourceParts.length > 0) {
 	      bullets.push({ label: "来源", text: sourceParts.join("，") });

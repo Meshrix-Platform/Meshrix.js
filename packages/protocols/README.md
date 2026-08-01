@@ -30,5 +30,5 @@ evaluation on those ports.
 
 ```bash
 npm run server:verify:protocol-boundary
-npm run vitest -- tests/vitest/server/plugin-mcp-outlet-visibility.test.mjs
+npm run vitest -- tests/vitest/server/plugin-mcp-outlet-visibility.test.ts
 ```

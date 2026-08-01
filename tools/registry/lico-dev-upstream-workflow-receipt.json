@@ -1,125 +1,115 @@
 {
   "schemaVersion": "v1:meshrix:lico-dev-upstream-workflow-receipt",
-  "receiptId": "lico-dev:core.upstream-service-publishing",
+  "receiptId": "meshrix:lico-dev-upstream-workflows",
+  "owner": "meshrix",
   "source": {
     "repository": "lico-dev",
-    "revision": "5adef875c7ab9079773a3e87f614cb67d70c0e67",
+    "revision": "2d2bce829b9e425b611ebf6ffe61c483d18858c3",
     "revisionAlgorithm": "git-sha1",
     "allowlist": [
       {
-        "path": "config/developer-intent.json",
+        "path": "config/repositories.json",
         "role": "repository-routing",
-        "digest": "sha256:99e5fe6aa96459179abd201348f3ea7133261089ad9ea5687abf49d8f7f94d48"
+        "digest": "sha256:d3b834d54f5accb641e9bfd2e56cb5280c1e643abaf2c74bd0d7abe4a9f3b49b"
       },
       {
-        "path": "lib/constants.mjs",
+        "path": "lib/constants.ts",
         "role": "workflow-planner",
-        "digest": "sha256:502b5b34271e93740f82dc069c849632ac3ae1a876b4e88b9904ed05a7df4529"
+        "digest": "sha256:6abcde139a7ada26d66a733bda2700fbe32f6e1308a831efd549692dc2337aae"
       },
       {
-        "path": "lib/io.mjs",
+        "path": "lib/io.ts",
         "role": "workflow-planner",
         "digest": "sha256:0eba631c708bf427caef601939be7505c54e67a5390b41f60a593e2cfedb3281"
       },
       {
-        "path": "lib/privacy-classifier.mjs",
+        "path": "lib/privacy-classifier.ts",
         "role": "workflow-planner",
-        "digest": "sha256:ab20e3c2c00bee8e43d8050ecc30a620bc22b382ac86699b29d8c25f0c646c41"
+        "digest": "sha256:fbeabd1789f2e23c66cbaef0cfc6e0e46939dfe655fe0a05dbd9d82f7abac84d"
       },
       {
-        "path": "lib/repositories.mjs",
+        "path": "lib/repositories.ts",
         "role": "workflow-planner",
-        "digest": "sha256:393ad9fc21cbe59882acd28faffed4304585fa02a8320c1c3318d451c35f364e"
+        "digest": "sha256:4877275f6195aa142570cc64c1659ace1bbf88644f1ca6ac392b45fe3f59d3dc"
       },
       {
-        "path": "lib/workflow.mjs",
+        "path": "lib/workflow.ts",
         "role": "workflow-planner",
-        "digest": "sha256:2de34a8705ec256f2638529e6cb2a76934cf32d441361ec0a0ed6e758666ef3a"
+        "digest": "sha256:bd01c36896e1ddc8e71f8c166deb28add950fdce5d39dd98bf84cd95c4b31dc8"
       },
       {
-        "path": "tests/helpers.mjs",
+        "path": "tests/helpers.ts",
         "role": "workflow-tests",
-        "digest": "sha256:8ae7ef81e8c159f510e2474207410e4e498c9b862d3cb3f3e77f72e37aafcf2b"
+        "digest": "sha256:0ddf894c4325726a5571b7371651fd5197e598673a40e1bf9be9dfdd840c57f7"
       },
       {
-        "path": "tests/workflow.test.mjs",
+        "path": "tests/workflow.test.ts",
         "role": "workflow-tests",
-        "digest": "sha256:8a4bad00f7d5a2a66bfd3444c17d6c934aaeff97ee179e69357cdb79c48fcc1f"
+        "digest": "sha256:df5d33606dfe305061542c467a003be427e63abc7254b04969b9bc72405b0bc9"
       },
       {
         "path": "workflows/catalog.json",
         "role": "workflow-catalog",
-        "digest": "sha256:cc1c2a0158b90fdf51e55535e362ef3ad8dcfa467e8be62307a924d03d703c2a"
+        "digest": "sha256:58c7d19f7d49fc5f7d65316d478f1d7a0c0bb050864f30dfedd3a014083172e8"
       },
       {
         "path": "skills/catalog.json",
         "role": "skill-catalog",
-        "digest": "sha256:1bb666646b3f1ff1a888bbf13cdcff3a4d107fb68d237d45582165464e2d16ee"
+        "digest": "sha256:64a826f00507f0683ccf14465fa22552f898a532f2bc37f0c29c1252b07b8ce9"
       },
       {
         "path": "skills/lico-upstream-service-publishing/SKILL.md",
         "role": "skill-contract",
-        "digest": "sha256:5c43bafbea338596c19782f1e9766c836728056ea968867bd1303c4ae387d76f"
+        "digest": "sha256:e3db82d537da688932720d9c0ec589746f5ea11778de3dee6b1af85dce22b138"
       },
       {
         "path": "skills/lico-upstream-service-publishing/references/publishing-contract.md",
         "role": "skill-contract",
-        "digest": "sha256:8ad02be504c49a8f6e0dcb5853a08fd4823775c4a8d6465b21304ac5f160ca32"
+        "digest": "sha256:63adb973a99017df52aa9c2ea83073adc37348d8a7e3269b9ddb4c083a926e96"
       }
     ],
-    "treeDigest": "sha256:135a229fc443f0bc92fbd8fa87986e3e352071bdd8ff887fafe5b61a3cb8e09a",
+    "treeDigest": "sha256:f6ba885183f70fa4e79dec9f74ddf3a321effd818c51033e79d8cd5b510c2c57",
     "treeDigestAlgorithm": "sha256-canonical-json-v1"
   },
-  "workflow": {
-    "id": "core.upstream-service-publishing",
-    "owner": "core",
-    "command": {
-      "executable": "npm",
-      "args": [
-        "run",
-        "verify:upstream-service-publishing"
-      ]
+  "routes": {
+    "digestAlgorithm": "sha256-canonical-json-v1",
+    "prepublication": {
+      "profile": "upstream-service-prepublication",
+      "taskOrder": [
+        "meshrix.upstream-service-report-template",
+        "meshrix.upstream-service-prepublication"
+      ],
+      "taskOrderDigest": "sha256:96b9c57516d267713aa5a51dadcab95a2350bb5bed2340d4c45d468bd576a249"
     },
-    "cwd": "repo:core",
-    "report": "build/reports/upstream-service-publishing.json",
-    "inputSelectors": {
-      "count": 25,
-      "digest": "sha256:b6250d819d89e71798bcb48a3bc5d9a2a9f4e0b3a2240a636e967ac2cd7cee32"
-    },
-    "changedRouting": {
-      "profile": "changed",
-      "selectedWorkflowId": "core.upstream-service-publishing",
-      "coreOnly": true,
-      "testedOwnedPathCount": 14,
-      "testedOwnedPathDigest": "sha256:e181944520417872165420f095deb7bba1f28cca95b9949eef56317e47eabb75"
+    "full": {
+      "profile": "upstream-service-publishing",
+      "taskOrder": [
+        "meshrix.typecheck",
+        "meshrix.upstream-service-report-template",
+        "meshrix.upstream-service-publishing",
+        "meshrix.release-journey"
+      ],
+      "taskOrderDigest": "sha256:adf8e4006eec059687056dc9ae83109f82dd4d7b5804e87643cc58fa095a14c5"
     }
-  },
-  "skillRouting": {
-    "skill": "meshrix-upstream-service-publishing",
-    "owner": "core",
-    "routeCount": 6,
-    "routeDigest": "sha256:365c1c9bbe135392476d7716c2c99d7fd3c834f61053b59541f3afd7a2eb5a74",
-    "selectorCount": 8,
-    "selectorDigest": "sha256:9bf4fbf22835c783a4b7b49e4a39d02cce3efbe5eec59e10f7ead1845f358ab8",
-    "contractDigest": "sha256:8ad02be504c49a8f6e0dcb5853a08fd4823775c4a8d6465b21304ac5f160ca32"
   },
   "externalTest": {
     "command": {
       "executable": "node",
       "args": [
         "--test",
-        "tests/workflow.test.mjs"
+        "tests/workflow.test.ts"
       ]
     },
-    "commandDigest": "sha256:11821582958b487339d41f9471cb2021cd2bb88030610bdc45e23a81a207e9ca",
-    "revision": "5adef875c7ab9079773a3e87f614cb67d70c0e67",
+    "commandDigest": "sha256:3768521fa3ec64d18d2af617d49ac7daca76e418ddb3b81f588cdae720c3ea9d",
+    "revision": "2d2bce829b9e425b611ebf6ffe61c483d18858c3",
+    "sourceTreeDigest": "sha256:f6ba885183f70fa4e79dec9f74ddf3a321effd818c51033e79d8cd5b510c2c57",
     "passed": true,
     "exitCode": 0,
-    "factDigest": "sha256:5689a1a6295bbbcd3d9ff30206ec8fedede0cdf59a0770ddd42901966c0ca9ea"
+    "factDigest": "sha256:357b94f28f7c7ce6599cf5470a081572380adcaebbfddb8cde65bc8cbb086da9"
   },
   "privacy": {
     "rawOutputIncluded": false,
     "localInformationIncluded": false
   },
-  "receiptDigest": "sha256:3bb54c582e4209d4bf9804a7e697862a4f414fe8eb0b90efd72bc7262a435a69"
+  "receiptDigest": "sha256:2551ef2c639e5bb9f92d5c06bacd8e55423cdc63a88d42e9e0e585bbc74c7896"
 }

@@ -112,7 +112,7 @@ const emit = defineEmits<{
       </footer>
     </article>
     <div v-if="!profiles.length" class="empty-profile-state">
-      暂无上下文配置。您可以点击右上角“新增预设”进行添加。
+      暂无上下文配置。点击“新增预设”即可添加。
     </div>
   </div>
 </template>

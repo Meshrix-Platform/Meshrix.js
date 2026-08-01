@@ -1,5 +1,10 @@
 # Gateway
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 The gateway is the upstream service forwarding boundary and the runtime consumer of authenticated, revisioned service publications after they pass the control-plane, security, and acceptance contracts below.
 
 ## Current Runtime Status
@@ -142,9 +147,9 @@ governance proof; byte transfer, routine success, ordinary denial, and
 backpressure telemetry are counters or sampled diagnostics, not per-chunk or
 per-request durable logs.
 
-This section is a maintenance and readiness invariant. A representation adapter
-that has not converged on the shared permit and proof lifecycle must remain
-outside a release-ready claim even if its current controller authenticates and
+This section is a maintenance and Functional Release Gate invariant. A
+representation adapter that has not converged on the shared permit and proof
+lifecycle fails the gate even if its current controller authenticates and
 authorizes the caller.
 
 1. Resolve route and upstream operation.
@@ -174,6 +179,10 @@ outside the workspace root fails closed. Successful artifact responses carry
 an authenticated Core URI under
 `GET /api/gateway/v1/artifacts/:artifactId`; `HEAD` and one RFC-style byte
 range are supported. Ownership is checked on every resolve and download.
+The upload-session create, read, and raw-chunk routes require the dedicated
+`uploads:write` scope. The grantable `meshrix.uploads.write` toolset is
+`safe_write`; native file upload does not grant the repair-capable Jobs write
+surface.
 
 HTTP endpoint pools admit at most 64 configured endpoints, weight 100 for one
 endpoint, and total weight 1,024; duplicate endpoint identities and invalid
@@ -192,7 +201,7 @@ The stdio proxy processes requests concurrently so a downstream cancellation not
 
 ## Governance
 
-Canonical gateway verification runs against the repository's self-contained upstream fixture service (`tools/server-scripts/upstream-fixture-service.mjs`). The fixture exposes the same forwarding surfaces a production upstream service would: a deterministic HTTP API (records, echo, identity, state probe) and an MCP server over stdio and HTTP transports. Current verifiers publish it through the authenticated control-plane contract and durable manifest authority, then bind credentials through runtime `secret://` references. The fixture returns redacted credential-arrival proof (hashes and presence flags) so evidence can confirm gateway-side injection without recording secret material. Reports record only redacted hashes, response sizes, audit flags, and embedded timestamps instead of account identifiers, credentials, or raw response bodies.
+Canonical gateway verification runs against the repository's self-contained upstream fixture service (`tools/server-scripts/upstream-fixture-service.ts`). The fixture exposes the same forwarding surfaces a production upstream service would: a deterministic HTTP API (records, echo, identity, state probe) and an MCP server over stdio and HTTP transports. Current verifiers publish it through the authenticated control-plane contract and durable manifest authority, then bind credentials through runtime `secret://` references. The fixture returns redacted credential-arrival proof (hashes and presence flags) so evidence can confirm gateway-side injection without recording secret material. Reports record only redacted hashes, response sizes, audit flags, and embedded timestamps instead of account identifiers, credentials, or raw response bodies.
 
 Server protocol conformance uses a neutral downstream peer generated from the MCP and catalog-delivery contracts. It exercises initialize, initialized notification, tools/list, governed tools/call, denied destructive call, cancellation, scoped invalidation, authenticated pull, acknowledgement, disconnect, and reconnect fencing without loading a connector or client implementation. Target-specific connector and client probes remain separate compatibility checks and cannot block or promote a server receipt.
 
@@ -200,7 +209,23 @@ Native downstream installation obtains a grant through the local device-authoriz
 
 The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. The catalog pins external packages from Meshrix-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
 
-Destructive fixture tools stay hidden from downstream projection. The approval verifier first proves that the pending call produced no upstream side effect, then resolves the shared pending operation and requires exactly one credential-bound upstream MCP call. Repeated approval is rejected without replay, while rejection and expiry leave the upstream hit count unchanged. The dedicated readiness reducer rejects reports that contain only `pending_approval` without the resume, exactly-once, no-side-effect, audit-correlation, and credential-binding evidence.
+The pre-release format-convert compatibility fixture projects one external
+`POST /v1/convert` route as
+`convert-require-approval-debug` and `convert-full-access-debug`. The first
+waits for an Operation Permission approval receipt. The second skips only that
+wait; it still requires the same Grant, capability, scope, risk, audience,
+service, owner, execution permit, audit, and protected-sink checks. These are
+diagnostic operation identities for the acceptance fixture, not a general
+production recommendation to duplicate operation names.
+
+Destructive fixture tools stay hidden from downstream projection. The approval
+verifier first proves that the pending call produced no upstream side effect,
+then resolves the shared pending operation and requires exactly one
+credential-bound upstream MCP call. Repeated approval is rejected without
+replay, while rejection and expiry leave the upstream hit count unchanged. The
+dedicated functional reducer rejects reports that contain only
+`pending_approval` without the resume, exactly-once, no-side-effect,
+audit-correlation, and credential-binding evidence.
 
 Other upstream services use the same descriptor and operation policy model. A live external HTTPS compatibility probe remains available as an explicitly optional check (`MESHRIX_UPSTREAM_EXTERNAL_COMPAT=1 npm run verify:upstream-gateway-external`); it is excluded from default and container gates.
 
@@ -214,27 +239,66 @@ The upstream gateway E2E verifier publishes local fixture services through the d
 
 The upstream fixture transit verifier (`npm run verify:upstream-fixture-transit`) registers the self-contained fixture twice — once as a REST/HTTP external service with `responseSchema` and `publicResponseFields`, once as an MCP service over stdio with an HTTP-transport variant — then proves REST forwarding, MCP tool projection and transit, `state.increment` followed by `state.probe` in the same initialized stdio session, secret-store credential injection on both header and env paths, identity-proof redaction, downstream tool visibility, and denial paths (missing scope, destructive without approval). The managed-session transport tests additionally cover concurrent id routing, SSE notification/result interleaving, session headers and `404` rebuilding, cancellation without side effects, slot release, and isolation of a concurrent peer request.
 
-The downstream agent tool-loop and connector installation verifiers exercise independently released adapter compatibility. They may validate a real `meshrix-mcp proxy` or locally installed target, but their reports are outside the server acceptance DAG. Server cancellation and downstream protocol readiness are instead proven through the neutral protocol peer against `/mcp`, Operation Permission, the gateway registry, and the deterministic upstream fixture.
+The downstream agent tool-loop and connector installation verifiers exercise
+independently released adapter compatibility. They may validate a real
+`meshrix-mcp proxy` or locally installed target, but their reports are outside
+the server functional DAG. Server cancellation and downstream protocol
+behavior are instead proven through the neutral protocol peer against `/mcp`,
+Operation Permission, the gateway registry, and the deterministic upstream
+fixture.
 
 The fixture service can also be started standalone for manual inspection:
 
 ```bash
-node tools/server-scripts/upstream-fixture-service.mjs --mode http --port 0
-node tools/server-scripts/upstream-fixture-service.mjs --mode mcp-stdio
+node tools/server-scripts/upstream-fixture-service.ts --mode http --port 0
+node tools/server-scripts/upstream-fixture-service.ts --mode mcp-stdio
 ```
 
 ## Verification
 
-The commands below are separated by ownership. `verify:upstream-service-publishing` is the canonical positive server gate and writes the recomputable required report at `build/reports/upstream-service-publishing.json`.
+The commands below are separated by ownership.
+`verify:upstream-service-publishing` is the canonical positive server gate. One
+run writes the recomputable authority report at
+`build/reports/upstream-service-publishing.json`. The mandatory pre-release
+skill then runs the isolated external-service and downstream-agent journey and
+writes `build/reports/upstream-service-publishing.html`. The report records the
+exact safe startup, native upload-session, raw binary chunk, owner-bound
+`upload:` reference, and connector configuration, then embeds ten digest-bound
+screenshots captured from the real Meshrix Web Console: authenticated
+publishing, basic configuration, operation configuration, published runtime
+health, tool catalog projection, pending Token authorization, completed Token
+authorization, pending operation approval, completed operation approval, and
+the downstream MCP call matrix. It also records the complete seven-target
+catalog and requires installation, upload, tools/list, both debug calls, and
+cleanup to pass for every detected local target; missing local commands remain
+`not_detected`. Simulation is forbidden whenever any supported local client is
+detected. When and only when all seven clients are `not_detected`, the journey
+uses one explicitly labelled `mcp-simulator` fallback and reports it as
+protocol-path evidence rather than client compatibility. Its connector
+bootstrap also proves that unrelated workspace
+authority is not amplified: one expected `meshrix.agentWorkspace.list`
+`missing_capabilities` denial is required per real or simulated execution target and is reported
+separately from the two successful conversion branches. Synthetic pages,
+receipt cards, and DOM-only snapshots are not evidence. The offline report includes
+English and Simplified Chinese copy with a right-aligned language switch. It
+is local-only under Git-ignored `build/`; synthetic fixture and generated
+platform identifiers remain visible while credentials and protected identities
+remain protected. The report identifies the operation `maxBytes` value as a
+single multipart request-envelope bound, separate from the external service's
+file-size budget and from any global Meshrix upload policy:
 
 ```bash
 npm run verify:upstream-gateway
 npm run verify:upstream-service-publishing
+lico-dev workflow run upstream-service-publishing --allow-side-effects
 npm run verify:upstream-fixture-transit
 npm run verify:console-gateway-mcp-workflows
-npx vitest run tests/vitest/server/http-mcp-adapter-cancellation.test.mjs tests/vitest/server/mcp-sse-admission.test.mjs tests/vitest/server/upstream-mcp-session-manager.test.mjs tests/vitest/server/upstream-gateway-session-cancellation.test.mjs tests/vitest/server/mcp-proxy-cancellation.test.mjs
+npx vitest run tests/vitest/server/http-mcp-adapter-cancellation.test.ts tests/vitest/server/mcp-sse-admission.test.ts tests/vitest/server/upstream-mcp-session-manager.test.ts tests/vitest/server/upstream-gateway-session-cancellation.test.ts tests/vitest/server/mcp-proxy-cancellation.test.ts
 npm test -- --suite domains.manifest
 npm test
 ```
 
-Connector and client compatibility checks, including downstream agent tool loops, install refresh, and proxy transport, are independently owned. They are not server verification commands and cannot block or promote server readiness.
+Connector and client compatibility checks, including downstream agent tool
+loops, install refresh, and proxy transport, are independently owned. They are
+not server functional verification commands and cannot block or promote the
+Functional Release Gate.

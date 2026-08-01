@@ -49,7 +49,7 @@ export type WorkspaceAssetQuery = {
   [key: string]: unknown;
 };
 
-export const workspaceContextContract = Object.freeze({
+export const workspaceContextContract: Readonly<Record<string, any>> = Object.freeze({
   workspaceEndpoint: "/api/agent-workspaces",
   contextEndpoint: "/context",
   sessionsEndpoint: "/api/agent-sessions",
@@ -57,15 +57,15 @@ export const workspaceContextContract = Object.freeze({
   forkActionLabel: "分叉",
 });
 
-export const workspaceContextSignature = JSON.stringify(workspaceContextContract);
+export const workspaceContextSignature: any = JSON.stringify(workspaceContextContract);
 
-function encoded(value: string) {
+function encoded(value: string) : any {
   return encodeURIComponent(value);
 }
 
-function buildQuery(params: Record<string, unknown>) {
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
+function buildQuery(params: Record<string, unknown>) : any {
+  const query: any = new URLSearchParams();
+  for (const [key, value] of (Object.entries(params) as [string, any][])) {
     if (value !== undefined && value !== null && String(value) !== "") {
       query.set(key, String(value));
     }
@@ -73,12 +73,12 @@ function buildQuery(params: Record<string, unknown>) {
   return query.toString();
 }
 
-function stringArray(value: unknown) {
+function stringArray(value: unknown) : any {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
 function normalizeWorkspace(value: WsWorkspace): WsWorkspace {
-  const summary = value?.summary && typeof value.summary === "object"
+  const summary: any = value?.summary && typeof value.summary === "object"
     ? value.summary
     : { sessionCount: 0 };
   return {
@@ -96,15 +96,15 @@ function normalizeWorkspace(value: WsWorkspace): WsWorkspace {
   };
 }
 
-export async function listWorkspaceSummaries() {
-  const response = await getJson<WorkspaceListResponse>("/api/agent-workspaces?includeSummary=true");
+export async function listWorkspaceSummaries() : Promise<any> {
+  const response: any = await getJson<WorkspaceListResponse>("/api/agent-workspaces?includeSummary=true");
   return {
     ...response,
-    workspaces: (response.workspaces || []).map(normalizeWorkspace).filter((item) => item.workspaceId),
+    workspaces: (response.workspaces || []).map(normalizeWorkspace).filter((item?: any) : any => item.workspaceId),
   };
 }
 
-export function listWorkspaceSessions() {
+export function listWorkspaceSessions() : any {
   return getJson<WorkspaceSessionListResponse>("/api/agent-sessions?limit=100&includeLastEvent=true");
 }
 
@@ -113,22 +113,22 @@ export async function getWorkspaceChainBundle(workspaceId: string): Promise<Work
     getJson<WorkspaceConsolePayload>(`/api/agent-workspaces/${encoded(workspaceId)}/chain`),
     getJson<WorkspaceConsolePayload>(`/api/agent-workspaces/${encoded(workspaceId)}/context`),
     getJson<WorkspaceConsolePayload>(`/api/agent-workspaces/${encoded(workspaceId)}/files?recursive=true`)
-      .catch(() => ({ files: [] })),
+      .catch(() : any => ({ files: [] })),
   ]);
   return { chain, context, files };
 }
 
-export function listWorkspaceCheckpointTrees(workspaceId: string) {
+export function listWorkspaceCheckpointTrees(workspaceId: string) : any {
   return getJson<WorkspaceCheckpointTreeListResponse>(
     `/api/workspace/checkpoints/trees?ownerId=${encoded(workspaceId)}&kind=workspace_files&limit=20`,
   );
 }
 
-export function getWorkspaceCheckpointTree(treeId: string) {
+export function getWorkspaceCheckpointTree(treeId: string) : any {
   return getJson<WsCheckpointTreeDetail>(`/api/workspace/checkpoints/nodes/${encoded(treeId)}`);
 }
 
-export function previewWorkspaceCheckpointRestoreRequest(payload: WorkspaceConsolePayload) {
+export function previewWorkspaceCheckpointRestoreRequest(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>(
     "/api/workspace/checkpoints/restore/preview",
     payload,
@@ -136,7 +136,7 @@ export function previewWorkspaceCheckpointRestoreRequest(payload: WorkspaceConso
   );
 }
 
-export function restoreWorkspaceCheckpointRequest(payload: WorkspaceConsolePayload) {
+export function restoreWorkspaceCheckpointRequest(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>(
     "/api/workspace/checkpoints/restore",
     payload,
@@ -152,7 +152,7 @@ export async function getWorkspaceSessionBundle(sessionId: string): Promise<Work
   return {
     sessionData: {
       ...sessionData,
-      events: (Array.isArray(sessionData.events) ? sessionData.events : []).map((event, index) => ({
+      events: (Array.isArray(sessionData.events) ? sessionData.events : []).map((event?: any, index?: any) : any => ({
         ...event,
         eventId: String(event?.eventId || `event-${index}`),
         sequence: typeof event?.sequence === "number" || typeof event?.sequence === "string"
@@ -164,69 +164,69 @@ export async function getWorkspaceSessionBundle(sessionId: string): Promise<Work
   };
 }
 
-export function forkWorkspaceSession(sessionId: string) {
+export function forkWorkspaceSession(sessionId: string) : any {
   return postJson<WorkspaceConsolePayload>(`/api/agent-sessions/${encoded(sessionId)}/fork`, {});
 }
 
-export function createWorkspace(payload: WorkspaceConsolePayload) {
+export function createWorkspace(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>("/api/agent-workspaces", payload);
 }
 
-export function deleteWorkspace(workspaceId: string) {
+export function deleteWorkspace(workspaceId: string) : any {
   return deleteJson<WorkspaceConsolePayload>(`/api/agent-workspaces/${encoded(workspaceId)}`);
 }
 
-export function setWorkspaceParent(workspaceId: string, parentWorkspaceId: string | null) {
+export function setWorkspaceParent(workspaceId: string, parentWorkspaceId: string | null) : any {
   return postJson<WorkspaceConsolePayload>(
     `/api/agent-workspaces/${encoded(workspaceId)}/parent`,
     { parentWorkspaceId },
   );
 }
 
-export function updateWorkspaceProfile(workspaceId: string, payload: WorkspaceProfilePatch) {
+export function updateWorkspaceProfile(workspaceId: string, payload: WorkspaceProfilePatch) : any {
   return postJson<WorkspaceConsolePayload>(`/api/agent-workspaces/${encoded(workspaceId)}/profile`, payload);
 }
 
-export function updateWorkspaceShare(workspaceId: string, action: "share" | "unshare", targetWorkspaceId: string) {
+export function updateWorkspaceShare(workspaceId: string, action: "share" | "unshare", targetWorkspaceId: string) : any {
   return postJson<WorkspaceConsolePayload>(
     `/api/agent-workspaces/${encoded(workspaceId)}/${action}`,
     { targetWorkspaceId },
   );
 }
 
-export function listWorkspaceAssets(params: WorkspaceAssetQuery) {
+export function listWorkspaceAssets(params: WorkspaceAssetQuery) : any {
   return getJson<WorkspaceConsolePayload>(`/api/workspace/assets?${buildQuery(params)}`);
 }
 
-export function readWorkspaceAsset(params: WorkspaceAssetQuery) {
+export function readWorkspaceAsset(params: WorkspaceAssetQuery) : any {
   return getJson<WorkspaceConsolePayload>(`/api/workspace/assets/read?${buildQuery(params)}`);
 }
 
-export function submitWorkspaceAsset(payload: WorkspaceConsolePayload) {
+export function submitWorkspaceAsset(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>("/api/workspace/assets/submit", payload);
 }
 
-export function getWorkspaceAssetReceipts(payload: WorkspaceConsolePayload) {
+export function getWorkspaceAssetReceipts(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>("/api/workspace/assets/receipts/get", payload);
 }
 
-export function backfillWorkspaceAssets(payload: WorkspaceConsolePayload) {
+export function backfillWorkspaceAssets(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>("/api/workspace/assets/backfill", payload);
 }
 
-export function queryWorkspaceAudit(params: WorkspaceAssetQuery) {
+export function queryWorkspaceAudit(params: WorkspaceAssetQuery) : any {
   return getJson<WorkspaceConsolePayload>(`/api/workspace/audit?${buildQuery(params)}`);
 }
 
-export function listWorkspaceOperationHistory(params: WorkspaceAssetQuery) {
+export function listWorkspaceOperationHistory(params: WorkspaceAssetQuery) : any {
   return getJson<WorkspaceConsolePayload>(`/api/workspace/operations/history?${buildQuery(params)}`);
 }
 
-export function previewWorkspaceOperationRevert(payload: WorkspaceConsolePayload) {
+export function previewWorkspaceOperationRevert(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>("/api/workspace/operations/revert/scope", payload);
 }
 
-export function applyWorkspaceOperationRevert(payload: WorkspaceConsolePayload) {
+export function applyWorkspaceOperationRevert(payload: WorkspaceConsolePayload) : any {
   return postJson<WorkspaceConsolePayload>("/api/workspace/operations/revert/apply", payload, {
     safetyConfirm: true,
   });

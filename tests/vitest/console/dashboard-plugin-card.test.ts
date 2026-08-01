@@ -3,9 +3,9 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import DashboardPluginCard from "../../../apps/console/components/dashboard/DashboardPluginCard.vue";
 
-describe("DashboardPluginCard", () => {
-  it("checks effective plugins and grays loaded inactive plugins", () => {
-    const wrapper = mount(DashboardPluginCard, {
+describe("DashboardPluginCard", () : any => {
+  it("checks effective plugins and grays loaded inactive plugins", () : any => {
+    const wrapper: any = mount(DashboardPluginCard, {
       props: {
         plugins: [
           { id: "inactive-plugin", version: "1.0.0", features: [], effective: false },
@@ -14,8 +14,8 @@ describe("DashboardPluginCard", () => {
       },
     });
 
-    const items = wrapper.findAll(".dashboard-plugin-item");
-    expect(items.map((item) => item.text())).toEqual([
+    const items: any = wrapper.findAll(".dashboard-plugin-item");
+    expect(items.map((item?: any) : any => item.text())).toEqual([
       "active-pluginv2.0.0",
       "inactive-pluginv1.0.0",
     ]);
@@ -27,8 +27,8 @@ describe("DashboardPluginCard", () => {
     expect(items[1].get('[role="checkbox"]').attributes("disabled")).toBeDefined();
   });
 
-  it("renders an explicit empty state when no plugins are loaded", () => {
-    const wrapper = mount(DashboardPluginCard, { props: { plugins: [] } });
+  it("renders an explicit empty state when no plugins are loaded", () : any => {
+    const wrapper: any = mount(DashboardPluginCard, { props: { plugins: [] } });
     expect(wrapper.get(".dashboard-plugin-empty").text()).toBe("暂无已装载插件");
     expect(wrapper.text()).toContain("0/0 已生效");
   });

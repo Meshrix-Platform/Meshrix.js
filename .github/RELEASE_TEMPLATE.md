@@ -1,9 +1,10 @@
 # Meshrix v<VERSION>
 
-This release was assembled by the canonical tag workflow after platform
-acceptance, the required Node.js 22 clean install/start probe, final macOS arm64
-MCP asset execution, and actionable high-severity scans of both container
-platforms completed successfully.
+This release was assembled by the canonical tag workflow after the Functional
+Release Gate, the required Node.js 22 clean install/start probe, and actionable
+high-severity scans of both container artifacts completed successfully.
+Real-machine results are separate candidate-bound Environment Support Claims;
+their absence or failure does not block this release.
 
 ## Changes
 
@@ -85,9 +86,9 @@ cd "${asset%.tar.gz}"
 | Surface | Target | Release status |
 | --- | --- | --- |
 | npm packages | Seven public `@meshrix/*` workspaces, `meshrix-mcp-connector`, and `meshrix` | Published or integrity-reverified through npm trusted publishing. |
-| Server and Web Console container | Linux amd64 and arm64 | Published as the signed multi-platform container after pinned Trivy scans and per-platform provenance/SBOM validation. |
-| MCP Connector | macOS arm64 | Published after required execution of the exact final archive on a macOS arm64 tag-workflow runner. |
-| MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Build support remains in source; no artifact or runtime support claim is made by this release. |
+| Server and Web Console container | Linux amd64 and arm64 | Published as the signed multi-platform container after pinned Trivy scans and per-platform provenance/SBOM validation. Native runtime support is claimed only by a matching optional real-machine receipt. |
+| MCP Connector | macOS arm64 | Published as a functionally accepted artifact. Native runtime support is claimed only after the exact final archive passes the macOS arm64 Real-Machine Verification Workflow. |
+| MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Build support may remain in source; each runtime support claim requires its own optional real-machine receipt. |
 | MeshrixUp relay client | Separately versioned client platforms | Optional and removable; not shipped by or required for this core release. |
 | Pactium substrate | `pactium@0.5.0`, `pactium.v0.2`, `pactium.v0.2.schema.latest` | Exact runtime dependency for this release. |
 

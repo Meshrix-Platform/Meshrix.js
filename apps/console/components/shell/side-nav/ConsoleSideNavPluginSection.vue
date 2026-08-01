@@ -16,8 +16,8 @@ const {
 
 const entries = computed(() =>
   (consoleState.value?.features?.plugins?.consoleEntries || [])
-    .filter((entry) => isAdminPluginConsoleEntry(entry) && canAccessAdminView(entry.viewKey))
-    .sort((left, right) => (left.label || left.id).localeCompare(right.label || right.id)),
+    .filter((entry: any) => isAdminPluginConsoleEntry(entry) && canAccessAdminView(entry.viewKey))
+    .sort((left: any, right: any) => (left.label || left.id).localeCompare(right.label || right.id)),
 );
 
 function pluginEntryHref(entry: { routePath?: string }) {

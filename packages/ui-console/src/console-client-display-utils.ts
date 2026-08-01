@@ -17,21 +17,21 @@ export const clientAlignmentStateLabels: Record<string, string> = {
   unknown: "未知",
 };
 
-export function clientAlignmentTone(state = "") {
+export function clientAlignmentTone(state: any = "") : any {
   if (state === "aligned") return "aligned";
   if (state === "draining") return "draining";
   if (state === "offline") return "offline";
   return "attention";
 }
 
-export function clientConnectionMethodLabel(client: ConsoleClientConnectionRow) {
+export function clientConnectionMethodLabel(client: ConsoleClientConnectionRow) : any {
   if (client.connectionKind === "mcp-plugin") {
     return "MCP 服务";
   }
   return String(client.connectionMethod || "meshrix-client 封装");
 }
 
-export function clientConnectionDetail(client: ConsoleClientConnectionRow) {
+export function clientConnectionDetail(client: ConsoleClientConnectionRow) : any {
   if (client.connectionKind === "mcp-plugin") {
     return "";
   }
@@ -41,14 +41,14 @@ export function clientConnectionDetail(client: ConsoleClientConnectionRow) {
   return "Discovery Check-in";
 }
 
-export function clientStatusLabel(client: ConsoleClientConnectionRow) {
+export function clientStatusLabel(client: ConsoleClientConnectionRow) : any {
   if (client.connectionKind === "mcp-plugin") {
     return String(client.connectionStatusLabel || "已配对");
   }
   return clientAlignmentStateLabels[String(client.alignmentState || "unknown")] || "未知";
 }
 
-export function clientStatusTone(client: ConsoleClientConnectionRow) {
+export function clientStatusTone(client: ConsoleClientConnectionRow) : any {
   if (client.connectionKind !== "mcp-plugin") {
     return clientAlignmentTone(client.alignmentState);
   }
@@ -66,10 +66,10 @@ export function clientStatusTone(client: ConsoleClientConnectionRow) {
   return "online";
 }
 
-export function clientConfigReportLabel(client: ConsoleClientConnectionRow) {
+export function clientConfigReportLabel(client: ConsoleClientConnectionRow) : any {
   return String(client.configVersion || "").trim() ? "已上报" : "未上报";
 }
 
-export function clientConfigReportTone(client: ConsoleClientConnectionRow) {
+export function clientConfigReportTone(client: ConsoleClientConnectionRow) : any {
   return String(client.configVersion || "").trim() ? "success" : "warning";
 }

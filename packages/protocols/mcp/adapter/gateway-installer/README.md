@@ -36,8 +36,8 @@ The runtime CLI remains available for internal verifiers and protocol runtime
 commands:
 
 ```bash
-node packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs proxy --target opencode
-node packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs doctor --json
+node packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts proxy --target opencode
+node packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts doctor --json
 ```
 
 Install/config discovery is not proof that the real stdio proxy transport works;

@@ -31,73 +31,73 @@ type ConsoleMaintenanceAgentControllerOptions = {
   visibleModelEntries: ComputedRef<AgentModelConfig[]>;
 };
 
-function cloneConfig(config: MaintenanceAgentConfig) {
+function cloneConfig(config: MaintenanceAgentConfig) : any {
   return JSON.parse(JSON.stringify(config)) as MaintenanceAgentConfig;
 }
 
 export function createConsoleMaintenanceAgentController(
   options: ConsoleMaintenanceAgentControllerOptions,
-) {
-  const maintenanceAgentConfig = ref<MaintenanceAgentConfig | null>(null);
-  const maintenanceAgentRuns = ref<MaintenanceAgentRun[]>([]);
-  const selectedMaintenanceAgentRun = ref<MaintenanceAgentRun | null>(null);
-  const maintenanceAgentMessage = ref("");
-  const maintenanceAgentModelAlias = ref("");
-  const maintenanceAgentRunbook = ref("");
-  const maintenanceAgentRunbookCatalog = ref<MaintenanceAgentRunbook[]>([]);
-  const maintenanceAgentResultJson = ref("");
+) : any {
+  const maintenanceAgentConfig: any = ref<MaintenanceAgentConfig | null>(null);
+  const maintenanceAgentRuns: any = ref<MaintenanceAgentRun[]>([]);
+  const selectedMaintenanceAgentRun: any = ref<MaintenanceAgentRun | null>(null);
+  const maintenanceAgentMessage: any = ref("");
+  const maintenanceAgentModelAlias: any = ref("");
+  const maintenanceAgentRunbook: any = ref("");
+  const maintenanceAgentRunbookCatalog: any = ref<MaintenanceAgentRunbook[]>([]);
+  const maintenanceAgentResultJson: any = ref("");
 
-  const maintenanceAgentSummary = computed(() => options.consoleState.value?.maintenanceAgent || null);
-  const maintenanceAgentRunbooks = computed(() => maintenanceAgentRunbookCatalog.value);
-  const maintenanceAgentRunbookOptionBarOptions = computed<OptionBarOption[]>(() =>
-    maintenanceAgentRunbooks.value.map((runbook) => ({
+  const maintenanceAgentSummary: any = computed(() : any => options.consoleState.value?.maintenanceAgent || null);
+  const maintenanceAgentRunbooks: any = computed(() : any => maintenanceAgentRunbookCatalog.value);
+  const maintenanceAgentRunbookOptionBarOptions: any = computed<OptionBarOption[]>(() : any =>
+    maintenanceAgentRunbooks.value.map((runbook?: any) : any => ({
       value: runbook.id,
       label: `${runbook.label} / ${runbook.id}`,
     })),
   );
-  const maintenanceAgentSchedules = computed(
-    () =>
+  const maintenanceAgentSchedules: any = computed(
+    () : any =>
       maintenanceAgentConfig.value?.schedules ||
       maintenanceAgentSummary.value?.config.schedules ||
       [],
   );
-  const displayedMaintenanceAgentRuns = computed(() =>
+  const displayedMaintenanceAgentRuns: any = computed(() : any =>
     (maintenanceAgentRuns.value.length > 0
       ? maintenanceAgentRuns.value
       : maintenanceAgentSummary.value?.runs || []
     ).slice(0, 12),
   );
-  const latestMaintenanceAgentRun = computed(
-    () => displayedMaintenanceAgentRuns.value[0] || maintenanceAgentSummary.value?.latestRun || null,
+  const latestMaintenanceAgentRun: any = computed(
+    () : any => displayedMaintenanceAgentRuns.value[0] || maintenanceAgentSummary.value?.latestRun || null,
   );
-  const pendingMaintenanceApprovalCount = computed(
-    () =>
-      displayedMaintenanceAgentRuns.value.filter((run) => run.status === "awaiting_approval").length ||
+  const pendingMaintenanceApprovalCount: any = computed(
+    () : any =>
+      displayedMaintenanceAgentRuns.value.filter((run?: any) : any => run.status === "awaiting_approval").length ||
       maintenanceAgentSummary.value?.pendingApprovalCount ||
       0,
   );
-  const nextMaintenanceAgentRunAt = computed(() => {
-    const scheduled =
+  const nextMaintenanceAgentRunAt: any = computed(() : any => {
+    const scheduled: any =
       maintenanceAgentSchedules.value
-        .filter((schedule) => schedule.enabled && schedule.nextRunAt)
-        .map((schedule) => schedule.nextRunAt)
+        .filter((schedule?: any) : any => schedule.enabled && schedule.nextRunAt)
+        .map((schedule?: any) : any => schedule.nextRunAt)
         .sort()[0] || "";
     return scheduled || maintenanceAgentSummary.value?.nextRunAt || "";
   });
-  const allMaintenanceAgentRuns = computed(() =>
+  const allMaintenanceAgentRuns: any = computed(() : any =>
     maintenanceAgentRuns.value.length > 0
       ? maintenanceAgentRuns.value
       : maintenanceAgentSummary.value?.runs || [],
   );
 
-  function applyMaintenanceAgentStateFromConsoleState(nextState: ServerConsoleState) {
+  function applyMaintenanceAgentStateFromConsoleState(nextState: ServerConsoleState) : any {
     maintenanceAgentConfig.value = nextState.maintenanceAgent?.config
       ? cloneConfig(nextState.maintenanceAgent.config)
       : null;
     maintenanceAgentRuns.value = nextState.maintenanceAgent?.runs || [];
     selectedMaintenanceAgentRun.value =
       maintenanceAgentRuns.value.find(
-        (run) => run.runId === selectedMaintenanceAgentRun.value?.runId,
+        (run?: any) : any => run.runId === selectedMaintenanceAgentRun.value?.runId,
       ) ||
       selectedMaintenanceAgentRun.value ||
       maintenanceAgentRuns.value[0] ||
@@ -119,11 +119,11 @@ export function createConsoleMaintenanceAgentController(
     };
   }
 
-  function patchMaintenanceAgentState(patch: Partial<MaintenanceAgentState>) {
+  function patchMaintenanceAgentState(patch: Partial<MaintenanceAgentState>) : any {
     if (!options.consoleState.value) {
       return;
     }
-    const previous = options.consoleState.value.maintenanceAgent || defaultMaintenanceAgentState();
+    const previous: any = options.consoleState.value.maintenanceAgent || defaultMaintenanceAgentState();
     if (!previous.config && !patch.config) {
       return;
     }
@@ -136,8 +136,8 @@ export function createConsoleMaintenanceAgentController(
     };
   }
 
-  function applyMaintenanceAgentConfigFromEvent(value: unknown) {
-    const config = asRecord(value) as MaintenanceAgentConfig | null;
+  function applyMaintenanceAgentConfigFromEvent(value: unknown) : any {
+    const config: any = asRecord(value) as MaintenanceAgentConfig | null;
     if (!config) {
       return false;
     }
@@ -146,7 +146,7 @@ export function createConsoleMaintenanceAgentController(
     return true;
   }
 
-  async function refreshMaintenanceAgent(refreshOptions: { silent?: boolean } = {}) {
+  async function refreshMaintenanceAgent(refreshOptions: { silent?: boolean } = {}) : Promise<any> {
     if (!options.canReadMaintenanceAgent.value) {
       return;
     }
@@ -164,7 +164,7 @@ export function createConsoleMaintenanceAgentController(
       maintenanceAgentRuns.value = runsResult.items;
       selectedMaintenanceAgentRun.value =
         maintenanceAgentRuns.value.find(
-          (run) => run.runId === selectedMaintenanceAgentRun.value?.runId,
+          (run?: any) : any => run.runId === selectedMaintenanceAgentRun.value?.runId,
         ) ||
         maintenanceAgentRuns.value[0] ||
         null;
@@ -174,14 +174,14 @@ export function createConsoleMaintenanceAgentController(
         latestRun: runsResult.items[0] || null,
         activeRunId: runsResult.activeRunId,
         queuedRunIds: runsResult.queuedRunIds,
-        pendingApprovalCount: runsResult.items.filter((run) => run.status === "awaiting_approval").length,
+        pendingApprovalCount: runsResult.items.filter((run?: any) : any => run.status === "awaiting_approval").length,
         nextRunAt:
           (configResult.config.schedules || [])
-            .filter((schedule) => schedule.enabled && schedule.nextRunAt)
-            .map((schedule) => schedule.nextRunAt)
+            .filter((schedule?: any) : any => schedule.enabled && schedule.nextRunAt)
+            .map((schedule?: any) : any => schedule.nextRunAt)
             .sort()[0] || "",
       });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "刷新智能巡检失败。";
     } finally {
@@ -191,18 +191,18 @@ export function createConsoleMaintenanceAgentController(
     }
   }
 
-  async function saveMaintenanceAgentConfig() {
+  async function saveMaintenanceAgentConfig() : Promise<any> {
     if (!maintenanceAgentConfig.value) {
       return;
     }
     options.setBusy("maintenance-agent:config");
     options.error.value = "";
     try {
-      const result = await saveMaintenanceAgentConfigRequest(maintenanceAgentConfig.value);
+      const result: any = await saveMaintenanceAgentConfigRequest(maintenanceAgentConfig.value);
       maintenanceAgentConfig.value = cloneConfig(result.config);
       patchMaintenanceAgentState({ config: result.config });
       await refreshMaintenanceAgent({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存智能巡检配置失败。";
     } finally {
@@ -210,10 +210,10 @@ export function createConsoleMaintenanceAgentController(
     }
   }
 
-  function addMaintenanceAgentSchedule() {
-    const config = maintenanceAgentConfig.value;
-    const runbook = maintenanceAgentRunbookCatalog.value.find(
-      (item) => item.id === maintenanceAgentRunbook.value,
+  function addMaintenanceAgentSchedule() : any {
+    const config: any = maintenanceAgentConfig.value;
+    const runbook: any = maintenanceAgentRunbookCatalog.value.find(
+      (item?: any) : any => item.id === maintenanceAgentRunbook.value,
     );
     if (!config || !runbook) return;
     config.schedules.push({
@@ -226,14 +226,14 @@ export function createConsoleMaintenanceAgentController(
     });
   }
 
-  function removeMaintenanceAgentSchedule(scheduleId: string) {
-    const config = maintenanceAgentConfig.value;
+  function removeMaintenanceAgentSchedule(scheduleId: string) : any {
+    const config: any = maintenanceAgentConfig.value;
     if (!config) return;
-    config.schedules = config.schedules.filter((schedule) => schedule.id !== scheduleId);
+    config.schedules = config.schedules.filter((schedule?: any) : any => schedule.id !== scheduleId);
   }
 
-  async function chatMaintenanceAgent() {
-    const message = maintenanceAgentMessage.value.trim();
+  async function chatMaintenanceAgent() : Promise<any> {
+    const message: any = maintenanceAgentMessage.value.trim();
     if (!message) {
       options.error.value = "请输入维护指令。";
       return;
@@ -241,10 +241,10 @@ export function createConsoleMaintenanceAgentController(
     options.setBusy("maintenance-agent:chat");
     options.error.value = "";
     try {
-      const selectedAgent = options.visibleModelEntries.value.find(
-        (entry) => options.modelEntryStatusKey(entry) === maintenanceAgentModelAlias.value,
+      const selectedAgent: any = options.visibleModelEntries.value.find(
+        (entry?: any) : any => options.modelEntryStatusKey(entry) === maintenanceAgentModelAlias.value,
       );
-      const result = await chatMaintenanceAgentRequest({
+      const result: any = await chatMaintenanceAgentRequest({
         message,
         modelAlias: maintenanceAgentModelAlias.value || undefined,
         agentName: selectedAgent?.agentName || selectedAgent?.label || undefined,
@@ -253,7 +253,7 @@ export function createConsoleMaintenanceAgentController(
       maintenanceAgentResultJson.value = jsonPreview(result);
       selectedMaintenanceAgentRun.value = result.run;
       await refreshMaintenanceAgent({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "智能巡检对话执行失败。";
     } finally {
@@ -261,18 +261,18 @@ export function createConsoleMaintenanceAgentController(
     }
   }
 
-  async function runMaintenanceAgentRunbook() {
+  async function runMaintenanceAgentRunbook() : Promise<any> {
     options.setBusy("maintenance-agent:run");
     options.error.value = "";
     try {
-      const run = await startMaintenanceAgentRun({
+      const run: any = await startMaintenanceAgentRun({
         runbook: maintenanceAgentRunbook.value,
         wait: true,
       });
       maintenanceAgentResultJson.value = jsonPreview(run);
       selectedMaintenanceAgentRun.value = run;
       await refreshMaintenanceAgent({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "维护 runbook 执行失败。";
     } finally {
@@ -280,23 +280,23 @@ export function createConsoleMaintenanceAgentController(
     }
   }
 
-  async function runMaintenanceAgentGatewayReview() {
+  async function runMaintenanceAgentGatewayReview() : Promise<any> {
     maintenanceAgentRunbook.value = "failed_jobs_review";
     await runMaintenanceAgentRunbook();
   }
 
-  async function approveMaintenanceAgentRun(run: MaintenanceAgentRun) {
+  async function approveMaintenanceAgentRun(run: MaintenanceAgentRun) : Promise<any> {
     options.setBusy(`maintenance-agent:approve:${run.runId}`);
     options.error.value = "";
     try {
-      const result = await approveMaintenanceAgentRunRequest(run.runId, {
+      const result: any = await approveMaintenanceAgentRunRequest(run.runId, {
         planHash: run.planHash,
         wait: true,
       });
       maintenanceAgentResultJson.value = jsonPreview(result.run);
       selectedMaintenanceAgentRun.value = result.run;
       await refreshMaintenanceAgent({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "维护计划审批失败。";
     } finally {
@@ -304,17 +304,17 @@ export function createConsoleMaintenanceAgentController(
     }
   }
 
-  async function cancelMaintenanceAgentRun(run: MaintenanceAgentRun) {
+  async function cancelMaintenanceAgentRun(run: MaintenanceAgentRun) : Promise<any> {
     options.setBusy(`maintenance-agent:cancel:${run.runId}`);
     options.error.value = "";
     try {
-      const result = await cancelMaintenanceAgentRunRequest(run.runId, {
+      const result: any = await cancelMaintenanceAgentRunRequest(run.runId, {
         reason: "console",
       });
       maintenanceAgentResultJson.value = jsonPreview(result.run);
       selectedMaintenanceAgentRun.value = result.run;
       await refreshMaintenanceAgent({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "维护运行取消失败。";
     } finally {

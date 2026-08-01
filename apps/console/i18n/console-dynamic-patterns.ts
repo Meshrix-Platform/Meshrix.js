@@ -14,9 +14,9 @@ export function applyConsolePattern(
   text: string,
   locale: ConsoleLocale,
   context: ConsolePatternContext,
-) {
+) : any {
   for (const pattern of consoleDynamicPatternPairs) {
-    const match = locale === "en" ? text.match(pattern.zh) : text.match(pattern.enPattern);
+    const match: any = locale === "en" ? text.match(pattern.zh) : text.match(pattern.enPattern);
     if (match) {
       return locale === "en" ? pattern.en(match, context) : pattern.zhBack(match, context);
     }

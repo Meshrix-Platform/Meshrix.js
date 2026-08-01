@@ -30,7 +30,7 @@ export type TagManagementTreeRow = {
   depth: number;
 };
 
-export const tagManagementKindOptions = [
+export const tagManagementKindOptions: any[] = [
   { value: "", label: "全部类型" },
   { value: "role", label: "role" },
   { value: "group", label: "group" },
@@ -39,7 +39,7 @@ export const tagManagementKindOptions = [
   { value: "custom", label: "custom" },
 ];
 
-export const tagManagementStatusOptions = [
+export const tagManagementStatusOptions: any[] = [
   { value: "", label: "全部状态" },
   { value: "active", label: "active" },
   { value: "archived", label: "archived" },
@@ -58,14 +58,14 @@ function emptyEditor(): TagEditor {
   };
 }
 
-function formatJson(value: unknown) {
+function formatJson(value: unknown) : any {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
-function parseListText(value: string) {
+function parseListText(value: string) : any {
   return value
     .split(/[\n,]/g)
-    .map((item) => item.trim())
+    .map((item?: any) : any => item.trim())
     .filter(Boolean);
 }
 
@@ -82,26 +82,26 @@ function editorFromTag(tag: TagManagementTag): TagEditor {
   };
 }
 
-function sortTags(tags: TagManagementTag[]) {
-  return [...tags].sort((a, b) =>
+function sortTags(tags: TagManagementTag[]) : any {
+  return [...tags].sort((a?: any, b?: any) : any =>
     `${a.kind}:${a.label}:${a.tagId}`.localeCompare(`${b.kind}:${b.label}:${b.tagId}`),
   );
 }
 
 function buildTreeRows(tags: TagManagementTag[]): TagManagementTreeRow[] {
   const rows: TagManagementTreeRow[] = [];
-  const tagIds = new Set(tags.map((tag) => tag.tagId));
-  const childrenByParent = new Map<string, TagManagementTag[]>();
+  const tagIds: any = new Set<any>(tags.map((tag?: any) : any => tag.tagId));
+  const childrenByParent: any = new Map<string, TagManagementTag[]>();
   for (const tag of tags) {
-    const parentId = tag.parentTagId && tagIds.has(tag.parentTagId) ? tag.parentTagId : "";
+    const parentId: any = tag.parentTagId && tagIds.has(tag.parentTagId) ? tag.parentTagId : "";
     childrenByParent.set(parentId, [...(childrenByParent.get(parentId) || []), tag]);
   }
   for (const [parentId, children] of childrenByParent.entries()) {
     childrenByParent.set(parentId, sortTags(children));
   }
 
-  const visited = new Set<string>();
-  function visit(tag: TagManagementTag, depth: number) {
+  const visited: any = new Set<string>();
+  function visit(tag: TagManagementTag, depth: number) : any {
     if (visited.has(tag.tagId)) return;
     visited.add(tag.tagId);
     rows.push({ tag, depth });
@@ -119,34 +119,34 @@ function buildTreeRows(tags: TagManagementTag[]): TagManagementTreeRow[] {
   return rows;
 }
 
-export function useTagManagementConsole() {
-  const tags = ref<TagManagementTag[]>([]);
-  const projections = ref<TagManagementProjection[]>([]);
-  const auditItems = ref<TagManagementAuditItem[]>([]);
-  const loading = ref(false);
-  const saving = ref(false);
-  const error = ref("");
-  const status = ref("");
-  const kindFilter = ref("");
-  const statusFilter = ref("");
-  const includeArchived = ref(true);
-  const selectedTagId = ref("");
-  const editor = ref<TagEditor>(emptyEditor());
+export function useTagManagementConsole() : any {
+  const tags: any = ref<TagManagementTag[]>([]);
+  const projections: any = ref<TagManagementProjection[]>([]);
+  const auditItems: any = ref<TagManagementAuditItem[]>([]);
+  const loading: any = ref(false);
+  const saving: any = ref(false);
+  const error: any = ref("");
+  const status: any = ref("");
+  const kindFilter: any = ref("");
+  const statusFilter: any = ref("");
+  const includeArchived: any = ref(true);
+  const selectedTagId: any = ref("");
+  const editor: any = ref<TagEditor>(emptyEditor());
 
-  const selectedTag = computed(() => tags.value.find((tag) => tag.tagId === selectedTagId.value) || null);
-  const projectionByTagId = computed(() => {
-    const map = new Map<string, TagManagementProjection>();
+  const selectedTag: any = computed(() : any => tags.value.find((tag?: any) : any => tag.tagId === selectedTagId.value) || null);
+  const projectionByTagId: any = computed(() : any => {
+    const map: any = new Map<string, TagManagementProjection>();
     for (const projection of projections.value) {
       map.set(projection.tagId, projection);
     }
     return map;
   });
-  const selectedProjection = computed(() =>
+  const selectedProjection: any = computed(() : any =>
     selectedTag.value ? projectionByTagId.value.get(selectedTag.value.tagId) || null : null,
   );
-  const treeRows = computed(() => buildTreeRows(tags.value));
-  const tagStats = computed(() => {
-    const archived = tags.value.filter((tag) => tag.status === "archived").length;
+  const treeRows: any = computed(() : any => buildTreeRows(tags.value));
+  const tagStats: any = computed(() : any => {
+    const archived: any = tags.value.filter((tag?: any) : any => tag.status === "archived").length;
     return {
       total: tags.value.length,
       active: tags.value.length - archived,
@@ -155,24 +155,24 @@ export function useTagManagementConsole() {
       audit: auditItems.value.length,
     };
   });
-  const parentTagOptions = computed(() =>
+  const parentTagOptions: any = computed(() : any =>
     tags.value
-      .filter((tag) => tag.tagId !== editor.value.tagId && tag.status !== "archived")
-      .map((tag) => ({ value: tag.tagId, label: `${tag.label} (${tag.tagId})` })),
+      .filter((tag?: any) : any => tag.tagId !== editor.value.tagId && tag.status !== "archived")
+      .map((tag?: any) : any => ({ value: tag.tagId, label: `${tag.label} (${tag.tagId})` })),
   );
-  const selectedProjectionPayload = computed(() => formatJson(selectedProjection.value?.payload || {}));
-  const selectedTagMetadata = computed(() => formatJson(selectedTag.value?.metadata || {}));
+  const selectedProjectionPayload: any = computed(() : any => formatJson(selectedProjection.value?.payload || {}));
+  const selectedTagMetadata: any = computed(() : any => formatJson(selectedTag.value?.metadata || {}));
 
-  function selectTag(tagId: string) {
+  function selectTag(tagId: string) : any {
     selectedTagId.value = tagId;
-    const tag = tags.value.find((item) => item.tagId === tagId);
+    const tag: any = tags.value.find((item?: any) : any => item.tagId === tagId);
     if (tag) {
       editor.value = editorFromTag(tag);
     }
     status.value = "";
   }
 
-  function startNewTag() {
+  function startNewTag() : any {
     selectedTagId.value = "";
     editor.value = {
       ...emptyEditor(),
@@ -181,15 +181,15 @@ export function useTagManagementConsole() {
     status.value = "";
   }
 
-  function syncSelectionAfterLoad(forceEditor = false) {
-    const selected = tags.value.find((tag) => tag.tagId === selectedTagId.value);
+  function syncSelectionAfterLoad(forceEditor: any = false) : any {
+    const selected: any = tags.value.find((tag?: any) : any => tag.tagId === selectedTagId.value);
     if (selected) {
       if (forceEditor) {
         editor.value = editorFromTag(selected);
       }
       return;
     }
-    const first = treeRows.value[0]?.tag;
+    const first: any = treeRows.value[0]?.tag;
     if (first) {
       selectedTagId.value = first.tagId;
       editor.value = editorFromTag(first);
@@ -198,7 +198,7 @@ export function useTagManagementConsole() {
     startNewTag();
   }
 
-  async function refreshTagManagement(forceEditor = false) {
+  async function refreshTagManagement(forceEditor: any = false) : Promise<any> {
     loading.value = true;
     error.value = "";
     try {
@@ -215,21 +215,21 @@ export function useTagManagementConsole() {
       projections.value = projectionPayload.items || [];
       auditItems.value = auditPayload.items || [];
       syncSelectionAfterLoad(forceEditor);
-    } catch (caught) {
+    } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag Management 加载失败。";
     } finally {
       loading.value = false;
     }
   }
 
-  async function saveEditor() {
+  async function saveEditor() : Promise<any> {
     saving.value = true;
     error.value = "";
     status.value = "";
     try {
-      const metadata = JSON.parse(editor.value.metadataText || "{}") as Record<string, unknown>;
-      const tagId = editor.value.tagId.trim();
-      const payload = {
+      const metadata: any = JSON.parse(editor.value.metadataText || "{}") as Record<string, unknown>;
+      const tagId: any = editor.value.tagId.trim();
+      const payload: Record<string, any> = {
         tagId,
         kind: editor.value.kind,
         label: editor.value.label.trim() || tagId,
@@ -239,20 +239,20 @@ export function useTagManagementConsole() {
         scopePrerequisites: parseListText(editor.value.scopePrerequisitesText),
         metadata,
       };
-      const response = await upsertTagManagementTag(payload);
+      const response: any = await upsertTagManagementTag(payload);
       selectedTagId.value = response.tag.tagId;
       status.value = "已保存";
       await refreshTagManagement(true);
-    } catch (caught) {
+    } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag 保存失败。";
     } finally {
       saving.value = false;
     }
   }
 
-  async function archiveSelectedTag() {
+  async function archiveSelectedTag() : Promise<any> {
     if (!selectedTag.value || selectedTag.value.system) return;
-    const confirmed = await confirmConsoleAction(`确认归档 ${selectedTag.value.tagId}？`, { tone: "danger" });
+    const confirmed: any = await confirmConsoleAction(`确认归档 ${selectedTag.value.tagId}？`, { tone: "danger" });
     if (!confirmed) return;
     saving.value = true;
     error.value = "";
@@ -261,14 +261,14 @@ export function useTagManagementConsole() {
       await archiveTagManagementTag(selectedTag.value.tagId, "console archive");
       status.value = "已归档";
       await refreshTagManagement(true);
-    } catch (caught) {
+    } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag 归档失败。";
     } finally {
       saving.value = false;
     }
   }
 
-  async function restoreSelectedTag() {
+  async function restoreSelectedTag() : Promise<any> {
     if (!selectedTag.value) return;
     saving.value = true;
     error.value = "";
@@ -277,39 +277,39 @@ export function useTagManagementConsole() {
       await restoreTagManagementTag(selectedTag.value.tagId);
       status.value = "已恢复";
       await refreshTagManagement(true);
-    } catch (caught) {
+    } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "Tag 恢复失败。";
     } finally {
       saving.value = false;
     }
   }
 
-  async function rebuildProjections() {
+  async function rebuildProjections() : Promise<any> {
     saving.value = true;
     error.value = "";
     status.value = "";
     try {
-      const result = await rebuildTagManagementProjections();
+      const result: any = await rebuildTagManagementProjections();
       status.value = `投影已重建：${Number(result.count || 0)}`;
       await refreshTagManagement(true);
-    } catch (caught) {
+    } catch (caught: any) {
       error.value = caught instanceof Error ? caught.message : "投影重建失败。";
     } finally {
       saving.value = false;
     }
   }
 
-  watch([kindFilter, statusFilter, includeArchived], () => {
+  watch([kindFilter, statusFilter, includeArchived], () : any => {
     void refreshTagManagement(false);
   });
 
-  onMounted(() => {
+  onMounted(() : any => {
     void refreshTagManagement(true);
   });
 
   usePageRefreshHandler(
-    (detail) => detail.viewId === "admin" && detail.adminView === "tagManagement",
-    () => refreshTagManagement(true),
+    (detail?: any) : any => detail.viewId === "admin" && detail.adminView === "tagManagement",
+    () : any => refreshTagManagement(true),
   );
 
   return {

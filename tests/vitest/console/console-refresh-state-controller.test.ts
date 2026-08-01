@@ -6,28 +6,28 @@ import {
   REFRESH_STATE_DELAY_MS,
 } from "../../../apps/console/composables/console-refresh-state-controller";
 
-const consoleStateClientMock = vi.hoisted(() => ({
+const consoleStateClientMock: any = vi.hoisted(() : any => ({
   getServerConsoleState: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/console-state-client", () => ({
+vi.mock("../../../apps/console/lib/console-state-client", () : any => ({
   getServerConsoleState: consoleStateClientMock.getServerConsoleState,
 }));
 
-function makeState(id: string) {
+function makeState(id: string) : any {
   return {
     server: { runtimeId: id },
   } as any;
 }
 
-function createFixture() {
-  const busyKey = ref("");
-  const error = ref("seed");
-  const serverAvailable = ref(false);
-  const applyConsoleState = vi.fn();
-  const clearAllBusy = vi.fn();
-  const setBusy = vi.fn();
-  const controller = createConsoleRefreshStateController({
+function createFixture() : any {
+  const busyKey: any = ref("");
+  const error: any = ref("seed");
+  const serverAvailable: any = ref(false);
+  const applyConsoleState: any = vi.fn();
+  const clearAllBusy: any = vi.fn();
+  const setBusy: any = vi.fn();
+  const controller: any = createConsoleRefreshStateController({
     applyConsoleState,
     busyKey,
     clearAllBusy,
@@ -46,18 +46,18 @@ function createFixture() {
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
   vi.clearAllMocks();
 });
 
-afterEach(() => {
+afterEach(() : any => {
   vi.useRealTimers();
 });
 
-describe("console refresh state controller", () => {
-  it("normalizes and merges refresh options", () => {
+describe("console refresh state controller", () : any => {
+  it("normalizes and merges refresh options", () : any => {
     const { controller } = createFixture();
 
     expect(controller.normalizeRefreshStateOptions({})).toEqual({
@@ -89,7 +89,7 @@ describe("console refresh state controller", () => {
     });
   });
 
-  it("performs a visible refresh and applies the server state", async () => {
+  it("performs a visible refresh and applies the server state", async () : Promise<any> => {
     const { applyConsoleState, busyKey, clearAllBusy, controller, error, serverAvailable, setBusy } = createFixture();
     busyKey.value = "manual-refresh";
     consoleStateClientMock.getServerConsoleState.mockResolvedValueOnce(makeState("runtime-1"));
@@ -107,7 +107,7 @@ describe("console refresh state controller", () => {
     expect(controller.lastRefreshStateStartedAt.value).toBe(Date.now());
   });
 
-  it("marks the server unavailable and reports fallback errors", async () => {
+  it("marks the server unavailable and reports fallback errors", async () : Promise<any> => {
     const { applyConsoleState, clearAllBusy, controller, error, serverAvailable, setBusy } = createFixture();
     consoleStateClientMock.getServerConsoleState.mockRejectedValueOnce("offline");
 
@@ -127,7 +127,7 @@ describe("console refresh state controller", () => {
     expect(clearAllBusy).toHaveBeenCalledTimes(1);
   });
 
-  it("coalesces rapid refreshes into one delayed refresh and merges silent flags", async () => {
+  it("coalesces rapid refreshes into one delayed refresh and merges silent flags", async () : Promise<any> => {
     const { applyConsoleState, clearAllBusy, controller, setBusy } = createFixture();
     consoleStateClientMock.getServerConsoleState
       .mockResolvedValueOnce(makeState("initial"))
@@ -138,8 +138,8 @@ describe("console refresh state controller", () => {
     expect(setBusy).not.toHaveBeenCalled();
 
     vi.setSystemTime(Date.now() + 500);
-    const firstPending = controller.refreshState({ silent: true });
-    const secondPending = controller.refreshState({ silent: false });
+    const firstPending: any = controller.refreshState({ silent: true });
+    const secondPending: any = controller.refreshState({ silent: false });
 
     expect(controller.pendingRefreshStatePromise.value).not.toBeNull();
     expect(controller.pendingRefreshStateOptions.value).toEqual({
@@ -162,7 +162,7 @@ describe("console refresh state controller", () => {
     expect(controller.pendingRefreshStatePromise.value).toBeNull();
   });
 
-  it("bypasses throttling for force refreshes and clears pending delayed refreshes", async () => {
+  it("bypasses throttling for force refreshes and clears pending delayed refreshes", async () : Promise<any> => {
     const { applyConsoleState, controller, setBusy } = createFixture();
     consoleStateClientMock.getServerConsoleState
       .mockResolvedValueOnce(makeState("initial"))
@@ -171,7 +171,7 @@ describe("console refresh state controller", () => {
     await controller.refreshState();
     setBusy.mockClear();
     vi.setSystemTime(Date.now() + 100);
-    const pending = controller.scheduleDelayedRefreshState({ silent: true }, 5000);
+    const pending: any = controller.scheduleDelayedRefreshState({ silent: true }, 5000);
     expect(controller.pendingRefreshStateTimer.value).not.toBeNull();
 
     controller.clearPendingRefreshState();

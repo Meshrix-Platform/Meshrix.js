@@ -18,13 +18,13 @@
     {
       "id": "docs.functionality.agent-gateway",
       "path": "docs/functionality/AGENT-GATEWAY.md",
-      "source": "packages/server-runtime/src/composition/features/feature-manifest-data.mjs",
+      "source": "packages/server-runtime/src/composition/features/feature-manifest-data.ts",
       "description": "Standard-edition Agent Gateway, Model Routing, and optional Agent Management boundary."
     },
     {
       "id": "docs.functionality.maintenance-agent",
       "path": "docs/functionality/MAINTENANCE-AGENT.md",
-      "source": "packages/server-runtime/src/composition/features/feature-manifest-data.mjs",
+      "source": "packages/server-runtime/src/composition/features/feature-manifest-data.ts",
       "description": "Explicit Maintenance Agent runbook operation boundary and verification."
     },
     {

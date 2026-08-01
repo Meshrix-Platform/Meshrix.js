@@ -9,11 +9,11 @@ export function isStorageRecord(value: unknown): value is Record<string, unknown
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function readStorageItem(key: string, storage?: BrowserStorageLike) {
+function readStorageItem(key: string, storage?: BrowserStorageLike) : any {
   return storage ? storage.getItem(key) : readBrowserLocalStorageItem(key);
 }
 
-function writeStorageItem(key: string, value: string, storage?: BrowserStorageLike) {
+function writeStorageItem(key: string, value: string, storage?: BrowserStorageLike) : any {
   if (!storage) {
     return writeBrowserLocalStorageItem(key, value);
   }
@@ -26,8 +26,8 @@ export function readBrowserJsonStorage<T>(
   fallbackValue: T,
   normalize: (value: unknown) => T | null | undefined,
   storage?: BrowserStorageLike,
-) {
-  const rawValue = readStorageItem(key, storage);
+) : any {
+  const rawValue: any = readStorageItem(key, storage);
   if (!rawValue) {
     return fallbackValue;
   }
@@ -38,15 +38,15 @@ export function readBrowserJsonStorage<T>(
   }
 }
 
-export function readBrowserJsonRecord(key: string) {
+export function readBrowserJsonRecord(key: string) : any {
   return readBrowserJsonStorage<Record<string, unknown>>(
     key,
     {},
-    (value) => (isStorageRecord(value) ? value : null),
+    (value?: any) : any => (isStorageRecord(value) ? value : null),
   );
 }
 
-export function writeBrowserJsonStorage(key: string, value: unknown, storage?: BrowserStorageLike) {
+export function writeBrowserJsonStorage(key: string, value: unknown, storage?: BrowserStorageLike) : any {
   try {
     return writeStorageItem(key, JSON.stringify(value), storage);
   } catch {

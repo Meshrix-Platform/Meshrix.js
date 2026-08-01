@@ -13,7 +13,7 @@ type DefaultAgentKey =
   | "ruleAuthoringModelAlias"
   | "reviewFusionModelAlias";
 
-const BATCH_PLACEHOLDER_VALUE = "__meshrix_agent_assignment_batch_placeholder__";
+const BATCH_PLACEHOLDER_VALUE: any = "__meshrix_agent_assignment_batch_placeholder__";
 
 type AssignmentProbeFailure = {
   key: string;
@@ -39,7 +39,7 @@ type CapabilityAssignment = {
   update: (value: string) => void;
 };
 
-export function useAgentAssignmentView() {
+export function useAgentAssignmentView() : any {
   const {
     gatewayAssistantAgentOptions,
     gatewayAssistantForm,
@@ -63,72 +63,72 @@ export function useAgentAssignmentView() {
     settingsDraft,
     visibleModelEntries,
   } = useServerConsoleShellContext();
-  const moduleDefinitions = intelligentModuleDefinitions as IntelligentModuleDefinition[];
-  const selectOptionsForModule = moduleModelAssignmentSelectOptions as (
+  const moduleDefinitions: any = intelligentModuleDefinitions as IntelligentModuleDefinition[];
+  const selectOptionsForModule: any = moduleModelAssignmentSelectOptions as (
     moduleId: string,
   ) => ModuleModelAssignmentSelectOption[];
-  const route = useRoute();
-  const routeHighlightedConfigTarget = ref("");
+  const route: any = useRoute();
+  const routeHighlightedConfigTarget: any = ref("");
   let routeHighlightTimer: number | null = null;
-  const activeProbeScope = ref<"" | "capability" | "module">("");
-  const capabilityProbeFailures = ref<AssignmentProbeFailure[]>([]);
-  const moduleProbeFailures = ref<AssignmentProbeFailure[]>([]);
-  const agentAssignmentSaving = computed(() => busyKey.value === "settings" || Boolean(activeProbeScope.value));
-  const capabilitySaveButtonText = computed(() => {
+  const activeProbeScope: any = ref<"" | "capability" | "module">("");
+  const capabilityProbeFailures: any = ref<AssignmentProbeFailure[]>([]);
+  const moduleProbeFailures: any = ref<AssignmentProbeFailure[]>([]);
+  const agentAssignmentSaving: any = computed(() : any => busyKey.value === "settings" || Boolean(activeProbeScope.value));
+  const capabilitySaveButtonText: any = computed(() : any => {
     if (activeProbeScope.value === "capability") {
       return "检测中";
     }
     return busyKey.value === "settings" ? "保存中" : "保存";
   });
-  const moduleSaveButtonText = computed(() => {
+  const moduleSaveButtonText: any = computed(() : any => {
     if (activeProbeScope.value === "module") {
       return "检测中";
     }
     return busyKey.value === "settings" ? "保存中" : "保存";
   });
 
-  const routeConfigTarget = computed(() => {
-    const rawTarget = route.query.configTarget;
-    const target = Array.isArray(rawTarget) ? rawTarget[0] : rawTarget;
+  const routeConfigTarget: any = computed(() : any => {
+    const rawTarget: any = route.query.configTarget;
+    const target: any = Array.isArray(rawTarget) ? rawTarget[0] : rawTarget;
     return String(target || "").trim();
   });
 
-  const activeHighlightedConfigTarget = computed(() =>
+  const activeHighlightedConfigTarget: any = computed(() : any =>
     String(highlightedConfigTarget.value || routeHighlightedConfigTarget.value || "").trim(),
   );
 
-  function configTargetIsHighlighted(targetId: string) {
+  function configTargetIsHighlighted(targetId: string) : any {
     return activeHighlightedConfigTarget.value === targetId;
   }
 
-  function clearRouteConfigHighlightTimer() {
+  function clearRouteConfigHighlightTimer() : any {
     if (typeof window !== "undefined" && routeHighlightTimer) {
       window.clearTimeout(routeHighlightTimer);
     }
     routeHighlightTimer = null;
   }
 
-  function configTargetElement(targetId: string) {
+  function configTargetElement(targetId: string) : any {
     if (typeof document === "undefined") {
       return null;
     }
     return (
       Array.from(document.querySelectorAll<HTMLElement>("[data-config-target]"))
-        .find((element) => element.dataset.configTarget === targetId) || null
+        .find((element?: any) : any => element.dataset.configTarget === targetId) || null
     );
   }
 
-  async function waitForNextFrame() {
+  async function waitForNextFrame() : Promise<any> {
     if (typeof window === "undefined") {
       return;
     }
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => resolve());
+    await new Promise<void>((resolve?: any) : any => {
+      window.requestAnimationFrame(() : any => resolve());
     });
   }
 
-  async function revealRouteConfigTarget(targetId: string) {
-    const target = String(targetId || "").trim();
+  async function revealRouteConfigTarget(targetId: string) : Promise<any> {
+    const target: any = String(targetId || "").trim();
     if (!target) {
       return;
     }
@@ -140,7 +140,7 @@ export function useAgentAssignmentView() {
     if (typeof window === "undefined") {
       return;
     }
-    routeHighlightTimer = window.setTimeout(() => {
+    routeHighlightTimer = window.setTimeout(() : any => {
       if (routeHighlightedConfigTarget.value === target) {
         routeHighlightedConfigTarget.value = "";
       }
@@ -150,19 +150,19 @@ export function useAgentAssignmentView() {
 
   watch(
     routeConfigTarget,
-    (target) => {
+    (target?: any) : any => {
       void revealRouteConfigTarget(target);
     },
     { immediate: true },
   );
 
-  function defaultAgentValue(key: DefaultAgentKey, fallback = "") {
+  function defaultAgentValue(key: DefaultAgentKey, fallback: any = "") : any {
     return String(settingsDraft.value.gatewayAssistantDefaults?.[key] || fallback || "").trim();
   }
 
-  function setDefaultAgentValue(key: DefaultAgentKey, value: string) {
+  function setDefaultAgentValue(key: DefaultAgentKey, value: string) : any {
     capabilityProbeFailures.value = [];
-    const modelAlias = String(value || "").trim();
+    const modelAlias: any = String(value || "").trim();
     settingsDraft.value.gatewayAssistantDefaults = {
       ...settingsDraft.value.gatewayAssistantDefaults,
       [key]: modelAlias,
@@ -174,38 +174,38 @@ export function useAgentAssignmentView() {
     }
   }
 
-  function selectedOptionStatus(options: Array<{ value?: unknown; enabled?: boolean }>, value: string) {
-    const modelAlias = String(value || "").trim();
+  function selectedOptionStatus(options: Array<{ value?: unknown; enabled?: boolean }>, value: string) : any {
+    const modelAlias: any = String(value || "").trim();
     if (!modelAlias) {
       return { label: "未分配", tone: "warning" };
     }
-    const option = options.find((item) => String(item.value || "").trim() === modelAlias);
+    const option: any = options.find((item?: any) : any => String(item.value || "").trim() === modelAlias);
     if (!option?.enabled) {
       return { label: "不可用", tone: "danger" };
     }
     return { label: "已分配", tone: "success" };
   }
 
-  function optionValue(option: { value?: unknown }) {
+  function optionValue(option: { value?: unknown }) : any {
     return String(option.value || "").trim();
   }
 
-  function optionLabel(option: { value?: unknown; label?: string }) {
+  function optionLabel(option: { value?: unknown; label?: string }) : any {
     return String(option.label || optionValue(option)).trim();
   }
 
-  function optionIsEnabled(option: { enabled?: boolean; disabled?: boolean }) {
+  function optionIsEnabled(option: { enabled?: boolean; disabled?: boolean }) : any {
     return option.enabled !== false && option.disabled !== true;
   }
 
-  const capabilityAssignments = computed<CapabilityAssignment[]>(() => [
+  const capabilityAssignments: any = computed<CapabilityAssignment[]>(() : any => [
     {
       id: "gateway-assistant-agent",
       title: "网关审计智能体",
       description: "网关审计默认智能体，负责规划工具调用、打开证据并生成回答。",
       value: defaultAgentValue("gatewayReviewModelAlias", gatewayAssistantForm.value.modelAlias),
       options: gatewayAssistantAgentOptions.value as AssignmentOption[],
-      update: (value: string) => setDefaultAgentValue("gatewayReviewModelAlias", value),
+      update: (value: string) : any => setDefaultAgentValue("gatewayReviewModelAlias", value),
     },
     {
       id: "rule-authoring-agent",
@@ -213,7 +213,7 @@ export function useAgentAssignmentView() {
       description: "规则生成对话模式的默认智能体，用于根据需求生成规则草稿。",
       value: defaultAgentValue("ruleAuthoringModelAlias", ruleAuthoringForm.value.modelAlias),
       options: ruleAuthoringModelOptions.value as AssignmentOption[],
-      update: (value: string) => setDefaultAgentValue("ruleAuthoringModelAlias", value),
+      update: (value: string) : any => setDefaultAgentValue("ruleAuthoringModelAlias", value),
     },
     {
       id: "approval-flow-agent",
@@ -221,54 +221,54 @@ export function useAgentAssignmentView() {
       description: "审批流审批合并默认智能体，用于合并多路审计证据和结构化结果。",
       value: defaultAgentValue("reviewFusionModelAlias"),
       options: agentSelectorOptions.value as AssignmentOption[],
-      update: (value: string) => setDefaultAgentValue("reviewFusionModelAlias", value),
+      update: (value: string) : any => setDefaultAgentValue("reviewFusionModelAlias", value),
     },
   ]);
 
-  const assignedCapabilityCount = computed(() =>
-    capabilityAssignments.value.filter((item) => String(item.value || "").trim()).length,
+  const assignedCapabilityCount: any = computed(() : any =>
+    capabilityAssignments.value.filter((item?: any) : any => String(item.value || "").trim()).length,
   );
 
-  const capabilityBatchValue = computed(() => {
-    const values = capabilityAssignments.value.map((item) => String(item.value || "").trim());
-    const firstValue = values[0] || "";
-    return firstValue && values.every((value) => value === firstValue) ? firstValue : "";
+  const capabilityBatchValue: any = computed(() : any => {
+    const values: any = capabilityAssignments.value.map((item?: any) : any => String(item.value || "").trim());
+    const firstValue: any = values[0] || "";
+    return firstValue && values.every((value?: any) : any => value === firstValue) ? firstValue : "";
   });
 
-  const capabilityBatchOptions = computed(() => {
-    const assignments = capabilityAssignments.value;
+  const capabilityBatchOptions: any = computed(() : any => {
+    const assignments: any = capabilityAssignments.value;
     if (!assignments.length) {
       return [];
     }
-    const optionMaps = assignments.map((assignment) =>
-      new Map(
+    const optionMaps: any = assignments.map((assignment?: any) : any =>
+      new Map<any, any>(
         assignment.options
-          .filter((option) => optionValue(option) && optionIsEnabled(option))
-          .map((option) => [optionValue(option), option]),
+          .filter((option?: any) : any => optionValue(option) && optionIsEnabled(option))
+          .map((option?: any) : any => [optionValue(option), option]),
       ),
     );
-    const firstOptions = assignments[0]?.options || [];
+    const firstOptions: any = assignments[0]?.options || [];
     return firstOptions
-      .filter((option) => {
-        const value = optionValue(option);
-        return Boolean(value && optionMaps.every((optionMap) => optionMap.has(value)));
+      .filter((option?: any) : any => {
+        const value: any = optionValue(option);
+        return Boolean(value && optionMaps.every((optionMap?: any) : any => optionMap.has(value)));
       })
-      .map((option) => ({
+      .map((option?: any) : any => ({
         value: optionValue(option),
         label: optionLabel(option),
       }));
   });
 
-  const capabilityBatchSelectValue = computed(() => capabilityBatchValue.value || BATCH_PLACEHOLDER_VALUE);
-  const capabilityBatchSelectOptions = computed(() => [
+  const capabilityBatchSelectValue: any = computed(() : any => capabilityBatchValue.value || BATCH_PLACEHOLDER_VALUE);
+  const capabilityBatchSelectOptions: any = computed(() : any => [
     { value: BATCH_PLACEHOLDER_VALUE, label: "选择智能体", disabled: true },
     { value: "", label: "清空分配" },
     ...capabilityBatchOptions.value,
   ]);
 
-  function applyCapabilityBatch(value: string | number | boolean | Array<string | number | boolean>) {
-    const nextValue = Array.isArray(value) ? value[0] : value;
-    const modelAlias = String(nextValue || "").trim();
+  function applyCapabilityBatch(value: string | number | boolean | Array<string | number | boolean>) : any {
+    const nextValue: any = Array.isArray(value) ? value[0] : value;
+    const modelAlias: any = String(nextValue || "").trim();
     if (modelAlias === BATCH_PLACEHOLDER_VALUE) {
       return;
     }
@@ -280,7 +280,7 @@ export function useAgentAssignmentView() {
   function moduleAssignmentOptions(moduleId: string): OptionBarOption[] {
     return [
       { value: "", label: "未分配" },
-      ...selectOptionsForModule(moduleId).map((option) => ({
+      ...selectOptionsForModule(moduleId).map((option?: any) : any => ({
         value: option.value,
         label: option.label,
         disabled: !option.enabled,
@@ -288,46 +288,46 @@ export function useAgentAssignmentView() {
     ];
   }
 
-  const moduleBatchValue = computed(() => {
-    const values = moduleDefinitions.map((moduleDefinition) => moduleModelRef(moduleDefinition.id));
-    const firstValue = values[0] || "";
-    return firstValue && values.every((value) => value === firstValue) ? firstValue : "";
+  const moduleBatchValue: any = computed(() : any => {
+    const values: any = moduleDefinitions.map((moduleDefinition?: any) : any => moduleModelRef(moduleDefinition.id));
+    const firstValue: any = values[0] || "";
+    return firstValue && values.every((value?: any) : any => value === firstValue) ? firstValue : "";
   });
 
-  const moduleBatchOptions = computed(() => {
-    const moduleIds = moduleDefinitions.map((moduleDefinition) => moduleDefinition.id);
+  const moduleBatchOptions: any = computed(() : any => {
+    const moduleIds: any = moduleDefinitions.map((moduleDefinition?: any) : any => moduleDefinition.id);
     if (!moduleIds.length) {
       return [];
     }
-    const optionMaps = moduleIds.map((moduleId) =>
-      new Map(
+    const optionMaps: any = moduleIds.map((moduleId?: any) : any =>
+      new Map<any, any>(
         selectOptionsForModule(moduleId)
-          .filter((option) => option.value && option.enabled)
-          .map((option) => [String(option.value || "").trim(), option]),
+          .filter((option?: any) : any => option.value && option.enabled)
+          .map((option?: any) : any => [String(option.value || "").trim(), option]),
       ),
     );
     return selectOptionsForModule(moduleIds[0] || "")
-      .filter((option) => {
-        const value = String(option.value || "").trim();
-        return Boolean(value && option.enabled && optionMaps.every((optionMap) => optionMap.has(value)));
+      .filter((option?: any) : any => {
+        const value: any = String(option.value || "").trim();
+        return Boolean(value && option.enabled && optionMaps.every((optionMap?: any) : any => optionMap.has(value)));
       })
-      .map((option) => ({
+      .map((option?: any) : any => ({
         value: String(option.value || "").trim(),
         label: option.label,
       }));
   });
 
-  const moduleBatchSelectValue = computed(() => moduleBatchValue.value || BATCH_PLACEHOLDER_VALUE);
-  const moduleBatchSelectOptions = computed(() => [
+  const moduleBatchSelectValue: any = computed(() : any => moduleBatchValue.value || BATCH_PLACEHOLDER_VALUE);
+  const moduleBatchSelectOptions: any = computed(() : any => [
     { value: BATCH_PLACEHOLDER_VALUE, label: "选择智能体", disabled: true },
     { value: "", label: "清空分配" },
     ...moduleBatchOptions.value,
   ]);
 
-  function applyModuleBatch(value: string | number | boolean | Array<string | number | boolean>) {
+  function applyModuleBatch(value: string | number | boolean | Array<string | number | boolean>) : any {
     moduleProbeFailures.value = [];
-    const nextValue = Array.isArray(value) ? value[0] : value;
-    const refValue = String(nextValue || "").trim();
+    const nextValue: any = Array.isArray(value) ? value[0] : value;
+    const refValue: any = String(nextValue || "").trim();
     if (refValue === BATCH_PLACEHOLDER_VALUE) {
       return;
     }
@@ -336,7 +336,7 @@ export function useAgentAssignmentView() {
     }
   }
 
-  function updateModuleEnabled(moduleId: string, enabled: boolean) {
+  function updateModuleEnabled(moduleId: string, enabled: boolean) : any {
     moduleProbeFailures.value = [];
     setModuleNeedsIntelligence(moduleId, enabled);
     if (!enabled) {
@@ -344,12 +344,12 @@ export function useAgentAssignmentView() {
     }
   }
 
-  function updateModuleModelRef(moduleId: string, value: string) {
+  function updateModuleModelRef(moduleId: string, value: string) : any {
     moduleProbeFailures.value = [];
     setModuleModelRef(moduleId, value);
   }
 
-  function moduleStatus(moduleId: string) {
+  function moduleStatus(moduleId: string) : any {
     if (!moduleNeedsIntelligence(moduleId)) {
       return { label: "已关闭", tone: "neutral" };
     }
@@ -358,43 +358,43 @@ export function useAgentAssignmentView() {
       : { label: "未分配", tone: "warning" };
   }
 
-  function moduleRequirementLabel(alertRequired?: boolean) {
+  function moduleRequirementLabel(alertRequired?: boolean) : any {
     return alertRequired === false ? "可选" : "建议分配";
   }
 
-  function modelEntryIdentityValues(entry: AgentModelConfig) {
+  function modelEntryIdentityValues(entry: AgentModelConfig) : any {
     return [
       modelEntryStatusKey(entry),
       entry.uid,
       entry.instanceId,
       entry.alias,
     ]
-      .map((item) => String(item || "").trim())
+      .map((item?: any) : any => String(item || "").trim())
       .filter(Boolean);
   }
 
-  function modelEntryDisplayLabel(entry: AgentModelConfig) {
-    const name = String(entry.label || entry.agentName || entry.alias || modelEntryStatusKey(entry)).trim();
-    const modelName = String(entry.model || entry.engine || "").trim();
+  function modelEntryDisplayLabel(entry: AgentModelConfig) : any {
+    const name: any = String(entry.label || entry.agentName || entry.alias || modelEntryStatusKey(entry)).trim();
+    const modelName: any = String(entry.model || entry.engine || "").trim();
     return modelName && modelName !== name ? `${name} · ${modelName}` : name;
   }
 
-  function resolveModelEntry(value: string) {
-    const normalized = String(value || "").trim();
+  function resolveModelEntry(value: string) : any {
+    const normalized: any = String(value || "").trim();
     if (!normalized) {
       return null;
     }
-    const directMatch = (visibleModelEntries.value as AgentModelConfig[]).find((entry) =>
+    const directMatch: any = (visibleModelEntries.value as AgentModelConfig[]).find((entry?: any) : any =>
       modelEntryIdentityValues(entry).includes(normalized),
     );
     if (directMatch) {
       return directMatch;
     }
-    const parsed = parseModelRef(normalized);
+    const parsed: any = parseModelRef(normalized);
     if (!parsed.provider && !parsed.model) {
       return null;
     }
-    return (visibleModelEntries.value as AgentModelConfig[]).find((entry) =>
+    return (visibleModelEntries.value as AgentModelConfig[]).find((entry?: any) : any =>
       String(entry.provider || "").trim() === parsed.provider &&
         modelEntryIdentityValues(entry).includes(parsed.model),
     ) || null;
@@ -405,14 +405,14 @@ export function useAgentAssignmentView() {
     value: string,
     usageLabel: string,
     fallbackLabel: string,
-  ) {
-    const normalized = String(value || "").trim();
+  ) : any {
+    const normalized: any = String(value || "").trim();
     if (!normalized) {
       return;
     }
-    const entry = resolveModelEntry(normalized);
-    const key = entry ? modelEntryStatusKey(entry) : normalized;
-    const current = targets.get(key);
+    const entry: any = resolveModelEntry(normalized);
+    const key: any = entry ? modelEntryStatusKey(entry) : normalized;
+    const current: any = targets.get(key);
     if (current) {
       if (!current.usageLabels.includes(usageLabel)) {
         current.usageLabels.push(usageLabel);
@@ -427,8 +427,8 @@ export function useAgentAssignmentView() {
     });
   }
 
-  function formatProbeFailure(target: AssignmentProbeTarget, result?: ModelProbeResponse | null, fallback = "") {
-    const usageText = target.usageLabels.length ? `（用于：${target.usageLabels.join("、")}）` : "";
+  function formatProbeFailure(target: AssignmentProbeTarget, result?: ModelProbeResponse | null, fallback: any = "") : any {
+    const usageText: any = target.usageLabels.length ? `（用于：${target.usageLabels.join("、")}）` : "";
     return {
       key: target.key,
       label: `${target.label}${usageText}`,
@@ -436,31 +436,31 @@ export function useAgentAssignmentView() {
     };
   }
 
-  async function probeAssignmentTargets(targets: AssignmentProbeTarget[]) {
+  async function probeAssignmentTargets(targets: AssignmentProbeTarget[]) : Promise<any> {
     const failures: AssignmentProbeFailure[] = [];
-    await Promise.all(targets.map(async (target) => {
+    await Promise.all(targets.map(async (target?: any) : Promise<any> => {
       if (!target.entry) {
         failures.push(formatProbeFailure(target, null, "未找到对应的大模型配置。"));
         return;
       }
       try {
-        const result = await runModelEntryProbe(target.entry);
+        const result: any = await runModelEntryProbe(target.entry);
         if (!result.ok) {
           failures.push(formatProbeFailure(target, result));
         }
-      } catch (nextError) {
-        const message = nextError instanceof Error ? nextError.message : "模型连通性检测失败。";
+      } catch (nextError: any) {
+        const message: any = nextError instanceof Error ? nextError.message : "模型连通性检测失败。";
         failures.push(formatProbeFailure(target, null, message));
       }
     }));
-    return failures.sort((left, right) => left.label.localeCompare(right.label, "zh-CN"));
+    return failures.sort((left?: any, right?: any) : any => left.label.localeCompare(right.label, "zh-CN"));
   }
 
   async function saveAssignmentsAfterProbe(
     scope: "capability" | "module",
     targets: AssignmentProbeTarget[],
     failureRef: typeof capabilityProbeFailures,
-  ) {
+  ) : Promise<any> {
     if (activeProbeScope.value || busyKey.value === "settings") {
       return;
     }
@@ -468,10 +468,10 @@ export function useAgentAssignmentView() {
     failureRef.value = [];
     error.value = "";
     try {
-      const failures = await probeAssignmentTargets(targets);
+      const failures: any = await probeAssignmentTargets(targets);
       if (failures.length) {
         failureRef.value = failures;
-        error.value = `智能体分配保存前连通性检测失败：${failures.map((item) => item.label).join("、")}`;
+        error.value = `智能体分配保存前连通性检测失败：${failures.map((item?: any) : any => item.label).join("、")}`;
         return;
       }
       activeProbeScope.value = "";
@@ -483,40 +483,40 @@ export function useAgentAssignmentView() {
     }
   }
 
-  function capabilityProbeTargets() {
-    const targets = new Map<string, AssignmentProbeTarget>();
+  function capabilityProbeTargets() : any {
+    const targets: any = new Map<string, AssignmentProbeTarget>();
     for (const assignment of capabilityAssignments.value) {
-      const value = String(assignment.value || "").trim();
+      const value: any = String(assignment.value || "").trim();
       if (!value) {
         continue;
       }
-      const label = optionLabel(assignment.options.find((option) => optionValue(option) === value) || { value });
+      const label: any = optionLabel(assignment.options.find((option?: any) : any => optionValue(option) === value) || { value });
       addProbeTarget(targets, value, assignment.title, label);
     }
     return [...targets.values()];
   }
 
-  function moduleProbeTargets() {
-    const targets = new Map<string, AssignmentProbeTarget>();
+  function moduleProbeTargets() : any {
+    const targets: any = new Map<string, AssignmentProbeTarget>();
     for (const moduleDefinition of moduleDefinitions) {
       if (!moduleNeedsIntelligence(moduleDefinition.id)) {
         continue;
       }
-      const value = moduleModelRef(moduleDefinition.id);
+      const value: any = moduleModelRef(moduleDefinition.id);
       if (!value) {
         continue;
       }
-      const option = moduleAssignmentOptions(moduleDefinition.id).find((item) => String(item.value || "").trim() === value);
+      const option: any = moduleAssignmentOptions(moduleDefinition.id).find((item?: any) : any => String(item.value || "").trim() === value);
       addProbeTarget(targets, value, moduleDefinition.label, String(option?.label || value).trim());
     }
     return [...targets.values()];
   }
 
-  async function saveCapabilityAssignments() {
+  async function saveCapabilityAssignments() : Promise<any> {
     await saveAssignmentsAfterProbe("capability", capabilityProbeTargets(), capabilityProbeFailures);
   }
 
-  async function saveModuleAssignments() {
+  async function saveModuleAssignments() : Promise<any> {
     await saveAssignmentsAfterProbe("module", moduleProbeTargets(), moduleProbeFailures);
   }
 

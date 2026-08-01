@@ -14,21 +14,21 @@ type ConsoleClientControllerOptions = {
   consoleState: Ref<ServerConsoleState | null>;
 };
 
-export function createConsoleClientController(options: ConsoleClientControllerOptions) {
-  const clientSearchQuery = ref("");
-  const clientStateFilter = ref<ClientAlignmentState | "all">("all");
+export function createConsoleClientController(options: ConsoleClientControllerOptions) : any {
+  const clientSearchQuery: any = ref("");
+  const clientStateFilter: any = ref<ClientAlignmentState | "all">("all");
 
-  const filteredClients = computed(() =>
+  const filteredClients: any = computed(() : any =>
     [...(options.consoleState.value?.clients.items || [])].sort(
-      (left, right) => parseTime(right.lastSeenAt) - parseTime(left.lastSeenAt),
+      (left?: any, right?: any) : any => parseTime(right.lastSeenAt) - parseTime(left.lastSeenAt),
     ),
   );
 
-  const filteredClientList = computed(() => {
-    const query = clientSearchQuery.value.trim().toLowerCase();
-    const stateFilter = clientStateFilter.value;
+  const filteredClientList: any = computed(() : any => {
+    const query: any = clientSearchQuery.value.trim().toLowerCase();
+    const stateFilter: any = clientStateFilter.value;
 
-    return filteredClients.value.filter((item) => {
+    return filteredClients.value.filter((item?: any) : any => {
       if (stateFilter !== "all" && item.alignmentState !== stateFilter) {
         return false;
       }
@@ -50,13 +50,13 @@ export function createConsoleClientController(options: ConsoleClientControllerOp
     });
   });
 
-  const displayedClients = computed(() => filteredClients.value.slice(0, 6));
-  const clientStateFilterOptionBarOptions = computed<OptionBarOption[]>(() => [
+  const displayedClients: any = computed(() : any => filteredClients.value.slice(0, 6));
+  const clientStateFilterOptionBarOptions: any = computed<OptionBarOption[]>(() : any => [
     { value: "all", label: "所有状态" },
-    ...Object.entries(alignmentStateLabels).map(([value, label]) => ({ value, label })),
+    ...(Object.entries(alignmentStateLabels) as [string, any][]).map(([value, label]: any[]) : any => ({ value, label })),
   ]);
-  const attentionClientCount = computed(() => {
-    const summary = options.consoleState.value?.clients.summary;
+  const attentionClientCount: any = computed(() : any => {
+    const summary: any = options.consoleState.value?.clients.summary;
 
     if (!summary) {
       return 0;
@@ -70,11 +70,11 @@ export function createConsoleClientController(options: ConsoleClientControllerOp
       summary.unknownCount
     );
   });
-  const latestClient = computed(() => filteredClients.value[0] || null);
+  const latestClient: any = computed(() : any => filteredClients.value[0] || null);
 
-  function exportClients() {
-    const exportedAt = new Date().toISOString();
-    const payload = {
+  function exportClients() : any {
+    const exportedAt: any = new Date().toISOString();
+    const payload: Record<string, any> = {
       schemaVersion: "v0.0.1:console:client-inventory-export-1",
       exportedAt,
       source: "server-console-discovery-clients",
@@ -92,7 +92,7 @@ export function createConsoleClientController(options: ConsoleClientControllerOp
         ],
       },
       summary: options.consoleState.value?.clients.summary || null,
-      clients: filteredClients.value.map((client, index) => ({
+      clients: filteredClients.value.map((client?: any, index?: any) : any => ({
         clientRef: `client-${index + 1}`,
         appVersion: client.appVersion || "",
         platform: client.platform || "",
@@ -108,7 +108,7 @@ export function createConsoleClientController(options: ConsoleClientControllerOp
         lastSeenAt: client.lastSeenAt || "",
       })),
     };
-    const timestamp = formatMachineDate(exportedAt, "full").replace(/[: ]/g, "-");
+    const timestamp: any = formatMachineDate(exportedAt, "full").replace(/[: ]/g, "-");
     downloadTextFile(
       `meshrix-clients-${timestamp}.json`,
       `${JSON.stringify(payload, null, 2)}\n`,

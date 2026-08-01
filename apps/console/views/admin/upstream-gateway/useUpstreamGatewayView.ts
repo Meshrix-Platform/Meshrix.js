@@ -9,41 +9,41 @@ import {
   type UpstreamGatewayService,
 } from "../../../lib/upstream-gateway-client";
 
-export function useUpstreamGatewayView() {
-  const loading = ref(false);
-  const error = ref("");
-  const status = ref("");
-  const services = ref<UpstreamGatewayService[]>([]);
-  const selectedServiceId = ref("");
-  const audit = ref<UpstreamGatewayAuditItem[]>([]);
-  const metrics = ref<UpstreamGatewayMetrics>({});
+export function useUpstreamGatewayView() : any {
+  const loading: any = ref(false);
+  const error: any = ref("");
+  const status: any = ref("");
+  const services: any = ref<UpstreamGatewayService[]>([]);
+  const selectedServiceId: any = ref("");
+  const audit: any = ref<UpstreamGatewayAuditItem[]>([]);
+  const metrics: any = ref<UpstreamGatewayMetrics>({});
 
-  const selectedService = computed(() =>
-    services.value.find((service) => service.serviceId === selectedServiceId.value) || services.value[0] || null,
+  const selectedService: any = computed(() : any =>
+    services.value.find((service?: any) : any => service.serviceId === selectedServiceId.value) || services.value[0] || null,
   );
 
-  const selectedOperation = computed(() => selectedService.value?.operations?.[0] || null);
+  const selectedOperation: any = computed(() : any => selectedService.value?.operations?.[0] || null);
 
-  function gatewayStateClass(disabled?: boolean) {
+  function gatewayStateClass(disabled?: boolean) : any {
     return disabled ? "disabled" : "active";
   }
 
-  function gatewayAuditStatus(item: UpstreamGatewayAuditItem) {
+  function gatewayAuditStatus(item: UpstreamGatewayAuditItem) : any {
     return item.status || item.result || item.reasonCode || "recorded";
   }
 
-  function gatewayAuditTime(item: UpstreamGatewayAuditItem) {
+  function gatewayAuditTime(item: UpstreamGatewayAuditItem) : any {
     return item.createdAt || item.finishedAt || item.startedAt || "";
   }
 
-  function syncSelectedService(nextServices: UpstreamGatewayService[]) {
-    if (nextServices.some((service) => service.serviceId === selectedServiceId.value)) {
+  function syncSelectedService(nextServices: UpstreamGatewayService[]) : any {
+    if (nextServices.some((service?: any) : any => service.serviceId === selectedServiceId.value)) {
       return;
     }
     selectedServiceId.value = nextServices[0]?.serviceId || "";
   }
 
-  async function refreshGateway() {
+  async function refreshGateway() : Promise<any> {
     loading.value = true;
     error.value = "";
     status.value = "";
@@ -53,25 +53,25 @@ export function useUpstreamGatewayView() {
         listUpstreamGatewayAudit(),
         getUpstreamGatewayMetrics(),
       ]);
-      const nextServices = Array.isArray(servicePayload.items) ? servicePayload.items : [];
+      const nextServices: any = Array.isArray(servicePayload.items) ? servicePayload.items : [];
       services.value = nextServices;
       audit.value = Array.isArray(auditPayload.items) ? auditPayload.items : [];
       metrics.value = metricsPayload;
       syncSelectedService(nextServices);
       status.value = "已同步";
-    } catch (err) {
+    } catch (err: any) {
       error.value = err instanceof Error ? err.message : "刷新失败";
     } finally {
       loading.value = false;
     }
   }
 
-  onMounted(() => {
+  onMounted(() : any => {
     void refreshGateway();
   });
 
   usePageRefreshHandler(
-    (detail) => detail.viewId === "admin" && detail.adminView === "upstreamServices",
+    (detail?: any) : any => detail.viewId === "admin" && detail.adminView === "upstreamServices",
     refreshGateway,
   );
 

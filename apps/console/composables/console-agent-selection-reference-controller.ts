@@ -1,7 +1,7 @@
 import { ref, watch } from "vue";
 import type { SystemLogRow } from "../types/app";
 
-export const AGENT_SELECTION_REFERENCE_LOG_LIMIT = 80;
+export const AGENT_SELECTION_REFERENCE_LOG_LIMIT: any = 80;
 
 type AgentSelectionReferenceState = "empty" | "available" | "removed";
 
@@ -16,11 +16,11 @@ type AgentSelectionOptionLike = {
   selectable: boolean;
 };
 
-export function createConsoleAgentSelectionReferenceController() {
-  const agentSelectionReferenceLogs = ref<SystemLogRow[]>([]);
-  const agentSelectionReferenceStates = ref<Record<string, AgentSelectionReferenceSnapshot>>({});
+export function createConsoleAgentSelectionReferenceController() : any {
+  const agentSelectionReferenceLogs: any = ref<SystemLogRow[]>([]);
+  const agentSelectionReferenceStates: any = ref<Record<string, AgentSelectionReferenceSnapshot>>({});
 
-  function normalizeAgentSelectionAlias(value?: string) {
+  function normalizeAgentSelectionAlias(value?: string) : any {
     return String(value || "").trim();
   }
 
@@ -30,11 +30,11 @@ export function createConsoleAgentSelectionReferenceController() {
     alias: string;
     stage: "lost" | "restored";
     reason: string;
-  }) {
-    const now = new Date().toISOString();
-    const statusLabel = params.stage === "lost" ? "引用丢失" : "引用恢复";
+  }) : any {
+    const now: any = new Date().toISOString();
+    const statusLabel: any = params.stage === "lost" ? "引用丢失" : "引用恢复";
     const tone: SystemLogRow["tone"] = params.stage === "lost" ? "warning" : "success";
-    const logId = `${params.context}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const logId: any = `${params.context}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
     const row: SystemLogRow = {
       logId,
       kindLabel: "智能体引用",
@@ -62,14 +62,14 @@ export function createConsoleAgentSelectionReferenceController() {
     contextLabel: string,
     alias: string,
     selectedOption: AgentSelectionOptionLike,
-  ) {
-    const normalizedAlias = normalizeAgentSelectionAlias(alias);
+  ) : any {
+    const normalizedAlias: any = normalizeAgentSelectionAlias(alias);
     const nextState: AgentSelectionReferenceState = normalizedAlias
       ? selectedOption.selectable
         ? "available"
         : "removed"
       : "empty";
-    const previous = agentSelectionReferenceStates.value[context] || { alias: "", state: "empty" };
+    const previous: any = agentSelectionReferenceStates.value[context] || { alias: "", state: "empty" };
     if (previous.alias === normalizedAlias && previous.state === nextState) {
       return;
     }
@@ -109,16 +109,16 @@ export function createConsoleAgentSelectionReferenceController() {
     contextLabel: string,
     getAlias: () => string,
     getSelection: () => AgentSelectionOptionLike,
-  ) {
+  ) : any {
     watch(
-      () => [
+      () : any => [
         normalizeAgentSelectionAlias(getAlias()),
         getSelection().enabled,
         getSelection().selectable,
         getSelection().label,
       ],
-      () => {
-        const alias = normalizeAgentSelectionAlias(getAlias());
+      () : any => {
+        const alias: any = normalizeAgentSelectionAlias(getAlias());
         trackAgentSelectionReference(context, contextLabel, alias, getSelection());
       },
       { immediate: true },

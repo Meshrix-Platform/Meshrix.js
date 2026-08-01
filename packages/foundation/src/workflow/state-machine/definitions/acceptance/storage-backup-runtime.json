@@ -1,5 +1,5 @@
 {
-  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: tools/generators/generate-capability-acceptance-definitions.mjs and tools/registry/capability-acceptance-checkpoints/*.json",
+  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: tools/generators/generate-capability-acceptance-definitions.ts and tools/registry/capability-acceptance-checkpoints/*.json",
   "machineId": "acceptance.storage-backup-runtime",
   "entityType": "capability_acceptance",
   "version": "v0.0.1:state-machine:capability-acceptance-storage-backup-runtime-3",
@@ -375,7 +375,7 @@
     "registryPath": "tools/registry/capability-acceptance.registry.json",
     "checkpointPath": "tools/registry/capability-acceptance-checkpoints/storage-backup-runtime.json",
     "platformReducerCommand": "npm run verify:acceptance",
-    "verifier": "tools/server-scripts/verify-capability-acceptance-machines.mjs",
+    "verifier": "tools/server-scripts/verify-capability-acceptance-machines.ts",
     "reportPath": "build/reports/capability-acceptance-machines.json"
   }
 }

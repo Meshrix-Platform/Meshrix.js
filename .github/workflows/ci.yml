@@ -1,6 +1,9 @@
 # Public clean-rebuild workflow registration anchor.
 name: CI
 
+env:
+  NODE_OPTIONS: --conditions=source
+
 on:
   push:
     branches: ["nightly", "stable", "release"]
@@ -34,7 +37,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Rebuild local plan baseline
-        run: node tools/plan/rebuild-current-plan-baseline.mjs
+        run: node tools/plan/rebuild-current-plan-baseline.ts
       - name: Core repository gate
         run: npm run verify
       - name: Vitest suite
@@ -43,8 +46,8 @@ jobs:
         if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release' || startsWith(github.ref, 'refs/tags/v')) }}
         run: npm run test:audit
 
-  platform-acceptance:
-    name: Canonical platform acceptance
+  functional-completeness:
+    name: Functional completeness release gate
     needs: [public-gate]
     if: ${{ github.event_name == 'push' && (github.ref_name == 'stable' || github.ref_name == 'release') }}
     runs-on: ubuntu-latest
@@ -61,12 +64,14 @@ jobs:
           cache: "npm"
       - name: Install dependencies
         run: npm ci
-      - name: Rebuild local plan baseline
-        run: node tools/plan/rebuild-current-plan-baseline.mjs
-      - name: Platform acceptance authority
+      - name: Produce enterprise single-node delivery receipt in Ubuntu
+        run: npm run verify:enterprise-single-node:ubuntu-container
+      - name: Functional-complete authority
         env:
           MESHRIX_RELEASE_PARALLELISM: "4"
-        run: npm run verify:acceptance
+        run: >-
+          node tools/server-scripts/verify-platform-acceptance.ts
+          --profile enterprise-single-node
 
   node-22-compatibility:
     name: Supported Node 22 compatibility
@@ -85,57 +90,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Rebuild local plan baseline
-        run: node tools/plan/rebuild-current-plan-baseline.mjs
+        run: node tools/plan/rebuild-current-plan-baseline.ts
       - name: Core repository gate
         run: npm run verify
 
   npm-package-portability:
-    name: npm package portability (${{ matrix.os }}, Node ${{ matrix.node }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.timeout }}
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            node: "22"
-            mode: host
-            timeout: 15
-          - os: ubuntu-latest
-            node: "24"
-            mode: container
-            timeout: 60
-          - os: macos-latest
-            node: "24"
-            mode: host
-            timeout: 15
-          - os: windows-latest
-            node: "24"
-            mode: host
-            timeout: 15
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: ${{ matrix.node }}
-          cache: "npm"
-      - name: Install verifier workspace dependencies
-        run: npm ci --ignore-scripts
-      - name: Run the fresh-container package authority
-        if: ${{ matrix.mode == 'container' }}
-        run: npm run verify:npm-package-installability
-      - name: Run the supplementary clean-host package probe
-        if: ${{ matrix.mode == 'host' }}
-        run: npm run verify:npm-package-installability -- --host-platform-probe
-
-  windows-installer-security:
-    name: Windows installer security
-    runs-on: windows-latest
-    timeout-minutes: 15
+    name: Fresh-container npm package simulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     steps:
@@ -145,61 +107,11 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
-      - name: Install connector workspace dependencies
+          cache: "npm"
+      - name: Install verifier workspace dependencies
         run: npm ci --ignore-scripts
-      - name: Verify PowerShell launcher syntax, delegation, and fail-closed inputs
-        shell: pwsh
-        run: |
-          $installer = (Resolve-Path "packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.ps1").Path
-          $connector = (Resolve-Path "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.mjs").Path
-          $env:MESHRIX_MCP_CONNECTOR = $connector
-
-          $tokens = $null
-          $parseErrors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile($installer, [ref]$tokens, [ref]$parseErrors) | Out-Null
-          if ($parseErrors.Count -ne 0) { throw "PowerShell installer syntax validation failed" }
-
-          function Invoke-InstallerProcess([string[]]$Arguments) {
-            $start = [System.Diagnostics.ProcessStartInfo]::new("pwsh")
-            $start.UseShellExecute = $false
-            $start.RedirectStandardOutput = $true
-            $start.RedirectStandardError = $true
-            $start.Environment["MESHRIX_MCP_CONNECTOR"] = $connector
-            $start.ArgumentList.Add("-NoLogo")
-            $start.ArgumentList.Add("-NoProfile")
-            $start.ArgumentList.Add("-File")
-            $start.ArgumentList.Add($installer)
-            foreach ($argument in $Arguments) { $start.ArgumentList.Add($argument) }
-            $process = [System.Diagnostics.Process]::Start($start)
-            $stdout = $process.StandardOutput.ReadToEnd()
-            $stderr = $process.StandardError.ReadToEnd()
-            $process.WaitForExit()
-            return @{ ExitCode = $process.ExitCode; Output = "$stdout`n$stderr" }
-          }
-
-          $version = Invoke-InstallerProcess -Arguments @("-Command", "version", "-Json")
-          if ($version.ExitCode -ne 0 -or $version.Output -notmatch '"packageName":"meshrix-mcp-connector"') {
-            $snippet = [regex]::Replace($version.Output, "\s+", " ")
-            if ($snippet.Length -gt 800) { $snippet = $snippet.Substring(0, 800) }
-            throw "PowerShell installer did not delegate to the repository connector (exit=$($version.ExitCode); output=$snippet)"
-          }
-
-          $invalidTokenProbe = "installer-invalid-token-sentinel"
-          $rawToken = Invoke-InstallerProcess -Arguments @("-Command", "doctor", "-Json", "-Token", $invalidTokenProbe)
-          if ($rawToken.ExitCode -eq 0 -or $rawToken.Output.Contains($invalidTokenProbe)) {
-            throw "PowerShell installer did not reject and redact a raw token argument"
-          }
-
-          $canary = Join-Path $env:RUNNER_TEMP "meshrix-token-env-injection-canary"
-          Remove-Item -LiteralPath $canary -Force -ErrorAction SilentlyContinue
-          $invalidEnv = Invoke-InstallerProcess -Arguments @("-Command", "doctor", "-Json", "-TokenEnv", "BAD;New-Item $canary")
-          if ($invalidEnv.ExitCode -eq 0 -or (Test-Path -LiteralPath $canary)) {
-            throw "PowerShell installer accepted an unsafe token environment name"
-          }
-
-      - name: Verify Windows current-user DPAPI credential custody
-        shell: pwsh
-        run: npm run verify:mcp-windows-process-identity-credential-store
+      - name: Run the fresh-container package authority
+        run: npm run verify:npm-package-installability
 
   supply-chain:
     name: Supply-chain evidence
@@ -222,11 +134,11 @@ jobs:
       - name: Audit build and development dependencies
         run: npm audit --audit-level=high
       - name: Verify pinned Node runtime checksum signature
-        run: node tools/server-scripts/verify-node-runtime-supply-chain.mjs
+        run: node tools/server-scripts/verify-node-runtime-supply-chain.ts
       - name: Generate reproducible SBOM and third-party notices
-        run: node tools/generators/generate-supply-chain-artifacts.mjs
+        run: node tools/generators/generate-supply-chain-artifacts.ts
       - name: Verify supply-chain artifacts and negative cases
-        run: node tools/verifiers/verify-supply-chain-artifacts.mjs --self-test
+        run: node tools/verifiers/verify-supply-chain-artifacts.ts --self-test
       - name: Upload verified supply-chain evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

@@ -1,7 +1,7 @@
 [
   {
     "id": "b4e3dd16-c818-48f6-963e-a8fb2e57ca29",
-    "status": "completed",
+    "status": "in_progress",
     "role": "implementation",
     "prerequisites": [],
     "platform": "macos",
@@ -10,7 +10,7 @@
     "description": "Implement maintenance-agent-collaboration end to end through the current source-owned runtime, authorization, state-machine, and validation contracts.",
     "acceptance_criteria": [
       {
-        "checked": true,
+        "checked": false,
         "text": "Every maintenance-agent action has assigned identity, allowed context sources, workspace permissions, an audit event, and a terminal outcome.",
         "evidence": [
           {
@@ -19,7 +19,7 @@
         ]
       },
       {
-        "checked": true,
+        "checked": false,
         "text": "Maintenance actions are governed by role/tag/capability policy before side effects.",
         "evidence": [
           {
@@ -36,7 +36,7 @@
         ]
       },
       {
-        "checked": true,
+        "checked": false,
         "text": "Console and MCP surfaces expose the same governed operations.",
         "evidence": [
           {
@@ -60,7 +60,7 @@
   },
   {
     "id": "1018efe5-d12e-469e-a05b-4f89c2170e26",
-    "status": "completed",
+    "status": "pending",
     "role": "final_validation",
     "prerequisites": [
       "b4e3dd16-c818-48f6-963e-a8fb2e57ca29"
@@ -71,7 +71,7 @@
     "description": "Run the capability validation matrix, state-machine verifier, and capability-specific verifiers. This checkpoint produces evidence for, but does not invoke, the platform acceptance reducer.",
     "acceptance_criteria": [
       {
-        "checked": true,
+        "checked": false,
         "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
         "evidence": [
           {
@@ -92,7 +92,7 @@
         ]
       },
       {
-        "checked": true,
+        "checked": false,
         "text": "Capability-specific reports are schema-bearing and pass repository local-information and evidence leak checks.",
         "evidence": [
           {
@@ -105,7 +105,7 @@
         ]
       },
       {
-        "checked": true,
+        "checked": false,
         "text": "The checkpoint graph is eligible for platform reduction without using a capability or platform aggregate reducer as checkpoint evidence.",
         "evidence": [
           {

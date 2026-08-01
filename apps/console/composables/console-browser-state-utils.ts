@@ -1,46 +1,46 @@
 import { browserWindow } from "../lib/browser-window";
 
-export const CLEAR_LOCAL_STATE_PARAM = "clearLocalState";
+export const CLEAR_LOCAL_STATE_PARAM: any = "clearLocalState";
 
-export async function clearIndexedDbDatabases() {
-  const browser = browserWindow();
+export async function clearIndexedDbDatabases() : Promise<any> {
+  const browser: any = browserWindow();
   if (!browser || !("indexedDB" in browser) || typeof browser.indexedDB.databases !== "function") {
     return [];
   }
-  const databases = await browser.indexedDB.databases();
-  const names = databases
-    .map((database) => String(database.name || "").trim())
+  const databases: any = await browser.indexedDB.databases();
+  const names: any = databases
+    .map((database?: any) : any => String(database.name || "").trim())
     .filter(Boolean);
   await Promise.all(
     names.map(
-      (name) =>
-        new Promise<void>((resolve) => {
-          const request = browser.indexedDB.deleteDatabase(name);
-          request.onsuccess = () => resolve();
-          request.onerror = () => resolve();
-          request.onblocked = () => resolve();
+      (name?: any) : any =>
+        new Promise<void>((resolve?: any) : any => {
+          const request: any = browser.indexedDB.deleteDatabase(name);
+          request.onsuccess = () : any => resolve();
+          request.onerror = () : any => resolve();
+          request.onblocked = () : any => resolve();
         }),
     ),
   );
   return names;
 }
 
-export async function clearBrowserCacheStorage() {
-  const browser = browserWindow();
+export async function clearBrowserCacheStorage() : Promise<any> {
+  const browser: any = browserWindow();
   if (!browser || !("caches" in browser)) {
     return [];
   }
-  const names = await browser.caches.keys();
-  await Promise.all(names.map((name) => browser.caches.delete(name)));
+  const names: any = await browser.caches.keys();
+  await Promise.all(names.map((name?: any) : any => browser.caches.delete(name)));
   return names;
 }
 
-export async function unregisterServiceWorkers() {
+export async function unregisterServiceWorkers() : Promise<any> {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     return 0;
   }
-  const registrations = await navigator.serviceWorker.getRegistrations();
-  await Promise.all(registrations.map((registration) => registration.unregister()));
+  const registrations: any = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map((registration?: any) : any => registration.unregister()));
   return registrations.length;
 }
 
@@ -49,13 +49,13 @@ export async function clearBrowserLocalStateFromUrl(
     clearMemoryCaches?: () => void;
     param?: string;
   } = {},
-) {
-  const browser = browserWindow();
+) : Promise<any> {
+  const browser: any = browserWindow();
   if (!browser) {
     return false;
   }
-  const param = options.param || CLEAR_LOCAL_STATE_PARAM;
-  const url = new URL(browser.location.href);
+  const param: any = options.param || CLEAR_LOCAL_STATE_PARAM;
+  const url: any = new URL(browser.location.href);
   if (url.searchParams.get(param) !== "1") {
     return false;
   }
@@ -66,17 +66,17 @@ export async function clearBrowserLocalStateFromUrl(
   };
   try {
     report.indexedDbNames = await clearIndexedDbDatabases();
-  } catch (nextError) {
+  } catch (nextError: any) {
     report.indexedDbError = nextError instanceof Error ? nextError.message : String(nextError);
   }
   try {
     report.cacheNames = await clearBrowserCacheStorage();
-  } catch (nextError) {
+  } catch (nextError: any) {
     report.cacheStorageError = nextError instanceof Error ? nextError.message : String(nextError);
   }
   try {
     report.serviceWorkers = await unregisterServiceWorkers();
-  } catch (nextError) {
+  } catch (nextError: any) {
     report.serviceWorkerError = nextError instanceof Error ? nextError.message : String(nextError);
   }
   browser.localStorage.clear();
@@ -84,6 +84,6 @@ export async function clearBrowserLocalStateFromUrl(
   options.clearMemoryCaches?.();
   url.searchParams.delete(param);
   browser.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  (browser as Window & { __licoLocalStateClearReport?: Record<string, unknown> }).__licoLocalStateClearReport = report;
+  (browser as Window & { __meshrixLocalStateClearReport?: Record<string, unknown> }).__meshrixLocalStateClearReport = report;
   return true;
 }

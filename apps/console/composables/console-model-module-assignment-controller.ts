@@ -30,10 +30,10 @@ type ConsoleModelModuleAssignmentControllerOptions = {
 
 export function createConsoleModelModuleAssignmentController(
   options: ConsoleModelModuleAssignmentControllerOptions,
-) {
-  const agentModelAssignmentOptions = computed(() =>
+) : any {
+  const agentModelAssignmentOptions: any = computed(() : any =>
     options.visibleModelEntries.value
-      .map((entry) => ({
+      .map((entry?: any) : any => ({
         provider: entry.provider as CloudProvider,
         value: options.modelEntryStatusKey(entry),
         label: options.gatewayAssistantModelOptionLabel(entry),
@@ -46,21 +46,21 @@ export function createConsoleModelModuleAssignmentController(
     return normalizeAgentModuleAccess(entry.moduleAccess);
   }
 
-  function modelEntryAllowsModule(entry: AgentModelConfig, moduleId: string) {
-    const access = modelEntryModuleAccess(entry);
+  function modelEntryAllowsModule(entry: AgentModelConfig, moduleId: string) : any {
+    const access: any = modelEntryModuleAccess(entry);
     return access.mode !== "selected" || access.moduleIds.includes(moduleId);
   }
 
-  function setModelEntryModuleAccessMode(entry: AgentModelConfig, mode: string) {
+  function setModelEntryModuleAccessMode(entry: AgentModelConfig, mode: string) : any {
     entry.moduleAccess = {
       ...modelEntryModuleAccess(entry),
       mode: mode === "selected" ? "selected" : "all",
     };
   }
 
-  function toggleModelEntryModuleAccess(entry: AgentModelConfig, moduleId: string, checked: boolean) {
-    const access = modelEntryModuleAccess(entry);
-    const next = new Set(access.moduleIds);
+  function toggleModelEntryModuleAccess(entry: AgentModelConfig, moduleId: string, checked: boolean) : any {
+    const access: any = modelEntryModuleAccess(entry);
+    const next: any = new Set<any>(access.moduleIds);
     if (checked) {
       next.add(moduleId);
     } else {
@@ -72,36 +72,36 @@ export function createConsoleModelModuleAssignmentController(
     };
   }
 
-  function moduleModelAssignmentOptions(moduleId: string) {
-    return agentModelAssignmentOptions.value.filter((option) => {
-      const entry = options.visibleModelEntries.value.find(
-        (model) => options.modelEntryStatusKey(model) === option.value,
+  function moduleModelAssignmentOptions(moduleId: string) : any {
+    return agentModelAssignmentOptions.value.filter((option?: any) : any => {
+      const entry: any = options.visibleModelEntries.value.find(
+        (model?: any) : any => options.modelEntryStatusKey(model) === option.value,
       );
       return Boolean(entry && modelEntryAllowsModule(entry, moduleId));
     });
   }
 
-  function modelProviderFromRef(refValue: string) {
+  function modelProviderFromRef(refValue: string) : any {
     return options.parseModelRef(refValue).provider;
   }
 
-  function moduleNeedsIntelligence(moduleId: string) {
+  function moduleNeedsIntelligence(moduleId: string) : any {
     if (moduleModelRef(moduleId)) {
       return true;
     }
     return options.settingsDraft.value.moduleIntelligence?.[moduleId] === true;
   }
 
-  function setModuleNeedsIntelligence(moduleId: string, enabled: boolean) {
+  function setModuleNeedsIntelligence(moduleId: string, enabled: boolean) : any {
     options.settingsDraft.value.moduleIntelligence = {
       ...(options.settingsDraft.value.moduleIntelligence || {}),
       [moduleId]: enabled,
     };
   }
 
-  function ensureModuleAgentGroup(moduleId: string) {
-    const groups = { ...(options.settingsDraft.value.moduleAgentProfiles || {}) };
-    const group = groups[moduleId] || { primaryAgent: "", agents: {} };
+  function ensureModuleAgentGroup(moduleId: string) : any {
+    const groups: Record<string, any> = { ...(options.settingsDraft.value.moduleAgentProfiles || {}) };
+    const group: any = groups[moduleId] || { primaryAgent: "", agents: {} };
     groups[moduleId] = {
       primaryAgent: String(group.primaryAgent || "").trim(),
       agents: { ...(group.agents || {}) },
@@ -110,13 +110,13 @@ export function createConsoleModelModuleAssignmentController(
     return groups[moduleId];
   }
 
-  function ensureModuleAgentProfile(moduleId: string, agentId: string, defaults: Partial<ModuleAgentProfile> = {}) {
-    const normalizedAgentId = String(agentId || "").trim();
+  function ensureModuleAgentProfile(moduleId: string, agentId: string, defaults: Partial<ModuleAgentProfile> = {}) : any {
+    const normalizedAgentId: any = String(agentId || "").trim();
     if (!normalizedAgentId) {
       return null;
     }
-    const group = ensureModuleAgentGroup(moduleId);
-    const existing = group.agents[normalizedAgentId];
+    const group: any = ensureModuleAgentGroup(moduleId);
+    const existing: any = group.agents[normalizedAgentId];
     group.agents[normalizedAgentId] = normalizeModuleAgentProfile({
       ...(existing || {}),
       ...defaults,
@@ -126,23 +126,23 @@ export function createConsoleModelModuleAssignmentController(
     return group.agents[normalizedAgentId];
   }
 
-  function removeModuleAgentProfile(moduleId: string, agentId: string) {
-    const group = ensureModuleAgentGroup(moduleId);
+  function removeModuleAgentProfile(moduleId: string, agentId: string) : any {
+    const group: any = ensureModuleAgentGroup(moduleId);
     delete group.agents[agentId];
     if (group.primaryAgent === agentId) {
       group.primaryAgent = "";
-      const nextAssignments = { ...(options.settingsDraft.value.moduleModelAssignments || {}) };
+      const nextAssignments: Record<string, any> = { ...(options.settingsDraft.value.moduleModelAssignments || {}) };
       delete nextAssignments[moduleId];
       options.settingsDraft.value.moduleModelAssignments = nextAssignments;
     }
   }
 
-  function moduleAgentProfileRows(moduleId: string) {
-    const group = options.settingsDraft.value.moduleAgentProfiles?.[moduleId];
-    const agents = group?.agents || {};
-    return Object.entries(agents).map(([agentId, profile]) => {
-      const entry = options.visibleModelEntries.value.find(
-        (model) => options.modelEntryStatusKey(model) === agentId,
+  function moduleAgentProfileRows(moduleId: string) : any {
+    const group: any = options.settingsDraft.value.moduleAgentProfiles?.[moduleId];
+    const agents: any = group?.agents || {};
+    return (Object.entries(agents) as [string, any][]).map(([agentId, profile]: any[]) : any => {
+      const entry: any = options.visibleModelEntries.value.find(
+        (model?: any) : any => options.modelEntryStatusKey(model) === agentId,
       );
       return {
         agentId,
@@ -155,31 +155,31 @@ export function createConsoleModelModuleAssignmentController(
     });
   }
 
-  function moduleModelRef(moduleId: string) {
-    const assignment = options.settingsDraft.value.moduleModelAssignments?.[moduleId];
+  function moduleModelRef(moduleId: string) : any {
+    const assignment: any = options.settingsDraft.value.moduleModelAssignments?.[moduleId];
     if (!assignment?.provider || !assignment?.model) {
       return "";
     }
-    const refValue = options.modelRef(assignment.provider, assignment.model);
-    return moduleModelAssignmentOptions(moduleId).some((option) => option.ref === refValue)
+    const refValue: any = options.modelRef(assignment.provider, assignment.model);
+    return moduleModelAssignmentOptions(moduleId).some((option?: any) : any => option.ref === refValue)
       ? refValue
       : "";
   }
 
-  function setModuleModelRef(moduleId: string, refValue: string) {
+  function setModuleModelRef(moduleId: string, refValue: string) : any {
     if (!String(refValue || "").trim()) {
-      const nextAssignments = { ...(options.settingsDraft.value.moduleModelAssignments || {}) };
+      const nextAssignments: Record<string, any> = { ...(options.settingsDraft.value.moduleModelAssignments || {}) };
       delete nextAssignments[moduleId];
       options.settingsDraft.value.moduleModelAssignments = nextAssignments;
-      const group = ensureModuleAgentGroup(moduleId);
+      const group: any = ensureModuleAgentGroup(moduleId);
       group.primaryAgent = "";
-      const moduleDefinition = intelligentModuleDefinitions.find((item) => item.id === moduleId);
+      const moduleDefinition: any = intelligentModuleDefinitions.find((item?: any) : any => item.id === moduleId);
       if (moduleDefinition?.alertRequired === false) {
         setModuleNeedsIntelligence(moduleId, false);
       }
       return;
     }
-    const parsed = options.parseModelRef(refValue);
+    const parsed: any = options.parseModelRef(refValue);
     options.settingsDraft.value.moduleModelAssignments = {
       ...(options.settingsDraft.value.moduleModelAssignments || {}),
       [moduleId]: {
@@ -187,25 +187,25 @@ export function createConsoleModelModuleAssignmentController(
         model: parsed.model,
       },
     };
-    const group = ensureModuleAgentGroup(moduleId);
+    const group: any = ensureModuleAgentGroup(moduleId);
     group.primaryAgent = parsed.model;
     ensureModuleAgentProfile(moduleId, parsed.model, { role: "primary" });
     setModuleNeedsIntelligence(moduleId, true);
   }
 
-  function setModuleAgentProfileEnabled(moduleId: string, agentId: string, enabled: boolean) {
-    const profile = ensureModuleAgentProfile(moduleId, agentId);
+  function setModuleAgentProfileEnabled(moduleId: string, agentId: string, enabled: boolean) : any {
+    const profile: any = ensureModuleAgentProfile(moduleId, agentId);
     if (profile) {
       profile.enabled = enabled;
     }
   }
 
-  function addModuleAgentProfileFromDraft(moduleId: string) {
-    const refValue = String(options.moduleAgentCandidateDrafts.value[moduleId] || "").trim();
+  function addModuleAgentProfileFromDraft(moduleId: string) : any {
+    const refValue: any = String(options.moduleAgentCandidateDrafts.value[moduleId] || "").trim();
     if (!refValue) {
       return;
     }
-    const parsed = options.parseModelRef(refValue);
+    const parsed: any = options.parseModelRef(refValue);
     ensureModuleAgentProfile(moduleId, parsed.model, { role: "assistant" });
     options.moduleAgentCandidateDrafts.value = {
       ...options.moduleAgentCandidateDrafts.value,
@@ -213,10 +213,10 @@ export function createConsoleModelModuleAssignmentController(
     };
   }
 
-  const moduleModelAssignmentStats = computed(() => {
-    const enabled = intelligentModuleDefinitions.filter((item) => moduleNeedsIntelligence(item.id)).length;
-    const assigned = intelligentModuleDefinitions.filter(
-      (item) => moduleNeedsIntelligence(item.id) && moduleModelRef(item.id),
+  const moduleModelAssignmentStats: any = computed(() : any => {
+    const enabled: any = intelligentModuleDefinitions.filter((item?: any) : any => moduleNeedsIntelligence(item.id)).length;
+    const assigned: any = intelligentModuleDefinitions.filter(
+      (item?: any) : any => moduleNeedsIntelligence(item.id) && moduleModelRef(item.id),
     ).length;
     return {
       assigned,

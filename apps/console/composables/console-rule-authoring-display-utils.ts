@@ -1,5 +1,5 @@
-export function ruleAuthoringStatusLabel(status: unknown) {
-  const value = String(status || "");
+export function ruleAuthoringStatusLabel(status: unknown) : any {
+  const value: any = String(status || "");
   if (value === "pending_human_confirmation") return "待人类确认";
   if (value === "no_rule_needed") return "未触发规则";
   if (value === "gate_failed") return "门禁未通过";

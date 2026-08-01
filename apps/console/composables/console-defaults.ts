@@ -40,7 +40,7 @@ export const modelLibraryProviderDefinitions: Array<{
   },
 ];
 
-export const systemLogPaginationConfig = {
+export const systemLogPaginationConfig: Record<string, any> = {
   defaultPageSize: 20,
   maxPageSize: 100,
   pageSizeOptions: [10, 20, 50, 100],
@@ -54,7 +54,7 @@ export type IntelligentModuleDefinition = {
   alertRequired?: boolean;
 };
 
-export const intelligentModuleDefinitions: IntelligentModuleDefinition[] = MODEL_USAGE_DEFINITIONS.map((definition) => ({
+export const intelligentModuleDefinitions: IntelligentModuleDefinition[] = MODEL_USAGE_DEFINITIONS.map((definition?: any) : any => ({
   id: definition.id,
   label: definition.label,
   designedModule: definition.designedModule,
@@ -132,7 +132,7 @@ export const jobStatusLabels: Record<SplitJobStatus, string> = {
   cancelled: "已取消",
 };
 
-export const alignmentStateLabels = clientAlignmentStateLabels as Record<ClientAlignmentState, string>;
+export const alignmentStateLabels: any = clientAlignmentStateLabels as Record<ClientAlignmentState, string>;
 
 export const moduleNameLabels: Record<string, string> = {
   storage: "存储",
@@ -142,7 +142,7 @@ export const moduleNameDescriptions: Record<string, string> = {
   storage: "公开平台的基础持久化能力。",
 };
 
-export const moduleGroupDefinitions = [
+export const moduleGroupDefinitions: any[] = [
   {
     id: "storage",
     label: "存储管理",
@@ -176,6 +176,6 @@ export const adminViewTitleMap: Partial<Record<AdminView, string>> = {
 export const viewTitleMap: Record<AppView, string> = {
   dashboard: "工作台",
   approval: "审批流",
-  workspaces: "工作树",
+  workspaces: "工作空间",
   admin: "管理",
 };

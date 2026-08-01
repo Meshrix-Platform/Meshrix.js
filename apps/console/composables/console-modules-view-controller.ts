@@ -3,15 +3,15 @@ import { useServerConsoleShellContext } from "./serverConsoleShellContext";
 import { createConsoleExternalGatewayController, type ExternalGatewayState } from "./console-external-gateway-controller";
 import { applyExternalGateway, getExternalGatewayState, switchExternalGatewayDirect } from "../lib/external-gateway-client";
 
-export function useModulesViewConsole() {
-  const externalGatewayState = ref<ExternalGatewayState | null>(null);
-  const externalGatewayBusy = ref(false);
-  async function refreshExternalGateway() {
+export function useModulesViewConsole() : any {
+  const externalGatewayState: any = ref<ExternalGatewayState | null>(null);
+  const externalGatewayBusy: any = ref(false);
+  async function refreshExternalGateway() : Promise<any> {
     externalGatewayState.value = await getExternalGatewayState();
   }
-  const externalGateway = createConsoleExternalGatewayController(externalGatewayState, {
+  const externalGateway: any = createConsoleExternalGatewayController(externalGatewayState, {
     refresh: refreshExternalGateway,
-    async apply(input) {
+    async apply(input?: any) : Promise<any> {
       externalGatewayBusy.value = true;
       try {
         await applyExternalGateway(input);
@@ -20,7 +20,7 @@ export function useModulesViewConsole() {
         externalGatewayBusy.value = false;
       }
     },
-    async switchDirect(expectedGeneration) {
+    async switchDirect(expectedGeneration?: any) : Promise<any> {
       externalGatewayBusy.value = true;
       try {
         await switchExternalGatewayDirect(expectedGeneration);
@@ -30,7 +30,7 @@ export function useModulesViewConsole() {
       }
     },
   });
-  onMounted(() => void refreshExternalGateway());
+  onMounted(() : any => void refreshExternalGateway());
   const {
     busyKey,
     canBrowseServerPaths,

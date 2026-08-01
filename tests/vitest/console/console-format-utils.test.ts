@@ -13,8 +13,8 @@ import {
   safeDownloadName,
 } from "../../../apps/console/composables/console-format-utils";
 
-describe("console-format-utils", () => {
-  it("formats filter boundaries consistently", () => {
+describe("console-format-utils", () : any => {
+  it("formats filter boundaries consistently", () : any => {
     expect(parseFilterDate("", "start")).toBe(0);
     expect(parseFilterDate("2026-06-04", "start")).toBeGreaterThan(0);
     expect(parseFilterDate("2026-06-04", "end")).toBeGreaterThan(
@@ -22,7 +22,7 @@ describe("console-format-utils", () => {
     );
   });
 
-  it("formats machine and date strings with fallback values", () => {
+  it("formats machine and date strings with fallback values", () : any => {
     expect(formatMachineDate("", "compact")).toBe("未记录");
     expect(formatMachineDate("bad", "compact")).toBe("bad");
     expect(formatMachineDate("2026-06-04T00:00:00", "compact")).toMatch(/\d{2}-\d{2} \d{2}:\d{2}/);
@@ -31,7 +31,7 @@ describe("console-format-utils", () => {
     expect(formatCompactDate("")).toBe("未记录");
   });
 
-  it("sanitizes text helpers", () => {
+  it("sanitizes text helpers", () : any => {
     expect(csvCell('a"b')).toBe('"a""b"');
     expect(csvCell(null)).toBe('""');
     expect(jsonPreview({ a: 1 })).toContain("\"a\": 1");
@@ -40,7 +40,7 @@ describe("console-format-utils", () => {
     expect(safeDownloadName("/\\:*?\"<>|test")).toBe("-test");
   });
 
-  it("parses time and scales bytes with sane suffixes", () => {
+  it("parses time and scales bytes with sane suffixes", () : any => {
     expect(parseTime("bad")).toBe(0);
     expect(parseTime("2026-06-04T00:00:00Z")).toBeGreaterThan(0);
 
@@ -51,21 +51,21 @@ describe("console-format-utils", () => {
     expect(formatBytes(1073741824)).toBe("1.0 GB");
   });
 
-  it("formats elapsed durations across branches", () => {
+  it("formats elapsed durations across branches", () : any => {
     expect(formatDuration("", "")).toBe("--");
     expect(formatDuration("2026-06-04T00:00:00Z", "2026-06-04T00:00:30Z")).toBe("30s");
     expect(formatDuration("2026-06-04T00:00:00Z", "2026-06-04T00:02:00Z")).toBe("2m 0s");
     expect(formatDuration("2026-06-04T00:00:00Z", "2026-06-04T01:10:00Z")).toBe("1h 10m");
   });
 
-  it("returns passthrough job status tone", () => {
+  it("returns passthrough job status tone", () : any => {
     expect(jobStatusTone("running")).toBe("running");
     expect(jobStatusTone("queued")).toBe("queued");
   });
 
-  it("keeps compact date fallback behavior", () => {
+  it("keeps compact date fallback behavior", () : any => {
     expect(formatCompactDate("")).toBe("未记录");
-    const now = new Date("2026-06-04T00:00:00Z").toLocaleString("zh-CN", {
+    const now: any = new Date("2026-06-04T00:00:00Z").toLocaleString("zh-CN", {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -78,10 +78,10 @@ describe("console-format-utils", () => {
     }));
   });
 
-  it("falls back when date formatting throws", () => {
-    const spy = vi
+  it("falls back when date formatting throws", () : any => {
+    const spy: any = vi
       .spyOn(Date.prototype, "toLocaleString")
-      .mockImplementation(() => {
+      .mockImplementation(() : any => {
         throw new Error("forced format failure");
       });
 
@@ -91,7 +91,7 @@ describe("console-format-utils", () => {
     spy.mockRestore();
   });
 
-  it("formats long duration in days", () => {
+  it("formats long duration in days", () : any => {
     expect(
       formatDuration("2026-06-01T00:00:00Z", "2026-06-03T03:00:00Z"),
     ).toBe("2d 3h");

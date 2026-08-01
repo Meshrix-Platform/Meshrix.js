@@ -34,7 +34,7 @@ onMounted(() => {
 });
 
 usePageRefreshHandler(
-  (detail) => detail.viewId === "admin" && detail.adminView === "productionHealth",
+  (detail: any) => detail.viewId === "admin" && detail.adminView === "productionHealth",
   refreshProductionHealth,
 );
 </script>

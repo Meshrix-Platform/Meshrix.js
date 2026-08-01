@@ -93,7 +93,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete upstream-mcp-passthrough",
-      "target": "packages/protocols/mcp/upstream-mcp-client.mjs, packages/agents/src/upstream-gateway/tool-projection.mjs, packages/protocols/mcp/adapter/http-mcp-adapter-upstream.mjs, packages/protocols/mcp/adapter/http-mcp-adapter-upstream-tools.mjs, tools/server-scripts/verify-upstream-mcp-gateway-e2e.mjs"
+      "target": "packages/protocols/mcp/upstream-mcp-client.ts, packages/agents/src/upstream-gateway/tool-projection.ts, packages/protocols/mcp/adapter/http-mcp-adapter-upstream.ts, packages/protocols/mcp/adapter/http-mcp-adapter-upstream-tools.ts, tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts"
     },
     "next": [
       "98d6fdd9-7592-4103-9b21-b95e950f0679"

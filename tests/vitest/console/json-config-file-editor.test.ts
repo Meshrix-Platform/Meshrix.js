@@ -6,15 +6,15 @@ import JsonConfigFileEditor from "../../../apps/console/components/JsonConfigFil
 
 const mounted: VueWrapper[] = [];
 
-const ConfigFoldCardStub = defineComponent({
+const ConfigFoldCardStub: any = defineComponent({
   name: "ConfigFoldCard",
   props: {
     title: String,
     subtitle: String,
     open: Boolean,
   },
-  setup(props, { slots }) {
-    return () => h("section", {
+  setup(props: any, { slots }: Record<string, any>) : any {
+    return () : any => h("section", {
       class: "config-fold-card-stub",
       "data-title": props.title,
       "data-subtitle": props.subtitle,
@@ -23,8 +23,8 @@ const ConfigFoldCardStub = defineComponent({
   },
 });
 
-function mountEditor(props: Record<string, unknown> = {}) {
-  const wrapper = mount(JsonConfigFileEditor, {
+function mountEditor(props: Record<string, unknown> = {}) : any {
+  const wrapper: any = mount(JsonConfigFileEditor, {
     attachTo: document.body,
     props: {
       title: "Runtime config",
@@ -42,11 +42,11 @@ function mountEditor(props: Record<string, unknown> = {}) {
   return wrapper;
 }
 
-function actionButtons(wrapper: VueWrapper) {
+function actionButtons(wrapper: VueWrapper) : any {
   return wrapper.findAll("button");
 }
 
-afterEach(() => {
+afterEach(() : any => {
   while (mounted.length) {
     mounted.pop()?.unmount();
   }
@@ -54,10 +54,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("JsonConfigFileEditor", () => {
-  it("renders formatted JSON, forwards fold-card props and commits parsed changes", async () => {
-    const onSave = vi.fn(async () => undefined);
-    const wrapper = mountEditor({
+describe("JsonConfigFileEditor", () : any => {
+  it("renders formatted JSON, forwards fold-card props and commits parsed changes", async () : Promise<any> => {
+    const onSave: any = vi.fn(async () : Promise<any> => undefined);
+    const wrapper: any = mountEditor({
       title: "Agent config",
       subtitle: "agent-tools.json",
       fileKey: "json-editor-save",
@@ -74,7 +74,7 @@ describe("JsonConfigFileEditor", () => {
       "data-subtitle": "agent-tools.json",
       "data-open": "true",
     });
-    const textarea = wrapper.get("textarea");
+    const textarea: any = wrapper.get("textarea");
     expect(textarea.attributes("rows")).toBe("6");
     expect((textarea.element as HTMLTextAreaElement).value).toContain("\"enabled\": true");
     expect(actionButtons(wrapper)[0].text()).toBe("Discard");
@@ -94,17 +94,17 @@ describe("JsonConfigFileEditor", () => {
     expect(actionButtons(wrapper)[1].attributes("disabled")).toBeDefined();
   });
 
-  it("reports parse and save errors without losing dirty text", async () => {
-    const onSave = vi.fn(async () => {
+  it("reports parse and save errors without losing dirty text", async () : Promise<any> => {
+    const onSave: any = vi.fn(async () : Promise<any> => {
       throw new Error("write failed");
     });
-    const wrapper = mountEditor({
+    const wrapper: any = mountEditor({
       fileKey: "json-editor-errors",
       modelValue: { enabled: true },
       onSave,
     });
-    const textarea = wrapper.get("textarea");
-    const save = () => actionButtons(wrapper)[1];
+    const textarea: any = wrapper.get("textarea");
+    const save: any = () : any => actionButtons(wrapper)[1];
 
     await textarea.setValue("{not json");
     await save().trigger("click");
@@ -122,15 +122,15 @@ describe("JsonConfigFileEditor", () => {
     expect((textarea.element as HTMLTextAreaElement).value).toBe("{\"enabled\":false}");
   });
 
-  it("cancels dirty edits and ignores readonly or clean commits", async () => {
-    const onSave = vi.fn();
-    const wrapper = mountEditor({
+  it("cancels dirty edits and ignores readonly or clean commits", async () : Promise<any> => {
+    const onSave: any = vi.fn();
+    const wrapper: any = mountEditor({
       fileKey: "json-editor-cancel",
       modelValue: { enabled: true },
       readonly: true,
       onSave,
     });
-    const textarea = wrapper.get("textarea");
+    const textarea: any = wrapper.get("textarea");
     const [cancelButton, saveButton] = actionButtons(wrapper);
 
     expect(textarea.attributes("readonly")).toBeDefined();
@@ -148,14 +148,14 @@ describe("JsonConfigFileEditor", () => {
     expect(cancelButton.attributes("disabled")).toBeDefined();
   });
 
-  it("keeps singleton editor state per file key and only replaces clean drafts from new props", async () => {
-    const first = mountEditor({
+  it("keeps singleton editor state per file key and only replaces clean drafts from new props", async () : Promise<any> => {
+    const first: any = mountEditor({
       fileKey: "json-editor-singleton",
       modelValue: { version: 1 },
     });
     await first.get("textarea").setValue("{\"version\":2}");
 
-    const second = mountEditor({
+    const second: any = mountEditor({
       fileKey: "json-editor-singleton",
       modelValue: { version: 10 },
     });
@@ -172,7 +172,7 @@ describe("JsonConfigFileEditor", () => {
     await nextTick();
     expect((second.get("textarea").element as HTMLTextAreaElement).value).toContain("\"version\": 30");
 
-    const stringEditor = mountEditor({
+    const stringEditor: any = mountEditor({
       fileKey: "json-editor-string",
       modelValue: "{\"raw\":true}",
     });

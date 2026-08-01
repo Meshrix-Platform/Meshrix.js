@@ -41,31 +41,31 @@ type ConsoleShellPageRefreshControllerOptions = {
   routeFullPath: ComputedRef<string>;
 };
 
-async function waitForPageRefreshTasks(tasks: Promise<unknown>[]) {
-  const results = await Promise.allSettled(tasks);
-  const failed = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
+async function waitForPageRefreshTasks(tasks: Promise<unknown>[]) : Promise<any> {
+  const results: any = await Promise.allSettled(tasks);
+  const failed: any = results.find((result?: any): result is PromiseRejectedResult => result.status === "rejected");
   if (failed) {
     throw failed.reason;
   }
 }
 
-export function createConsoleShellPageRefreshController(options: ConsoleShellPageRefreshControllerOptions) {
-  const pageRefreshPendingCount = ref(0);
-  const pageRefreshActionBusy = computed(() => pageRefreshPendingCount.value > 0);
-  const busyKey = computed(() => options.busyKey?.value || "");
-  const pageRefreshMessages = computed(() => options.msg?.value || {
+export function createConsoleShellPageRefreshController(options: ConsoleShellPageRefreshControllerOptions) : any {
+  const pageRefreshPendingCount: any = ref(0);
+  const pageRefreshActionBusy: any = computed(() : any => pageRefreshPendingCount.value > 0);
+  const busyKey: any = computed(() : any => options.busyKey?.value || "");
+  const pageRefreshMessages: any = computed(() : any => options.msg?.value || {
     actions: {
       refreshing: "刷新中",
       refreshPage: "刷新",
     },
   });
-  const pageRefreshBusy = computed(() =>
+  const pageRefreshBusy: any = computed(() : any =>
     pageRefreshActionBusy.value || Boolean(busyKey.value),
   );
-  const pageRefreshTitle = computed(() =>
+  const pageRefreshTitle: any = computed(() : any =>
     pageRefreshBusy.value ? `${pageRefreshMessages.value.actions.refreshing}...` : pageRefreshMessages.value.actions.refreshPage,
   );
-  const pageRefreshAriaLabel = computed(() =>
+  const pageRefreshAriaLabel: any = computed(() : any =>
     pageRefreshBusy.value ? pageRefreshMessages.value.actions.refreshing : pageRefreshMessages.value.actions.refreshPage,
   );
 
@@ -78,7 +78,7 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
     }
   }
 
-  async function refreshAdminRoute() {
+  async function refreshAdminRoute() : Promise<any> {
     switch (options.activeRouteAdminView.value) {
       case "storage":
         await Promise.all([
@@ -152,7 +152,7 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
     }
   }
 
-  async function refreshCurrentRouteDefaults() {
+  async function refreshCurrentRouteDefaults() : Promise<any> {
     switch (options.activeRouteView.value) {
       case "dashboard":
         await options.refreshDashboardAlertsSnapshot({ silent: false });
@@ -177,12 +177,12 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
     }
   }
 
-  async function refreshCurrentPage() {
+  async function refreshCurrentPage() : Promise<any> {
     if (pageRefreshActionBusy.value) {
       return;
     }
-    await trackPageRefreshTask((async () => {
-      const pageTasks = collectPageRefreshTasks({
+    await trackPageRefreshTask((async () : Promise<any> => {
+      const pageTasks: any = collectPageRefreshTasks({
         viewId: options.activeRouteView.value,
         adminView: options.activeRouteAdminView.value,
         gatewayTab: "",

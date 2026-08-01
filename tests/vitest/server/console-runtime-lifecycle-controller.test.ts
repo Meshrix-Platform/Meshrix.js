@@ -8,10 +8,10 @@ type AuthSnapshot = {
   session: { authenticated: boolean };
 };
 
-function deferred<T>() {
+function deferred<T>() : any {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((nextResolve, nextReject) => {
+  const promise: any = new Promise<T>((nextResolve?: any, nextReject?: any) : any => {
     resolve = nextResolve;
     reject = nextReject;
   });
@@ -25,18 +25,18 @@ function authenticatedSnapshot(): AuthSnapshot {
   };
 }
 
-function fixture(overrides: Partial<Parameters<typeof createConsoleRuntimeLifecycleController>[0]> = {}) {
-  const options = {
+function fixture(overrides: Partial<Parameters<typeof createConsoleRuntimeLifecycleController>[0]> = {}) : any {
+  const options: Record<string, any> = {
     consoleBootstrapping: ref(false),
-    clearBrowserLocalStateFromUrl: vi.fn(async () => undefined),
+    clearBrowserLocalStateFromUrl: vi.fn(async () : Promise<any> => undefined),
     clearConfigTargetHighlight: vi.fn(),
     clearPendingRefreshState: vi.fn(),
     liveDashboardAlerts: { value: [] },
     onBootstrapError: vi.fn(),
-    refreshAuthState: vi.fn(async () => authenticatedSnapshot()),
-    refreshContextCompiler: vi.fn(async () => undefined),
-    refreshMonitorAlerts: vi.fn(async () => undefined),
-    refreshState: vi.fn(async () => undefined),
+    refreshAuthState: vi.fn(async () : Promise<any> => authenticatedSnapshot()),
+    refreshContextCompiler: vi.fn(async () : Promise<any> => undefined),
+    refreshMonitorAlerts: vi.fn(async () : Promise<any> => undefined),
+    refreshState: vi.fn(async () : Promise<any> => undefined),
     startServerEventSubscription: vi.fn(),
     stopServerEventSubscription: vi.fn(),
     syncDashboardAlertInbox: vi.fn(),
@@ -48,15 +48,15 @@ function fixture(overrides: Partial<Parameters<typeof createConsoleRuntimeLifecy
   };
 }
 
-describe("console runtime lifecycle", () => {
-  it("keeps route access gated until authenticated console state is loaded", async () => {
-    const state = deferred<void>();
+describe("console runtime lifecycle", () : any => {
+  it("keeps route access gated until authenticated console state is loaded", async () : Promise<any> => {
+    const state: any = deferred<void>();
     const { controller, options } = fixture({
-      refreshState: vi.fn(() => state.promise),
+      refreshState: vi.fn(() : any => state.promise),
     });
 
-    const initialization = controller.mountConsoleRuntime();
-    await vi.waitFor(() => expect(options.refreshState).toHaveBeenCalledTimes(1));
+    const initialization: any = controller.mountConsoleRuntime();
+    await vi.waitFor(() : any => expect(options.refreshState).toHaveBeenCalledTimes(1));
     expect(options.consoleBootstrapping.value).toBe(true);
 
     state.resolve();
@@ -64,14 +64,14 @@ describe("console runtime lifecycle", () => {
     expect(options.consoleBootstrapping.value).toBe(false);
   });
 
-  it("does not resume initialization side effects after the last mount is removed", async () => {
-    const auth = deferred<AuthSnapshot>();
+  it("does not resume initialization side effects after the last mount is removed", async () : Promise<any> => {
+    const auth: any = deferred<AuthSnapshot>();
     const { controller, options } = fixture({
-      refreshAuthState: vi.fn(() => auth.promise),
+      refreshAuthState: vi.fn(() : any => auth.promise),
     });
 
-    const initialization = controller.mountConsoleRuntime();
-    await vi.waitFor(() => expect(options.refreshAuthState).toHaveBeenCalledTimes(1));
+    const initialization: any = controller.mountConsoleRuntime();
+    await vi.waitFor(() : any => expect(options.refreshAuthState).toHaveBeenCalledTimes(1));
     controller.unmountConsoleRuntime();
     auth.resolve(authenticatedSnapshot());
     await initialization;
@@ -81,17 +81,17 @@ describe("console runtime lifecycle", () => {
     expect(options.consoleBootstrapping.value).toBe(false);
   });
 
-  it("keeps a remount isolated from an older in-flight bootstrap", async () => {
-    const firstAuth = deferred<AuthSnapshot>();
-    const refreshAuthState = vi.fn()
-      .mockImplementationOnce(() => firstAuth.promise)
+  it("keeps a remount isolated from an older in-flight bootstrap", async () : Promise<any> => {
+    const firstAuth: any = deferred<AuthSnapshot>();
+    const refreshAuthState: any = vi.fn()
+      .mockImplementationOnce(() : any => firstAuth.promise)
       .mockResolvedValueOnce(authenticatedSnapshot());
     const { controller, options } = fixture({ refreshAuthState });
 
-    const firstInitialization = controller.mountConsoleRuntime();
-    await vi.waitFor(() => expect(refreshAuthState).toHaveBeenCalledTimes(1));
+    const firstInitialization: any = controller.mountConsoleRuntime();
+    await vi.waitFor(() : any => expect(refreshAuthState).toHaveBeenCalledTimes(1));
     controller.unmountConsoleRuntime();
-    const secondInitialization = controller.mountConsoleRuntime();
+    const secondInitialization: any = controller.mountConsoleRuntime();
     await secondInitialization;
 
     firstAuth.resolve(authenticatedSnapshot());
@@ -101,16 +101,16 @@ describe("console runtime lifecycle", () => {
     expect(options.syncDashboardAlertInbox).toHaveBeenCalledTimes(1);
   });
 
-  it("reports bootstrap rejection and never starts the event subscription", async () => {
-    const failure = new Error("bootstrap failed");
+  it("reports bootstrap rejection and never starts the event subscription", async () : Promise<any> => {
+    const failure: any = new Error("bootstrap failed");
     const { controller, options } = fixture({
-      refreshContextCompiler: vi.fn(async () => {
+      refreshContextCompiler: vi.fn(async () : Promise<any> => {
         throw failure;
       }),
     });
 
     await expect(controller.mountConsoleRuntime()).rejects.toBe(failure);
-    await vi.waitFor(() => expect(options.onBootstrapError).toHaveBeenCalledWith(failure));
+    await vi.waitFor(() : any => expect(options.onBootstrapError).toHaveBeenCalledWith(failure));
     expect(options.startServerEventSubscription).not.toHaveBeenCalled();
     expect(options.consoleBootstrapping.value).toBe(false);
   });

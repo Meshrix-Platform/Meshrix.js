@@ -1,0 +1,5 @@
+{
+  "id": "uploads:write",
+  "label": "Upload files",
+  "description": "Create owner-bound upload sessions and stream file chunks."
+}

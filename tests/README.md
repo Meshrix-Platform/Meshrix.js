@@ -2,9 +2,9 @@
 
 This directory stores repository-level test assets.
 
-- `tests/run.mjs`: unified test runner for repository profiles, tagged suites,
+- `tests/run.ts`: unified test runner for repository profiles, tagged suites,
   platform gates, and JSON reports.
-- `tests/verify-secret-hygiene.mjs`: source, docs, and test secret scan.
+- `tests/verify-secret-hygiene.ts`: source, docs, and test secret scan.
 - `tests/server`: server verification mounts and mock modules.
 - `tests/fixtures`: small synthetic fixtures only.
 

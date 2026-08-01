@@ -28,19 +28,35 @@
     "#meshrix/http-response": "@meshrix/foundation/http/http-response",
     "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
     "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
-    "#meshrix/product-api": "./src/composition/product-api.mjs",
+    "#meshrix/product-api": {
+      "types": "./dist/composition/product-api.d.ts",
+      "source": "./src/composition/product-api.ts",
+      "default": "./dist/composition/product-api.js"
+    },
     "#meshrix/protocols/*": "@meshrix/protocols/*",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/server-config": "@meshrix/foundation/config/server-config",
-    "#meshrix/server-runtime/*": "./src/*.mjs",
-    "#meshrix/settings": "./src/composition/settings.mjs",
+    "#meshrix/server-runtime/*": {
+      "types": "./dist/*.d.ts",
+      "source": "./src/*.ts",
+      "default": "./dist/*.js"
+    },
+    "#meshrix/settings": {
+      "types": "./dist/composition/settings.d.ts",
+      "source": "./src/composition/settings.ts",
+      "default": "./dist/composition/settings.js"
+    },
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
-    "./*": "./src/*.mjs"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
   },
   "files": [
-    "src/**/*",
+    "dist/**/*",
     "README.md",
     "LICENSE",
     "package.json"

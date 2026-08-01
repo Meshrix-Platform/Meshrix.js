@@ -32,18 +32,18 @@ type ConsoleSettingsDraftControllerOptions = {
   visibleModelEntries: () => AgentModelConfig[];
 };
 
-export function remoteDraftEquals(left: unknown, right: unknown) {
+export function remoteDraftEquals(left: unknown, right: unknown) : any {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
 export function createConsoleSettingsDraftController(
   options: ConsoleSettingsDraftControllerOptions,
-) {
-  let applyingRemoteSettings = false;
+) : any {
+  let applyingRemoteSettings: any = false;
 
   watch(
     options.settingsDraft,
-    () => {
+    () : any => {
       if (!applyingRemoteSettings) {
         options.settingsDraftDirty.value = true;
       }
@@ -52,24 +52,24 @@ export function createConsoleSettingsDraftController(
   );
 
   function normalizeModelLibraryAgents(settings: AgentSettings): AgentModelConfig[] {
-    const models = Array.isArray(settings.modelLibraryAgents)
+    const models: any = Array.isArray(settings.modelLibraryAgents)
       ? settings.modelLibraryAgents
       : [];
-    return models.map((item, index) =>
+    return models.map((item?: any, index?: any) : any =>
       options.normalizeModelEntry(item, index, settings),
     );
   }
 
-  function moduleAgentProfilesPayload() {
+  function moduleAgentProfilesPayload() : any {
     const next: AgentSettings["moduleAgentProfiles"] = {};
-    for (const [moduleId, group] of Object.entries(options.settingsDraft.value.moduleAgentProfiles || {})) {
+    for (const [moduleId, group] of (Object.entries(options.settingsDraft.value.moduleAgentProfiles || {}) as [string, any][])) {
       const agents: Record<string, ModuleAgentProfile> = {};
-      for (const [agentId, profile] of Object.entries(group.agents || {})) {
-        const normalizedAgentId = String(agentId || "").trim();
+      for (const [agentId, profile] of (Object.entries(group.agents || {}) as [string, any][])) {
+        const normalizedAgentId: any = String(agentId || "").trim();
         if (!normalizedAgentId) {
           continue;
         }
-        const normalizedProfile = normalizeModuleAgentProfile(profile);
+        const normalizedProfile: any = normalizeModuleAgentProfile(profile);
         agents[normalizedAgentId] = {
           enabled: normalizedProfile.enabled,
           role: normalizedProfile.role,
@@ -116,22 +116,22 @@ export function createConsoleSettingsDraftController(
     };
   }
 
-  function settingsPayloadForSave() {
-    const normalized = normalizeSettingsDraft(options.settingsDraft.value);
-    normalized.modelLibraryAgents = options.visibleModelEntries().map((entry, index) => ({
+  function settingsPayloadForSave() : any {
+    const normalized: any = normalizeSettingsDraft(options.settingsDraft.value);
+    normalized.modelLibraryAgents = options.visibleModelEntries().map((entry?: any, index?: any) : any => ({
       ...options.normalizeModelEntry(entry, index, options.settingsDraft.value),
       parameters: options.modelEntryParameters(entry),
     }));
     normalized.modelLibraryEntries = [
-      ...new Set(normalized.modelLibraryAgents.map((entry) => String(entry.provider || "").trim()).filter(Boolean)),
+      ...new Set<any>(normalized.modelLibraryAgents.map((entry?: any) : any => String(entry.provider || "").trim()).filter(Boolean)),
     ] as CloudProvider[];
     normalized.moduleModelAssignments = Object.fromEntries(
-      Object.entries(normalized.moduleModelAssignments || {}).filter(([moduleId, assignment]) => {
+      (Object.entries(normalized.moduleModelAssignments || {}) as [string, any][]).filter(([moduleId, assignment]: any[]) : any => {
         if (!options.moduleNeedsIntelligence(moduleId)) {
           return false;
         }
         return options.moduleModelAssignmentOptions(moduleId).some(
-          (option) => option.ref === options.modelRef(assignment.provider, assignment.model),
+          (option?: any) : any => option.ref === options.modelRef(assignment.provider, assignment.model),
         );
       }),
     );
@@ -139,26 +139,26 @@ export function createConsoleSettingsDraftController(
     return normalized;
   }
 
-  function normalizeRemoteSettings(settings: AgentSettings) {
+  function normalizeRemoteSettings(settings: AgentSettings) : any {
     return normalizeSettingsDraft({
       ...emptySettings,
       ...settings,
     });
   }
 
-  function normalizedSettingsFromServer(settings: AgentSettings) {
+  function normalizedSettingsFromServer(settings: AgentSettings) : any {
     return normalizeRemoteSettings(settings);
   }
 
-  function settingsDraftEquals(left: AgentSettings, right: AgentSettings) {
+  function settingsDraftEquals(left: AgentSettings, right: AgentSettings) : any {
     return remoteDraftEquals(left, right);
   }
 
   function replaceSettingsDraftFromServer(
     settings: AgentSettings,
     replaceOptions: { markClean?: boolean } = {},
-  ) {
-    const normalized = normalizedSettingsFromServer(settings);
+  ) : any {
+    const normalized: any = normalizedSettingsFromServer(settings);
     if (settingsDraftEquals(options.settingsDraft.value, normalized)) {
       if (replaceOptions.markClean !== false) {
         options.settingsDraftDirty.value = false;
@@ -170,12 +170,12 @@ export function createConsoleSettingsDraftController(
     if (replaceOptions.markClean !== false) {
       options.settingsDraftDirty.value = false;
     }
-    queueMicrotask(() => {
+    queueMicrotask(() : any => {
       applyingRemoteSettings = false;
     });
   }
 
-  function isApplyingRemoteSettings() {
+  function isApplyingRemoteSettings() : any {
     return applyingRemoteSettings;
   }
 

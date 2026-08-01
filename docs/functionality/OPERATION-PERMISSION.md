@@ -1,5 +1,10 @@
 # Operation Permission
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Operation Permission is the governed boundary for operation visibility and execution.
 
 ## Permission Primitive
@@ -38,7 +43,7 @@ parallel per-request audit logs. Failure to prepare mandatory proof denies
 before the protected boundary; failure after an external effect leaves a
 recoverable `in_doubt` state and does not authorize blind retry.
 
-This is a maintenance and release-acceptance rule. An execution surface that
+This is a maintenance and Functional Release Gate rule. An execution surface that
 does not yet present the same permit to its final sink remains non-converged
 even when it performs an earlier authorization check.
 
@@ -46,7 +51,7 @@ even when it performs an earlier authorization check.
 
 Tags are a universal governance abstraction for roles, skills, operations, documents, agents, upstream services, workspaces, and organizations. Deny tags take precedence over allow tags.
 
-The shared evaluator lives in `packages/foundation/src/security/authorization/universal-tag-policy.mjs` and is invoked by the Security Permissions Provider when an Operation Permission policy supplies `tagPolicy`. It evaluates active direct and inherited tags from the TagStoreProvider port, applies deny-tag precedence, required-tag checks, allow-tag admission, stale revision handling, and records the tag policy decision in the effective policy snapshot.
+The shared evaluator lives in `packages/foundation/src/security/authorization/universal-tag-policy.ts` and is invoked by the Security Permissions Provider when an Operation Permission policy supplies `tagPolicy`. It evaluates active direct and inherited tags from the TagStoreProvider port, applies deny-tag precedence, required-tag checks, allow-tag admission, stale revision handling, and records the tag policy decision in the effective policy snapshot.
 
 ## Upstream Publishing Projection
 
@@ -54,7 +59,10 @@ Developer-published upstream operations are projected by the current upstream sn
 
 Operation Permission builds that catalog off-path and atomically replaces it only when the source gateway revision is identifiable and complete. The committed catalog event is an invalidation signal; modules, plugins, tag projection, and the downstream gateway pull from the owning catalog instead of importing gateway state. Discovery and execution evaluate the same grant and tag decision with deny precedence, and a denied operation exposes no name or schema and reaches no sensitive-reference or upstream side-effect boundary.
 
-The production publishing gate proves revision agreement, affected-audience invalidation, and protocol-side delivery through a neutral protocol peer. Client adoption is independently owned and cannot block or promote Operation Permission or server release support.
+The functional publishing verifier proves revision agreement,
+affected-audience invalidation, and protocol-side delivery through a neutral
+protocol peer. Client adoption is independently owned and cannot block or
+promote Operation Permission or the Functional Release Gate.
 
 ## Runtime Storage
 
@@ -62,12 +70,25 @@ The production publishing gate proves revision agreement, affected-audience inva
 
 Every bearer authorization reloads the current grant policy before execution. Toolsets, tool allow/deny rules, scopes, resource restrictions, expiry, origin/CIDR rules, and risk limits therefore apply to already-issued credentials immediately after a policy update. Persisted policy JSON is type-checked by SQLite write triggers and by the read projection; malformed policy state disables authorization instead of becoming an empty, unrestricted list. `maxUses` is consumed with one conditional SQLite update bound to the current credential and policy revision, so concurrent requests cannot exceed the configured limit.
 
+Owner-bound upload-session creation, inspection, and binary chunk writes use
+the dedicated grantable `uploads:write` scope and
+`meshrix.uploads.write` safe-write toolset. They do not require or imply the
+repair-capable `jobs:write` scope.
+
 Pending operations store approval requirements and approval layers as a redacted projection of the current Security Authorization/Governance decision. They are a projection of the approval policy source. `requiredApproval` is the approval fact source; `approvalLayers` is only the stored projection and must match `requiredApproval.approvalLayers` before runtime approval can proceed. The write path derives the stored projection only from `requiredApproval.approvalLayers`; caller-supplied `approvalLayers` is ignored for approval requirement derivation. Static console route authorization such as `runtime:admin` only admits a user to the pending-resolution endpoint; layer eligibility still comes from the same governance model. Before recording a governance approval, the runtime checks the current session user against the required user, team, department, or agent-binding facts, then verifies the original grant is still available. When a governance decision returns `needsApproval`, Operation Permission creates a pending operation with the contract-provided `requiredApproval` shape; approving it records the matching governance approval layer and replays the request through the same authorization evaluator, which either advances to the next required layer or allows execution.
 
 Final approval claims the pending record with one conditional state transition
 before recording the governance approval or dispatching the operation. Only the
 claim winner may continue; a concurrent or repeated approval is rejected as a
 replay and cannot reach the operation handler.
+
+The pre-release format-convert fixture verifies both policy outcomes over the
+same external `POST /v1/convert` route. Its
+`convert-require-approval-debug` projection creates a pending operation and
+resumes exactly once after approval. Its `convert-full-access-debug` projection
+has no approval requirement, but “full access” is only the fixture label: the
+normal Grant, scope, risk, audience, service, owner, short-lived permit, audit,
+and protected-sink checks still apply.
 
 ## Current External Execution Boundary
 
@@ -88,12 +109,12 @@ The grant metadata stores one `delegatedMcp` object. Bearer credentials are retu
 ## Verification
 
 ```bash
-node tools/server-scripts/verify-tag-management.mjs
-node tools/server-scripts/verify-operation-permission-tag-governance-audit.mjs
-node tools/server-scripts/verify-operation-permission-universal-tag-policy.mjs
-node tools/server-scripts/verify-operation-permission-domain-model.mjs
-node tools/server-scripts/verify-operation-permission-external-http-boundary.mjs
-npx vitest run tests/vitest/server/operation-permission-grant-security.test.mjs tests/vitest/server/delegated-mcp-parent-authority.test.mjs
+node tools/server-scripts/verify-tag-management.ts
+node tools/server-scripts/verify-operation-permission-tag-governance-audit.ts
+node tools/server-scripts/verify-operation-permission-universal-tag-policy.ts
+node tools/server-scripts/verify-operation-permission-domain-model.ts
+node tools/server-scripts/verify-operation-permission-external-http-boundary.ts
+npx vitest run tests/vitest/server/operation-permission-grant-security.test.ts tests/vitest/server/delegated-mcp-parent-authority.test.ts
 npm run verify:operation-permission-tag-governed-e2e
 npm test -- --suite domains.manifest
 npm test

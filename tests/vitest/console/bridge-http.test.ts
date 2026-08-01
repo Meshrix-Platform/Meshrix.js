@@ -8,22 +8,22 @@ import {
   vi,
 } from "vitest";
 
-const triggerBrowserDownloadMock = vi.hoisted(() => vi.fn());
+const triggerBrowserDownloadMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../packages/ui-console/src/browser-downloads", () => ({
+vi.mock("../../../packages/ui-console/src/browser-downloads", () : any => ({
   triggerBrowserDownload: triggerBrowserDownloadMock,
 }));
 
 type BridgeHttpModule = typeof import("@meshrix/ui-console/bridge-http");
 
-const originalFetch = globalThis.fetch;
+const originalFetch: any = globalThis.fetch;
 
 async function loadBridgeHttp(): Promise<BridgeHttpModule> {
   vi.resetModules();
   return import("@meshrix/ui-console/bridge-http");
 }
 
-function jsonResponse(payload: unknown, init: ResponseInit = {}) {
+function jsonResponse(payload: unknown, init: ResponseInit = {}) : any {
   return new Response(JSON.stringify(payload), {
     status: init.status || 200,
     headers: {
@@ -33,29 +33,29 @@ function jsonResponse(payload: unknown, init: ResponseInit = {}) {
   });
 }
 
-function textResponse(text: string, init: ResponseInit = {}) {
+function textResponse(text: string, init: ResponseInit = {}) : any {
   return new Response(text, {
     status: init.status || 200,
     headers: init.headers,
   });
 }
 
-function fetchMock() {
+function fetchMock() : any {
   return globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   triggerBrowserDownloadMock.mockReset();
   globalThis.fetch = vi.fn() as unknown as typeof fetch;
 });
 
-afterEach(() => {
+afterEach(() : any => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
 
-describe("bridge-http JSON helpers", () => {
-  it("sends JSON requests, safety headers, and carries CSRF tokens forward", async () => {
+describe("bridge-http JSON helpers", () : any => {
+  it("sends JSON requests, safety headers, and carries CSRF tokens forward", async () : Promise<any> => {
     const { deleteJson, getJson, postJson, putBinaryJson } = await loadBridgeHttp();
     fetchMock()
       .mockResolvedValueOnce(jsonResponse({ ok: true, csrfToken: "token-1" }))
@@ -67,7 +67,7 @@ describe("bridge-http JSON helpers", () => {
       ok: true,
       csrfToken: "token-1",
     });
-    const postCall = fetchMock().mock.calls[0];
+    const postCall: any = fetchMock().mock.calls[0];
     expect(postCall[0]).toBe("/api/auth/login");
     expect(postCall[1]).toMatchObject({
       method: "POST",
@@ -98,7 +98,7 @@ describe("bridge-http JSON helpers", () => {
       "x-meshrix-safety-confirm": "true",
     });
 
-    const blob = new Blob(["abc"], { type: "application/octet-stream" });
+    const blob: any = new Blob(["abc"], { type: "application/octet-stream" });
     await putBinaryJson("/api/upload", blob);
     expect(fetchMock().mock.calls[3][1]).toMatchObject({
       method: "PUT",
@@ -111,7 +111,7 @@ describe("bridge-http JSON helpers", () => {
     });
   });
 
-  it("uses GET when postJson has no payload", async () => {
+  it("uses GET when postJson has no payload", async () : Promise<any> => {
     const { postJson } = await loadBridgeHttp();
     fetchMock().mockResolvedValueOnce(jsonResponse({ subscribed: true }));
 
@@ -124,7 +124,7 @@ describe("bridge-http JSON helpers", () => {
     }));
   });
 
-  it("reports HTTP and malformed JSON responses with useful messages", async () => {
+  it("reports HTTP and malformed JSON responses with useful messages", async () : Promise<any> => {
     const { deleteJson, getJson, putBinaryJson } = await loadBridgeHttp();
 
     fetchMock().mockResolvedValueOnce(jsonResponse({ error: "bad request" }, { status: 400 }));
@@ -158,8 +158,8 @@ describe("bridge-http JSON helpers", () => {
   });
 });
 
-describe("bridge-http downloadFile", () => {
-  it("downloads blobs and derives sanitized filenames from content-disposition", async () => {
+describe("bridge-http downloadFile", () : any => {
+  it("downloads blobs and derives sanitized filenames from content-disposition", async () : Promise<any> => {
     const { downloadFile } = await loadBridgeHttp();
     fetchMock().mockResolvedValueOnce(new Response("id,name\n1,Ada", {
       status: 200,
@@ -182,7 +182,7 @@ describe("bridge-http downloadFile", () => {
     expect(triggerBrowserDownloadMock).toHaveBeenCalledWith(expect.any(Blob), "report one_bad.csv");
   });
 
-  it("allows explicit filenames and falls back to URL segments", async () => {
+  it("allows explicit filenames and falls back to URL segments", async () : Promise<any> => {
     const { downloadFile } = await loadBridgeHttp();
     fetchMock()
       .mockResolvedValueOnce(new Response("abc", {
@@ -204,7 +204,7 @@ describe("bridge-http downloadFile", () => {
     });
   });
 
-  it("uses plain content-disposition filenames and tolerates malformed encoded names", async () => {
+  it("uses plain content-disposition filenames and tolerates malformed encoded names", async () : Promise<any> => {
     const { downloadFile } = await loadBridgeHttp();
     fetchMock()
       .mockResolvedValueOnce(new Response("plain", {
@@ -232,7 +232,7 @@ describe("bridge-http downloadFile", () => {
     });
   });
 
-  it("rejects failed and HTML download responses", async () => {
+  it("rejects failed and HTML download responses", async () : Promise<any> => {
     const { downloadFile } = await loadBridgeHttp();
 
     fetchMock().mockResolvedValueOnce(jsonResponse({ message: "not found" }, { status: 404 }));

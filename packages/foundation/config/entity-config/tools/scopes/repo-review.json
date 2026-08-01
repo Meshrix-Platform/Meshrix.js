@@ -1,0 +1,5 @@
+{
+  "id": "repo:review",
+  "label": "Review governed repository changes",
+  "description": "Comment on or request changes to a governed repository proposal."
+}

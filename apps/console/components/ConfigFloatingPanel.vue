@@ -50,7 +50,7 @@ function removeDocumentListeners() {
   document.removeEventListener("keydown", handleDocumentKeydown);
 }
 
-watch(() => props.open, (open) => {
+watch(() => props.open, (open: any) => {
   removeDocumentListeners();
   if (!open) return;
   document.addEventListener("keydown", handleDocumentKeydown);

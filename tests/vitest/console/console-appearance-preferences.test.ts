@@ -10,21 +10,21 @@ import {
 } from "../../../apps/console/composables/console-shell-preference-effects";
 import type { AppearancePresetConfig } from "../../../apps/console/lib/appearance-preset-config";
 
-describe("console appearance preferences", () => {
-  beforeEach(() => {
+describe("console appearance preferences", () : any => {
+  beforeEach(() : any => {
     window.localStorage.clear();
     document.documentElement.removeAttribute("data-appearance-preset");
     document.documentElement.classList.remove("theme-dark", "theme-light");
   });
 
-  it("returns null for an unknown appearance preset id", () => {
+  it("returns null for an unknown appearance preset id", () : any => {
     window.localStorage.setItem("meshrix-appearance-preset", "unknown-preset");
 
     expect(readStoredAppearancePreset()).toBeNull();
     expect(window.localStorage.getItem("meshrix-appearance-preset")).toBe("unknown-preset");
   });
 
-  it("applies the active preset through the document dataset", () => {
+  it("applies the active preset through the document dataset", () : any => {
     document.documentElement.classList.add("theme-dark", "theme-light");
 
     applyAppearancePresetDocument("sunset-ember");
@@ -36,9 +36,9 @@ describe("console appearance preferences", () => {
     expect(document.documentElement.classList.contains("theme-light")).toBe(false);
   });
 
-  it("refreshes the Vue/Vite preset file catalog", async () => {
-    const configs = await refreshAvailableAppearancePresetConfigs();
-    const ids = configs.map((config) => config.id);
+  it("refreshes the Vue/Vite preset file catalog", async () : Promise<any> => {
+    const configs: any = await refreshAvailableAppearancePresetConfigs();
+    const ids: any = configs.map((config?: any) : any => config.id);
 
     expect(ids).toContain("geek-light-blue");
     expect(ids).toContain("catppuccin-latte");
@@ -50,15 +50,15 @@ describe("console appearance preferences", () => {
     expect(ids).toContain("tokyo-night");
   });
 
-  it("keeps bundled dark presets in the Chinese console order", async () => {
+  it("keeps bundled dark presets in the Chinese console order", async () : Promise<any> => {
     await refreshAvailableAppearancePresetConfigs();
-    const configs = setServerAppearancePresetConfigs([]);
-    const darkPresets = configs
-      .filter((config) => config.mode === "dark")
-      .map((config) => [config.id, config.label["zh-CN"]]);
+    const configs: any = setServerAppearancePresetConfigs([]);
+    const darkPresets: any = configs
+      .filter((config?: any) : any => config.mode === "dark")
+      .map((config?: any) : any => [config.id, config.label["zh-CN"]]);
 
     expect(darkPresets).toEqual([
-      ["meshrix-crystal", "黑晶灿金"],
+      ["meshrix-crystal", "黑晶蓝调"],
       ["sunset-ember", "落日余烬"],
       ["tokyo-night", "东京之夜"],
       ["cappuccino-dark", "卡布奇诺"],
@@ -70,12 +70,12 @@ describe("console appearance preferences", () => {
     ]);
   });
 
-  it("applies the shared Meshrix Crystal black-and-yellow palette", async () => {
+  it("applies the Meshrix Crystal dark palette with a blue primary", async () : Promise<any> => {
     await refreshAvailableAppearancePresetConfigs();
 
     applyAppearancePresetDocument("meshrix-crystal");
 
-    const expectedTokens = {
+    const expectedTokens: Record<string, any> = {
       "--bg-base": "#070707",
       "--bg-surface": "#0d0d0d",
       "--bg-subtle": "#151515",
@@ -86,11 +86,11 @@ describe("console appearance preferences", () => {
       "--text-secondary": "#c8c8c8",
       "--text-muted": "#969696",
       "--text-disabled": "#5c5c5c",
-      "--text-on-brand": "#171300",
-      "--brand": "#fef100",
-      "--brand-strong": "#fff75c",
-      "--brand-subtle": "#2e2909",
-      "--brand-muted": "#6b6117",
+      "--text-on-brand": "#061021",
+      "--brand": "#6aa1ff",
+      "--brand-strong": "#93bdff",
+      "--brand-subtle": "#12203a",
+      "--brand-muted": "#3f5a8c",
       "--info": "#5ed7f2",
       "--success": "#3ddc97",
       "--warning": "#ff9e2c",
@@ -99,13 +99,13 @@ describe("console appearance preferences", () => {
 
     expect(document.documentElement.dataset.appearancePreset).toBe("meshrix-crystal");
     expect(document.documentElement.style.colorScheme).toBe("dark");
-    for (const [tokenName, value] of Object.entries(expectedTokens)) {
+    for (const [tokenName, value] of (Object.entries(expectedTokens) as [string, any][])) {
       expect(document.documentElement.style.getPropertyValue(tokenName)).toBe(value);
     }
   });
 
-  it("merges server-imported preset configs with bundled preset files", () => {
-    const configs = setServerAppearancePresetConfigs([
+  it("merges server-imported preset configs with bundled preset files", () : any => {
+    const configs: any = setServerAppearancePresetConfigs([
       {
         schemaVersion: "v0.0.1:schema:definition-1",
         id: "agent-preview",
@@ -128,11 +128,11 @@ describe("console appearance preferences", () => {
       },
     ]);
 
-    expect(configs.map((config) => config.id)).toContain("geek-light-blue");
-    expect(readAvailableAppearancePresetConfigs().map((config) => config.id)).toContain("agent-preview");
+    expect(configs.map((config?: any) : any => config.id)).toContain("geek-light-blue");
+    expect(readAvailableAppearancePresetConfigs().map((config?: any) : any => config.id)).toContain("agent-preview");
   });
 
-  it("applies a framework-provided custom preset config immediately", () => {
+  it("applies a framework-provided custom preset config immediately", () : any => {
     const customConfig: AppearancePresetConfig = {
       schemaVersion: "v0.0.1:schema:definition-1",
       id: "agent-preview",

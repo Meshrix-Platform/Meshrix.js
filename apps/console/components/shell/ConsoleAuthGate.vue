@@ -62,11 +62,11 @@ const {
       <form class="form-grid auth-form" @submit.prevent="submitLoginAuth" :inert="consoleBootstrapping">
         <label>
           <span>{{ tt('用户名') }}</span>
-          <input v-model="loginForm.username" type="text" autocomplete="username" :disabled="consoleBootstrapping" />
+          <input v-model="loginForm.username" type="text" autocomplete="username" :placeholder="tt('请输入用户名')" :disabled="consoleBootstrapping" />
         </label>
         <label>
           <span>{{ tt('密码') }}</span>
-          <input v-model="loginForm.password" type="password" autocomplete="current-password" :disabled="consoleBootstrapping" />
+          <input v-model="loginForm.password" type="password" autocomplete="current-password" :placeholder="tt('请输入密码')" :disabled="consoleBootstrapping" />
         </label>
         <button class="primary-action" type="submit" :disabled="consoleBootstrapping || busyKey === 'auth:login'">
           {{ tt(busyKey === "auth:login" ? "登录中" : "登录") }}

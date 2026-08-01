@@ -1,4 +1,4 @@
-export function errorMessage(error: unknown, fallback = "操作失败。") {
+export function errorMessage(error: unknown, fallback: any = "操作失败。") : any {
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -6,7 +6,7 @@ export function errorMessage(error: unknown, fallback = "操作失败。") {
     return error;
   }
   if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
+    const message: any = (error as { message?: unknown }).message;
     return typeof message === "string" && message.trim() ? message : fallback;
   }
   return fallback;

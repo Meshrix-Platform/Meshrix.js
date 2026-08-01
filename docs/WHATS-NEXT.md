@@ -1,409 +1,329 @@
 # What's Next: Highest-Value Open Problems
 
----
-
 This file ranks Meshrix's ten highest-value open problems; item 1 is the
 highest priority. It is a factual index, not an execution plan, architecture
-decision, acceptance receipt, or readiness claim.
+decision, acceptance receipt, release result, or support claim. Current status
+belongs to [Status](STATUS.md).
 
----
-
-## 1. Produce One Auditable, Accepted Enterprise Release Candidate
+## 1. Freeze One Enterprise Single-Node Candidate
 
 ### Background
 
-Meshrix has a canonical acceptance reducer and a release workflow that require
-fresh, command-owned, privacy-safe evidence before publication. The tracked
-[release baseline generator](../tools/plan/rebuild-current-plan-baseline.mjs)
-defines release-truth, offline packaging, production security, recovery,
-upgrade, observability, adapter isolation, and real dual-architecture
-acceptance stages. The canonical
-[release definition](../tools/registry/release-definition.registry.json) now
-binds the version, tag, channel, package set, acceptance profile, container
-platforms, and GitHub native-runner matrix. The release workflow starts the
-immutable image on native Linux x64 and ARM64 runners before signing.
+Meshrix has broad server, console, governance, storage, gateway, and release
+surfaces. Its release definition can name a candidate, and its Functional
+Release Gate can reduce repository-owned evidence.
 
 ### Problem
 
-There is no single immutable candidate receipt that binds the declared
-enterprise single-node support boundary, artifact inventory, report ownership,
-Linux x64 and ARM64 results, and the final regression. Without that binding,
-individual passing checks cannot establish that one releasable candidate has
-closed the complete deployment journey.
+The current source is not represented by one immutable, auditable candidate
+whose scope, package inventory, artifacts, required reports, and verification
+commands all agree. Without that binding, prior or focused results cannot
+establish a current candidate result.
 
 ### Affected scenarios
 
-- Release and security review.
-- Enterprise evaluation and procurement evidence.
-- Reproduction of an accepted build from source.
-- Prioritization of all work that depends on a stable release boundary.
+- Maintainer release review.
+- Enterprise installation evaluation.
+- Reproducing a candidate from source.
+- Binding every later recovery and environment receipt.
 
 ### Possible solution paths
 
-1. Close release-truth convergence first: fix the support matrix, classify
-   every required report owner, and bind one candidate inventory.
-2. Configure the GitHub `release-candidate` environment with repository-owner
-   decisions for required reviewers, allowed release tags, and any wait timer;
-   keep those controls outside source-level readiness claims.
-3. Produce focused receipts for each release stage, then execute the offline
-   journey on real Linux x64 and ARM64 hosts.
-4. Run `npm run verify:acceptance` once against the immutable candidate and
-   publish only through the repository release workflow.
+1. Freeze the source revision, tree, lockfile, package set, container digests,
+   support boundary, and required report owners.
+2. Reject stale, skipped, differently scoped, or differently bound evidence.
+3. Keep publication and environment workflows downstream of the immutable
+   candidate instead of using them to define it.
+4. Run the complete Functional Release Gate once after the next four priority
+   journeys have closed on the same candidate.
 
-## 2. Encrypt Local Secret Values and Define Master-Key Custody
+## 2. Prove the First Governed Call
 
 ### Background
 
-The [Local Secret Store](../packages/foundation/src/security/secrets/local-secret-store.mjs)
-uses private files, mutation locking, revision checks, and crash-consistent
-replacement. Its value record still stores the secret payload as JSON. File
-permissions protect ordinary local access but do not protect a copied data
-directory, backup, or disk snapshot.
+The repository contains authentication, Operation Permission, downstream MCP,
+upstream HTTP/MCP gateway, protected-sink permit, proof, and audit surfaces.
 
 ### Problem
 
-The store has no canonical master-key port or production key-custody contract.
-Placing an encryption key beside the data would not change the threat boundary,
-while silently selecting a platform-specific backend would make headless
-deployment behavior unpredictable.
+Meshrix still needs one minimal candidate-bound journey showing that a newly
+configured single-node deployment can admit one explicit principal, expose one
+allowed operation, consume one exact permit, produce at most one fixed
+upstream effect, and return a bounded outcome and receipt. The same journey
+must prove denial, revocation, replay, conflict, cancellation, and uncertain
+outcome behavior without additional effects.
 
 ### Affected scenarios
 
-- Provider credentials and external-service authentication material.
-- Host backups, virtual-machine snapshots, and copied data directories.
-- Headless private deployments without an interactive credential service.
-- Key rotation, disaster recovery, and secret revocation.
+- A first-time operator validating the product.
+- An agent client discovering and invoking its first operation.
+- Security review of the canonical governance path.
+- Regression triage when a protocol or authorization boundary changes.
 
 ### Possible solution paths
 
-1. Require a system credential backend by default and support an explicitly
-   configured external key provider for headless deployments.
-2. Use authenticated envelope encryption, bind ciphertext metadata to the
-   secret identity and revision, and keep all key material out of settings,
-   arguments, logs, and reports.
-3. Replace plaintext records atomically under the existing mutation lock,
-   fail closed when the selected key backend is unavailable, and do not keep a
-   local-file key fallback.
-4. Verify wrong-key denial, metadata substitution, tampering, rotation,
-   revocation, crash recovery, and backup inspection.
+1. Use a neutral MCP peer and a synthetic fixed upstream; do not depend on a
+   client, plugin, or service repository.
+2. Drive configuration, grant, discovery, call, protected sink, outcome,
+   audit, and cleanup through production-owned entry points.
+3. Count upstream attempts and prove every negative case produces zero
+   additional effects.
+4. Bind the redacted journey receipt to the frozen candidate and make it a
+   mandatory Functional Release Gate input.
 
-## 3. Give Durable Maintenance Runs Current Governed Authority
+## 3. Close the Operator Diagnostics Journey
 
 ### Background
 
-The
-[maintenance work-queue provider](../packages/server-runtime/src/composition/maintenance-work-queue-provider.mjs)
-binds queued work to a plan hash and approval digest. Scheduled, retried, or
-recovered work is dispatched as a system actor, but the durable run does not
-carry a current Grant reference and policy binding that can be revalidated
-before execution.
+Meshrix exposes health, readiness, diagnostics, metrics, audit, job, storage,
+and integration-state surfaces. It also applies privacy and resource bounds to
+reports and telemetry.
 
 ### Problem
 
-A persisted plan or approval digest proves historical agreement; it is not a
-current governed execution permit. Revocation, expiry, a policy revision, or a
-scope change may occur after enqueue and before a retry or protected effect.
-Creating a queue-specific authorization shortcut would introduce a second
-authority model.
+The product lacks one candidate-bound operator journey proving that startup,
+configuration, authentication, upstream, storage, backup, resource, and
+optional-integration failures can be distinguished through bounded output
+without raw requests, responses, credentials, paths, identities, or private
+runtime data.
 
 ### Affected scenarios
 
-- Scheduled maintenance and unattended repair.
-- Retry after a transient failure.
-- Queue recovery after process restart.
-- Cancellation, approval withdrawal, or authorization changes while work is
-  waiting.
+- Failed initial installation.
+- Degraded upstream or optional integration.
+- Storage pressure and backup failure.
+- Incident response without access to developer internals.
 
 ### Possible solution paths
 
-1. Bind each run to a dedicated Maintenance Agent workload principal and
-   current workload Grant, including policy revision, operation set, resource
-   scope, plan digest, approval, and expiry.
-2. Alternatively, bind the initiating user's Grant or require fresh
-   interactive authorization on every durable resume; document the resulting
-   unattended-operation limitation.
-3. Revalidate at queue claim, recovery, retry, lock acquisition, and
-   immediately before the first protected effect.
-4. Advance the durable schema once, fail closed existing non-terminal runs
-   without the new binding, and remove authorization-skipping paths.
+1. Define a small stable diagnostic reason taxonomy and the owning source for
+   every projected state.
+2. Exercise healthy, degraded, unavailable, saturated, and recovery cases
+   against a single-node deployment.
+3. Prove optional telemetry can be shed while required governance evidence
+   fails closed.
+4. Bind the diagnostic receipt and privacy result to the candidate.
 
-## 4. Isolate Plugin Console Code from Main-Console Browser Authority
+## 4. Prove Independent Backup and Clean-Root Restore
 
 ### Background
 
-The current
-[plugin console router](../apps/console/router/plugin-console-routes.ts)
-checks artifact digest, generation, route, feature, and scope before dynamically
-importing a plugin module. It then gives that same-origin JavaScript an element
-from the main console document. Provenance and route admission do not restrict
-the module after execution begins.
+Meshrix implements backup manifests, SQLite online backup, integrity checks,
+offline restore, rollback storage, crash reconciliation, and independent-root
+admission.
 
 ### Problem
 
-An admitted but compromised plugin console module has the browser authority of
-the main console, including access to same-origin DOM and APIs. Meshrix has no
-opaque-origin UI sandbox, independent plugin origin, or versioned capability
-bridge.
+Those mechanisms need one repeatable same-candidate closure proving that an
+operator can restore independently retained material into an empty replacement
+root, rejoin separately custodied keys without copying them into the backup,
+reopen the runtime, and complete the first governed call.
 
 ### Affected scenarios
 
-- Third-party administrative views and plugin-provided routes.
-- A compromised signing or plugin publication path.
-- Multi-administrator consoles with high-privilege sessions.
-- Plugin revocation, route removal, and live session cleanup.
+- Disk or host loss.
+- Corruption or accidental deletion.
+- Replacement infrastructure.
+- Recovery before an upgrade retry.
 
 ### Possible solution paths
 
-1. Replace the module-mount ABI with an opaque-origin iframe using
-   `sandbox="allow-scripts"` without `allow-same-origin`, form, or
-   top-navigation privileges.
-2. Expose a closed-schema, size-bounded, session-bound, entry-bound capability
-   bridge over a versioned `MessageChannel`.
-3. Use an independently controlled origin if the deployment can provide and
-   verify that isolation boundary.
-4. If console modules remain same-origin, classify them as trusted first-party
-   code and narrow the admitted publisher set; do not describe that option as
-   sandboxing.
+1. Require an explicit backup root outside governed live storage.
+2. Bind the backup generation, manifest, public prerequisites, and candidate
+   without retaining secrets or business content.
+3. Exercise tamper, interruption, wrong-key, partial-selection, and runtime
+   reopen failures.
+4. Re-run the first governed call after restore and reduce one privacy-safe
+   clean-root receipt.
 
-## 5. Implement a Supervised, Fail-Isolated Optional-Adapter Runtime
+## 5. Prove N-1 Upgrade and Failure Rollback
 
 ### Background
 
-Optional identity, telemetry, notification, provider, and external-service
-integrations should extend an already operable Core. The release baseline names
-an `integration-task-supervisor.mjs` implementation and a
-`verify-integration-task-supervisor.mjs` verifier, but neither surface is
-present in tracked source. Existing integrations use several different
-composition and shutdown patterns.
+The repository contains candidate upgrade orchestration and focused verification
+for preflight, backup, migration, health admission, rollback, and `in_doubt`
+classification.
 
 ### Problem
 
-Core lacks one bounded lifecycle contract for adapter connect, activation,
-execution, cancellation, retry, close, and degraded-state projection. A slow
-or unavailable remote integration can therefore acquire too much influence
-over startup or shutdown, while concrete adapters risk duplicating lifecycle
-and privacy behavior.
-
-### Affected scenarios
-
-- OIDC, OTLP, webhook, model-provider, and external-service adapters.
-- Remote dependencies that are absent, invalid, slow, or unavailable.
-- Optional queue or datastore profiles such as PostgreSQL.
-- Process shutdown while an adapter is connecting, retrying, or flushing.
-
-### Possible solution paths
-
-1. Add one Core-owned asynchronous supervisor with bounded concurrency,
-   deadlines, cancellation, backoff, resource budgets, typed availability, and
-   privacy-safe status.
-2. Keep concrete implementations in their owning plugin plans; Core owns only
-   versioned ports, neutral fixtures, default-off behavior, and isolation
-   verification.
-3. Preserve fail-before-listen for explicitly selected executable in-process
-   plugins unless a complete supervised-plugin state-machine migration is
-   selected. Do not silently reinterpret the existing deployment-integrity
-   contract.
-4. Keep PostgreSQL outside the single-node release until queue availability,
-   accepted-work durability, activation, and recovery semantics are decided.
-
-## 6. Build a Fully Offline Dual-Architecture Compose Artifact
-
-### Background
-
-The source [Compose definition](../docker-compose.yml) can build and verify a
-local deployment. The current source package intentionally excludes installed
-dependencies and container images, so the target host still needs network
-access. The release boundary requires Linux x64 and ARM64 support.
-
-### Problem
-
-Meshrix does not yet have one verified offline artifact containing every
-immutable image and installation dependency, with an exact inventory, SBOM,
-signature, and platform binding. A source archive or a locally cached build is
-not sufficient evidence for an air-gapped clean-host installation.
-
-### Affected scenarios
-
-- Air-gapped and restricted-network enterprise deployment.
-- Disaster reinstall when public registries are unavailable.
-- Architecture-specific image and dependency validation.
-- Supply-chain review of the exact deployable artifact.
-
-### Possible solution paths
-
-1. Assemble a platform-bound OCI layout or equivalent offline image archive
-   together with all required package artifacts and the Compose definition.
-2. Pin every image, dependency, and base artifact by immutable digest and
-   generate an exact inventory, per-platform SBOM, checksums, and signatures.
-3. Verify extraction, inventory integrity, installation, startup, governed
-   operation, and shutdown on clean Linux x64 and ARM64 hosts with public
-   network access disabled.
-4. Reuse the canonical release assembly and signing authorities instead of
-   creating a second offline publication path.
-
-## 7. Select and Prove the Production TLS and Startup-Security Boundary
-
-### Background
-
-The default server is a loopback HTTP service. Production deployment currently
-delegates TLS termination to an administrator-managed reverse proxy, while the
-release baseline requires mounted TLS material, secure startup preflight, and
-privacy-safe failure diagnostics. No concrete TLS owner and versioned ingress
-contract has been selected.
-
-### Problem
-
-The project cannot yet prove certificate readiness, reload behavior, trusted
-proxy bounds, forwarded identity, external-admission failure, and diagnostics
-as one production ingress contract. Selecting a specific gateway framework in
-Core would also make an optional third-party implementation part of the server
-lifecycle.
-
-### Affected scenarios
-
-- Non-loopback private deployment.
-- Certificate rotation and expired or malformed certificate material.
-- Reverse-proxy outage or misconfiguration.
-- Forwarded client identity, secure cookies, health checks, and audit origin.
-
-### Possible solution paths
-
-1. Keep TLS in an administrator-owned reverse proxy and define a Core ingress
-   contract for trusted proxy bounds, identity forwarding, readiness, health,
-   and failure reporting.
-2. Implement a Core-owned TLS listener if certificate custody and reload must
-   be part of the Core availability contract.
-3. Package gateway implementations as optional adapters while ensuring their
-   absence blocks external admission, not bounded Core startup and shutdown.
-4. Verify malformed, missing, expired, rotated, and untrusted material without
-   exposing certificate paths or private runtime details.
-
-## 8. Prove Independent Backup and Clean-Host Restore
-
-### Background
-
-Meshrix implements manifest verification, SQLite online backup, offline
-restore, crash journaling, rollback storage, and a production restore drill.
-The enterprise release boundary additionally requires backups to an explicitly
-configured independent mount and recovery on a clean host.
-
-### Problem
-
-Current local storage mechanics do not by themselves prove that a lost or
-unusable server can be rebuilt from independently retained material. Backup
-location admission, portable custody metadata, required-key recovery, and the
-complete clean-host operator journey are not closed as one receipt.
-
-### Affected scenarios
-
-- Host or disk loss.
-- Corruption, accidental deletion, and failed repair.
-- Migration to replacement infrastructure.
-- Recovery from an offline or separately retained backup generation.
-
-### Possible solution paths
-
-1. Require an explicit independent backup target; keep empty configuration
-   non-executable and reject targets inside governed live storage.
-2. Bind the backup manifest, data generation, required public metadata, and
-   restoration prerequisites without embedding secrets.
-3. Run the registered backup operations and restore drill on a clean host,
-   including integrity failure, interrupted restore, and runtime reopen.
-4. Define measurable recovery-time and capacity budgets after functional
-   correctness is closed.
-
-## 9. Implement N-1 Upgrade with Failure Rollback
-
-### Background
-
-The release baseline requires a preflighted N-1 upgrade with pre-upgrade
-backup, atomic migration, health validation, and rollback. It names an upgrade
-rollback verifier, but the tracked source does not yet contain the planned
-upgrade workflow and verifier.
-
-### Problem
-
-An operator cannot prove that a failed application or schema upgrade returns
-the node to the last healthy version without losing governed state. Running a
-new binary and relying on manual backup recovery leaves version switching,
-migration commit, health admission, and rollback ordering unspecified.
+Upgrade support still requires two distinct immutable images and an actual
+schema transition. The journey must prove that failure before or after each
+commit boundary restores the previous executable and governed data generation,
+or reports an honest non-automatic recovery state.
 
 ### Affected scenarios
 
 - Routine enterprise maintenance.
-- Schema or data migration failure.
-- Crash or power loss during an upgrade.
-- A new version that starts but fails health or governed-operation checks.
+- Schema migration failure.
+- New version startup or health failure.
+- Process loss during activation or rollback.
 
 ### Possible solution paths
 
-1. Add compatibility preflight, independent pre-upgrade backup, staged
-   artifacts, one durable migration transaction, and an atomic active-version
-   switch.
-2. Admit the new version only after bounded health and governed-operation
-   checks; otherwise restore the prior data generation and executable version.
-3. Use backup-based rollback instead of retaining a permanent legacy runtime
-   or compatibility implementation.
-4. Verify failures before migration, at each commit boundary, after startup,
-   and during rollback, then prove the healthy retry path.
+1. Bind the N-1 source and destination images, schema identities, backup, and
+   activation decision.
+2. Admit the new image only after readiness and the first governed call pass.
+3. Exercise each durable boundary, rollback, reopen, and healthy retry.
+4. Use backup-based rollback and remove any temporary compatibility path after
+   the migration closes.
 
-## 10. Close Emergency Administrator Recovery and Real External Identity
+## 6. Produce a Complete Offline Installation Artifact
 
 ### Background
 
-Core has local console authentication and stores OIDC configuration through
-governed operations. It does not implement OIDC discovery, authorization-code
-callback, token exchange, key rotation, or external session establishment. The
-release boundary also requires an audited emergency administrator path that
-works without an external identity provider.
+The source Compose path can build and run locally, but source archives and
+ordinary image caches do not constitute a disconnected installation artifact.
 
 ### Problem
 
-Configuration storage can be mistaken for working enterprise identity
-integration, while outage, disablement, role mapping, session revocation, and
-administrator lockout semantics remain unresolved. Making an identity provider
-a startup dependency would also violate the optional-adapter availability
-boundary.
+Meshrix lacks one candidate-bound package containing every required immutable
+image and installation dependency together with inventory, SBOM, provenance,
+signature, extraction, verification, startup, shutdown, and cleanup procedures.
 
 ### Affected scenarios
 
-- Enterprise single sign-on.
-- Identity-provider outage or key rotation.
-- Immediate offboarding and role reduction.
-- First bootstrap, local administrator lockout, and emergency recovery.
+- Air-gapped enterprise installation.
+- Disaster reinstall without public registries.
+- Supply-chain inspection of the exact deployed bytes.
+- Separate Linux architecture support claims.
 
 ### Possible solution paths
 
-1. Keep audited emergency administrator recovery and its disablement controls
-   in Core, independent of every external identity provider.
-2. Define one versioned external-identity port and implement generic OIDC in
-   an independently owned adapter verified against synthetic peers.
-3. Version named provider profiles separately from generic protocol
-   conformance and avoid provider-specific behavior in Core.
-4. Decide whether provider disablement revokes existing sessions immediately
-   or at bounded revalidation, then verify outage isolation, role mapping,
-   audit coverage, and session termination.
+1. Build platform-bound OCI layouts with exact dependency inventories.
+2. Verify digests, signatures, SBOMs, provenance, and dependency completeness
+   before loading anything on the target.
+3. Prove a network-disabled install and the first governed call.
+4. Keep native Linux x64 and arm64 support as separate downstream environment
+   claims.
 
----
+## 7. Close Production Ingress and Key Custody
 
-## Appendix: Maintenance Standard
+### Background
 
-Current behavior remains owned by source, schemas, registries, capability
-documents, and verifiers. Possible solution paths are alternatives for
-evaluation; a selected durable decision must be recorded in the owning formal
-document and implemented before it becomes a project fact.
+Meshrix has a trusted-proxy ingress contract, encrypted local secret storage,
+separate proof-signing material, and fail-closed production configuration
+surfaces.
 
-- Keep exactly ten active problems in this file, ordered from highest to
-  lowest priority.
-- Every problem must contain **Background**, **Problem**, **Affected
-  scenarios**, and **Possible solution paths**.
-- Include only gaps that can be reproduced from tracked source, configuration,
-  protocol, or verifier behavior. Do not rank work from unreviewed runtime
-  data, private evidence, popularity, or speculative demand.
-- Close a problem only after the owning implementation, focused verification,
-  and required acceptance evidence agree. Remove the closed entry instead of
-  retaining a completed history, promote the remaining entries, and add the
-  next highest-value open problem.
-- Re-rank when a security boundary, release dependency, supported deployment
-  profile, or objective implementation fact changes. A rank change does not
-  authorize implementation or weaken an existing fail-closed boundary.
+### Problem
+
+The candidate needs one complete operator journey for certificate and proxy
+admission, key creation, rotation, recovery, wrong-key denial, signer-history
+verification, and diagnostics. A configured path or synthetic component test
+does not establish deployed support.
+
+### Affected scenarios
+
+- Non-loopback private deployment.
+- TLS or proxy misconfiguration.
+- Secret-store or signer-key rotation.
+- Clean-root recovery with independent custody.
+
+### Possible solution paths
+
+1. Keep TLS in the administrator-owned proxy unless Meshrix deliberately
+   selects a different product boundary.
+2. Expose existing re-encryption through one governed operator operation.
+3. Retain only the minimum historical verification material.
+4. Prove malformed, missing, substituted, expired, rotated, and unavailable
+   inputs without exposing private values.
+
+## 8. Isolate Emergency Administration from External Identity
+
+### Background
+
+Meshrix has local console authentication and configuration surfaces for
+external identity. An optional identity provider must not own Meshrix startup,
+shutdown, or recovery.
+
+### Problem
+
+The candidate needs an audited emergency-administrator journey that survives
+external identity absence or outage. Configuration storage must not be
+presented as working OIDC login, and external-session revocation semantics
+remain separately owned.
+
+### Affected scenarios
+
+- First bootstrap and administrator lockout.
+- Identity-provider outage or key rotation.
+- Immediate offboarding and role reduction.
+- Recovery while optional integrations are unavailable.
+
+### Possible solution paths
+
+1. Keep emergency administration self-contained and explicitly controllable.
+2. Give external identity one versioned optional port and independent receipt.
+3. Define session revalidation and revocation behavior before claiming support.
+4. Prove external identity failure never bypasses authority or blocks bounded
+   local recovery.
+
+## 9. Isolate Plugin Console Code
+
+### Background
+
+Plugin provenance and route admission can be checked before a browser module
+is loaded, but admitted same-origin JavaScript still receives the main
+console's browser authority.
+
+### Problem
+
+An admitted but compromised plugin console module can access same-origin DOM
+and APIs beyond a narrow feature contract. Provenance is not browser
+isolation.
+
+### Affected scenarios
+
+- Third-party administrative views.
+- Compromised plugin publication.
+- High-privilege console sessions.
+- Plugin revocation during a live session.
+
+### Possible solution paths
+
+1. Use an opaque-origin sandbox with a closed, versioned capability bridge.
+2. Bind every message to session, route, plugin generation, scope, and size.
+3. Use an independently controlled origin when the deployment supports it.
+4. If same-origin execution remains, classify it as trusted first-party code
+   instead of describing it as sandboxed.
+
+## 10. Complete Optional-Integration Runtime Migration
+
+### Background
+
+Meshrix has a common bounded supervisor for optional asynchronous integration
+work, while concrete integrations still use multiple composition and shutdown
+patterns.
+
+### Problem
+
+An integration with an independent startup, retry, queue, execution, or close
+loop cannot inherit the common isolation evidence and may influence Meshrix
+availability beyond its capability.
+
+### Affected scenarios
+
+- External identity, telemetry, notification, model, and service adapters.
+- Absent, invalid, slow, or unavailable remote dependencies.
+- Shutdown while integration work is connecting or retrying.
+- Separate enabled-path compatibility claims.
+
+### Possible solution paths
+
+1. Move each concrete integration to the common Host lifecycle in its owning
+   repository or plan.
+2. Remove the superseded lifecycle in the same migration.
+3. Prove default-off, bounded degraded state, cancellation, retry, and close.
+4. Keep every concrete integration outside the single-node candidate
+   dependency graph unless the product boundary is explicitly changed.
+
+## Maintenance standard
+
+- Keep exactly ten active problems, ordered by current product value.
+- Keep **Background**, **Problem**, **Affected scenarios**, and **Possible
+  solution paths** for every entry.
+- Describe only gaps reproducible from current source, configuration,
+  protocol, or verifier ownership.
+- Remove a closed problem after implementation, focused verification, and
+  required same-candidate evidence agree.
+- Never turn a proposal, plan, command, or prior report into a current status
+  claim.

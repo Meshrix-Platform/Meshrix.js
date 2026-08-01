@@ -4,84 +4,84 @@
   "aliases": [
     {
       "alias": "#meshrix/contracts/*",
-      "targetPath": "./packages/contracts/src/*.mjs",
+      "targetPath": "./packages/contracts/src/*.ts",
       "status": "active",
       "domainPackage": "contracts",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/contracts/*.mjs",
-      "targetPath": "./packages/contracts/src/*.mjs",
+      "alias": "#meshrix/contracts/*.ts",
+      "targetPath": "./packages/contracts/src/*.ts",
       "status": "active",
       "domainPackage": "contracts",
       "owner": "platform"
     },
     {
       "alias": "#meshrix/foundation/*",
-      "targetPath": "./packages/foundation/src/*.mjs",
+      "targetPath": "./packages/foundation/src/*.ts",
       "status": "active",
       "domainPackage": "foundation",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/foundation/*.mjs",
-      "targetPath": "./packages/foundation/src/*.mjs",
+      "alias": "#meshrix/foundation/*.ts",
+      "targetPath": "./packages/foundation/src/*.ts",
       "status": "active",
       "domainPackage": "foundation",
       "owner": "platform"
     },
     {
       "alias": "#meshrix/agents/*",
-      "targetPath": "./packages/agents/src/*.mjs",
+      "targetPath": "./packages/agents/src/*.ts",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/agents/*.mjs",
-      "targetPath": "./packages/agents/src/*.mjs",
+      "alias": "#meshrix/agents/*.ts",
+      "targetPath": "./packages/agents/src/*.ts",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
     },
     {
       "alias": "#meshrix/capabilities/*",
-      "targetPath": "./packages/capabilities/src/*.mjs",
+      "targetPath": "./packages/capabilities/src/*.ts",
       "status": "active",
       "domainPackage": "capabilities",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/capabilities/*.mjs",
-      "targetPath": "./packages/capabilities/src/*.mjs",
+      "alias": "#meshrix/capabilities/*.ts",
+      "targetPath": "./packages/capabilities/src/*.ts",
       "status": "active",
       "domainPackage": "capabilities",
       "owner": "platform"
     },
     {
       "alias": "#meshrix/protocols/*",
-      "targetPath": "./packages/protocols/*.mjs",
+      "targetPath": "./packages/protocols/*.ts",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/protocols/*.mjs",
-      "targetPath": "./packages/protocols/*.mjs",
+      "alias": "#meshrix/protocols/*.ts",
+      "targetPath": "./packages/protocols/*.ts",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
     },
     {
       "alias": "#meshrix/server-runtime/*",
-      "targetPath": "./packages/server-runtime/src/*.mjs",
+      "targetPath": "./packages/server-runtime/src/*.ts",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/server-runtime/*.mjs",
-      "targetPath": "./packages/server-runtime/src/*.mjs",
+      "alias": "#meshrix/server-runtime/*.ts",
+      "targetPath": "./packages/server-runtime/src/*.ts",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"

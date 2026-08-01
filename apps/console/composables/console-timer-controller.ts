@@ -7,20 +7,20 @@ type TimerControllerOptions = {
   timer?: Ref<number | null>;
 };
 
-export function createConsoleIntervalController(options: TimerControllerOptions = {}) {
-  const timer = options.timer || ref<number | null>(null);
+export function createConsoleIntervalController(options: TimerControllerOptions = {}) : any {
+  const timer: any = options.timer || ref<number | null>(null);
 
-  function stop() {
-    const browser = browserWindow();
+  function stop() : any {
+    const browser: any = browserWindow();
     if (browser && timer.value !== null) {
       browser.clearInterval(timer.value);
     }
     timer.value = null;
   }
 
-  function start(callback: TimerCallback, intervalMs: number) {
+  function start(callback: TimerCallback, intervalMs: number) : any {
     stop();
-    const browser = browserWindow();
+    const browser: any = browserWindow();
     if (!browser) {
       return null;
     }
@@ -28,7 +28,7 @@ export function createConsoleIntervalController(options: TimerControllerOptions 
     return timer.value;
   }
 
-  function current() {
+  function current() : any {
     return timer.value;
   }
 
@@ -40,31 +40,31 @@ export function createConsoleIntervalController(options: TimerControllerOptions 
   };
 }
 
-export function createConsoleTimeoutController(options: TimerControllerOptions = {}) {
-  const timer = options.timer || ref<number | null>(null);
+export function createConsoleTimeoutController(options: TimerControllerOptions = {}) : any {
+  const timer: any = options.timer || ref<number | null>(null);
 
-  function stop() {
-    const browser = browserWindow();
+  function stop() : any {
+    const browser: any = browserWindow();
     if (browser && timer.value !== null) {
       browser.clearTimeout(timer.value);
     }
     timer.value = null;
   }
 
-  function schedule(callback: TimerCallback, delayMs: number) {
+  function schedule(callback: TimerCallback, delayMs: number) : any {
     stop();
-    const browser = browserWindow();
+    const browser: any = browserWindow();
     if (!browser) {
       return null;
     }
-    timer.value = browser.setTimeout(() => {
+    timer.value = browser.setTimeout(() : any => {
       timer.value = null;
       callback();
     }, Math.max(0, delayMs));
     return timer.value;
   }
 
-  function current() {
+  function current() : any {
     return timer.value;
   }
 
@@ -76,12 +76,12 @@ export function createConsoleTimeoutController(options: TimerControllerOptions =
   };
 }
 
-export function waitForConsoleDelay(delayMs: number) {
-  const browser = browserWindow();
+export function waitForConsoleDelay(delayMs: number) : any {
+  const browser: any = browserWindow();
   if (!browser) {
     return Promise.resolve();
   }
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve?: any) : any => {
     browser.setTimeout(resolve, Math.max(0, delayMs));
   });
 }

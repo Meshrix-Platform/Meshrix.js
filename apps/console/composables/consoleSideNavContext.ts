@@ -2,7 +2,7 @@ import { computed, inject, onBeforeUnmount, provide, ref, watch, type ComputedRe
 import type { ServerConsoleShellContext } from "./serverConsoleShellContext";
 import type { AppView } from "../types/app";
 
-const consoleSideNavContextKeys = [
+const consoleSideNavContextKeys: any = [
   "activeRouteAdminView",
   "activeRouteView",
   "appearancePresetId",
@@ -34,7 +34,7 @@ type ConsoleSideNavContextKey = (typeof consoleSideNavContextKeys)[number];
 
 type SideNavDirectoryView = "approval" | "workspaces";
 
-const sideNavDirectoryViews = new Set<AppView>(["approval", "workspaces"]);
+const sideNavDirectoryViews: any = new Set<AppView>(["approval", "workspaces"]);
 
 function isSideNavDirectoryView(view: unknown): view is SideNavDirectoryView {
   return sideNavDirectoryViews.has(view as AppView);
@@ -53,43 +53,43 @@ export type ConsoleSideNavContext = Pick<ServerConsoleShellContext, ConsoleSideN
   sideNavDirectoryWidth: Ref<number>;
 };
 
-const SIDE_NAV_MIN_WIDTH = 200;
-const SIDE_NAV_DEFAULT_WIDTH = 220;
-const SIDE_NAV_WIDTH_STORAGE_KEY = "meshrix:console:sideNavWidth";
-const SIDE_NAV_DIRECTORY_MIN_WIDTH = 220;
-const SIDE_NAV_DIRECTORY_DEFAULT_WIDTH = SIDE_NAV_DIRECTORY_MIN_WIDTH;
-const SIDE_NAV_DIRECTORY_NARROW_QUERY = "(max-width: 720px)";
-const SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY = "meshrix:console:sideNavDirectoryWidth";
-const SIDE_NAV_OVERLAY_BREAKPOINT = 860;
-const SIDE_NAV_COLLAPSED_WIDTH = 56;
-const MAIN_CONTENT_MIN_WIDTH = 480;
-const DEFAULT_VIEWPORT_WIDTH = 1280;
+const SIDE_NAV_MIN_WIDTH: any = 200;
+const SIDE_NAV_DEFAULT_WIDTH: any = 220;
+const SIDE_NAV_WIDTH_STORAGE_KEY: any = "meshrix:console:sideNavWidth";
+const SIDE_NAV_DIRECTORY_MIN_WIDTH: any = 220;
+const SIDE_NAV_DIRECTORY_DEFAULT_WIDTH: any = SIDE_NAV_DIRECTORY_MIN_WIDTH;
+const SIDE_NAV_DIRECTORY_NARROW_QUERY: any = "(max-width: 720px)";
+const SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY: any = "meshrix:console:sideNavDirectoryWidth";
+const SIDE_NAV_OVERLAY_BREAKPOINT: any = 860;
+const SIDE_NAV_COLLAPSED_WIDTH: any = 56;
+const MAIN_CONTENT_MIN_WIDTH: any = 480;
+const DEFAULT_VIEWPORT_WIDTH: any = 1280;
 
-function currentViewportWidth() {
+function currentViewportWidth() : any {
   if (typeof window === "undefined") {
     return DEFAULT_VIEWPORT_WIDTH;
   }
-  const width = Number(window.innerWidth);
+  const width: any = Number(window.innerWidth);
   return Number.isFinite(width) && width > 0 ? width : DEFAULT_VIEWPORT_WIDTH;
 }
 
-function readStoredWidth(storageKey: string, fallback: number) {
+function readStoredWidth(storageKey: string, fallback: number) : any {
   if (typeof window === "undefined") {
     return fallback;
   }
   try {
-    const stored = window.localStorage.getItem(storageKey);
+    const stored: any = window.localStorage.getItem(storageKey);
     if (stored === null || stored.trim() === "") {
       return fallback;
     }
-    const width = Number(stored);
+    const width: any = Number(stored);
     return Number.isFinite(width) ? width : fallback;
   } catch {
     return fallback;
   }
 }
 
-function writeStoredWidth(storageKey: string, width: number) {
+function writeStoredWidth(storageKey: string, width: number) : any {
   if (typeof window === "undefined") {
     return;
   }
@@ -100,21 +100,21 @@ function writeStoredWidth(storageKey: string, width: number) {
   }
 }
 
-function clampWidth(width: number, minWidth: number, maxWidth: number, fallback: number) {
-  const safeWidth = Number.isFinite(width) ? width : fallback;
-  const safeMaxWidth = Math.max(minWidth, Math.floor(maxWidth));
+function clampWidth(width: number, minWidth: number, maxWidth: number, fallback: number) : any {
+  const safeWidth: any = Number.isFinite(width) ? width : fallback;
+  const safeMaxWidth: any = Math.max(minWidth, Math.floor(maxWidth));
   return Math.round(Math.max(minWidth, Math.min(safeWidth, safeMaxWidth)));
 }
 
-function readInitialSideNavWidth() {
+function readInitialSideNavWidth() : any {
   return readStoredWidth(SIDE_NAV_WIDTH_STORAGE_KEY, SIDE_NAV_DEFAULT_WIDTH);
 }
 
-function readInitialSideNavDirectoryWidth() {
+function readInitialSideNavDirectoryWidth() : any {
   return readStoredWidth(SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY, SIDE_NAV_DIRECTORY_DEFAULT_WIDTH);
 }
 
-function isNarrowSideNavDirectoryViewport() {
+function isNarrowSideNavDirectoryViewport() : any {
   return (
     typeof window !== "undefined" &&
     typeof window.matchMedia === "function" &&
@@ -123,37 +123,37 @@ function isNarrowSideNavDirectoryViewport() {
 }
 
 export function createConsoleSideNavContext(shell: ServerConsoleShellContext): ConsoleSideNavContext {
-  const sideNavDirectoryOpen = ref(false);
-  const sideNavDirectoryNarrow = ref(isNarrowSideNavDirectoryViewport());
-  const viewportWidth = ref(currentViewportWidth());
-  const sideNavWidth = ref(readInitialSideNavWidth());
-  const sideNavDirectoryWidth = ref(readInitialSideNavDirectoryWidth());
-  const activeSideNavDirectory = computed<SideNavDirectoryView | "">(() => {
-    const view = shell.activeRouteView.value;
+  const sideNavDirectoryOpen: any = ref(false);
+  const sideNavDirectoryNarrow: any = ref(isNarrowSideNavDirectoryViewport());
+  const viewportWidth: any = ref(currentViewportWidth());
+  const sideNavWidth: any = ref(readInitialSideNavWidth());
+  const sideNavDirectoryWidth: any = ref(readInitialSideNavDirectoryWidth());
+  const activeSideNavDirectory: any = computed<SideNavDirectoryView | "">(() : any => {
+    const view: any = shell.activeRouteView.value;
     return isSideNavDirectoryView(view) ? view : "";
   });
-  const showSideNavDirectory = computed(() => !!activeSideNavDirectory.value && sideNavDirectoryOpen.value);
+  const showSideNavDirectory: any = computed(() : any => !!activeSideNavDirectory.value && sideNavDirectoryOpen.value);
 
-  function sideNavLayoutWidth() {
+  function sideNavLayoutWidth() : any {
     if (viewportWidth.value <= SIDE_NAV_OVERLAY_BREAKPOINT) {
       return 0;
     }
     return shell.sideNavCollapsed.value ? SIDE_NAV_COLLAPSED_WIDTH : sideNavWidth.value;
   }
 
-  function maxSideNavWidth(directoryWidth = showSideNavDirectory.value ? sideNavDirectoryWidth.value : 0) {
+  function maxSideNavWidth(directoryWidth: any = showSideNavDirectory.value ? sideNavDirectoryWidth.value : 0) : any {
     if (viewportWidth.value <= SIDE_NAV_OVERLAY_BREAKPOINT) {
       return viewportWidth.value - MAIN_CONTENT_MIN_WIDTH;
     }
-    const reservedDirectoryWidth = showSideNavDirectory.value ? directoryWidth : 0;
+    const reservedDirectoryWidth: any = showSideNavDirectory.value ? directoryWidth : 0;
     return viewportWidth.value - MAIN_CONTENT_MIN_WIDTH - reservedDirectoryWidth;
   }
 
-  function maxSideNavDirectoryWidth() {
+  function maxSideNavDirectoryWidth() : any {
     return viewportWidth.value - MAIN_CONTENT_MIN_WIDTH - sideNavLayoutWidth();
   }
 
-  function clampSideNavWidth(width: number, directoryWidth?: number) {
+  function clampSideNavWidth(width: number, directoryWidth?: number) : any {
     return clampWidth(
       width,
       SIDE_NAV_MIN_WIDTH,
@@ -162,7 +162,7 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
     );
   }
 
-  function clampSideNavDirectoryWidth(width: number) {
+  function clampSideNavDirectoryWidth(width: number) : any {
     return clampWidth(
       width,
       SIDE_NAV_DIRECTORY_MIN_WIDTH,
@@ -171,33 +171,33 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
     );
   }
 
-  function reconcileWidths() {
-    const reservedDirectoryWidth = showSideNavDirectory.value ? SIDE_NAV_DIRECTORY_MIN_WIDTH : 0;
+  function reconcileWidths() : any {
+    const reservedDirectoryWidth: any = showSideNavDirectory.value ? SIDE_NAV_DIRECTORY_MIN_WIDTH : 0;
     sideNavWidth.value = clampSideNavWidth(sideNavWidth.value, reservedDirectoryWidth);
     sideNavDirectoryWidth.value = clampSideNavDirectoryWidth(sideNavDirectoryWidth.value);
   }
 
-  function syncSideNavDirectoryFromRoute(view: unknown) {
-    const shouldOpen = isSideNavDirectoryView(view) && !sideNavDirectoryNarrow.value;
+  function syncSideNavDirectoryFromRoute(view: unknown) : any {
+    const shouldOpen: any = isSideNavDirectoryView(view) && !sideNavDirectoryNarrow.value;
     sideNavDirectoryOpen.value = shouldOpen;
   }
 
   if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-    const mediaQuery = window.matchMedia(SIDE_NAV_DIRECTORY_NARROW_QUERY);
-    const handleMediaQueryChange = () => {
+    const mediaQuery: any = window.matchMedia(SIDE_NAV_DIRECTORY_NARROW_QUERY);
+    const handleMediaQueryChange: any = () : any => {
       sideNavDirectoryNarrow.value = mediaQuery.matches;
     };
 
     handleMediaQueryChange();
     mediaQuery.addEventListener("change", handleMediaQueryChange);
-    onBeforeUnmount(() => {
+    onBeforeUnmount(() : any => {
       mediaQuery.removeEventListener("change", handleMediaQueryChange);
     });
   }
 
   watch(
     [shell.activeRouteView, sideNavDirectoryNarrow],
-    ([view]) => syncSideNavDirectoryFromRoute(view),
+    ([view]: any[]) : any => syncSideNavDirectoryFromRoute(view),
     { immediate: true },
   );
 
@@ -208,39 +208,39 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
   );
 
   if (typeof window !== "undefined") {
-    const handleViewportResize = () => {
+    const handleViewportResize: any = () : any => {
       viewportWidth.value = currentViewportWidth();
       reconcileWidths();
     };
     window.addEventListener("resize", handleViewportResize);
-    onBeforeUnmount(() => {
+    onBeforeUnmount(() : any => {
       window.removeEventListener("resize", handleViewportResize);
     });
   }
 
-  function openSideNavDirectory(view: AppView) {
-    const isDirectoryView = isSideNavDirectoryView(view);
+  function openSideNavDirectory(view: AppView) : any {
+    const isDirectoryView: any = isSideNavDirectoryView(view);
     sideNavDirectoryOpen.value = isDirectoryView;
   }
 
-  function returnToPrimarySideNav() {
+  function returnToPrimarySideNav() : any {
     sideNavDirectoryOpen.value = false;
   }
 
-  function setSideNavWidth(width: number) {
-    const nextWidth = clampSideNavWidth(width);
+  function setSideNavWidth(width: number) : any {
+    const nextWidth: any = clampSideNavWidth(width);
     sideNavWidth.value = nextWidth;
     writeStoredWidth(SIDE_NAV_WIDTH_STORAGE_KEY, nextWidth);
   }
 
-  function setSideNavDirectoryWidth(width: number) {
-    const nextWidth = clampSideNavDirectoryWidth(width);
+  function setSideNavDirectoryWidth(width: number) : any {
+    const nextWidth: any = clampSideNavDirectoryWidth(width);
     sideNavDirectoryWidth.value = nextWidth;
     writeStoredWidth(SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY, nextWidth);
   }
 
   return {
-    ...Object.fromEntries(consoleSideNavContextKeys.map((key) => [key, shell[key]])) as Pick<
+    ...Object.fromEntries(consoleSideNavContextKeys.map((key?: any) : any => [key, shell[key]])) as Pick<
       ServerConsoleShellContext,
       ConsoleSideNavContextKey
     >,
@@ -257,14 +257,14 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
   };
 }
 
-const consoleSideNavKey = Symbol("console-side-nav") as InjectionKey<ConsoleSideNavContext>;
+const consoleSideNavKey: any = Symbol("console-side-nav") as InjectionKey<ConsoleSideNavContext>;
 
-export function provideConsoleSideNavContext(context: ConsoleSideNavContext) {
+export function provideConsoleSideNavContext(context: ConsoleSideNavContext) : any {
   provide(consoleSideNavKey, context);
 }
 
-export function useConsoleSideNavContext() {
-  const context = inject(consoleSideNavKey);
+export function useConsoleSideNavContext() : any {
+  const context: any = inject(consoleSideNavKey);
   if (!context) {
     throw new Error("Console side nav context is not available");
   }

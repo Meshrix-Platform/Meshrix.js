@@ -52,13 +52,13 @@ const y = ref(0);
 
 const normalizedGroups = computed(() =>
   (props.groups || [])
-    .map((group) => ({
+    .map((group: any) => ({
       ...group,
-      entries: (group.entries || []).filter((entry) => entry.label || entry.key || entry.value),
+      entries: (group.entries || []).filter((entry: any) => entry.label || entry.key || entry.value),
     }))
-    .filter((group) => group.title && group.entries.length),
+    .filter((group: any) => group.title && group.entries.length),
 );
-const entryCount = computed(() => normalizedGroups.value.reduce((sum, group) => sum + group.entries.length, 0));
+const entryCount = computed(() => normalizedGroups.value.reduce((sum: any, group: any) => sum + group.entries.length, 0));
 const headerSubtitle = computed(() => props.subtitle || `${entryCount.value} 项配置`);
 const popoverStyle = computed(() => ({
   "--config-list-summary-width": `${props.width}px`,

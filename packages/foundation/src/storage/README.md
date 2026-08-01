@@ -23,17 +23,17 @@ Core surfaces:
 - serialized state coordination for durable store operations;
 - report and diagnostics readers for storage-backed runtime checks.
 
-Backup and restore responsibilities are separated by authority. `backup-contract.mjs`
-owns protocol constants and normalized identifiers, `storage-file-safety.mjs` owns
-opened-file and filesystem-boundary checks, `backup-manifest.mjs` owns manifest
-validation and catalog reconstruction, `backup-query.mjs` owns indexed listing,
-and `backup-snapshot.mjs` owns coherent snapshot publication. Restore verification
-and deterministic planning are read-only in `restore-plan.mjs`;
-`restore-report.mjs` projects preview and terminal evidence, and
-`restore-transaction-records.mjs` maps verified actions to durable transaction
+Backup and restore responsibilities are separated by authority. `backup-contract.ts`
+owns protocol constants and normalized identifiers, `storage-file-safety.ts` owns
+opened-file and filesystem-boundary checks, `backup-manifest.ts` owns manifest
+validation and catalog reconstruction, `backup-query.ts` owns indexed listing,
+and `backup-snapshot.ts` owns coherent snapshot publication. Restore verification
+and deterministic planning are read-only in `restore-plan.ts`;
+`restore-report.ts` projects preview and terminal evidence, and
+`restore-transaction-records.ts` maps verified actions to durable transaction
 records. Offline locking, transaction execution, and receipt publication are
-owned by `restore-execution.mjs`, with durable journal application and startup
-recovery in `restore-transaction.mjs`.
+owned by `restore-execution.ts`, with durable journal application and startup
+recovery in `restore-transaction.ts`.
 
 Serialized state mutations are admitted through one per-key lane. A mutation
 that exceeds its observation deadline aborts its cooperative signal, rejects

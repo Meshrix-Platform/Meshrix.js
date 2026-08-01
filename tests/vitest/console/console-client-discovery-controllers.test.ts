@@ -9,21 +9,21 @@ import {
 import { createConsoleClientController } from "../../../apps/console/composables/console-client-controller";
 import { createConsoleDiscoveryController } from "../../../apps/console/composables/console-discovery-controller";
 
-const discoveryClientMock = vi.hoisted(() => ({
+const discoveryClientMock: any = vi.hoisted(() : any => ({
   saveDiscoveryConfig: vi.fn(),
 }));
-const browserEffectsMock = vi.hoisted(() => ({
+const browserEffectsMock: any = vi.hoisted(() : any => ({
   downloadTextFile: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/discovery-client", () => ({
+vi.mock("../../../apps/console/lib/discovery-client", () : any => ({
   saveDiscoveryConfig: discoveryClientMock.saveDiscoveryConfig,
 }));
-vi.mock("../../../apps/console/composables/console-browser-effects", () => ({
+vi.mock("../../../apps/console/composables/console-browser-effects", () : any => ({
   downloadTextFile: browserEffectsMock.downloadTextFile,
 }));
 
-function client(overrides: Record<string, unknown>) {
+function client(overrides: Record<string, unknown>) : any {
   return {
     clientId: "client-a",
     clientLabel: "Alpha Client",
@@ -39,13 +39,13 @@ function client(overrides: Record<string, unknown>) {
   } as any;
 }
 
-describe("console client controller behavior", () => {
-  beforeEach(() => {
+describe("console client controller behavior", () : any => {
+  beforeEach(() : any => {
     browserEffectsMock.downloadTextFile.mockClear();
   });
 
-  it("sorts clients, derives latest/displayed clients, and counts attention states", () => {
-    const consoleState = ref<any>({
+  it("sorts clients, derives latest/displayed clients, and counts attention states", () : any => {
+    const consoleState: any = ref<any>({
       clients: {
         summary: {
           outdatedCount: 1,
@@ -61,9 +61,9 @@ describe("console client controller behavior", () => {
         ],
       },
     });
-    const controller = createConsoleClientController({ consoleState });
+    const controller: any = createConsoleClientController({ consoleState });
 
-    expect(controller.filteredClients.value.map((item) => item.clientId)).toEqual([
+    expect(controller.filteredClients.value.map((item?: any) : any => item.clientId)).toEqual([
       "new",
       "old",
       "bad-date",
@@ -81,8 +81,8 @@ describe("console client controller behavior", () => {
     expect(controller.latestClient.value).toBeNull();
   });
 
-  it("filters clients by alignment state and search terms across display fields", () => {
-    const consoleState = ref<any>({
+  it("filters clients by alignment state and search terms across display fields", () : any => {
+    const consoleState: any = ref<any>({
       clients: {
         summary: {},
         items: [
@@ -104,27 +104,27 @@ describe("console client controller behavior", () => {
         ],
       },
     });
-    const controller = createConsoleClientController({ consoleState });
+    const controller: any = createConsoleClientController({ consoleState });
 
     controller.clientStateFilter.value = "offline";
-    expect(controller.filteredClientList.value.map((item) => item.clientId)).toEqual(["beta"]);
+    expect(controller.filteredClientList.value.map((item?: any) : any => item.clientId)).toEqual(["beta"]);
 
     controller.clientStateFilter.value = "all";
     controller.clientSearchQuery.value = "edge";
-    expect(controller.filteredClientList.value.map((item) => item.clientId)).toEqual(["beta"]);
+    expect(controller.filteredClientList.value.map((item?: any) : any => item.clientId)).toEqual(["beta"]);
 
     controller.clientSearchQuery.value = "已配对";
-    expect(controller.filteredClientList.value.map((item) => item.clientId)).toEqual(["beta"]);
+    expect(controller.filteredClientList.value.map((item?: any) : any => item.clientId)).toEqual(["beta"]);
 
     controller.clientSearchQuery.value = "待对齐";
-    expect(controller.filteredClientList.value.map((item) => item.clientId)).toEqual(["gamma"]);
+    expect(controller.filteredClientList.value.map((item?: any) : any => item.clientId)).toEqual(["gamma"]);
 
     controller.clientSearchQuery.value = "service.example";
-    expect(controller.filteredClientList.value.map((item) => item.clientId)).toEqual(["gamma"]);
+    expect(controller.filteredClientList.value.map((item?: any) : any => item.clientId)).toEqual(["gamma"]);
   });
 
-  it("exports an operational inventory without client identity or endpoint fields", () => {
-    const consoleState = ref<any>({
+  it("exports an operational inventory without client identity or endpoint fields", () : any => {
+    const consoleState: any = ref<any>({
       clients: {
         summary: { totalCount: 1, alignedCount: 1 },
         items: [
@@ -144,13 +144,13 @@ describe("console client controller behavior", () => {
         ],
       },
     });
-    const controller = createConsoleClientController({ consoleState });
+    const controller: any = createConsoleClientController({ consoleState });
 
     controller.exportClients();
 
     expect(browserEffectsMock.downloadTextFile).toHaveBeenCalledTimes(1);
     const [fileName, content, contentType] = browserEffectsMock.downloadTextFile.mock.calls[0];
-    const payload = JSON.parse(content);
+    const payload: any = JSON.parse(content);
     expect(fileName).toMatch(/^meshrix-clients-.*\.json$/);
     expect(contentType).toBe("application/json;charset=utf-8");
     expect(payload.privacy.redacted).toBe(true);
@@ -169,28 +169,28 @@ describe("console client controller behavior", () => {
   });
 });
 
-describe("console discovery controller behavior", () => {
-  beforeEach(() => {
+describe("console discovery controller behavior", () : any => {
+  beforeEach(() : any => {
     vi.clearAllMocks();
   });
 
-  function createDiscoveryHarness() {
-    let applyingRemoteDrafts = false;
-    const error = ref("previous error");
-    const refreshState = vi.fn(async () => undefined);
-    const setBusy = vi.fn();
-    const clearAllBusy = vi.fn();
-    const controller = createConsoleDiscoveryController({
-      applyRemoteConsoleDraftUpdate: (update) => {
+  function createDiscoveryHarness() : any {
+    let applyingRemoteDrafts: any = false;
+    const error: any = ref("previous error");
+    const refreshState: any = vi.fn(async () : Promise<any> => undefined);
+    const setBusy: any = vi.fn();
+    const clearAllBusy: any = vi.fn();
+    const controller: any = createConsoleDiscoveryController({
+      applyRemoteConsoleDraftUpdate: (update?: any) : any => {
         applyingRemoteDrafts = true;
         update();
         applyingRemoteDrafts = false;
       },
       clearAllBusy,
       error,
-      isApplyingRemoteConsoleDrafts: () => applyingRemoteDrafts,
+      isApplyingRemoteConsoleDrafts: () : any => applyingRemoteDrafts,
       refreshState,
-      remoteDraftEquals: (left, right) => JSON.stringify(left) === JSON.stringify(right),
+      remoteDraftEquals: (left?: any, right?: any) : any => JSON.stringify(left) === JSON.stringify(right),
       setBusy,
     });
 
@@ -203,7 +203,7 @@ describe("console discovery controller behavior", () => {
     };
   }
 
-  it("replaces drafts from server, marks clean by default, and tracks local dirty edits", async () => {
+  it("replaces drafts from server, marks clean by default, and tracks local dirty edits", async () : Promise<any> => {
     const { controller } = createDiscoveryHarness();
 
     controller.replaceDiscoveryDraftFromServer({
@@ -234,9 +234,9 @@ describe("console discovery controller behavior", () => {
     expect(controller.discoveryDraftDirty.value).toBe(false);
   });
 
-  it("saves discovery config, refreshes state, and handles failures", async () => {
+  it("saves discovery config, refreshes state, and handles failures", async () : Promise<any> => {
     discoveryClientMock.saveDiscoveryConfig.mockResolvedValue({});
-    const success = createDiscoveryHarness();
+    const success: any = createDiscoveryHarness();
     success.controller.discoveryDraft.value.serverId = "server-ok";
     await nextTick();
 
@@ -252,7 +252,7 @@ describe("console discovery controller behavior", () => {
     expect(success.error.value).toBe("");
 
     discoveryClientMock.saveDiscoveryConfig.mockRejectedValue(new Error("save failed"));
-    const failure = createDiscoveryHarness();
+    const failure: any = createDiscoveryHarness();
     await failure.controller.saveDiscovery();
 
     expect(failure.error.value).toBe("save failed");

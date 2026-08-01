@@ -20,12 +20,12 @@ export type BridgeRequestOptions = SafetyRequestOptions & {
   signal?: AbortSignal;
 };
 
-let csrfToken = "";
+let csrfToken: any = "";
 let csrfBootstrapPromise: Promise<void> | null = null;
 
-function updateCsrfToken(value: unknown) {
-  const direct = typeof value === "string" ? value : "";
-  const fromPayload =
+function updateCsrfToken(value: unknown) : any {
+  const direct: any = typeof value === "string" ? value : "";
+  const fromPayload: any =
     !direct && value && typeof value === "object"
       ? String(
           (value as { csrfToken?: string; session?: { csrfToken?: string } }).csrfToken ||
@@ -33,13 +33,13 @@ function updateCsrfToken(value: unknown) {
             "",
         )
       : "";
-  const nextToken = direct || fromPayload;
+  const nextToken: any = direct || fromPayload;
   if (nextToken) {
     csrfToken = nextToken;
   }
 }
 
-function requestPath(url: string) {
+function requestPath(url: string) : any {
   try {
     return parseBrowserRelativeUrl(url).pathname;
   } catch {
@@ -47,7 +47,7 @@ function requestPath(url: string) {
   }
 }
 
-async function ensureCsrfToken(url: string) {
+async function ensureCsrfToken(url: string) : Promise<any> {
   if (csrfToken || requestPath(url) === "/api/auth/login") {
     return;
   }
@@ -57,7 +57,7 @@ async function ensureCsrfToken(url: string) {
       headers: { Accept: "application/json" },
       credentials: "same-origin",
     })
-      .then(async (response) => {
+      .then(async (response?: any) : Promise<any> => {
         if (!response.ok) {
           return;
         }
@@ -67,18 +67,18 @@ async function ensureCsrfToken(url: string) {
           // Ignore malformed session bootstrap responses; the caller will fail normally.
         }
       })
-      .finally(() => {
+      .finally(() : any => {
         csrfBootstrapPromise = null;
       });
   }
   await csrfBootstrapPromise;
 }
 
-async function extractErrorMessage(response: Response) {
-  const rawText = await response.text();
+async function extractErrorMessage(response: Response) : Promise<any> {
+  const rawText: any = await response.text();
 
   try {
-    const parsed = JSON.parse(rawText);
+    const parsed: any = JSON.parse(rawText);
     return parsed.error || parsed.message || rawText;
   } catch {
     return rawText;
@@ -86,9 +86,9 @@ async function extractErrorMessage(response: Response) {
 }
 
 async function parseJsonResponse<T>(response: Response, url: string): Promise<T> {
-  const rawText = await response.text();
-  const contentType = response.headers.get("content-type") || "";
-  const trimmed = rawText.trim();
+  const rawText: any = await response.text();
+  const contentType: any = response.headers.get("content-type") || "";
+  const trimmed: any = rawText.trim();
 
   if (!trimmed) {
     throw new Error(`接口没有返回 JSON：${url}`);
@@ -107,25 +107,25 @@ async function parseJsonResponse<T>(response: Response, url: string): Promise<T>
   }
 }
 
-function trimQuotedHeaderValue(value: string) {
-  const trimmed = value.trim();
+function trimQuotedHeaderValue(value: string) : any {
+  const trimmed: any = value.trim();
   if (trimmed.length >= 2 && trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
     return trimmed.slice(1, -1).replace(/\\"/g, "\"");
   }
   return trimmed;
 }
 
-function sanitizeDownloadFileName(value: string) {
+function sanitizeDownloadFileName(value: string) : any {
   return String(value || "download.bin")
     .replace(/[\\/:*?<>|"\r\n]+/g, "_")
     .replace(/\s+/g, " ")
     .trim() || "download.bin";
 }
 
-function decodeContentDispositionValue(value: string) {
-  const trimmed = trimQuotedHeaderValue(value);
-  const match = /^[^']*'[^']*'(.*)$/i.exec(trimmed);
-  const encoded = match ? match[1] : trimmed;
+function decodeContentDispositionValue(value: string) : any {
+  const trimmed: any = trimQuotedHeaderValue(value);
+  const match: any = /^[^']*'[^']*'(.*)$/i.exec(trimmed);
+  const encoded: any = match ? match[1] : trimmed;
   try {
     return decodeURIComponent(encoded);
   } catch {
@@ -133,32 +133,32 @@ function decodeContentDispositionValue(value: string) {
   }
 }
 
-function fileNameFromContentDisposition(value: string | null) {
+function fileNameFromContentDisposition(value: string | null) : any {
   if (!value) return "";
-  const parts = value.split(";").map((part) => part.trim()).filter(Boolean);
-  const encoded = parts.find((part) => /^filename\*/i.test(part));
+  const parts: any = value.split(";").map((part?: any) : any => part.trim()).filter(Boolean);
+  const encoded: any = parts.find((part?: any) : any => /^filename\*/i.test(part));
   if (encoded) {
     const [, ...rest] = encoded.split("=");
-    const decoded = decodeContentDispositionValue(rest.join("="));
+    const decoded: any = decodeContentDispositionValue(rest.join("="));
     if (decoded) return sanitizeDownloadFileName(decoded);
   }
-  const plain = parts.find((part) => /^filename=/i.test(part));
+  const plain: any = parts.find((part?: any) : any => /^filename=/i.test(part));
   if (plain) {
     const [, ...rest] = plain.split("=");
-    const decoded = trimQuotedHeaderValue(rest.join("="));
+    const decoded: any = trimQuotedHeaderValue(rest.join("="));
     if (decoded) return sanitizeDownloadFileName(decoded);
   }
   return "";
 }
 
-function fileNameFromUrl(url: string) {
+function fileNameFromUrl(url: string) : any {
   try {
-    const parsed = parseBrowserRelativeUrl(url);
-    const segment = parsed.pathname.split("/").filter(Boolean).pop() || "";
+    const parsed: any = parseBrowserRelativeUrl(url);
+    const segment: any = parsed.pathname.split("/").filter(Boolean).pop() || "";
     return sanitizeDownloadFileName(decodeURIComponent(segment || "download.bin"));
   } catch {
     const [pathPart] = String(url || "").split("?");
-    const segment = pathPart.split("/").filter(Boolean).pop() || "download.bin";
+    const segment: any = pathPart.split("/").filter(Boolean).pop() || "download.bin";
     return sanitizeDownloadFileName(segment);
   }
 }
@@ -171,7 +171,7 @@ export async function downloadFile(
   url: string,
   options: BridgeDownloadOptions = {},
 ): Promise<BridgeDownloadResult> {
-  const response = await fetch(url, {
+  const response: any = await fetch(url, {
     method: "GET",
     headers: {
       Accept: "*/*",
@@ -182,19 +182,19 @@ export async function downloadFile(
   });
 
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message: any = await extractErrorMessage(response);
     throw new Error(message || `下载失败：${response.status}`);
   }
 
-  const contentType = response.headers.get("content-type") || "";
-  const disposition = response.headers.get("content-disposition") || "";
+  const contentType: any = response.headers.get("content-type") || "";
+  const disposition: any = response.headers.get("content-disposition") || "";
   if (/text\/html/i.test(contentType) && !/filename|attachment/i.test(disposition)) {
-    const htmlPreview = (await response.text()).trim().slice(0, 160);
+    const htmlPreview: any = (await response.text()).trim().slice(0, 160);
     throw new Error(`下载接口返回了 HTML 页面，请检查接口路径或登录状态。响应片段：${htmlPreview}`);
   }
 
-  const blob = await response.blob();
-  const fileName = sanitizeDownloadFileName(
+  const blob: any = await response.blob();
+  const fileName: any = sanitizeDownloadFileName(
     options.fileName ||
       fileNameFromContentDisposition(disposition) ||
       fileNameFromUrl(url),
@@ -223,7 +223,7 @@ export async function postJson<T>(
         ...safetyHeaders(options),
       }
     : { Accept: "application/json" };
-  const response = await fetch(url, {
+  const response: any = await fetch(url, {
     method: payload ? "POST" : "GET",
     headers,
     body: payload ? JSON.stringify(payload) : undefined,
@@ -232,11 +232,11 @@ export async function postJson<T>(
   });
 
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message: any = await extractErrorMessage(response);
     throw new Error(message || `Request failed: ${response.status}`);
   }
 
-  const data = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response, url);
   updateCsrfToken(data);
   return data;
 }
@@ -248,7 +248,7 @@ export async function sendJson<T>(
   options: BridgeRequestOptions = {},
 ): Promise<T> {
   await ensureCsrfToken(url);
-  const response = await fetch(url, {
+  const response: any = await fetch(url, {
     method,
     headers: {
       "Content-Type": "application/json",
@@ -261,10 +261,10 @@ export async function sendJson<T>(
     signal: options.signal,
   });
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message: any = await extractErrorMessage(response);
     throw new Error(message || `Request failed: ${response.status}`);
   }
-  const data = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response, url);
   updateCsrfToken(data);
   return data;
 }
@@ -279,7 +279,7 @@ export async function deleteJson<T>(
     ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
     ...safetyHeaders(options),
   };
-  const response = await fetch(url, {
+  const response: any = await fetch(url, {
     method: "DELETE",
     headers,
     credentials: "same-origin",
@@ -287,11 +287,11 @@ export async function deleteJson<T>(
   });
 
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message: any = await extractErrorMessage(response);
     throw new Error(message || `Request failed: ${response.status}`);
   }
 
-  const data = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response, url);
   updateCsrfToken(data);
   return data;
 }
@@ -304,7 +304,7 @@ export async function getJson<T>(
     Accept: "application/json",
     ...(csrfToken ? { "x-meshrix-csrf": csrfToken } : {}),
   };
-  const response = await fetch(url, {
+  const response: any = await fetch(url, {
     method: "GET",
     headers,
     credentials: "same-origin",
@@ -312,11 +312,11 @@ export async function getJson<T>(
   });
 
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message: any = await extractErrorMessage(response);
     throw new Error(message || `Request failed: ${response.status}`);
   }
 
-  const data = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response, url);
   updateCsrfToken(data);
   return data;
 }
@@ -326,7 +326,7 @@ export async function putBinaryJson<T>(
   payload: Blob | ArrayBuffer,
 ): Promise<T> {
   await ensureCsrfToken(url);
-  const response = await fetch(url, {
+  const response: any = await fetch(url, {
     method: "PUT",
     headers: {
       Accept: "application/json",
@@ -337,11 +337,11 @@ export async function putBinaryJson<T>(
   });
 
   if (!response.ok) {
-    const message = await extractErrorMessage(response);
+    const message: any = await extractErrorMessage(response);
     throw new Error(message || `Request failed: ${response.status}`);
   }
 
-  const data = await parseJsonResponse<T>(response, url);
+  const data: any = await parseJsonResponse<T>(response, url);
   updateCsrfToken(data);
   return data;
 }

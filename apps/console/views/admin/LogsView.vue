@@ -1,10 +1,27 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
 import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
 import { formatMachineDate } from '../../composables/console-format-utils';
 import DataTable from '../../components/DataTable.vue';
 import OptionBar from "@meshrix/ui-console/option-bar";
 import StatusPill from '../../components/StatusPill.vue';
+
+/* Narrow viewports keep the high-signal columns; low-priority columns are
+   hidden instead of being clipped mid-character. */
+const isNarrowLayout = ref(false);
+let narrowLayoutMedia: MediaQueryList | null = null;
+function syncNarrowLayout() {
+  isNarrowLayout.value = Boolean(narrowLayoutMedia?.matches);
+}
+onMounted(() => {
+  narrowLayoutMedia = window.matchMedia("(max-width: 720px)");
+  syncNarrowLayout();
+  narrowLayoutMedia.addEventListener("change", syncNarrowLayout);
+});
+onBeforeUnmount(() => {
+  narrowLayoutMedia?.removeEventListener("change", syncNarrowLayout);
+});
 const {
   adminView,
   busyKey,
@@ -122,14 +139,14 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any) {
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="progress" label="进度" :min-width="systemLogColumnWidths.progress">
+                <el-table-column v-if="!isNarrowLayout" prop="progress" label="进度" :min-width="systemLogColumnWidths.progress">
                   <template #default="{ row }">
                     <span class="system-log-progress">
                       {{ Math.round(Number(row.progressPercent || 0)) }}%
                     </span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="stage" label="阶段" :min-width="systemLogColumnWidths.stage">
+                <el-table-column v-if="!isNarrowLayout" prop="stage" label="阶段" :min-width="systemLogColumnWidths.stage">
                   <template #default="{ row }">
                     <span class="system-log-stage">{{ row.stage }}</span>
                   </template>
@@ -139,7 +156,7 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any) {
                     <span class="system-log-detail-text" :title="row.detail">{{ row.detail }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column prop="error" label="错误" :min-width="systemLogColumnWidths.error">
+                <el-table-column v-if="!isNarrowLayout" prop="error" label="错误" :min-width="systemLogColumnWidths.error">
                   <template #default="{ row }">
                     <span class="system-log-error">{{ row.error }}</span>
                   </template>

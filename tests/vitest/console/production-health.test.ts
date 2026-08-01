@@ -8,12 +8,12 @@ import {
 } from "../../../apps/console/lib/production-health";
 import type { ProductionHealthGate } from "../../../apps/console/lib/types";
 
-const productionHealthClientMocks = vi.hoisted(() => ({
+const productionHealthClientMocks: any = vi.hoisted(() : any => ({
   getProductionHealth: vi.fn(),
   getReadinessBaselineStatus: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/production-health-client", () => ({
+vi.mock("../../../apps/console/lib/production-health-client", () : any => ({
   getProductionHealth: productionHealthClientMocks.getProductionHealth,
   getReadinessBaselineStatus: productionHealthClientMocks.getReadinessBaselineStatus,
 }));
@@ -31,12 +31,12 @@ function gateWithElapsed(elapsedMs?: number): ProductionHealthGate {
   } as ProductionHealthGate;
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
 });
 
-describe("production health lib behavior", () => {
-  it("formats status labels, tones, timestamps, and elapsed durations", () => {
+describe("production health lib behavior", () : any => {
+  it("formats status labels, tones, timestamps, and elapsed durations", () : any => {
     expect(statusLabel("pass")).toBe("通过");
     expect(statusLabel("fail")).toBe("失败");
     expect(statusLabel("timeout")).toBe("超时");
@@ -69,8 +69,8 @@ describe("production health lib behavior", () => {
     expect(elapsedText(gateWithElapsed(12345))).toBe("12s");
   });
 
-  it("loads health and baseline snapshots together", async () => {
-    const health = {
+  it("loads health and baseline snapshots together", async () : Promise<any> => {
+    const health: Record<string, any> = {
       gates: [],
       generatedAt: "2026-06-04T10:00:00.000Z",
       reportType: "v0.0.1:platform:production-health-1",
@@ -84,7 +84,7 @@ describe("production health lib behavior", () => {
     expect(productionHealthClientMocks.getReadinessBaselineStatus).not.toHaveBeenCalled();
   });
 
-  it("returns the health load error when the main health request fails", async () => {
+  it("returns the health load error when the main health request fails", async () : Promise<any> => {
     productionHealthClientMocks.getProductionHealth.mockRejectedValueOnce(new Error("health unavailable"));
 
     await expect(loadProductionHealthSnapshot()).resolves.toEqual({
@@ -93,7 +93,7 @@ describe("production health lib behavior", () => {
     expect(productionHealthClientMocks.getReadinessBaselineStatus).not.toHaveBeenCalled();
   });
 
-  it("reports string health load errors", async () => {
+  it("reports string health load errors", async () : Promise<any> => {
     productionHealthClientMocks.getProductionHealth.mockRejectedValueOnce("plain health failure");
 
     await expect(loadProductionHealthSnapshot()).resolves.toEqual({
