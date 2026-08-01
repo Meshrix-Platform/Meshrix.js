@@ -18,9 +18,9 @@ import { parseTime } from "./console-format-utils";
 type ConsoleSystemLogRowControllerOptions = ConsoleBaseServerLogRowOptions &
   ConsoleSystemStatusLogRowOptions;
 
-function dedupeLogRows(rows: SystemLogRow[]) {
-  const seen = new Set<string>();
-  return rows.filter((row) => {
+function dedupeLogRows(rows: SystemLogRow[]) : any {
+  const seen: any = new Set<string>();
+  return rows.filter((row?: any) : any => {
     if (seen.has(row.logId)) {
       return false;
     }
@@ -31,16 +31,16 @@ function dedupeLogRows(rows: SystemLogRow[]) {
 
 export function createConsoleSystemLogRowController(
   options: ConsoleSystemLogRowControllerOptions,
-) {
-  const baseServerLogRows = computed<SystemLogRow[]>(() => buildBaseServerLogRows(options));
+) : any {
+  const baseServerLogRows: any = computed<SystemLogRow[]>(() : any => buildBaseServerLogRows(options));
 
-  function collectSystemStatusLogRows() {
+  function collectSystemStatusLogRows() : any {
     return buildSystemStatusLogRows(options);
   }
 
-  const serverLogRows = computed<SystemLogRow[]>(() =>
+  const serverLogRows: any = computed<SystemLogRow[]>(() : any =>
     dedupeLogRows([...collectSystemStatusLogRows(), ...baseServerLogRows.value]).sort(
-      (left, right) => parseTime(right.occurredAt) - parseTime(left.occurredAt),
+      (left?: any, right?: any) : any => parseTime(right.occurredAt) - parseTime(left.occurredAt),
     ),
   );
 

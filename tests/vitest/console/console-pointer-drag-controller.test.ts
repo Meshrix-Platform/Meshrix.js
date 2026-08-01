@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createConsolePointerDragController } from "../../../apps/console/composables/console-pointer-drag-controller";
 
 function pointerEvent(type: string, currentTarget?: Element): PointerEvent {
-  const event = new Event(type) as PointerEvent;
+  const event: any = new Event(type) as PointerEvent;
   if (currentTarget) {
     Object.defineProperty(event, "currentTarget", {
       configurable: true,
@@ -13,16 +13,16 @@ function pointerEvent(type: string, currentTarget?: Element): PointerEvent {
   return event;
 }
 
-describe("console pointer drag controller", () => {
-  it("starts drag state, applies body styles, forwards pointer moves, and restores on pointerup", () => {
-    const target = document.createElement("button");
+describe("console pointer drag controller", () : any => {
+  it("starts drag state, applies body styles, forwards pointer moves, and restores on pointerup", () : any => {
+    const target: any = document.createElement("button");
     document.body.appendChild(target);
     document.body.style.cursor = "default";
     document.body.style.userSelect = "text";
 
-    const onMove = vi.fn();
-    const onStop = vi.fn();
-    const controller = createConsolePointerDragController({
+    const onMove: any = vi.fn();
+    const onStop: any = vi.fn();
+    const controller: any = createConsolePointerDragController({
       cursor: "col-resize",
       onMove,
       onStop,
@@ -36,7 +36,7 @@ describe("console pointer drag controller", () => {
     expect(document.body.style.cursor).toBe("col-resize");
     expect(document.body.style.userSelect).toBe("none");
 
-    const moveEvent = pointerEvent("pointermove");
+    const moveEvent: any = pointerEvent("pointermove");
     document.dispatchEvent(moveEvent);
     expect(onMove).toHaveBeenCalledWith(moveEvent);
 
@@ -50,11 +50,11 @@ describe("console pointer drag controller", () => {
     expect(onMove).toHaveBeenCalledTimes(1);
   });
 
-  it("stops on pointercancel and is idempotent when already stopped", () => {
-    const target = document.createElement("div");
+  it("stops on pointercancel and is idempotent when already stopped", () : any => {
+    const target: any = document.createElement("div");
     document.body.appendChild(target);
-    const onStop = vi.fn();
-    const controller = createConsolePointerDragController({
+    const onStop: any = vi.fn();
+    const controller: any = createConsolePointerDragController({
       onMove: vi.fn(),
       onStop,
     });
@@ -74,13 +74,13 @@ describe("console pointer drag controller", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
-  it("restarting a drag removes old listeners before binding the next document", () => {
-    const firstTarget = document.createElement("div");
-    const secondTarget = document.createElement("div");
+  it("restarting a drag removes old listeners before binding the next document", () : any => {
+    const firstTarget: any = document.createElement("div");
+    const secondTarget: any = document.createElement("div");
     document.body.append(firstTarget, secondTarget);
-    const onMove = vi.fn();
-    const onStop = vi.fn();
-    const controller = createConsolePointerDragController({
+    const onMove: any = vi.fn();
+    const onStop: any = vi.fn();
+    const controller: any = createConsolePointerDragController({
       cursor: "move",
       onMove,
       onStop,
@@ -93,7 +93,7 @@ describe("console pointer drag controller", () => {
     expect(controller.dragging.value).toBe(true);
     expect(onStop).toHaveBeenCalledTimes(1);
 
-    const moveEvent = pointerEvent("pointermove");
+    const moveEvent: any = pointerEvent("pointermove");
     document.dispatchEvent(moveEvent);
     expect(onMove).toHaveBeenCalledTimes(1);
     expect(onMove).toHaveBeenCalledWith(moveEvent);

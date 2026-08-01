@@ -1,4 +1,4 @@
-export const consoleMessages = {
+export const consoleMessages: any = {
   "zh-CN": {
     appTitle: "Meshrix 服务端控制台",
     loading: "正在初始化",
@@ -14,7 +14,7 @@ export const consoleMessages = {
     nav: {
       dashboard: "工作台",
       approvalFlow: "审批流",
-      workspaces: "工作树",
+      workspaces: "工作空间",
       devices: "客户端列表",
       processingRules: "处理规则",
       parameterConfig: "参数配置",
@@ -139,7 +139,7 @@ export const consoleMessages = {
     nav: {
       dashboard: "Workbench",
       approvalFlow: "Approvals",
-      workspaces: "Work Tree",
+      workspaces: "Workspaces",
       devices: "Client List",
       processingRules: "Processing Rules",
       parameterConfig: "Parameter Config",

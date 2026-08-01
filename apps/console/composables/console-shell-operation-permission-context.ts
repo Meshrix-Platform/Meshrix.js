@@ -2,7 +2,7 @@ import type { useConsole } from "./useConsole";
 
 type ConsoleContext = ReturnType<typeof useConsole>;
 
-const operationPermissionShellKeys = [
+const operationPermissionShellKeys: any = [
   "activeOperationPermissionToolCount",
   "busyKey",
   "copyIssuedToolToken",
@@ -53,5 +53,5 @@ const operationPermissionShellKeys = [
 export type OperationPermissionShellContext = Pick<ConsoleContext, (typeof operationPermissionShellKeys)[number]>;
 
 export function pickOperationPermissionShellContext(context: ConsoleContext): OperationPermissionShellContext {
-  return Object.fromEntries(operationPermissionShellKeys.map((key) => [key, context[key]])) as OperationPermissionShellContext;
+  return Object.fromEntries(operationPermissionShellKeys.map((key?: any) : any => [key, context[key]])) as OperationPermissionShellContext;
 }

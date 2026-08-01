@@ -3,20 +3,20 @@ import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vitest/config";
 
 const webRoot = path.resolve(__dirname, "apps", "console");
-const jobManagerTestPattern = "tests/vitest/server/job-manager*.test.mjs";
+const jobManagerTestPattern = "tests/vitest/server/job-manager*.test.ts";
 const testFilePatterns = [
-  "tests/vitest/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/server/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/unit/routing/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/unit/security/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/unit/serialization/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/unit/server-runtime/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/contract/domains/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "tests/contract/protocols/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
-  "plugins/*/tests/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}",
+  "tests/vitest/**/*.{test,spec}.{ts,tsx}",
+  "tests/server/**/*.{test,spec}.{ts,tsx}",
+  "tests/unit/routing/**/*.{test,spec}.{ts,tsx}",
+  "tests/unit/security/**/*.{test,spec}.{ts,tsx}",
+  "tests/unit/serialization/**/*.{test,spec}.{ts,tsx}",
+  "tests/unit/server-runtime/**/*.{test,spec}.{ts,tsx}",
+  "tests/contract/domains/**/*.{test,spec}.{ts,tsx}",
+  "tests/contract/protocols/**/*.{test,spec}.{ts,tsx}",
+  "plugins/*/tests/**/*.{test,spec}.{ts,tsx}",
 ];
 const excludedTestPatterns = [
-  "tests/vitest/server/server-verifier-coverage-extra.test.mjs",
+  "tests/vitest/server/server-verifier-coverage-extra.test.ts",
   "tests/contract/client/**",
   "tests/contract/foundation/**",
   "tests/unit/foundation/**",
@@ -25,6 +25,7 @@ const excludedTestPatterns = [
 export default defineConfig({
   plugins: [vue()],
   resolve: {
+    conditions: ["source"],
     alias: {
       "@": webRoot,
       "@components": path.resolve(webRoot, "components"),
@@ -38,7 +39,7 @@ export default defineConfig({
   test: {
     testTimeout: 30000,
     hookTimeout: 30000,
-    // Script-style verifier/contract files are executed by tests/run.mjs via
+    // Script-style verifier/contract files are executed by tests/run.ts via
     // tools/registry/tests.registry.json, not by Vitest's file discovery.
     pool: "forks",
     projects: [
@@ -66,10 +67,10 @@ export default defineConfig({
       reportsDirectory: "build/coverage/node-vue",
       all: true,
       include: [
-        "apps/server/**/*.mjs",
+        "apps/server/**/*.ts",
         "apps/console/**/*.ts",
         "apps/console/**/*.vue",
-        "packages/**/*.mjs",
+        "packages/**/*.ts",
       ],
       exclude: [
         "tools/server-scripts/**",

@@ -1,5 +1,10 @@
 # Security Policy
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Meshrix is designed for private deployment. Security reporting, authorization behavior, and audit evidence must be handled as operational facts, not public claims.
 
 ## Supported State
@@ -55,7 +60,7 @@ Use the security and hygiene checks that match the changed surface:
 npm test
 npm run security:hygiene
 npm run test:security
-node tools/server-scripts/verify-authorization-governance.mjs
-node tools/server-scripts/verify-capability-binding-guard.mjs
-node tools/server-scripts/verify-security-local-stdio-lockdown.mjs
+node tools/server-scripts/verify-authorization-governance.ts
+node tools/server-scripts/verify-capability-binding-guard.ts
+node tools/server-scripts/verify-security-local-stdio-lockdown.ts
 ```

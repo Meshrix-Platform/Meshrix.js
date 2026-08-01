@@ -7,34 +7,34 @@ import {
   useOperationPermissionViewContext,
 } from "../../../apps/console/composables/operationPermissionViewContext";
 
-describe("operation permission view context behavior", () => {
-  it("provides and reads the permissions view context", () => {
-    const context = {
+describe("operation permission view context behavior", () : any => {
+  it("provides and reads the permissions view context", () : any => {
+    const context: any = {
       busyKey: "permissions-busy",
       toolGrants: [{ id: "grant-a" }],
       toolScopes: [{ id: "scope-a" }],
     } as any;
     const observed: Record<string, unknown> = {};
-    const Consumer = defineComponent({
-      setup() {
+    const Consumer: any = defineComponent({
+      setup() : any {
         observed.context = useOperationPermissionViewContext();
-        return () => h("span", "permissions consumer");
+        return () : any => h("span", "permissions consumer");
       },
     });
-    const Host = defineComponent({
-      setup() {
+    const Host: any = defineComponent({
+      setup() : any {
         provideOperationPermissionView(context);
-        return () => h(Consumer);
+        return () : any => h(Consumer);
       },
     });
 
-    const wrapper = mount(Host);
+    const wrapper: any = mount(Host);
 
     expect(wrapper.text()).toBe("permissions consumer");
     expect(observed.context).toBe(context);
   });
 
-  it("throws an explicit error without a provider", () => {
-    expect(() => useOperationPermissionViewContext()).toThrow("Operation Permission view context is not available");
+  it("throws an explicit error without a provider", () : any => {
+    expect(() : any => useOperationPermissionViewContext()).toThrow("Operation Permission view context is not available");
   });
 });

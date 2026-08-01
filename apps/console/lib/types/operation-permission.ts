@@ -152,6 +152,7 @@ export type OperationPermissionPendingOperation = {
   traceId?: string;
   toolExecutionId?: string;
   toolId: string;
+  toolLabel?: string;
   toolVersion?: string;
   toolsetIds?: string[];
   operationId?: string;
@@ -163,13 +164,27 @@ export type OperationPermissionPendingOperation = {
   profileId?: string;
   reasonCode?: string;
   riskReason?: string;
+  requiredApproval?: {
+    approvalLayers?: string[];
+    expiresAt?: string;
+    grantKinds?: string[];
+    [key: string]: unknown;
+  };
   redactedInput?: unknown;
   context?: unknown;
   status: string;
+  resultSummary?: Record<string, unknown>;
+  executionOutcome?:
+    | "continued_pending_approval"
+    | "executed_once"
+    | "execution_failed";
   expiresAt?: string;
   createdAt?: string;
   resolvedAt?: string;
   completedAt?: string;
+  resolvedBy?: string;
+  resolutionReason?: string;
+  resumedToolExecutionId?: string;
   errorCode?: string;
   [key: string]: unknown;
 };

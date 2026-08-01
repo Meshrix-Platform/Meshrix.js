@@ -3,7 +3,7 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { defineComponent, h, nextTick } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const dismissControllerMock = vi.hoisted(() => ({
+const dismissControllerMock: any = vi.hoisted(() : any => ({
   calls: [] as Array<{
     active: { value: boolean };
     onDismiss: () => void;
@@ -11,12 +11,12 @@ const dismissControllerMock = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock("../../../apps/console/composables/console-document-dismiss-controller", () => ({
+vi.mock("../../../apps/console/composables/console-document-dismiss-controller", () : any => ({
   useConsoleDocumentDismissController: (options: {
     active: { value: boolean };
     onDismiss: () => void;
     root: { value: HTMLElement | null };
-  }) => {
+  }) : any => {
     dismissControllerMock.calls.push(options);
     return {
       handleDocumentKeydown: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock("../../../apps/console/composables/console-document-dismiss-controller",
   },
 }));
 
-vi.mock("../../../apps/console/components/BrowseSelectButton.vue", () => ({
+vi.mock("../../../apps/console/components/BrowseSelectButton.vue", () : any => ({
   default: defineComponent({
     name: "BrowseSelectButton",
     props: {
@@ -36,8 +36,8 @@ vi.mock("../../../apps/console/components/BrowseSelectButton.vue", () => ({
       multiple: Boolean,
     },
     emits: ["select"],
-    setup(props, { emit, slots }) {
-      function handleClick() {
+    setup(props: any, { emit, slots }: Record<string, any>) : any {
+      function handleClick() : any {
         if (props.disabled) {
           return;
         }
@@ -54,7 +54,7 @@ vi.mock("../../../apps/console/components/BrowseSelectButton.vue", () => ({
         }
       }
 
-      return () =>
+      return () : any =>
         h(
           "button",
           {
@@ -75,8 +75,8 @@ import UploadSplitButton from "../../../apps/console/components/upload/UploadSpl
 
 const mountedWrappers: VueWrapper[] = [];
 
-function mountUploadSplitButton(props: Record<string, unknown> = {}) {
-  const wrapper = mount(UploadSplitButton, {
+function mountUploadSplitButton(props: Record<string, unknown> = {}) : any {
+  const wrapper: any = mount(UploadSplitButton, {
     attachTo: document.body,
     props,
   });
@@ -84,12 +84,12 @@ function mountUploadSplitButton(props: Record<string, unknown> = {}) {
   return wrapper;
 }
 
-async function flush() {
+async function flush() : Promise<any> {
   await nextTick();
   await nextTick();
 }
 
-afterEach(() => {
+afterEach(() : any => {
   while (mountedWrappers.length > 0) {
     mountedWrappers.pop()?.unmount();
   }
@@ -97,15 +97,15 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-beforeEach(() => {
+beforeEach(() : any => {
   dismissControllerMock.calls.length = 0;
 });
 
-describe("UploadSplitButton behavior", () => {
-  it("emits file selection, toggles the menu, closes after folder selection, and reacts to dismiss", async () => {
-    const wrapper = mountUploadSplitButton();
-    const mainButton = wrapper.get(".browse-select-button-stub[data-kind=\"local-files\"]");
-    const arrowButton = wrapper.get(".upload-split-arrow");
+describe("UploadSplitButton behavior", () : any => {
+  it("emits file selection, toggles the menu, closes after folder selection, and reacts to dismiss", async () : Promise<any> => {
+    const wrapper: any = mountUploadSplitButton();
+    const mainButton: any = wrapper.get(".browse-select-button-stub[data-kind=\"local-files\"]");
+    const arrowButton: any = wrapper.get(".upload-split-arrow");
 
     await mainButton.trigger("click");
     expect(wrapper.emitted("select")?.[0]?.[0]).toHaveLength(1);
@@ -127,7 +127,7 @@ describe("UploadSplitButton behavior", () => {
     await arrowButton.trigger("click");
     await flush();
 
-    const folderButton = wrapper.get(".browse-select-button-stub[data-kind=\"local-directory\"]");
+    const folderButton: any = wrapper.get(".browse-select-button-stub[data-kind=\"local-directory\"]");
     await folderButton.trigger("click");
     await flush();
 
@@ -148,10 +148,10 @@ describe("UploadSplitButton behavior", () => {
     expect(arrowButton.attributes("aria-expanded")).toBe("false");
   });
 
-  it("keeps both controls inert when disabled", async () => {
-    const wrapper = mountUploadSplitButton({ disabled: true });
-    const mainButton = wrapper.get(".browse-select-button-stub[data-kind=\"local-files\"]");
-    const arrowButton = wrapper.get(".upload-split-arrow");
+  it("keeps both controls inert when disabled", async () : Promise<any> => {
+    const wrapper: any = mountUploadSplitButton({ disabled: true });
+    const mainButton: any = wrapper.get(".browse-select-button-stub[data-kind=\"local-files\"]");
+    const arrowButton: any = wrapper.get(".upload-split-arrow");
 
     expect(mainButton.attributes("disabled")).toBeDefined();
     expect(arrowButton.attributes("disabled")).toBeDefined();

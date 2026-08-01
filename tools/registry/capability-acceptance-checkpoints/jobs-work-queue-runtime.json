@@ -55,7 +55,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete jobs-work-queue-runtime",
-      "target": "packages/foundation/src/work-queue/README.md, packages/foundation/src/work-queue/, packages/foundation/src/workflow/state-machine/work-queue/state-machine.mjs, packages/server-runtime/src/jobs/jobs/, packages/server-runtime/src/state/upload-session-store.mjs, tools/server-scripts/verify-job-work-queue.mjs, tools/server-scripts/verify-job-work-queue-capacity.mjs, tools/server-scripts/verify-work-queue-conformance.mjs"
+      "target": "packages/foundation/src/work-queue/README.md, packages/foundation/src/work-queue/, packages/foundation/src/workflow/state-machine/work-queue/state-machine.ts, packages/server-runtime/src/jobs/jobs/, packages/server-runtime/src/state/upload-session-store.ts, tools/server-scripts/verify-job-work-queue.ts, tools/server-scripts/verify-job-work-queue-capacity.ts, tools/server-scripts/verify-work-queue-conformance.ts"
     },
     "next": [
       "43bffce1-ff60-444c-80ba-d9d9d0a90d24"

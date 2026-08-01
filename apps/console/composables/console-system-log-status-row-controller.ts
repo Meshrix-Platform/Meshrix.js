@@ -44,8 +44,8 @@ export type ConsoleSystemStatusLogRowOptions = {
 };
 
 export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptions): SystemLogRow[] {
-  const queueRows = options.workQueueRows.value.map((row): SystemLogRow => {
-    const status = row.lifecycleStatus || row.status;
+  const queueRows: any = options.workQueueRows.value.map((row?: any): SystemLogRow => {
+    const status: any = row.lifecycleStatus || row.status;
     return {
       logId: `queue:${row.rowId}`,
       kindLabel: "任务队列",
@@ -70,13 +70,13 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     };
   });
 
-  const taskRows = options.recentJobs.value.map((job): SystemLogRow => ({
+  const taskRows: any = options.recentJobs.value.map((job?: any): SystemLogRow => ({
     logId: `job:${job.id}`,
     kindLabel: "服务端任务",
     displayId: shortId(job.id),
     target: compactLogDetail([job.id, job.queueId ? `队列 ${job.queueId}` : ""]),
     status: job.status,
-    statusLabel: jobStatusLabels[job.status] || job.status,
+    statusLabel: (jobStatusLabels as Record<string, string>)[job.status] || job.status,
     tone: jobStatusTone(job.status),
     stage: job.stage || job.status,
     occurredAt: job.updatedAt || job.finishedAt || job.startedAt || job.createdAt || "",
@@ -90,7 +90,7 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     error: job.error || "",
   }));
 
-  const processRows = options.backgroundProcesses.value.map((processItem): SystemLogRow => ({
+  const processRows: any = options.backgroundProcesses.value.map((processItem?: any): SystemLogRow => ({
     logId: `process:${processItem.role}`,
     kindLabel: processItem.processType === "daemon" ? "守护进程" : "服务进程",
     displayId: processItem.role,
@@ -113,8 +113,8 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     error: processItem.error || String(asRecord(processItem.lastExit)?.error || ""),
   }));
 
-  const alertRows = [...options.activeMonitorAlerts.value, ...options.recentMonitorAlertHistory.value].map((alert): SystemLogRow => {
-    const status = alert.ackRequired ? "recovered" : alert.status || alert.severity;
+  const alertRows: any = [...options.activeMonitorAlerts.value, ...options.recentMonitorAlertHistory.value].map((alert?: any): SystemLogRow => {
+    const status: any = alert.ackRequired ? "recovered" : alert.status || alert.severity;
     return {
       logId: `alert:${alert.alertId}:${alert.lastSeenAt || alert.resolvedAt || alert.firstSeenAt || ""}`,
       kindLabel: alert.ruleId === "queueInterrupted" ? "中断报警" : "监控报警",
@@ -135,7 +135,7 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     };
   });
 
-  const configAlertRows = options.agentConfigurationAlerts.value.map((alert): SystemLogRow => ({
+  const configAlertRows: any = options.agentConfigurationAlerts.value.map((alert?: any): SystemLogRow => ({
     logId: `config-alert:${alert.alertId}`,
     kindLabel: "配置报警",
     displayId: shortId(alert.alertId),
@@ -151,7 +151,7 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     error: alert.tone === "danger" ? alert.detail : "",
   }));
 
-  const toolAuditRows = options.operationPermissionAuditItems.value.map((item): SystemLogRow => ({
+  const toolAuditRows: any = options.operationPermissionAuditItems.value.map((item?: any): SystemLogRow => ({
     logId: `tool-audit:${item.toolExecutionId}`,
     kindLabel: "调用记录",
     displayId: shortId(item.toolExecutionId),
@@ -172,13 +172,13 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     error: item.errorCode || "",
   }));
 
-  const authAuditRows = options.authAudit.value.map((item): SystemLogRow => {
-    const actor = asRecord(item.actor) || {};
-    const target = asRecord(item.target) || null;
-    const redactedInput = asRecord(item.redactedInput) || null;
-    const redactedOutputSummary = asRecord(item.redactedOutputSummary) || null;
-    const operationId = item.operationId || item.action || "operation";
-    const isAuthOperation = operationId.startsWith("auth.");
+  const authAuditRows: any = options.authAudit.value.map((item?: any): SystemLogRow => {
+    const actor: any = asRecord(item.actor) || {};
+    const target: any = asRecord(item.target) || null;
+    const redactedInput: any = asRecord(item.redactedInput) || null;
+    const redactedOutputSummary: any = asRecord(item.redactedOutputSummary) || null;
+    const operationId: any = item.operationId || item.action || "operation";
+    const isAuthOperation: any = operationId.startsWith("auth.");
     return {
       logId: `operation-audit:${item.auditId}`,
       kindLabel: isAuthOperation ? "认证日志" : "操作日志",

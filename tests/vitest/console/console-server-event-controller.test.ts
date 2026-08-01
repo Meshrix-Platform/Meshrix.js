@@ -4,15 +4,15 @@ import { createConsoleServerEventController } from "../../../apps/console/compos
 import { subscribeEvents } from "../../../apps/console/lib/server-events-client";
 import type { EventSubscriptionResponse, ProtocolEvent } from "../../../apps/console/lib/types";
 
-const serverEventsClientMock = vi.hoisted(() => ({
+const serverEventsClientMock: any = vi.hoisted(() : any => ({
   subscribeEvents: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/server-events-client", () => ({
+vi.mock("../../../apps/console/lib/server-events-client", () : any => ({
   subscribeEvents: serverEventsClientMock.subscribeEvents,
 }));
 
-const mockedSubscribeEvents = vi.mocked(subscribeEvents);
+const mockedSubscribeEvents: any = vi.mocked(subscribeEvents);
 
 function makeEvent(offset: number, overrides: Partial<ProtocolEvent> = {}): ProtocolEvent {
   return {
@@ -38,22 +38,22 @@ function makeResponse(overrides: Partial<EventSubscriptionResponse> = {}): Event
   };
 }
 
-function createDeferred<T>() {
+function createDeferred<T>() : any {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((nextResolve, nextReject) => {
+  const promise: any = new Promise<T>((nextResolve?: any, nextReject?: any) : any => {
     resolve = nextResolve;
     reject = nextReject;
   });
   return { promise, resolve, reject };
 }
 
-function createFixture(options: { currentTopics?: string; applyServerEvent?: (event: ProtocolEvent) => boolean } = {}) {
-  const applyServerEvent = vi.fn(options.applyServerEvent || (() => true));
-  const refreshState = vi.fn().mockResolvedValue(undefined);
-  const controller = createConsoleServerEventController({
+function createFixture(options: { currentTopics?: string; applyServerEvent?: (event: ProtocolEvent) => boolean } = {}) : any {
+  const applyServerEvent: any = vi.fn(options.applyServerEvent || (() : any => true));
+  const refreshState: any = vi.fn().mockResolvedValue(undefined);
+  const controller: any = createConsoleServerEventController({
     applyServerEvent,
-    currentTopics: options.currentTopics ? () => options.currentTopics! : () => "console.topic",
+    currentTopics: options.currentTopics ? () : any => options.currentTopics! : () : any => "console.topic",
     refreshState,
   });
 
@@ -64,22 +64,22 @@ function createFixture(options: { currentTopics?: string; applyServerEvent?: (ev
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-06-04T00:00:00.000Z"));
   vi.clearAllMocks();
   mockedSubscribeEvents.mockReset();
 });
 
-afterEach(() => {
+afterEach(() : any => {
   vi.clearAllTimers();
   vi.useRealTimers();
 });
 
-describe("console server event controller", () => {
-  it("calculates cursors from protocol events and refreshes when some incoming events are unhandled", async () => {
+describe("console server event controller", () : any => {
+  it("calculates cursors from protocol events and refreshes when some incoming events are unhandled", async () : Promise<any> => {
     const { applyServerEvent, controller, refreshState } = createFixture({
-      applyServerEvent: (event) => event.offset !== 7,
+      applyServerEvent: (event?: any) : any => event.offset !== 7,
     });
     mockedSubscribeEvents.mockResolvedValueOnce(
       makeResponse({
@@ -104,16 +104,16 @@ describe("console server event controller", () => {
       },
       { signal: expect.any(AbortSignal) },
     );
-    expect(applyServerEvent.mock.calls.map(([event]) => event.offset)).toEqual([1, 3, 4, 7]);
+    expect(applyServerEvent.mock.calls.map(([event]: any[]) : any => event.offset)).toEqual([1, 3, 4, 7]);
     expect(refreshState).toHaveBeenCalledWith({ silent: true });
     expect(controller.serverEventCursor.value).toBe(8);
 
     controller.stopServerEventSubscription();
   });
 
-  it("runs without snapshots after the first cursor and skips refresh when every event is handled", async () => {
+  it("runs without snapshots after the first cursor and skips refresh when every event is handled", async () : Promise<any> => {
     const { controller, refreshState } = createFixture({
-      applyServerEvent: () => true,
+      applyServerEvent: () : any => true,
     });
     controller.serverEventCursor.value = 8;
     mockedSubscribeEvents.mockResolvedValueOnce(
@@ -142,13 +142,13 @@ describe("console server event controller", () => {
     controller.stopServerEventSubscription();
   });
 
-  it("starts a fresh subscription, aborts the previous request, and clears pending retry timers on stop", async () => {
-    const request = createDeferred<EventSubscriptionResponse>();
+  it("starts a fresh subscription, aborts the previous request, and clears pending retry timers on stop", async () : Promise<any> => {
+    const request: any = createDeferred<EventSubscriptionResponse>();
     mockedSubscribeEvents.mockReturnValueOnce(request.promise);
     const { controller } = createFixture();
-    const priorAbortController = new AbortController();
+    const priorAbortController: any = new AbortController();
     controller.serverEventAbortController.value = priorAbortController;
-    const retryWait = controller.waitForServerEventRetry(3000);
+    const retryWait: any = controller.waitForServerEventRetry(3000);
 
     controller.serverEventCursor.value = 5;
     controller.serverEventSubscriptionGeneration.value = 2;
@@ -181,7 +181,7 @@ describe("console server event controller", () => {
     expect(controller.serverEventAbortController.value).toBeNull();
   });
 
-  it("retries after non-abort failures and stops retrying on abort errors", async () => {
+  it("retries after non-abort failures and stops retrying on abort errors", async () : Promise<any> => {
     const { controller } = createFixture();
 
     mockedSubscribeEvents.mockRejectedValueOnce(Object.assign(new Error("abort"), { name: "AbortError" }));
@@ -196,7 +196,7 @@ describe("console server event controller", () => {
       .mockRejectedValueOnce(new Error("temporary failure"))
       .mockResolvedValueOnce(makeResponse({ nextCursor: 2, events: [makeEvent(1)] }));
 
-    const retryPromise = controller.runServerEventSubscription();
+    const retryPromise: any = controller.runServerEventSubscription();
     await Promise.resolve();
 
     expect(controller.serverEventTimer.value).not.toBeNull();

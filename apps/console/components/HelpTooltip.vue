@@ -34,10 +34,10 @@ function isTupleItem(item: HelpTooltipItem): item is readonly [string, string] {
   return Array.isArray(item);
 }
 
-const normalizedItems = computed(() => props.items.map((item) => {
+const normalizedItems = computed(() => props.items.map((item: any) => {
   if (isTupleItem(item)) return { title: item[0], description: item[1] };
   return { title: item.title || item.label || "", description: item.description || "" };
-}).filter((item) => item.title || item.description));
+}).filter((item: any) => item.title || item.description));
 
 const hasContent = computed(() =>
   normalizedItems.value.length > 0 ||

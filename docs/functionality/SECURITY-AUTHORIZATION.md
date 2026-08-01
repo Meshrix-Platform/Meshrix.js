@@ -1,5 +1,10 @@
 # Security, Authorization, And Identity
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Security and authorization provide subject identity, session control, capability binding, secret handling, risk policy, approval, audit, and redaction for all governed operations.
 
 ## Responsibilities
@@ -35,15 +40,21 @@ and irreversible correlations. Do not copy identities, resources, requests,
 responses, prompts, errors, paths, URLs, headers, tokens, or runtime content.
 Mandatory proof failure denies before the protected boundary; optional logs,
 metrics, and traces may be aggregated, sampled, or shed without changing the
-authorization result. A surface lacking sink-bound permit validation is not
-release-ready even when its ingress check succeeds.
+authorization result. A surface lacking sink-bound permit validation fails the
+Functional Release Gate even when its ingress check succeeds.
 
 - The Risk Control Model is the runtime governance model for each admitted operation. It binds subject identity, permission policy, data-state semantics, traffic/resource controls, and audit recovery evidence into a fail-closed decision path.
 - Apply fail-closed handling for subject, grant, tag policy, capability binding, and risk decision resolution.
+- Protected non-public writes revalidate the current grant, process identity or console authority, policy revision, and any approval binding after acquiring the operation lock and before invoking the handler. Missing revalidation support or authority revoked while waiting for the lock fails closed.
 - Console password failures increment and lock the account through one conditional SQLite update after password verification. Concurrent failures cannot overwrite each other's counters, and a successful session transaction verifies that the credential, enabled state, and lock state did not change while password hashing was in progress.
 - Console user updates compute password hashes before entering an immediate SQLite transaction, then re-read the latest user row and apply only the explicitly requested fields. Credential replacement and session invalidation commit together, so a concurrent disable or role reduction is not overwritten and a verified old credential cannot create a session across the change.
+- Console login uses metadata-only operation audit and does not retain login input, an input-derived credential digest, or input logging material.
 - A console session is resolved once per HTTP request and is never cached across requests. The request-scoped cache retains an immutable validated session projection, not the raw token, and rechecks absolute expiry on every cache hit. Persisted `last_seen_at` activity writes are coalesced to at most once per minute per active session through a conditional update bound to the prior session state. Invalid persisted times fail closed. Expiry, disabled-user, and inactivity checks run before a request snapshot is created; revocation or account changes are visible to the next request.
 - Console Auth and authorization SQLite directories are owner-only (`0700`); current database, WAL, shared-memory, journal, and CSRF-secret files are owner-only (`0600`). Existing unsafe modes are tightened during construction before the stores are exposed.
+- Local Secret Store value files contain only AES-256-GCM envelopes. Associated data binds the secret reference, provider, family, authentication type, revision, scope metadata, and value-key inventory. The 32-byte master key is loaded from `MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE`, must be outside governed data, and is never copied into backup snapshots, registries, audit, reports, or public status. Missing, wrong, malformed, or tampered custody fails closed; plaintext value records and the retired store protocol are rejected instead of migrated.
+- Production operation-proof signing uses a separate 32-byte secret selected by `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE`. The file must be absolute, regular, non-symlinked, bounded, outside governed data, and distinct from the Local Secret Store master key at deployment admission. Invalid or missing production signer custody fails before the proof runtime opens.
+- The proof signer port can compose one active signer with historical verification generations. Signing always uses the active generation; verification selects the exact signer identity and algorithm and rejects unknown generations.
+- Local Secret master-key rotation stages and verifies every active encrypted value under a distinct next provider while holding the mutation lock, then switches all registry references in one atomic registry write. Failure before that write preserves the prior generation.
 - Redact raw tokens, cookies, private keys, upstream request secrets, local absolute paths, and private runtime state.
 - Use grant tokens for Operation Permission and MCP execution boundaries.
 - Direct `POST /api/mcp/local-grant` issuance is an administrative console operation. It requires a valid console session with `runtime:admin`, same-origin and CSRF validation, and explicit safety confirmation for write-capable grants. Loopback location and a caller-supplied process public key are not authorization facts.
@@ -57,6 +68,7 @@ release-ready even when its ingress check succeeds.
 - One signed MCP HTTP batch consumes process identity once before protected messages are dispatched. Message-level operation policy is still evaluated independently, without replaying the HTTP nonce or allowing an authentication failure after an earlier protected message has executed.
 - HTTP body admission enforces a 32 MiB request limit, a 128 MiB and 64-request process budget, and a 64 MiB and 16-request authenticated-subject budget. Declared lengths are rejected before body reads when possible; streamed chunks are charged incrementally, oversized streams are stopped, and every admission charge is released from the request `finally` path.
 - `X-Forwarded-For` is untrusted by default, including for direct loopback connections. HTTP client-IP normalization parses a forwarded chain only when the direct socket peer is explicitly listed in `MESHRIX_TRUSTED_PROXIES`; it walks the validated IP chain from the trusted edge toward the first untrusted hop and otherwise uses the socket peer.
+- `MESHRIX_PRODUCTION_INGRESS_MODE=trusted-proxy` additionally requires an HTTPS advertised origin, secure cookies, exact proxy IPs, one forwarded host and protocol, and a valid client chain before application routing. Only loopback health probes bypass proxy metadata.
 - Fixed-window HTTP rate-limit state is bounded. Each limiter retains at most its configured bucket capacity, defaults to 10,000 buckets, reclaims expired buckets in creation order, and aggregates new high-cardinality identifiers into one overflow bucket while capacity is saturated. Active buckets are not evicted to admit rotating identifiers.
 - Discovery capacity recovery evicts only expired offline client records. The operator's configured offline threshold is applied first; when that user setting is empty, a private 15-minute retention bound protects runtime capacity without representing a persisted user default.
 - Capability-binding state accepts only the exact prior local-file record shape for one atomic migration into sealed sidecar-backed state. Any malformed current record, invalid key material, unexpected field, or failed migration remains fail-closed.
@@ -74,7 +86,7 @@ Owner-scoped Host ports bind every admission to the verified artifact generation
 
 Process identity issuance and controlled execution additionally require a Host-issued invocation authorization derived from the admitted request's subject and current governance result. The signed in-memory authorization is bounded, short-lived, operation-, request-, source-request-, owner-, and generation-bound, and separately single-use for each Host capability audience. Host ports use only its principal and governance claims. The authorization is transient call data and is not persisted in plugin state, relay sessions, logs, audit, or recovery storage.
 
-The generic process-identity Host capability reuses the sealed Core process-identity state. A binding covers tenant, subject, target, device, process, workspace, correlation, and the request idempotency digest. Issue, inspect, and revoke serialize through the same persistent authority, so valid and revoked bindings survive restart. Revocation records a minimum Ed25519 receipt bound to the process identity reference, binding reference, target, context digest, revocation time, and Core server signing identity. Public plugin projections contain controlled references, status, expiry, revocation time, and receipt digest only.
+The generic process-identity Host capability reuses the sealed Meshrix process-identity state. A binding covers tenant, subject, target, device, process, workspace, correlation, and the request idempotency digest. Issue, inspect, and revoke serialize through the same persistent authority, so valid and revoked bindings survive restart. Revocation records a minimum Ed25519 receipt bound to the process identity reference, binding reference, target, context digest, revocation time, and Meshrix server signing identity. Public plugin projections contain controlled references, status, expiry, revocation time, and receipt digest only.
 
 Process-identity persistence accepts only the exact current top-level state schema and current state version. A non-current version or unexpected field initializes fresh current state; no retired binding field is discovered, translated, or imported, and no compatibility migration remains.
 
@@ -84,7 +96,7 @@ The controlled-execution Host capability rechecks tenant, subject, target, and p
 
 ## Upstream Publishing Security Boundary
 
-The current runtime has no authorized developer publishing command, so direct registration or configuration mutation remains prohibited. The final control-plane path must distinguish an authenticated, owner-authorized publishing command from direct gateway or filesystem mutation. Authentication, service ownership, expected revision, idempotency, reference binding, risk, and approval checks occur before persistence, secret resolution, or network side effects.
+Service developer publishing is authorized only through the authenticated control-plane contract (`POST /api/gateway/v1/services` and its service-specific replace, disable, remove, and republish routes); the console Publish action submits that same authenticated command. Direct gateway registration or manifest filesystem mutation remains prohibited. Authentication, service ownership, expected revision, idempotency, reference binding, risk, and approval checks occur before persistence, secret resolution, or network side effects.
 
 Publishing input is parsed from bounded bytes with duplicate-key detection before domain materialization. Closed schemas reject unknown and prototype-mutating keys, controls, unsafe Unicode, unsupported methods or protocols, caller-defined executable names, path traversal, unsafe targets, unbounded schemas, and excessive bytes, depth, collections, operations, or strings. Caller data is never evaluated as a template, command, expression, environment-variable name, filesystem name, or configuration fragment.
 
@@ -100,15 +112,33 @@ npm run verify:security-alert-lifecycle
 npm run security:hygiene
 npm run test:security
 npm test -- --suite security.http-resource-admission
-node tools/server-scripts/verify-authorization-governance.mjs
-node tools/server-scripts/verify-process-identity.mjs
-npx vitest run tests/vitest/server/process-identity-nonce-capacity.test.mjs tests/vitest/server/local-secret-crash-consistency.test.mjs tests/vitest/server/plugin-mcp-outlet-visibility.test.mjs
-npx vitest run tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.mjs tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.mjs tests/vitest/server/authorization-capability-binding-guard.test.mjs
-npx vitest run tests/vitest/server/runtime-logger.test.mjs tests/vitest/server/console-auth.test.mjs tests/vitest/server/client-registry-capacity-recovery.test.mjs
-npx vitest run tests/vitest/server/p2-security-boundaries.test.mjs tests/vitest/server/mcp-installer-device-authorization.test.mjs tests/vitest/server/http-server-middleware-rate-limit.test.mjs
-node tools/server-scripts/verify-security-local-stdio-lockdown.mjs
+node tools/server-scripts/verify-authorization-governance.ts
+node tools/server-scripts/verify-process-identity.ts
+npx vitest run tests/vitest/server/process-identity-nonce-capacity.test.ts tests/vitest/server/local-secret-crash-consistency.test.ts tests/vitest/server/plugin-mcp-outlet-visibility.test.ts
+npx vitest run tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.ts tests/vitest/server/authorization-capability-binding-guard.test.ts
+npx vitest run tests/vitest/server/runtime-logger.test.ts tests/vitest/server/console-auth.test.ts tests/vitest/server/client-registry-capacity-recovery.test.ts
+npx vitest run tests/vitest/server/p2-security-boundaries.test.ts tests/vitest/server/mcp-installer-device-authorization.test.ts tests/vitest/server/http-server-middleware-rate-limit.test.ts
+node tools/server-scripts/verify-security-local-stdio-lockdown.ts
 ```
 
-`tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.mjs` is the release-readiness source of truth for MCP process identity credential-store evidence. Release evidence requires the current platform host to prove a system credential backend, `reportLeakScan=true`, zero verifier failures, explicit denial of private-file fallback reads in `system` or named system-backend mode, and the controlled `0600` file fallback plus Linux Secret Service portability proof. The Linux proof runs in `MESHRIX_MCP_PROCESS_IDENTITY_LINUX_IMAGE` when provided, otherwise in the local `meshrix-mcp-secret-service-proof:node24-bookworm` image built by the verifier with Docker BuildKit apt caches. The release reducer checks the concrete verifier test evidence, not only the summary flags. Non-current-platform skips, file fallback alone, and container proof alone are insufficient for release readiness.
+`tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts`
+owns the Functional Release Gate evidence for MCP process-identity credential
+storage. The functional evidence requires `reportLeakScan=true`, zero verifier
+failures, explicit denial of private-file fallback reads in `system` or named
+system-backend mode, the controlled `0600` file fallback, and a reproducible
+Linux Secret Service simulation. The Linux simulation runs in
+`MESHRIX_MCP_PROCESS_IDENTITY_LINUX_IMAGE` when provided, otherwise in the
+local `meshrix-mcp-secret-service-proof:node24-bookworm` image built by the
+verifier with Docker BuildKit apt caches. The Functional Release Gate checks
+the concrete verifier evidence, not only summary flags.
 
-The local stdio release check is named `local-stdio-interface-lockdown` and is verified by `tools/server-scripts/verify-security-local-stdio-lockdown.mjs`. Run `tools/server-scripts/production-readiness-gate.mjs` for the full production gate; this page lists the security-specific verification entry points.
+A native operating-system credential backend is verified separately through
+`npm run verify:real-machine -- ...`. Its receipt may establish an Environment
+Support Claim for that exact system, but a missing or failed native receipt
+cannot block or change functional acceptance.
+
+The local stdio functional check is named `local-stdio-interface-lockdown` and
+is verified by
+`tools/server-scripts/verify-security-local-stdio-lockdown.ts`. Run
+`npm run verify:acceptance` for the complete Functional Release Gate; this page
+lists the security-specific verification entry points.

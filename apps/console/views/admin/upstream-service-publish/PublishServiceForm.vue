@@ -39,7 +39,7 @@ const formTabs: MeshrixTab[] = [
 
 function updateTags(event: Event) {
   const value = (event.target as HTMLInputElement).value;
-  form.tags = value.split(",").map((tag) => tag.trim()).filter(Boolean);
+  form.tags = value.split(",").map((tag: any) => tag.trim()).filter(Boolean);
 }
 
 function saveObjectField(field: typeof descriptorObjectFields[number], value: unknown) {
@@ -56,8 +56,8 @@ function addOperation() {
   const path = form.path?.trim() || "";
   const requestMaxBytes = Number(form.requestMaxBytes);
   const responseMaxBytes = Number(form.responseMaxBytes);
-  const requestMediaTypes = String(form.requestMediaTypes || "").split(",").map((value) => value.trim()).filter(Boolean);
-  const responseMediaTypes = String(form.responseMediaTypes || "").split(",").map((value) => value.trim()).filter(Boolean);
+  const requestMediaTypes = String(form.requestMediaTypes || "").split(",").map((value: any) => value.trim()).filter(Boolean);
+  const responseMediaTypes = String(form.responseMediaTypes || "").split(",").map((value: any) => value.trim()).filter(Boolean);
   if (!operationKey || !method || !path || !form.requestRepresentationMode || !form.responseRepresentationMode) {
     operationError.value = "Complete all required operation fields.";
     return;
@@ -77,7 +77,7 @@ function addOperation() {
     operationError.value = "JSON-RPC operations require Structured JSON for both request and response.";
     return;
   }
-  if (form.operations?.some((operation) => operation.operationKey === operationKey)) {
+  if (form.operations?.some((operation: any) => operation.operationKey === operationKey)) {
     operationError.value = "Operation keys must be unique within a service.";
     return;
   }
@@ -318,6 +318,23 @@ function removeReference(index: number) {
     </div>
 
     <div v-if="activeTab === 'advanced'" class="tab-content advanced-config-grid" role="tabpanel" aria-label="Advanced service JSON">
+      <section class="operation-descriptor-preview" aria-label="Imported operation descriptors">
+        <h3>Imported operation descriptors</h3>
+        <p class="form-help">Read-only payload mappings and byte envelopes loaded from the service descriptor.</p>
+        <div v-if="form.operations?.length" class="operation-descriptor-summary">
+          <article v-for="operation in form.operations" :key="operation.operationKey">
+            <strong>{{ operation.operationKey }}</strong>
+            <span>{{ operation.method }} {{ operation.path }}</span>
+            <span>Approval: {{ operation.requiresApproval ? "required" : "not required" }}</span>
+            <span>
+              Request:
+              {{ operation.payloadTransport?.request?.mode || "not configured" }}
+              · maxBytes {{ operation.payloadTransport?.request?.maxBytes || "not configured" }}
+            </span>
+          </article>
+        </div>
+        <pre>{{ JSON.stringify(form.operations || [], null, 2) }}</pre>
+      </section>
       <JsonConfigFileEditor
         v-for="field in descriptorObjectFields"
         :key="`${selectedServiceId || 'new'}:${field}`"
@@ -362,6 +379,49 @@ function removeReference(index: number) {
   color: var(--text-muted);
   font-size: var(--text-sm);
   line-height: var(--leading-normal);
+}
+.operation-descriptor-preview {
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-subtle);
+}
+.operation-descriptor-preview h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+.operation-descriptor-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+}
+.operation-descriptor-summary article {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.operation-descriptor-preview pre {
+  max-height: 34rem;
+  margin: 0.65rem 0 0;
+  padding: 0.75rem;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .form-field {
   display: flex;

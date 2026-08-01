@@ -40,24 +40,24 @@ export function resolveAdminViewLabel(viewKey: string, messages: ConsoleNavMessa
   return messages.nav[viewKey] || viewKey;
 }
 
-const state = reactive({
+const state: any = reactive({
   open: false,
 });
 
-const query = ref("");
-const activeIndex = ref(0);
+const query: any = ref("");
+const activeIndex: any = ref(0);
 
-export function openConsoleCommandPalette() {
+export function openConsoleCommandPalette() : any {
   state.open = true;
   query.value = "";
   activeIndex.value = 0;
 }
 
-export function closeConsoleCommandPalette() {
+export function closeConsoleCommandPalette() : any {
   state.open = false;
 }
 
-export function toggleConsoleCommandPalette() {
+export function toggleConsoleCommandPalette() : any {
   if (state.open) {
     closeConsoleCommandPalette();
     return;
@@ -69,13 +69,13 @@ export function filterConsoleCommandPaletteItems(
   items: ConsoleCommandPaletteItem[],
   rawQuery: string,
 ): ConsoleCommandPaletteItem[] {
-  const normalized = rawQuery.trim().toLowerCase();
+  const normalized: any = rawQuery.trim().toLowerCase();
   if (!normalized) {
     return items;
   }
-  return items.filter((item) =>
+  return items.filter((item?: any) : any =>
     [item.label, item.sectionLabel, ...item.keywords].some(
-      (text) => text && text.toLowerCase().includes(normalized),
+      (text?: any) : any => text && text.toLowerCase().includes(normalized),
     ),
   );
 }
@@ -84,24 +84,24 @@ export function filterConsoleCommandPaletteItems(
 export function groupConsoleCommandPaletteItems(
   items: ConsoleCommandPaletteItem[],
 ): { sectionLabel: string; items: ConsoleCommandPaletteItem[] }[] {
-  const groups = new Map<string, ConsoleCommandPaletteItem[]>();
+  const groups: any = new Map<string, ConsoleCommandPaletteItem[]>();
   for (const item of items) {
-    const bucket = groups.get(item.sectionLabel);
+    const bucket: any = groups.get(item.sectionLabel);
     if (bucket) {
       bucket.push(item);
     } else {
       groups.set(item.sectionLabel, [item]);
     }
   }
-  return [...groups.entries()].map(([sectionLabel, groupItems]) => ({
+  return [...groups.entries()].map(([sectionLabel, groupItems]: any[]) : any => ({
     sectionLabel,
     items: groupItems,
   }));
 }
 
-export function useConsoleCommandPalette() {
+export function useConsoleCommandPalette() : any {
   return {
-    paletteOpen: computed(() => state.open),
+    paletteOpen: computed(() : any => state.open),
     query,
     activeIndex,
     openPalette: openConsoleCommandPalette,

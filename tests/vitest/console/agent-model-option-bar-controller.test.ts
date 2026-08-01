@@ -12,15 +12,15 @@ import {
   type AgentModelOptionBarProps,
 } from "../../../apps/console/composables/agentModelOptionBarController";
 
-const navigateBrowserHashRouteMock = vi.hoisted(() => vi.fn());
+const navigateBrowserHashRouteMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../apps/console/lib/browser-window", () => ({
+vi.mock("../../../apps/console/lib/browser-window", () : any => ({
   navigateBrowserHashRoute: navigateBrowserHashRouteMock,
 }));
 
-function createController(props: Partial<AgentModelOptionBarProps> = {}) {
-  const emit = vi.fn();
-  const controller = useAgentModelOptionBarController({
+function createController(props: Partial<AgentModelOptionBarProps> = {}) : any {
+  const emit: any = vi.fn();
+  const controller: any = useAgentModelOptionBarController({
     modelValue: "",
     options: [],
     showDisabledReason: true,
@@ -36,9 +36,9 @@ function createController(props: Partial<AgentModelOptionBarProps> = {}) {
   };
 }
 
-function changeEvent(value: string) {
-  const select = document.createElement("select");
-  const option = document.createElement("option");
+function changeEvent(value: string) : any {
+  const select: any = document.createElement("select");
+  const option: any = document.createElement("option");
   option.value = value;
   select.appendChild(option);
   select.value = value;
@@ -47,8 +47,8 @@ function changeEvent(value: string) {
   });
 }
 
-function changeEventWithTarget(value: string) {
-  const event = changeEvent(value);
+function changeEventWithTarget(value: string) : any {
+  const event: any = changeEvent(value);
   Object.defineProperty(event, "target", {
     configurable: true,
     value: { value },
@@ -56,12 +56,12 @@ function changeEventWithTarget(value: string) {
   return event;
 }
 
-describe("agent model option bar controller behavior", () => {
-  beforeEach(() => {
+describe("agent model option bar controller behavior", () : any => {
+  beforeEach(() : any => {
     navigateBrowserHashRouteMock.mockClear();
   });
 
-  it("normalizes options, removes duplicate or empty values, and appends disabled reasons", () => {
+  it("normalizes options, removes duplicate or empty values, and appends disabled reasons", () : any => {
     const { controller } = createController({
       modelValue: "agent-a",
       options: [
@@ -84,7 +84,7 @@ describe("agent model option bar controller behavior", () => {
     ]);
   });
 
-  it("emits model updates for normal selection changes", () => {
+  it("emits model updates for normal selection changes", () : any => {
     const { controller, emit } = createController({
       options: [
         { value: "agent-a", label: "Agent A" },
@@ -98,7 +98,7 @@ describe("agent model option bar controller behavior", () => {
     expect(navigateBrowserHashRouteMock).not.toHaveBeenCalled();
   });
 
-  it("navigates to model library when the empty-library action is selected or clicked", () => {
+  it("navigates to model library when the empty-library action is selected or clicked", () : any => {
     const { controller, emit } = createController({
       options: [],
       emptyLibraryActionIcon: "⚙",
@@ -118,14 +118,14 @@ describe("agent model option bar controller behavior", () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it("handles empty-library keyboard activation and ignores unrelated keys", () => {
+  it("handles empty-library keyboard activation and ignores unrelated keys", () : any => {
     const { controller } = createController({
       options: [],
       emptyLibraryRoute: " ",
     });
-    const enter = new KeyboardEvent("keydown", { key: "Enter" });
-    const space = new KeyboardEvent("keydown", { key: " " });
-    const escape = new KeyboardEvent("keydown", { key: "Escape" });
+    const enter: any = new KeyboardEvent("keydown", { key: "Enter" });
+    const space: any = new KeyboardEvent("keydown", { key: " " });
+    const escape: any = new KeyboardEvent("keydown", { key: "Escape" });
     vi.spyOn(enter, "preventDefault");
     vi.spyOn(space, "preventDefault");
     vi.spyOn(escape, "preventDefault");
@@ -140,11 +140,11 @@ describe("agent model option bar controller behavior", () => {
     expect(navigateBrowserHashRouteMock).not.toHaveBeenCalled();
   });
 
-  it("does not navigate on click or keyboard when configured options exist", () => {
+  it("does not navigate on click or keyboard when configured options exist", () : any => {
     const { controller } = createController({
       options: [{ value: "agent-a", label: "Agent A" }],
     });
-    const enter = new KeyboardEvent("keydown", { key: "Enter" });
+    const enter: any = new KeyboardEvent("keydown", { key: "Enter" });
     vi.spyOn(enter, "preventDefault");
 
     controller.handleSelectClick();

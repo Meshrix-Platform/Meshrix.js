@@ -12,7 +12,7 @@ const props = defineProps<{
   gates: ProductionHealthGate[];
 }>();
 
-const failedGates = computed(() => props.gates.filter((gate) => gate.status !== "pass"));
+const failedGates = computed(() => props.gates.filter((gate: any) => gate.status !== "pass"));
 </script>
 
 <template>

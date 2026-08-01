@@ -12,8 +12,8 @@
 
 - Singleton registry: `packages/foundation/src/version-control/version-registry.json`
 - Registry schema: `packages/foundation/src/version-control/version-registry.schema.json`
-- Scan contract: `packages/foundation/src/version-control/version-scan.mjs`
-- Naming verifier: `node tools/server-scripts/verify-version-naming.mjs`
+- Scan contract: `packages/foundation/src/version-control/version-scan.ts`
+- Naming verifier: `node tools/server-scripts/verify-version-naming.ts`
 - Verifier: `npm run verify:version-registry`
 - Runtime artifact store root: `.meshrix-server-data/artifacts`
 - Platform version baseline: `v0.0.1`
@@ -29,7 +29,7 @@ A governed version has exactly three segments after tokenization: the platform v
 2. Define migration path configuration as explicit `fromVersion -> toVersion` transitions.
 3. Preserve adjacent-version migration rules, compatibility windows, retirement state, and evidence references.
 4. Maintain a Version Compatibility Table for `consumerRef -> providerRef` compatibility facts.
-5. Export compatibility projections for UI, diagnostics, and release-readiness consumers without making those consumers the source of truth.
+5. Export compatibility projections for UI, diagnostics, the Functional Release Gate, and optional Environment Support Claim consumers without making those consumers the source of truth.
 6. Reference materialized version artifacts in `.meshrix-server-data/artifacts` without treating that artifact store as the configuration authority.
 
 ## Identity

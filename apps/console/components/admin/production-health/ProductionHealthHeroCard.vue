@@ -73,19 +73,19 @@ const healthMetaItems = computed(() => [
     </div>
 
     <div class="detail-metrics production-health-metrics">
-      <div>
+      <div :data-tone="(health?.summary.pass || 0) > 0 ? 'success' : undefined">
         <span>通过门禁</span>
         <strong>{{ health?.summary.pass || 0 }}</strong>
       </div>
-      <div>
+      <div :data-tone="(health?.summary.fail || 0) > 0 ? 'danger' : undefined">
         <span>失败门禁</span>
         <strong>{{ health?.summary.fail || 0 }}</strong>
       </div>
-      <div>
+      <div :data-tone="(health?.summary.timeout || 0) > 0 ? 'warning' : undefined">
         <span>超时门禁</span>
         <strong>{{ health?.summary.timeout || 0 }}</strong>
       </div>
-      <div>
+      <div :data-tone="(health?.summary.blockedP0 || 0) > 0 ? 'danger' : undefined">
         <span>P0 阻塞</span>
         <strong>{{ health?.summary.blockedP0 || 0 }}</strong>
       </div>

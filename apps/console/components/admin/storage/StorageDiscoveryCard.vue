@@ -25,7 +25,7 @@ const {
     <dl class="meta-list">
       <div>
         <dt>服务 ID</dt>
-        <dd>{{ consoleState?.discovery?.value?.serverId || "未配置" }}</dd>
+        <dd :title="consoleState?.discovery?.value?.serverId || undefined">{{ consoleState?.discovery?.value?.serverId || "未配置" }}</dd>
       </div>
       <div>
         <dt>对外服务地址</dt>

@@ -232,9 +232,9 @@
     ],
     "requiredFiles": [
       "docs/architecture/ARCHITECTURE.md",
-      "tools/verifiers/architecture-graph.mjs",
-      "tools/registry/source-layout-manifest.mjs",
-      "tools/registry/architecture-layout-manifest.mjs",
+      "tools/verifiers/architecture-graph.ts",
+      "tools/registry/source-layout-manifest.ts",
+      "tools/registry/architecture-layout-manifest.ts",
       "tools/registry/fact-source-authority.registry.json"
     ],
     "sourceFileOrganization": {
@@ -280,10 +280,9 @@
           "tools"
         ],
         "extensions": [
-          ".cjs",
-          ".js",
-          ".mjs",
-          ".ts",
+        ".cjs",
+        ".js",
+        ".ts",
           ".tsx",
           ".vue"
         ],
@@ -306,7 +305,7 @@
         }
       ],
       "extensions": [
-        ".mjs",
+        ".ts",
         ".js"
       ],
       "sourceReferenceRoots": [

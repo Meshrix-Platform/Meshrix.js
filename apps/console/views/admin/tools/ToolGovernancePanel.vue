@@ -39,6 +39,7 @@ const policyPreviewGrantId = defineModel<string>("policyPreviewGrantId", { requi
     <div class="section-header">
       <div>
         <h3>工具治理</h3>
+        <p>选择工具、智能体档案与授权后预演策略评估；评估只读，不改变任何授权。</p>
       </div>
       <div class="section-tags">
         <span>档案 {{ profiles.length }}</span>
@@ -50,6 +51,7 @@ const policyPreviewGrantId = defineModel<string>("policyPreviewGrantId", { requi
       <label>
         <span>工具</span>
         <select v-model="policyPreviewToolId">
+          <option v-if="!toolOptions.length" value="" disabled>暂无可选工具</option>
           <option
             v-for="option in toolOptions"
             :key="String(option.value)"
@@ -62,6 +64,7 @@ const policyPreviewGrantId = defineModel<string>("policyPreviewGrantId", { requi
       <label>
         <span>智能体档案</span>
         <select v-model="policyPreviewProfileId">
+          <option v-if="!profileOptions.length" value="" disabled>暂无可选档案</option>
           <option
             v-for="option in profileOptions"
             :key="String(option.value)"

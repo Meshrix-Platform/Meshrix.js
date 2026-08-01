@@ -62,7 +62,7 @@ const {
       </label>
     </div>
     <div class="job-table compact-job-table maintenance-schedule-table">
-      <div class="job-table-header">
+      <div v-if="maintenanceAgentConfig.schedules.length" class="job-table-header">
         <span>计划</span>
         <span>间隔</span>
         <span>状态</span>
@@ -94,6 +94,9 @@ const {
           </button>
         </span>
       </div>
+      <p v-if="!maintenanceAgentConfig.schedules.length" class="maintenance-schedule-empty">
+        暂无计划。在上方选择 Runbook 后点击“添加计划”。
+      </p>
     </div>
     <div class="source-actions maintenance-agent-policy-actions">
       <button
@@ -107,3 +110,13 @@ const {
     </div>
   </article>
 </template>
+
+<style scoped>
+.maintenance-schedule-empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+</style>

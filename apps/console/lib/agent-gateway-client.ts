@@ -9,6 +9,6 @@ export type {
   AgentGatewayCallResponse,
 } from "./types";
 
-export function callAgentGateway(payload: AgentGatewayCallRequest) {
+export function callAgentGateway(payload: AgentGatewayCallRequest) : any {
   return postJson<AgentGatewayCallResponse>("/api/agent-gateway/call", payload);
 }

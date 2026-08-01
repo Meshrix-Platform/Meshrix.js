@@ -20,7 +20,7 @@ withDefaults(
         <h3>最近调用</h3>
       </div>
     </div>
-    <div class="job-table compact-job-table tool-audit-table">
+    <div v-if="items.length" class="job-table compact-job-table tool-audit-table">
       <div class="job-table-header">
         <span>执行</span>
         <span>工具</span>

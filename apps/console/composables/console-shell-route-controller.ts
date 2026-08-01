@@ -17,7 +17,7 @@ type ConsoleShellRouteControllerOptions = {
   route: RouteLocationNormalizedLoaded;
 };
 
-function adminRouteTitle(adminView: string, messages: ConsoleShellRouteMessages) {
+function adminRouteTitle(adminView: string, messages: ConsoleShellRouteMessages) : any {
   switch (adminView) {
     case "operationPermission":
       return messages.nav.operationPermission;
@@ -34,6 +34,10 @@ function adminRouteTitle(adminView: string, messages: ConsoleShellRouteMessages)
       return messages.nav.agentAssignment;
     case "contextManagement":
       return messages.nav.contextManagement;
+    case "upstreamServices":
+      return messages.nav.upstreamServices;
+    case "upstreamServicePublish":
+      return messages.nav.upstreamServicePublish;
     case "maintenanceAgent":
       return messages.nav.maintenanceAgent;
     case "jobs":
@@ -61,7 +65,7 @@ function adminRouteTitle(adminView: string, messages: ConsoleShellRouteMessages)
   }
 }
 
-function routeViewTitle(view: string, messages: ConsoleShellRouteMessages) {
+function routeViewTitle(view: string, messages: ConsoleShellRouteMessages) : any {
   switch (view) {
     case "dashboard":
       return messages.nav.dashboard;
@@ -76,15 +80,15 @@ function routeViewTitle(view: string, messages: ConsoleShellRouteMessages) {
   }
 }
 
-export function createConsoleShellRouteController(options: ConsoleShellRouteControllerOptions) {
-  const activeRouteView = computed(() => String(options.route.meta?.viewId || options.currentView.value));
-  const activeRouteDebugTab = computed(() => String(options.route.params.tab || options.debugTab.value));
-  const activeRouteAdminView = computed(() => String(options.route.meta?.adminView || options.adminView.value));
-  const activeRouteFullPath = computed(() => options.route.fullPath);
+export function createConsoleShellRouteController(options: ConsoleShellRouteControllerOptions) : any {
+  const activeRouteView: any = computed(() : any => String(options.route.meta?.viewId || options.currentView.value));
+  const activeRouteDebugTab: any = computed(() : any => String(options.route.params.tab || options.debugTab.value));
+  const activeRouteAdminView: any = computed(() : any => String(options.route.meta?.adminView || options.adminView.value));
+  const activeRouteFullPath: any = computed(() : any => options.route.fullPath);
 
-  const localizedViewTitle = computed(() => {
-    const messages = options.msg.value;
-    const contributedTitle = String(options.route.meta?.title || "").trim();
+  const localizedViewTitle: any = computed(() : any => {
+    const messages: any = options.msg.value;
+    const contributedTitle: any = String(options.route.meta?.title || "").trim();
     if (contributedTitle) return contributedTitle;
     if (activeRouteView.value === "admin") {
       return adminRouteTitle(activeRouteAdminView.value, messages);
@@ -92,7 +96,7 @@ export function createConsoleShellRouteController(options: ConsoleShellRouteCont
     return routeViewTitle(activeRouteView.value, messages);
   });
 
-  function localizedDebugTabLabel(tab: LabeledTab) {
+  function localizedDebugTabLabel(tab: LabeledTab) : any {
     switch (tab.id) {
       case "gatewayReview":
         return options.msg.value.nav.gatewayReview;

@@ -35,7 +35,7 @@ const decisionFacts = computed(() => {
     ["需要批准", typeof decision.requiresApproval === "boolean" ? (decision.requiresApproval ? "是" : "否") : ""],
     ["决策标识", decision.decisionId],
     ["评估时间", decision.createdAt],
-  ].filter((item): item is [string, string] => Boolean(item[1]));
+  ].filter((item: any): item is [string, string] => Boolean(item[1]));
 });
 
 async function refreshDescription() {
@@ -79,7 +79,7 @@ onMounted(() => {
 });
 
 usePageRefreshHandler(
-  (detail) => detail.viewId === "admin" && detail.adminView === "strategyManagement",
+  (detail: any) => detail.viewId === "admin" && detail.adminView === "strategyManagement",
   refreshDescription,
 );
 </script>

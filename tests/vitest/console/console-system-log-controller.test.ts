@@ -4,11 +4,11 @@ import { computed, nextTick, ref } from "vue";
 import { createConsoleSystemLogController } from "../../../apps/console/composables/console-system-log-controller";
 import type { SystemLogRow } from "../../../apps/console/types/app";
 
-const browserEffectsMock = vi.hoisted(() => ({
+const browserEffectsMock: any = vi.hoisted(() : any => ({
   downloadTextFile: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/composables/console-browser-effects", () => ({
+vi.mock("../../../apps/console/composables/console-browser-effects", () : any => ({
   downloadTextFile: browserEffectsMock.downloadTextFile,
 }));
 
@@ -17,7 +17,7 @@ function row(
   kindLabel: string,
   status: string,
   occurredAt: string,
-  detail = "",
+  detail: any = "",
 ): SystemLogRow {
   return {
     logId: id,
@@ -36,31 +36,31 @@ function row(
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
 });
 
-describe("console system log controller", () => {
-  it("filters, paginates, clamps pages, and tracks table scrolling", async () => {
-    const sourceRows = ref<SystemLogRow[]>([
+describe("console system log controller", () : any => {
+  it("filters, paginates, clamps pages, and tracks table scrolling", async () : Promise<any> => {
+    const sourceRows: any = ref<SystemLogRow[]>([
       row("alpha", "服务端任务", "running", "2026-07-10T12:00:00.000Z"),
       row("beta", "监控报警", "failed", "2026-07-09T12:00:00.000Z"),
       row("gamma", "服务端任务", "failed", "2026-07-08T12:00:00.000Z"),
     ]);
-    const controller = createConsoleSystemLogController({
-      serverLogRows: computed(() => sourceRows.value),
+    const controller: any = createConsoleSystemLogController({
+      serverLogRows: computed(() : any => sourceRows.value),
     });
 
     controller.systemLogPageSize.value = 1;
     await nextTick();
     expect(controller.systemLogPageTotal.value).toBe(3);
     expect(controller.systemLogPageCount.value).toBe(3);
-    expect(controller.paginatedSystemLogRows.value.map((item) => item.logId)).toEqual(["alpha"]);
+    expect(controller.paginatedSystemLogRows.value.map((item?: any) : any => item.logId)).toEqual(["alpha"]);
 
     controller.goToSystemLogNextPage();
     expect(controller.systemLogCurrentPage.value).toBe(2);
     expect(controller.systemLogPageRange.value).toEqual({ start: 2, end: 2 });
-    expect(controller.paginatedSystemLogRows.value.map((item) => item.logId)).toEqual(["beta"]);
+    expect(controller.paginatedSystemLogRows.value.map((item?: any) : any => item.logId)).toEqual(["beta"]);
 
     controller.systemLogFilters.value = {
       fuzzy: "target-beta",
@@ -71,7 +71,7 @@ describe("console system log controller", () => {
     };
     await nextTick();
     expect(controller.systemLogCurrentPage.value).toBe(1);
-    expect(controller.filteredSystemLogRows.value.map((item) => item.logId)).toEqual(["beta"]);
+    expect(controller.filteredSystemLogRows.value.map((item?: any) : any => item.logId)).toEqual(["beta"]);
 
     controller.handleSystemLogTableScroll({ scrollTop: 72 });
     expect(controller.systemLogScrollTop.value).toBe(72);
@@ -90,13 +90,13 @@ describe("console system log controller", () => {
     expect(controller.systemLogPageRange.value).toEqual({ start: 0, end: 0 });
   });
 
-  it("exports only the filtered rows as escaped UTF-8 CSV", () => {
-    const sourceRows = ref<SystemLogRow[]>([
+  it("exports only the filtered rows as escaped UTF-8 CSV", () : any => {
+    const sourceRows: any = ref<SystemLogRow[]>([
       row("alpha", "服务端任务", "running", "2026-07-10T12:00:00.000Z"),
       row("beta", "监控报警", "failed", "2026-07-09T12:00:00.000Z", 'comma, and "quote"'),
     ]);
-    const controller = createConsoleSystemLogController({
-      serverLogRows: computed(() => sourceRows.value),
+    const controller: any = createConsoleSystemLogController({
+      serverLogRows: computed(() : any => sourceRows.value),
     });
     controller.systemLogFilters.value.fuzzy = "beta";
 

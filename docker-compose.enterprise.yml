@@ -1,0 +1,35 @@
+# Enterprise single-node production overlay.
+#
+# Required host inputs:
+#   MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE=/absolute/operator-custodied/key
+#   MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE=/absolute/operator-custodied/signer-secret
+#   MESHRIX_PUBLIC_BASE_URL=https://meshrix.example.com
+#
+# Each secret file contains exactly 64 lowercase hexadecimal characters
+# (32 random bytes). They are distinct, stay outside Meshrix data and backup
+# volumes, and are mounted read-only.
+services:
+  meshrix-server:
+    environment:
+      MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE: /run/secrets/meshrix-local-secret-master-key
+      MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY: production
+      MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE: /run/secrets/meshrix-operation-proof-signer-secret
+      MESHRIX_PRODUCTION_INGRESS_MODE: trusted-proxy
+      MESHRIX_TRUSTED_PROXIES: ${MESHRIX_TRUSTED_PROXIES:?MESHRIX_TRUSTED_PROXIES is required}
+      MESHRIX_COOKIE_SECURE: always
+      MESHRIX_BACKUP_ROOT: /app/backups
+      MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT: "1"
+      MESHRIX_BOOTSTRAP_URL: ${MESHRIX_PUBLIC_BASE_URL:?MESHRIX_PUBLIC_BASE_URL is required}
+      MESHRIX_ADVERTISED_BASE_URL: ${MESHRIX_PUBLIC_BASE_URL:?MESHRIX_PUBLIC_BASE_URL is required}
+      MESHRIX_ACTIVE_SERVICE_URL: ${MESHRIX_PUBLIC_BASE_URL:?MESHRIX_PUBLIC_BASE_URL is required}
+    secrets:
+      - source: meshrix-local-secret-master-key
+        target: meshrix-local-secret-master-key
+      - source: meshrix-operation-proof-signer-secret
+        target: meshrix-operation-proof-signer-secret
+
+secrets:
+  meshrix-local-secret-master-key:
+    file: ${MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE:?MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE is required}
+  meshrix-operation-proof-signer-secret:
+    file: ${MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE:?MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE is required}

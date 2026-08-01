@@ -33,7 +33,7 @@ onMounted(() => {
 });
 
 usePageRefreshHandler(
-  (detail) => detail.viewId === "admin" && detail.adminView === "versionRelease",
+  (detail: any) => detail.viewId === "admin" && detail.adminView === "versionRelease",
   refreshVersionRelease,
 );
 </script>

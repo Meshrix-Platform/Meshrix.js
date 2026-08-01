@@ -1,10 +1,10 @@
 {
-  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.mjs",
+  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "openapi": "3.1.0",
   "info": {
     "title": "Meshrix API",
     "version": "v1.0.0",
-    "description": "Generated from packages/contracts/src/operations/operation-registry.mjs"
+    "description": "Generated from packages/contracts/src/operations/operation-registry.ts"
   },
   "paths": {
     "/api/readiness/baseline/status": {
@@ -4299,8 +4299,24 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
-                "required": []
+                "required": [],
+                "properties": {
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "fromTreeId": {
+                    "type": "string"
+                  },
+                  "toTreeId": {
+                    "type": "string"
+                  },
+                  "fromNodeId": {
+                    "type": "string"
+                  },
+                  "toNodeId": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -4463,8 +4479,18 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "properties": {},
-                "required": []
+                "required": [
+                  "treeId",
+                  "nodeId"
+                ],
+                "properties": {
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
@@ -4501,15 +4527,45 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
+                "required": [],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "auditId": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "preview": {
+                    "type": "boolean"
                   }
-                },
-                "required": []
+                }
               }
             }
           }
@@ -4546,15 +4602,45 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
+                "required": [],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "auditId": {
+                    "type": "string"
+                  },
+                  "workspaceId": {
+                    "type": "string"
+                  },
+                  "treeId": {
+                    "type": "string"
+                  },
+                  "nodeId": {
+                    "type": "string"
+                  },
+                  "operationId": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  },
+                  "preview": {
+                    "type": "boolean"
                   }
-                },
-                "required": []
+                }
               }
             }
           }
@@ -4623,10 +4709,12 @@
                     "type": "boolean"
                   },
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -4734,7 +4822,8 @@
                 ],
                 "properties": {
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "confirm": {
                     "type": "boolean"
@@ -4743,7 +4832,8 @@
                     "type": "boolean"
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -4826,7 +4916,8 @@
                 ],
                 "properties": {
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "confirm": {
                     "type": "boolean"
@@ -4835,7 +4926,8 @@
                     "type": "boolean"
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -4920,7 +5012,8 @@
                 ],
                 "properties": {
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "confirm": {
                     "type": "boolean"
@@ -4929,7 +5022,8 @@
                     "type": "boolean"
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -5014,7 +5108,8 @@
                 ],
                 "properties": {
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "confirm": {
                     "type": "boolean"
@@ -5023,7 +5118,8 @@
                     "type": "boolean"
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -5181,10 +5277,12 @@
                 "required": [],
                 "properties": {
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -5265,7 +5363,8 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "serviceId"
+                  "serviceId",
+                  "operationKey"
                 ],
                 "properties": {
                   "confirm": {
@@ -5275,10 +5374,12 @@
                     "type": "boolean"
                   },
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "artifactId": {
                     "type": "string"
@@ -5364,10 +5465,12 @@
                 ],
                 "properties": {
                   "serviceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "operationKey": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1
                   },
                   "confirm": {
                     "type": "boolean"
@@ -13332,15 +13435,84 @@
               "schema": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": [],
                 "properties": {
                   "confirm": {
                     "type": "boolean"
                   },
                   "safetyConfirm": {
                     "type": "boolean"
+                  },
+                  "checkpoint": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "checkpointId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 256
+                      },
+                      "mode": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    }
+                  },
+                  "forceNewVersion": {
+                    "type": "boolean"
+                  },
+                  "inputText": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1048576
+                  },
+                  "parentJobId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "settings": {
+                    "type": "object"
+                  },
+                  "uploadSessionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "versionGroupId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "workspaceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   }
-                }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "uploadSessionId"
+                    ],
+                    "not": {
+                      "required": [
+                        "inputText"
+                      ]
+                    }
+                  },
+                  {
+                    "required": [
+                      "inputText"
+                    ],
+                    "not": {
+                      "required": [
+                        "uploadSessionId"
+                      ]
+                    }
+                  }
+                ],
+                "required": []
               }
             }
           }
@@ -13403,7 +13575,8 @@
                 "required": [
                   "uploadSessionId",
                   "workspaceId",
-                  "expectedWorkspaceRevision"
+                  "expectedWorkspaceRevision",
+                  "logicalTarget"
                 ],
                 "properties": {
                   "confirm": {
@@ -13413,42 +13586,24 @@
                     "type": "boolean"
                   },
                   "uploadSessionId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "workspaceId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
                   "expectedWorkspaceRevision": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
                   },
-                  "targetPrefix": {
-                    "type": "string"
-                  },
-                  "mutation": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "files": {
-                        "type": "array",
-                        "maxItems": 256,
-                        "items": {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": [
-                            "sourcePath",
-                            "targetPath"
-                          ],
-                          "properties": {
-                            "sourcePath": {
-                              "type": "string"
-                            },
-                            "targetPath": {
-                              "type": "string"
-                            }
-                          }
-                        }
-                      }
-                    }
+                  "logicalTarget": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1024
                   }
                 }
               }

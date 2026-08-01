@@ -32,23 +32,23 @@ function optionalFormNumber(value: unknown): ContextProfileFormValue {
   if (value === undefined || value === null || value === "") {
     return "";
   }
-  const number = Number(value);
+  const number: any = Number(value);
   return Number.isFinite(number) ? number : "";
 }
 
 function optionalRowNumber(value: unknown): number | null {
-  const number = optionalFormNumber(value);
+  const number: any = optionalFormNumber(value);
   return number === "" ? null : number;
 }
 
-function hasConfiguredValue(value: unknown) {
+function hasConfiguredValue(value: unknown) : any {
   return value !== undefined && value !== null && value !== "";
 }
 
 export function createContextProfileForm(
   profile: Record<string, unknown> = {},
 ): ContextProfileForm {
-  const budgetPolicy = asRecord(profile.budgetPolicy) || {};
+  const budgetPolicy: any = asRecord(profile.budgetPolicy) || {};
   return {
     profileId: String(profile.profileId ?? ""),
     label: String(profile.label ?? ""),
@@ -61,7 +61,7 @@ export function createContextProfileForm(
 }
 
 export function createContextProfileCandidateTemplate(): Record<string, unknown> {
-  const contextWindowTokens = 128_000;
+  const contextWindowTokens: any = 128_000;
   return {
     contextWindowTokens,
     outputReserveTokens: 8_192,
@@ -134,7 +134,7 @@ export function createContextProfileCandidateTemplate(): Record<string, unknown>
   };
 }
 
-export function validateContextProfileForm(form: ContextProfileForm) {
+export function validateContextProfileForm(form: ContextProfileForm) : any {
   if (!form.profileId.trim()) {
     return "请填写 Profile ID。";
   }
@@ -167,7 +167,7 @@ function assignOptionalNumber(
   target: Record<string, unknown>,
   key: string,
   value: ContextProfileFormValue,
-) {
+) : any {
   if (value === "") {
     delete target[key];
     return;
@@ -178,12 +178,12 @@ function assignOptionalNumber(
 export function buildContextProfileFromForm(
   form: ContextProfileForm,
   original: Record<string, unknown> = {},
-) {
+) : any {
   const profile: Record<string, unknown> = {
     ...original,
     profileId: form.profileId.trim(),
   };
-  const label = form.label.trim();
+  const label: any = form.label.trim();
   if (label) {
     profile.label = label;
   } else {
@@ -194,7 +194,7 @@ export function buildContextProfileFromForm(
   assignOptionalNumber(profile, "historyBudget", form.historyBudget);
   assignOptionalNumber(profile, "recentTurnBudget", form.recentTurnBudget);
 
-  const budgetPolicy = { ...(asRecord(original.budgetPolicy) || {}) };
+  const budgetPolicy: Record<string, any> = { ...(asRecord(original.budgetPolicy) || {}) };
   assignOptionalNumber(budgetPolicy, "operatorGuidanceRatio", form.operatorGuidanceRatio);
   if (Object.keys(budgetPolicy).length) {
     profile.budgetPolicy = budgetPolicy;
@@ -204,30 +204,30 @@ export function buildContextProfileFromForm(
   return profile;
 }
 
-function parseRequiredEvidenceIds(value: string) {
+function parseRequiredEvidenceIds(value: string) : any {
   return value
     .split(/[,，\s]+/)
-    .map((item) => item.trim())
+    .map((item?: any) : any => item.trim())
     .filter(Boolean);
 }
 
 export function createConsoleContextCompilerController(
   options: ConsoleContextCompilerControllerOptions,
-) {
-  const contextProfilesResponse = ref<Record<string, unknown> | null>(null);
-  const contextBuildRecordsResponse = ref<Record<string, unknown> | null>(null);
-  const contextPreviewTask = ref("");
-  const contextPreviewRequiredEvidence = ref("");
-  const contextPreviewResult = ref<Record<string, unknown> | null>(null);
-  const contextEvaluationResult = ref<Record<string, unknown> | null>(null);
+) : any {
+  const contextProfilesResponse: any = ref<Record<string, unknown> | null>(null);
+  const contextBuildRecordsResponse: any = ref<Record<string, unknown> | null>(null);
+  const contextPreviewTask: any = ref("");
+  const contextPreviewRequiredEvidence: any = ref("");
+  const contextPreviewResult: any = ref<Record<string, unknown> | null>(null);
+  const contextEvaluationResult: any = ref<Record<string, unknown> | null>(null);
 
-  const contextProfileRows = computed(() =>
+  const contextProfileRows: any = computed(() : any =>
     ((asRecord(contextProfilesResponse.value)?.profiles || []) as Array<Record<string, unknown>>)
       .filter(Boolean)
-      .map((profile) => {
-        const compression = asRecord(profile.compression) || {};
-        const budgetPolicy = asRecord(profile.budgetPolicy) || {};
-        const modelCompression = asRecord(profile.modelCompression) || {};
+      .map((profile?: any) : any => {
+        const compression: any = asRecord(profile.compression) || {};
+        const budgetPolicy: any = asRecord(profile.budgetPolicy) || {};
+        const modelCompression: any = asRecord(profile.modelCompression) || {};
         return {
           profileId: String(profile.profileId ?? ""),
           label: String(profile.label ?? ""),
@@ -239,16 +239,16 @@ export function createConsoleContextCompilerController(
           recentTurnBudget: optionalRowNumber(profile.recentTurnBudget),
           operatorGuidanceRatio: optionalRowNumber(budgetPolicy.operatorGuidanceRatio),
           protectedEvidenceFields: Array.isArray(profile.protectedEvidenceFields)
-            ? profile.protectedEvidenceFields.map((item) => String(item))
+            ? profile.protectedEvidenceFields.map((item?: any) : any => String(item))
             : [],
           modelCompressionAlias: String(modelCompression.alias ?? ""),
-          modelCompressionConfigured: Object.values(modelCompression).some(hasConfiguredValue),
+          modelCompressionConfigured: (Object.values(modelCompression) as any[]).some(hasConfiguredValue),
           modelCompressionEnabled: modelCompression.enabled === true,
         };
       })
-      .sort((left, right) => {
+      .sort((left?: any, right?: any) : any => {
         if (left.contextWindowTokens !== null && right.contextWindowTokens !== null) {
-          const tokenCompare = left.contextWindowTokens - right.contextWindowTokens;
+          const tokenCompare: any = left.contextWindowTokens - right.contextWindowTokens;
           if (tokenCompare !== 0) return tokenCompare;
         } else if (left.contextWindowTokens === null && right.contextWindowTokens !== null) {
           return 1;
@@ -259,8 +259,8 @@ export function createConsoleContextCompilerController(
       }),
   );
 
-  const contextBuildRecordRows = computed(() =>
-    ((asRecord(contextBuildRecordsResponse.value)?.records || []) as Array<Record<string, unknown>>).map((record) => ({
+  const contextBuildRecordRows: any = computed(() : any =>
+    ((asRecord(contextBuildRecordsResponse.value)?.records || []) as Array<Record<string, unknown>>).map((record?: any) : any => ({
       recordId: String(record.recordId || ""),
       createdAt: String(record.createdAt || ""),
       profileId: String(record.profileId || ""),
@@ -268,14 +268,14 @@ export function createConsoleContextCompilerController(
       sourceTokens: Number(record.sourceTokens || 0),
       triggerReason: String(record.triggerReason || ""),
       compressionMode: String(record.compressionMode || ""),
-      preservedEvidenceIds: ((record.preservedEvidenceIds || []) as unknown[]).map((item) => String(item)),
+      preservedEvidenceIds: ((record.preservedEvidenceIds || []) as unknown[]).map((item?: any) : any => String(item)),
       droppedReferenceCount: Number(record.droppedReferenceCount || 0),
       humanOperatorGuidanceCount: Number(record.humanExpertGuidanceCount || 0),
     })),
   );
 
-  async function refreshContextCompiler(optionsOverride: { silent?: boolean } = {}) {
-    const showBusy = !optionsOverride.silent;
+  async function refreshContextCompiler(optionsOverride: { silent?: boolean } = {}) : Promise<any> {
+    const showBusy: any = !optionsOverride.silent;
     if (showBusy) {
       options.setBusy("context:refresh");
     }
@@ -286,7 +286,7 @@ export function createConsoleContextCompilerController(
       ]);
       contextProfilesResponse.value = profiles;
       contextBuildRecordsResponse.value = records;
-    } catch (nextError) {
+    } catch (nextError: any) {
       if (!optionsOverride.silent) {
         options.error.value =
           nextError instanceof Error ? nextError.message : "加载上下文编译器状态失败。";
@@ -299,9 +299,9 @@ export function createConsoleContextCompilerController(
   }
 
   function contextPreviewPayload(
-    contextProfileId = options.selectedContextProfileId().trim(),
-  ) {
-    const requiredEvidenceIds = parseRequiredEvidenceIds(contextPreviewRequiredEvidence.value);
+    contextProfileId: any = options.selectedContextProfileId().trim(),
+  ) : any {
+    const requiredEvidenceIds: any = parseRequiredEvidenceIds(contextPreviewRequiredEvidence.value);
     return {
       contextProfileId,
       inputSource: "server-console-context-preview",
@@ -311,8 +311,8 @@ export function createConsoleContextCompilerController(
     };
   }
 
-  async function previewContextCompiler() {
-    const contextProfileId = options.selectedContextProfileId().trim();
+  async function previewContextCompiler() : Promise<any> {
+    const contextProfileId: any = options.selectedContextProfileId().trim();
     if (!contextProfileId) {
       options.error.value = "请先选择上下文配置。";
       return;
@@ -322,15 +322,15 @@ export function createConsoleContextCompilerController(
     try {
       contextPreviewResult.value = await previewContextPack(contextPreviewPayload(contextProfileId));
       await refreshContextCompiler({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "上下文预览失败。";
     } finally {
       options.clearAllBusy();
     }
   }
 
-  async function runContextReplayEvaluation() {
-    const contextProfileId = options.selectedContextProfileId().trim();
+  async function runContextReplayEvaluation() : Promise<any> {
+    const contextProfileId: any = options.selectedContextProfileId().trim();
     if (!contextProfileId) {
       options.error.value = "请先选择上下文配置。";
       return;
@@ -338,8 +338,8 @@ export function createConsoleContextCompilerController(
     options.setBusy("context:evaluation");
     options.error.value = "";
     try {
-      const payload = contextPreviewPayload(contextProfileId);
-      const requiredEvidenceIds = parseRequiredEvidenceIds(contextPreviewRequiredEvidence.value);
+      const payload: any = contextPreviewPayload(contextProfileId);
+      const requiredEvidenceIds: any = parseRequiredEvidenceIds(contextPreviewRequiredEvidence.value);
       contextEvaluationResult.value = await runContextEvaluation({
         profiles: [contextProfileId],
         cases: [
@@ -351,15 +351,15 @@ export function createConsoleContextCompilerController(
         ],
       });
       await refreshContextCompiler({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "上下文 replay 评估失败。";
     } finally {
       options.clearAllBusy();
     }
   }
 
-  function exportContextBuildRecords() {
-    const payload = contextBuildRecordsResponse.value || { records: [] };
+  function exportContextBuildRecords() : any {
+    const payload: any = contextBuildRecordsResponse.value || { records: [] };
     downloadTextFile(
       `context-build-records-${formatMachineDate(new Date().toISOString(), "full").replace(/[: ]/g, "-")}.json`,
       `${JSON.stringify(payload, null, 2)}\n`,

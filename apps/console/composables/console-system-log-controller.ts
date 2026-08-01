@@ -21,12 +21,12 @@ type ConsoleSystemLogControllerOptions = {
   serverLogRows: ComputedRef<SystemLogRow[]>;
 };
 
-function csvCell(value: unknown) {
-  const text = String(value ?? "");
+function csvCell(value: unknown) : any {
+  const text: any = String(value ?? "");
   return `"${text.replace(/"/g, '""')}"`;
 }
 
-function rowSearchText(row: SystemLogRow) {
+function rowSearchText(row: SystemLogRow) : any {
   return [
     row.logId,
     row.kindLabel,
@@ -42,7 +42,7 @@ function rowSearchText(row: SystemLogRow) {
   ].join("\n").toLocaleLowerCase();
 }
 
-function dateBoundary(value: string, endOfDay = false) {
+function dateBoundary(value: string, endOfDay: any = false) : any {
   if (!value) {
     return endOfDay ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
   }
@@ -51,41 +51,41 @@ function dateBoundary(value: string, endOfDay = false) {
 
 export function createConsoleSystemLogController(
   options: ConsoleSystemLogControllerOptions,
-) {
-  const systemLogFilters = ref<SystemLogFilters>({
+) : any {
+  const systemLogFilters: any = ref<SystemLogFilters>({
     fuzzy: "",
     kind: "all",
     status: "all",
     from: "",
     to: "",
   });
-  const systemLogColumnWidths = ref({
-    kind: 120,
-    target: 220,
-    time: 180,
-    status: 130,
-    progress: 120,
-    stage: 160,
-    detail: 260,
-    error: 220,
+  const systemLogColumnWidths: any = ref({
+    kind: 88,
+    target: 160,
+    time: 150,
+    status: 96,
+    progress: 72,
+    stage: 112,
+    detail: 210,
+    error: 146,
   });
-  const systemLogCurrentPage = ref(1);
-  const systemLogPageSize = ref(systemLogPaginationConfig.defaultPageSize);
-  const systemLogTableShellRef = ref<HTMLElement | null>(null);
-  const systemLogScrollTop = ref(0);
+  const systemLogCurrentPage: any = ref(1);
+  const systemLogPageSize: any = ref(systemLogPaginationConfig.defaultPageSize);
+  const systemLogTableShellRef: any = ref<HTMLElement | null>(null);
+  const systemLogScrollTop: any = ref(0);
 
-  const filteredSystemLogRows = computed(() => {
-    const fuzzy = systemLogFilters.value.fuzzy.trim().toLocaleLowerCase();
-    const from = dateBoundary(systemLogFilters.value.from);
-    const to = dateBoundary(systemLogFilters.value.to, true);
-    return options.serverLogRows.value.filter((row) => {
+  const filteredSystemLogRows: any = computed(() : any => {
+    const fuzzy: any = systemLogFilters.value.fuzzy.trim().toLocaleLowerCase();
+    const from: any = dateBoundary(systemLogFilters.value.from);
+    const to: any = dateBoundary(systemLogFilters.value.to, true);
+    return options.serverLogRows.value.filter((row?: any) : any => {
       if (systemLogFilters.value.kind !== "all" && row.kindLabel !== systemLogFilters.value.kind) {
         return false;
       }
       if (systemLogFilters.value.status !== "all" && row.status !== systemLogFilters.value.status) {
         return false;
       }
-      const occurredAt = parseTime(row.occurredAt || row.createdAt);
+      const occurredAt: any = parseTime(row.occurredAt || row.createdAt);
       if (Number.isFinite(from) && occurredAt < from) {
         return false;
       }
@@ -96,15 +96,15 @@ export function createConsoleSystemLogController(
     });
   });
 
-  const systemLogPageTotal = computed(() => filteredSystemLogRows.value.length);
-  const normalizedPageSize = computed(() => Math.max(
+  const systemLogPageTotal: any = computed(() : any => filteredSystemLogRows.value.length);
+  const normalizedPageSize: any = computed(() : any => Math.max(
     1,
     Math.min(systemLogPaginationConfig.maxPageSize, Number(systemLogPageSize.value) || systemLogPaginationConfig.defaultPageSize),
   ));
-  const systemLogPageCount = computed(() =>
+  const systemLogPageCount: any = computed(() : any =>
     Math.max(1, Math.ceil(systemLogPageTotal.value / normalizedPageSize.value)),
   );
-  const systemLogPageRange = computed(() => ({
+  const systemLogPageRange: any = computed(() : any => ({
     start: systemLogPageTotal.value === 0
       ? 0
       : (systemLogCurrentPage.value - 1) * normalizedPageSize.value + 1,
@@ -113,19 +113,19 @@ export function createConsoleSystemLogController(
       systemLogCurrentPage.value * normalizedPageSize.value,
     ),
   }));
-  const paginatedSystemLogRows = computed(() => {
-    const start = (systemLogCurrentPage.value - 1) * normalizedPageSize.value;
+  const paginatedSystemLogRows: any = computed(() : any => {
+    const start: any = (systemLogCurrentPage.value - 1) * normalizedPageSize.value;
     return filteredSystemLogRows.value.slice(start, start + normalizedPageSize.value);
   });
 
-  const systemLogKindOptionBarOptions = computed<OptionBarOption[]>(() => [
+  const systemLogKindOptionBarOptions: any = computed<OptionBarOption[]>(() : any => [
     { value: "all", label: "全部类型" },
-    ...[...new Set(options.serverLogRows.value.map((row) => row.kindLabel).filter(Boolean))]
-      .sort((left, right) => left.localeCompare(right))
-      .map((value) => ({ value, label: value })),
+    ...[...new Set<any>(options.serverLogRows.value.map((row?: any) : any => row.kindLabel).filter(Boolean))]
+      .sort((left?: any, right?: any) : any => left.localeCompare(right))
+      .map((value?: any) : any => ({ value, label: value })),
   ]);
-  const systemLogStatusOptionBarOptions = computed<OptionBarOption[]>(() => {
-    const labels = new Map<string, string>();
+  const systemLogStatusOptionBarOptions: any = computed<OptionBarOption[]>(() : any => {
+    const labels: any = new Map<string, string>();
     for (const row of options.serverLogRows.value) {
       if (row.status && !labels.has(row.status)) {
         labels.set(row.status, row.statusLabel || row.status);
@@ -134,28 +134,28 @@ export function createConsoleSystemLogController(
     return [
       { value: "all", label: "全部状态" },
       ...[...labels.entries()]
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([value, label]) => ({ value, label })),
+        .sort(([left]: any[], [right]: any[]) : any => left.localeCompare(right))
+        .map(([value, label]: any[]) : any => ({ value, label })),
     ];
   });
   const systemLogPageSizeOptionBarOptions: OptionBarOption[] =
-    systemLogPaginationConfig.pageSizeOptions.map((value) => ({
+    systemLogPaginationConfig.pageSizeOptions.map((value?: any) : any => ({
       value,
       label: `${value} 条/页`,
     }));
 
-  function systemLogDisplayStatusLabel(row: SystemLogRow) {
+  function systemLogDisplayStatusLabel(row: SystemLogRow) : any {
     return String(row.statusLabel || row.status || "unknown");
   }
 
-  function scrollSystemLogTableToTop() {
-    const shell = systemLogTableShellRef.value;
-    const scroller = shell?.querySelector<HTMLElement>(".el-scrollbar__wrap") || shell;
+  function scrollSystemLogTableToTop() : any {
+    const shell: any = systemLogTableShellRef.value;
+    const scroller: any = shell?.querySelector(".el-scrollbar__wrap") || shell;
     scroller?.scrollTo?.({ top: 0, behavior: "smooth" });
     systemLogScrollTop.value = 0;
   }
 
-  function goToSystemLogNextPage() {
+  function goToSystemLogNextPage() : any {
     systemLogCurrentPage.value = Math.min(
       systemLogPageCount.value,
       systemLogCurrentPage.value + 1,
@@ -163,26 +163,26 @@ export function createConsoleSystemLogController(
     scrollSystemLogTableToTop();
   }
 
-  function goToSystemLogPreviousPage() {
+  function goToSystemLogPreviousPage() : any {
     systemLogCurrentPage.value = Math.max(1, systemLogCurrentPage.value - 1);
     scrollSystemLogTableToTop();
   }
 
-  function handleSystemLogTableScroll(payload: SystemLogScrollPayload) {
+  function handleSystemLogTableScroll(payload: SystemLogScrollPayload) : any {
     if (typeof Event !== "undefined" && payload instanceof Event) {
-      const target = payload.target;
+      const target: any = payload.target;
       systemLogScrollTop.value =
         typeof HTMLElement !== "undefined" && target instanceof HTMLElement
           ? target.scrollTop
           : 0;
       return;
     }
-    const scrollPayload = payload as Exclude<SystemLogScrollPayload, Event>;
+    const scrollPayload: any = payload as Exclude<SystemLogScrollPayload, Event>;
     systemLogScrollTop.value = Math.max(0, Number(scrollPayload.scrollTop || 0));
   }
 
-  function exportSystemLogRows() {
-    const headers = [
+  function exportSystemLogRows() : any {
+    const headers: any[] = [
       "logId",
       "kind",
       "target",
@@ -193,7 +193,7 @@ export function createConsoleSystemLogController(
       "detail",
       "error",
     ];
-    const rows = filteredSystemLogRows.value.map((row) => [
+    const rows: any = filteredSystemLogRows.value.map((row?: any) : any => [
       row.logId,
       row.kindLabel,
       row.target,
@@ -204,10 +204,10 @@ export function createConsoleSystemLogController(
       row.detail,
       row.error,
     ]);
-    const csv = [headers, ...rows]
-      .map((values) => values.map(csvCell).join(","))
+    const csv: any = [headers, ...rows]
+      .map((values?: any) : any => values.map(csvCell).join(","))
       .join("\r\n");
-    const timestamp = formatMachineDate(new Date().toISOString(), "full").replace(/[: ]/g, "-");
+    const timestamp: any = formatMachineDate(new Date().toISOString(), "full").replace(/[: ]/g, "-");
     downloadTextFile(
       `meshrix-system-logs-${timestamp}.csv`,
       `\uFEFF${csv}\r\n`,
@@ -217,13 +217,13 @@ export function createConsoleSystemLogController(
 
   watch(
     [systemLogFilters, systemLogPageSize],
-    () => {
+    () : any => {
       systemLogCurrentPage.value = 1;
       scrollSystemLogTableToTop();
     },
     { deep: true },
   );
-  watch(systemLogPageCount, (pageCount) => {
+  watch(systemLogPageCount, (pageCount?: any) : any => {
     systemLogCurrentPage.value = Math.min(systemLogCurrentPage.value, pageCount);
   });
 

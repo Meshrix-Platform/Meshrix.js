@@ -29,7 +29,7 @@ const props = withDefaults(defineProps<{
   valueLabel: "",
 });
 
-function normalizeState(state = "") {
+function normalizeState(state: any = "") {
   if (state === "complete" || state === "completed") return "complete";
   if (state === "active" || state === "running") return "active";
   if (state === "failed") return "failed";
@@ -38,15 +38,15 @@ function normalizeState(state = "") {
 
 const normalizedSegments = computed(() => {
   if (props.segments.length) {
-    return props.segments.map((segment, index) => ({
+    return props.segments.map((segment: any, index: any) => ({
       key: String(segment.key ?? index),
       label: String(segment.label || segment.key || `步骤 ${index + 1}`),
       state: normalizeState(String(segment.state || "")),
     }));
   }
   const total = Math.max(0, props.totalSteps || props.labels.length);
-  const labels = props.labels.length ? props.labels : Array.from({ length: total }, (_, index) => `步骤 ${index + 1}`);
-  return labels.map((label, index) => ({
+  const labels = props.labels.length ? props.labels : Array.from({ length: total }, (_: any, index: any) => `步骤 ${index + 1}`);
+  return labels.map((label: any, index: any) => ({
     key: `${label}:${index}`,
     label,
     state: index < props.completedSteps ? "complete" : "pending",
@@ -54,7 +54,7 @@ const normalizedSegments = computed(() => {
 });
 
 const completedCount = computed(() =>
-  normalizedSegments.value.filter((segment) => segment.state === "complete").length,
+  normalizedSegments.value.filter((segment: any) => segment.state === "complete").length,
 );
 const gridColumns = computed(() =>
   `repeat(${Math.max(1, normalizedSegments.value.length)}, minmax(0, 1fr))`,

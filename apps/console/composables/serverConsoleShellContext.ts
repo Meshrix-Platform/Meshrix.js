@@ -7,14 +7,14 @@ import type { useServerConsoleShell } from "./useServerConsoleShell";
 
 export type ServerConsoleShellContext = ReturnType<typeof useServerConsoleShell>;
 
-export function provideServerConsoleShell(shell: ServerConsoleShellContext) {
+export function provideServerConsoleShell(shell: ServerConsoleShellContext) : any {
   providePublicServerConsoleShell(shell);
 }
 
-export function useServerConsoleShellContext() {
+export function useServerConsoleShellContext() : any {
   return usePublicServerConsoleShellContext<ServerConsoleShellContext>();
 }
 
-export function useOptionalServerConsoleShellContext() {
+export function useOptionalServerConsoleShellContext() : any {
   return useOptionalPublicServerConsoleShellContext<ServerConsoleShellContext>();
 }

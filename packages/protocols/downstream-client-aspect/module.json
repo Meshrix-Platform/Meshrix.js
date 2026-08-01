@@ -18,7 +18,7 @@
   ],
   "components": {
     "downstreamClientAspect": {
-      "path": "./index.mjs",
+      "path": "./index.ts",
       "factory": "createDownstreamClientAspectService",
       "exports": [
         "DOWNSTREAM_CLIENT_ASPECT_PROTOCOL_VERSION",
@@ -41,6 +41,6 @@
     }
   },
   "verification": [
-    "node tools/server-scripts/verify-downstream-client-aspect.mjs"
+    "node tools/server-scripts/verify-downstream-client-aspect.ts"
   ]
 }

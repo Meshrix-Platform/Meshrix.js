@@ -37,14 +37,14 @@ export type UpstreamGatewayMetrics = {
   [key: string]: unknown;
 };
 
-export function listUpstreamGatewayServices() {
+export function listUpstreamGatewayServices() : any {
   return getJson<{ items?: UpstreamGatewayService[] }>("/api/gateway/v1/external-services");
 }
 
-export function listUpstreamGatewayAudit() {
+export function listUpstreamGatewayAudit() : any {
   return getJson<{ items?: UpstreamGatewayAuditItem[] }>("/api/gateway/v1/audit");
 }
 
-export function getUpstreamGatewayMetrics() {
+export function getUpstreamGatewayMetrics() : any {
   return getJson<UpstreamGatewayMetrics>("/api/gateway/v1/metrics");
 }

@@ -1,5 +1,10 @@
 # Agent Gateway And Model Routing
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Agent Gateway is the standard-edition model-call surface for invoking configured model agents through the server runtime. Model Routing records local routing policy, circuit-breaker state, and cost-ledger evidence for routed calls. Agent Management is an explicit optional feature for maintaining model-library entries.
 
 ## Current Boundary
@@ -44,8 +49,8 @@ npm test -- --suite agent-management.runtime
 npm test -- --suite agents.model-provider-runtime
 ```
 
-`tools/server-scripts/verify-agent-gateway.mjs` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, standard-edition activation, core-edition exclusion, executor dispatch, and controlled failure when no provider URL is configured.
+`tools/server-scripts/verify-agent-gateway.ts` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, standard-edition activation, core-edition exclusion, executor dispatch, and controlled failure when no provider URL is configured.
 
-`tools/server-scripts/verify-model-routing.mjs` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, routed call ledger creation, circuit-state inspection, and console-domain health dispatch.
+`tools/server-scripts/verify-model-routing.ts` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, routed call ledger creation, circuit-state inspection, and console-domain health dispatch.
 
-`tools/server-scripts/verify-agent-management.mjs` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, default-disabled feature behavior, explicit activation behavior, local model-library create/list/update/delete, and token redaction support.
+`tools/server-scripts/verify-agent-management.ts` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, default-disabled feature behavior, explicit activation behavior, local model-library create/list/update/delete, and token redaction support.

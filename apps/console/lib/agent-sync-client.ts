@@ -12,8 +12,8 @@ export type AgentSyncEventParams = {
   includeSnapshot?: boolean;
 };
 
-function eventQuery(params: AgentSyncEventParams = {}) {
-  const query = new URLSearchParams();
+function eventQuery(params: AgentSyncEventParams = {}) : any {
+  const query: any = new URLSearchParams();
   if (params.cursor !== undefined) {
     query.set("cursor", String(params.cursor));
   }
@@ -26,15 +26,15 @@ function eventQuery(params: AgentSyncEventParams = {}) {
   if (params.includeSnapshot !== undefined) {
     query.set("includeSnapshot", params.includeSnapshot ? "1" : "0");
   }
-  const suffix = query.toString();
+  const suffix: any = query.toString();
   return suffix ? `?${suffix}` : "";
 }
 
-export function getAgentSyncConfig() {
+export function getAgentSyncConfig() : any {
   return getJson<{ config: AgentSyncConfig }>("/api/agent-sync/config");
 }
 
-export function saveAgentSyncConfig(config: Partial<AgentSyncConfig>) {
+export function saveAgentSyncConfig(config: Partial<AgentSyncConfig>) : any {
   return postJson<{ config: AgentSyncConfig }>(
     "/api/agent-sync/config",
     { config },
@@ -42,10 +42,10 @@ export function saveAgentSyncConfig(config: Partial<AgentSyncConfig>) {
   );
 }
 
-export function publishAgentSync(payload: AgentSyncPublishRequest) {
+export function publishAgentSync(payload: AgentSyncPublishRequest) : any {
   return postJson<Record<string, unknown>>("/api/agent-sync/publish", payload);
 }
 
-export function subscribeAgentSync(params: AgentSyncEventParams = {}) {
+export function subscribeAgentSync(params: AgentSyncEventParams = {}) : any {
   return getJson<EventSubscriptionResponse>(`/api/agent-sync/events${eventQuery(params)}`);
 }

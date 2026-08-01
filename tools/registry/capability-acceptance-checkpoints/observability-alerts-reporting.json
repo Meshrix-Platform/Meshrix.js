@@ -66,7 +66,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete observability-alerts-reporting",
-      "target": "packages/foundation/src/observability/, packages/foundation/config/default-monitor-alerts.json, packages/server-runtime/src/composition/devops/monitor-alerts.mjs, tools/server-scripts/system-inspection-daemon.mjs, tools/server-scripts/verify-observability-semantics.mjs, tools/server-scripts/verify-enterprise-observability-coverage.mjs, tools/server-scripts/verify-security-alert-lifecycle.mjs",
+      "target": "packages/foundation/src/observability/, packages/foundation/config/default-monitor-alerts.json, packages/server-runtime/src/composition/devops/monitor-alerts.ts, tools/server-scripts/system-inspection-daemon.ts, tools/server-scripts/verify-observability-semantics.ts, tools/server-scripts/verify-enterprise-observability-coverage.ts, tools/server-scripts/verify-security-alert-lifecycle.ts",
       "delivered": "9d80b5fc"
     },
     "next": [

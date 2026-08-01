@@ -18,9 +18,16 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "title", "docs", "requirementRows", "requiredEdges"],
+        "required": ["id", "capabilityClass", "title", "docs", "requirementRows", "requiredEdges"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
+          "capabilityClass": {
+            "enum": ["core", "detachable-core", "external-plugin"]
+          },
+          "activationFeatureId": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
           "title": { "type": "string", "minLength": 1 },
           "pluginId": { "type": "string", "minLength": 1 },
           "docs": {
@@ -54,7 +61,7 @@
               {
                 "type": "string",
                 "const": "$MCP_SUPPORTED_TARGETS",
-                "description": "Projection-only reference to packages/protocols/mcp/adapter/mcp-release-targets.mjs#MCP_SUPPORTED_TARGETS."
+                "description": "Projection-only reference to packages/protocols/mcp/adapter/mcp-release-targets.ts#MCP_SUPPORTED_TARGETS."
               }
             ]
           },

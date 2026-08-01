@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 import ConsoleEmptyState from "../../../apps/console/components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../apps/console/components/ConsoleInlineAlert.vue";
 
-describe("ConsoleEmptyState", () => {
-  it("renders title, optional description and action slot", () => {
-    const wrapper = mount(ConsoleEmptyState, {
+describe("ConsoleEmptyState", () : any => {
+  it("renders title, optional description and action slot", () : any => {
+    const wrapper: any = mount(ConsoleEmptyState, {
       props: { title: "暂无任务记录", description: "当前筛选条件下没有匹配任务。" },
       slots: { default: '<button class="empty-action">重试</button>' },
     });
@@ -18,8 +18,8 @@ describe("ConsoleEmptyState", () => {
     expect(wrapper.find(".empty-action").exists()).toBe(true);
   });
 
-  it("omits the description node when not provided and supports compact danger variants", () => {
-    const wrapper = mount(ConsoleEmptyState, {
+  it("omits the description node when not provided and supports compact danger variants", () : any => {
+    const wrapper: any = mount(ConsoleEmptyState, {
       props: { title: "加载失败", tone: "danger", compact: true },
     });
 
@@ -28,8 +28,8 @@ describe("ConsoleEmptyState", () => {
     expect(wrapper.classes()).toContain("tone-danger");
   });
 
-  it("renders as a list item when used inside list containers", () => {
-    const wrapper = mount(ConsoleEmptyState, {
+  it("renders as a list item when used inside list containers", () : any => {
+    const wrapper: any = mount(ConsoleEmptyState, {
       props: { title: "暂无操作", as: "li" },
     });
 
@@ -37,9 +37,9 @@ describe("ConsoleEmptyState", () => {
   });
 });
 
-describe("ConsoleInlineAlert", () => {
-  it("defaults to info tone with status role", () => {
-    const wrapper = mount(ConsoleInlineAlert, {
+describe("ConsoleInlineAlert", () : any => {
+  it("defaults to info tone with status role", () : any => {
+    const wrapper: any = mount(ConsoleInlineAlert, {
       slots: { default: "已同步 3 个文件" },
     });
 
@@ -48,8 +48,8 @@ describe("ConsoleInlineAlert", () => {
     expect(wrapper.text()).toBe("已同步 3 个文件");
   });
 
-  it("maps danger tone to the alert role", () => {
-    const wrapper = mount(ConsoleInlineAlert, {
+  it("maps danger tone to the alert role", () : any => {
+    const wrapper: any = mount(ConsoleInlineAlert, {
       props: { tone: "danger" },
       slots: { default: "保存失败" },
     });
@@ -58,8 +58,8 @@ describe("ConsoleInlineAlert", () => {
     expect(wrapper.attributes("role")).toBe("alert");
   });
 
-  it("supports success tone", () => {
-    const wrapper = mount(ConsoleInlineAlert, {
+  it("supports success tone", () : any => {
+    const wrapper: any = mount(ConsoleInlineAlert, {
       props: { tone: "success" },
       slots: { default: "已保存" },
     });

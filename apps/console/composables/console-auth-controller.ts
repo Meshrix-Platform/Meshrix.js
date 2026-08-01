@@ -34,14 +34,14 @@ export type ConsoleAuthControllerOptions = {
   stopServerEventSubscription: () => void;
 };
 
-export function createConsoleAuthController(options: ConsoleAuthControllerOptions) {
-  const authState = ref<ConsoleAuthSummary | null>(null);
-  const consoleBootstrapping = ref(true);
-  const loginForm = ref({ username: "", password: "" });
-  const authUsers = ref<ConsoleUser[]>([]);
-  const authAudit = ref<ConsoleAuditItem[]>([]);
-  const authSessions = ref<Array<Record<string, unknown>>>([]);
-  const oidcDraft = ref<ConsoleOidcConfig & { clientSecret?: string }>({
+export function createConsoleAuthController(options: ConsoleAuthControllerOptions) : any {
+  const authState: any = ref<ConsoleAuthSummary | null>(null);
+  const consoleBootstrapping: any = ref(true);
+  const loginForm: any = ref({ username: "", password: "" });
+  const authUsers: any = ref<ConsoleUser[]>([]);
+  const authAudit: any = ref<ConsoleAuditItem[]>([]);
+  const authSessions: any = ref<Array<Record<string, unknown>>>([]);
+  const oidcDraft: any = ref<ConsoleOidcConfig & { clientSecret?: string }>({
     enabled: false,
     issuer: "",
     clientId: "",
@@ -52,42 +52,42 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     updatedAt: "",
     clientSecret: "",
   });
-  const oidcAllowedDomainsText = ref("");
-  const oidcRoleMappingText = ref("{}");
+  const oidcAllowedDomainsText: any = ref("");
+  const oidcRoleMappingText: any = ref("{}");
 
-  const currentUser = computed(() => authState.value?.session.user || null);
-  const isAuthenticated = computed(
-    () => authState.value?.session.authenticated === true,
+  const currentUser: any = computed(() : any => authState.value?.session.user || null);
+  const isAuthenticated: any = computed(
+    () : any => authState.value?.session.authenticated === true,
   );
-  const currentUserScopes = computed(() => currentUser.value?.scopes || []);
+  const currentUserScopes: any = computed(() : any => currentUser.value?.scopes || []);
 
-  function hasScope(scopeId: string) {
+  function hasScope(scopeId: string) : any {
     return isAuthenticated.value && currentUserScopes.value.includes(scopeId);
   }
 
-  const canAdminAuth = computed(() => hasScope("auth:admin"));
-  const canReadGateway = computed(() => hasScope("gateway:read"));
-  const canWriteGateway = computed(() => hasScope("workspace:write"));
-  const canMaintainGateway = computed(() => hasScope("gateway:maintain"));
-  const canAdminGateway = computed(() => hasScope("gateway:admin"));
-  const canWriteJobs = computed(() => hasScope("jobs:write"));
-  const canBrowseServerPaths = computed(() => hasScope("workspace:write"));
-  const canAdminRuntime = computed(() => hasScope("runtime:admin"));
-  const canReadMaintenanceAgent = computed(() => hasScope("maintenance:read"));
-  const canRunMaintenanceAgent = computed(() => hasScope("maintenance:run"));
-  const canApproveMaintenanceAgent = computed(() => hasScope("maintenance:approve"));
-  const canAdminMaintenanceAgent = computed(() => hasScope("maintenance:admin"));
+  const canAdminAuth: any = computed(() : any => hasScope("auth:admin"));
+  const canReadGateway: any = computed(() : any => hasScope("gateway:read"));
+  const canWriteGateway: any = computed(() : any => hasScope("workspace:write"));
+  const canMaintainGateway: any = computed(() : any => hasScope("gateway:maintain"));
+  const canAdminGateway: any = computed(() : any => hasScope("gateway:admin"));
+  const canWriteJobs: any = computed(() : any => hasScope("jobs:write"));
+  const canBrowseServerPaths: any = computed(() : any => hasScope("workspace:write"));
+  const canAdminRuntime: any = computed(() : any => hasScope("runtime:admin"));
+  const canReadMaintenanceAgent: any = computed(() : any => hasScope("maintenance:read"));
+  const canRunMaintenanceAgent: any = computed(() : any => hasScope("maintenance:run"));
+  const canApproveMaintenanceAgent: any = computed(() : any => hasScope("maintenance:approve"));
+  const canAdminMaintenanceAgent: any = computed(() : any => hasScope("maintenance:admin"));
 
-  async function refreshAuthState() {
+  async function refreshAuthState() : Promise<any> {
     try {
-      const session = await getAuthSession();
+      const session: any = await getAuthSession();
       authState.value = session;
       if (!session.session.authenticated) {
         options.consoleState.value = null;
         options.stopServerEventSubscription();
       }
       return session;
-    } catch (nextError) {
+    } catch (nextError: any) {
       authState.value = null;
       options.consoleState.value = null;
       options.stopServerEventSubscription();
@@ -96,20 +96,20 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     }
   }
 
-  async function submitLoginAuth() {
+  async function submitLoginAuth() : Promise<any> {
     consoleBootstrapping.value = true;
     options.setBusy("auth:login");
     options.error.value = "";
     try {
       await loginAuth(loginForm.value);
-      const session = await refreshAuthState();
+      const session: any = await refreshAuthState();
       if (!session?.session.authenticated) {
         options.error.value = "登录已返回，但会话状态尚未生效，请重试。";
         return;
       }
       await options.refreshState({ silent: true });
       options.startServerEventSubscription();
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "登录失败。";
     } finally {
       consoleBootstrapping.value = false;
@@ -117,7 +117,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     }
   }
 
-  async function logoutConsole() {
+  async function logoutConsole() : Promise<any> {
     consoleBootstrapping.value = true;
     options.setBusy("auth:logout");
     options.error.value = "";
@@ -127,7 +127,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
       await logoutAuth();
       options.consoleState.value = null;
       await refreshAuthState();
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "退出失败。";
     } finally {
       consoleBootstrapping.value = false;
@@ -135,7 +135,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     }
   }
 
-  async function refreshAuthAdmin() {
+  async function refreshAuthAdmin() : Promise<any> {
     if (!canAdminAuth.value) {
       return;
     }
@@ -155,43 +155,43 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
       };
       oidcAllowedDomainsText.value = (oidc.oidc.allowedDomains || []).join("\n");
       oidcRoleMappingText.value = JSON.stringify(oidc.oidc.roleMapping || {}, null, 2);
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "加载认证管理数据失败。";
     }
   }
 
-  async function updateConsoleUser(user: ConsoleUser, patch: Partial<ConsoleUser> & { password?: string }) {
+  async function updateConsoleUser(user: ConsoleUser, patch: Partial<ConsoleUser> & { password?: string }) : Promise<any> {
     options.setBusy(`auth:user:${user.userId}`);
     options.error.value = "";
     try {
-      const result = await updateAuthUser(user.userId, patch);
+      const result: any = await updateAuthUser(user.userId, patch);
       authUsers.value = result.users;
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "更新用户失败。";
     } finally {
       options.clearAllBusy();
     }
   }
 
-  function updateConsoleUserRoleFromEvent(user: ConsoleUser, event: Event) {
-    const roleId = (event.target as HTMLSelectElement).value;
+  function updateConsoleUserRoleFromEvent(user: ConsoleUser, event: Event) : any {
+    const roleId: any = (event.target as HTMLSelectElement).value;
     void updateConsoleUser(user, { roleId });
   }
 
-  function updateConsoleUserRole(user: ConsoleUser, roleId: string) {
+  function updateConsoleUserRole(user: ConsoleUser, roleId: string) : any {
     void updateConsoleUser(user, { roleId });
   }
 
-  async function saveOidcConfig() {
+  async function saveOidcConfig() : Promise<any> {
     options.setBusy("auth:oidc");
     options.error.value = "";
     try {
-      const result = await saveAuthOidc({
+      const result: any = await saveAuthOidc({
         ...oidcDraft.value,
         allowedDomains: oidcAllowedDomainsText.value
           .split(/[\n,，]/)
-          .map((item) => item.trim())
+          .map((item?: any) : any => item.trim())
           .filter(Boolean),
         roleMapping: JSON.parse(oidcRoleMappingText.value || "{}") as Record<string, string>,
       });
@@ -199,20 +199,20 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
         ...result.oidc,
         clientSecret: "",
       };
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "保存 OIDC 失败。";
     } finally {
       options.clearAllBusy();
     }
   }
 
-  async function revokeConsoleSession(sessionId: string) {
+  async function revokeConsoleSession(sessionId: string) : Promise<any> {
     options.setBusy(`auth:session:${sessionId}`);
     options.error.value = "";
     try {
       await revokeAuthSession(sessionId);
       await refreshAuthAdmin();
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "撤销会话失败。";
     } finally {
       options.clearAllBusy();

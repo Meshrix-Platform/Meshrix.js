@@ -8,7 +8,7 @@ Useful commands:
 npm run server:deployment-index
 npm run server:deployment-index -- section dockerPresets
 npm run release:package-server-source
-node tools/server-scripts/verify-deployment-index.mjs
+node tools/server-scripts/verify-deployment-index.ts
 ```
 
 Deployment proof must run in fresh containers. Use the commands under `validation.freshContainer` in `index.json` when the touched area affects bootstrap or container startup.

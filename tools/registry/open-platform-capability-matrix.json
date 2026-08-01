@@ -13,6 +13,7 @@
   "capabilities": [
     {
       "id": "upstream-gateway",
+      "capabilityClass": "core",
       "title": "Governed Upstream Service Gateway",
       "docs": [
         "README.md",
@@ -39,10 +40,10 @@
         "admin.gateway-routes"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-external-gateway.mjs",
-        "tools/server-scripts/verify-upstream-gateway-e2e.mjs",
-        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.mjs",
-        "tools/server-scripts/verify-upstream-fixture-transit.mjs"
+        "tools/server-scripts/verify-external-gateway.ts",
+        "tools/server-scripts/verify-upstream-gateway-e2e.ts",
+        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts",
+        "tools/server-scripts/verify-upstream-fixture-transit.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -55,6 +56,7 @@
     },
     {
       "id": "downstream-mcp",
+      "capabilityClass": "core",
       "title": "Downstream MCP Gateway Completeness",
       "docs": [
         "README.md",
@@ -77,15 +79,15 @@
         "admin.operation-permission-governance"
       ],
       "verifierScripts": [
-        "tools/verifiers/downstream-mcp-completeness-audit.mjs",
-        "tools/server-scripts/mcp-doctor.mjs",
-        "tools/server-scripts/verify-mcp-installer-convergence.mjs",
-        "tools/server-scripts/verify-mcp-release-target-scope.mjs",
-        "tools/server-scripts/verify-mcp-client-identity-proof.mjs",
-        "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs",
-        "tools/server-scripts/verify-mcp-release-portable-assembly.mjs",
-        "tools/server-scripts/verify-downstream-agent-tool-loop.mjs",
-        "tools/server-scripts/verify-mcp-proxy-transport.mjs"
+        "tools/verifiers/downstream-mcp-completeness-audit.ts",
+        "tools/server-scripts/mcp-doctor.ts",
+        "tools/server-scripts/verify-mcp-installer-convergence.ts",
+        "tools/server-scripts/verify-mcp-release-target-scope.ts",
+        "tools/server-scripts/verify-mcp-client-identity-proof.ts",
+        "tools/server-scripts/verify-mcp-process-identity-credential-store.ts",
+        "tools/server-scripts/verify-mcp-release-portable-assembly.ts",
+        "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
+        "tools/server-scripts/verify-mcp-proxy-transport.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -98,6 +100,8 @@
     },
     {
       "id": "strategy-management",
+      "capabilityClass": "detachable-core",
+      "activationFeatureId": "strategy-management",
       "title": "Strategy Management Policy Preview",
       "docs": [
         "docs/functionality/STRATEGY-MANAGEMENT.md",
@@ -117,7 +121,7 @@
         "admin.strategy-management"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-strategy-management.mjs"
+        "tools/server-scripts/verify-strategy-management.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -130,6 +134,7 @@
     },
     {
       "id": "enterprise-governance",
+      "capabilityClass": "core",
       "title": "Enterprise Governance And Observability",
       "docs": [
         "docs/functionality/SECURITY-AUTHORIZATION.md",
@@ -160,10 +165,10 @@
         "admin.ops-monitor"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-tag-management.mjs",
-        "tools/server-scripts/verify-security-alert-lifecycle.mjs",
-        "tools/server-scripts/verify-production-health-console.mjs",
-        "tools/server-scripts/verify-observability-semantics.mjs"
+        "tools/server-scripts/verify-tag-management.ts",
+        "tools/server-scripts/verify-security-alert-lifecycle.ts",
+        "tools/server-scripts/verify-production-health-console.ts",
+        "tools/server-scripts/verify-observability-semantics.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -176,9 +181,10 @@
     },
     {
       "id": "console-administration",
+      "capabilityClass": "core",
       "title": "Console Administration Workflows",
       "docs": [
-        "apps/console/router/admin-route-registry.mjs",
+        "apps/console/router/admin-route-registry.ts",
         "packages/foundation/config/frontend-feature-registry.yaml"
       ],
       "requirementRows": [
@@ -198,8 +204,8 @@
         "admin.jobs-control"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-production-health-console.mjs",
-        "tests/verify-frontend-route-registry.mjs"
+        "tools/server-scripts/verify-production-health-console.ts",
+        "tests/verify-frontend-route-registry.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -209,6 +215,7 @@
     },
     {
       "id": "container-deployment",
+      "capabilityClass": "core",
       "title": "Container Deployment Resumability",
       "docs": [
         "Dockerfile",
@@ -222,11 +229,11 @@
         "Dockerfile",
         "docker-compose.yml",
         "package-lock.json",
-        "tools/server-scripts/prepare-npm-artifact-cache.mjs"
+        "tools/server-scripts/prepare-npm-artifact-cache.ts"
       ],
       "verifierScripts": [
-        "tools/server-scripts/prepare-npm-artifact-cache.mjs",
-        "tools/server-scripts/verify-deployment-container-flow.mjs"
+        "tools/server-scripts/prepare-npm-artifact-cache.ts",
+        "tools/server-scripts/verify-deployment-container-flow.ts"
       ],
       "requiredEdges": [
         "sourceFiles",
@@ -235,6 +242,7 @@
     },
     {
       "id": "storage",
+      "capabilityClass": "core",
       "title": "Storage And Backup Runtime",
       "docs": [
         "packages/foundation/src/storage/README.md",
@@ -253,8 +261,8 @@
         "admin.storage-control"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-backup-restore.mjs",
-        "tools/server-scripts/verify-storage-production-restore-drill.mjs"
+        "tools/server-scripts/verify-backup-restore.ts",
+        "tools/server-scripts/verify-storage-production-restore-drill.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -266,6 +274,7 @@
     },
     {
       "id": "jobs",
+      "capabilityClass": "core",
       "title": "Jobs And Work Queue Runtime",
       "docs": [
         "docs/functionality/INGESTION-JOBS.md",
@@ -284,11 +293,11 @@
         "admin.jobs-control"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-job-work-queue.mjs",
-        "tools/server-scripts/verify-job-work-queue-capacity.mjs",
-        "tools/server-scripts/verify-work-queue-conformance.mjs",
-        "tools/server-scripts/verify-work-queue-process-restart.mjs",
-        "tools/server-scripts/verify-upload-workspace-materialization.mjs"
+        "tools/server-scripts/verify-job-work-queue.ts",
+        "tools/server-scripts/verify-job-work-queue-capacity.ts",
+        "tools/server-scripts/verify-work-queue-conformance.ts",
+        "tools/server-scripts/verify-work-queue-process-restart.ts",
+        "tools/server-scripts/verify-upload-workspace-materialization.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -300,6 +309,7 @@
     },
     {
       "id": "external-plugin-packaging-loading",
+      "capabilityClass": "external-plugin",
       "title": "External Plugin Packaging And Loading",
       "docs": [
         "docs/protocols/PLUGIN-PACKAGE-AND-LOADING.md",
@@ -309,12 +319,12 @@
         "External Plugin Packaging And Loading"
       ],
       "requiredFiles": [
-        "packages/foundation/src/module-system/plugin-runtime.mjs",
-        "packages/foundation/src/module-system/plugin-registry.mjs",
-        "packages/foundation/src/module-system/mount-manager.mjs"
+        "packages/foundation/src/module-system/plugin-runtime.ts",
+        "packages/foundation/src/module-system/plugin-registry.ts",
+        "packages/foundation/src/module-system/mount-manager.ts"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-plugin-runtime.mjs"
+        "tools/server-scripts/verify-plugin-runtime.ts"
       ],
       "requiredEdges": [
         "sourceFiles",
@@ -323,6 +333,8 @@
     },
     {
       "id": "agent-gateway-model-routing",
+      "capabilityClass": "detachable-core",
+      "activationFeatureId": "agent-gateway",
       "title": "Agent Gateway And Model Routing",
       "docs": [
         "docs/functionality/AGENT-GATEWAY.md",
@@ -343,8 +355,8 @@
         "admin.context-management"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-agent-gateway.mjs",
-        "tools/server-scripts/verify-model-routing.mjs"
+        "tools/server-scripts/verify-agent-gateway.ts",
+        "tools/server-scripts/verify-model-routing.ts"
       ],
       "requiredEdges": [
         "serverOperations",
@@ -357,6 +369,7 @@
     },
     {
       "id": "core-workspace-assets-governance",
+      "capabilityClass": "core",
       "title": "Core Workspace Assets And Governance",
       "docs": [
         "docs/functionality/WORKSPACE-ASSETS.md",
@@ -386,7 +399,7 @@
         "workspace.gateway-context"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-workspace-asset-management.mjs"
+        "tools/server-scripts/verify-workspace-asset-management.ts"
       ],
       "requiredEdges": [
         "serverOperations",

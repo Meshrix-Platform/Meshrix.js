@@ -7,7 +7,7 @@ import {
 import {
   routeAccessPolicyForAdminView,
   routeAccessPolicyForView,
-} from "./route-access-policy.mjs";
+} from "./route-access-policy.ts";
 import { installRuntimeRouteGuard } from "./runtime-route-guard";
 export type { AdminSection } from "./routes";
 export { adminSectionToSlug, slugToAdminView, viewToPath } from "./routes";
@@ -19,7 +19,7 @@ export { adminSectionToSlug, slugToAdminView, viewToPath } from "./routes";
  * This ensures the route still exists so it can be diagnosed via the verifier
  * and the router table remains inspectable.
  */
-const MissingAdminView = {
+const MissingAdminView: Record<string, any> = {
   template: '<div class="admin-error">Admin view component not found — see build logs.</div>',
 };
 
@@ -28,30 +28,30 @@ const MissingAdminView = {
 const routes: RouteRecordRaw[] = [
   {
     path: "/welcome",
-    component: () => import("../views/LandingView.vue"),
+    component: () : any => import("../views/LandingView.vue"),
     meta: { public: true, accessPolicy: routeAccessPolicyForView("welcome") },
   },
   {
     path: "/login",
-    component: () => import("../views/LoginView.vue"),
+    component: () : any => import("../views/LoginView.vue"),
     meta: { authView: true, accessPolicy: routeAccessPolicyForView("login") },
   },
 
   {
     path: "/workspaces",
-    component: () => import("../views/WorkspacesView.vue"),
+    component: () : any => import("../views/WorkspacesView.vue"),
     meta: { viewId: "workspaces", accessPolicy: routeAccessPolicyForView("workspaces") },
   },
 
   // Core views
   {
     path: "/",
-    component: () => import("../views/DashboardView.vue"),
+    component: () : any => import("../views/DashboardView.vue"),
     meta: { viewId: "dashboard", accessPolicy: routeAccessPolicyForView("dashboard") },
   },
   {
     path: "/approval",
-    component: () => import("../views/ApprovalFlowView.vue"),
+    component: () : any => import("../views/ApprovalFlowView.vue"),
     meta: { viewId: "approval", accessPolicy: routeAccessPolicyForView("approval") },
   },
   { path: "/intelligence", redirect: "/" },
@@ -63,8 +63,8 @@ const routes: RouteRecordRaw[] = [
   // Uses resolveAdminComponent (import.meta.glob) for Vite build safety.
   // Missing components get an explicit error placeholder instead of being
   // silently dropped — the verifier catches these at build time.
-  ...ADMIN_ROUTE_REGISTRY.map((entry: AdminRouteEntry) => {
-    const component = resolveAdminComponent(entry.viewKey);
+  ...ADMIN_ROUTE_REGISTRY.map((entry: AdminRouteEntry) : any => {
+    const component: any = resolveAdminComponent(entry.viewKey);
     return {
       path: `/admin/${entry.slug}` as const,
       component: component || MissingAdminView,
@@ -79,15 +79,15 @@ const routes: RouteRecordRaw[] = [
   // Catch-all → dashboard
   {
     path: "/:pathMatch(.*)*",
-    redirect: (to) => ({ path: "/welcome", query: { redirect: to.fullPath } }),
+    redirect: (to?: any) : any => ({ path: "/welcome", query: { redirect: to.fullPath } }),
   },
 ];
 
-export const router = createRouter({
+export const router: any = createRouter({
   // Hash history works without server-side routing configuration
   history: createWebHashHistory(),
   routes,
-  scrollBehavior: () => ({ top: 0 }),
+  scrollBehavior: () : any => ({ top: 0 }),
 });
 
 installRuntimeRouteGuard(router);

@@ -30,17 +30,17 @@ import {
   useConsoleToasts,
 } from "../../../apps/console/composables/console-toast-controller";
 
-const triggerBrowserDownloadMock = vi.hoisted(() => vi.fn());
+const triggerBrowserDownloadMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../apps/console/lib/browser-downloads", () => ({
+vi.mock("../../../apps/console/lib/browser-downloads", () : any => ({
   triggerBrowserDownload: triggerBrowserDownloadMock,
 }));
 
-const originalClipboard = Object.getOwnPropertyDescriptor(window.navigator, "clipboard");
-const originalExecCommand = document.execCommand;
-const originalRequestAnimationFrame = window.requestAnimationFrame;
+const originalClipboard: any = Object.getOwnPropertyDescriptor(window.navigator, "clipboard");
+const originalExecCommand: any = document.execCommand;
+const originalRequestAnimationFrame: any = window.requestAnimationFrame;
 
-function installClipboard(writeText = vi.fn().mockResolvedValue(undefined)) {
+function installClipboard(writeText: any = vi.fn().mockResolvedValue(undefined)) : any {
   Object.defineProperty(window.navigator, "clipboard", {
     value: { writeText },
     configurable: true,
@@ -48,17 +48,17 @@ function installClipboard(writeText = vi.fn().mockResolvedValue(undefined)) {
   return writeText;
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.useFakeTimers();
   document.body.innerHTML = "";
   triggerBrowserDownloadMock.mockReset();
-  window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+  window.requestAnimationFrame = ((callback: FrameRequestCallback) : any => {
     callback(0);
     return 1;
   }) as typeof window.requestAnimationFrame;
 });
 
-afterEach(() => {
+afterEach(() : any => {
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   vi.clearAllTimers();
@@ -72,13 +72,13 @@ afterEach(() => {
   window.requestAnimationFrame = originalRequestAnimationFrame;
 });
 
-describe("console browser effects", () => {
-  it("routes confirms through the dialog host and notifications through toasts", async () => {
+describe("console browser effects", () : any => {
+  it("routes confirms through the dialog host and notifications through toasts", async () : Promise<any> => {
     await expect(confirmConsoleAction("delete it?")).resolves.toBe(false);
     await expect(confirmConsoleAction("delete it?", { defaultValue: true })).resolves.toBe(true);
 
     registerConsoleConfirmHost();
-    const pending = confirmConsoleAction("delete it?");
+    const pending: any = confirmConsoleAction("delete it?");
     settleConsoleConfirm(true);
     await expect(pending).resolves.toBe(true);
     unregisterConsoleConfirmHost();
@@ -91,14 +91,14 @@ describe("console browser effects", () => {
     clearConsoleToasts();
   });
 
-  it("scrolls elements by id and exact data attribute", () => {
+  it("scrolls elements by id and exact data attribute", () : any => {
     document.body.innerHTML = `
       <section id="target"></section>
       <div data-config-target="alpha"></div>
       <div data-config-target="beta"></div>
     `;
-    const idTarget = document.getElementById("target") as HTMLElement;
-    const dataTarget = document.querySelector('[data-config-target="beta"]') as HTMLElement;
+    const idTarget: any = document.getElementById("target") as HTMLElement;
+    const dataTarget: any = document.querySelector('[data-config-target="beta"]') as HTMLElement;
     idTarget.scrollIntoView = vi.fn();
     dataTarget.scrollIntoView = vi.fn();
 
@@ -112,10 +112,10 @@ describe("console browser effects", () => {
     expect(dataTarget.scrollIntoView).toHaveBeenCalledWith({ block: "center" });
   });
 
-  it("shows floating feedback and removes it after timers", () => {
-    const button = document.createElement("button");
+  it("shows floating feedback and removes it after timers", () : any => {
+    const button: any = document.createElement("button");
     document.body.appendChild(button);
-    button.getBoundingClientRect = vi.fn(() => ({
+    button.getBoundingClientRect = vi.fn(() : any => ({
       left: 10,
       top: 20,
       width: 40,
@@ -124,12 +124,12 @@ describe("console browser effects", () => {
       right: 50,
       x: 10,
       y: 20,
-      toJSON: () => ({}),
+      toJSON: () : any => ({}),
     } as DOMRect));
 
     expect(showFloatingElementFeedback(button, "Copied", { visibleMs: 10 })).toBe(true);
 
-    const bubble = document.querySelector(".meshrix-copy-bubble") as HTMLElement;
+    const bubble: any = document.querySelector(".meshrix-copy-bubble") as HTMLElement;
     expect(bubble.textContent).toBe("Copied");
     expect(bubble.style.left).toBe("30px");
     expect(bubble.style.top).toBe("20px");
@@ -141,15 +141,15 @@ describe("console browser effects", () => {
     expect(document.querySelector(".meshrix-copy-bubble")).toBeNull();
   });
 
-  it("copies text through clipboard and falls back to execCommand", async () => {
-    const writeText = installClipboard();
+  it("copies text through clipboard and falls back to execCommand", async () : Promise<any> => {
+    const writeText: any = installClipboard();
 
     await expect(copyConsoleText("hello")).resolves.toBe(true);
     await expect(copyConsoleText("")).resolves.toBe(false);
     expect(writeText).toHaveBeenCalledWith("hello");
 
     Reflect.deleteProperty(window.navigator, "clipboard");
-    const execSpy = vi.fn(() => true);
+    const execSpy: any = vi.fn(() : any => true);
     document.execCommand = execSpy as typeof document.execCommand;
 
     await copyTextToClipboard("fallback");
@@ -158,11 +158,11 @@ describe("console browser effects", () => {
     expect(document.querySelector("textarea")).toBeNull();
   });
 
-  it("downloads text files and copies with target feedback", async () => {
-    const writeText = installClipboard();
-    const button = document.createElement("button");
+  it("downloads text files and copies with target feedback", async () : Promise<any> => {
+    const writeText: any = installClipboard();
+    const button: any = document.createElement("button");
     document.body.appendChild(button);
-    button.getBoundingClientRect = vi.fn(() => ({
+    button.getBoundingClientRect = vi.fn(() : any => ({
       left: 0,
       top: 0,
       width: 20,
@@ -171,12 +171,12 @@ describe("console browser effects", () => {
       right: 20,
       x: 0,
       y: 0,
-      toJSON: () => ({}),
+      toJSON: () : any => ({}),
     } as DOMRect));
 
     downloadTextFile("report.txt", "hello", "text/plain");
     expect(triggerBrowserDownloadMock).toHaveBeenCalledWith(expect.any(Blob), "report.txt");
-    const blob = triggerBrowserDownloadMock.mock.calls[0][0] as Blob;
+    const blob: any = triggerBrowserDownloadMock.mock.calls[0][0] as Blob;
     await expect(blob.text()).resolves.toBe("hello");
 
     await expect(copyConsoleTextWithFeedback(new Event("click"), "no target")).resolves.toBe(true);
@@ -189,16 +189,16 @@ describe("console browser effects", () => {
     expect(document.querySelector(".meshrix-copy-bubble")?.textContent).toBe("Copied");
   });
 
-  it("scrolls and highlights config targets with timer cleanup", async () => {
+  it("scrolls and highlights config targets with timer cleanup", async () : Promise<any> => {
     document.body.innerHTML = `
       <div data-config-target="agent-settings">
         <button>Focusable</button>
       </div>
     `;
-    const root = document.querySelector("[data-config-target]") as HTMLElement;
+    const root: any = document.querySelector("[data-config-target]") as HTMLElement;
     root.scrollIntoView = vi.fn();
-    const highlightedTarget = ref("");
-    const controller = createConsoleTargetHighlightController({
+    const highlightedTarget: any = ref("");
+    const controller: any = createConsoleTargetHighlightController({
       highlightedTarget,
       highlightDurationMs: 25,
     });
@@ -226,9 +226,9 @@ describe("console browser effects", () => {
     expect(highlightedTarget.value).toBe("missing");
   });
 
-  it("handles missing browser globals without throwing", async () => {
-    const originalWindow = globalThis.window;
-    const originalDocument = globalThis.document;
+  it("handles missing browser globals without throwing", async () : Promise<any> => {
+    const originalWindow: any = globalThis.window;
+    const originalDocument: any = globalThis.document;
     vi.stubGlobal("window", undefined);
     vi.stubGlobal("document", undefined);
 
@@ -238,8 +238,8 @@ describe("console browser effects", () => {
       await expect(copyTextToClipboard("no browser")).rejects.toThrow("剪贴板环境不可用。");
       await expect(copyConsoleText("no browser")).rejects.toThrow("剪贴板环境不可用。");
 
-      const highlightedTarget = ref("");
-      const controller = createConsoleTargetHighlightController({ highlightedTarget });
+      const highlightedTarget: any = ref("");
+      const controller: any = createConsoleTargetHighlightController({ highlightedTarget });
       await controller.scrollToConfigTarget("missing-target");
       expect(highlightedTarget.value).toBe("missing-target");
       expect(controller.configTargetElement("missing-target")).toBeNull();

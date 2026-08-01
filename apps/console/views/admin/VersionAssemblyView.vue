@@ -144,7 +144,7 @@ const {
                     :disabled="architectureSubtreeToggleDisabled(node)"
                     @update:model-value="setArchitectureSubtreeSelection(node, $event)"
                   />
-                  <p>{{ moduleSummaryText(node) }}</p>
+                  <p :title="moduleSummaryText(node)">{{ moduleSummaryText(node) }}</p>
                 </div>
                 <div class="version-assembly-module-meta">
                   <span class="version-assembly-hydration-chip" :data-hydratable="node.hydratable ? 'true' : 'false'">

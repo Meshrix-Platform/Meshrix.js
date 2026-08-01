@@ -27,6 +27,11 @@ export type McpAuthorizationRequest = {
   verificationCode?: string;
   processKeyFingerprints?: Array<{ target: string; fingerprint: string }>;
   expiresAt?: string;
+  createdAt?: string;
+  resolvedAt?: string;
+  issuingAt?: string;
+  consumedAt?: string;
+  errorCode?: string;
 } & Record<string, unknown>;
 
 export type ResolveMcpAuthorizationRequestPayload = {
@@ -37,7 +42,7 @@ export type ResolveMcpAuthorizationRequestPayload = {
   toolAllow?: string[];
 };
 
-const authorizationGovernanceEndpoints = {
+const authorizationGovernanceEndpoints: any = {
   role: "/api/authorization/roles",
   department: "/api/authorization/departments",
   team: "/api/authorization/teams",
@@ -47,20 +52,20 @@ const authorizationGovernanceEndpoints = {
   approval: "/api/authorization/approvals",
 } as const satisfies Record<AuthorizationGovernanceKind, string>;
 
-export function getAuthorizationGovernance() {
+export function getAuthorizationGovernance() : any {
   return getJson<AuthorizationGovernanceResponse>("/api/authorization/governance");
 }
 
 export function upsertAuthorizationGovernance(
   kind: AuthorizationGovernanceKind,
   payload: Record<string, unknown>,
-) {
+) : any {
   return postJson<Record<string, unknown>>(authorizationGovernanceEndpoints[kind], payload, {
     safetyConfirm: true,
   });
 }
 
-export function revokeAuthorizationApproval(approvalId: string, reason = "") {
+export function revokeAuthorizationApproval(approvalId: string, reason: any = "") : any {
   return postJson<Record<string, unknown>>(
     `/api/authorization/approvals/${encodeURIComponent(approvalId)}/revoke`,
     { reason },
@@ -68,7 +73,7 @@ export function revokeAuthorizationApproval(approvalId: string, reason = "") {
   );
 }
 
-export function listMcpAuthorizationRequests(status = "pending") {
+export function listMcpAuthorizationRequests(status: any = "pending") : any {
   return getJson<{ requests: McpAuthorizationRequest[] }>(
     `/api/console/mcp/authorization/requests?status=${encodeURIComponent(status)}`,
   );
@@ -77,7 +82,7 @@ export function listMcpAuthorizationRequests(status = "pending") {
 export function resolveMcpAuthorizationRequest(
   requestId: string,
   payload: ResolveMcpAuthorizationRequestPayload,
-) {
+) : any {
   return postJson<{ ok: boolean; grantId?: string }>(
     `/api/console/mcp/authorization/requests/${encodeURIComponent(requestId)}/resolve`,
     payload,

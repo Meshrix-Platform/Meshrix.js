@@ -7,16 +7,16 @@ export type ConsoleDomLocalizer = {
 
 function emptyConsoleDomLocalizer(): ConsoleDomLocalizer {
   return {
-    refresh() {},
-    disconnect() {},
+    refresh() : any {},
+    disconnect() : any {},
   };
 }
 
-function shouldSkipConsoleLocalizeElement(element: Element | null) {
+function shouldSkipConsoleLocalizeElement(element: Element | null) : any {
   if (!element) {
     return false;
   }
-  const tagName = element.tagName.toLowerCase();
+  const tagName: any = element.tagName.toLowerCase();
   if (["script", "style", "pre", "code"].includes(tagName)) {
     return true;
   }
@@ -27,11 +27,11 @@ function shouldSkipConsoleLocalizeElement(element: Element | null) {
   );
 }
 
-function shouldSkipConsoleLocalizeText(element: Element | null) {
+function shouldSkipConsoleLocalizeText(element: Element | null) : any {
   if (!element) {
     return true;
   }
-  const tagName = element.tagName.toLowerCase();
+  const tagName: any = element.tagName.toLowerCase();
   if (["script", "style", "textarea", "pre", "code"].includes(tagName)) {
     return true;
   }
@@ -42,27 +42,27 @@ function shouldSkipConsoleLocalizeText(element: Element | null) {
   );
 }
 
-function localizeConsoleElementAttributes(element: Element, locale: ConsoleLocale) {
+function localizeConsoleElementAttributes(element: Element, locale: ConsoleLocale) : any {
   for (const attr of ["placeholder", "title", "aria-label", "alt", "data-tooltip", "data-label"]) {
-    const current = element.getAttribute(attr);
+    const current: any = element.getAttribute(attr);
     if (!current) {
       continue;
     }
-    const localized = localizeConsoleText(current, locale);
+    const localized: any = localizeConsoleText(current, locale);
     if (localized !== current) {
       element.setAttribute(attr, localized);
     }
   }
 }
 
-function localizeConsoleNode(root: Node, locale: ConsoleLocale) {
+function localizeConsoleNode(root: Node, locale: ConsoleLocale) : any {
   if (root.nodeType === Node.TEXT_NODE) {
-    const parent = root.parentElement;
+    const parent: any = root.parentElement;
     if (shouldSkipConsoleLocalizeText(parent)) {
       return;
     }
-    const current = root.nodeValue || "";
-    const localized = localizeConsoleText(current, locale);
+    const current: any = root.nodeValue || "";
+    const localized: any = localizeConsoleText(current, locale);
     if (localized !== current) {
       root.nodeValue = localized;
     }
@@ -73,7 +73,7 @@ function localizeConsoleNode(root: Node, locale: ConsoleLocale) {
     return;
   }
 
-  const rootElement = root.nodeType === Node.ELEMENT_NODE ? (root as Element) : null;
+  const rootElement: any = root.nodeType === Node.ELEMENT_NODE ? (root as Element) : null;
   if (shouldSkipConsoleLocalizeElement(rootElement)) {
     return;
   }
@@ -81,17 +81,17 @@ function localizeConsoleNode(root: Node, locale: ConsoleLocale) {
     localizeConsoleElementAttributes(rootElement, locale);
   }
 
-  const walker = document.createTreeWalker(
+  const walker: any = document.createTreeWalker(
     root,
     NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
     {
-      acceptNode(node) {
+      acceptNode(node?: any) : any {
         if (node.nodeType === Node.ELEMENT_NODE) {
           return shouldSkipConsoleLocalizeElement(node as Element)
             ? NodeFilter.FILTER_REJECT
             : NodeFilter.FILTER_ACCEPT;
         }
-        const parent = node.parentElement;
+        const parent: any = node.parentElement;
         return shouldSkipConsoleLocalizeText(parent)
           ? NodeFilter.FILTER_REJECT
           : NodeFilter.FILTER_ACCEPT;
@@ -99,13 +99,13 @@ function localizeConsoleNode(root: Node, locale: ConsoleLocale) {
     },
   );
 
-  let node = walker.nextNode();
+  let node: any = walker.nextNode();
   while (node) {
     if (node.nodeType === Node.ELEMENT_NODE) {
       localizeConsoleElementAttributes(node as Element, locale);
     } else if (node.nodeType === Node.TEXT_NODE) {
-      const current = node.nodeValue || "";
-      const localized = localizeConsoleText(current, locale);
+      const current: any = node.nodeValue || "";
+      const localized: any = localizeConsoleText(current, locale);
       if (localized !== current) {
         node.nodeValue = localized;
       }
@@ -119,13 +119,13 @@ export function installConsoleDomLocalizer(getLocale: () => ConsoleLocale): Cons
     return emptyConsoleDomLocalizer();
   }
 
-  let refreshing = false;
-  const refresh = () => {
+  let refreshing: any = false;
+  const refresh: any = () : any => {
     if (refreshing) {
       return;
     }
     refreshing = true;
-    window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() : any => {
       try {
         localizeConsoleNode(document.body, getLocale());
       } finally {
@@ -134,7 +134,7 @@ export function installConsoleDomLocalizer(getLocale: () => ConsoleLocale): Cons
     });
   };
 
-  const observer = new MutationObserver((mutations) => {
+  const observer: any = new MutationObserver((mutations?: any) : any => {
     if (refreshing) {
       return;
     }
@@ -147,7 +147,7 @@ export function installConsoleDomLocalizer(getLocale: () => ConsoleLocale): Cons
         localizeConsoleNode(mutation.target, getLocale());
         continue;
       }
-      mutation.addedNodes.forEach((node) => localizeConsoleNode(node, getLocale()));
+      mutation.addedNodes.forEach((node?: any) : any => localizeConsoleNode(node, getLocale()));
     }
   });
 
@@ -162,7 +162,7 @@ export function installConsoleDomLocalizer(getLocale: () => ConsoleLocale): Cons
 
   return {
     refresh,
-    disconnect() {
+    disconnect() : any {
       observer.disconnect();
     },
   };

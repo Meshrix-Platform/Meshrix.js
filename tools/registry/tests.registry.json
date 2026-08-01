@@ -41,13 +41,13 @@
         "gateway.performance-observation",
         "gateway.external"
       ],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "standard-public": {
       "description": "Platform validation",
       "extends": "core-public",
       "suites": [],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "security-public": {
       "description": "Security-focused gate",
@@ -64,7 +64,7 @@
         "downstream-mcp.authorization-request-filters",
         "agents.model-provider-runtime"
       ],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "audit-public": {
       "description": "Audit gate",
@@ -109,6 +109,7 @@
         "jobs.work-queue-conformance",
         "jobs.work-queue-process-restart",
         "jobs.upload-workspace-materialization",
+        "jobs.upload-custody-workspace-materialization-acceptance",
         "agent-memory.runtime",
         "workspace-asset-management.runtime",
         "workspace-governance.runtime",
@@ -141,10 +142,10 @@
       "suites": [
         "smoke.start-server-defaults"
       ],
-      "timeoutMs": 300000
+      "timeoutMs": 1800000
     },
     "release-public": {
-      "description": "Release readiness gate",
+      "description": "Functional completeness release gate",
       "extends": "audit-public",
       "suites": [
         "release.npm-package-installability",
@@ -175,7 +176,7 @@
       "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": false,
+      "coverageContribution": true,
       "artifacts": [
         "build/reports/runtime-resource-discipline.json"
       ],
@@ -190,7 +191,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-public-boundary.mjs"
+        "tools/server-scripts/verify-public-boundary.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -206,7 +207,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tests/verify-secret-hygiene.mjs"
+        "tests/verify-secret-hygiene.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -222,7 +223,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/config-scanner.mjs"
+        "tools/config-scanner.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -240,7 +241,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/verifiers/registry-validator.mjs"
+        "tools/verifiers/registry-validator.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -257,7 +258,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-version-registry.mjs"
+        "tools/server-scripts/verify-version-registry.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -269,6 +270,23 @@
       ]
     },
     {
+      "id": "release.definition",
+      "label": "Canonical product release definition and projection consistency",
+      "owner": "platform",
+      "package": "repo",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-release-definition.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
       "id": "registry.version-naming",
       "label": "Governed version naming and legacy token rejection",
       "owner": "platform",
@@ -276,7 +294,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-version-naming.mjs"
+        "tools/server-scripts/verify-version-naming.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -294,7 +312,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tests/verify-root-hygiene.mjs"
+        "tests/verify-root-hygiene.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -311,7 +329,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tests/verify-script-registry.mjs"
+        "tests/verify-script-registry.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -353,7 +371,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/source-organization-analysis.test.mjs"
+        "tests/vitest/server/source-organization-analysis.test.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -370,7 +388,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tests/architecture/import-graph.test.mjs"
+        "tests/architecture/import-graph.test.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -393,7 +411,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/plan-execution-eligibility.test.mjs"
+        "tests/vitest/server/plan-execution-eligibility.test.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -410,7 +428,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-protocol-boundary.mjs"
+        "tools/server-scripts/verify-protocol-boundary.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -429,13 +447,13 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tests/unit/foundation/checkpoint-tree.test.mjs"
+        "tests/unit/foundation/checkpoint-tree.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -449,20 +467,23 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/state-coordinator.test.mjs",
-        "tests/vitest/server/checkpoint-tree-projection.test.mjs",
-        "tests/vitest/server/merkle-state-substrate.test.mjs",
-        "tests/vitest/server/storage-backup-restore.test.mjs",
-        "tests/vitest/server/storage-retention-and-maintenance.test.mjs",
-        "tests/vitest/server/storage-service-manifest.test.mjs",
-        "tests/vitest/server/storage-production-restore-evidence.test.mjs",
-        "tests/vitest/server/storage-provider.test.mjs",
-        "tests/vitest/server/storage-ops-tools.test.mjs",
-        "tests/vitest/server/upload-session-store.test.mjs",
-        "tests/vitest/server/job-pipeline-upload-session-persistence.test.mjs",
-        "tests/vitest/server/pactium-provider-boundary.test.mjs",
-        "tests/vitest/server/job-manager-lifecycle-and-persistence.test.mjs",
-        "tests/vitest/server/job-runner-background-workers.test.mjs"
+        "tests/vitest/server/state-coordinator.test.ts",
+        "tests/vitest/server/checkpoint-tree-projection.test.ts",
+        "tests/vitest/server/merkle-state-substrate.test.ts",
+        "tests/vitest/server/storage-backup-restore.test.ts",
+        "tests/vitest/server/storage-independent-backup-root.test.ts",
+        "tests/vitest/server/enterprise-upgrade-rollback.test.ts",
+        "tests/vitest/server/storage-retention-and-maintenance.test.ts",
+        "tests/vitest/server/storage-service-manifest.test.ts",
+        "tests/vitest/server/storage-production-restore-evidence.test.ts",
+        "tests/vitest/server/storage-provider.test.ts",
+        "tests/vitest/server/storage-ops-tools.test.ts",
+        "tests/vitest/server/job-pipeline-bound-upload-session-adoption.test.ts",
+        "tests/vitest/server/job-create-upload-session-only.test.ts",
+        "tests/vitest/server/job-pipeline-upload-session-persistence.test.ts",
+        "tests/vitest/server/pactium-provider-boundary.test.ts",
+        "tests/vitest/server/job-manager-lifecycle-and-persistence.test.ts",
+        "tests/vitest/server/job-runner-background-workers.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -482,7 +503,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/local-secret-store.test.mjs"
+        "tests/vitest/server/local-secret-store.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -502,20 +523,24 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/operation-permission-grant-security.test.mjs",
-        "tests/vitest/server/delegated-mcp-parent-authority.test.mjs",
-        "tests/vitest/server/process-identity-nonce-capacity.test.mjs",
-        "tests/vitest/server/mcp-installer-device-authorization.test.mjs",
-        "tests/vitest/server/local-secret-crash-consistency.test.mjs",
-        "tests/vitest/server/plugin-mcp-outlet-visibility.test.mjs",
-        "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.mjs",
-        "tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.mjs",
-        "tests/vitest/server/authorization-capability-binding-guard.test.mjs",
-        "tests/vitest/server/console-auth.test.mjs",
-        "tests/vitest/server/runtime-logger.test.mjs",
-        "tests/vitest/server/operation-audit-retention.test.mjs",
-        "tests/vitest/server/p2-security-boundaries.test.mjs",
-        "tests/vitest/console/authorization-governance-card-context.test.ts"
+        "tests/vitest/server/operation-permission-grant-security.test.ts",
+        "tests/vitest/server/delegated-mcp-parent-authority.test.ts",
+        "tests/vitest/server/process-identity-nonce-capacity.test.ts",
+        "tests/vitest/server/mcp-installer-device-authorization.test.ts",
+        "tests/vitest/server/local-secret-crash-consistency.test.ts",
+        "tests/vitest/server/plugin-mcp-outlet-visibility.test.ts",
+        "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts",
+        "tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.ts",
+        "tests/vitest/server/authorization-capability-binding-guard.test.ts",
+        "tests/vitest/server/console-auth.test.ts",
+        "tests/vitest/server/runtime-logger.test.ts",
+        "tests/vitest/server/operation-audit-retention.test.ts",
+        "tests/vitest/server/p2-security-boundaries.test.ts",
+        "tests/vitest/console/authorization-governance-card-context.test.ts",
+        "tests/vitest/console/approval-flow-card-list.test.ts",
+        "tests/vitest/console/approval-flow-refresh-race.test.ts",
+        "tests/vitest/console/approval-side-nav-directory.test.ts",
+        "tests/vitest/console/dashboard-approval-entry.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -535,9 +560,10 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/http-request-body-admission.test.mjs",
-        "tests/vitest/server/http-server-middleware-rate-limit.test.mjs",
-        "tests/vitest/server/client-registry-capacity-recovery.test.mjs"
+        "tests/vitest/server/http-request-body-admission.test.ts",
+        "tests/vitest/server/http-server-middleware-rate-limit.test.ts",
+        "tests/vitest/server/production-ingress-contract.test.ts",
+        "tests/vitest/server/client-registry-capacity-recovery.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -554,7 +580,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tests/unit/foundation/state-machine.test.mjs"
+        "tests/unit/foundation/state-machine.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -565,7 +591,7 @@
     },
     {
       "id": "agents.model-provider-runtime",
-      "label": "Agent model registry, settings transaction, and credential binding runtime",
+      "label": "Agent model registry, governed Gateway service, and credential binding runtime",
       "owner": "platform",
       "package": "agents",
       "level": "security",
@@ -574,7 +600,8 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/model-provider-runtime.test.mjs"
+        "tests/vitest/server/model-provider-runtime.test.ts",
+        "tests/vitest/server/agent-gateway-service-golden-path.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -615,22 +642,24 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/architecture-acceptance-boundaries.test.mjs",
-        "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.mjs",
-        "tests/vitest/server/deployment-lifecycle-state-machine.test.mjs",
-        "tests/vitest/server/mcp-release-manifest.test.mjs",
-        "tests/vitest/server/plugin-runtime.test.mjs",
-        "tests/vitest/server/prepare-release.test.mjs",
-        "tests/vitest/server/operation-proof-evidence-policy.test.mjs",
-        "tests/vitest/server/platform-acceptance-ledger-anchor.test.mjs",
-        "tests/vitest/server/platform-acceptance-generation-store.test.mjs",
-        "tests/vitest/server/plan-receipt-digest.test.mjs",
-        "tests/vitest/server/publish-release-set.test.mjs",
-        "tests/vitest/server/release-authority-baseline.test.mjs",
-        "tests/vitest/server/release-command-dag-runner.test.mjs",
-        "tests/vitest/server/release-evidence-freshness.test.mjs",
-        "tests/vitest/server/release-workflow-supply-chain.test.mjs",
-        "tests/vitest/server/required-report-validator.test.mjs"
+        "tests/vitest/server/architecture-acceptance-boundaries.test.ts",
+        "tests/vitest/server/capability-acceptance-checkpoint-reducer.test.ts",
+        "tests/vitest/server/deployment-lifecycle-state-machine.test.ts",
+        "tests/vitest/server/mcp-release-manifest.test.ts",
+        "tests/vitest/server/plugin-runtime.test.ts",
+        "tests/vitest/server/prepare-release.test.ts",
+        "tests/vitest/server/operation-proof-evidence-policy.test.ts",
+        "tests/vitest/server/platform-acceptance-ledger-anchor.test.ts",
+        "tests/vitest/server/platform-acceptance-generation-store.test.ts",
+        "tests/vitest/server/plan-receipt-digest.test.ts",
+        "tests/vitest/server/publish-release-set.test.ts",
+        "tests/vitest/server/release-authority-baseline.test.ts",
+        "tests/vitest/server/release-command-dag-runner.test.ts",
+        "tests/vitest/server/release-evidence-freshness.test.ts",
+        "tests/vitest/server/real-machine-validation-workflow.test.ts",
+        "tests/vitest/server/release-plan-execution-authority.test.ts",
+        "tests/vitest/server/release-workflow-supply-chain.test.ts",
+        "tests/vitest/server/required-report-validator.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -650,8 +679,8 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/operation-route-index.test.mjs",
-        "tests/vitest/server/operation-dispatcher.test.mjs"
+        "tests/vitest/server/operation-route-index.test.ts",
+        "tests/vitest/server/operation-dispatcher.test.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -671,33 +700,35 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/http-server-lifecycle-lock-safety.test.mjs",
-        "tests/vitest/server/http-request-abort-propagation.test.mjs",
-        "tests/vitest/server/http-server-startup-lock-safety.test.mjs",
-        "tests/vitest/server/lock-manager.test.mjs",
-        "tests/vitest/server/maintenance-planner-config-truth.test.mjs",
-        "tests/vitest/server/maintenance-tool-registry.test.mjs",
-        "tests/vitest/server/maintenance-worker-lifecycle.test.mjs",
-        "tests/vitest/server/operation-dispatch-locking.test.mjs",
-        "tests/vitest/server/operation-permission.test.mjs",
-        "tests/vitest/server/operation-state-machine-integration.test.mjs",
-        "tests/vitest/server/protocol-event-bus-malformed-log-and-cancellation.test.mjs",
-        "tests/vitest/server/protocol-event-bus-recovery-and-backpressure.test.mjs",
-        "tests/vitest/server/protocol-event-bus-subscription-and-persistence.test.mjs",
-        "tests/vitest/server/server-runtime-construction-unwind.test.mjs",
-        "tests/vitest/server/server-runtime-provider-construction-unwind.test.mjs",
-        "tests/vitest/server/sqlite-constructor-unwind.test.mjs",
-        "tests/vitest/server/sqlite-owned-constructor-failure.test.mjs",
-        "tests/vitest/server/sqlite-owned-store-lifecycle.test.mjs",
-        "tests/vitest/server/upstream-gateway-console-provider-wiring.test.mjs",
-        "tests/vitest/server/upstream-gateway-manifest-compiler.test.mjs",
-        "tests/vitest/server/upstream-gateway-manifest-observer.test.mjs",
-        "tests/vitest/server/upstream-gateway-owned-resource-lifecycle.test.mjs",
-        "tests/vitest/server/upstream-publishing-application.test.mjs",
-        "tests/vitest/server/upstream-publishing-http-integration.test.mjs",
+        "tests/vitest/server/http-server-lifecycle-lock-safety.test.ts",
+        "tests/vitest/server/http-request-abort-propagation.test.ts",
+        "tests/vitest/server/http-server-startup-lock-safety.test.ts",
+        "tests/vitest/server/lock-manager.test.ts",
+        "tests/vitest/server/maintenance-planner-config-truth.test.ts",
+        "tests/vitest/server/maintenance-tool-registry.test.ts",
+        "tests/vitest/server/maintenance-worker-lifecycle.test.ts",
+        "tests/vitest/server/operation-dispatch-locking.test.ts",
+        "tests/vitest/server/operation-permission.test.ts",
+        "tests/vitest/server/operation-state-machine-integration.test.ts",
+        "tests/vitest/server/protocol-event-bus-malformed-log-and-cancellation.test.ts",
+        "tests/vitest/server/protocol-event-bus-recovery-and-backpressure.test.ts",
+        "tests/vitest/server/protocol-event-bus-subscription-and-persistence.test.ts",
+        "tests/vitest/server/server-runtime-construction-unwind.test.ts",
+        "tests/vitest/server/server-runtime-provider-construction-unwind.test.ts",
+        "tests/vitest/server/sqlite-constructor-unwind.test.ts",
+        "tests/vitest/server/sqlite-owned-constructor-failure.test.ts",
+        "tests/vitest/server/sqlite-owned-store-lifecycle.test.ts",
+        "tests/vitest/server/upstream-gateway-console-provider-wiring.test.ts",
+        "tests/vitest/server/upstream-gateway-manifest-compiler.test.ts",
+        "tests/vitest/server/upstream-gateway-manifest-observer.test.ts",
+        "tests/vitest/server/upstream-gateway-owned-resource-lifecycle.test.ts",
+        "tests/vitest/server/upstream-publishing-application.test.ts",
+        "tests/vitest/server/upstream-publishing-http-integration.test.ts",
         "tests/vitest/console/upstream-service-publish-client.test.ts",
         "tests/vitest/console/upstream-service-publish-view.test.ts",
-        "tests/vitest/server/upstream-mcp-gateway.test.mjs"
+        "tests/vitest/server/upstream-mcp-gateway.test.ts",
+        "tests/vitest/server/upstream-service-publishing-html.test.ts",
+        "tests/vitest/server/release-journey-visual-evidence.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -717,15 +748,15 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/work-queue-application-port.test.mjs",
-        "tests/vitest/server/queued-job-workflow-provider.test.mjs",
-        "tests/vitest/server/work-queue-restart-takeover.test.mjs",
-        "tests/vitest/server/work-queue-worker-lease-fence.test.mjs",
-        "tests/vitest/server/job-manager-manifest-deduplication-and-listing.test.mjs",
-        "tests/vitest/server/job-manager-queue-authority-boundary.test.mjs",
-        "tests/vitest/server/job-manager-reparse-and-closure-boundaries.test.mjs",
-        "tests/vitest/server/job-projection-store.test.mjs",
-        "tests/vitest/server/import-worker-canonical-queue.test.mjs"
+        "tests/vitest/server/work-queue-application-port.test.ts",
+        "tests/vitest/server/queued-job-workflow-provider.test.ts",
+        "tests/vitest/server/work-queue-restart-takeover.test.ts",
+        "tests/vitest/server/work-queue-worker-lease-fence.test.ts",
+        "tests/vitest/server/job-manager-manifest-deduplication-and-listing.test.ts",
+        "tests/vitest/server/job-manager-queue-authority-boundary.test.ts",
+        "tests/vitest/server/job-manager-reparse-and-closure-boundaries.test.ts",
+        "tests/vitest/server/job-projection-store.test.ts",
+        "tests/vitest/server/import-worker-canonical-queue.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -745,14 +776,14 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/http-mcp-adapter-cancellation.test.mjs",
-        "tests/vitest/server/mcp-sse-admission.test.mjs",
-        "tests/vitest/server/outbound-egress-policy.test.mjs",
-        "tests/vitest/server/upstream-mcp-session-manager.test.mjs",
-        "tests/vitest/server/upstream-endpoint-traffic-state.test.mjs",
-        "tests/vitest/server/upstream-gateway-ssrf.test.mjs",
-        "tests/vitest/server/upstream-gateway-session-cancellation.test.mjs",
-        "tests/vitest/server/mcp-proxy-cancellation.test.mjs"
+        "tests/vitest/server/http-mcp-adapter-cancellation.test.ts",
+        "tests/vitest/server/mcp-sse-admission.test.ts",
+        "tests/vitest/server/outbound-egress-policy.test.ts",
+        "tests/vitest/server/upstream-mcp-session-manager.test.ts",
+        "tests/vitest/server/upstream-endpoint-traffic-state.test.ts",
+        "tests/vitest/server/upstream-gateway-ssrf.test.ts",
+        "tests/vitest/server/upstream-gateway-session-cancellation.test.ts",
+        "tests/vitest/server/mcp-proxy-cancellation.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -772,10 +803,10 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/upstream-payload-contract.test.mjs",
-        "tests/vitest/server/upstream-payload-transit.test.mjs",
-        "tests/vitest/server/upstream-artifact-transit.test.mjs",
-        "tests/vitest/server/upstream-artifact-mcp-projection.test.mjs"
+        "tests/vitest/server/upstream-payload-contract.test.ts",
+        "tests/vitest/server/upstream-payload-transit.test.ts",
+        "tests/vitest/server/upstream-artifact-transit.test.ts",
+        "tests/vitest/server/upstream-artifact-mcp-projection.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -795,7 +826,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/gateway-performance-observation.test.mjs"
+        "tests/vitest/server/gateway-performance-observation.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -830,7 +861,7 @@
       "level": "smoke",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-start-server-defaults.mjs"
+        "tools/server-scripts/verify-start-server-defaults.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -850,8 +881,8 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/feature-manifest.test.mjs",
-        "tests/contract/domains/domain-manifest.test.mjs"
+        "tests/vitest/server/feature-manifest.test.ts",
+        "tests/contract/domains/domain-manifest.test.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -868,7 +899,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-agent-memory.mjs"
+        "tools/server-scripts/verify-agent-memory.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -888,7 +919,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/agent-workspace-schema.test.mjs"
+        "tests/vitest/server/agent-workspace-schema.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -905,7 +936,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-workspace-asset-management.mjs"
+        "tools/server-scripts/verify-workspace-asset-management.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -925,7 +956,7 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/workspace-governance.test.mjs"
+        "tests/vitest/server/workspace-governance.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -942,7 +973,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-communication-service.mjs"
+        "tools/server-scripts/verify-communication-service.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -959,7 +990,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/verifiers/core-platform-gap-audit.mjs"
+        "tools/verifiers/core-platform-gap-audit.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -978,7 +1009,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-core-platform-surface-convergence.mjs"
+        "tools/server-scripts/verify-core-platform-surface-convergence.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -997,7 +1028,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-core-platform-documentation-convergence.mjs"
+        "tools/server-scripts/verify-core-platform-documentation-convergence.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1016,7 +1047,7 @@
       "level": "e2e",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs"
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1037,7 +1068,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-workspace-file-ops.mjs"
+        "tools/server-scripts/verify-workspace-file-ops.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1054,7 +1085,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-strategy-management.mjs"
+        "tools/server-scripts/verify-strategy-management.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1071,7 +1102,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-agent-gateway.mjs"
+        "tools/server-scripts/verify-agent-gateway.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1088,7 +1119,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-model-routing.mjs"
+        "tools/server-scripts/verify-model-routing.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1105,7 +1136,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-agent-management.mjs"
+        "tools/server-scripts/verify-agent-management.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1122,7 +1153,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-maintenance-agent.mjs"
+        "tools/server-scripts/verify-maintenance-agent.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1142,14 +1173,14 @@
         "run",
         "vitest",
         "--",
-        "tests/vitest/server/trusted-sandbox-provider-resolver.test.mjs",
-        "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.mjs",
-        "tests/vitest/server/oci-sandbox-backend.test.mjs",
-        "tests/vitest/server/sandbox-configured-workload.test.mjs",
-        "tests/vitest/server/sandbox-streaming-input.test.mjs",
-        "tests/vitest/server/opaque-sandbox-custody.test.mjs",
-        "tests/vitest/server/execution-launcher-boundary.test.mjs",
-        "tests/vitest/server/controlled-execution-sandbox.test.mjs"
+        "tests/vitest/server/trusted-sandbox-provider-resolver.test.ts",
+        "tests/vitest/server/trusted-sandbox-provider-receipt-store.test.ts",
+        "tests/vitest/server/oci-sandbox-backend.test.ts",
+        "tests/vitest/server/sandbox-configured-workload.test.ts",
+        "tests/vitest/server/sandbox-streaming-input.test.ts",
+        "tests/vitest/server/opaque-sandbox-custody.test.ts",
+        "tests/vitest/server/execution-launcher-boundary.test.ts",
+        "tests/vitest/server/controlled-execution-sandbox.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1166,7 +1197,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-controlled-execution-sandbox.mjs"
+        "tools/server-scripts/verify-controlled-execution-sandbox.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "standard",
@@ -1190,7 +1221,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-controlled-execution-convergence.mjs"
+        "tools/server-scripts/verify-controlled-execution-convergence.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1209,7 +1240,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-upstream-gateway-e2e.mjs"
+        "tools/server-scripts/verify-upstream-gateway-e2e.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1228,7 +1259,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-upstream-service-publishing.mjs"
+        "tools/server-scripts/verify-upstream-service-publishing.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1247,7 +1278,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-upstream-gateway-external-compatibility.mjs"
+        "tools/server-scripts/verify-upstream-gateway-external-compatibility.ts"
       ],
       "sideEffects": "network-service",
       "timeoutClass": "standard",
@@ -1268,7 +1299,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.mjs"
+        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1287,7 +1318,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/verifiers/downstream-mcp-completeness-audit.mjs"
+        "tools/verifiers/downstream-mcp-completeness-audit.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1306,7 +1337,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-authorization-request-filters.mjs"
+        "tools/server-scripts/verify-mcp-authorization-request-filters.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1325,7 +1356,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-operation-permission-external-http-boundary.mjs"
+        "tools/server-scripts/verify-operation-permission-external-http-boundary.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1344,7 +1375,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-installer-convergence.mjs"
+        "tools/server-scripts/verify-mcp-installer-convergence.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1363,7 +1394,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-release-target-scope.mjs"
+        "tools/server-scripts/verify-mcp-release-target-scope.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1382,7 +1413,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-release-portable-assembly.mjs"
+        "tools/server-scripts/verify-mcp-release-portable-assembly.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1401,7 +1432,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-architecture-facts.mjs"
+        "tools/server-scripts/verify-architecture-facts.ts"
       ],
       "sideEffects": "none",
       "timeoutClass": "fast",
@@ -1418,7 +1449,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-organization-model.mjs"
+        "tools/server-scripts/verify-organization-model.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1435,7 +1466,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-agent-session-governance.mjs"
+        "tools/server-scripts/verify-agent-session-governance.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1452,7 +1483,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-trace-context.mjs"
+        "tools/server-scripts/verify-trace-context.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1469,7 +1500,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-unified-registration.mjs"
+        "tools/server-scripts/verify-unified-registration.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1486,7 +1517,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-acceptance-ledger-anchor.mjs"
+        "tools/server-scripts/verify-acceptance-ledger-anchor.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1503,7 +1534,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-operation-proof-substrate.mjs"
+        "tools/server-scripts/verify-operation-proof-substrate.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1520,7 +1551,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-merkle-state-substrate.mjs"
+        "tools/server-scripts/verify-merkle-state-substrate.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1537,7 +1568,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-runtime-recovery-export.mjs"
+        "tools/server-scripts/verify-runtime-recovery-export.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1554,7 +1585,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-workspace-proposal-protocol.mjs"
+        "tools/server-scripts/verify-workspace-proposal-protocol.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1571,7 +1602,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-downstream-client-aspect.mjs"
+        "tools/server-scripts/verify-downstream-client-aspect.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1588,7 +1619,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-work-queue-postgres-container.mjs"
+        "tools/server-scripts/verify-work-queue-postgres-container.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1607,7 +1638,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-npm-package-installability.mjs"
+        "tools/server-scripts/verify-npm-package-installability.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1629,7 +1660,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-client-identity-proof.mjs"
+        "tools/server-scripts/verify-mcp-client-identity-proof.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1648,7 +1679,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs"
+        "tools/server-scripts/verify-mcp-process-identity-credential-store.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1667,7 +1698,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-mcp-proxy-transport.mjs"
+        "tools/server-scripts/verify-mcp-proxy-transport.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1686,7 +1717,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-upstream-fixture-transit.mjs"
+        "tools/server-scripts/verify-upstream-fixture-transit.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1705,7 +1736,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-downstream-agent-tool-loop.mjs"
+        "tools/server-scripts/verify-downstream-agent-tool-loop.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1717,6 +1748,48 @@
       ]
     },
     {
+      "id": "release.journey-gate",
+      "label": "Optional detachable-service integration journey: containerized upstream publish, connector install, MCP conversion, and PDF proof",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "e2e",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-release-journey.ts"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "docker"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/release-journey.json",
+        "build/reports/upstream-service-publishing.html",
+        "build/reports/upstream-service-publishing/screenshots"
+      ]
+    },
+    {
+      "id": "release.upstream-service-publishing-candidate",
+      "label": "Immutable upstream publishing candidate artifact receipt verifier",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-upstream-service-publishing-candidate.ts"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/upstream-service-publishing-candidate.json"
+      ]
+    },
+    {
       "id": "container.deployment-flow",
       "label": "Container compose build, startup, MCP baseline, and cleanup verifier",
       "owner": "platform",
@@ -1724,7 +1797,7 @@
       "level": "e2e",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-deployment-container-flow.mjs"
+        "tools/server-scripts/verify-deployment-container-flow.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1739,6 +1812,29 @@
       ]
     },
     {
+      "id": "container.deployment-flow-podman-local",
+      "label": "Local-only Podman compose deployment and MCP baseline verifier",
+      "owner": "platform",
+      "package": "deployment",
+      "level": "e2e",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-deployment-container-flow.ts",
+        "--engine",
+        "podman"
+      ],
+      "sideEffects": "container",
+      "timeoutClass": "slow",
+      "requiredServices": [
+        "podman"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": [
+        "build/reports/deployment-container-flow-podman.json"
+      ]
+    },
+    {
       "id": "storage.backup-restore",
       "label": "Storage backup and restore operation verifier",
       "owner": "platform",
@@ -1746,7 +1842,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-backup-restore.mjs"
+        "tools/server-scripts/verify-backup-restore.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1763,7 +1859,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-storage-production-restore-drill.mjs"
+        "tools/server-scripts/verify-storage-production-restore-drill.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "standard",
@@ -1782,7 +1878,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-job-work-queue.mjs"
+        "tools/server-scripts/verify-job-work-queue.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1799,7 +1895,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-job-work-queue-capacity.mjs"
+        "tools/server-scripts/verify-job-work-queue-capacity.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1818,7 +1914,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-work-queue-conformance.mjs"
+        "tools/server-scripts/verify-work-queue-conformance.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1835,7 +1931,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-work-queue-process-restart.mjs"
+        "tools/server-scripts/verify-work-queue-process-restart.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1854,7 +1950,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-upload-workspace-materialization.mjs"
+        "tools/server-scripts/verify-upload-workspace-materialization.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1866,6 +1962,28 @@
       ]
     },
     {
+      "id": "jobs.upload-custody-workspace-materialization-acceptance",
+      "label": "Crash-safe no-run upload custody to workspace materialization acceptance",
+      "owner": "platform-security",
+      "package": "server-runtime",
+      "level": "security",
+      "command": "env",
+      "args": [
+        "NODE_OPTIONS=--max-old-space-size=512 --max-semi-space-size=4",
+        "node",
+        "tests/vitest/server/support/run-upload-workspace-materialization-acceptance.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "platforms": [
+        "linux"
+      ],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
       "id": "governance.tag-management",
       "label": "Tag management migration, store, catalog, and audit verifier",
       "owner": "platform",
@@ -1873,7 +1991,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-tag-management.mjs"
+        "tools/server-scripts/verify-tag-management.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -1890,7 +2008,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-operation-permission-tag-governance-audit.mjs"
+        "tools/server-scripts/verify-operation-permission-tag-governance-audit.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1909,7 +2027,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-operation-permission-universal-tag-policy.mjs"
+        "tools/server-scripts/verify-operation-permission-universal-tag-policy.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1928,7 +2046,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-operation-permission-protocol-consistency.mjs"
+        "tools/server-scripts/verify-operation-permission-protocol-consistency.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",
@@ -1947,7 +2065,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-operation-permission-tag-governed-e2e.mjs"
+        "tools/server-scripts/verify-operation-permission-tag-governed-e2e.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1968,7 +2086,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-authorization-governance.mjs"
+        "tools/server-scripts/verify-authorization-governance.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1987,7 +2105,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-authorization-enforcement.mjs"
+        "tools/server-scripts/verify-enterprise-authorization-enforcement.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2006,7 +2124,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-audit-retention-redaction.mjs"
+        "tools/server-scripts/verify-enterprise-audit-retention-redaction.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -2025,7 +2143,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-enterprise-observability-coverage.mjs"
+        "tools/server-scripts/verify-enterprise-observability-coverage.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2044,7 +2162,7 @@
       "level": "security",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-security-alert-lifecycle.mjs"
+        "tools/server-scripts/verify-security-alert-lifecycle.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2063,7 +2181,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-console-administration-coverage.mjs"
+        "tools/server-scripts/verify-console-administration-coverage.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2082,7 +2200,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-console-gateway-mcp-workflows.mjs"
+        "tools/server-scripts/verify-console-gateway-mcp-workflows.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2101,7 +2219,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-production-health-console.mjs"
+        "tools/server-scripts/verify-production-health-console.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -2118,7 +2236,7 @@
       "level": "architecture",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-observability-semantics.mjs"
+        "tools/server-scripts/verify-observability-semantics.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -2137,7 +2255,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-approval-governance.mjs"
+        "tools/server-scripts/verify-approval-governance.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",

@@ -2,13 +2,13 @@
 // ADMIN ROUTE REGISTRY — imported from pure data module
 // ══════════════════════════════════════════════════════════════════════════════
 //
-// The canonical ADMIN_ROUTE_REGISTRY lives in admin-route-registry.mjs (pure data).
+// The canonical ADMIN_ROUTE_REGISTRY lives in admin-route-registry.ts (pure data).
 // This file re-exports it along with Vite-specific component loaders.
-// Verifiers import admin-route-registry.mjs directly; the Vue router imports
+// Verifiers import admin-route-registry.ts directly; the Vue router imports
 // this file for the component loader.
 //
 // LAYER SEPARATION:
-// - admin-route-registry.mjs: pure data, safe to import by verifiers and tests.
+// - admin-route-registry.ts: pure data, safe to import by verifiers and tests.
 // - routes.ts: Vite-static-analyzable component loader map + re-exports.
 //   Built via import.meta.glob so Vite can tree-shake and bundle correctly.
 //   Do NOT use import(/* @vite-ignore */ variablePath) — it breaks bundling.
@@ -17,7 +17,7 @@ import {
   ADMIN_ROUTE_REGISTRY,
   VIEW_KEY_TO_SLUG,
   SLUG_TO_VIEW_KEY,
-} from "./admin-route-registry.mjs";
+} from "./admin-route-registry.ts";
 
 // Re-export for consumers
 export {
@@ -26,7 +26,7 @@ export {
   SLUG_TO_VIEW_KEY,
 };
 
-/** Canonical admin view entry — mirrors admin-route-registry.mjs schema */
+/** Canonical admin view entry — mirrors admin-route-registry.ts schema */
 export interface AdminRouteEntry {
   viewKey: string;
   slug: string;
@@ -44,16 +44,16 @@ export interface AdminRouteEntry {
  * import.meta.glob returns a Record<path, () => Promise<Component>>.
  * Vite resolves these at build time — no @vite-ignore needed.
  */
-const _adminViewModules = import.meta.glob("../views/admin/*.vue");
+const _adminViewModules: any = import.meta.glob("../views/admin/*.vue");
 
 /**
  * Resolves a component loader for a given admin route entry.
  * Returns undefined if the component file is not found in the glob map.
  */
 export function resolveAdminComponent(viewKey: string): (() => Promise<unknown>) | undefined {
-  const entry = ADMIN_ROUTE_REGISTRY.find((e) => e.viewKey === viewKey);
+  const entry: any = ADMIN_ROUTE_REGISTRY.find((e?: any) : any => e.viewKey === viewKey);
   if (!entry) return undefined;
-  const globKey = `../views/admin/${entry.componentName}`;
+  const globKey: any = `../views/admin/${entry.componentName}`;
   return _adminViewModules[globKey];
 }
 

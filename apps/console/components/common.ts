@@ -37,7 +37,7 @@ export type CommonComponentRegistration = {
   usageRule: string;
 };
 
-export const commonComponentReusePolicy = [
+export const commonComponentReusePolicy: any = [
   "能用通用组件就用通用组件，功能页面不得重新手写已有语义覆盖的控件。",
   "能继承就继承，页面级样式只负责布局、间距和局部状态组合。",
   "新场景优先扩展通用组件的 props、slot 或 token 化样式；语义无法覆盖时才新增组件并登记到本注册表。",

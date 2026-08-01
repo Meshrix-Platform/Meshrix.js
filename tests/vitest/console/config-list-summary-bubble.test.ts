@@ -6,8 +6,8 @@ import ConfigListSummaryBubble from "../../../apps/console/components/ConfigList
 
 const mounted: VueWrapper[] = [];
 
-function mountBubble(props: Record<string, unknown> = {}) {
-  const wrapper = mount(ConfigListSummaryBubble, {
+function mountBubble(props: Record<string, unknown> = {}) : any {
+  const wrapper: any = mount(ConfigListSummaryBubble, {
     attachTo: document.body,
     props: {
       title: "运行时依赖",
@@ -24,14 +24,14 @@ function mountBubble(props: Record<string, unknown> = {}) {
   return wrapper;
 }
 
-async function openBubble(wrapper: VueWrapper) {
+async function openBubble(wrapper: VueWrapper) : Promise<any> {
   await wrapper.find("button").trigger("click");
   await nextTick();
   await nextTick();
   return document.body.querySelector<HTMLElement>(".config-list-summary-popover");
 }
 
-afterEach(() => {
+afterEach(() : any => {
   while (mounted.length) {
     mounted.pop()?.unmount();
   }
@@ -39,16 +39,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("ConfigListSummaryBubble", () => {
-  it("renders accessible defaults and the empty-state popover", async () => {
-    const wrapper = mountBubble();
+describe("ConfigListSummaryBubble", () : any => {
+  it("renders accessible defaults and the empty-state popover", async () : Promise<any> => {
+    const wrapper: any = mountBubble();
 
-    const button = wrapper.find("button");
+    const button: any = wrapper.find("button");
     expect(button.attributes("aria-label")).toBe("配置 运行时依赖");
     expect(button.attributes("aria-expanded")).toBe("false");
     expect(button.text()).toContain("配置");
 
-    const popover = await openBubble(wrapper);
+    const popover: any = await openBubble(wrapper);
 
     expect(popover).not.toBeNull();
     expect(button.attributes("aria-expanded")).toBe("true");
@@ -66,8 +66,8 @@ describe("ConfigListSummaryBubble", () => {
     expect(button.attributes("aria-expanded")).toBe("false");
   });
 
-  it("filters entries and renders configured, unconfigured and required states", async () => {
-    const wrapper = mountBubble({
+  it("filters entries and renders configured, unconfigured and required states", async () : Promise<any> => {
+    const wrapper: any = mountBubble({
       ariaLabel: "依赖配置明细",
       buttonAriaLabel: "查看配置",
       buttonClass: "plain-button",
@@ -115,7 +115,7 @@ describe("ConfigListSummaryBubble", () => {
       ],
     });
 
-    const popover = await openBubble(wrapper);
+    const popover: any = await openBubble(wrapper);
 
     expect(wrapper.find("button").classes()).toContain("plain-button");
     expect(wrapper.find("button").attributes("aria-label")).toBe("查看配置");
@@ -132,21 +132,21 @@ describe("ConfigListSummaryBubble", () => {
     expect(popover?.textContent).not.toContain("ignored");
     expect(popover?.textContent).not.toContain("没有字段");
 
-    const entries = Array.from(document.body.querySelectorAll<HTMLElement>(".config-list-summary-entry"));
+    const entries: any = Array.from(document.body.querySelectorAll<HTMLElement>(".config-list-summary-entry"));
     expect(entries).toHaveLength(3);
-    expect(entries.map((entry) => entry.dataset.configured)).toEqual(["true", "false", "false"]);
+    expect(entries.map((entry?: any) : any => entry.dataset.configured)).toEqual(["true", "false", "false"]);
 
-    const close = document.body.querySelector<HTMLElement>(".config-list-summary-close");
+    const close: any = document.body.querySelector<HTMLElement>(".config-list-summary-close");
     close?.click();
     await nextTick();
     expect(document.body.querySelector(".config-list-summary-popover")).toBeNull();
   });
 
-  it("positions above when lower viewport space is insufficient and closes on escape", async () => {
+  it("positions above when lower viewport space is insufficient and closes on escape", async () : Promise<any> => {
     Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
     Object.defineProperty(window, "innerHeight", { configurable: true, value: 180 });
 
-    const wrapper = mountBubble({
+    const wrapper: any = mountBubble({
       width: 640,
       groups: [
         {
@@ -155,7 +155,7 @@ describe("ConfigListSummaryBubble", () => {
         },
       ],
     });
-    const button = wrapper.find("button");
+    const button: any = wrapper.find("button");
     vi.spyOn(button.element, "getBoundingClientRect").mockReturnValue({
       bottom: 170,
       height: 32,
@@ -165,11 +165,11 @@ describe("ConfigListSummaryBubble", () => {
       width: 36,
       x: 280,
       y: 138,
-      toJSON: () => ({}),
+      toJSON: () : any => ({}),
     });
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, value: 96 });
 
-    const popover = await openBubble(wrapper);
+    const popover: any = await openBubble(wrapper);
 
     expect(popover?.classList.contains("is-above")).toBe(true);
     expect(popover?.style.left).toBe("12px");

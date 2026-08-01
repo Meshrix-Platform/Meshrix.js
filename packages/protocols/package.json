@@ -21,34 +21,60 @@
     "#meshrix/contracts/*": "@meshrix/contracts/*",
     "#meshrix/foundation/*": "@meshrix/foundation/*",
     "#meshrix/http-response": "@meshrix/foundation/http/http-response",
-    "#meshrix/http-utils": "./http/http-utils.mjs",
+    "#meshrix/http-utils": {
+      "types": "./dist/http/http-utils.d.ts",
+      "source": "./http/http-utils.ts",
+      "default": "./dist/http/http-utils.js"
+    },
     "#meshrix/local-path-boundary": "@meshrix/foundation/security/local-path-boundary",
     "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
-    "./mcp/adapter/mcp-identity": "./mcp/adapter/gateway-installer/mcp-identity.mjs",
-    "./mcp/*": "./mcp/*.mjs",
-    "./agent-sync/*": "./agent-sync/*.mjs",
-    "./downstream-client-aspect/*": "./downstream-client-aspect/*.mjs",
-    "./http/*": "./http/*.mjs",
-    "./pubsub/*": "./pubsub/*.mjs",
-    "./common/*": "./common/*.mjs",
-    "./*": "./common/*.mjs"
+    "./mcp/adapter/mcp-identity": {
+      "types": "./dist/mcp/adapter/gateway-installer/mcp-identity.d.ts",
+      "source": "./mcp/adapter/gateway-installer/mcp-identity.ts",
+      "default": "./dist/mcp/adapter/gateway-installer/mcp-identity.js"
+    },
+    "./mcp/*": {
+      "types": "./dist/mcp/*.d.ts",
+      "source": "./mcp/*.ts",
+      "default": "./dist/mcp/*.js"
+    },
+    "./agent-sync/*": {
+      "types": "./dist/agent-sync/*.d.ts",
+      "source": "./agent-sync/*.ts",
+      "default": "./dist/agent-sync/*.js"
+    },
+    "./downstream-client-aspect/*": {
+      "types": "./dist/downstream-client-aspect/*.d.ts",
+      "source": "./downstream-client-aspect/*.ts",
+      "default": "./dist/downstream-client-aspect/*.js"
+    },
+    "./http/*": {
+      "types": "./dist/http/*.d.ts",
+      "source": "./http/*.ts",
+      "default": "./dist/http/*.js"
+    },
+    "./pubsub/*": {
+      "types": "./dist/pubsub/*.d.ts",
+      "source": "./pubsub/*.ts",
+      "default": "./dist/pubsub/*.js"
+    },
+    "./common/*": {
+      "types": "./dist/common/*.d.ts",
+      "source": "./common/*.ts",
+      "default": "./dist/common/*.js"
+    },
+    "./*": {
+      "types": "./dist/common/*.d.ts",
+      "source": "./common/*.ts",
+      "default": "./dist/common/*.js"
+    }
   },
   "files": [
-    "mcp/**/*.mjs",
-    "mcp/adapter/gateway-installer/bin/**/*",
-    "mcp/adapter/gateway-installer/lib/**/*",
-    "mcp/adapter/gateway-installer/package.json",
-    "mcp/adapter/gateway-installer/README.md",
-    "mcp/adapter/native-installer/**/*",
-    "agent-sync/**/*.mjs",
-    "downstream-client-aspect/**/*.mjs",
-    "http/**/*.mjs",
-    "pubsub/**/*.mjs",
-    "common/**/*.mjs",
+    "dist/**/*",
     "README.md",
     "LICENSE",
     "package.json"

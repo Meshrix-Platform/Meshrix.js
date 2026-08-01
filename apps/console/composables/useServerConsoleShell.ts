@@ -9,11 +9,11 @@ import { createConsoleShellRouteController } from "./console-shell-route-control
 import { pickOperationPermissionShellContext } from "./console-shell-operation-permission-context";
 import { useWorkspacesConsole } from "./useWorkspacesConsole";
 
-export function useServerConsoleShell() {
-  const consoleContext = useConsole();
-  const approvalFlowConsole = pickApprovalFlowShellContext(consoleContext);
-  const operationPermissionConsole = pickOperationPermissionShellContext(consoleContext);
-  const publicConsoleContext = pickServerConsoleShellPublicContext(consoleContext);
+export function useServerConsoleShell() : any {
+  const consoleContext: any = useConsole();
+  const approvalFlowConsole: any = pickApprovalFlowShellContext(consoleContext);
+  const operationPermissionConsole: any = pickOperationPermissionShellContext(consoleContext);
+  const publicConsoleContext: any = pickServerConsoleShellPublicContext(consoleContext);
   const {
     adminView,
     busyKey,
@@ -61,9 +61,9 @@ export function useServerConsoleShell() {
     toggleLanguage,
     tt,
   } = useConsoleShellPreferences({ isAuthenticated });
-  const workspacesConsole = useWorkspacesConsole({ autoload: false, globalBusyKey: busyKey });
+  const workspacesConsole: any = useWorkspacesConsole({ autoload: false, globalBusyKey: busyKey });
 
-  const route = useRoute();
+  const route: any = useRoute();
   const {
     activeRouteAdminView,
     activeRouteDebugTab,
@@ -78,8 +78,8 @@ export function useServerConsoleShell() {
     msg,
     route,
   });
-  const serviceUrl = computed(() => consoleState.value?.server.url || msg.value.connecting);
-  const serviceStatusLabel = computed(() =>
+  const serviceUrl: any = computed(() : any => consoleState.value?.server.url || msg.value.connecting);
+  const serviceStatusLabel: any = computed(() : any =>
     serverAvailable.value ? msg.value.topbar.serverAvailable : msg.value.topbar.serverUnavailable
   );
   const {
@@ -110,12 +110,12 @@ export function useServerConsoleShell() {
     routeFullPath: activeRouteFullPath,
   });
 
-  let toolListRouteRefreshSequence = 0;
-  const isToolListRoute = computed(() =>
+  let toolListRouteRefreshSequence: any = 0;
+  const isToolListRoute: any = computed(() : any =>
     activeRouteView.value === "admin" && ["tools", "toolList"].includes(activeRouteAdminView.value),
   );
-  const operationPermissionCatalogLoaded = computed(() => {
-    const catalog = operationPermissionConsole.operationPermissionCatalogState.value;
+  const operationPermissionCatalogLoaded: any = computed(() : any => {
+    const catalog: any = operationPermissionConsole.operationPermissionCatalogState.value;
     return Boolean(
       catalog?.fingerprint ||
       catalog?.toolGroups?.length ||
@@ -124,7 +124,7 @@ export function useServerConsoleShell() {
     );
   });
 
-  async function refreshToolListRouteOnEntry(sequence: number, routePath: string) {
+  async function refreshToolListRouteOnEntry(sequence: number, routePath: string) : Promise<any> {
     await trackPageRefreshTask(refreshOperationPermission({ silent: true }));
     if (sequence !== toolListRouteRefreshSequence || activeRouteFullPath.value !== routePath) {
       return;
@@ -141,11 +141,11 @@ export function useServerConsoleShell() {
 
   watch(
     [isAuthenticated, isToolListRoute, activeRouteFullPath],
-    ([authenticated, shouldRefresh, routePath]) => {
+    ([authenticated, shouldRefresh, routePath]: any[]) : any => {
       if (!authenticated || !shouldRefresh) {
         return;
       }
-      const sequence = ++toolListRouteRefreshSequence;
+      const sequence: any = ++toolListRouteRefreshSequence;
       void refreshToolListRouteOnEntry(sequence, routePath);
     },
     { immediate: true },

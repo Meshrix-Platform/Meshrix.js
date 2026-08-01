@@ -1,11 +1,11 @@
 import type { ServerAddressRow, ServerAddressValidationStatus } from "./types";
 
-let serverAddressRowSequence = 0;
+let serverAddressRowSequence: any = 0;
 
 export function createServerAddressRow(
-  url = "",
+  url: any = "",
   validationStatus: ServerAddressValidationStatus = "idle",
-  validationMessage = "",
+  validationMessage: any = "",
 ): ServerAddressRow {
   serverAddressRowSequence += 1;
   return {

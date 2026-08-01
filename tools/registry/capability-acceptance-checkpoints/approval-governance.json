@@ -55,7 +55,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete approval-governance",
-      "target": "packages/capabilities/src/operation-permission-core/runtime-handler-pending.mjs, packages/capabilities/src/operation-permission-core/runtime-pending.mjs, packages/agents/src/upstream-gateway/approval.mjs, packages/protocols/mcp/adapter/http-mcp-adapter-transport.mjs, tools/server-scripts/verify-mcp-authorization-request-filters.mjs"
+      "target": "packages/capabilities/src/operation-permission-core/runtime-handler-pending.ts, packages/capabilities/src/operation-permission-core/runtime-pending.ts, packages/agents/src/upstream-gateway/approval.ts, packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts, tools/server-scripts/verify-mcp-authorization-request-filters.ts"
     },
     "next": [
       "cc4deab7-d0c4-4252-a281-801294d7e155"

@@ -1,5 +1,10 @@
 # Protocols
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Every protocol surface inherits [Governed Execution And Minimum
 Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md). A
 transport projection cannot weaken the permit or minimum-evidence boundary.
@@ -73,9 +78,12 @@ checks. Structured operations continue through the bounded JSON forwarding
 surface.
 
 MCP and other JSON-only callers never embed file bytes in JSON by default. They
-pass owner-bound `upload:` or `artifact:` references to a declared raw or
-multipart mapping. File-like results are committed as artifacts and projected
-as MCP `resource_link` content. The authenticated
+pass owner-bound `upload:`, `artifact:`, or `workspace:` references to a
+declared raw or multipart mapping. A `workspace:<workspaceId>:<relativePath>`
+reference resolves through the same owner-bound workspace access and
+path-containment rules as `workspace.file.download`. File-like results are
+committed as artifacts and projected as MCP `resource_link` content. The
+authenticated
 `GET|HEAD /api/gateway/v1/artifacts/:artifactId` route supports a single byte
 range and never exposes a host path or storage-provider URL.
 
@@ -104,7 +112,7 @@ The MCP adapter compares every request binding field with the authenticated gran
 
 ## Adapter Target Scope
 
-The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi. Their implementations and compatibility evidence are external Meshrix-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
+The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Their implementations and compatibility evidence are external Meshrix-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
 
 MCP user-device installation begins at platform-native launchers: macOS and Linux
 use `meshrix-mcp-install.sh`, and Windows uses `meshrix-mcp-install.ps1` only. The
@@ -127,8 +135,8 @@ Protocol telemetry records bounded transfer counts, stable outcomes, and
 irreversible correlations only when required. It does not persist bodies,
 headers, paths, identities, chunks, prompts, results, or one routine success
 record per request. A protocol path without sink-side permit consumption and
-the mandatory compact lifecycle proof is non-converged and cannot support a
-release-readiness claim.
+the mandatory compact lifecycle proof is non-converged and fails the
+Functional Release Gate.
 
 Plugin package admission binds each contribution to the verified plugin identity, artifact digest, and active generation. The external-service Host accepts only the exact operation reference and configured service binding selected by Core after current authorization. It returns a bounded, sanitized projection and never exposes credentials or transport internals to plugin code.
 
@@ -136,7 +144,7 @@ Plugin package admission binds each contribution to the verified plugin identity
 
 ```bash
 npm run server:verify:protocol-boundary
-npm run vitest -- tests/vitest/server/plugin-mcp-outlet-visibility.test.mjs
+npm run vitest -- tests/vitest/server/plugin-mcp-outlet-visibility.test.ts
 npm run verify:plugin-bundle-protocol
 npm run verify:plugin-runtime
 npm test -- --suite domains.manifest

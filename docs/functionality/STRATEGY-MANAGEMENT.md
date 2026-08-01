@@ -29,4 +29,4 @@ npm run verify:platform-audit
 npm run verify:core-platform-surface-convergence
 ```
 
-`tools/server-scripts/verify-strategy-management.mjs` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, dispatch routing through the HTTP controller and console-domain executor, provider behavior for every current strategy operation, and core feature activation.
+`tools/server-scripts/verify-strategy-management.ts` verifies source/generated registry parity, generated capability projection, Operation Permission catalog projection, dispatch routing through the HTTP controller and console-domain executor, provider behavior for every current strategy operation, and core feature activation.

@@ -41,6 +41,12 @@ const {
 
 <template>
   <section class="tag-management-layout">
+    <div class="section-header tag-management-title">
+      <div>
+        <h3>标签管理</h3>
+        <p>维护标签与角色的定义、层级、投影与审计。</p>
+      </div>
+    </div>
     <header class="tag-management-header">
       <div class="tag-management-filters">
         <label>
@@ -129,6 +135,10 @@ const {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.tag-management-title {
+  margin-bottom: 0;
 }
 
 .tag-management-header,

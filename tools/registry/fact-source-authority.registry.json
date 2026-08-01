@@ -9,30 +9,113 @@
     "notes": [
       "Each governed fact has one stable factKey and exactly one authorityPath. Reports, plans, docs, and dashboards may project that authority but must not redefine it.",
       "Governed facts have no fallback or double standard: implementations must consume the registered authority or remain projection-only with no acceptance power.",
-      "Release readiness is always reduced through the registered reducer authority; report-local booleans are input evidence only."
+      "The mandatory functional-complete claim is always reduced through the registered reducer authority; report-local booleans are input evidence only.",
+      "Optional real-machine evidence may establish only the candidate-and-environment claim declared by the acceptance-standards authority and cannot change the functional-complete result."
     ]
   },
   "authorities": [
     {
+      "id": "release-definition",
+      "factKey": "release.definition",
+      "domain": "Product release version, tag, channel, package manifest set, container platforms, acceptance profile, GitHub runner matrix, and local verification engine.",
+      "authorityPath": "tools/registry/release-definition.registry.json",
+      "authorityRole": "release-definition-authority",
+      "projectionPaths": [
+        "package.json",
+        "package-lock.json",
+        ".github/workflows/release.yml",
+        "docs/RUNBOOK.md"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-release-definition.ts",
+        "tools/server-scripts/prepare-release.ts",
+        ".github/workflows/release.yml"
+      ],
+      "verification": [
+        "npm run verify:release-definition",
+        "npm run verify:registry"
+      ],
+      "nonAuthorityBoundaries": [
+        "Git tags, package manifests, lockfiles, workflow expressions, reports, and documentation are projections and cannot redefine the release.",
+        "The platform acceptance command catalog continues to own its command DAG; this definition selects a registered profile only."
+      ]
+    },
+    {
+      "id": "release-candidate-identity",
+      "factKey": "release.candidate-identity",
+      "domain": "Immutable release source-candidate identity over the Git source revision and tree, release definition, package lock, canonical public package inventory, supported profile, and report-owner inventory.",
+      "authorityPath": "tools/server-scripts/verify-release-candidate-identity.ts",
+      "authorityRole": "release-source-candidate-identity-authority",
+      "projectionPaths": [
+        "build/release/control/SOURCE_CANDIDATE.json",
+        ".github/workflows/release.yml"
+      ],
+      "consumerPaths": [
+        "tools/plan/plan-final-receipt.ts",
+        "tools/server-scripts/lib/release-image-evidence.ts",
+        "tools/server-scripts/verify-enterprise-single-node-ubuntu-container.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        ".github/workflows/release.yml"
+      ],
+      "verification": [
+        "node tools/server-scripts/verify-release-candidate-identity.ts",
+        "npm run verify:registry"
+      ],
+      "nonAuthorityBoundaries": [
+        "SOURCE_CANDIDATE.json is a write-once projection of this authority; jobs, reports, packages, images, signatures, plans, and receipts cannot recompute or replace its candidate digest.",
+        "Derived package, functional, and OCI authorities must bind the same candidate digest together with their own immutable artifact evidence."
+      ]
+    },
+    {
+      "id": "release-acceptance-standards",
+      "factKey": "release.acceptance-standards",
+      "domain": "Mandatory functional-completeness release claim, optional real-machine verification claim, their one-way dependency, and the declared target set.",
+      "authorityPath": "tools/registry/release-acceptance-standards.registry.json",
+      "authorityRole": "release-acceptance-standards-authority",
+      "projectionPaths": [
+        "tools/registry/release-definition.registry.json",
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/real-machine-validation.yml",
+        "docs/RUNBOOK.md",
+        "docs/plans/Manifest.json",
+        "docs/plans/end-to-end-release/DependencyMap.json"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-release-acceptance-standards.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/server-scripts/verify-real-machine-validation.ts"
+      ],
+      "verification": [
+        "npm run verify:acceptance:standards",
+        "npm run verify:better-plan",
+        "npm run verify:acceptance:plan"
+      ],
+      "nonAuthorityBoundaries": [
+        "Workflow files, plans, reports, and documentation project the two standards but cannot redefine their dependency direction.",
+        "A real-machine receipt may establish only its candidate-and-environment support claim and cannot block or revoke functional-complete."
+      ]
+    },
+    {
       "id": "server-operation-registry",
       "factKey": "server.operations",
       "domain": "Server operation definitions, generated operation registry projection, API capability projection, Operation Permission tool capability projection, and route/OpenAPI generated artifacts.",
-      "authorityPath": "packages/contracts/src/operations/operation-registry.mjs",
+      "authorityPath": "packages/contracts/src/operations/operation-registry.ts",
       "authorityRole": "runtime-operation-registry",
       "projectionPaths": [
         "tools/registry/operations/operations.registry.json",
         "tools/registry/capabilities/capabilities.registry.json",
-        "packages/contracts/src/generated/operations.generated.mjs",
-        "packages/foundation/src/security/authorization/generated-capabilities.mjs",
+        "packages/contracts/src/generated/operations.generated.ts",
+        "packages/foundation/src/security/authorization/generated-capabilities.ts",
         "tools/registry/operations/operations.openapi.generated.json",
         "tools/registry/operations/operations.routes.generated.json"
       ],
       "consumerPaths": [
-        "tools/generators/generate-operation-artifacts.mjs",
-        "tools/verifiers/registry-validator.mjs",
-        "packages/foundation/src/security/authorization/authorization-capabilities.mjs",
-        "packages/server-runtime/src/routing/operation-route-index.mjs",
-        "packages/capabilities/src/operation-permission-core/catalog.mjs"
+        "tools/generators/generate-operation-artifacts.ts",
+        "tools/verifiers/registry-validator.ts",
+        "packages/foundation/src/security/authorization/authorization-capabilities.ts",
+        "packages/server-runtime/src/routing/operation-route-index.ts",
+        "packages/capabilities/src/operation-permission-core/catalog.ts"
       ],
       "verification": [
         "npm run verify:registry",
@@ -47,19 +130,19 @@
       "id": "process-identity-runtime-contract",
       "factKey": "process-identity.runtime-contract",
       "domain": "Process identity package issuance, signed request verification, rotation, revocation state, and server-signed revocation receipts.",
-      "authorityPath": "packages/foundation/src/security/process-identity/index.mjs",
+      "authorityPath": "packages/foundation/src/security/process-identity/index.ts",
       "authorityRole": "process-identity-runtime-contract",
       "projectionPaths": [
         "docs/functionality/SECURITY-AUTHORIZATION.md",
         "tools/registry/operations/operations.registry.json"
       ],
       "consumerPaths": [
-        "packages/protocols/http/controllers/system-controller-process-identity-handlers.mjs",
-        "packages/server-runtime/src/composition/dispatch-operation-core.mjs",
-        "tools/server-scripts/verify-process-identity.mjs"
+        "packages/protocols/http/controllers/system-controller-process-identity-handlers.ts",
+        "packages/server-runtime/src/composition/dispatch-operation-core.ts",
+        "tools/server-scripts/verify-process-identity.ts"
       ],
       "verification": [
-        "node tools/server-scripts/verify-process-identity.mjs",
+        "node tools/server-scripts/verify-process-identity.ts",
         "npm run verify:registry"
       ],
       "nonAuthorityBoundaries": [
@@ -70,7 +153,7 @@
       "id": "release-readiness-reduction",
       "factKey": "release.readiness-reduction",
       "domain": "Final release readiness reduction across command failures, missing evidence, stale reports, leak scans, and delegated evidence reducers.",
-      "authorityPath": "tools/server-scripts/lib/release-evidence-readiness.mjs",
+      "authorityPath": "tools/server-scripts/lib/release-evidence-readiness.ts",
       "authorityRole": "release-readiness-reducer",
       "projectionPaths": [
         "build/acceptance-evidence/current.json",
@@ -79,10 +162,10 @@
         "build/reports/gateway-platform-profile.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs",
-        "tools/server-scripts/production-readiness-gate.mjs",
-        "tools/server-scripts/stress-gateway-platform-profile.mjs"
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+        "tools/server-scripts/production-readiness-gate.ts",
+        "tools/server-scripts/stress-gateway-platform-profile.ts"
       ],
       "verification": [
         "npm run server:verify:script-registry",
@@ -96,24 +179,25 @@
     {
       "id": "platform-acceptance-workflow",
       "factKey": "platform.acceptance-workflow",
-      "domain": "Final platform acceptance command DAG, acceptance layers, child report reduction, state transitions, and aggregate readiness decision.",
-      "authorityPath": "tools/server-scripts/verify-platform-acceptance.mjs",
-      "authorityRole": "final-readiness-authority",
+      "domain": "Mandatory functional-completeness command DAG, acceptance layers, child report reduction, state transitions, and aggregate accepted-or-failed decision.",
+      "authorityPath": "tools/server-scripts/verify-platform-acceptance.ts",
+      "authorityRole": "functional-completeness-authority",
       "projectionPaths": [
         "build/acceptance-evidence/current.json",
         "tools/registry/tests.registry.json",
         "tools/registry/open-platform-capability-matrix.json"
       ],
       "consumerPaths": [
-        "tests/verify-script-registry.mjs"
+        "tests/verify-script-registry.ts"
       ],
       "verification": [
         "npm run server:verify:script-registry",
         "npm run verify:acceptance:plan"
       ],
       "nonAuthorityBoundaries": [
-        "Child verifiers and report-local releaseReady fields provide input evidence only and cannot declare final readiness.",
-        "The platform acceptance plan is a read-only projection and must not replace the aggregate acceptance report."
+        "Child verifiers and report-local releaseReady fields provide input evidence only and cannot declare functional completeness.",
+        "The functional acceptance plan is a read-only projection and must not replace the aggregate acceptance report.",
+        "Real-machine verification is a downstream optional claim and cannot feed back into this authority."
       ]
     },
     {
@@ -129,10 +213,10 @@
         "packages/foundation/config/entity-config/runbooks/project-release-runbook/README.md"
       ],
       "consumerPaths": [
-        "tools/server-scripts/mcp-release.mjs",
-        "tools/server-scripts/lib/mcp-release-common.mjs",
-        "tools/server-scripts/lib/mcp-release-portable.mjs",
-        "tools/generators/generate-supply-chain-artifacts.mjs"
+        "tools/server-scripts/mcp-release.ts",
+        "tools/server-scripts/lib/mcp-release-common.ts",
+        "tools/server-scripts/lib/mcp-release-portable.ts",
+        "tools/generators/generate-supply-chain-artifacts.ts"
       ],
       "verification": [
         "npm run vitest",
@@ -149,24 +233,24 @@
       "id": "private-deployment-open-platform-e2e-catalog",
       "factKey": "private-deployment.open-platform-e2e-catalog",
       "domain": "Private deployment open platform evidence command selection, required report derivation, and canonical scheduling.",
-      "authorityPath": "tools/server-scripts/lib/platform-acceptance-command-catalog.mjs",
+      "authorityPath": "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
       "authorityRole": "platform-acceptance-command-and-report-ownership-catalog",
       "projectionPaths": [
         "build/reports/private-deployment-open-platform-e2e.json",
         "build/acceptance-evidence/current.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.mjs",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tests/verify-script-registry.mjs"
+        "tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts",
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tests/verify-script-registry.ts"
       ],
       "verification": [
         "npm run server:verify:script-registry",
         "npm run verify:acceptance"
       ],
       "nonAuthorityBoundaries": [
-        "The private deployment verifier only reduces reports already produced by canonical platform acceptance command owners.",
+        "The private deployment verifier only reduces reports already produced by registered functional-completeness command owners.",
         "The private deployment constants module owns only its aggregate report path and fixture scan constants; it does not own command execution, scheduling, or report membership."
       ]
     },
@@ -174,17 +258,17 @@
       "id": "upstream-service-publishing-evidence",
       "factKey": "upstream-service-publishing.server-evidence",
       "domain": "Authenticated upstream publishing, durable manifest publication, runtime snapshot replacement, Operation Permission revision, audience projection, and protocol delivery evidence.",
-      "authorityPath": "tools/server-scripts/lib/upstream-service-publishing-evidence.mjs",
+      "authorityPath": "tools/server-scripts/lib/upstream-service-publishing-evidence.ts",
       "authorityRole": "upstream-service-publishing-evidence-reducer",
       "projectionPaths": [
         "build/reports/upstream-service-publishing.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-upstream-service-publishing.mjs",
-        "tools/server-scripts/lib/required-report-validator.mjs",
-        "tools/server-scripts/lib/release-evidence-readiness.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs"
+        "tools/server-scripts/verify-upstream-service-publishing.ts",
+        "tools/server-scripts/lib/required-report-validator.ts",
+        "tools/server-scripts/lib/release-evidence-readiness.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:upstream-service-publishing",
@@ -196,19 +280,43 @@
       ]
     },
     {
+      "id": "upstream-service-publishing-candidate",
+      "factKey": "release.upstream-service-publishing-candidate",
+      "domain": "Immutable release tag, source commit and tree, complete upstream publishing report bundle, privacy scan, and the scoped upstream-publishing-prepublication-passed claim.",
+      "authorityPath": "tools/server-scripts/lib/upstream-service-publishing-candidate-receipt.ts",
+      "authorityRole": "upstream-service-publishing-candidate-receipt-authority",
+      "projectionPaths": [
+        "build/reports/upstream-service-publishing-candidate.json"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-upstream-service-publishing-candidate.ts",
+        "tools/registry/release-definition.registry.json",
+        ".github/workflows/release.yml"
+      ],
+      "verification": [
+        "npm run verify:upstream-service-publishing-candidate",
+        "npm run server:verify:script-registry"
+      ],
+      "nonAuthorityBoundaries": [
+        "The candidate receipt establishes only scoped upstream publishing prepublication evidence and never establishes or replaces the functional-complete release claim.",
+        "The HTML report is a human-readable candidate-context projection; only the external receipt binds the final HTML bytes and the complete artifact set.",
+        "Optional sibling services, plugins, clients, and their repositories do not become Meshrix Core release authorities."
+      ]
+    },
+    {
       "id": "upstream-fixture-transit-evidence",
       "factKey": "upstream-fixture.transit-evidence",
       "domain": "Self-contained upstream fixture transit evidence schema: REST and MCP registration, credential injection proof, projection parity, risk governance, and readiness reduction.",
-      "authorityPath": "tools/server-scripts/lib/upstream-fixture-transit-evidence.mjs",
+      "authorityPath": "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts",
       "authorityRole": "fixture-evidence-reducer",
       "projectionPaths": [
         "build/reports/upstream-fixture-transit.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-upstream-fixture-transit.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs",
-        "tools/server-scripts/stress-gateway-platform-profile.mjs"
+        "tools/server-scripts/verify-upstream-fixture-transit.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+        "tools/server-scripts/stress-gateway-platform-profile.ts"
       ],
       "verification": [
         "npm run verify:upstream-fixture-transit",
@@ -222,15 +330,15 @@
       "id": "upstream-mcp-gateway-evidence",
       "factKey": "upstream-mcp.gateway-evidence",
       "domain": "Upstream MCP gateway approval evidence: suspend-before-forward, approve-and-resume exactly once, rejection and expiry side-effect guards, audit correlation, and credential binding.",
-      "authorityPath": "tools/server-scripts/lib/upstream-mcp-gateway-evidence.mjs",
+      "authorityPath": "tools/server-scripts/lib/upstream-mcp-gateway-evidence.ts",
       "authorityRole": "gateway-evidence-reducer",
       "projectionPaths": [
         "build/reports/upstream-mcp-gateway-e2e.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.mjs",
-        "tools/server-scripts/lib/release-evidence-readiness.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs"
+        "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts",
+        "tools/server-scripts/lib/release-evidence-readiness.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts"
       ],
       "verification": [
         "npm run verify:upstream-mcp-gateway",
@@ -245,15 +353,15 @@
       "id": "downstream-agent-tool-loop-evidence",
       "factKey": "downstream-agent.tool-loop-evidence",
       "domain": "Deterministic downstream agent tool loop evidence for every MCP release target: target-specific initialize, initialized notification, tools/list, tools/call, and denial turns through real meshrix-mcp proxy child processes over newline-delimited stdio JSON-RPC.",
-      "authorityPath": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.mjs",
+      "authorityPath": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
       "authorityRole": "fixture-evidence-reducer",
       "projectionPaths": [
         "build/reports/downstream-agent-tool-loop.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-downstream-agent-tool-loop.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs"
+        "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:downstream-agent-tool-loop",
@@ -268,14 +376,14 @@
       "id": "mcp-proxy-transport-evidence",
       "factKey": "mcp-client.proxy-transport-evidence",
       "domain": "MCP downstream client real meshrix-mcp proxy newline-delimited stdio transport evidence and release-target profile coverage readiness.",
-      "authorityPath": "tools/server-scripts/lib/mcp-proxy-transport-evidence.mjs",
+      "authorityPath": "tools/server-scripts/lib/mcp-proxy-transport-evidence.ts",
       "authorityRole": "proxy-transport-evidence-reducer",
       "projectionPaths": [
         "build/reports/mcp-proxy-transport.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-mcp-proxy-transport.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs"
+        "tools/server-scripts/verify-mcp-proxy-transport.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts"
       ],
       "verification": [
         "npm run verify:mcp-proxy-transport",
@@ -290,7 +398,7 @@
       "id": "mcp-release-targets",
       "factKey": "mcp-release.targets",
       "domain": "Current downstream MCP release target names and membership.",
-      "authorityPath": "packages/protocols/mcp/adapter/mcp-release-targets.mjs",
+      "authorityPath": "packages/protocols/mcp/adapter/mcp-release-targets.ts",
       "authorityRole": "target-scope-contract",
       "projectionPaths": [
         "packages/protocols/mcp/adapter/native-installer/README.md",
@@ -298,13 +406,13 @@
         "build/reports/mcp-release-target-scope.json"
       ],
       "consumerPaths": [
-        "packages/protocols/mcp/adapter/http-mcp-adapter-constants.mjs",
-        "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.mjs",
-        "tools/server-scripts/verify-mcp-release-target-scope.mjs"
+        "packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts",
+        "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
+        "tools/server-scripts/verify-mcp-release-target-scope.ts"
       ],
       "verification": [
         "npm run server:verify:script-registry",
-        "node tools/server-scripts/verify-mcp-release-target-scope.mjs"
+        "node tools/server-scripts/verify-mcp-release-target-scope.ts"
       ],
       "nonAuthorityBoundaries": [
         "Consumer-local hardcoded target arrays must not replace the shared target module."
@@ -314,15 +422,15 @@
       "id": "mcp-process-identity-credential-store-evidence",
       "factKey": "mcp-process-identity.credential-store-evidence",
       "domain": "MCP process identity credential-store release evidence and platform backend readiness.",
-      "authorityPath": "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.mjs",
+      "authorityPath": "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts",
       "authorityRole": "credential-store-evidence-reducer",
       "projectionPaths": [
         "build/reports/mcp-process-identity-credential-store.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.mjs"
+        "tools/server-scripts/verify-mcp-process-identity-credential-store.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:mcp-process-identity-credential-store",
@@ -336,17 +444,17 @@
       "id": "composition-source-package",
       "factKey": "composition.source-package",
       "domain": "Self-contained open source composition package root selection, copy plan, manifest hashing, and source package verification.",
-      "authorityPath": "tools/server-scripts/package-server-source.mjs",
+      "authorityPath": "tools/server-scripts/package-server-source.ts",
       "authorityRole": "source-package-builder-contract",
       "projectionPaths": [
         "build/reports/composition-source-package.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-composition-source.mjs",
-        "tools/server-scripts/verify-composition-source-package.mjs",
-        "tools/server-scripts/verify-deployment-container-flow.mjs",
-        "tools/server-scripts/verify-platform-acceptance.mjs",
-        "tools/scripts/package-script-registry.mjs"
+        "tools/server-scripts/verify-composition-source.ts",
+        "tools/server-scripts/verify-composition-source-package.ts",
+        "tools/server-scripts/verify-deployment-container-flow.ts",
+        "tools/server-scripts/verify-platform-acceptance.ts",
+        "tools/scripts/package-script-registry.ts"
       ],
       "verification": [
         "npm run verify:composition-source-package",
@@ -360,14 +468,14 @@
       "id": "controlled-execution-convergence-reducer",
       "factKey": "controlled-execution.convergence-readiness",
       "domain": "Current Controlled Execution Convergence readiness reduction over exact Plan receipts, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
-      "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.mjs",
+      "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts",
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [
         "build/reports/controlled-execution-convergence-final.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/verify-controlled-execution-convergence.mjs",
-        "tools/server-scripts/lib/platform-acceptance-command-catalog.mjs"
+        "tools/server-scripts/verify-controlled-execution-convergence.ts",
+        "tools/server-scripts/lib/platform-acceptance-command-catalog.ts"
       ],
       "verification": [
         "npm run verify:controlled-execution-convergence",
@@ -381,20 +489,20 @@
       "id": "package-script-classification",
       "factKey": "package-scripts.classification",
       "domain": "npm script classification, tiers, side-effect policy, and CI profile metadata.",
-      "authorityPath": "tools/scripts/package-script-registry.mjs",
+      "authorityPath": "tools/scripts/package-script-registry.ts",
       "authorityRole": "script-classification-registry",
       "projectionPaths": [
         "build/reports/script-registry.json"
       ],
       "consumerPaths": [
-        "tests/verify-script-registry.mjs"
+        "tests/verify-script-registry.ts"
       ],
       "verification": [
         "npm run server:verify:script-registry",
         "npm test"
       ],
       "nonAuthorityBoundaries": [
-        "package.json command strings define executable commands, but classification facts live only in tools/scripts/package-script-registry.mjs."
+        "package.json command strings define executable commands, but classification facts live only in tools/scripts/package-script-registry.ts."
       ]
     },
     {
@@ -408,8 +516,8 @@
         "build/reports/core-platform-surface-convergence.json"
       ],
       "consumerPaths": [
-        "tools/verifiers/core-platform-gap-audit.mjs",
-        "tools/server-scripts/verify-core-platform-surface-convergence.mjs",
+        "tools/verifiers/core-platform-gap-audit.ts",
+        "tools/server-scripts/verify-core-platform-surface-convergence.ts",
         "tools/registry/docs.registry.json"
       ],
       "verification": [

@@ -13,7 +13,7 @@ export type AppearancePresetCatalogResponse = {
 };
 
 function normalizeCatalogResponse(response: AppearancePresetCatalogResponse): AppearancePresetCatalogResponse {
-  const configs = Array.isArray(response.configs) ? response.configs : response.presets || [];
+  const configs: any = Array.isArray(response.configs) ? response.configs : response.presets || [];
   return {
     ...response,
     configs,
@@ -22,11 +22,11 @@ function normalizeCatalogResponse(response: AppearancePresetCatalogResponse): Ap
   };
 }
 
-export async function fetchServerAppearancePresetConfigs() {
+export async function fetchServerAppearancePresetConfigs() : Promise<any> {
   return normalizeCatalogResponse(await getJson<AppearancePresetCatalogResponse>("/api/appearance-presets"));
 }
 
-export async function importServerAppearancePresetConfig(config: AppearancePresetConfig) {
+export async function importServerAppearancePresetConfig(config: AppearancePresetConfig) : Promise<any> {
   return normalizeCatalogResponse(
     await postJson<AppearancePresetCatalogResponse>(
       "/api/appearance-presets/import",
@@ -36,7 +36,7 @@ export async function importServerAppearancePresetConfig(config: AppearancePrese
   );
 }
 
-export async function importServerAppearancePresetText(text: string) {
+export async function importServerAppearancePresetText(text: string) : Promise<any> {
   return normalizeCatalogResponse(
     await postJson<AppearancePresetCatalogResponse>(
       "/api/appearance-presets/import",

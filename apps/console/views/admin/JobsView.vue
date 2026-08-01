@@ -103,7 +103,7 @@ onMounted(() => {
           <button class="table-action" type="button" :disabled="Boolean(workQueueBusy) || !workQueueEnabled" @click="runWorkQueueAction('resume')">
             {{ workQueueBusy === 'resume' ? '恢复中' : '恢复' }}
           </button>
-          <button class="table-action" type="button" :disabled="Boolean(workQueueBusy) || !workQueueEnabled" @click="runWorkQueueAction('drain')">
+          <button class="table-action" type="button" :disabled="Boolean(workQueueBusy) || !workQueueEnabled || workQueueSummary.total === 0" @click="runWorkQueueAction('drain')">
             {{ workQueueBusy === 'drain' ? '排空中' : '排空' }}
           </button>
         </div>
@@ -115,7 +115,7 @@ onMounted(() => {
     </section>
 
     <section class="queue-status-section">
-      <div class="job-table compact-job-table work-queue-table">
+      <div v-if="workQueueRows.length" class="job-table compact-job-table work-queue-table">
         <div class="job-table-header">
           <span>队列</span>
           <span>来源</span>
@@ -162,7 +162,7 @@ onMounted(() => {
         <span>失败 {{ consoleState?.jobs?.summary?.failedCount || 0 }}</span>
       </div>
     </div>
-    <div class="table-shell">
+    <div v-if="recentJobs.length > 0" class="table-shell">
       <table class="jobs-table">
         <thead>
           <tr>
@@ -186,7 +186,7 @@ onMounted(() => {
               <span class="url-badge">{{ item.queueId || "未登记" }}</span>
             </td>
             <td>
-              <StatusPill :tone="jobStatusTone(item.status)" :label="jobStatusLabels[item.status]" />
+              <StatusPill :tone="jobStatusTone(item.status)" :label="(jobStatusLabels as Record<string, string>)[item.status]" />
             </td>
             <td class="progress-cell">
               <div class="progress-track">
@@ -226,7 +226,7 @@ onMounted(() => {
         </tbody>
       </table>
 
-      <ConsoleEmptyState v-if="recentJobs.length === 0" title="暂无任务记录" description="当前筛选条件下没有匹配任务。" />
+      <ConsoleEmptyState v-if="recentJobs.length === 0" title="暂无任务记录" description="有导入、智能巡检或队列任务时会显示在这里。" />
     </div>
   </section>
 </template>

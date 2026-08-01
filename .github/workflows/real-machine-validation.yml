@@ -1,0 +1,242 @@
+name: Optional real-machine validation
+
+env:
+  NODE_OPTIONS: --conditions=source
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Declared real-machine target
+        required: true
+        type: choice
+        options:
+          - native-linux-x64
+          - native-linux-arm64
+          - native-macos-arm64
+          - native-windows-x64
+          - public-cloud-single-node
+          - clean-host-recovery
+      source_revision:
+        description: Exact release workflow source revision (40-character Git commit)
+        required: true
+        type: string
+      functional_run_id:
+        description: Release workflow run containing functional-platform-acceptance
+        required: true
+        type: string
+      public_base_url:
+        description: HTTPS public base URL used by the production Compose contract
+        required: false
+        type: string
+      trusted_proxies:
+        description: Explicit trusted-proxy CIDR list for the production Compose contract
+        required: false
+        type: string
+      candidate_artifact_name:
+        description: Artifact name containing the macOS or Windows candidate archive from functional_run_id
+        required: false
+        type: string
+      candidate_artifact_filename:
+        description: Candidate archive filename inside the downloaded artifact
+        required: false
+        type: string
+      portable_input_subdirectory:
+        description: macOS portable verifier input directory relative to the candidate artifact
+        required: false
+        default: "."
+        type: string
+      backup_run_id:
+        description: Run containing the independent clean-host backup artifact
+        required: false
+        type: string
+      backup_artifact_name:
+        description: Backup artifact whose root contains backup-manifest.json
+        required: false
+        type: string
+      public_agent_mcp_url:
+        description: Public Agent MCP endpoint for the public-cloud target
+        required: false
+        type: string
+      public_upstream_http_url:
+        description: Public governed upstream HTTP probe endpoint
+        required: false
+        type: string
+      public_upstream_mcp_url:
+        description: Public governed upstream MCP probe endpoint
+        required: false
+        type: string
+      public_fault_url:
+        description: Public endpoint expected to fail or time out during the fault probe
+        required: false
+        type: string
+      expected_cert_sha256:
+        description: Exact sha256:<64-hex> digest of the expected public TLS certificate
+        required: false
+        type: string
+      capacity_requests:
+        description: Bounded public-cloud health request count
+        required: false
+        default: "20"
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+concurrency:
+  group: real-machine-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate ${{ inputs.target }}
+    runs-on: ${{ inputs.target == 'native-linux-x64' && 'ubuntu-24.04' || inputs.target == 'native-linux-arm64' && 'ubuntu-24.04-arm' || inputs.target == 'native-macos-arm64' && 'macos-15' || inputs.target == 'native-windows-x64' && 'windows-2025' || inputs.target == 'public-cloud-single-node' && 'meshrix-public-cloud' || 'meshrix-clean-host-recovery' }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.source_revision }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24.16.0"
+          cache: "npm"
+      - name: Install verifier dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify the two-standard acceptance contract
+        run: node tools/server-scripts/verify-release-acceptance-standards.ts
+      - name: Reject incomplete target-specific validation inputs
+        env:
+          MESHRIX_REAL_MACHINE_TARGET: ${{ inputs.target }}
+          MESHRIX_CANDIDATE_ARTIFACT_NAME: ${{ inputs.candidate_artifact_name }}
+          MESHRIX_CANDIDATE_ARTIFACT_FILENAME: ${{ inputs.candidate_artifact_filename }}
+          MESHRIX_PORTABLE_INPUT_SUBDIRECTORY: ${{ inputs.portable_input_subdirectory }}
+          MESHRIX_BACKUP_RUN_ID: ${{ inputs.backup_run_id }}
+          MESHRIX_BACKUP_ARTIFACT_NAME: ${{ inputs.backup_artifact_name }}
+          MESHRIX_PUBLIC_BASE_URL: ${{ inputs.public_base_url }}
+          MESHRIX_TRUSTED_PROXIES: ${{ inputs.trusted_proxies }}
+          MESHRIX_PUBLIC_AGENT_MCP_URL: ${{ inputs.public_agent_mcp_url }}
+          MESHRIX_PUBLIC_UPSTREAM_HTTP_URL: ${{ inputs.public_upstream_http_url }}
+          MESHRIX_PUBLIC_UPSTREAM_MCP_URL: ${{ inputs.public_upstream_mcp_url }}
+          MESHRIX_PUBLIC_FAULT_URL: ${{ inputs.public_fault_url }}
+          MESHRIX_EXPECTED_CERT_SHA256: ${{ inputs.expected_cert_sha256 }}
+          MESHRIX_CAPACITY_REQUESTS: ${{ inputs.capacity_requests }}
+        run: node tools/server-scripts/verify-real-machine-workflow-inputs.ts
+      - name: Bind the functional receipt and candidate to one successful release run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MESHRIX_FUNCTIONAL_RUN_ID: ${{ inputs.functional_run_id }}
+          MESHRIX_SOURCE_REVISION: ${{ inputs.source_revision }}
+          MESHRIX_REPOSITORY: ${{ github.repository }}
+          MESHRIX_GITHUB_API_URL: ${{ github.api_url }}
+        run: node tools/server-scripts/verify-real-machine-source-run.ts
+      - name: Download the accepted functional-complete receipt
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: functional-platform-acceptance
+          path: build/functional-evidence
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.functional_run_id }}
+      - name: Download the native portable candidate
+        if: ${{ inputs.target == 'native-macos-arm64' || inputs.target == 'native-windows-x64' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.candidate_artifact_name }}
+          path: build/candidate-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.functional_run_id }}
+      - name: Download the immutable container candidate authority
+        if: ${{ inputs.target == 'native-linux-x64' || inputs.target == 'native-linux-arm64' || inputs.target == 'public-cloud-single-node' || inputs.target == 'clean-host-recovery' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: unsigned-release-image-${{ inputs.source_revision }}
+          path: build/candidate-image-authority
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.functional_run_id }}
+      - name: Download the independent backup input
+        if: ${{ inputs.target == 'clean-host-recovery' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.backup_artifact_name }}
+          path: build/backup-input
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.backup_run_id }}
+      - name: Authenticate for the immutable Docker candidate
+        if: ${{ inputs.target == 'native-linux-x64' || inputs.target == 'native-linux-arm64' || inputs.target == 'public-cloud-single-node' || inputs.target == 'clean-host-recovery' }}
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Resolve the downloaded immutable candidate
+        id: candidate
+        env:
+          MESHRIX_REAL_MACHINE_TARGET: ${{ inputs.target }}
+          MESHRIX_SOURCE_REVISION: ${{ inputs.source_revision }}
+          MESHRIX_REPOSITORY: ${{ github.repository }}
+          MESHRIX_CANDIDATE_AUTHORITY: ${{ github.workspace }}/build/candidate-image-authority/image/RELEASE_IMAGE.json
+          MESHRIX_CANDIDATE_ARTIFACT: ${{ github.workspace }}/build/candidate-artifact/${{ inputs.candidate_artifact_filename }}
+        run: node tools/server-scripts/resolve-real-machine-candidate.ts
+      - name: Materialize production secret custody inputs
+        if: ${{ inputs.target == 'native-linux-x64' || inputs.target == 'native-linux-arm64' || inputs.target == 'public-cloud-single-node' || inputs.target == 'clean-host-recovery' }}
+        env:
+          LOCAL_SECRET_MASTER_KEY: ${{ secrets.MESHRIX_LOCAL_SECRET_MASTER_KEY }}
+          OPERATION_PROOF_SIGNER_SECRET: ${{ secrets.MESHRIX_OPERATION_PROOF_SIGNER_SECRET }}
+          SECRET_ROOT: ${{ runner.temp }}/meshrix-real-machine-secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LOCAL_SECRET_MASTER_KEY"
+          test -n "$OPERATION_PROOF_SIGNER_SECRET"
+          test "$LOCAL_SECRET_MASTER_KEY" != "$OPERATION_PROOF_SIGNER_SECRET"
+          umask 077
+          node tools/server-scripts/cleanup-real-machine-secrets.ts
+          mkdir -p "$SECRET_ROOT"
+          printf '%s' "$LOCAL_SECRET_MASTER_KEY" > "$SECRET_ROOT/local-secret-master-key"
+          printf '%s' "$OPERATION_PROOF_SIGNER_SECRET" > "$SECRET_ROOT/operation-proof-signer-secret"
+      - name: Execute the governed real-machine lifecycle
+        env:
+          MESHRIX_REAL_MACHINE_CANDIDATE_IMAGE: ${{ steps.candidate.outputs.image }}
+          MESHRIX_REAL_MACHINE_CANDIDATE_ARTIFACT: ${{ github.workspace }}/build/candidate-artifact/${{ inputs.candidate_artifact_filename }}
+          MESHRIX_REAL_MACHINE_PORTABLE_INPUT_DIR: ${{ github.workspace }}/build/candidate-artifact/${{ inputs.portable_input_subdirectory }}
+          MESHRIX_REAL_MACHINE_BACKUP_INPUT: ${{ github.workspace }}/build/backup-input
+          MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE: ${{ runner.temp }}/meshrix-real-machine-secrets/local-secret-master-key
+          MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE: ${{ runner.temp }}/meshrix-real-machine-secrets/operation-proof-signer-secret
+          MESHRIX_PUBLIC_BASE_URL: ${{ inputs.public_base_url }}
+          MESHRIX_TRUSTED_PROXIES: ${{ inputs.trusted_proxies }}
+          MESHRIX_REAL_MACHINE_PUBLIC_AGENT_MCP_URL: ${{ inputs.public_agent_mcp_url }}
+          MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_HTTP_URL: ${{ inputs.public_upstream_http_url }}
+          MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_MCP_URL: ${{ inputs.public_upstream_mcp_url }}
+          MESHRIX_REAL_MACHINE_PUBLIC_FAULT_URL: ${{ inputs.public_fault_url }}
+          MESHRIX_REAL_MACHINE_EXPECTED_CERT_SHA256: ${{ inputs.expected_cert_sha256 }}
+          MESHRIX_REAL_MACHINE_CAPACITY_REQUESTS: ${{ inputs.capacity_requests }}
+          MESHRIX_REAL_MACHINE_PUBLIC_AGENT_MCP_TOKEN: ${{ secrets.MESHRIX_REAL_MACHINE_PUBLIC_AGENT_MCP_TOKEN }}
+          MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_HTTP_TOKEN: ${{ secrets.MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_HTTP_TOKEN }}
+          MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_MCP_TOKEN: ${{ secrets.MESHRIX_REAL_MACHINE_PUBLIC_UPSTREAM_MCP_TOKEN }}
+        run: >-
+          npm run verify:real-machine --
+          run
+          --target "${{ inputs.target }}"
+          --architecture "${{ contains(inputs.target, 'arm64') && 'arm64' || 'x64' }}"
+          --environment "${{ inputs.target }}"
+          --candidate "${{ steps.candidate.outputs.digest }}"
+          --functional-report "${{ github.workspace }}/build/functional-evidence/platform-acceptance.json"
+          --commands "${{ github.workspace }}/tools/server-scripts/real-machine-targets/${{ inputs.target }}.commands.json"
+          --state-root "${{ runner.temp }}/meshrix-real-machine"
+          --run-id "validation-${{ github.run_id }}-${{ github.run_attempt }}"
+      - name: Preserve privacy-safe phase and final receipts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: real-machine-${{ inputs.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/meshrix-real-machine/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Remove ephemeral production secret custody inputs
+        if: ${{ always() }}
+        env:
+          MESHRIX_RUNNER_TEMP: ${{ runner.temp }}
+          MESHRIX_REAL_MACHINE_SECRET_ROOT: ${{ runner.temp }}/meshrix-real-machine-secrets
+        run: node tools/server-scripts/cleanup-real-machine-secrets.ts

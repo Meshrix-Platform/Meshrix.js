@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount } from "vue";
+import { computed, onBeforeUnmount } from "vue";
 import { useConsoleSideNavContext } from "../../composables/consoleSideNavContext";
 import ConsoleSideNavAgentSection from "./side-nav/ConsoleSideNavAgentSection.vue";
 import ConsoleSideNavBackdrop from "./side-nav/ConsoleSideNavBackdrop.vue";
@@ -14,6 +14,7 @@ import ConsoleSideNavVersionSection from "./side-nav/ConsoleSideNavVersionSectio
 
 defineOptions({ name: "ConsoleSideNav" });
 const {
+  consoleState,
   isAuthenticated,
   setSideNavWidth,
   sideNavCollapsed,
@@ -22,6 +23,10 @@ const {
   sideNavWidth,
   tt,
 } = useConsoleSideNavContext();
+
+/* Nav sections are gated on scopes + features from async console state;
+   show a skeleton instead of letting sections pop in one by one. */
+const showNavSkeleton = computed(() => isAuthenticated.value && !consoleState.value);
 
 let stopResizeListeners: (() => void) | null = null;
 
@@ -95,13 +100,23 @@ onBeforeUnmount(stopSideNavResize);
     <div class="side-nav-primary" :inert="!isAuthenticated">
       <ConsoleSideNavBrand />
       <nav class="side-nav-links">
-        <ConsoleSideNavPrimaryLinks />
-        <ConsoleSideNavAgentSection />
-        <ConsoleSideNavIntegrationSection />
-        <ConsoleSideNavPluginSection />
-        <ConsoleSideNavOperationPermissionSection />
-        <ConsoleSideNavSystemSection />
-        <ConsoleSideNavVersionSection />
+        <div v-if="showNavSkeleton" class="side-nav-skeleton" aria-hidden="true">
+          <span class="sk sk-title" />
+          <span class="sk sk-text" />
+          <span class="sk sk-text" />
+          <span class="sk sk-text-sm" />
+          <span class="sk sk-text" />
+          <span class="sk sk-text-sm" />
+        </div>
+        <template v-else>
+          <ConsoleSideNavPrimaryLinks />
+          <ConsoleSideNavAgentSection />
+          <ConsoleSideNavIntegrationSection />
+          <ConsoleSideNavPluginSection />
+          <ConsoleSideNavOperationPermissionSection />
+          <ConsoleSideNavSystemSection />
+          <ConsoleSideNavVersionSection />
+        </template>
       </nav>
 
       <ConsoleSideNavFooter />

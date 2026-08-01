@@ -3,9 +3,9 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import SegmentedProgressBar from "../../../apps/console/components/SegmentedProgressBar.vue";
 
-describe("SegmentedProgressBar behavior", () => {
-  it("renders generated label segments from completed step counts", () => {
-    const wrapper = mount(SegmentedProgressBar, {
+describe("SegmentedProgressBar behavior", () : any => {
+  it("renders generated label segments from completed step counts", () : any => {
+    const wrapper: any = mount(SegmentedProgressBar, {
       props: {
         ariaLabel: "上传进度",
         completedSteps: 2,
@@ -16,7 +16,7 @@ describe("SegmentedProgressBar behavior", () => {
       },
     });
 
-    const segments = wrapper.findAll(".meshrix-segmented-progress-segment");
+    const segments: any = wrapper.findAll(".meshrix-segmented-progress-segment");
     expect(wrapper.attributes("role")).toBe("progressbar");
     expect(wrapper.attributes("aria-label")).toBe("上传进度");
     expect(wrapper.attributes("aria-valuemax")).toBe("3");
@@ -24,12 +24,12 @@ describe("SegmentedProgressBar behavior", () => {
     expect(wrapper.attributes("aria-valuetext")).toBe("2 / 3");
     expect(wrapper.attributes("data-size")).toBe("compact");
     expect(wrapper.attributes("data-show-labels")).toBe("true");
-    expect(segments.map((segment) => segment.attributes("data-state"))).toEqual([
+    expect(segments.map((segment?: any) : any => segment.attributes("data-state"))).toEqual([
       "complete",
       "complete",
       "pending",
     ]);
-    expect(segments.map((segment) => segment.attributes("title"))).toEqual([
+    expect(segments.map((segment?: any) : any => segment.attributes("title"))).toEqual([
       "选择",
       "上传",
       "解析",
@@ -38,8 +38,8 @@ describe("SegmentedProgressBar behavior", () => {
     expect(wrapper.attributes("style")).toContain("repeat(3, minmax(0, 1fr))");
   });
 
-  it("normalizes explicit segment states and fallback labels", () => {
-    const wrapper = mount(SegmentedProgressBar, {
+  it("normalizes explicit segment states and fallback labels", () : any => {
+    const wrapper: any = mount(SegmentedProgressBar, {
       props: {
         segments: [
           { key: "queued", label: "Queued", state: "completed" },
@@ -50,17 +50,17 @@ describe("SegmentedProgressBar behavior", () => {
       },
     });
 
-    const segments = wrapper.findAll(".meshrix-segmented-progress-segment");
+    const segments: any = wrapper.findAll(".meshrix-segmented-progress-segment");
     expect(wrapper.attributes("aria-valuemax")).toBe("4");
     expect(wrapper.attributes("aria-valuenow")).toBe("1");
     expect(wrapper.attributes("aria-valuetext")).toBeUndefined();
-    expect(segments.map((segment) => segment.attributes("data-state"))).toEqual([
+    expect(segments.map((segment?: any) : any => segment.attributes("data-state"))).toEqual([
       "complete",
       "active",
       "failed",
       "pending",
     ]);
-    expect(segments.map((segment) => segment.attributes("title"))).toEqual([
+    expect(segments.map((segment?: any) : any => segment.attributes("title"))).toEqual([
       "Queued",
       "running",
       "Bad",
@@ -69,8 +69,8 @@ describe("SegmentedProgressBar behavior", () => {
     expect(wrapper.text()).toBe("");
   });
 
-  it("keeps a stable one-column layout when no steps are supplied", () => {
-    const wrapper = mount(SegmentedProgressBar);
+  it("keeps a stable one-column layout when no steps are supplied", () : any => {
+    const wrapper: any = mount(SegmentedProgressBar);
 
     expect(wrapper.findAll(".meshrix-segmented-progress-segment")).toHaveLength(0);
     expect(wrapper.attributes("aria-valuemax")).toBe("0");

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-describe("console main entry behavior", () => {
-  beforeEach(() => {
+describe("console main entry behavior", () : any => {
+  beforeEach(() : any => {
     vi.resetModules();
     window.localStorage.clear();
     document.documentElement.removeAttribute("lang");
@@ -13,8 +13,8 @@ describe("console main entry behavior", () => {
     document.body.innerHTML = '<div id="root"></div>';
   });
 
-  it("sets translation guards and mounts the console app with Element Plus components", async () => {
-    const app = {
+  it("sets translation guards and mounts the console app with Element Plus components", async () : Promise<any> => {
+    const app: Record<string, any> = {
       use: vi.fn(),
       component: vi.fn(),
       mount: vi.fn()
@@ -22,31 +22,31 @@ describe("console main entry behavior", () => {
     app.use.mockReturnValue(app);
     app.component.mockReturnValue(app);
     app.mount.mockReturnValue(app);
-    const createApp = vi.fn(() => app);
-    const router = { name: "router" };
-    const ServerConsoleApp = { name: "ServerConsoleApp" };
+    const createApp: any = vi.fn(() : any => app);
+    const router: Record<string, any> = { name: "router" };
+    const ServerConsoleApp: Record<string, any> = { name: "ServerConsoleApp" };
 
-    vi.doMock("vue", async (importOriginal) => ({
+    vi.doMock("vue", async (importOriginal?: any) : Promise<any> => ({
       ...(await importOriginal<typeof import("vue")>()),
       createApp,
     }));
-    vi.doMock("../../../apps/console/router/index", () => ({ router }));
-    vi.doMock("../../../apps/console/ServerConsoleApp.vue", () => ({ default: ServerConsoleApp }));
-    vi.doMock("element-plus/es/components/button/index.mjs", () => ({ ElButton: { name: "ElButton" } }));
-    vi.doMock("element-plus/es/components/loading/index.mjs", () => ({ ElLoading: { name: "ElLoading" } }));
-    vi.doMock("element-plus/es/components/select/index.mjs", () => ({
+    vi.doMock("../../../apps/console/router/index", () : any => ({ router }));
+    vi.doMock("../../../apps/console/ServerConsoleApp.vue", () : any => ({ default: ServerConsoleApp }));
+    vi.doMock("element-plus/es/components/button/index.mjs", () : any => ({ ElButton: { name: "ElButton" } }));
+    vi.doMock("element-plus/es/components/loading/index.mjs", () : any => ({ ElLoading: { name: "ElLoading" } }));
+    vi.doMock("element-plus/es/components/select/index.mjs", () : any => ({
       ElOption: { name: "ElOption" },
       ElSelect: { name: "ElSelect" }
     }));
-    vi.doMock("element-plus/es/components/table/index.mjs", () => ({
+    vi.doMock("element-plus/es/components/table/index.mjs", () : any => ({
       ElTable: { name: "ElTable" },
       ElTableColumn: { name: "ElTableColumn" }
     }));
-    vi.doMock("element-plus/es/components/button/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/loading/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/select/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/table/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/table-column/style/css", () => ({}));
+    vi.doMock("element-plus/es/components/button/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/loading/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/select/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/table/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/table-column/style/css", () : any => ({}));
 
     await import("../../../apps/console/main");
 
@@ -58,7 +58,7 @@ describe("console main entry behavior", () => {
     expect(createApp).toHaveBeenCalledWith(ServerConsoleApp);
     expect(app.use).toHaveBeenCalledWith(router);
     expect(app.use).toHaveBeenCalledWith({ name: "ElLoading" });
-    expect(app.component.mock.calls.map((call) => call[0])).toEqual([
+    expect(app.component.mock.calls.map((call?: any) : any => call[0])).toEqual([
       "ElButton",
       "ElSelect",
       "ElOption",
@@ -68,9 +68,9 @@ describe("console main entry behavior", () => {
     expect(app.mount).toHaveBeenCalledWith("#root");
   });
 
-  it("uses the stored console language before mounting", async () => {
+  it("uses the stored console language before mounting", async () : Promise<any> => {
     window.localStorage.setItem("meshrix-language", "en");
-    const app = {
+    const app: Record<string, any> = {
       use: vi.fn(),
       component: vi.fn(),
       mount: vi.fn()
@@ -78,31 +78,31 @@ describe("console main entry behavior", () => {
     app.use.mockReturnValue(app);
     app.component.mockReturnValue(app);
     app.mount.mockReturnValue(app);
-    const createApp = vi.fn(() => app);
-    const router = { name: "router" };
-    const ServerConsoleApp = { name: "ServerConsoleApp" };
+    const createApp: any = vi.fn(() : any => app);
+    const router: Record<string, any> = { name: "router" };
+    const ServerConsoleApp: Record<string, any> = { name: "ServerConsoleApp" };
 
-    vi.doMock("vue", async (importOriginal) => ({
+    vi.doMock("vue", async (importOriginal?: any) : Promise<any> => ({
       ...(await importOriginal<typeof import("vue")>()),
       createApp,
     }));
-    vi.doMock("../../../apps/console/router/index", () => ({ router }));
-    vi.doMock("../../../apps/console/ServerConsoleApp.vue", () => ({ default: ServerConsoleApp }));
-    vi.doMock("element-plus/es/components/button/index.mjs", () => ({ ElButton: { name: "ElButton" } }));
-    vi.doMock("element-plus/es/components/loading/index.mjs", () => ({ ElLoading: { name: "ElLoading" } }));
-    vi.doMock("element-plus/es/components/select/index.mjs", () => ({
+    vi.doMock("../../../apps/console/router/index", () : any => ({ router }));
+    vi.doMock("../../../apps/console/ServerConsoleApp.vue", () : any => ({ default: ServerConsoleApp }));
+    vi.doMock("element-plus/es/components/button/index.mjs", () : any => ({ ElButton: { name: "ElButton" } }));
+    vi.doMock("element-plus/es/components/loading/index.mjs", () : any => ({ ElLoading: { name: "ElLoading" } }));
+    vi.doMock("element-plus/es/components/select/index.mjs", () : any => ({
       ElOption: { name: "ElOption" },
       ElSelect: { name: "ElSelect" }
     }));
-    vi.doMock("element-plus/es/components/table/index.mjs", () => ({
+    vi.doMock("element-plus/es/components/table/index.mjs", () : any => ({
       ElTable: { name: "ElTable" },
       ElTableColumn: { name: "ElTableColumn" }
     }));
-    vi.doMock("element-plus/es/components/button/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/loading/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/select/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/table/style/css", () => ({}));
-    vi.doMock("element-plus/es/components/table-column/style/css", () => ({}));
+    vi.doMock("element-plus/es/components/button/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/loading/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/select/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/table/style/css", () : any => ({}));
+    vi.doMock("element-plus/es/components/table-column/style/css", () : any => ({}));
 
     await import("../../../apps/console/main");
 

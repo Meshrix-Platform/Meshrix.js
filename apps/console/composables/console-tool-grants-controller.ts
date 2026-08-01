@@ -21,18 +21,18 @@ type ConsoleToolGrantsControllerOptions = {
 
 export function createConsoleToolGrantsController(
   options: ConsoleToolGrantsControllerOptions,
-) {
-  const newGrantLabel = ref("默认智能体");
-  const newGrantScopes = ref<string[]>(["gateway:read"]);
-  const newGrantToolsets = ref<string[]>(["meshrix.gateway.read"]);
-  const issuedToolToken = ref("");
+) : any {
+  const newGrantLabel: any = ref("默认智能体");
+  const newGrantScopes: any = ref<string[]>(["gateway:read"]);
+  const newGrantToolsets: any = ref<string[]>(["meshrix.gateway.read"]);
+  const issuedToolToken: any = ref("");
 
-  const toolGrants = computed(() => options.operationPermissionGrantsState.value);
-  const enabledToolGrantCount = computed(
-    () => toolGrants.value.filter((grant) => grant.enabled).length,
+  const toolGrants: any = computed(() : any => options.operationPermissionGrantsState.value);
+  const enabledToolGrantCount: any = computed(
+    () : any => toolGrants.value.filter((grant?: any) : any => grant.enabled).length,
   );
 
-  function grantToolRuleState(grant: OperationPermissionGrant, toolId: string) {
+  function grantToolRuleState(grant: OperationPermissionGrant, toolId: string) : any {
     if ((grant.toolDeny || []).includes(toolId)) {
       return "deny";
     }
@@ -42,8 +42,8 @@ export function createConsoleToolGrantsController(
     return "inherit";
   }
 
-  function toggleNewGrantScope(scopeId: string) {
-    const current = new Set(newGrantScopes.value);
+  function toggleNewGrantScope(scopeId: string) : any {
+    const current: any = new Set<any>(newGrantScopes.value);
     if (current.has(scopeId)) {
       current.delete(scopeId);
     } else {
@@ -52,8 +52,8 @@ export function createConsoleToolGrantsController(
     newGrantScopes.value = [...current];
   }
 
-  function toggleNewGrantToolset(toolsetId: string) {
-    const current = new Set(newGrantToolsets.value);
+  function toggleNewGrantToolset(toolsetId: string) : any {
+    const current: any = new Set<any>(newGrantToolsets.value);
     if (current.has(toolsetId)) {
       current.delete(toolsetId);
     } else {
@@ -62,15 +62,15 @@ export function createConsoleToolGrantsController(
     newGrantToolsets.value = [...current];
   }
 
-  function grantHasScope(grant: OperationPermissionGrant, scopeId: string) {
+  function grantHasScope(grant: OperationPermissionGrant, scopeId: string) : any {
     return grant.scopes.includes(scopeId);
   }
 
-  function grantHasToolset(grant: OperationPermissionGrant, toolsetId: string) {
+  function grantHasToolset(grant: OperationPermissionGrant, toolsetId: string) : any {
     return (grant.toolsets || []).includes(toolsetId);
   }
 
-  async function createGrant() {
+  async function createGrant() : Promise<any> {
     if (newGrantScopes.value.length === 0 && newGrantToolsets.value.length === 0) {
       options.error.value = "请至少选择一个工具权限范围或工具集。";
       return;
@@ -81,14 +81,14 @@ export function createConsoleToolGrantsController(
     issuedToolToken.value = "";
 
     try {
-      const result = await createToolGrantApi({
+      const result: any = await createToolGrantApi({
         label: newGrantLabel.value,
         scopes: newGrantScopes.value,
         toolsets: newGrantToolsets.value,
       });
       issuedToolToken.value = result.token;
       await options.refreshOperationPermission({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "创建工具授权失败。";
     } finally {
@@ -96,7 +96,7 @@ export function createConsoleToolGrantsController(
     }
   }
 
-  async function updateGrant(grant: OperationPermissionGrant, patch: Partial<OperationPermissionGrant>) {
+  async function updateGrant(grant: OperationPermissionGrant, patch: Partial<OperationPermissionGrant>) : Promise<any> {
     options.setBusy(`grant:${grant.id}`);
     options.error.value = "";
 
@@ -110,7 +110,7 @@ export function createConsoleToolGrantsController(
         toolDeny: patch.toolDeny,
       });
       await options.refreshOperationPermission({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "更新工具授权失败。";
     } finally {
@@ -118,9 +118,9 @@ export function createConsoleToolGrantsController(
     }
   }
 
-  async function setGrantToolRule(grant: OperationPermissionGrant, toolId: string, rule: "inherit" | "allow" | "deny") {
-    const allow = new Set(grant.toolAllow || []);
-    const deny = new Set(grant.toolDeny || []);
+  async function setGrantToolRule(grant: OperationPermissionGrant, toolId: string, rule: "inherit" | "allow" | "deny") : Promise<any> {
+    const allow: any = new Set<any>(grant.toolAllow || []);
+    const deny: any = new Set<any>(grant.toolDeny || []);
     allow.delete(toolId);
     deny.delete(toolId);
     if (rule === "allow") {
@@ -135,8 +135,8 @@ export function createConsoleToolGrantsController(
     });
   }
 
-  async function toggleGrantScope(grant: OperationPermissionGrant, scopeId: string) {
-    const nextScopes = new Set(grant.scopes);
+  async function toggleGrantScope(grant: OperationPermissionGrant, scopeId: string) : Promise<any> {
+    const nextScopes: any = new Set<any>(grant.scopes);
     if (nextScopes.has(scopeId)) {
       nextScopes.delete(scopeId);
     } else {
@@ -147,8 +147,8 @@ export function createConsoleToolGrantsController(
     });
   }
 
-  async function toggleGrantToolset(grant: OperationPermissionGrant, toolsetId: string) {
-    const nextToolsets = new Set(grant.toolsets || []);
+  async function toggleGrantToolset(grant: OperationPermissionGrant, toolsetId: string) : Promise<any> {
+    const nextToolsets: any = new Set<any>(grant.toolsets || []);
     if (nextToolsets.has(toolsetId)) {
       nextToolsets.delete(toolsetId);
     } else {
@@ -159,16 +159,16 @@ export function createConsoleToolGrantsController(
     });
   }
 
-  async function rotateGrant(grant: OperationPermissionGrant) {
+  async function rotateGrant(grant: OperationPermissionGrant) : Promise<any> {
     options.setBusy(`grant:${grant.id}`);
     options.error.value = "";
     issuedToolToken.value = "";
 
     try {
-      const result = await rotateToolGrantToken(grant.id);
+      const result: any = await rotateToolGrantToken(grant.id);
       issuedToolToken.value = result.token;
       await options.refreshOperationPermission({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "轮换工具令牌失败。";
     } finally {
@@ -176,7 +176,7 @@ export function createConsoleToolGrantsController(
     }
   }
 
-  async function deleteGrant(grant: OperationPermissionGrant) {
+  async function deleteGrant(grant: OperationPermissionGrant) : Promise<any> {
     if (!(await confirmConsoleAction(`撤销工具授权“${grant.label}”？`, { tone: "danger" }))) {
       return;
     }
@@ -187,7 +187,7 @@ export function createConsoleToolGrantsController(
     try {
       await deleteToolGrantApi(grant.id);
       await options.refreshOperationPermission({ silent: true });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "撤销工具授权失败。";
     } finally {
@@ -195,7 +195,7 @@ export function createConsoleToolGrantsController(
     }
   }
 
-  async function copyIssuedToolToken() {
+  async function copyIssuedToolToken() : Promise<any> {
     if (!issuedToolToken.value) {
       return;
     }

@@ -2,7 +2,7 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const client = vi.hoisted(() => ({
+const client: any = vi.hoisted(() : any => ({
   createUpstreamService: vi.fn(),
   replaceUpstreamService: vi.fn(),
   disableUpstreamService: vi.fn(),
@@ -14,7 +14,7 @@ const client = vi.hoisted(() => ({
   checkUpstreamServiceRuntimeHealth: vi.fn()
 }));
 
-vi.mock("../../../apps/console/lib/upstream-service-publish-client", async (importOriginal) => ({
+vi.mock("../../../apps/console/lib/upstream-service-publish-client", async (importOriginal?: any) : Promise<any> => ({
   ...await importOriginal<typeof import("../../../apps/console/lib/upstream-service-publish-client")>(),
   ...client
 }));
@@ -26,7 +26,7 @@ import {
   unregisterConsoleConfirmHost,
 } from "../../../apps/console/composables/console-confirm-controller";
 
-function publication(revision: number, digest = "a".repeat(64)) {
+function publication(revision: number, digest: any = "a".repeat(64)) : any {
   return {
     publicationRef: `urn:meshrix:upstream-publication:${revision}`,
     status: "publishing" as const,
@@ -35,7 +35,7 @@ function publication(revision: number, digest = "a".repeat(64)) {
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
   client.listPublishedServices.mockResolvedValue({ ok: true, setRevision: 0, services: [] });
   client.createUpstreamService.mockResolvedValue({
@@ -63,17 +63,17 @@ beforeEach(() => {
   client.checkUpstreamServiceRuntimeHealth.mockResolvedValue({ ok: true, status: "healthy" });
 });
 
-describe("UpstreamServicePublishView configuration truthfulness", () => {
-  it("starts empty and submits only explicitly entered configuration", async () => {
-    const wrapper = mount(UpstreamServicePublishView);
+describe("UpstreamServicePublishView configuration truthfulness", () : any => {
+  it("starts empty and submits only explicitly entered configuration", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
 
-    const protocol = wrapper.find('select');
+    const protocol: any = wrapper.find('select');
     expect((protocol.element as HTMLSelectElement).value).toBe("");
     expect((protocol.element as HTMLSelectElement).selectedIndex).toBe(0);
     expect(wrapper.text()).not.toContain("MCP");
 
-    const inputs = wrapper.findAll('.publish-form input');
+    const inputs: any = wrapper.findAll('.publish-form input');
     await inputs[0].setValue("inventory");
     await protocol.setValue("http");
     await inputs[3].setValue("https://service.invalid");
@@ -86,7 +86,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
       operations: [],
       references: []
     }, 0);
-    const descriptor = client.createUpstreamService.mock.calls[0][1];
+    const descriptor: any = client.createUpstreamService.mock.calls[0][1];
     expect(descriptor).not.toHaveProperty("visibility");
     expect(descriptor).not.toHaveProperty("trafficPolicy");
     expect(client.waitForUpstreamServicePublication).toHaveBeenCalledWith("svc_fixture");
@@ -94,13 +94,13 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(wrapper.text()).toContain('"status": "healthy"');
   });
 
-  it("imports a strict portable document without publishing and preserves the draft on errors", async () => {
-    const wrapper = mount(UpstreamServicePublishView);
+  it("imports a strict portable document without publishing and preserves the draft on errors", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
-    const serviceKey = wrapper.find('.publish-form input');
+    const serviceKey: any = wrapper.find('.publish-form input');
     await serviceKey.setValue("existing-draft");
-    const importer = wrapper.findComponent({ name: "PortableServiceImportPanel" });
-    const textarea = importer.find("textarea");
+    const importer: any = wrapper.findComponent({ name: "PortableServiceImportPanel" });
+    const textarea: any = importer.find("textarea");
 
     await textarea.setValue('{"kind":"wrong","schemaVersion":"v0.0.1:upstream-service:portable-import-2","serviceKey":"replacement","descriptor":{}}');
     await importer.find("button").trigger("click");
@@ -132,11 +132,11 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(wrapper.text()).toContain("Draft loaded. Review it, then select Publish.");
   });
 
-  it("loads a selected local file without importing or publishing it", async () => {
-    const wrapper = mount(UpstreamServicePublishView);
+  it("loads a selected local file without importing or publishing it", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
-    const importer = wrapper.findComponent({ name: "PortableServiceImportPanel" });
-    const fileText = JSON.stringify({
+    const importer: any = wrapper.findComponent({ name: "PortableServiceImportPanel" });
+    const fileText: any = JSON.stringify({
       kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
       serviceKey: "inventory",
@@ -152,9 +152,9 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
         }]
       }
     });
-    const file = new File([fileText], "service.json", { type: "application/json" });
+    const file: any = new File([fileText], "service.json", { type: "application/json" });
     Object.defineProperty(file, "text", { value: vi.fn().mockResolvedValue(fileText) });
-    const fileInput = importer.find('input[type="file"]');
+    const fileInput: any = importer.find('input[type="file"]');
     Object.defineProperty(fileInput.element, "files", { configurable: true, value: [file] });
     await fileInput.trigger("change");
     await flushPromises();
@@ -165,10 +165,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(wrapper.find('.publish-form input').element).toHaveProperty("value", "");
   });
 
-  it("loads an imported draft before the single explicit publish action", async () => {
-    const wrapper = mount(UpstreamServicePublishView);
+  it("loads an imported draft before the single explicit publish action", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
-    const importer = wrapper.findComponent({ name: "PortableServiceImportPanel" });
+    const importer: any = wrapper.findComponent({ name: "PortableServiceImportPanel" });
     await importer.find("textarea").setValue(JSON.stringify({
       kind: "meshrix.upstream-service",
       schemaVersion: "v0.0.1:upstream-service:portable-import-2",
@@ -192,6 +192,18 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(client.createUpstreamService).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("Review it, then select Publish");
 
+    const advancedTab: any = wrapper.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Advanced JSON");
+    expect(advancedTab).toBeDefined();
+    await advancedTab!.trigger("click");
+    const operationDescriptors: any = wrapper.find('[aria-label="Imported operation descriptors"]');
+    expect(operationDescriptors.exists()).toBe(true);
+    expect(operationDescriptors.find(".operation-descriptor-summary").text()).toContain("list");
+    expect(operationDescriptors.find(".operation-descriptor-summary").text()).toContain("GET /items");
+    expect(operationDescriptors.find(".operation-descriptor-summary").text()).toContain("Approval: not required");
+    expect(operationDescriptors.find(".operation-descriptor-summary").text()).toContain("maxBytes 1024");
+    expect(operationDescriptors.find("pre").text()).toContain('"maxBytes": 1024');
+    expect(operationDescriptors.find("pre").text()).toContain('"mode": "structured_json"');
+
     await wrapper.find(".form-actions .primary").trigger("click");
     await flushPromises();
 
@@ -212,17 +224,17 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(client.checkUpstreamServiceRuntimeHealth).toHaveBeenCalledWith("svc_fixture");
   });
 
-  it("labels operation fields, reports invalid drafts, and applies protocol-specific representation rules", async () => {
-    const wrapper = mount(UpstreamServicePublishView);
+  it("labels operation fields, reports invalid drafts, and applies protocol-specific representation rules", async () : Promise<any> => {
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
 
     await wrapper.find(".publish-form select").setValue("http");
-    const operationsTab = wrapper.findAll('[role="tab"]').find((tab) => tab.text() === "Service operations");
+    const operationsTab: any = wrapper.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Service operations");
     expect(operationsTab).toBeDefined();
     await operationsTab!.trigger("click");
 
-    const fields = wrapper.findAll(".operation-builder .form-field");
-    expect(fields.map((field) => field.find("span").text())).toEqual([
+    const fields: any = wrapper.findAll(".operation-builder .form-field");
+    expect(fields.map((field?: any) : any => field.find("span").text())).toEqual([
       "Operation key *",
       "Method *",
       "Path *",
@@ -255,11 +267,11 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(wrapper.findAll(".op-list > li")).toHaveLength(1);
     expect(wrapper.text()).toContain("opaque_stream → structured_json");
 
-    const basicTab = wrapper.findAll('[role="tab"]').find((tab) => tab.text() === "Basic");
+    const basicTab: any = wrapper.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Basic");
     await basicTab!.trigger("click");
     await wrapper.find(".publish-form select").setValue("json-rpc");
     await operationsTab!.trigger("click");
-    const jsonRpcFields = wrapper.findAll(".operation-builder .form-field");
+    const jsonRpcFields: any = wrapper.findAll(".operation-builder .form-field");
     await jsonRpcFields[0].find("input").setValue("rpc-download");
     await jsonRpcFields[1].find("select").setValue("POST");
     await jsonRpcFields[2].find("input").setValue("/rpc");
@@ -275,11 +287,11 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(wrapper.findAll(".op-list > li")).toHaveLength(1);
   });
 
-  it("keeps publication evidence while reporting a failed runtime health result", async () => {
+  it("keeps publication evidence while reporting a failed runtime health result", async () : Promise<any> => {
     client.checkUpstreamServiceRuntimeHealth.mockResolvedValue({ ok: false, status: "unhealthy" });
-    const wrapper = mount(UpstreamServicePublishView);
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
-    const inputs = wrapper.findAll('.publish-form input');
+    const inputs: any = wrapper.findAll('.publish-form input');
     await inputs[0].setValue("inventory");
     await wrapper.find('.publish-form select').setValue("http");
     await inputs[3].setValue("https://service.invalid:443");
@@ -291,8 +303,8 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     expect(wrapper.text()).toContain('"status": "unhealthy"');
   });
 
-  it("loads and replaces the complete descriptor with both current revisions", async () => {
-    const descriptor = {
+  it("loads and replaces the complete descriptor with both current revisions", async () : Promise<any> => {
+    const descriptor: Record<string, any> = {
       serviceProtocol: "json-rpc" as const,
       label: "Catalog",
       baseUrl: "https://service.invalid/rpc",
@@ -316,7 +328,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
         }
       }]
     };
-    const references = [{
+    const references: any[] = [{
       type: "credential" as const,
       reference: "credential://vault/catalog",
       revision: 1,
@@ -352,7 +364,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
       publication: publication(7, "b".repeat(64)), replayed: false
     });
 
-    const wrapper = mount(UpstreamServicePublishView);
+    const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
     await wrapper.find(".service-row").trigger("click");
     await flushPromises();
@@ -367,7 +379,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     );
   });
 
-  it("binds disable, republish, and remove controls to the selected revisions", async () => {
+  it("binds disable, republish, and remove controls to the selected revisions", async () : Promise<any> => {
     client.listPublishedServices.mockResolvedValue({
       ok: true,
       setRevision: 8,
@@ -397,11 +409,11 @@ describe("UpstreamServicePublishView configuration truthfulness", () => {
     client.removeUpstreamService.mockResolvedValue({ ok: true });
     registerConsoleConfirmHost();
     try {
-      const wrapper = mount(UpstreamServicePublishView);
+      const wrapper: any = mount(UpstreamServicePublishView);
       await flushPromises();
       await wrapper.find(".service-row").trigger("click");
       await flushPromises();
-      const actions = wrapper.findAll(".form-actions button");
+      const actions: any = wrapper.findAll(".form-actions button");
       await actions[1].trigger("click");
       await flushPromises();
       await actions[2].trigger("click");

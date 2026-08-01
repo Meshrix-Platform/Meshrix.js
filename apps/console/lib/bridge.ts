@@ -166,8 +166,8 @@ const browserBridge: Bridge = {
   rotateToolGrantToken,
   getDiscoveryConfig,
   saveDiscoveryConfig,
-  pickFiles: async () => [],
-  pickFolders: async () => [],
+  pickFiles: async () : Promise<any> => [],
+  pickFolders: async () : Promise<any> => [],
   createJob,
   reparseJob,
   listJobs,
@@ -184,4 +184,4 @@ const browserBridge: Bridge = {
   getUploadSession,
 };
 
-export const bridge = browserBridge;
+export const bridge: any = browserBridge;

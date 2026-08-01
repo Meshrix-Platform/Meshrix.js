@@ -12,20 +12,20 @@ type WorkspaceAssetControllerOptions = {
   confirmAction?: ConsoleConfirmAction;
 };
 
-function itemsFrom(payload: WorkspaceConsolePayload | null) {
-  const downstream = payload?.downstream as WorkspaceConsolePayload | undefined;
-  const items = downstream?.items ?? payload?.items ?? [];
+function itemsFrom(payload: WorkspaceConsolePayload | null) : any {
+  const downstream: any = payload?.downstream as WorkspaceConsolePayload | undefined;
+  const items: any = downstream?.items ?? payload?.items ?? [];
   return Array.isArray(items) ? items : [];
 }
 
-export function useWorkspaceAssetController(options: WorkspaceAssetControllerOptions) {
-  const workspaceAssetData = ref<WorkspaceConsolePayload | null>(null);
-  const workspaceAssetDetail = ref<WorkspaceConsolePayload | null>(null);
-  const workspaceAssetResult = ref<WorkspaceConsolePayload | null>(null);
-  const workspaceAuditItems = ref<WorkspaceConsolePayload[]>([]);
-  const workspaceOperationHistory = ref<WorkspaceConsolePayload[]>([]);
-  const workspaceOperationRevertPreview = ref<WorkspaceConsolePayload | null>(null);
-  const workspaceAssetForm = reactive({
+export function useWorkspaceAssetController(options: WorkspaceAssetControllerOptions) : any {
+  const workspaceAssetData: any = ref<WorkspaceConsolePayload | null>(null);
+  const workspaceAssetDetail: any = ref<WorkspaceConsolePayload | null>(null);
+  const workspaceAssetResult: any = ref<WorkspaceConsolePayload | null>(null);
+  const workspaceAuditItems: any = ref<WorkspaceConsolePayload[]>([]);
+  const workspaceOperationHistory: any = ref<WorkspaceConsolePayload[]>([]);
+  const workspaceOperationRevertPreview: any = ref<WorkspaceConsolePayload | null>(null);
+  const workspaceAssetForm: any = reactive({
     targetKind: "workspaceFolder",
     assetKind: "file",
     canonicalState: "",
@@ -34,13 +34,13 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     content: "Unified asset console submission\n",
   });
 
-  const workspaceAssetItems = computed(() => itemsFrom(workspaceAssetData.value));
-  const selectedWorkspaceAsset = computed(() => {
-    const detail = workspaceAssetDetail.value?.downstream as WorkspaceConsolePayload | undefined;
+  const workspaceAssetItems: any = computed(() : any => itemsFrom(workspaceAssetData.value));
+  const selectedWorkspaceAsset: any = computed(() : any => {
+    const detail: any = workspaceAssetDetail.value?.downstream as WorkspaceConsolePayload | undefined;
     return detail?.assetRef ? detail : null;
   });
 
-  function resetWorkspaceAssetState() {
+  function resetWorkspaceAssetState() : any {
     workspaceAssetData.value = null;
     workspaceAssetDetail.value = null;
     workspaceAssetResult.value = null;
@@ -50,7 +50,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     workspaceAssetForm.assetRef = "";
   }
 
-  async function refreshWorkspaceAssets() {
+  async function refreshWorkspaceAssets() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:assets-list");
     options.localError.value = "";
@@ -69,13 +69,13 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function openWorkspaceAssets() {
+  async function openWorkspaceAssets() : Promise<any> {
     workspaceAssetResult.value = null;
     await refreshWorkspaceAssets();
     return "assets" as const;
   }
 
-  async function selectWorkspaceAsset(assetRef: string) {
+  async function selectWorkspaceAsset(assetRef: string) : Promise<any> {
     if (!options.selectedId.value || !assetRef) return;
     options.setBusy("ws:asset-read");
     options.localError.value = "";
@@ -93,7 +93,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function submitWorkspaceAsset() {
+  async function submitWorkspaceAsset() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:asset-submit");
     options.localError.value = "";
@@ -102,7 +102,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
         kind: workspaceAssetForm.targetKind,
         path: workspaceAssetForm.path,
       };
-      const submitted = await workspacesClient.submitWorkspaceAsset({
+      const submitted: any = await workspacesClient.submitWorkspaceAsset({
         workspaceId: options.selectedId.value,
         submitKind: workspaceAssetForm.assetKind,
         target,
@@ -115,7 +115,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
         overwrite: true,
       });
       workspaceAssetResult.value = submitted;
-      const assetRef = String(submitted.workspaceAsset?.assetRef || submitted.assetRef || "");
+      const assetRef: any = String(submitted.workspaceAsset?.assetRef || submitted.assetRef || "");
       await refreshWorkspaceAssets();
       if (assetRef) {
         await selectWorkspaceAsset(assetRef);
@@ -127,7 +127,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function loadWorkspaceAssetReceipts() {
+  async function loadWorkspaceAssetReceipts() : Promise<any> {
     if (!options.selectedId.value || !workspaceAssetForm.assetRef) return;
     options.setBusy("ws:asset-receipts");
     options.localError.value = "";
@@ -144,7 +144,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function backfillWorkspaceAssets() {
+  async function backfillWorkspaceAssets() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:asset-backfill");
     options.localError.value = "";
@@ -161,7 +161,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function loadWorkspaceOperationHistory() {
+  async function loadWorkspaceOperationHistory() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:operation-history");
     options.localError.value = "";
@@ -189,7 +189,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function previewWorkspaceOperationRevert() {
+  async function previewWorkspaceOperationRevert() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:operation-revert-preview");
     options.localError.value = "";
@@ -207,7 +207,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     }
   }
 
-  async function applyWorkspaceOperationRevert() {
+  async function applyWorkspaceOperationRevert() : Promise<any> {
     if (!options.selectedId.value) return;
     if (options.confirmAction && !(await options.confirmAction("确认应用工作区操作回滚？", { tone: "danger" }))) {
       return;

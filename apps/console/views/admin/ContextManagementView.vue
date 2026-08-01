@@ -47,12 +47,12 @@ function profileRecords() {
   const profiles = contextProfilesResponse.value?.profiles;
   return Array.isArray(profiles)
     ? profiles
-      .filter((profile): profile is Record<string, unknown> => !!profile && typeof profile === "object")
+      .filter((profile: any): profile is Record<string, unknown> => !!profile && typeof profile === "object")
     : [];
 }
 
 function sortProfiles(profiles: Record<string, unknown>[]) {
-  return [...profiles].sort((left, right) => {
+  return [...profiles].sort((left: any, right: any) => {
     const tokenCompare = Number(left.contextWindowTokens || 0) - Number(right.contextWindowTokens || 0);
     if (tokenCompare !== 0) return tokenCompare;
     return String(left.profileId || "").localeCompare(String(right.profileId || ""));
@@ -60,7 +60,7 @@ function sortProfiles(profiles: Record<string, unknown>[]) {
 }
 
 function rawProfileFor(profileId: string) {
-  return profileRecords().find((profile) => String(profile.profileId ?? "") === profileId) || {};
+  return profileRecords().find((profile: any) => String(profile.profileId ?? "") === profileId) || {};
 }
 
 function openAddPresetModal() {
@@ -119,7 +119,7 @@ async function savePresetForm() {
     presetFormError.value = validationError;
     return;
   }
-  const conflict = profileRecords().some((profile) =>
+  const conflict = profileRecords().some((profile: any) =>
     String(profile.profileId ?? "") === profileId &&
       String(profile.profileId ?? "") !== editingProfileId.value,
   );
@@ -132,7 +132,7 @@ async function savePresetForm() {
     presetForm.value,
     presetSourceProfile.value || {},
   );
-  const nextProfiles = profileRecords().filter((profile) =>
+  const nextProfiles = profileRecords().filter((profile: any) =>
     String(profile.profileId ?? "") !== editingProfileId.value,
   );
   nextProfiles.push(nextProfile);
@@ -145,7 +145,7 @@ async function deletePreset(profile: ContextProfileRow) {
     return;
   }
   const saved = await persistProfiles(
-    profileRecords().filter((item) => String(item.profileId ?? "") !== profile.profileId),
+    profileRecords().filter((item: any) => String(item.profileId ?? "") !== profile.profileId),
   );
   if (!saved) {
     notifyConsoleAction(presetFormError.value || "删除上下文预设失败。", { tone: "danger" });

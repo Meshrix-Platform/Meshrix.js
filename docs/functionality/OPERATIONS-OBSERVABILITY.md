@@ -1,5 +1,10 @@
 # Operations And Observability
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Operations and observability provide health, diagnostics, storage repair, backup and restore, audit query, alerts, metrics, traces, production health, and release evidence.
 
 ## Priority Zero Resource Discipline (天字号第一标准)
@@ -8,7 +13,7 @@ This is the repository's highest-priority, non-negotiable runtime standard. A
 feature is not complete or release-ready merely because it is functionally
 correct. It must also prove that its memory and persistent footprint remain
 bounded under repeated real use. Unbounded logging, metrics, events, queues,
-caches, or history are release blockers.
+caches, or history fail the Functional Release Gate.
 
 The following rules are mandatory:
 
@@ -171,9 +176,17 @@ that omit or contradict these fields.
 
 ## Operational Evidence
 
-Operational reports are redacted and intended for health checks, audits, and Core release validation. External plugin-product reports are separately owned facts; Core reports and acceptance do not consume them.
+Operational reports are redacted and intended for health checks, audits, and Meshrix release validation. External plugin-product reports are separately owned facts; Meshrix reports and acceptance do not consume them.
 
-The upstream-service-publishing command traverses the production publishing flow and writes a required server report. The platform acceptance reducer recomputes readiness from authenticated mutation, durable publication, runtime snapshot, Operation Permission, scoped audience, and protocol-side delivery facts observed with a neutral peer; it rejects forged summaries, counters, revisions, stale source, unknown fields, privacy violations, and resource-budget breaches. Client implementation or adoption facts are separate compatibility evidence and cannot block or promote that report. A report summary or generic gateway health report alone cannot establish publication readiness.
+The upstream-service-publishing command traverses the production publishing
+flow and writes a required functional report. The Functional Release Gate
+recomputes acceptance from authenticated mutation, durable publication,
+runtime snapshot, Operation Permission, scoped audience, and protocol-side
+delivery facts observed with a neutral peer; it rejects forged summaries,
+counters, revisions, stale source, unknown fields, privacy violations, and
+resource-budget breaches. Client adoption and real-machine receipts are
+separate facts and cannot block or promote this report. A report summary or
+generic gateway health report alone cannot establish functional acceptance.
 
 ## Verification
 
@@ -182,7 +195,7 @@ npm run server:verify:resource-discipline
 npm test
 npm run verify:enterprise-observability-coverage
 npm run verify:enterprise-audit-retention-redaction
-node tools/server-scripts/verify-observability-runtime-acceptance.mjs
+node tools/server-scripts/verify-observability-runtime-acceptance.ts
 npm test -- --suite domains.manifest
 npm run server:doctor
 ```

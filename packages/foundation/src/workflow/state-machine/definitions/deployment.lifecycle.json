@@ -555,7 +555,7 @@
       "obligationId": "PO-DEPLOYMENT-STORAGE-RESTORE",
       "method": "required_report",
       "params": {
-        "command": "node tools/server-scripts/verify-storage-production-restore-drill.mjs",
+        "command": "node tools/server-scripts/verify-storage-production-restore-drill.ts",
         "reportPath": "build/reports/storage-production-restore-drill/latest.json"
       }
     },
@@ -563,7 +563,7 @@
       "obligationId": "PO-DEPLOYMENT-JOB-RECOVERY",
       "method": "required_report",
       "params": {
-        "command": "node tools/server-scripts/verify-work-queue-conformance.mjs",
+        "command": "node tools/server-scripts/verify-work-queue-conformance.ts",
         "reportPath": "build/reports/work-queue/latest.json"
       }
     },

@@ -2,7 +2,7 @@ import type { useConsole } from "./useConsole";
 
 type ConsoleContext = ReturnType<typeof useConsole>;
 
-const serverConsoleShellPublicKeys = [
+const serverConsoleShellPublicKeys: any = [
   "acknowledgeMonitorAlert",
   "activeConsoleFeatureIds",
   "activeMonitorAlerts",
@@ -209,6 +209,6 @@ export function pickServerConsoleShellPublicContext(
   context: ConsoleContext,
 ): ServerConsoleShellPublicContext {
   return Object.fromEntries(
-    serverConsoleShellPublicKeys.map((key) => [key, context[key]]),
+    serverConsoleShellPublicKeys.map((key?: any) : any => [key, context[key]]),
   ) as ServerConsoleShellPublicContext;
 }

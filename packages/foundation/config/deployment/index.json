@@ -15,13 +15,18 @@
         "why": "Authoritative Meshrix server container build and runtime command."
       },
       {
+        "id": "enterprise-compose-overlay",
+        "path": "docker-compose.enterprise.yml",
+        "why": "Production-only secure public URL plus independently custodied local-secret encryption and operation-proof signing mounts."
+      },
+      {
         "id": "main-service-source-package",
-        "path": "tools/server-scripts/package-server-source.mjs",
+        "path": "tools/server-scripts/package-server-source.ts",
         "why": "Authoritative reproducible server source package builder."
       },
       {
         "id": "deployment-container-flow",
-        "path": "tools/server-scripts/verify-deployment-container-flow.mjs",
+        "path": "tools/server-scripts/verify-deployment-container-flow.ts",
         "why": "Fresh-container deployment proof for Meshrix, including resumable dependency cache, Docker BuildKit cache mounts, Core compose startup, optional-plugin absence, MCP baseline, destructive rejection, and cleanup."
       }
     ],
@@ -40,6 +45,7 @@
     "npmRegistry": "https://registry.npmjs.org/",
     "mainService": {
       "dockerfile": "Dockerfile",
+      "enterpriseComposeOverlay": "docker-compose.enterprise.yml",
       "imageName": "meshrix-server",
       "buildTarget": "runtime",
       "buildArgs": {
@@ -58,15 +64,24 @@
         "hostPublishAddress": "127.0.0.1",
         "hostPublishAddressEnv": "MESHRIX_BIND_ADDRESS",
         "advertisedHostEnv": "MESHRIX_ADVERTISED_HOST",
+        "publicBaseUrlEnv": "MESHRIX_PUBLIC_BASE_URL",
         "dataPath": "data",
         "codexHome": "codex-home",
         "user": "meshrix",
         "uid": 10001,
         "gid": 10001,
+        "readOnlyRootFilesystem": true,
+        "noNewPrivileges": true,
+        "droppedCapabilities": [
+          "ALL"
+        ],
+        "stopSignal": "SIGTERM",
+        "stopGracePeriodSeconds": 90,
+        "defaultNetworkInternal": false,
         "allowPublicConsole": true,
         "command": [
           "node",
-          "tools/server-scripts/start-server.mjs",
+          "tools/server-scripts/start-server.ts",
           "--host",
           "0.0.0.0",
           "--port",
@@ -81,14 +96,54 @@
           "id": "server-data",
           "containerPath": "data",
           "purpose": "Persistent Meshrix server data, logs, jobs, and configured upstream service runtime evidence."
+        },
+        {
+          "id": "server-backups",
+          "containerPath": "backups",
+          "purpose": "Independent persistent target for governed backup snapshots and restore receipts."
+        },
+        {
+          "id": "codex-home",
+          "containerPath": "codex-home",
+          "purpose": "Persistent writable runtime home kept outside the read-only image filesystem."
         }
-      ]
+      ],
+      "immutableCandidate": {
+        "requiredReferenceShape": "<registry>/<repository>@sha256:<64 lowercase hex>",
+        "composeImageEnvironment": "MESHRIX_IMAGE_NAME",
+        "composePullPolicyEnvironment": "MESHRIX_PULL_POLICY",
+        "startCommand": "docker compose -f docker-compose.yml -f docker-compose.enterprise.yml up -d --no-build --pull never --wait meshrix-server",
+        "offlineStartRequiresPreloadedImage": true
+      },
+      "secretEncryption": {
+        "algorithm": "aes-256-gcm",
+        "masterKeySourceEnvironment": "MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE",
+        "containerKeyPath": "/run/secrets/meshrix-local-secret-master-key",
+        "keyMustRemainOutsideDataAndBackupVolumes": true,
+        "missingKeyFailsClosed": true,
+        "plaintextValueRecordsAccepted": false
+      },
+      "proofSigning": {
+        "evidencePolicy": "production",
+        "signerSecretSourceEnvironment": "MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE",
+        "containerSecretPath": "/run/secrets/meshrix-operation-proof-signer-secret",
+        "secretMustDifferFromEncryptionMasterKey": true,
+        "secretMustRemainOutsideDataAndBackupVolumes": true,
+        "missingSignerFailsBeforeRuntimeOpen": true
+      },
+      "upgrade": {
+        "preUpgradeOperation": "storage.backups.create",
+        "restorePreviewOperation": "storage.backups.restore_preview",
+        "restoreOperation": "storage.backups.restore",
+        "previousCandidateDigestRequired": true,
+        "nMinusOneMigrationProofImplemented": false
+      }
     }
   },
   "sourcePackages": {
     "mainService": {
       "command": "npm run release:package-server-source",
-      "builder": "tools/server-scripts/package-server-source.mjs",
+      "builder": "tools/server-scripts/package-server-source.ts",
       "outputDirectory": "build/packages",
       "archiveFormat": "tar.gz",
       "checksumAlgorithm": "sha256",
@@ -100,11 +155,54 @@
       ]
     }
   },
+  "offlineBundles": {
+    "enterpriseSingleNode": {
+      "id": "meshrix-offline-bundle-enterprise-single-node",
+      "builder": "tools/server-scripts/enterprise-single-node-offline-bundle.ts",
+      "verifier": "tools/server-scripts/enterprise-single-node-offline-bundle.ts",
+      "targetProfile": "enterprise-single-node",
+      "payload": "oci-layout",
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ],
+      "verificationPolicy": {
+        "requiresNetwork": false,
+        "signatureAlgorithm": "ed25519",
+        "externalTrustKeyRequired": true,
+        "bundledTrustRootAllowed": false,
+        "executablePolicy": "non-executable-regular-file",
+        "diskVerificationRequired": true,
+        "replayGuardRequired": true
+      },
+      "supplyChain": {
+        "sbom": "per-platform",
+        "provenance": "per-platform",
+        "originalEvidenceBytesRequired": true
+      },
+      "container": {
+        "composeImage": "<registry>/<repository>@sha256:<64 lowercase hex>",
+        "composePullPolicy": "never",
+        "composeFile": "compose/compose.yaml",
+        "composeBuildAllowed": false,
+        "activationCommand": "docker compose -f compose/compose.yaml up -d --no-build --pull never --wait meshrix-server",
+        "dependencies": {
+          "docker": {
+            "engine": "installed",
+            "compose": "installed"
+          }
+        }
+      },
+      "optionalFeatures": {
+        "formatConvert": false
+      }
+    }
+  },
   "validation": {
     "static": [
       {
         "id": "deployment-index",
-        "command": "node tools/server-scripts/verify-deployment-index.mjs",
+        "command": "node tools/server-scripts/verify-deployment-index.ts",
         "checks": "Index shape, referenced paths, Dockerfile defaults, and package script wiring."
       },
       {
@@ -116,7 +214,7 @@
     "freshContainer": [
       {
         "id": "deployment-flow",
-        "command": "node tools/server-scripts/verify-deployment-container-flow.mjs",
+        "command": "node tools/server-scripts/verify-deployment-container-flow.ts",
         "checks": "Builds and verifies the canonical server source archive, expands that artifact into an isolated context, runs resumable npm artifact cache verification, builds the Docker image with BuildKit cache mounts, starts docker compose, verifies container health, Core discovery, and MCP baseline operations, proves optional plugin surfaces remain absent without explicit installed artifacts and configuration, rejects malformed/unauthenticated MCP calls, and cleans up containers and fixture state."
       }
     ]

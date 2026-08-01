@@ -21,7 +21,7 @@ const {
 } = useOperationPermissionViewContext();
 
 const grantableToolsets = computed(() =>
-  operationPermissionToolsets.value.filter((item) => item.grantable !== false),
+  operationPermissionToolsets.value.filter((item: any) => item.grantable !== false),
 );
 
 function grantToolsetLabel(toolsetId: string) {

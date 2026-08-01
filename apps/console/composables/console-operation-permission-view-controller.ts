@@ -22,7 +22,7 @@ type GovernanceSummary = {
 
 type GovernanceEditorKind = AuthorizationGovernanceKind;
 
-const authorizationGovernanceEditorKinds = [
+const authorizationGovernanceEditorKinds: any = [
   { value: 'role', label: '角色' },
   { value: 'department', label: '部门' },
   { value: 'team', label: '团队' },
@@ -46,23 +46,23 @@ function emptyGovernanceSummary(): GovernanceSummary {
 
 function asList(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.map((item) => String(item || '').trim()).filter(Boolean);
+    return value.map((item?: any) : any => String(item || '').trim()).filter(Boolean);
   }
   if (typeof value === 'string') {
-    return value.split(',').map((item) => item.trim()).filter(Boolean);
+    return value.split(',').map((item?: any) : any => item.trim()).filter(Boolean);
   }
   return [];
 }
 
-function shortList(value: unknown, fallback = '未配置'): string {
-  const items = asList(value);
+function shortList(value: unknown, fallback: any = '未配置'): string {
+  const items: any = asList(value);
   if (items.length === 0) return fallback;
   return items.slice(0, 3).join(', ') + (items.length > 3 ? ` +${items.length - 3}` : '');
 }
 
-function itemText(item: GovernanceItem, keys: string[], fallback = ''): string {
+function itemText(item: GovernanceItem, keys: string[], fallback: any = ''): string {
   for (const key of keys) {
-    const value = item[key];
+    const value: any = item[key];
     if (value !== undefined && value !== null && String(value).trim()) {
       return String(value);
     }
@@ -71,12 +71,12 @@ function itemText(item: GovernanceItem, keys: string[], fallback = ''): string {
 }
 
 function policyCount(item: GovernanceItem): number {
-  const policies = item.resourcePolicies;
+  const policies: any = item.resourcePolicies;
   return Array.isArray(policies) ? policies.length : 0;
 }
 
 function governanceEditorSample(kind: GovernanceEditorKind): string {
-  const samples = {
+  const samples: any = {
     role: {
       roleId: 'repo-maintainer',
       label: 'Repo Maintainer',
@@ -129,32 +129,32 @@ function governanceEditorSample(kind: GovernanceEditorKind): string {
   return JSON.stringify(samples[kind], null, 2);
 }
 
-export function useOperationPermissionViewConsole() {
-  const authorizationGovernance = ref<GovernanceSummary>(emptyGovernanceSummary());
-  const authorizationGovernanceLoading = ref(false);
-  const authorizationGovernanceError = ref('');
-  const authorizationGovernanceSaving = ref(false);
-  const authorizationGovernanceEditorKind = ref<GovernanceEditorKind>('team');
-  const authorizationGovernanceEditorBody = ref('');
-  const authorizationGovernanceEditorStatus = ref('');
+export function useOperationPermissionViewConsole() : any {
+  const authorizationGovernance: any = ref<GovernanceSummary>(emptyGovernanceSummary());
+  const authorizationGovernanceLoading: any = ref(false);
+  const authorizationGovernanceError: any = ref('');
+  const authorizationGovernanceSaving: any = ref(false);
+  const authorizationGovernanceEditorKind: any = ref<GovernanceEditorKind>('team');
+  const authorizationGovernanceEditorBody: any = ref('');
+  const authorizationGovernanceEditorStatus: any = ref('');
 
-  async function refreshAuthorizationGovernance() {
+  async function refreshAuthorizationGovernance() : Promise<any> {
     authorizationGovernanceLoading.value = true;
     authorizationGovernanceError.value = '';
     try {
-      const payload = await getAuthorizationGovernance();
+      const payload: any = await getAuthorizationGovernance();
       authorizationGovernance.value = {
         ...emptyGovernanceSummary(),
         ...(payload?.governance || {}),
       };
-    } catch (error) {
+    } catch (error: any) {
       authorizationGovernanceError.value = error instanceof Error ? error.message : '读取统一权限治理失败。';
     } finally {
       authorizationGovernanceLoading.value = false;
     }
   }
 
-  const authorizationGovernanceMetrics = computed(() => [
+  const authorizationGovernanceMetrics: any = computed(() : any => [
     { label: '角色', value: authorizationGovernance.value.roles.length },
     { label: '部门', value: authorizationGovernance.value.departments.length },
     { label: '团队', value: authorizationGovernance.value.teams.length },
@@ -163,28 +163,28 @@ export function useOperationPermissionViewConsole() {
     { label: '审批', value: authorizationGovernance.value.approvals.length },
   ]);
 
-  function resetAuthorizationGovernanceEditor() {
+  function resetAuthorizationGovernanceEditor() : any {
     authorizationGovernanceEditorBody.value = governanceEditorSample(authorizationGovernanceEditorKind.value);
     authorizationGovernanceEditorStatus.value = '';
   }
 
-  async function saveAuthorizationGovernanceEditor() {
+  async function saveAuthorizationGovernanceEditor() : Promise<any> {
     authorizationGovernanceSaving.value = true;
     authorizationGovernanceEditorStatus.value = '';
     authorizationGovernanceError.value = '';
     try {
-      const payload = JSON.parse(authorizationGovernanceEditorBody.value || '{}') as Record<string, unknown>;
+      const payload: any = JSON.parse(authorizationGovernanceEditorBody.value || '{}') as Record<string, unknown>;
       await upsertAuthorizationGovernance(authorizationGovernanceEditorKind.value, payload);
       authorizationGovernanceEditorStatus.value = '已保存';
       await refreshAuthorizationGovernance();
-    } catch (error) {
+    } catch (error: any) {
       authorizationGovernanceEditorStatus.value = error instanceof Error ? error.message : '保存失败';
     } finally {
       authorizationGovernanceSaving.value = false;
     }
   }
 
-  watch(authorizationGovernanceEditorKind, () => {
+  watch(authorizationGovernanceEditorKind, () : any => {
     resetAuthorizationGovernanceEditor();
   });
 
@@ -221,18 +221,18 @@ export function useOperationPermissionViewConsole() {
     updateGrant,
   } = operationPermissionConsole;
 
-  function handleSelectedToolChange(event: Event) {
-    const target = event.target as HTMLSelectElement | null;
+  function handleSelectedToolChange(event: Event) : any {
+    const target: any = event.target as HTMLSelectElement | null;
     selectToolForManagement(target?.value || '');
   }
 
-  onMounted(() => {
+  onMounted(() : any => {
     resetAuthorizationGovernanceEditor();
     void refreshAuthorizationGovernance();
   });
 
   usePageRefreshHandler(
-    (detail) => detail.viewId === 'admin' && detail.adminView === 'operationPermission',
+    (detail?: any) : any => detail.viewId === 'admin' && detail.adminView === 'operationPermission',
     refreshAuthorizationGovernance,
   );
 

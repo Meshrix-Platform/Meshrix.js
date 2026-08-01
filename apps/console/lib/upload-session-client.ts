@@ -1,7 +1,7 @@
 import { getJson, postJson, putBinaryJson } from "@meshrix/ui-console/bridge-http";
 import type { UploadSessionResponse } from "./types";
 
-export function createUploadSession(payload: Record<string, unknown>) {
+export function createUploadSession(payload: Record<string, unknown>) : any {
   return postJson<UploadSessionResponse>("/api/upload-sessions", payload);
 }
 
@@ -10,7 +10,7 @@ export function uploadSessionChunk(
   fileIndex: number,
   offset: number,
   chunk: Blob | ArrayBuffer,
-) {
+) : any {
   return putBinaryJson<UploadSessionResponse>(
     `/api/upload-sessions/${encodeURIComponent(sessionId)}/files/${encodeURIComponent(
       String(fileIndex),
@@ -19,6 +19,6 @@ export function uploadSessionChunk(
   );
 }
 
-export function getUploadSession(sessionId: string) {
+export function getUploadSession(sessionId: string) : any {
   return getJson<UploadSessionResponse>(`/api/upload-sessions/${encodeURIComponent(sessionId)}`);
 }

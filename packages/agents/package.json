@@ -18,11 +18,31 @@
     "@meshrix/protocols": "0.0.1"
   },
   "exports": {
-    "./workspace-contribution": "./src/workspace-contribution/index.mjs",
-    "./*": "./src/*.mjs"
+    "./workspace-contribution": {
+      "types": "./dist/workspace-contribution/index.d.ts",
+      "source": "./src/workspace-contribution/index.ts",
+      "default": "./dist/workspace-contribution/index.js"
+    },
+    "./agent-workspace/agent-workspace-materialization-port": {
+      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
+      "source": "./src/agent-workspace/agent-workspace-materialization-port.ts",
+      "default": "./dist/agent-workspace/agent-workspace-materialization-port.js"
+    },
+    "./agent-workspace/agent-workspace-materialization-brand": {
+      "types": "./dist/agent-workspace/agent-workspace-materialization-brand.d.ts",
+      "source": "./src/agent-workspace/agent-workspace-materialization-brand.ts",
+      "default": "./dist/agent-workspace/agent-workspace-materialization-brand.js"
+    },
+    "./agent-workspace/agent-workspace-materialization": null,
+    "./agent-workspace/agent-workspace-materialization-file-worker": null,
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
   },
   "files": [
-    "src/**/*",
+    "dist/**/*",
     "README.md",
     "LICENSE",
     "package.json"
