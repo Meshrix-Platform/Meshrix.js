@@ -687,7 +687,8 @@ try {
   console.log(
     `[resource-discipline] memoryLeakFree=${report.summary.releaseReady} ` +
     `framework=${report.framework.name} requests=${completedRequests} ` +
-    `violations=${violations.length}`
+    `violations=${violations.length} ` +
+    `violationCodes=${violations.length > 0 ? violations.join(",") : "none"}`
   );
   if (violations.length > 0) process.exitCode = 1;
 } catch (error: any) {
