@@ -17,7 +17,28 @@ import {
 
 const __filename: any = fileURLToPath(import.meta.url);
 const __dirname: any = path.dirname(__filename);
-const projectRoot: any = path.resolve(__dirname, "../..");
+
+function resolveProjectRoot(scriptDirectory: string): string {
+  const candidates = [
+    path.resolve(scriptDirectory, "../.."),
+    path.resolve(scriptDirectory, "../../..")
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const manifest = JSON.parse(fs.readFileSync(path.join(candidate, "package.json"), "utf8"));
+      if (manifest?.name === "meshrix") {
+        return candidate;
+      }
+    } catch {
+      // Continue to the next bounded source/build layout candidate.
+    }
+  }
+
+  throw new Error("无法定位 Meshrix 项目根目录。请从完整的软件包中启动服务。");
+}
+
+const projectRoot: any = resolveProjectRoot(__dirname);
 const defaultDistPath: any = path.join(projectRoot, "build", "dist");
 const READY_FILE_KIND: any = "private-ready-state";
 const operatorConsole: Readonly<Record<string, any>> = Object.freeze({
