@@ -236,7 +236,10 @@ function verifySchema(db?: any) : any {
   return existing.size === 0;
 }
 
-function createSchema(db?: any) : any {
+function createSchema(
+  db?: any,
+  { initialize = false }: Record<string, any> = {}
+) : any {
   const initializing: any = verifySchema(db);
   if (!initializing) {
     const expectedIndexes: any = new Set<any>([
@@ -297,6 +300,12 @@ function createSchema(db?: any) : any {
       );
     }
     return;
+  }
+  if (!initialize) {
+    throw serviceManifestError(
+      "storage_manifest_index_incomplete",
+      "Service manifest index schema is incomplete."
+    );
   }
   db.exec(`
     CREATE TABLE IF NOT EXISTS manifest_authority_meta (
@@ -430,7 +439,7 @@ function openAuthorityDatabase(rootPath?: any, { create = false }: Record<string
     db.pragma("busy_timeout = 5000");
     if (!databaseExists) db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
-    createSchema(db);
+    createSchema(db, { initialize: create });
     return db;
   } catch (error: any) {
     db.close();
