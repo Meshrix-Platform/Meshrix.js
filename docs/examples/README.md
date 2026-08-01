@@ -3,6 +3,31 @@
 These examples demonstrate current public contracts with synthetic values. They
 do not define protocol, configuration, or capability facts.
 
+## Upstream Service Publishing Report Template
+
+[upstream-service-publishing-report-template.html](upstream-service-publishing-report-template.html)
+is the portable, bilingual, offline blank structural template for the mandatory
+publishing report. It is visibly marked `Not executed / 未执行` and is not release
+evidence. Generated reports are single-file artifacts: verified screenshots and
+the downloadable publishing JSON are embedded as data URLs, so the HTML can be
+moved and opened without neighboring resource files. Update the publishing skill
+and contract first, then regenerate this template, then change the report
+renderer and generated report. Live Console evidence uses a 1440 × 1000 CSS
+viewport at 2× device scale, producing 2880 × 2000 PNG screenshots.
+The fixed ten-section structure includes in-document navigation, accessible
+section headings, table captions, and a mandatory interface catalog with
+runtime health beside published operations. A generated local report remains
+scoped but unbound until the external candidate receipt hashes its final bytes.
+The blank template also exposes synthetic-only slots for candidate scope,
+publication/runtime health, the ordered client lifecycle, the visual evidence
+index, journey timings, and cleanup summary. Those slots contain no build
+locations or executed evidence.
+
+```bash
+npm run generate:upstream-service-report-template
+npm run verify:upstream-service-report-template
+```
+
 ## Upstream Service Import
 
 [file-parser-format-convert.upstream.json](file-parser-format-convert.upstream.json)

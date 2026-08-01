@@ -4,8 +4,8 @@ import type { ServerPathBrowseEntry } from "../lib/types";
 import type { PathPickerMode, PathPickerState } from "../types/app";
 import { formatBytes, formatCompactDate } from "./console-format-utils";
 
-export function createConsolePathPickerController() {
-  const pathPicker = ref<PathPickerState>({
+export function createConsolePathPickerController() : any {
+  const pathPicker: any = ref<PathPickerState>({
     open: false,
     title: "选择路径",
     mode: "directory",
@@ -16,16 +16,16 @@ export function createConsolePathPickerController() {
     error: "",
     response: null,
     closeOnSelect: true,
-    applyPath: () => {
+    applyPath: () : any => {
       throw new Error("路径选择器尚未配置目标字段。");
     },
   });
 
-  function pathPickerModeLabel(mode: PathPickerMode) {
+  function pathPickerModeLabel(mode: PathPickerMode) : any {
     return mode === "file" ? "文件" : "目录";
   }
 
-  function pathEntryMeta(entry: ServerPathBrowseEntry) {
+  function pathEntryMeta(entry: ServerPathBrowseEntry) : any {
     if (entry.type === "directory") {
       return "";
     }
@@ -39,7 +39,7 @@ export function createConsolePathPickerController() {
     extensions?: string[];
     closeOnSelect?: boolean;
     applyPath: (nextPath: string) => void;
-  }) {
+  }) : any {
     pathPicker.value = {
       open: true,
       title: pickerOptions.title,
@@ -56,12 +56,12 @@ export function createConsolePathPickerController() {
     void refreshServerPathBrowser(pickerOptions.value || "");
   }
 
-  async function refreshServerPathBrowser(nextPath?: string) {
-    const current = pathPicker.value;
+  async function refreshServerPathBrowser(nextPath?: string) : Promise<any> {
+    const current: any = pathPicker.value;
     current.loading = true;
     current.error = "";
     try {
-      const response = await browseServerPath({
+      const response: any = await browseServerPath({
         path: nextPath ?? current.response?.currentPath ?? current.value,
         mode: current.mode,
         extensions: current.extensions,
@@ -73,7 +73,7 @@ export function createConsolePathPickerController() {
         response,
         error: response.error || "",
       };
-    } catch (nextError) {
+    } catch (nextError: any) {
       pathPicker.value = {
         ...current,
         loading: false,
@@ -82,14 +82,14 @@ export function createConsolePathPickerController() {
     }
   }
 
-  function closeServerPathPicker() {
+  function closeServerPathPicker() : any {
     pathPicker.value = {
       ...pathPicker.value,
       open: false,
     };
   }
 
-  function selectServerPath(nextPath: string) {
+  function selectServerPath(nextPath: string) : any {
     if (!nextPath) {
       return;
     }
@@ -99,15 +99,15 @@ export function createConsolePathPickerController() {
     }
   }
 
-  function confirmServerPathPicker() {
-    const currentPath = String(pathPicker.value.response?.currentPath || pathPicker.value.value || "").trim();
+  function confirmServerPathPicker() : any {
+    const currentPath: any = String(pathPicker.value.response?.currentPath || pathPicker.value.value || "").trim();
     if (pathPicker.value.mode === "directory" && currentPath) {
       pathPicker.value.applyPath(currentPath);
     }
     closeServerPathPicker();
   }
 
-  function openPathEntry(entry: ServerPathBrowseEntry) {
+  function openPathEntry(entry: ServerPathBrowseEntry) : any {
     if (!entry.browsable) {
       return;
     }

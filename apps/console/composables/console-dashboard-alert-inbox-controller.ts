@@ -18,15 +18,15 @@ type DashboardAlertInboxControllerOptions = {
   recoverBackgroundSupervisor: () => Promise<void>;
 };
 
-export function createConsoleDashboardAlertInboxController(options: DashboardAlertInboxControllerOptions) {
-  const dashboardAlertInbox = ref<Record<string, DashboardAlert>>({});
-  const dismissedDashboardAlertIds = ref<Set<string>>(new Set());
+export function createConsoleDashboardAlertInboxController(options: DashboardAlertInboxControllerOptions) : any {
+  const dashboardAlertInbox: any = ref<Record<string, DashboardAlert>>({});
+  const dismissedDashboardAlertIds: any = ref<Set<string>>(new Set<any>());
 
-  const dashboardMonitorAlerts = computed<DashboardAlert[]>(() =>
-    options.activeMonitorAlerts.value.map((alert) => {
-      const recovered = alert.ackRequired || alert.active === false || alert.status === "recovered";
-      const isQueueInterruption = alert.ruleId === "queueInterrupted";
-      const isSupervisorStopped = alert.alertId === "monitor.supervisor.stopped";
+  const dashboardMonitorAlerts: any = computed<DashboardAlert[]>(() : any =>
+    options.activeMonitorAlerts.value.map((alert?: any) : any => {
+      const recovered: any = alert.ackRequired || alert.active === false || alert.status === "recovered";
+      const isQueueInterruption: any = alert.ruleId === "queueInterrupted";
+      const isSupervisorStopped: any = alert.alertId === "monitor.supervisor.stopped";
       return {
         alertId: alert.alertId,
         category: isQueueInterruption ? "中断报警" : "后台报警",
@@ -42,9 +42,9 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     }),
   );
 
-  const liveDashboardAlerts = computed<DashboardAlert[]>(() => [
+  const liveDashboardAlerts: any = computed<DashboardAlert[]>(() : any => [
     ...dashboardMonitorAlerts.value,
-    ...options.agentConfigurationAlerts.value.map((alert) => ({
+    ...options.agentConfigurationAlerts.value.map((alert?: any) : any => ({
       alertId: alert.alertId,
       category: "空配置报警",
       title: alert.title,
@@ -57,40 +57,40 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     })),
   ]);
 
-  function dashboardAlertInboxId(alertItem: DashboardAlert) {
+  function dashboardAlertInboxId(alertItem: DashboardAlert) : any {
     return `${alertItem.source}:${alertItem.alertId}`;
   }
 
-  function shouldDropResolvedDashboardAlert(alertItem: DashboardAlert) {
+  function shouldDropResolvedDashboardAlert(alertItem: DashboardAlert) : any {
     if (alertItem.source !== "monitor") return false;
-    const alertId = String(alertItem.alertId || "");
-    const processIsHealthy = (role: string) => {
-      const processItem = options.backgroundProcesses.value.find((item) => item.role === role);
+    const alertId: any = String(alertItem.alertId || "");
+    const processIsHealthy: any = (role: string) : any => {
+      const processItem: any = options.backgroundProcesses.value.find((item?: any) : any => item.role === role);
       return processItem?.alive === true && ["running", "standby"].includes(String(processItem.status || ""));
     };
     if (alertId === "monitor.supervisor.stopped") return processIsHealthy("background-supervisor");
     for (const role of ["background-supervisor", "system-inspection"]) {
       if (alertId.startsWith(`monitor.process.${role}.`)) return processIsHealthy(role);
     }
-    const demandManagedRoles = ["import-worker", "maintenance-worker", "agent-worker"];
-    const role = demandManagedRoles.find((item) => alertId.startsWith(`monitor.process.${item}.`));
+    const demandManagedRoles: any[] = ["import-worker", "maintenance-worker", "agent-worker"];
+    const role: any = demandManagedRoles.find((item?: any) : any => alertId.startsWith(`monitor.process.${item}.`));
     if (!role) return false;
-    const processItem = options.backgroundProcesses.value.find((item) => item.role === role);
+    const processItem: any = options.backgroundProcesses.value.find((item?: any) : any => item.role === role);
     return processItem?.desired === false;
   }
 
-  function syncDashboardAlertInbox(liveAlerts: DashboardAlert[]) {
-    const now = new Date().toISOString();
-    const liveById = new Map<string, DashboardAlert>(liveAlerts.map((alertItem) => [
+  function syncDashboardAlertInbox(liveAlerts: DashboardAlert[]) : any {
+    const now: any = new Date().toISOString();
+    const liveById: any = new Map<string, DashboardAlert>(liveAlerts.map((alertItem?: any) : any => [
       dashboardAlertInboxId(alertItem),
       alertItem,
     ]));
-    const nextDismissedIds = new Set<string>();
+    const nextDismissedIds: any = new Set<string>();
     for (const alertId of dismissedDashboardAlertIds.value) {
       if (liveById.has(alertId)) nextDismissedIds.add(alertId);
     }
     const nextInbox: Record<string, DashboardAlert> = {};
-    for (const [alertId, previousAlert] of Object.entries(dashboardAlertInbox.value)) {
+    for (const [alertId, previousAlert] of (Object.entries(dashboardAlertInbox.value) as [string, any][])) {
       if (nextDismissedIds.has(alertId)) continue;
       if (!liveById.has(alertId)) {
         if (shouldDropResolvedDashboardAlert(previousAlert)) continue;
@@ -108,7 +108,7 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     }
     for (const [alertId, liveAlert] of liveById.entries()) {
       if (nextDismissedIds.has(alertId)) continue;
-      const previousAlert = dashboardAlertInbox.value[alertId];
+      const previousAlert: any = dashboardAlertInbox.value[alertId];
       nextInbox[alertId] = {
         ...previousAlert,
         ...liveAlert,
@@ -122,42 +122,42 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     dashboardAlertInbox.value = nextInbox;
   }
 
-  const dashboardAlerts = computed<DashboardAlert[]>(() => {
-    const severityRank: Record<DashboardAlert["tone"], number> = { danger: 0, warning: 1, success: 2 };
-    return Object.values(dashboardAlertInbox.value)
-      .filter((alertItem) => !dismissedDashboardAlertIds.value.has(dashboardAlertInboxId(alertItem)))
-      .sort((left, right) => {
-        const severityDiff = severityRank[left.tone] - severityRank[right.tone];
+  const dashboardAlerts: any = computed<DashboardAlert[]>(() : any => {
+    const severityRank: Record<string, number> = { danger: 0, warning: 1, success: 2 };
+    return (Object.values(dashboardAlertInbox.value) as any[])
+      .filter((alertItem?: any) : any => !dismissedDashboardAlertIds.value.has(dashboardAlertInboxId(alertItem)))
+      .sort((left?: any, right?: any) : any => {
+        const severityDiff: any = severityRank[left.tone] - severityRank[right.tone];
         if (severityDiff !== 0) return severityDiff;
         return String(left.firstSeenAt || "").localeCompare(String(right.firstSeenAt || ""));
       });
   });
 
-  const dashboardPrimaryAlert = computed<DashboardAlert | null>(() => dashboardAlerts.value[0] || null);
-  const dashboardPrimaryAlertInboxId = computed(() => dashboardPrimaryAlert.value ? dashboardAlertInboxId(dashboardPrimaryAlert.value) : "");
-  const isNotPrimaryAlert = (alertItem: DashboardAlert) => dashboardAlertInboxId(alertItem) !== dashboardPrimaryAlertInboxId.value;
-  const dashboardConfigurationQueue = computed<DashboardAlert[]>(() =>
-    dashboardAlerts.value.filter((alertItem) => alertItem.source === "configuration" && isNotPrimaryAlert(alertItem)),
+  const dashboardPrimaryAlert: any = computed<DashboardAlert | null>(() : any => dashboardAlerts.value[0] || null);
+  const dashboardPrimaryAlertInboxId: any = computed(() : any => dashboardPrimaryAlert.value ? dashboardAlertInboxId(dashboardPrimaryAlert.value) : "");
+  const isNotPrimaryAlert: any = (alertItem: DashboardAlert) : any => dashboardAlertInboxId(alertItem) !== dashboardPrimaryAlertInboxId.value;
+  const dashboardConfigurationQueue: any = computed<DashboardAlert[]>(() : any =>
+    dashboardAlerts.value.filter((alertItem?: any) : any => alertItem.source === "configuration" && isNotPrimaryAlert(alertItem)),
   );
-  const dashboardMonitorQueue = computed<DashboardAlert[]>(() =>
-    dashboardAlerts.value.filter((alertItem) => alertItem.source === "monitor" && isNotPrimaryAlert(alertItem)),
+  const dashboardMonitorQueue: any = computed<DashboardAlert[]>(() : any =>
+    dashboardAlerts.value.filter((alertItem?: any) : any => alertItem.source === "monitor" && isNotPrimaryAlert(alertItem)),
   );
-  const dashboardSecondaryAlerts = computed<DashboardAlert[]>(() =>
+  const dashboardSecondaryAlerts: any = computed<DashboardAlert[]>(() : any =>
     dashboardAlerts.value.filter(isNotPrimaryAlert).slice(0, 4),
   );
-  const dashboardAlertCounts = computed(() => ({
+  const dashboardAlertCounts: any = computed(() : any => ({
     total: dashboardAlerts.value.length,
-    danger: dashboardAlerts.value.filter((item) => item.tone === "danger").length,
-    warning: dashboardAlerts.value.filter((item) => item.tone === "warning").length,
-    recovered: dashboardAlerts.value.filter((item) => item.tone === "success").length,
-    configuration: dashboardAlerts.value.filter((item) => item.source === "configuration").length,
-    monitor: dashboardAlerts.value.filter((item) => item.source === "monitor").length,
+    danger: dashboardAlerts.value.filter((item?: any) : any => item.tone === "danger").length,
+    warning: dashboardAlerts.value.filter((item?: any) : any => item.tone === "warning").length,
+    recovered: dashboardAlerts.value.filter((item?: any) : any => item.tone === "success").length,
+    configuration: dashboardAlerts.value.filter((item?: any) : any => item.source === "configuration").length,
+    monitor: dashboardAlerts.value.filter((item?: any) : any => item.source === "monitor").length,
   }));
 
-  const dashboardAlertSummary = computed(() => {
-    const dangerCount = dashboardAlertCounts.value.danger;
-    const warningCount = dashboardAlertCounts.value.warning;
-    const recoveredCount = dashboardAlertCounts.value.recovered;
+  const dashboardAlertSummary: any = computed(() : any => {
+    const dangerCount: any = dashboardAlertCounts.value.danger;
+    const warningCount: any = dashboardAlertCounts.value.warning;
+    const recoveredCount: any = dashboardAlertCounts.value.recovered;
     if (dashboardAlerts.value.length === 0) return "当前没有需要处理的报警。";
     return [
       dangerCount ? `${dangerCount} 项严重` : "",
@@ -166,7 +166,7 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     ].filter(Boolean).join("，");
   });
 
-  async function openDashboardAlert(alertItem: DashboardAlert) {
+  async function openDashboardAlert(alertItem: DashboardAlert) : Promise<any> {
     if (alertItem.source === "configuration" && alertItem.configAlert) {
       await options.openAgentConfigurationAlert(alertItem.configAlert);
       return;
@@ -183,9 +183,9 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     await options.refreshMonitorAlerts({ silent: true });
   }
 
-  async function dismissDashboardAlert(alertItem: DashboardAlert) {
-    const inboxId = dashboardAlertInboxId(alertItem);
-    const monitorAlert = alertItem.monitorAlert;
+  async function dismissDashboardAlert(alertItem: DashboardAlert) : Promise<any> {
+    const inboxId: any = dashboardAlertInboxId(alertItem);
+    const monitorAlert: any = alertItem.monitorAlert;
     if (
       alertItem.source === "monitor" &&
       monitorAlert &&
@@ -194,13 +194,13 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
       await options.acknowledgeMonitorAlert(alertItem.alertId);
       if (options.error.value) return;
     }
-    dismissedDashboardAlertIds.value = new Set([...dismissedDashboardAlertIds.value, inboxId]);
-    const nextInbox = { ...dashboardAlertInbox.value };
+    dismissedDashboardAlertIds.value = new Set<any>([...dismissedDashboardAlertIds.value, inboxId]);
+    const nextInbox: Record<string, any> = { ...dashboardAlertInbox.value };
     delete nextInbox[inboxId];
     dashboardAlertInbox.value = nextInbox;
   }
 
-  async function refreshDashboardAlertsSnapshot(optionsOverride: { silent?: boolean } = {}) {
+  async function refreshDashboardAlertsSnapshot(optionsOverride: { silent?: boolean } = {}) : Promise<any> {
     await options.refreshMonitorAlerts({ silent: optionsOverride.silent !== false });
     syncDashboardAlertInbox(liveDashboardAlerts.value);
   }

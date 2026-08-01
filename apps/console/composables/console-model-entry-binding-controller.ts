@@ -23,12 +23,12 @@ type ConsoleModelEntryBindingControllerOptions = {
 
 export function createConsoleModelEntryBindingController(
   options: ConsoleModelEntryBindingControllerOptions,
-) {
+) : any {
   function addModelEntryBinding(
     bindings: ModelEntryBinding[],
     binding: ModelEntryBinding,
-  ) {
-    if (bindings.some((item) => item.bindingId === binding.bindingId)) {
+  ) : any {
+    if (bindings.some((item?: any) : any => item.bindingId === binding.bindingId)) {
       return;
     }
     bindings.push(binding);
@@ -72,7 +72,7 @@ export function createConsoleModelEntryBindingController(
       if (!options.moduleNeedsIntelligence(moduleDefinition.id)) {
         continue;
       }
-      const assignment = options.settingsDraft.value.moduleModelAssignments?.[moduleDefinition.id];
+      const assignment: any = options.settingsDraft.value.moduleModelAssignments?.[moduleDefinition.id];
       if (options.modelEntryMatchesAssignment(entry, assignment?.provider, assignment?.model)) {
         addModelEntryBinding(bindings, {
           bindingId: `module:${moduleDefinition.id}`,
@@ -82,7 +82,7 @@ export function createConsoleModelEntryBindingController(
           source: "settings",
         });
       }
-      const profileGroup = options.settingsDraft.value.moduleAgentProfiles?.[moduleDefinition.id];
+      const profileGroup: any = options.settingsDraft.value.moduleAgentProfiles?.[moduleDefinition.id];
       if (profileGroup?.agents?.[options.modelEntryStatusKey(entry)]) {
         addModelEntryBinding(bindings, {
           bindingId: `module-profile:${moduleDefinition.id}:${options.modelEntryStatusKey(entry)}`,
@@ -96,7 +96,7 @@ export function createConsoleModelEntryBindingController(
     return bindings;
   }
 
-  const modelEntryBindingsByKey = computed<Record<string, ModelEntryBinding[]>>(() => {
+  const modelEntryBindingsByKey: any = computed<Record<string, ModelEntryBinding[]>>(() : any => {
     const next: Record<string, ModelEntryBinding[]> = {};
     for (const entry of options.visibleModelEntries.value) {
       next[options.modelEntryStatusKey(entry)] = collectModelEntryBindings(entry);
@@ -108,16 +108,16 @@ export function createConsoleModelEntryBindingController(
     return modelEntryBindingsByKey.value[options.modelEntryStatusKey(entry)] || [];
   }
 
-  function modelEntryIsBound(entry: AgentModelConfig) {
+  function modelEntryIsBound(entry: AgentModelConfig) : any {
     return modelEntryBindings(entry).length > 0;
   }
 
-  function modelEntryBindingSummary(entry: AgentModelConfig) {
-    const bindings = modelEntryBindings(entry);
+  function modelEntryBindingSummary(entry: AgentModelConfig) : any {
+    const bindings: any = modelEntryBindings(entry);
     if (bindings.length === 0) {
       return "";
     }
-    return bindings.map((item) => item.label).join("、");
+    return bindings.map((item?: any) : any => item.label).join("、");
   }
 
   return {

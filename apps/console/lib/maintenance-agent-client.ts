@@ -38,11 +38,11 @@ export type MaintenanceAgentRunsResponse = {
   queuedRunIds: string[];
 };
 
-export function getMaintenanceAgentConfig() {
+export function getMaintenanceAgentConfig() : any {
   return getJson<MaintenanceAgentConfigResponse>("/api/maintenance-agent/config");
 }
 
-export function saveMaintenanceAgentConfig(config: Partial<MaintenanceAgentConfig>) {
+export function saveMaintenanceAgentConfig(config: Partial<MaintenanceAgentConfig>) : any {
   return postJson<SaveMaintenanceAgentConfigResponse>(
     "/api/maintenance-agent/config",
     { config },
@@ -50,21 +50,21 @@ export function saveMaintenanceAgentConfig(config: Partial<MaintenanceAgentConfi
   );
 }
 
-export function chatMaintenanceAgent(payload: MaintenanceAgentChatPayload) {
+export function chatMaintenanceAgent(payload: MaintenanceAgentChatPayload) : any {
   return postJson<MaintenanceAgentChatResponse>("/api/maintenance-agent/chat", payload);
 }
 
-export function startMaintenanceAgentRun(payload: MaintenanceAgentRunPayload) {
+export function startMaintenanceAgentRun(payload: MaintenanceAgentRunPayload) : any {
   return postJson<MaintenanceAgentRun>("/api/maintenance-agent/runs", payload);
 }
 
-export function listMaintenanceAgentRuns(limit = 50) {
+export function listMaintenanceAgentRuns(limit: any = 50) : any {
   return getJson<MaintenanceAgentRunsResponse>(
     `/api/maintenance-agent/runs?limit=${encodeURIComponent(String(limit))}`,
   );
 }
 
-export function getMaintenanceAgentRun(runId: string) {
+export function getMaintenanceAgentRun(runId: string) : any {
   return getJson<{ run: MaintenanceAgentRun }>(
     `/api/maintenance-agent/runs/${encodeURIComponent(runId)}`,
   );
@@ -73,7 +73,7 @@ export function getMaintenanceAgentRun(runId: string) {
 export function approveMaintenanceAgentRun(
   runId: string,
   payload: { planHash: string; wait?: boolean },
-) {
+) : any {
   return postJson<{ run: MaintenanceAgentRun }>(
     `/api/maintenance-agent/runs/${encodeURIComponent(runId)}/approve`,
     payload,
@@ -83,7 +83,7 @@ export function approveMaintenanceAgentRun(
 export function cancelMaintenanceAgentRun(
   runId: string,
   payload: { reason?: string } = {},
-) {
+) : any {
   return postJson<{ run: MaintenanceAgentRun }>(
     `/api/maintenance-agent/runs/${encodeURIComponent(runId)}/cancel`,
     payload,

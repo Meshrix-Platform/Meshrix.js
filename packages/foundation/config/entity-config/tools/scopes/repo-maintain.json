@@ -1,0 +1,5 @@
+{
+  "id": "repo:maintain",
+  "label": "Maintain governed repository resources",
+  "description": "Run governed repository maintenance operations such as merge, rebase, or revert."
+}

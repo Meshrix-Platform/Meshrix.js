@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { ADMIN_ROUTE_REGISTRY } from "../../router/admin-route-registry.mjs";
+import { ADMIN_ROUTE_REGISTRY } from "../../router/admin-route-registry.ts";
 import { openConsoleCommandPalette, resolveAdminSectionLabel } from "../../composables/console-command-palette-controller";
 import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
 import {
@@ -36,7 +36,7 @@ const breadcrumbSectionLabel = computed(() => {
   if (!isAuthenticated.value || activeRouteView.value !== "admin") {
     return "";
   }
-  const entry = ADMIN_ROUTE_REGISTRY.find((candidate) => candidate.viewKey === activeRouteAdminView.value);
+  const entry = ADMIN_ROUTE_REGISTRY.find((candidate: any) => candidate.viewKey === activeRouteAdminView.value);
   if (!entry) {
     return "";
   }
@@ -53,7 +53,7 @@ const serviceAddressOptions = computed(() =>
     ...storedServerAddresses.value.addresses,
     ...(normalizedStoredActiveUrl.value ? [normalizedStoredActiveUrl.value] : []),
     ...(normalizedCurrentServiceUrl.value ? [normalizedCurrentServiceUrl.value] : []),
-  ]).map((url) => ({
+  ]).map((url: any) => ({
     url,
     isCurrent: url === normalizedCurrentServiceUrl.value,
     isStoredActive: url === normalizedStoredActiveUrl.value,

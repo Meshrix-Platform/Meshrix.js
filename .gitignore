@@ -29,6 +29,8 @@ crash-*
 /meshrix-data/
 /.meshrix-agent-history/
 /build/
+/dist/
+**/dist/
 /cache/
 /outputs/
 /reports/production-readiness/
@@ -99,3 +101,6 @@ CLAUDE.md
 # and docs/adrs/.
 /docs/plans/
 /docs/reports/
+
+# Test-only placeholder data roots must never become repository content.
+/<user-data>/

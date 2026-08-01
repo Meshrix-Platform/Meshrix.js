@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildSystemStatusLogRows } from "../../../apps/console/composables/console-system-log-status-row-controller";
 
-function readonlyValue<T>(value: T) {
+function readonlyValue<T>(value: T) : any {
   return { value };
 }
 
-describe("console system log status row controller behavior", () => {
-  it("builds status log rows across queue, jobs, processes, alerts, config, tools, and auth audit", () => {
-    const rows = buildSystemStatusLogRows({
+describe("console system log status row controller behavior", () : any => {
+  it("builds status log rows across queue, jobs, processes, alerts, config, tools, and auth audit", () : any => {
+    const rows: any = buildSystemStatusLogRows({
       activeMonitorAlerts: readonlyValue([
         {
           active: true,
@@ -167,7 +167,7 @@ describe("console system log status row controller behavior", () => {
       ] as never),
     });
 
-    expect(rows.map((row) => row.logId)).toEqual([
+    expect(rows.map((row?: any) : any => row.logId)).toEqual([
       "queue:row-a",
       "job:job-long-identifier",
       "process:queue-worker",
@@ -253,7 +253,7 @@ describe("console system log status row controller behavior", () => {
     expect(rows[9].detail).toContain("backup-a");
   });
 
-  it("returns no rows when all inputs are empty", () => {
+  it("returns no rows when all inputs are empty", () : any => {
     expect(buildSystemStatusLogRows({
       activeMonitorAlerts: readonlyValue([]),
       agentConfigurationAlerts: readonlyValue([]),

@@ -8,11 +8,16 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[Website](https://meshrix.io) · [Overview](#overview) · [Top 10 Priorities](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
+[Website](https://meshrix.io) · [Overview](#overview) · [Status](docs/STATUS.md) · [Top 10 Priorities](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
 
 </div>
 
 English is the normative language of this repository's documentation; [简体中文](README.zh-CN.md) is the localized language version.
+
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
 
 > **Current priorities:** Meshrix's ten highest-value open problems, ranked by
 > priority, are maintained in [What's Next](docs/WHATS-NEXT.md). Read this
@@ -34,13 +39,22 @@ grants, audit records, and checkpoints are stored under the server data
 directory. External middleware and service adapters are optional extensions
 for deployment-specific integrations.
 
-> **Current state: pre-release.** Source availability and license status are
-> separate from a tagged production release.
+> **Current state: pre-release.** Source availability, implementation,
+> verification, publication channels, environment support, and hosted
+> operation are separate facts. See [Status](docs/STATUS.md).
+
+Meshrix separates mandatory functional acceptance from optional environment
+claims. `npm run verify:acceptance` is the Functional Release Gate and must
+pass before publication. An accepted immutable candidate may then be exercised
+by `npm run verify:real-machine -- ...`; that independently repeatable workflow
+can establish an Environment Support Claim for one exact system or deployment.
+Real-machine availability or results never block or alter functional
+acceptance. See the [release contract](docs/RUNBOOK.md#release-definition-and-publication).
 
 This English document is the normative project overview. See the
 [Simplified Chinese localization](README.zh-CN.md).
 
-## Core Capabilities
+## Platform Capabilities
 
 | Capability | What it provides |
 | --- | --- |
@@ -96,6 +110,14 @@ runtime data in a container volume. The compose path is API-only by default;
 serving the console UI requires a built console bundle and the server
 `--with-ui` path.
 
+Cloud production uses `docker-compose.enterprise.yml` together with the base
+file. It requires a digest-pinned image, an HTTPS public base URL, and a
+separately custodied 32-byte local-secret master key plus a distinct 32-byte
+operation-proof signer secret. It also requires the exact reverse-proxy source
+IP list and an independent backup mount. See the
+[production container runbook](docs/RUNBOOK.md#container-startup); the
+production overlay fails closed when any required security input is absent.
+
 ## Operate
 
 ```bash
@@ -110,14 +132,18 @@ npm run mcp:doctor
 | `MESHRIX_SERVER_DATA_DIR` | Places runtime state in an explicit deployment directory. |
 | `MESHRIX_SERVER_HOST` | Server listen address. |
 | `MESHRIX_SERVER_PORT` | Server listen port. |
+| `MESHRIX_PUBLIC_BASE_URL` | HTTPS URL advertised behind the administrator-owned TLS proxy. |
+| `MESHRIX_TRUSTED_PROXIES` | Exact IP addresses from which the administrator-owned TLS proxy reaches Meshrix. |
+| `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` | Absolute host path to the production secret-store key; never place it in Meshrix data or backups. |
+| `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` | Absolute host path to the distinct production evidence-signing secret; never place it in Meshrix data or backups. |
 
 ## Downstream Agent Clients
 
 Agent clients connect through MCP discovery and governed gateway calls;
 operation visibility is grant-controlled. The documented downstream adapter
 target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi —
-delivered as external `Meshrix-Plugins` adapter packages rather than Core
-dependencies. See [Compatibility](docs/COMPATIBILITY.md) and
+delivered as external `Meshrix-Plugins` adapter packages rather than Meshrix
+runtime dependencies. See [Compatibility](docs/COMPATIBILITY.md) and
 [Protocols](docs/protocols/PROTOCOLS.md) for the exact scope and status.
 
 ## Repository Layout
@@ -135,7 +161,9 @@ dependencies. See [Compatibility](docs/COMPATIBILITY.md) and
 | Topic | Document |
 | --- | --- |
 | Top 10 project priorities | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
-| Product definition | [PRODUCT.md](PRODUCT.md) |
+| Product goal and boundary | [PRODUCT.md](PRODUCT.md) |
+| Domain language | [CONTEXT.md](CONTEXT.md) |
+| Current status | [docs/STATUS.md](docs/STATUS.md) |
 | Documentation index | [docs/README.md](docs/README.md) |
 | Architecture | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) |
 | Protocols | [docs/protocols/PROTOCOLS.md](docs/protocols/PROTOCOLS.md) |

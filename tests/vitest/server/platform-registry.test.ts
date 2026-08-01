@@ -1,0 +1,102 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  callPlatformInterface,
+  createPlatformRegistry,
+  registerPlatformService,
+  requirePlatformInterface
+} from "#meshrix/platform-registry";
+
+describe("platform interactive registry", () : any => {
+  it("registers common-platform interfaces, lists public metadata, and calls function values", async () : Promise<any> => {
+    const handler: any = vi.fn((left?: any, right?: any) : any => ({ sum: left + right }));
+    const registry: any = createPlatformRegistry({ scope: "unit-scope" });
+
+    const record: any = registry.register({
+      platform: "core",
+      id: "core.math.add",
+      label: "Add",
+      kind: "function",
+      ownerFeatureId: "math-feature",
+      metadata: { stable: true },
+      value: handler
+    });
+
+    expect(registry.scope).toBe("unit-scope");
+    expect(record).toMatchObject({
+      id: "core.math.add",
+      platform: "core",
+      layer: "common",
+      label: "Add",
+      kind: "function",
+      ownerFeatureId: "math-feature",
+      public: true,
+      metadata: { stable: true }
+    });
+    expect(registry.get(" core.math.add ")).toBe(record);
+    expect(registry.get("missing")).toBeNull();
+    await expect(registry.callInterface("core.math.add", 2, 3)).resolves.toEqual({ sum: 5 });
+    expect(handler).toHaveBeenCalledWith(2, 3);
+
+    expect(registry.list({ platform: "core" })).toEqual([
+      {
+        id: "core.math.add",
+        platform: "core",
+        layer: "common",
+        label: "Add",
+        kind: "function",
+        ownerFeatureId: "math-feature",
+        public: true,
+        metadata: { stable: true }
+      }
+    ]);
+    expect(registry.list({ layer: "other" })).toEqual([]);
+  });
+
+  it("supports handle-object values, defaults, and helper facades", async () : Promise<any> => {
+    const registry: any = createPlatformRegistry();
+    const value: Record<string, any> = {
+      handle: vi.fn(async (input?: any) : Promise<any> => ({ echoed: input }))
+    };
+
+    const record: any = registerPlatformService(registry, {
+      platform: "security",
+      id: "security.echo",
+      public: false,
+      value
+    });
+
+    expect(record).toMatchObject({
+      label: "security.echo",
+      kind: "service",
+      ownerFeatureId: "security-platform",
+      public: false
+    });
+    expect(requirePlatformInterface(registry, "security.echo")).toBe(record);
+    await expect(callPlatformInterface(registry, "security.echo", "payload")).resolves.toEqual({ echoed: "payload" });
+    expect(value.handle).toHaveBeenCalledWith("payload");
+  });
+
+  it("rejects invalid platforms, inconsistent layers, duplicate ids, missing records, and non-callable values", async () : Promise<any> => {
+    const registry: any = createPlatformRegistry({ scope: "" });
+    expect(registry.scope).toBe("server");
+
+    expect(() : any => registry.register({ platform: "", id: "missing.platform" }))
+      .toThrow("Platform registry platform is required.");
+    expect(() : any => registry.register({ platform: "feature", id: "feature.bad" }))
+      .toThrow("only accepts bottom platform interfaces");
+    expect(() : any => registry.register({ platform: "core", id: "" }))
+      .toThrow("Platform registry id is required.");
+    expect(() : any => registry.register({ platform: "core", id: "core.bad-layer", layer: "specialized" }))
+      .toThrow("inconsistent layer specialized");
+
+    registry.register({ platform: "storage", id: "storage.repo", value: { name: "not-callable" } });
+    expect(() : any => registry.register({ platform: "storage", id: "storage.repo" }))
+      .toThrow("Duplicate platform registration");
+    expect(() : any => registry.require("missing.interface")).toThrow("Missing platform registration");
+    await expect(registry.callInterface("storage.repo")).rejects.toThrow("Platform interface is not callable");
+
+    expect(() : any => registerPlatformService(null, {})).toThrow("A PlatformRegistry instance is required.");
+    expect(() : any => requirePlatformInterface({}, "x")).toThrow("A PlatformInteractiveRegistry instance is required.");
+    expect(() : any => callPlatformInterface({}, "x")).toThrow("A PlatformInteractiveRegistry instance is required.");
+  });
+});

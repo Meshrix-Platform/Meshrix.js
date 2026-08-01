@@ -19,8 +19,8 @@ const expandedDirs = ref<Set<string>>(new Set());
 
 // Auto expand first level
 watch(() => props.files, () => {
-  const rootDirs = props.files.filter(f => f.type === 'directory' && !f.relativePath.includes('/'));
-  rootDirs.forEach(d => expandedDirs.value.add(d.relativePath));
+  const rootDirs = props.files.filter((f: any) => f.type === 'directory' && !f.relativePath.includes('/'));
+  rootDirs.forEach((d: any) => expandedDirs.value.add(d.relativePath));
 }, { immediate: true, deep: true });
 
 const rootNodes = computed(() => {
@@ -28,7 +28,7 @@ const rootNodes = computed(() => {
   const map = new Map<string, TreeNode>();
   map.set('', root);
 
-  const sortedFiles = [...props.files].sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  const sortedFiles = [...props.files].sort((a: any, b: any) => a.relativePath.localeCompare(b.relativePath));
 
   for (const file of sortedFiles) {
     const parts = file.relativePath.split('/');
@@ -59,7 +59,7 @@ const rootNodes = computed(() => {
 
   // Sort children: directories first, then files
   const sortChildren = (node: TreeNode) => {
-    node.children.sort((a, b) => {
+    node.children.sort((a: any, b: any) => {
       if (a.type === 'directory' && b.type !== 'directory') return -1;
       if (a.type !== 'directory' && b.type === 'directory') return 1;
       return a.name.localeCompare(b.name);

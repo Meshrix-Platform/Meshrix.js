@@ -26,18 +26,18 @@ export type WorkspaceManagementControllerOptions = {
 
 export function useWorkspaceManagementController(
   options: WorkspaceManagementControllerOptions,
-) {
-  const createForm = reactive({ title: "", objective: "", parentWorkspaceId: "" });
-  const profileForm = reactive({
+) : any {
+  const createForm: any = reactive({ title: "", objective: "", parentWorkspaceId: "" });
+  const profileForm: any = reactive({
     contextProfileId: "",
     toolGrantId: "",
     modelAlias: "",
   });
-  const parentForm = reactive({ parentWorkspaceId: "" });
-  const shareForm = reactive({ targetWorkspaceId: "", action: "share" as "share" | "unshare" });
-  let deletePending = false;
+  const parentForm: any = reactive({ parentWorkspaceId: "" });
+  const shareForm: any = reactive({ targetWorkspaceId: "", action: "share" as "share" | "unshare" });
+  let deletePending: any = false;
 
-  async function createWorkspace() {
+  async function createWorkspace() : Promise<any> {
     options.setBusy("ws:create");
     options.localError.value = "";
     try {
@@ -52,13 +52,13 @@ export function useWorkspaceManagementController(
     }
   }
 
-  async function deleteWorkspace() {
-    const workspaceId = options.selectedId.value;
+  async function deleteWorkspace() : Promise<any> {
+    const workspaceId: any = options.selectedId.value;
     if (!workspaceId || deletePending) return;
     deletePending = true;
-    let operationStarted = false;
+    let operationStarted: any = false;
     try {
-      const confirmed = await options.confirmAction(
+      const confirmed: any = await options.confirmAction(
         `确认永久删除工作空间 ${workspaceId} 及其全部受管数据？`,
         {
           title: "移除工作空间",
@@ -86,7 +86,7 @@ export function useWorkspaceManagementController(
     }
   }
 
-  async function setParent() {
+  async function setParent() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:parent");
     options.localError.value = "";
@@ -102,7 +102,7 @@ export function useWorkspaceManagementController(
     }
   }
 
-  async function hotSwapProfile() {
+  async function hotSwapProfile() : Promise<any> {
     if (!options.selectedId.value) return;
     options.setBusy("ws:profile");
     options.localError.value = "";
@@ -122,7 +122,7 @@ export function useWorkspaceManagementController(
     }
   }
 
-  async function shareOrUnshare() {
+  async function shareOrUnshare() : Promise<any> {
     if (!options.selectedId.value || !shareForm.targetWorkspaceId) return;
     options.setBusy("ws:share");
     options.localError.value = "";
@@ -142,7 +142,7 @@ export function useWorkspaceManagementController(
     }
   }
 
-  function openProfile(ws: WsWorkspace) {
+  function openProfile(ws: WsWorkspace) : any {
     Object.assign(profileForm, {
       contextProfileId: ws.profile?.contextProfileId ?? "",
       toolGrantId: ws.profile?.toolGrantId ?? "",
@@ -151,7 +151,7 @@ export function useWorkspaceManagementController(
     options.panel.value = "profile";
   }
 
-  function openParent(ws: WsWorkspace) {
+  function openParent(ws: WsWorkspace) : any {
     parentForm.parentWorkspaceId = ws.parentWorkspaceId ?? "";
     options.panel.value = "parent";
   }

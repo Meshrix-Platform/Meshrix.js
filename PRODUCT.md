@@ -1,73 +1,105 @@
 # Meshrix Product
 
-This document explains what the Meshrix framework does. It is a product-level overview, not a replacement for protocol, architecture, configuration, or verification documentation. Implementation facts remain owned by the responsibility documents, registries, and verifiers under `docs/`, `packages/`, and `tools/`.
+This document owns Meshrix's durable product goal and boundary. It does not
+record current implementation, verification, release, support, or hosted
+operation. Those facts belong to [Status](docs/STATUS.md),
+[Compatibility](docs/COMPATIBILITY.md), and the owning technical documents.
 
-## What Meshrix Is
+## Purpose
 
-Meshrix is an open-source, private-deployable agent gateway framework. It runs as a Node.js server and brings upstream services, agent clients, workspace assets, verified plugin packages, runtime jobs, audit, and operator controls into governed operation boundaries.
+Meshrix is the full private-deployable governance platform for organizations
+that need to connect agent clients, upstream services, plugins, workspaces, and
+operator actions without distributing unchecked credentials or bypassing a
+single execution authority.
 
-Its core role is to let operators configure services and capabilities inside their own deployment environment, then expose those capabilities safely to authorized users, the console, and agent clients through HTTP, RPC, MCP, and console surfaces.
+The product lets an operator keep configuration, credentials, data custody,
+runtime policy, and operational decisions inside the operator's deployment
+while exposing useful capabilities through governed protocol and console
+surfaces.
 
-## Problems It Solves
+## Durable outcome
 
-Meshrix is built for teams that need privately deployed agent capabilities:
+A Meshrix deployment should let an authorized user or agent discover an
+allowed operation, request it through a published boundary, satisfy any
+required policy or approval, produce no more authority or effect than was
+admitted, and receive a bounded outcome with privacy-preserving evidence.
 
-- Connect external upstream services through one server-side gateway instead of giving every agent direct service credentials.
-- Represent MCP tools, console actions, service calls, file operations, plugin actions, and maintenance actions as governed operations.
-- Evaluate authentication, authorization, Operation Permission, tag policy, risk policy, approval requirements, traffic controls, and audit before execution.
-- Keep runtime data in the local server data directory by default, with external middleware and service adapters enabled only as explicit deployment integrations.
-- Provide verifiable runtime behavior, boundaries, redaction, audit, and release evidence for private deployments.
+The platform is designed around four simultaneous requirements:
 
-## Core Capabilities
+- identity is independently verifiable;
+- authority is never amplified by transport, cache, plugin, or internal call;
+- admitted content remains bound to the protected effect; and
+- the decision, effect, and terminal outcome remain traceable through minimum
+  evidence.
 
-| Capability | Product role |
-| --- | --- |
-| Upstream service gateway | Declares external HTTP/MCP services through server-side configuration and exposes them as governed operation entry points. |
-| Downstream MCP | Provides discovery and governed gateway MCP outlets to agent clients, with operation visibility controlled by grants. |
-| Operation Permission | Manages the operation catalog, operation groups, scopes, grants, policy preview, approval, execution, audit, and metrics. |
-| Universal tag policy | Applies one tag model to operations, resources, documents, agents, upstream services, workspaces, and organization objects. |
-| Verified plugin runtime | Installs one-plugin bundles through a common validation, custody, activation, rollback, and contribution transaction boundary. |
-| Plugin console assets | Serves digest-bound, precompiled browser assets only for an active verified plugin generation while Core retains route and authorization control. |
-| External-service host | Executes operation-scoped HTTP or MCP requests for configured plugin service bindings without exposing credentials or transport internals. |
-| Workspace assets | Manages workspace files, uploads, downloads, history, checkpoints, restores, and governed Host capabilities for optional plugins. |
-| Agent Gateway | Calls configured model agents through the server proxy when enabled and configured, with routing health and call evidence. |
-| Operations and observability | Provides runtime status, logs, health checks, jobs, storage maintenance, backup restore, audit queries, and release evidence entry points. |
+The normative technical meaning of those requirements belongs to
+[Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md).
 
-## Downstream Agent Clients
+## Product boundary
 
-At the product level, Meshrix exposes governed downstream access to agent clients through MCP. The current documented downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi.
+Meshrix owns the complete server-side governance platform for a private
+deployment:
 
-The protocol-level adapter scope, compatibility status, and verification requirements are maintained by `docs/protocols/PROTOCOLS.md`, `docs/COMPATIBILITY.md`, and the relevant functionality documents.
+- server configuration and runtime composition;
+- authenticated protocol and console entry points;
+- Operation Permission, grants, policy evaluation, approvals, and admission;
+- exact execution dispatch and protected-sink authorization;
+- upstream HTTP and MCP service publication;
+- downstream governed protocol access;
+- plugin package and Host boundaries;
+- workspace assets, jobs, storage, checkpoints, backup, and restore;
+- audit, metrics, diagnostics, and bounded evidence;
+- release-candidate definition and repository-owned functional acceptance.
 
-## Product Boundary
+External databases, object stores, identity providers, model providers,
+telemetry services, notification services, and upstream business systems are
+optional operator-selected integrations. Their absence must not silently
+become a configured default or a false capability claim.
 
-Meshrix's product boundary is the server-side governance layer in a private deployment:
+## Product direction
 
-- It owns server configuration, operation exposure, permission decisions, execution dispatch, audit, metrics, runtime status, and evidence generation.
-- It binds upstream service credentials through server-side configuration and local `secret://` references, and redacts public responses, audit records, and reports.
-- It checks boundaries around workspaces, files, paths, uploads, execution entry points, and local runtime data.
-- It is self-contained by default for private deployment. External databases, object stores, upstream services, model providers, and other middleware are explicit operator-configured integration points.
+Meshrix is intended to provide:
 
-## What It Is Not
+- a dependable single-node private deployment before broader deployment
+  shapes;
+- one canonical governed-execution path for every protected resource or
+  effect;
+- self-contained local operation and recovery, with optional integrations
+  isolated behind versioned boundaries;
+- protocol-neutral verification with synthetic peers instead of dependencies
+  on client repositories;
+- complete migrations without permanent legacy paths; and
+- precise separation of functional acceptance, publication channels,
+  environment support, and hosted operation.
+
+## Non-goals
 
 Meshrix is not:
 
-- A hosted SaaS platform. The default assumption is that operators run the server in their own environment.
-- A model provider. Model calls execute through the gateway only after the relevant provider and feature are configured.
-- A general source-code version control, release approval, or release-note system.
-- A client cryptography implementation.
-- A communication or messaging platform. Client communication relay capabilities are optional, decoupled extensions developed outside the Core product line; when deployed, they enter only through the same governed provider and plugin boundaries as any other extension.
-- A direct tool bypass around permissions. Any surface that can read, write, invoke an external service, mutate package lifecycle state, administer runtime state, or run maintenance actions should pass through the shared governance path.
+- a hosted SaaS product by default;
+- a model provider or model-hosting product;
+- a human messaging or federation protocol;
+- the owner of client keys, end-to-end encryption, plaintext, or endpoint
+  trust decisions;
+- a station implementation or Lico Arc Protocol authority;
+- a bypass that lets plugins, agents, controllers, queues, or internal
+  services create execution authority;
+- a guarantee that an optional third-party integration is configured,
+  available, or supported;
+- a substitute for a product-specific client, plugin, service, or hosted
+  operation receipt.
 
-## Current Status
+MeshCore is an independent same-origin product. It is not Meshrix's internal
+Core, library, backend, compatibility layer, or reduced distribution. Neither
+product uses the other's source, runtime, contract, verification, release, or
+support evidence.
 
-The project is currently pre-release. Source availability, license status, and a tagged production release are separate states. Release or production readiness must be determined through the repository verification commands, release gates, and redacted evidence.
+## Documentation authorities
 
-## Related Documents
-
-- `README.md` and `README.zh-CN.md`: product technical overview and current capability summary.
-- `docs/README.md`: public documentation index.
-- `docs/architecture/ARCHITECTURE.md`: runtime layering, core flow, and deployment boundary.
-- `docs/protocols/PROTOCOLS.md`: HTTP, RPC, MCP, plugin-package, and other Core protocol surfaces.
-- `docs/functionality/`: current boundaries, responsibilities, and verification commands for each capability.
-- `docs/RUNBOOK.md`: startup, operations, verification, and evidence handling.
+- [Domain language](CONTEXT.md) defines Meshrix vocabulary.
+- [Status](docs/STATUS.md) records the five current status dimensions.
+- [Compatibility](docs/COMPATIBILITY.md) records exact runtime, protocol,
+  adapter, and environment claim boundaries.
+- [Documentation index](docs/README.md) routes implemented technical facts.
+- [What's Next](docs/WHATS-NEXT.md) ranks objective gaps without claiming
+  completion.

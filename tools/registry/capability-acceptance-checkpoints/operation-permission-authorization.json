@@ -94,7 +94,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete operation-permission-authorization",
-      "target": "packages/capabilities/src/operation-permission-core/store.mjs, packages/capabilities/src/operation-permission-core/store-grants.mjs, packages/capabilities/src/operation-permission-core/runtime.mjs, packages/capabilities/src/operation-permission-core/http.mjs, packages/foundation/src/security/authorization/authorization-engine.mjs, tools/server-scripts/verify-enterprise-authorization-enforcement.mjs"
+      "target": "packages/capabilities/src/operation-permission-core/store.ts, packages/capabilities/src/operation-permission-core/store-grants.ts, packages/capabilities/src/operation-permission-core/runtime.ts, packages/capabilities/src/operation-permission-core/http.ts, packages/foundation/src/security/authorization/authorization-engine.ts, tools/server-scripts/verify-enterprise-authorization-enforcement.ts"
     },
     "next": [
       "b85a6643-4d68-4ac0-bc32-221bbbadff29"

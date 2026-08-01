@@ -18,7 +18,7 @@ export type AuthorizationGovernanceCardContext = Pick<
   | "shortList"
 >;
 
-const authorizationGovernanceCardKey = Symbol("authorization-governance-card") as InjectionKey<AuthorizationGovernanceCardContext>;
+const authorizationGovernanceCardKey: any = Symbol("authorization-governance-card") as InjectionKey<AuthorizationGovernanceCardContext>;
 
 export function createAuthorizationGovernanceCardContext(
   context: OperationPermissionViewContext,
@@ -40,12 +40,12 @@ export function createAuthorizationGovernanceCardContext(
   };
 }
 
-export function provideAuthorizationGovernanceCardContext(context: AuthorizationGovernanceCardContext) {
+export function provideAuthorizationGovernanceCardContext(context: AuthorizationGovernanceCardContext) : any {
   provide(authorizationGovernanceCardKey, context);
 }
 
-export function useAuthorizationGovernanceCardContext() {
-  const context = inject(authorizationGovernanceCardKey);
+export function useAuthorizationGovernanceCardContext() : any {
+  const context: any = inject(authorizationGovernanceCardKey);
   if (!context) {
     throw new Error("Authorization governance card context is not available");
   }

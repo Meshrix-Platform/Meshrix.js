@@ -6,15 +6,15 @@ import type {
   MonitorAlertState,
 } from "./types";
 
-export function getBackgroundProcesses() {
+export function getBackgroundProcesses() : any {
   return getJson<BackgroundProcessStatus>("/api/system/background-processes");
 }
 
-export function getMonitorAlerts() {
+export function getMonitorAlerts() : any {
   return getJson<MonitorAlertState>("/api/system/monitor-alerts");
 }
 
-export function saveMonitorAlertConfig(config: MonitorAlertConfig) {
+export function saveMonitorAlertConfig(config: MonitorAlertConfig) : any {
   return postJson<MonitorAlertState>(
     "/api/system/monitor-alerts/config",
     { config },
@@ -22,7 +22,7 @@ export function saveMonitorAlertConfig(config: MonitorAlertConfig) {
   );
 }
 
-export function acknowledgeMonitorAlert(alertId: string) {
+export function acknowledgeMonitorAlert(alertId: string) : any {
   return postJson<MonitorAlertState>(
     `/api/system/monitor-alerts/${encodeURIComponent(alertId)}/ack`,
     {},
@@ -30,7 +30,7 @@ export function acknowledgeMonitorAlert(alertId: string) {
   );
 }
 
-export function recoverBackgroundSupervisor() {
+export function recoverBackgroundSupervisor() : any {
   return postJson<BackgroundSupervisorRecoveryResponse>(
     "/api/system/background-supervisor/recover",
     {},

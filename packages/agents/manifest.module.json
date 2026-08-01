@@ -25,7 +25,7 @@
     {
       "feature": "agent-gateway",
       "path": "src/agent-gateway",
-      "fileCount": 14,
+      "fileCount": 15,
       "testSuites": [
         "agent-gateway.runtime",
         "model-routing.runtime"
@@ -41,7 +41,7 @@
     },
     {
       "feature": "agent-runtime",
-      "path": "src/agent-runtime-provider.mjs",
+      "path": "src/agent-runtime-provider.ts",
       "fileCount": 1,
       "testSuites": [
         "agent-management.runtime"
@@ -50,7 +50,7 @@
     {
       "feature": "agent-workspace",
       "path": "src/agent-workspace",
-      "fileCount": 19,
+      "fileCount": 23,
       "testSuites": [
         "agents.agent-workspace-schema"
       ]
@@ -58,7 +58,7 @@
     {
       "feature": "maintenance-agent",
       "path": "src/maintenance",
-      "fileCount": 13,
+      "fileCount": 14,
       "testSuites": [
         "maintenance-agent.runtime"
       ]

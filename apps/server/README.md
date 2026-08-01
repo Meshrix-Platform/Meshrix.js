@@ -1,6 +1,6 @@
 # Meshrix Server Application
 
-`apps/server` is the Meshrix Node server executable (`@meshrix/server`). It owns the HTTP runtime bootstrap and process lifecycle: `bin/meshrix.mjs` starts the server, and `runtime/` wires configuration, middleware, routes, console assets, proxy handling, and listener lifecycle.
+`apps/server` is the Meshrix Node server executable (`@meshrix/server`). It owns the HTTP runtime bootstrap and process lifecycle: `bin/meshrix.ts` starts the server, and `runtime/` wires configuration, middleware, routes, console assets, proxy handling, and listener lifecycle.
 
 ## Responsibilities
 

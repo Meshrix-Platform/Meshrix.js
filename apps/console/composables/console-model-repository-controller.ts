@@ -31,30 +31,30 @@ type ConsoleModelRepositoryControllerOptions = {
 
 export function createConsoleModelRepositoryController(
   options: ConsoleModelRepositoryControllerOptions,
-) {
-  function createModelEntryUid(provider: CloudProvider | string) {
-    const nonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+) : any {
+  function createModelEntryUid(provider: CloudProvider | string) : any {
+    const nonce: any = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     return modelAgentUid(provider, nonce);
   }
 
-  function isModelLibraryCardExpanded(entry: AgentModelConfig) {
+  function isModelLibraryCardExpanded(entry: AgentModelConfig) : any {
     return options.modelLibraryExpandedCards.value[options.modelEntryStatusKey(entry)] === true;
   }
 
-  function toggleModelLibraryCard(entry: AgentModelConfig) {
-    const key = options.modelEntryStatusKey(entry);
+  function toggleModelLibraryCard(entry: AgentModelConfig) : any {
+    const key: any = options.modelEntryStatusKey(entry);
     options.modelLibraryExpandedCards.value = {
       ...options.modelLibraryExpandedCards.value,
       [key]: !options.modelLibraryExpandedCards.value[key],
     };
   }
 
-  function addModelProvider() {
-    const provider = options.selectedModelProvider.value;
+  function addModelProvider() : any {
+    const provider: any = options.selectedModelProvider.value;
     if (!provider) {
       return;
     }
-    const entry = options.normalizeModelEntry({
+    const entry: any = options.normalizeModelEntry({
       uid: createModelEntryUid(provider),
       provider,
       model: "",
@@ -66,7 +66,7 @@ export function createConsoleModelRepositoryController(
       tokenPrefix: provider === "local-model" ? "" : "Bearer ",
       timeoutMs: 120000,
     }, Date.now());
-    const key = options.modelEntryStatusKey(entry);
+    const key: any = options.modelEntryStatusKey(entry);
     options.settingsDraft.value.modelLibraryAgents = [
       entry,
       ...options.visibleModelEntries.value,
@@ -77,30 +77,30 @@ export function createConsoleModelRepositoryController(
     };
   }
 
-  async function removeModelProvider(provider: CloudProvider | AgentModelConfig) {
-    const entry = typeof provider === "string" ? null : provider;
-    const removeKey = entry ? options.modelEntryStatusKey(entry) : String(provider);
+  async function removeModelProvider(provider: CloudProvider | AgentModelConfig) : Promise<any> {
+    const entry: any = typeof provider === "string" ? null : provider;
+    const removeKey: any = entry ? options.modelEntryStatusKey(entry) : String(provider);
     if (entry && options.modelEntryIsBound(entry)) {
       options.error.value = `智能体已绑定到 ${options.modelEntryBindingSummary(entry)}，请先解除引用后再删除。`;
       return;
     }
-    const previousModels = [...options.visibleModelEntries.value];
-    const previousEntries = [...options.visibleModelProviders.value];
+    const previousModels: any[] = [...options.visibleModelEntries.value];
+    const previousEntries: any[] = [...options.visibleModelProviders.value];
     options.settingsDraft.value.modelLibraryAgents = entry
-      ? options.visibleModelEntries.value.filter((item) => options.modelEntryStatusKey(item) !== removeKey)
-      : options.visibleModelEntries.value.filter((item) => item.provider !== provider);
-    const remainingExpandedCards = { ...options.modelLibraryExpandedCards.value };
+      ? options.visibleModelEntries.value.filter((item?: any) : any => options.modelEntryStatusKey(item) !== removeKey)
+      : options.visibleModelEntries.value.filter((item?: any) : any => item.provider !== provider);
+    const remainingExpandedCards: Record<string, any> = { ...options.modelLibraryExpandedCards.value };
     delete remainingExpandedCards[removeKey];
     options.modelLibraryExpandedCards.value = remainingExpandedCards;
     options.settingsDraft.value.modelLibraryEntries = [
-      ...new Set(options.settingsDraft.value.modelLibraryAgents.map((item) => item.provider)),
+      ...new Set<any>(options.settingsDraft.value.modelLibraryAgents.map((item?: any) : any => item.provider)),
     ] as CloudProvider[];
     options.setBusy(`model-remove:${removeKey}`);
     options.error.value = "";
     try {
-      const saved = await saveSettings(options.settingsPayloadForSave());
+      const saved: any = await saveSettings(options.settingsPayloadForSave());
       options.replaceSettingsDraftFromServer(saved);
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.settingsDraft.value.modelLibraryAgents = previousModels;
       options.settingsDraft.value.modelLibraryEntries = previousEntries;
       options.error.value =
@@ -110,8 +110,8 @@ export function createConsoleModelRepositoryController(
     }
   }
 
-  function duplicateModelEntry(entry: AgentModelConfig) {
-    const copy = options.normalizeModelEntry({
+  function duplicateModelEntry(entry: AgentModelConfig) : any {
+    const copy: any = options.normalizeModelEntry({
       ...entry,
       uid: createModelEntryUid(entry.provider),
       instanceId: "",
@@ -122,7 +122,7 @@ export function createConsoleModelRepositoryController(
       token: "",
       tokenConfigured: false,
     }, Date.now());
-    const key = options.modelEntryStatusKey(copy);
+    const key: any = options.modelEntryStatusKey(copy);
     options.settingsDraft.value.modelLibraryAgents = [copy, ...options.visibleModelEntries.value];
     options.modelLibraryExpandedCards.value = {
       ...options.modelLibraryExpandedCards.value,

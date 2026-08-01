@@ -79,7 +79,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete upstream-service-publishing",
-      "target": "packages/agents/src/upstream-gateway/index.mjs, packages/agents/src/upstream-gateway/support.mjs, packages/agents/src/upstream-gateway/tool-projection.mjs, packages/agents/src/upstream-gateway/credential-material.mjs, tools/server-scripts/verify-upstream-gateway-e2e.mjs"
+      "target": "packages/agents/src/upstream-gateway/index.ts, packages/agents/src/upstream-gateway/support.ts, packages/agents/src/upstream-gateway/tool-projection.ts, packages/agents/src/upstream-gateway/credential-material.ts, tools/server-scripts/verify-upstream-gateway-e2e.ts"
     },
     "next": [
       "690075cf-0597-407d-a720-056a517e2327"

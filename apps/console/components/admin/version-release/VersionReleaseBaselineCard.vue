@@ -10,7 +10,7 @@ const props = defineProps<{
   baselineError: string;
 }>();
 
-const baselinePortLabels = computed(() => (props.baseline?.ports || []).map((port) => ({
+const baselinePortLabels = computed(() => (props.baseline?.ports || []).map((port: any) => ({
   id: port.port,
   label: port.port,
   value: port.verificationMode || port.implementation,

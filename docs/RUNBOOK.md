@@ -1,5 +1,10 @@
 # Runbook
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 This runbook covers local startup, container startup, verification, and operational checks for the open platform repository.
 
 ## Required Runtime
@@ -185,7 +190,7 @@ Automation that requests a dynamic port must use the private readiness file
 instead of parsing stdout:
 
 ```bash
-node tools/server-scripts/start-server.mjs --port 0 --ready-file <private-ready-file>
+node tools/server-scripts/start-server.ts --port 0 --ready-file <private-ready-file>
 ```
 
 The file is atomically created with mode `0600`, contains the selected local
@@ -243,20 +248,116 @@ covers the runtime's two-phase request drain and cancellation budget. Compose
 also reports container health from the loopback `/api/healthz` endpoint.
 
 The published release image uses the `runtime-ui` target and serves both the
-server and Web Console. Start that immutable image directly so the local
-Compose build definition cannot silently replace it:
+server and Web Console. Production deployment must use the registry digest,
+not a floating tag. The runtime root filesystem is read-only, runs as UID/GID
+`10001`, drops all Linux capabilities, enables `no-new-privileges`, and keeps
+data, backups, and runtime home on separate writable volumes:
 
 ```bash
-docker pull ghcr.io/licoland/meshrix:<version>
+candidate='ghcr.io/licoland/meshrix@sha256:<manifest-digest>'
+public_base_url='https://meshrix.example.com'
+key_source='/etc/meshrix/secrets/local-secret-master-key'
+proof_signer_source='/etc/meshrix/secrets/operation-proof-signer-secret'
+trusted_proxy='<trusted-proxy-ip>'
+install -d -m 0700 /etc/meshrix/secrets
+umask 077
+openssl rand -hex 32 > "$key_source"
+openssl rand -hex 32 > "$proof_signer_source"
+docker pull "$candidate"
 docker volume create meshrix-server-data
+docker volume create meshrix-server-backups
+docker volume create meshrix-codex-home
+docker network create meshrix-core
 docker run -d \
   --name meshrix-server \
   --restart unless-stopped \
   --stop-timeout 90 \
+  --user 10001:10001 \
+  --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,mode=1777 \
+  --security-opt no-new-privileges=true \
+  --cap-drop ALL \
+  --network meshrix-core \
   --publish 127.0.0.1:7228:7228 \
-  --mount source=meshrix-server-data,target=<container-data-dir> \
-  ghcr.io/licoland/meshrix:<version>
+  --env MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE=/run/secrets/meshrix-local-secret-master-key \
+  --env MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY=production \
+  --env MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE=/run/secrets/meshrix-operation-proof-signer-secret \
+  --env MESHRIX_PRODUCTION_INGRESS_MODE=trusted-proxy \
+  --env MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
+  --env MESHRIX_COOKIE_SECURE=always \
+  --env MESHRIX_BACKUP_ROOT=/app/backups \
+  --env MESHRIX_REQUIRE_INDEPENDENT_BACKUP_ROOT=1 \
+  --env MESHRIX_BOOTSTRAP_URL="$public_base_url" \
+  --env MESHRIX_ADVERTISED_BASE_URL="$public_base_url" \
+  --env MESHRIX_ACTIVE_SERVICE_URL="$public_base_url" \
+  --mount type=bind,src="$key_source",dst=/run/secrets/meshrix-local-secret-master-key,readonly \
+  --mount type=bind,src="$proof_signer_source",dst=/run/secrets/meshrix-operation-proof-signer-secret,readonly \
+  --mount source=meshrix-server-data,target=/app/data \
+  --mount source=meshrix-server-backups,target=/app/backups \
+  --mount source=meshrix-codex-home,target=/codex-home \
+  "$candidate"
 ```
+
+The same immutable activation is available through the production Compose
+overlay. `MESHRIX_IMAGE_NAME` must contain the digest reference.
+`MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` must be an absolute operator-custodied
+file outside Meshrix data and backup volumes.
+`MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` must be a second, different
+operator-custodied file with the same external-custody boundary, and
+`MESHRIX_PUBLIC_BASE_URL` must be the HTTPS URL owned by the administrator's
+reverse proxy. `MESHRIX_TRUSTED_PROXIES` must list the exact IP address or
+addresses from which that proxy reaches the container. Production admission
+requires exact HTTPS forwarding metadata from those peers and leaves only
+local health probes available without proxy metadata.
+`--no-build --pull never` prevents the cloud host from replacing the candidate
+with a local build or network result:
+
+```bash
+MESHRIX_IMAGE_NAME="$candidate" \
+MESHRIX_PULL_POLICY=never \
+MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source" \
+MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE="$proof_signer_source" \
+MESHRIX_PUBLIC_BASE_URL="$public_base_url" \
+MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
+  docker compose -f docker-compose.yml -f docker-compose.enterprise.yml \
+  up -d --no-build --pull never --wait meshrix-server
+```
+
+Inspect the deterministic online or preloaded-offline activation plan with:
+
+```bash
+MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE="$key_source" \
+MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE="$proof_signer_source" \
+MESHRIX_PUBLIC_BASE_URL="$public_base_url" \
+MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
+  node tools/server-scripts/enterprise-single-node-cloud-deployment.ts \
+  plan --candidate "$candidate" --offline
+```
+
+Neither secret source is printed by the planner or stored in a Meshrix report.
+The planner rejects shared paths or identical values. Do not replace the
+encryption key independently: current encrypted values intentionally fail with
+the wrong key. The Local Secret Store provides an all-active-value
+re-encryption transaction that verifies every new envelope before one registry
+commit. An operator-facing governed command and external KMS/HSM custody remain
+separate release work.
+
+Offline activation itself has no registry dependency after the exact image is
+loaded and addressable by digest. The repository does not currently produce a
+signed multi-architecture OCI archive, so transfer to a disconnected new host
+is not yet a closed release artifact path.
+
+Before an upgrade, invoke the governed `storage.backups.create` operation and
+retain its successful receipt; backups are written to the independent
+`meshrix-server-backups` volume. Keep the previous digest and pass it as
+`--previous` to inspect the rollback activation plus the governed
+`storage.backups.restore_preview` and `storage.backups.restore` recovery
+entries. The durable orchestration state machine is implemented at
+`tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts`; verify its
+successful, rolled-back, and `in_doubt` paths with
+`node tools/server-scripts/verify-upgrade-rollback.ts`. The repository does
+not yet prove an N-1 schema migration against two distinct released images.
+Do not claim an upgrade complete until that evidence exists.
 
 Before an unreliable-network deployment window, prepare the npm artifact cache:
 
@@ -280,13 +381,34 @@ npm run server:verify:deployment-flow:podman
 ```
 
 Initialize the Podman machine only once. The Podman report is written separately
-as `build/reports/deployment-container-flow-podman.json`; it may establish
-`localVerificationReady`, but it deliberately cannot establish `releaseReady`.
-The canonical release acceptance path continues to own release evidence.
+as `build/reports/deployment-container-flow-podman.json`. It is development-
+environment simulation evidence for the Functional Release Gate. It is not a
+real-machine receipt and cannot establish an Environment Support Claim.
+
+## TypeScript Source And Build Boundary
+
+Meshrix source is authored as TypeScript throughout the Node.js backend,
+repository tooling, tests, and Vue application. Local npm scripts enable the
+`source` export condition so workspace packages resolve their `.ts` entry
+points. Run source entry points through the owning npm script; when invoking a
+source file directly, use `node --conditions=source <entry>.ts`.
+
+Production and container execution use emitted JavaScript from `dist/` rather
+than runtime type stripping. Validate and build both runtime surfaces with:
+
+```bash
+npm run typecheck
+npm run build
+```
+
+`typecheck:node`, `typecheck:test`, and `typecheck:web` are the independently
+diagnosable checks. `build:node` emits the Node.js packages and applications;
+`build:web` builds the Vue console.
 
 ## Routine Verification
 
-Use the narrowest check that covers the change. For repository-level readiness, run:
+Use the narrowest check that covers the change. For repository-level functional
+verification, run:
 
 ```bash
 npm run typecheck
@@ -317,8 +439,24 @@ lico-dev workflow plan reassembly
 
 The reassembly profile covers the Core typecheck and build, public regression
 gate, capability surface convergence, and canonical acceptance-plan contract.
-It does not execute the final acceptance reducer or establish client or plugin
-compatibility.
+It does not execute the Functional Release Gate or establish an Environment
+Support Claim, client compatibility, or plugin compatibility.
+
+### Optional integration isolation
+
+After changing an optional provider, identity, telemetry, notification,
+datastore, or external-service lifecycle, run:
+
+```bash
+npm run server:verify:integration-task-supervisor
+```
+
+The check proves that empty, disabled, unconfigured, invalid, slow, failed, and
+cancelled adapters remain capability-scoped; work begins only after Core
+readiness; concurrency, queueing, retries, timeouts, and close are bounded; and
+the emitted status contains only stable reason codes and counters. A passing
+supervisor check proves the Core lifecycle authority, not that any concrete
+third-party adapter is configured or healthy.
 
 ## Priority Zero Resource Verification
 
@@ -386,11 +524,46 @@ non-converged rather than compensating with additional logs.
 
 ## Release Definition and Publication
 
+Meshrix has two deliberately separate acceptance standards:
+
+1. The **Functional Release Gate** is the mandatory project release closure.
+   It proves that the implementation and code organization are complete,
+   internally consistent, secure, resource-bounded, reproducible, and covered
+   by every simulation, container, failure-injection, recovery, packaging, and
+   protocol check that the development environment can execute. A missing,
+   skipped, stale, or failing required functional check fails this gate.
+2. A **Real-Machine Verification Workflow** is an optional, independently
+   repeatable validation of the exact accepted candidate on one declared
+   operating system, architecture, device, host, or network environment. Its
+   successful receipt establishes only the corresponding **Environment Support
+   Claim**.
+
+The dependency is one-way:
+
+```text
+Functional Release Gate receipt
+  -> Real-Machine Verification Workflow receipt
+  -> Environment Support Claim
+```
+
+A real-machine workflow must refuse an unaccepted or mismatched candidate, but
+its absence, unavailability, failure, or expired receipt never changes the
+Functional Release Gate result and never blocks project publication. It only
+leaves that environment unverified. Project-level functional results are
+`passed` or `failed`; `blocked` is not a project release result. Real-machine
+workflow results are `not_run`, `ineligible`, `passed`, or `failed`.
+
+Avoid the ambiguous standalone terms `production-ready`, `final readiness`,
+and `platform acceptance`. State the exact claim instead: `functional release
+accepted`, `real-machine verified on <environment>`, or `environment support
+not claimed`.
+
 `tools/registry/release-definition.registry.json` is the sole source for the
 product version, Git tag, release channel, package manifest set, container
-platforms, acceptance profile, GitHub native-runner matrix, and local container
-engine. Package manifests, the lockfile, workflow expressions, tags, reports,
-and this runbook are projections of that definition.
+platforms, functional acceptance profile, local container engine, and the exact
+fourteen-file upstream publishing candidate bundle. Package manifests, the
+lockfile, workflow expressions, tags, reports, and this runbook are projections
+of that definition.
 
 Before creating a tag, update the definition, prepare all version projections,
 and verify them:
@@ -401,51 +574,107 @@ npm run verify:release-definition
 npm run release:prepare -- --check
 ```
 
-Every release tag must also pass the mandatory release journey gate:
+The detachable format-conversion integration can be checked separately when
+the sibling service and adapter repositories are available:
 
 ```bash
 npm run verify:release-journey
 ```
 
-The gate re-runs the release-defining scenario deterministically on an
+This command re-runs that integration scenario deterministically on an
 isolated Docker Compose stack: it builds and starts the server plus the
 `format-convert` profile on a free loopback port with
 `MESHRIX_ADVERTISED_BASE_URL` set to the mapped URL, bootstraps the
 containerized owner account, publishes
 `docs/examples/file-parser-format-convert.upstream.json` through the
 authenticated control plane, seeds the client-adapter cache, installs the MCP
-connector for the `kimi` target with the write-capable journey grant, approves
-the device authorization through the console API, drives the MCP journey over
-the real connector stdio proxy (create workspace, read the internal
-`workspaceId` from the response, upload the tracked Chinese UTF-8 fixture
-from `tools/server-scripts/lib/release-journey-fixture.mjs`, convert it through
-a governed `workspace:` artifact reference, assert the `[resource_link, text]`
-result), downloads the PDF by following the returned resource_link URL with
+connector for every detected supported local target with isolated temporary
+client configuration and a minimal journey grant, approves each device
+authorization through the Console, drives each real connector stdio proxy
+after uploading the tracked Chinese UTF-8
+fixture from `tools/server-scripts/lib/release-journey-fixture.ts` through an
+authenticated upload session with raw `application/octet-stream` bytes
+(without a Base64 JSON file field), converts it through a governed owner-bound
+`upload:` artifact reference, and asserts the `[resource_link, text]` result
+for both `convert-full-access-debug` and
+`convert-require-approval-debug`. The latter must have zero successful
+execution before approval and exactly one after approval per detected target;
+the former skips only the approval wait and remains fully governed.
+It downloads the PDF by following the returned resource_link URL with
 the connector `fetch` command, and verifies `%PDF-` magic, byte bounds,
 embedded Noto CJK fonts, and full ToUnicode coverage of the fixture's Han
 codepoints. It writes `build/reports/release-journey.json` with per-step
 receipts and exits nonzero on any failure; cleanup (connector uninstall and
 grant revocation, compose `down -v`, temporary secrets and work directories)
-always runs. The gate needs Docker, the format-convert image (built
+always runs and is duration-bound in the report. Missing, duplicate, skipped,
+or failed required steps and any incomplete cleanup keep `releaseReady` false.
+Its seven-row matrix covers OpenClaw, Codex, Claude Code,
+Antigravity, OpenCode, Pi, and Kimi CLI. A missing local command is
+`not_detected`; every detected target must pass installation, upload,
+tools/list, both debug calls, uninstall, and cleanup. The integration check
+forbids simulation whenever at least one supported local client is detected.
+Only after the complete seven-target scan returns zero detected clients may it
+run one explicitly labelled `mcp-simulator` fallback through the same request
+and evidence path. That fallback is protocol-path evidence, not client
+compatibility evidence, and carries the fixed zero-client reason in the report.
+The integration check
+also requires one expected `meshrix.agentWorkspace.list`
+`missing_capabilities` denial per real or simulated execution target because the journey Grant
+deliberately excludes unrelated workspace authority; the HTML distinguishes
+this non-amplification evidence from format-convert failures. The integration check
+needs Docker, the format-convert image (built
 automatically from the sibling `../Meshrix-Services` checkout when missing,
-or pass `--image-name`), and the kimi client adapter source (default
-`../Meshrix-Plugins/plugins/agents/kimi`; override with
+or pass `--image-name`), and the client adapter sources (default
+`../Meshrix-Plugins/plugins/agents`; override with
 `MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE` or `--adapter-source`). Useful flags:
 `--plan`, `--keep-stack`, `--port`, `--adapter-source`, `--image-name`,
-`--json`. The gate proves the install-to-download client journey works end to
-end; it is not the enterprise acceptance reducer and does not replace it —
-`verify:acceptance` remains the platform readiness authority. In
-`.github/workflows/release.yml` the `journey` job runs this gate after the
-`verify` job and before asset assembly and every publish job.
+`--json`. A pass proves only that this optional service-and-adapter composition
+works end to end. Because the implementation is owned by detachable sibling
+repositories, the command is neither a Meshrix Functional Release Gate input
+nor a Meshrix publication dependency. Its absence or failure cannot change the
+Core `functional-complete` result.
+
+A successful journey writes a ten-section, navigable, bilingual, single-file
+HTML projection with captions, lazy embedded screenshots, total timing, and
+cleanup timing. Its safe-configuration section places the verified publication
+state and bounded runtime health immediately before the digest-bound health and
+operation interface catalog. The client lifecycle is ordered as discovery,
+install, upload, tools/list, both operation branches, uninstall, and cleanup;
+every detected or fallback row must carry its own passing lifecycle outcomes.
+The provenance section projects only step or cleanup identifiers, statuses, and
+bounded durations—never their receipts or messages. It records candidate
+context but remains unbound: embedding a
+final receipt would create an HTML/receipt digest cycle. On a clean immutable
+tag, bind the final HTML and all other required bytes with:
+
+```bash
+npm run verify:upstream-service-publishing-candidate
+```
+
+The resulting
+`build/reports/upstream-service-publishing-candidate.json` binds the tag,
+source commit and tree, release-definition digest, Core JSON, journey JSON,
+publishing JSON, final HTML, and ten screenshots. Its scoped
+`upstream-publishing-prepublication-passed` claim never establishes
+`functional-complete`. A failed journey writes only a redacted,
+non-authoritative HTML recovery projection without candidate status or embedded
+screenshots. That recovery projection includes only the stable failing stage
+and code plus bounded step and cleanup identifier/status/duration rows; it never
+projects failure messages, receipts, logs, or runtime values.
 
 `.github/workflows/release.yml` is the sole publication path. It runs only for
 semantic version tags, serializes all release runs globally, and fails unless
 the tagged commit is verifiably contained in the canonical `release` branch.
-The workflow runs the canonical acceptance authority before any publication.
-Its protected `release-candidate` GitHub environment is the review boundary.
-The immutable candidate image is built for both declared Linux platforms and
-must start successfully on native `ubuntu-24.04` amd64 and
-`ubuntu-24.04-arm` runners before signing.
+The workflow runs the Functional Release Gate before any publication. Its
+protected `release-candidate` GitHub environment is the review boundary.
+Before that authority, a read-only `upstream-service-publishing` job runs the
+self-contained Core verifier. It checks out no detachable service or plugin
+repository and performs no registry or release mutation. The Functional
+Release Gate depends on this job, so every later publication job inherits the
+Core prepublication prerequisite.
+Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
+functional artifact requirements. Native host execution is performed only by
+the optional Real-Machine Verification Workflows and cannot block publication.
 
 Meshrix `0.0.1` has an exact registry dependency on `pactium@0.5.0`. Publish
 that Pactium version first and confirm registry visibility before creating the
@@ -456,17 +685,18 @@ npm view pactium@0.5.0 version --registry=https://registry.npmjs.org/
 ```
 
 The Meshrix clean-install and container gates intentionally fail while that
-version is absent. This is a publication ordering requirement, not a MeshrixUp or
-non-current-platform support blocker.
+version is absent. This is a functional publication ordering requirement, not
+a client or environment support condition.
 
 The workflow stages a multi-platform container and compares the intended OCI
 manifest digest with the GHCR version tag before and after creating that tag.
 An existing equal digest is idempotent; an existing different digest fails
 without replacing the version tag. Before any candidate image is pushed, the
 workflow requires a clean packed-package install and headless start on Node.js
-22, executes the final `macos-arm64` MCP archive with its bundled runtime on a
-macOS arm64 runner, and performs a read-only registry preflight for every npm
-release-set package. The assembly jobs remain credential-free.
+22 and performs a read-only registry preflight for every npm release-set
+package. The assembly jobs remain credential-free. Execution of the final MCP
+archive on a native macOS, Linux, or Windows runner belongs to a separate
+Real-Machine Verification Workflow.
 
 The commit-pinned Trivy action uses the pinned Trivy `v0.69.3` binary to scan
 both `linux/amd64` and `linux/arm64` operating-system and library packages. It
@@ -519,38 +749,193 @@ The built-in project release runbook prepares and validates a candidate only.
 It does not commit, tag, push, upload assets, publish packages, or create a
 parallel release path.
 
-For final release-readiness validation, run the platform acceptance authority:
+Run the mandatory Functional Release Gate:
 
 ```bash
 npm run verify:acceptance
 ```
 
-### Upstream Service Publishing Readiness
+The command accepts a release candidate only when every required functional
+report is fresh, command-owned, schema-valid, privacy-safe, and successful.
+Development-host simulations, isolated containers, neutral protocol peers,
+fault injection, bounded-load checks, clean temporary roots, offline artifact
+inspection, startup and shutdown, rollback rehearsal, and recovery rehearsal
+belong in this gate whenever they can be executed without a particular real
+machine or external deployment. Exit code `0` means `passed`; every non-zero
+exit means `failed`.
 
-Run the canonical production-path publishing verifier before platform acceptance:
+Inspect the sanitized functional DAG without executing it:
+
+```bash
+npm run verify:acceptance:plan
+```
+
+After the Functional Release Gate has accepted an immutable candidate, an
+operator may run any registered real-machine workflow:
+
+```bash
+npm run verify:real-machine -- \
+  run \
+  --state-root <private-state-root> \
+  --run-id <run-id> \
+  --environment <environment-id> \
+  --target <target-id> \
+  --architecture <architecture> \
+  --candidate sha256:<candidate-digest> \
+  --functional-report <functional-acceptance-report>
+```
+
+Each workflow is a complete operational unit. It validates the functional
+receipt and candidate identity, preflights the environment, starts only the
+resources it owns, waits for bounded readiness, runs its declared probes and
+failure cases, performs graceful shutdown, verifies termination and cleanup,
+and writes one redacted candidate-bound receipt. Repeating the command on the
+same clean environment must not require source edits or ad hoc operator
+patches. Separate workflows are required for separate operating systems,
+architectures, hosts, cloud environments, network environments, and clean-host
+recovery targets.
+
+`run` executes the registered `prepare`, `start`, `verify`, `stop`, and
+`cleanup` phases and then reduces their receipts. Operators may invoke one
+phase at a time with the same run identity and then invoke `reduce` to resume a
+controlled deployment window.
+The target selects its source-controlled command manifest; `--commands` may
+name another reviewed repository-relative manifest when the workflow contract
+explicitly permits it.
+
+For repository-operated verification, dispatch
+`.github/workflows/real-machine-validation.yml`. Every run requires the target,
+the exact 40-character source revision, and the successful release-workflow
+run ID that produced the functional receipt and candidate. The workflow checks
+that the run used `.github/workflows/release.yml`, completed successfully, and
+has the same source revision; it then downloads both inputs from that run and
+derives the candidate digest locally. It does not accept a hand-entered
+candidate digest.
+
+Target-specific inputs fail before deployment:
+
+- Native macOS and Windows require the portable artifact name and filename;
+  macOS also declares its verifier input subdirectory.
+- Native Linux requires the production base URL and trusted-proxy contract.
+- Public-cloud verification additionally requires the Agent MCP, governed
+  upstream HTTP, governed upstream MCP, and deliberate-fault HTTPS endpoints,
+  the expected `sha256:<64-hex>` TLS certificate digest, and a bounded capacity
+  count.
+- Clean-host recovery requires an independent backup workflow run and artifact
+  whose root contains `backup-manifest.json`.
+
+Docker-backed targets consume the repository environment secrets for the local
+secret master key and operation-proof signer. Public-cloud endpoint tokens are
+also repository environment secrets, never workflow inputs. Secret custody
+files live only in a bounded runner-temporary directory, are excluded from
+receipt artifacts, are removed before materialization, and are removed again
+under `always()` after the run. The public-cloud and clean-host targets require
+self-hosted runners carrying the corresponding labels; lack of such a runner
+leaves only that optional environment claim unverified.
+
+An optional workflow that cannot run returns its own `not_run`, `ineligible`,
+or `failed` result and denies only its Environment Support Claim. The
+Functional Release Gate does not read, wait for, or aggregate these receipts.
+
+### Upstream Service Publishing Functional Evidence
+
+Run the canonical production-path publishing verifier before the Functional
+Release Gate:
 
 ```bash
 npm run verify:upstream-service-publishing
 ```
 
-The command writes `build/reports/upstream-service-publishing.json`. Its reducer recomputes authenticated mutation, durable publication, immutable runtime snapshot, Operation Permission revision agreement, scoped audience projection, catalog invalidation, acknowledgement, disconnect, timeout, reconnect fencing, and governed loopback forwarding. The verifier uses protocol-owned schemas and a neutral peer; it does not discover or run a client repository, implementation, build, plan, test, report, or receipt. Only the platform acceptance reducer may promote the accepted server report to release readiness.
+The Core verifier writes the reducer-owned
+`build/reports/upstream-service-publishing.json`. When the independently owned
+service and adapter sources are available, run the complete detachable
+integration workflow with:
 
-For a non-authoritative diagnostic that records currently open platform gaps without
-publishing a release-ready claim, run:
+```bash
+lico-dev workflow run upstream-service-publishing --allow-side-effects
+```
+
+That closure additionally starts the isolated external service, publishes it,
+authorizes the connector-managed downstream agent, uploads the source through
+the authenticated upload-session raw byte stream, drives the real MCP proxy
+with only the owner-bound `upload:` reference, and writes the offline
+`build/reports/upstream-service-publishing.html` projection. The HTML records
+the exact safe startup command, the non-Base64 upload configuration, the
+external service file budget, and the separate multipart request-envelope
+limit before the UI-enabled runtime configuration, then
+embeds ten digest-bound screenshots from the real Meshrix Web Console:
+authenticated publishing, basic configuration, operation configuration,
+published runtime health, tool catalog projection, pending Token authorization,
+completed Token authorization, pending operation approval, completed operation
+approval, and the downstream MCP call matrix. The report includes the complete
+seven-target catalog; every detected local client must pass isolated install,
+upload, tools/list, both debug calls, uninstall, and cleanup, while an absent
+client is recorded as `not_detected`. Synthetic pages, receipt cards, and
+DOM-only snapshots are invalid. Missing, duplicate,
+blank, reordered, stale, digest-mismatched, non-Console, or privacy-unsafe
+images fail the closure. The offline report includes English and Simplified
+Chinese copy with a right-aligned language switch and no external script or
+resource. The report tree is local-only under Git-ignored `build/`. Synthetic
+fixture URLs, generated service identities, catalog digests, and tool identities
+remain visible; credentials, authorization codes and request identities,
+process fingerprints, account metadata, execution and trace identities, and
+backend payloads remain protected.
+
+The HTML has exactly ten semantic sections with in-document navigation and
+table captions. Runtime health is listed beside the published operations, and
+client rows separately expose upload, uninstall, and cleanup outcomes. A fresh
+local success is scoped but unbound evidence; only the external candidate
+receipt binds the final HTML bytes and complete bundle. The Functional Release
+Gate remains the sole platform release authority.
+
+The reducer recomputes authenticated mutation, durable publication, immutable
+runtime snapshot, Operation Permission revision agreement, scoped audience
+projection, catalog invalidation, acknowledgement, disconnect, timeout,
+reconnect fencing, and governed loopback forwarding. The verifier uses
+protocol-owned schemas and a neutral peer; it does not discover or run a client
+repository, implementation, build, plan, test, report, or receipt. Only the
+Functional Release Gate may consume the JSON report as project release
+evidence; the HTML does not create a second readiness authority.
+
+For a non-authoritative diagnostic that records currently open functional or
+environment-claim gaps without changing either result, run:
 
 ```bash
 npm run platform:audit:report
 ```
 
-The acceptance state machine owns the command DAG and final aggregate report. Its foundation task runs the core public test profile once; that profile is the sole owner of public-boundary, secret-hygiene, local-info, registry, root-hygiene, and script-registry child reports. The remaining server layers refresh plugin-package admission and runtime evidence, protocol-only upstream fixture transit, neutral downstream peer conformance, gateway platform profiling, surface convergence, private-deployment aggregate E2E, and gap audit. External plugin-product evidence remains independently owned outside the Core acceptance DAG. Capability checkpoints cite canonical `acceptanceCommandId` values instead of copied shell commands. After the DAG finishes, the platform reducer requires every checked Core criterion's command to have passed in that same run and every cited Core report to be command-owned, fresh, schema-valid, leak-scanned, and ready. External product evidence cannot block or promote a Core receipt. Verifier-health failures, Core-actionable blockers, unknown or unexecuted commands, unowned reports, and inconsistent capability reports remain platform failures.
+The functional acceptance state machine owns the mandatory command DAG and
+aggregate report. Its foundation task runs the Core public test profile once;
+that profile owns the public-boundary, secret-hygiene, local-info, registry,
+root-hygiene, and script-registry child reports. The remaining functional
+layers refresh plugin-package admission and runtime evidence, protocol-only
+upstream fixture transit, neutral downstream peer conformance, gateway
+profiling, surface convergence, private-deployment aggregate E2E, and gap
+audit. External product adoption and real-machine receipts remain outside this
+DAG and cannot block or promote it.
 
-Final readiness is reduced through `tools/server-scripts/lib/release-evidence-readiness.mjs`. Full acceptance executes in an isolated workspace inside a fresh Linux container with a stable discoverable cgroup CPU quota. It publishes an immutable evidence generation only after every required child report, aggregate reduction, privacy check, and proof anchor succeeds. `build/acceptance-evidence/current.json` is the atomic pointer to the accepted generation; failed or interrupted runs leave the preceding generation intact. Child readiness fields are input evidence. Exit code `0` means the selected Core release scope is accepted. Exit code `2` means a Core-required but structurally valid evidence dependency remains blocked; optional current-host or external-product support gaps do not produce this exit code. All other non-zero results mean failed. Only a command explicitly registered with blocked exit code `2` may produce that state, and its fresh report must independently reduce to `blocked`. Use `npm run verify:acceptance:plan` to inspect the sanitized DAG, report ownership, blocker protocol, worst-case schedule, and job budget without creating a workspace or changing the generation pointer. To refresh the capability evidence report directly, run:
+Functional acceptance is reduced through
+`tools/server-scripts/lib/release-evidence-readiness.ts`. It publishes an
+immutable evidence generation only after every required functional child
+report, aggregate reduction, privacy check, and proof anchor succeeds.
+`build/acceptance-evidence/current.json` is the atomic pointer to the accepted
+generation; failed or interrupted runs leave the preceding generation intact.
+Child readiness fields are input evidence. Missing implementation, missing
+simulation, unavailable local tooling declared by the functional contract,
+unknown or unexecuted commands, unowned reports, and inconsistent capability
+reports all fail the Functional Release Gate. External-machine availability
+cannot produce a project-level status.
+
+To refresh the capability evidence report directly, run:
 
 ```bash
 npm run verify:capability-acceptance-machines
 ```
 
-The capability report stops at local `verified`, `blocked`, or `failed` evidence states. Local implementation gaps are always `failed`; only canonical external-evidence blockers can be `blocked`. Owner decisions are recorded for maintainers but cannot produce a machine-level blocked result until a source-controlled decision authority contract exists. The capability report never declares project-level release readiness.
+The capability report stops at local `verified` or `failed` evidence states.
+It never declares project-level acceptance and never requests an external
+machine receipt. Environment-specific verification is owned exclusively by
+the separately invoked real-machine workflow.
 
 For gateway load validation, use the combined gateway profile:
 
@@ -558,7 +943,13 @@ For gateway load validation, use the combined gateway profile:
 npm run server:stress:gateway-platform
 ```
 
-The profile writes redacted reports under `build/reports/` and covers downstream MCP, upstream forwarding checks, and self-contained upstream fixture transit readiness. It returns non-zero when any required evidence report is not release-ready. CPU, RSS, duration, concurrency, and request-rate limits are controlled by the stress runner options or environment defaults; the runner records a controlled cutoff instead of continuing after the configured CPU or RSS threshold is reached.
+The profile writes redacted reports under `build/reports/` and covers
+downstream MCP, upstream forwarding checks, and self-contained upstream fixture
+transit. It returns non-zero when any required functional evidence report
+fails. CPU, RSS, duration, concurrency, and request-rate limits are controlled
+by the stress runner options or environment defaults; the runner records a
+controlled cutoff instead of continuing after the configured CPU or RSS
+threshold is reached.
 
 ## Runtime Utilities
 
@@ -571,7 +962,18 @@ npm run mcp:doctor
 
 ## Storage Backup Restore Production Drill
 
-Storage production recovery evidence comes from a host-level operator drill rather than a document-only statement. The drill exercises the registered `storage.backups.list`, `storage.backups.create`, `storage.backups.retention`, `storage.backups.restore_preview`, and `storage.backups.restore` operation path against the selected private-deployment storage backend. It verifies authorization denial with zero storage side effects, confirmation denial before restore execution, retention approval, the confirmed restore, proof and audit lifecycle completion, and storage-kernel reopen. The verifier writes only a redacted fact report; the parent evidence reducer determines readiness.
+Storage production recovery evidence comes from a repeatable operator drill
+rather than a document-only statement. The drill exercises the registered
+`storage.backups.list`, `storage.backups.create`,
+`storage.backups.retention`, `storage.backups.restore_preview`, and
+`storage.backups.restore` operation path against the selected
+private-deployment storage backend. It verifies authorization denial with zero
+storage side effects, confirmation denial before restore execution, retention
+approval, the confirmed restore, proof and audit lifecycle completion, and
+storage-kernel reopen. The functional verifier writes only a redacted fact
+report; the Functional Release Gate determines acceptance. Execution on a
+separate physical or virtual host is an optional Real-Machine Verification
+Workflow and controls only its Environment Support Claim.
 
 Backup creation identifies SQLite from the file path rather than the capability
 artifact category. Every `.sqlite`, `.sqlite3`, and `.db` file, including
@@ -643,27 +1045,29 @@ synchronization sequence before their metadata is committed.
 Run the storage operation verifier and the production drill:
 
 ```bash
-node tools/server-scripts/verify-backup-restore.mjs
-node tools/server-scripts/verify-storage-production-restore-drill.mjs
+node tools/server-scripts/verify-backup-restore.ts
+node tools/server-scripts/verify-storage-production-restore-drill.ts
 ```
 
-The production drill writes `build/reports/storage-production-restore-drill/latest.json` without child-owned readiness or leak-scan flags. The required-report validator performs the sensitive-data scan, and the parent evidence reducer in `tools/server-scripts/lib/release-evidence-readiness.mjs` evaluates the operation, integrity, authorization, proof, and audit facts.
+The production drill writes `build/reports/storage-production-restore-drill/latest.json` without child-owned readiness or leak-scan flags. The required-report validator performs the sensitive-data scan, and the parent evidence reducer in `tools/server-scripts/lib/release-evidence-readiness.ts` evaluates the operation, integrity, authorization, proof, and audit facts.
 
 ## Operation Proof Evidence Policy
 
-Operation proof evidence is governed by `MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY` and
-`MESHRIX_OPERATION_PROOF_SIGNER_SECRET`. The policy defaults to `development`, which
-produces non-verifiable operation proof entries.
+Operation proof evidence is governed by
+`MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY`. The policy defaults to
+`development`, which produces non-production-verifiable operation proof
+entries. Production uses a separately custodied signer file selected through
+`MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE`.
 
 Set the policy to `production` only when a signer secret is configured:
 
 ```bash
 export MESHRIX_OPERATION_PROOF_EVIDENCE_POLICY=production
-export MESHRIX_OPERATION_PROOF_SIGNER_SECRET=<redacted-secret>
+export MESHRIX_OPERATION_PROOF_SIGNER_SECRET_FILE=/run/secrets/meshrix-operation-proof-signer-secret
 ```
 
-A production policy without a configured signer fails closed before operation
-proof evidence can be produced. The operation proof substrate verifier
+A production policy without valid external signer custody fails before the
+proof runtime opens. The operation proof substrate verifier
 (`npm test -- --suite runtime.operation-proof-substrate`) also rejects production
 policy without a signer, enforcing consistency between declared policy and
 signer presence. User configuration remains empty by default; the verifier
@@ -671,26 +1075,25 @@ enforces the declared intent rather than imposing a default policy.
 
 ### Signer Provisioning
 
-Generate a signer secret with sufficient entropy:
+Generate a 32-byte signer secret as lowercase hexadecimal text:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+umask 077
+openssl rand -hex 32 > /etc/meshrix/secrets/operation-proof-signer-secret
 ```
 
-Store the secret through the deployment environment or a secret manager. Do not
-write the secret value into repository source, documentation, or generated
-reports.
+Keep the file outside Meshrix data and backup volumes and distinct from the
+Local Secret Store master key. Do not write the value into repository source,
+documentation, generated reports, or a Compose environment field.
 
 ### Signer Rotation
 
-To rotate the signer secret:
-
-1. Provision the new secret under a fresh environment variable.
-2. Deploy with both old and new secrets available and the new secret configured
-   as `MESHRIX_OPERATION_PROOF_SIGNER_SECRET`.
-3. Verify the proof substrate verifier passes against the new secret.
-4. Remove the old secret from the deployment environment.
-5. Record the rotation in the deployment audit log.
+The proof port can compose one active signing generation with explicitly
+retained historical verification generations through
+`createMeshrixSignerKeyRing`; unknown generations fail verification. The
+production signer file still selects one active symmetric signer. A governed
+operator rotation command and external asymmetric KMS/HSM custody remain
+release requirements.
 
 Run the operation proof substrate verifier after rotation:
 
@@ -705,8 +1108,8 @@ The execution sandbox is unconfigured and disabled by default. An operator must 
 Provision or revoke a trusted OCI conformance receipt explicitly:
 
 ```bash
-node tools/server-scripts/verify-execution-sandbox-oci-conformance.mjs provision --user-data-path <user-data-path> --policy-revision <policy-revision> --runtime-profile <runtime-profile>
-node tools/server-scripts/verify-execution-sandbox-oci-conformance.mjs revoke --user-data-path <user-data-path> --provider-id <provider-id>
+node tools/server-scripts/verify-execution-sandbox-oci-conformance.ts provision --user-data-path <user-data-path> --policy-revision <policy-revision> --runtime-profile <runtime-profile>
+node tools/server-scripts/verify-execution-sandbox-oci-conformance.ts revoke --user-data-path <user-data-path> --provider-id <provider-id>
 ```
 
 The runtime data path must be absolute. The command emits only bounded status and check counts; it does not print provider paths, runtime probe output, or the supplied data path. A failed provision attempt leaves no trusted receipt for that candidate.

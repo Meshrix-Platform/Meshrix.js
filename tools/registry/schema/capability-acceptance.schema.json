@@ -18,6 +18,7 @@
         "type": "object",
         "required": [
           "capabilityId",
+          "capabilityClass",
           "releaseScope",
           "checkpointPath",
           "acceptanceMachineId",
@@ -31,8 +32,24 @@
             "type": "string",
             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           },
+          "capabilityClass": {
+            "enum": ["core", "detachable-core", "external-plugin"]
+          },
           "releaseScope": {
             "enum": ["core-release", "optional-support-matrix"]
+          },
+          "activationFeatureId": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "governedEvidenceCommandIds": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            }
           },
           "checkpointPath": {
             "type": "string",
@@ -47,7 +64,7 @@
             "pattern": "^packages/foundation/src/workflow/state-machine/definitions/acceptance/[a-z0-9]+(?:-[a-z0-9]+)*\\.json$"
           },
           "verifier": {
-            "const": "tools/server-scripts/verify-capability-acceptance-machines.mjs"
+            "const": "tools/server-scripts/verify-capability-acceptance-machines.ts"
           },
           "reportPath": {
             "const": "build/reports/capability-acceptance-machines.json"

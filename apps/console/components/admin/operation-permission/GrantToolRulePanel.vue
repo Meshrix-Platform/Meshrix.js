@@ -25,7 +25,7 @@ const selectedToolId = ref("");
 const selectedRule = ref<GrantToolRule>("deny");
 
 const selectedGrant = computed(() =>
-  toolGrants.value.find((grant) => grant.id === selectedGrantId.value) || toolGrants.value[0],
+  toolGrants.value.find((grant: any) => grant.id === selectedGrantId.value) || toolGrants.value[0],
 );
 
 const exceptionRows = computed(() => {
@@ -33,7 +33,7 @@ const exceptionRows = computed(() => {
 
   for (const grant of toolGrants.value) {
     for (const toolId of grant.toolAllow || []) {
-      const tool = operationPermissionTools.value.find((item) => item.id === toolId);
+      const tool = operationPermissionTools.value.find((item: any) => item.id === toolId);
       rows.push({
         grantId: grant.id,
         grantLabel: grant.label || grant.id,
@@ -44,7 +44,7 @@ const exceptionRows = computed(() => {
       });
     }
     for (const toolId of grant.toolDeny || []) {
-      const tool = operationPermissionTools.value.find((item) => item.id === toolId);
+      const tool = operationPermissionTools.value.find((item: any) => item.id === toolId);
       rows.push({
         grantId: grant.id,
         grantLabel: grant.label || grant.id,
@@ -56,7 +56,7 @@ const exceptionRows = computed(() => {
     }
   }
 
-  return rows.sort((a, b) => a.grantLabel.localeCompare(b.grantLabel) || a.toolLabel.localeCompare(b.toolLabel));
+  return rows.sort((a: any, b: any) => a.grantLabel.localeCompare(b.grantLabel) || a.toolLabel.localeCompare(b.toolLabel));
 });
 
 const availableToolsForSelectedGrant = computed(() => {
@@ -65,17 +65,17 @@ const availableToolsForSelectedGrant = computed(() => {
     return [];
   }
   const configured = new Set([...(grant.toolAllow || []), ...(grant.toolDeny || [])]);
-  return operationPermissionTools.value.filter((tool) => !configured.has(tool.id));
+  return operationPermissionTools.value.filter((tool: any) => !configured.has(tool.id));
 });
 
 watch(
   toolGrants,
-  (grants) => {
+  (grants: any) => {
     if (grants.length === 0) {
       selectedGrantId.value = "";
       return;
     }
-    if (!grants.some((grant) => grant.id === selectedGrantId.value)) {
+    if (!grants.some((grant: any) => grant.id === selectedGrantId.value)) {
       selectedGrantId.value = grants[0]?.id || "";
     }
   },
@@ -84,8 +84,8 @@ watch(
 
 watch(
   availableToolsForSelectedGrant,
-  (tools) => {
-    if (!tools.some((tool) => tool.id === selectedToolId.value)) {
+  (tools: any) => {
+    if (!tools.some((tool: any) => tool.id === selectedToolId.value)) {
       selectedToolId.value = tools[0]?.id || "";
     }
   },
@@ -100,7 +100,7 @@ function addGrantToolRule() {
 }
 
 function findGrant(grantId: string) {
-  return toolGrants.value.find((grant) => grant.id === grantId);
+  return toolGrants.value.find((grant: any) => grant.id === grantId);
 }
 
 function ruleLabel(rule: GrantToolRule) {

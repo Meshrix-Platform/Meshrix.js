@@ -4,10 +4,10 @@ import { describe, expect, it } from "vitest";
 import { nextTick, ref } from "vue";
 import { createConsoleExternalGatewayController } from "../../../apps/console/composables/console-external-gateway-controller";
 
-describe("External Gateway console controller", () => {
-  it("keeps empty configuration in Direct mode and reflects server state", async () => {
-    const state = ref(null);
-    const controller = createConsoleExternalGatewayController(state);
+describe("External Gateway console controller", () : any => {
+  it("keeps empty configuration in Direct mode and reflects server state", async () : Promise<any> => {
+    const state: any = ref(null);
+    const controller: any = createConsoleExternalGatewayController(state);
 
     expect(controller.activeMode.value).toBe("direct");
     expect(controller.availableAdapters.value).toEqual([]);
@@ -31,16 +31,16 @@ describe("External Gateway console controller", () => {
     expect(controller.publicBaseUrlDraft.value).toBe("https://gateway.example.invalid:8443");
   });
 
-  it("uses the External Gateway product name and removes the fixed gateway mount placeholder", async () => {
-    const defaults = await import("../../../apps/console/composables/console-defaults");
-    const panelPath = fileURLToPath(new URL(
+  it("uses the External Gateway product name and removes the fixed gateway mount placeholder", async () : Promise<any> => {
+    const defaults: any = await import("../../../apps/console/composables/console-defaults");
+    const panelPath: any = fileURLToPath(new URL(
       "../../../apps/console/components/admin/modules/RuntimeModulesPanel.vue",
       import.meta.url,
     ));
-    const panel = readFileSync(panelPath, "utf8");
+    const panel: any = readFileSync(panelPath, "utf8");
 
     expect(defaults.moduleNameLabels).not.toHaveProperty("gateway");
-    expect(defaults.moduleGroupDefinitions.map((group) => group.id)).not.toContain("gateway");
+    expect(defaults.moduleGroupDefinitions.map((group?: any) : any => group.id)).not.toContain("gateway");
     expect(panel).toContain("外置网关");
     expect(panel).toContain("Caddy");
     expect(panel).toContain("Nginx");
@@ -49,6 +49,6 @@ describe("External Gateway console controller", () => {
     expect(panel).toContain("验证并启用");
     expect(panel).not.toContain("网关程序路径");
     expect(panel).not.toContain("配置输出目录");
-    expect(panel).not.toContain("填写外置模块 .mjs 路径");
+    expect(panel).not.toContain("填写外置模块 .ts 路径");
   });
 });

@@ -23,11 +23,11 @@ export function createConsoleExternalGatewayController(
     }) => Promise<unknown>;
     switchDirect?: (expectedGeneration: number) => Promise<unknown>;
   } = {},
-) {
-  const modeDraft = ref<ExternalGatewayMode>("direct");
-  const adapterDraft = ref<ExternalGatewayAdapterId>("caddy");
-  const publicBaseUrlDraft = ref("");
-  watch(state, (next) => {
+) : any {
+  const modeDraft: any = ref<ExternalGatewayMode>("direct");
+  const adapterDraft: any = ref<ExternalGatewayAdapterId>("caddy");
+  const publicBaseUrlDraft: any = ref("");
+  watch(state, (next?: any) : any => {
     if (next?.adapterId) adapterDraft.value = next.adapterId;
     publicBaseUrlDraft.value = String(next?.profile?.gatewayMode?.publicBaseUrl || "");
   }, { immediate: true });
@@ -36,12 +36,12 @@ export function createConsoleExternalGatewayController(
     modeDraft,
     adapterDraft,
     publicBaseUrlDraft,
-    activeMode: computed(() => state.value?.mode || "direct"),
-    activeAdapter: computed(() => state.value?.adapterId || "caddy"),
-    availableAdapters: computed(() => state.value?.availableAdapters || []),
-    generation: computed(() => state.value?.generation || 0),
-    refresh: actions.refresh || (async () => undefined),
-    apply: actions.apply || (async () => undefined),
-    switchDirect: actions.switchDirect || (async () => undefined),
+    activeMode: computed(() : any => state.value?.mode || "direct"),
+    activeAdapter: computed(() : any => state.value?.adapterId || "caddy"),
+    availableAdapters: computed(() : any => state.value?.availableAdapters || []),
+    generation: computed(() : any => state.value?.generation || 0),
+    refresh: actions.refresh || (async () : Promise<any> => undefined),
+    apply: actions.apply || (async () : Promise<any> => undefined),
+    switchDirect: actions.switchDirect || (async () : Promise<any> => undefined),
   };
 }

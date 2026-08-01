@@ -25,7 +25,7 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
     </label>
     <label>
       <span>必须保留的 evidenceId</span>
-      <input v-model="requiredEvidence" placeholder="ev_1, evidence::abc" autocomplete="off" />
+      <input v-model="requiredEvidence" placeholder="多个用逗号分隔，例如 evidence::abc123" autocomplete="off" />
     </label>
   </div>
   <div class="context-action-bar">
@@ -45,7 +45,6 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
     >
       {{ busyKey === "context:evaluation" ? "评估中" : "运行 Replay 评估" }}
     </button>
-    <div class="action-divider"></div>
     <button
       class="tool-button tool-button-ghost"
       type="button"
@@ -136,21 +135,10 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
   background: var(--el-color-primary-light-3);
 }
 
-.action-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--el-border-color-lighter);
-  margin: 0 0.5rem;
-}
-
 @media (max-width: 720px) {
   .context-action-bar {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .action-divider {
-    display: none;
   }
 }
 </style>

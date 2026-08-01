@@ -14,12 +14,12 @@
       "label": "MCP Server",
       "protocol": "mcp",
       "routeTarget": "mcp-server-side",
-      "modulePath": "packages/protocols/mcp/adapter/http-mcp-adapter.mjs"
+      "modulePath": "packages/protocols/mcp/adapter/http-mcp-adapter.ts"
     }
   ],
   "components": {
     "communicationService": {
-      "path": "./index.mjs",
+      "path": "./index.ts",
       "factory": "createCommunicationServiceProvider",
       "exports": [
         "COMMUNICATION_SERVICE_ID",
@@ -35,6 +35,6 @@
     }
   },
   "verification": [
-    "node tools/server-scripts/verify-communication-service.mjs"
+    "node tools/server-scripts/verify-communication-service.ts"
   ]
 }

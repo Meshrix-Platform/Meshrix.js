@@ -40,7 +40,7 @@ function Invoke-Connector([string]$Connector, [string[]]$Arguments) {
     Write-Failure "The configured MCP connector is not available."
   }
 
-  if ([IO.Path]::GetExtension($Connector) -eq ".mjs") {
+  if ([IO.Path]::GetExtension($Connector) -eq ".ts") {
     $Node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $Node) {
       Write-Failure "The repository connector requires Node.js. Use a verified portable release bundle when Node.js is unavailable."
@@ -91,7 +91,7 @@ if ($SiblingExecutable) {
   Invoke-Connector $SiblingExecutable $ConnectorArguments
 }
 
-$RepositoryConnector = Join-Path $PSScriptRoot "..\gateway-installer\bin\meshrix-mcp.mjs"
+$RepositoryConnector = Join-Path $PSScriptRoot "..\gateway-installer\bin\meshrix-mcp.ts"
 if (Test-Path -LiteralPath $RepositoryConnector -PathType Leaf) {
   Invoke-Connector $RepositoryConnector $ConnectorArguments
 }

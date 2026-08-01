@@ -17,8 +17,58 @@
     },
     "operations": [
       {
-        "operationKey": "convert",
-        "label": "Convert document",
+        "operationKey": "convert-require-approval-debug",
+        "label": "Convert document (approval required debug)",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/convert",
+        "risk": "safe_write",
+        "requiredScopes": ["gateway:write"],
+        "requiresApproval": true,
+        "approvalScope": "gateway:write",
+        "requiredApproval": {
+          "required": true,
+          "approvalScope": "gateway:write",
+          "approvalLayers": []
+        },
+        "timeoutMs": 30000,
+        "payloadTransport": {
+          "request": {
+            "mode": "artifact_multipart",
+            "maxBytes": 53477376,
+            "mediaTypes": ["multipart/form-data"],
+            "multipart": {
+              "artifactParts": [
+                {
+                  "argument": "file",
+                  "partName": "file",
+                  "required": true
+                }
+              ],
+              "scalarFields": [
+                {
+                  "argument": "targetFormat",
+                  "partName": "targetFormat",
+                  "required": false
+                }
+              ],
+              "maxParts": 2
+            }
+          },
+          "response": {
+            "mode": "artifact",
+            "maxBytes": 104857600,
+            "mediaTypes": [
+              "application/pdf",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ],
+            "allowRanges": true
+          }
+        }
+      },
+      {
+        "operationKey": "convert-full-access-debug",
+        "label": "Convert document (immediate debug)",
         "protocol": "http",
         "method": "POST",
         "path": "/v1/convert",

@@ -6,9 +6,9 @@ import {
   PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
 } from "@meshrix/contracts/upstream-service-publishing";
 
-describe("portable upstream service import schema", () => {
-  it("accepts the canonical format-convert multipart artifact configuration", () => {
-    const imported = parsePortableUpstreamServiceImport(readFileSync(
+describe("portable upstream service import schema", () : any => {
+  it("accepts the canonical format-convert multipart artifact configuration", () : any => {
+    const imported: any = parsePortableUpstreamServiceImport(readFileSync(
       new URL("../../../docs/examples/file-parser-format-convert.upstream.json", import.meta.url),
       "utf8",
     ));
@@ -35,8 +35,8 @@ describe("portable upstream service import schema", () => {
     });
   });
 
-  it("accepts the explicit portable envelope and preserves the complete descriptor", () => {
-    const descriptor = {
+  it("accepts the explicit portable envelope and preserves the complete descriptor", () : any => {
+    const descriptor: Record<string, any> = {
       serviceProtocol: "json-rpc",
       baseUrl: "https://service.invalid:443/rpc",
       operations: [{
@@ -68,8 +68,8 @@ describe("portable upstream service import schema", () => {
     [{ kind: PORTABLE_UPSTREAM_SERVICE_KIND, schemaVersion: "unsupported", serviceKey: "svc", descriptor: {} }, "schemaVersion must be"],
     [{ kind: PORTABLE_UPSTREAM_SERVICE_KIND, schemaVersion: PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION, serviceKey: "", descriptor: {} }, "serviceKey must be a canonical non-empty service key"],
     [{ kind: PORTABLE_UPSTREAM_SERVICE_KIND, schemaVersion: PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION, serviceKey: "svc", descriptor: {}, extra: true }, "Unknown top-level field(s): extra"],
-  ])("rejects invalid strict envelopes without producing a draft", (input, message) => {
-    expect(() => parsePortableUpstreamServiceImport(JSON.stringify(input))).toThrow(message);
+  ])("rejects invalid strict envelopes without producing a draft", (input?: any, message?: any) : any => {
+    expect(() : any => parsePortableUpstreamServiceImport(JSON.stringify(input))).toThrow(message);
   });
 
   it.each([
@@ -79,8 +79,8 @@ describe("portable upstream service import schema", () => {
     [{ serviceProtocol: "http", endpoints: [{ baseUrl: "https://service.invalid" }], operations: [{}] }, "explicit port"],
     [{ serviceProtocol: "http", baseUrl: "https://service.invalid:443", operations: [] }, "at least one explicit HTTP operation"],
     [{ serviceProtocol: "http", baseUrl: "https://service.invalid:443", operations: [{}], unsupported: true }, "Unknown descriptor field(s): unsupported"],
-  ])("rejects unsafe or incomplete descriptors", (descriptor, message) => {
-    expect(() => parsePortableUpstreamServiceImport(JSON.stringify({
+  ])("rejects unsafe or incomplete descriptors", (descriptor?: any, message?: any) : any => {
+    expect(() : any => parsePortableUpstreamServiceImport(JSON.stringify({
       kind: PORTABLE_UPSTREAM_SERVICE_KIND,
       schemaVersion: PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,
       serviceKey: "svc",

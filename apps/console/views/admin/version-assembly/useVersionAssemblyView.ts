@@ -98,19 +98,19 @@ const categoryLabelFallback: Record<string, string> = {
   foundation: "基础模块",
 };
 
-export function useVersionAssemblyView() {
-  const runtimeInfo = ref<RuntimeInfoResponse | null>(null);
-  const loading = ref(false);
-  const loadError = ref("");
-  const buildingAssembly = ref(false);
-  const assemblyError = ref("");
-  const assemblyArtifact = ref<RuntimeAssemblyArtifact | null>(null);
+export function useVersionAssemblyView() : any {
+  const runtimeInfo: any = ref<RuntimeInfoResponse | null>(null);
+  const loading: any = ref(false);
+  const loadError: any = ref("");
+  const buildingAssembly: any = ref(false);
+  const assemblyError: any = ref("");
+  const assemblyArtifact: any = ref<RuntimeAssemblyArtifact | null>(null);
 
-  const selectedArchitectureComponents = ref<AssemblySelection>({});
-  const expandedModuleIds = ref<Set<string>>(new Set());
+  const selectedArchitectureComponents: any = ref<AssemblySelection>({});
+  const expandedModuleIds: any = ref<Set<string>>(new Set<any>());
 
-  function mountCapabilityText(mount: RuntimeMountInfo) {
-    const capabilities = [
+  function mountCapabilityText(mount: RuntimeMountInfo) : any {
+    const capabilities: any = [
       mount.supportsStructuredDocument ? "结构化输入" : "",
       mount.supportsTextExtraction ? "文本输入" : "",
       mount.supportsBatchHook ? "批次回调" : "",
@@ -123,7 +123,7 @@ export function useVersionAssemblyView() {
       return [];
     }
     if (features.activeFeatures?.length) {
-      return features.activeFeatures.map((feature) => ({
+      return features.activeFeatures.map((feature?: any) : any => ({
         id: feature.featureId,
         label: feature.label || feature.featureId,
         detail: [feature.group, feature.reason].filter(Boolean).join("，") || "已启用能力",
@@ -132,7 +132,7 @@ export function useVersionAssemblyView() {
         locked: feature.required,
       }));
     }
-    return (features.activeFeatureIds || []).map((featureId) => ({
+    return (features.activeFeatureIds || []).map((featureId?: any) : any => ({
       id: featureId,
       label: featureId,
       detail: features.profileName || features.edition || "已启用能力",
@@ -141,13 +141,13 @@ export function useVersionAssemblyView() {
     }));
   }
 
-  const capabilityItems = computed<AssemblyItem[]>(() =>
+  const capabilityItems: any = computed<AssemblyItem[]>(() : any =>
     capabilityItemsFromFeatures(runtimeInfo.value?.features),
   );
 
-  const moduleItems = computed<AssemblyItem[]>(() =>
-    (runtimeInfo.value?.runtime.mounts || []).map((mount) => {
-      const enabled = mount.enabled !== false;
+  const moduleItems: any = computed<AssemblyItem[]>(() : any =>
+    (runtimeInfo.value?.runtime.mounts || []).map((mount?: any) : any => {
+      const enabled: any = mount.enabled !== false;
       return {
         id: mount.id || mount.name,
         label: mount.name || mount.id,
@@ -158,29 +158,29 @@ export function useVersionAssemblyView() {
     }),
   );
 
-  const architectureInventory = computed(() => runtimeInfo.value?.runtime.architectureComponents || null);
-  const architectureComponents = computed<RuntimeArchitectureComponent[]>(() =>
+  const architectureInventory: any = computed(() : any => runtimeInfo.value?.runtime.architectureComponents || null);
+  const architectureComponents: any = computed<RuntimeArchitectureComponent[]>(() : any =>
     architectureInventory.value?.allComponents || [],
   );
 
-  const categoryDefinitionMap = computed(() => {
-    const definitions = architectureInventory.value?.moduleCategoryDefinitions || [];
-    return new Map(definitions.map((definition) => [definition.categoryId, definition]));
+  const categoryDefinitionMap: any = computed(() : any => {
+    const definitions: any = architectureInventory.value?.moduleCategoryDefinitions || [];
+    return new Map<any, any>(definitions.map((definition?: any) : any => [definition.categoryId, definition]));
   });
 
-  const architectureLayerDefinitions = computed<RuntimeArchitectureLayer[]>(() => {
-    const configuredLayers = architectureInventory.value?.layers?.length
+  const architectureLayerDefinitions: any = computed<RuntimeArchitectureLayer[]>(() : any => {
+    const configuredLayers: any = architectureInventory.value?.layers?.length
       ? architectureInventory.value.layers
       : defaultArchitectureLayers;
-    const layerIds = new Set(configuredLayers.map((layer) => layer.layerId));
-    const missingLayers = architectureComponents.value
-      .filter((component) => !layerIds.has(component.layerId))
-      .map((component) => component.layerId);
+    const layerIds: any = new Set<any>(configuredLayers.map((layer?: any) : any => layer.layerId));
+    const missingLayers: any = architectureComponents.value
+      .filter((component?: any) : any => !layerIds.has(component.layerId))
+      .map((component?: any) : any => component.layerId);
     return [
       ...configuredLayers,
-      ...Array.from(new Set(missingLayers)).map((layerId) => ({
+      ...Array.from(new Set<any>(missingLayers)).map((layerId?: any) : any => ({
         layerId,
-        moduleCategory: architectureComponents.value.find((component) => component.layerId === layerId)?.moduleCategory || layerId,
+        moduleCategory: architectureComponents.value.find((component?: any) : any => component.layerId === layerId)?.moduleCategory || layerId,
         label: layerId,
         hydration: "optional",
         hydratable: true,
@@ -189,15 +189,15 @@ export function useVersionAssemblyView() {
     ];
   });
 
-  function componentKey(component: RuntimeArchitectureComponent) {
+  function componentKey(component: RuntimeArchitectureComponent) : any {
     return component.componentId || component.moduleId;
   }
 
-  function categoryLabel(categoryId: string) {
+  function categoryLabel(categoryId: string) : any {
     return categoryDefinitionMap.value.get(categoryId)?.label || categoryLabelFallback[categoryId] || categoryId;
   }
 
-  function hydrationLabel(hydratable: boolean) {
+  function hydrationLabel(hydratable: boolean) : any {
     return hydratable ? "可脱水" : "不可脱水";
   }
 
@@ -212,19 +212,19 @@ export function useVersionAssemblyView() {
     };
   }
 
-  const architectureItems = computed<AssemblyItem[]>(() =>
+  const architectureItems: any = computed<AssemblyItem[]>(() : any =>
     architectureComponents.value.map(architectureItemFromComponent),
   );
 
-  const selectedArchitectureComponentIds = computed(() =>
+  const selectedArchitectureComponentIds: any = computed(() : any =>
     architectureComponents.value
-      .filter((component) => Boolean(selectedArchitectureComponents.value[componentKey(component)]))
+      .filter((component?: any) : any => Boolean(selectedArchitectureComponents.value[componentKey(component)]))
       .map(componentKey)
       .filter(Boolean),
   );
 
-  const architectureRootNodes = computed<ArchitectureTreeNode[]>(() => {
-    const nodeMap = new Map<string, ArchitectureTreeNode>();
+  const architectureRootNodes: any = computed<ArchitectureTreeNode[]>(() : any => {
+    const nodeMap: any = new Map<string, ArchitectureTreeNode>();
     for (const component of architectureComponents.value) {
       nodeMap.set(componentKey(component), {
         ...component,
@@ -236,7 +236,7 @@ export function useVersionAssemblyView() {
 
     const roots: ArchitectureTreeNode[] = [];
     for (const node of nodeMap.values()) {
-      const parent = node.parentModuleId ? nodeMap.get(node.parentModuleId) : null;
+      const parent: any = node.parentModuleId ? nodeMap.get(node.parentModuleId) : null;
       if (parent) {
         parent.children.push(node);
       } else {
@@ -244,7 +244,7 @@ export function useVersionAssemblyView() {
       }
     }
 
-    function assignDepth(node: ArchitectureTreeNode, depth: number) {
+    function assignDepth(node: ArchitectureTreeNode, depth: number) : any {
       node.depth = depth;
       for (const child of node.children) {
         assignDepth(child, depth + 1);
@@ -257,18 +257,18 @@ export function useVersionAssemblyView() {
     return roots;
   });
 
-  function layerDescription(layer: RuntimeArchitectureLayer) {
+  function layerDescription(layer: RuntimeArchitectureLayer) : any {
     if (layer.functionItems?.length) {
       return layer.functionItems.join("，");
     }
     return categoryDefinitionMap.value.get(layer.moduleCategory)?.description || "";
   }
 
-  function isArchitectureComponentSelected(component: RuntimeArchitectureComponent) {
+  function isArchitectureComponentSelected(component: RuntimeArchitectureComponent) : any {
     return Boolean(selectedArchitectureComponents.value[componentKey(component)]);
   }
 
-  function collectArchitectureNodes(node: ArchitectureTreeNode) {
+  function collectArchitectureNodes(node: ArchitectureTreeNode) : any {
     const nodes: ArchitectureTreeNode[] = [node];
     for (const child of node.children) {
       nodes.push(...collectArchitectureNodes(child));
@@ -276,50 +276,50 @@ export function useVersionAssemblyView() {
     return nodes;
   }
 
-  function flattenArchitectureChildren(node: ArchitectureTreeNode) {
-    return node.children.flatMap((child) => collectArchitectureNodes(child));
+  function flattenArchitectureChildren(node: ArchitectureTreeNode) : any {
+    return node.children.flatMap((child?: any) : any => collectArchitectureNodes(child));
   }
 
-  function architectureTreeRowStyle(node: ArchitectureTreeNode) {
+  function architectureTreeRowStyle(node: ArchitectureTreeNode) : any {
     return {
       "--tree-indent": `${Math.min(Math.max(node.depth, 1), 5) * 18}px`,
     };
   }
 
-  function moduleSummaryText(node: ArchitectureTreeNode) {
+  function moduleSummaryText(node: ArchitectureTreeNode) : any {
     return node.functionItems?.slice(0, 3).join("，") || node.moduleId;
   }
 
-  function architectureChildDetail(node: ArchitectureTreeNode) {
+  function architectureChildDetail(node: ArchitectureTreeNode) : any {
     return node.functionItems?.join("，") || node.moduleId;
   }
 
-  function architectureNodeCount(node: ArchitectureTreeNode) {
+  function architectureNodeCount(node: ArchitectureTreeNode) : any {
     return collectArchitectureNodes(node).length;
   }
 
-  function selectedArchitectureNodeCount(node: ArchitectureTreeNode) {
+  function selectedArchitectureNodeCount(node: ArchitectureTreeNode) : any {
     return collectArchitectureNodes(node).filter(isArchitectureComponentSelected).length;
   }
 
-  function hydratableArchitectureNodeCount(node: ArchitectureTreeNode) {
-    return collectArchitectureNodes(node).filter((component) => component.hydratable).length;
+  function hydratableArchitectureNodeCount(node: ArchitectureTreeNode) : any {
+    return collectArchitectureNodes(node).filter((component?: any) : any => component.hydratable).length;
   }
 
-  function architectureSubtreeToggleDisabled(node: ArchitectureTreeNode) {
-    return collectArchitectureNodes(node).every((component) => !component.hydratable);
+  function architectureSubtreeToggleDisabled(node: ArchitectureTreeNode) : any {
+    return collectArchitectureNodes(node).every((component?: any) : any => !component.hydratable);
   }
 
-  function isArchitectureSubtreeSelected(node: ArchitectureTreeNode) {
-    const nodes = collectArchitectureNodes(node);
+  function isArchitectureSubtreeSelected(node: ArchitectureTreeNode) : any {
+    const nodes: any = collectArchitectureNodes(node);
     return nodes.length > 0 && nodes.every(isArchitectureComponentSelected);
   }
 
-  const architectureLayerGroups = computed<ArchitectureLayerGroup[]>(() =>
+  const architectureLayerGroups: any = computed<ArchitectureLayerGroup[]>(() : any =>
     architectureLayerDefinitions.value
-      .map((layer) => {
-        const layerComponents = architectureComponents.value.filter((component) => component.layerId === layer.layerId);
-        const roots = architectureRootNodes.value.filter((node) => node.layerId === layer.layerId);
+      .map((layer?: any) : any => {
+        const layerComponents: any = architectureComponents.value.filter((component?: any) : any => component.layerId === layer.layerId);
+        const roots: any = architectureRootNodes.value.filter((node?: any) : any => node.layerId === layer.layerId);
         return {
           layerId: layer.layerId,
           label: layer.label || layer.layerId,
@@ -327,15 +327,15 @@ export function useVersionAssemblyView() {
           description: layerDescription(layer),
           roots,
           componentCount: layerComponents.length,
-          hydratableCount: layerComponents.filter((component) => component.hydratable).length,
-          lockedCount: layerComponents.filter((component) => !component.hydratable).length,
+          hydratableCount: layerComponents.filter((component?: any) : any => component.hydratable).length,
+          lockedCount: layerComponents.filter((component?: any) : any => !component.hydratable).length,
           selectedCount: layerComponents.filter(isArchitectureComponentSelected).length,
         };
       })
-      .filter((layer) => layer.componentCount > 0 || layer.roots.length > 0),
+      .filter((layer?: any) : any => layer.componentCount > 0 || layer.roots.length > 0),
   );
 
-  const runtimeEvidenceGroups = computed<RuntimeEvidenceGroup[]>(() => [
+  const runtimeEvidenceGroups: any = computed<RuntimeEvidenceGroup[]>(() : any => [
     {
       id: "capabilities",
       title: "运行时能力",
@@ -352,11 +352,11 @@ export function useVersionAssemblyView() {
     },
   ]);
 
-  function itemMustStaySelected(item: AssemblyItem) {
+  function itemMustStaySelected(item: AssemblyItem) : any {
     return item.locked || item.statusLabel === "必选";
   }
 
-  function syncSelection(bucket: SelectionBucket, items: AssemblyItem[]) {
+  function syncSelection(bucket: SelectionBucket, items: AssemblyItem[]) : any {
     const next: AssemblySelection = {};
     for (const item of items) {
       next[item.id] = itemMustStaySelected(item) || (item.enabled && (bucket.value[item.id] ?? item.enabled));
@@ -364,46 +364,46 @@ export function useVersionAssemblyView() {
     bucket.value = next;
   }
 
-  function syncAllSelections() {
+  function syncAllSelections() : any {
     syncSelection(selectedArchitectureComponents, architectureItems.value);
   }
 
-  function selectedCount(bucket: AssemblySelection, items: AssemblyItem[]) {
-    return items.filter((item) => Boolean(bucket[item.id])).length;
+  function selectedCount(bucket: AssemblySelection, items: AssemblyItem[]) : any {
+    return items.filter((item?: any) : any => Boolean(bucket[item.id])).length;
   }
 
-  const selectedArchitectureCount = computed(() =>
+  const selectedArchitectureCount: any = computed(() : any =>
     selectedCount(selectedArchitectureComponents.value, architectureItems.value),
   );
-  const hydratableArchitectureCount = computed(() =>
-    architectureComponents.value.filter((component) => component.hydratable).length,
+  const hydratableArchitectureCount: any = computed(() : any =>
+    architectureComponents.value.filter((component?: any) : any => component.hydratable).length,
   );
-  const nonHydratableArchitectureCount = computed(() =>
-    architectureComponents.value.filter((component) => !component.hydratable).length,
+  const nonHydratableArchitectureCount: any = computed(() : any =>
+    architectureComponents.value.filter((component?: any) : any => !component.hydratable).length,
   );
-  const foundationArchitectureCount = computed(() =>
-    architectureComponents.value.filter((component) => component.moduleCategory === "foundation").length,
+  const foundationArchitectureCount: any = computed(() : any =>
+    architectureComponents.value.filter((component?: any) : any => component.moduleCategory === "foundation").length,
   );
-  const selectedHydratableArchitectureCount = computed(() =>
-    architectureComponents.value.filter((component) =>
+  const selectedHydratableArchitectureCount: any = computed(() : any =>
+    architectureComponents.value.filter((component?: any) : any =>
       component.hydratable && selectedArchitectureComponents.value[componentKey(component)],
     ).length,
   );
-  const runtimeEvidenceCount = computed(() =>
+  const runtimeEvidenceCount: any = computed(() : any =>
     capabilityItems.value.length + moduleItems.value.length,
   );
 
-  const canBuildRuntimeAssembly = computed(() =>
+  const canBuildRuntimeAssembly: any = computed(() : any =>
     !loading.value && !buildingAssembly.value && selectedArchitectureComponentIds.value.length > 0,
   );
 
-  function clearAssemblyResult() {
+  function clearAssemblyResult() : any {
     assemblyArtifact.value = null;
     assemblyError.value = "";
   }
 
-  function setArchitectureComponentSelection(component: RuntimeArchitectureComponent, value: boolean) {
-    const item = architectureItemFromComponent(component);
+  function setArchitectureComponentSelection(component: RuntimeArchitectureComponent, value: boolean) : any {
+    const item: any = architectureItemFromComponent(component);
     clearAssemblyResult();
     selectedArchitectureComponents.value = {
       ...selectedArchitectureComponents.value,
@@ -411,40 +411,40 @@ export function useVersionAssemblyView() {
     };
   }
 
-  function setArchitectureSubtreeSelection(node: ArchitectureTreeNode, value: boolean) {
-    const next = { ...selectedArchitectureComponents.value };
+  function setArchitectureSubtreeSelection(node: ArchitectureTreeNode, value: boolean) : any {
+    const next: Record<string, any> = { ...selectedArchitectureComponents.value };
     clearAssemblyResult();
     for (const component of collectArchitectureNodes(node)) {
-      const item = architectureItemFromComponent(component);
+      const item: any = architectureItemFromComponent(component);
       next[item.id] = itemMustStaySelected(item) || (value && item.enabled);
     }
     selectedArchitectureComponents.value = next;
   }
 
-  function setArchitectureLayerSelection(layer: ArchitectureLayerGroup, value: boolean) {
-    const next = { ...selectedArchitectureComponents.value };
+  function setArchitectureLayerSelection(layer: ArchitectureLayerGroup, value: boolean) : any {
+    const next: Record<string, any> = { ...selectedArchitectureComponents.value };
     clearAssemblyResult();
-    const layerComponentIds = new Set(
+    const layerComponentIds: any = new Set<any>(
       architectureComponents.value
-        .filter((component) => component.layerId === layer.layerId)
+        .filter((component?: any) : any => component.layerId === layer.layerId)
         .map(componentKey),
     );
     for (const component of architectureComponents.value) {
       if (!layerComponentIds.has(componentKey(component))) {
         continue;
       }
-      const item = architectureItemFromComponent(component);
+      const item: any = architectureItemFromComponent(component);
       next[item.id] = itemMustStaySelected(item) || (value && item.enabled);
     }
     selectedArchitectureComponents.value = next;
   }
 
-  function isModuleExpanded(componentId: string) {
+  function isModuleExpanded(componentId: string) : any {
     return expandedModuleIds.value.has(componentId);
   }
 
-  function toggleModuleExpanded(componentId: string) {
-    const next = new Set(expandedModuleIds.value);
+  function toggleModuleExpanded(componentId: string) : any {
+    const next: any = new Set<any>(expandedModuleIds.value);
     if (next.has(componentId)) {
       next.delete(componentId);
     } else {
@@ -453,7 +453,7 @@ export function useVersionAssemblyView() {
     expandedModuleIds.value = next;
   }
 
-  async function refreshVersionAssembly() {
+  async function refreshVersionAssembly() : Promise<any> {
     loading.value = true;
     loadError.value = "";
     try {
@@ -468,7 +468,7 @@ export function useVersionAssemblyView() {
     }
   }
 
-  async function buildRuntimeAssemblyPackage() {
+  async function buildRuntimeAssemblyPackage() : Promise<any> {
     if (!canBuildRuntimeAssembly.value) {
       return;
     }
@@ -476,23 +476,23 @@ export function useVersionAssemblyView() {
     assemblyError.value = "";
     assemblyArtifact.value = null;
     try {
-      const response = await buildRuntimeAssembly({
+      const response: any = await buildRuntimeAssembly({
         selectedComponentIds: selectedArchitectureComponentIds.value,
       });
       assemblyArtifact.value = response.artifact;
-    } catch (error) {
+    } catch (error: any) {
       assemblyError.value = error instanceof Error ? error.message : "装配清单生成失败";
     } finally {
       buildingAssembly.value = false;
     }
   }
 
-  onMounted(() => {
+  onMounted(() : any => {
     void refreshVersionAssembly();
   });
 
   usePageRefreshHandler(
-    (detail) => detail.viewId === "admin" && detail.adminView === "versionAssembly",
+    (detail?: any) : any => detail.viewId === "admin" && detail.adminView === "versionAssembly",
     refreshVersionAssembly,
   );
 

@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted } from "vue";
 import { createConsoleWindowEventChannel } from "./console-window-event-channel";
 
-export const PAGE_REFRESH_EVENT = "meshrix:page-refresh";
+export const PAGE_REFRESH_EVENT: any = "meshrix:page-refresh";
 
 export type PageRefreshContext = {
   viewId: string;
@@ -17,13 +17,13 @@ export type PageRefreshEventDetail = PageRefreshContext & {
   addTask: (task: PageRefreshTask) => void;
 };
 
-const pageRefreshEventChannel = createConsoleWindowEventChannel<PageRefreshEventDetail>(PAGE_REFRESH_EVENT);
+const pageRefreshEventChannel: any = createConsoleWindowEventChannel<PageRefreshEventDetail>(PAGE_REFRESH_EVENT);
 
-export function collectPageRefreshTasks(context: PageRefreshContext) {
+export function collectPageRefreshTasks(context: PageRefreshContext) : any {
   const tasks: Promise<unknown>[] = [];
   const detail: PageRefreshEventDetail = {
     ...context,
-    addTask(task) {
+    addTask(task?: any) : any {
       tasks.push(Promise.resolve(task));
     },
   };
@@ -34,20 +34,20 @@ export function collectPageRefreshTasks(context: PageRefreshContext) {
 export function usePageRefreshHandler(
   predicate: (detail: PageRefreshEventDetail) => boolean,
   handler: (detail: PageRefreshEventDetail) => PageRefreshTask,
-) {
+) : any {
   let removeListener: (() => void) | null = null;
-  const listener = (detail: PageRefreshEventDetail) => {
+  const listener: any = (detail: PageRefreshEventDetail) : any => {
     if (!detail || !predicate(detail)) {
       return;
     }
     detail.addTask(handler(detail));
   };
 
-  onMounted(() => {
+  onMounted(() : any => {
     removeListener = pageRefreshEventChannel.add(listener);
   });
 
-  onBeforeUnmount(() => {
+  onBeforeUnmount(() : any => {
     removeListener?.();
     removeListener = null;
   });

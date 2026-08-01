@@ -95,20 +95,20 @@ const toolSearchResults = computed(() => {
   }
   const tokens = query.split(/\s+/).filter(Boolean);
   return props.tools
-    .map((tool) => ({
+    .map((tool: any) => ({
       tool,
       searchText: toolSearchText(tool),
       score: toolSearchScore(tool, query),
     }))
-    .filter((item) => tokens.every((token) => item.searchText.includes(token)))
-    .sort((left, right) => {
+    .filter((item: any) => tokens.every((token: any) => item.searchText.includes(token)))
+    .sort((left: any, right: any) => {
       if (right.score !== left.score) {
         return right.score - left.score;
       }
       return left.tool.label.localeCompare(right.tool.label);
     })
     .slice(0, 10)
-    .map((item) => item.tool);
+    .map((item: any) => item.tool);
 });
 
 const showToolSearchResults = computed(
@@ -116,14 +116,14 @@ const showToolSearchResults = computed(
 );
 
 function toolSearchToolsetLabel(tool: OperationPermissionTool) {
-  const currentToolset = tool.toolsets.find((toolsetId) => toolsetId === props.selectedToolsetId);
+  const currentToolset = tool.toolsets.find((toolsetId: any) => toolsetId === props.selectedToolsetId);
   return renderToolsetLabel(currentToolset || tool.toolsets[0] || "");
 }
 
 function scrollSelectedToolIntoView(toolId: string) {
   window.requestAnimationFrame(() => {
     const row = Array.from(document.querySelectorAll<HTMLElement>(".tool-list-table [data-tool-id]"))
-      .find((element) => element.dataset.toolId === toolId);
+      .find((element: any) => element.dataset.toolId === toolId);
     row?.scrollIntoView({ block: "center", behavior: "smooth" });
   });
 }

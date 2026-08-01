@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, watch } from "vue";
 import "./ConsoleSideNavDirectory.css";
+import { operationApprovalTitle } from "../../../composables/console-approval-flow-view-controller";
 import { formatCompactDate } from "../../../composables/console-format-utils";
 import { useConsoleSideNavContext } from "../../../composables/consoleSideNavContext";
+import {
+  currentConsoleLocale,
+  resolveEffectiveConsoleLocale,
+} from "../../../i18n/console";
 import type { HistorySessionPanelItem } from "../../../types/app";
 import type { McpAuthorizationRequest } from "../../../lib/authorization-governance-client";
 import type { OperationPermissionPendingOperation } from "../../../lib/operation-permission-client";
@@ -11,6 +16,7 @@ import type { WsWorkspace } from "../../../types/workspaces";
 defineOptions({ name: "ConsoleSideNavDirectory" });
 
 type DirectoryItem = HistorySessionPanelItem & {
+  approvalFilter?: "pending" | "all";
   anchorId?: string;
   badges?: DirectoryBadge[];
   statusKey?: string;
@@ -32,14 +38,28 @@ const {
   sideNavDirectoryWidth,
   workspacesConsole,
 } = useConsoleSideNavContext();
+const directoryLocale = computed(() =>
+  resolveEffectiveConsoleLocale(currentConsoleLocale.value),
+);
+function directoryText(zh: string, en: string) {
+  return directoryLocale.value === "en" ? en : zh;
+}
 
 const directoryTitle = computed(() => {
-  if (activeSideNavDirectory.value === "approval") return "待办事项";
-  if (activeSideNavDirectory.value === "workspaces") return "工作空间";
+  if (activeSideNavDirectory.value === "approval") {
+    return directoryText("待办事项", "Pending Items");
+  }
+  if (activeSideNavDirectory.value === "workspaces") {
+    return directoryText("工作空间", "Workspaces");
+  }
   return "";
 });
 
-const directoryToggleLabel = computed(() => showSideNavDirectory.value ? "收起索引栏" : "展开索引栏");
+const directoryToggleLabel = computed(() =>
+  showSideNavDirectory.value
+    ? directoryText("收起索引栏", "Collapse Index")
+    : directoryText("展开索引栏", "Expand Index"),
+);
 
 const workspaceItems = computed<DirectoryItem[]>(() =>
   workspacesConsole.workspaces.value.map((workspace: WsWorkspace) => ({
@@ -56,16 +76,16 @@ const workspaceItems = computed<DirectoryItem[]>(() =>
 );
 
 const pendingApprovalItems = computed<DirectoryItem[]>(() =>
-  approvalItems().filter((item) => item.statusKey === "pending"),
+  approvalItems().filter((item: any) => item.statusKey === "pending"),
 );
 
 const approvalHistoryItems = computed<DirectoryItem[]>(() =>
-  approvalItems().filter((item) => item.statusKey !== "pending"),
+  approvalItems().filter((item: any) => item.statusKey !== "pending"),
 );
 
 watch(
   activeSideNavDirectory,
-  (directory) => {
+  (directory: any) => {
     if (directory === "approval") {
       void Promise.all([
         approvalFlowConsole.refreshMcpAuthorizationRequests(),
@@ -80,13 +100,24 @@ watch(
 );
 
 function authorizationStatusLabel(status: unknown) {
-  if (status === "pending") return "待审批";
-  if (status === "approved") return "已批准";
-  if (status === "rejected") return "已拒绝";
-  if (status === "completed") return "已完成";
-  if (status === "expired") return "已过期";
-  if (status === "failed") return "失败";
-  return String(status || "未知状态");
+  if (status === "pending") return directoryText("待决定", "Pending");
+  if (status === "approved") return directoryText("已批准", "Approved");
+  if (status === "issuing") return directoryText("交付中", "Issuing");
+  if (status === "consumed") return directoryText("已交付", "Delivered");
+  if (status === "rejected") return directoryText("已拒绝", "Rejected");
+  if (status === "completed") return directoryText("已处理", "Processed");
+  if (status === "expired") return directoryText("已过期", "Expired");
+  if (status === "cancelled") return directoryText("已取消", "Cancelled");
+  if (status === "failed") return directoryText("失败", "Failed");
+  return String(status || directoryText("未知状态", "Unknown"));
+}
+
+function approvalRiskLabel(risk: unknown) {
+  if (risk === "read_only") return directoryText("只读", "Read Only");
+  if (risk === "safe_write") return directoryText("受限写入", "Controlled Write");
+  if (risk === "repair_write") return directoryText("修复写入", "Repair Write");
+  if (risk === "destructive") return directoryText("破坏性", "Destructive");
+  return String(risk || "");
 }
 
 function approvalItems() {
@@ -99,20 +130,22 @@ function approvalItems() {
       timeBadge(recordTimestamp(request)),
     ].filter(Boolean) as DirectoryBadge[],
     statusKey: String(request.status || ""),
+    approvalFilter: request.status === "pending" ? "pending" as const : "all" as const,
     anchorId: `approval-authorization:${request.requestId}`,
   }));
   const pendingOperationItems = approvalFlowConsole.operationPermissionPendingOperations.value.map((
     operation: OperationPermissionPendingOperation,
   ) => ({
     id: `pending-operation:${operation.pendingOperationId}`,
-    title: operation.toolId || operation.operationId || operation.pendingOperationId,
+    title: operationApprovalTitle(operation),
     badges: [
       { label: "OP", tone: "info" },
       { label: authorizationStatusLabel(operation.status), tone: statusTone(operation.status) },
-      operation.risk ? { label: String(operation.risk), tone: "neutral" } : null,
+      operation.risk ? { label: approvalRiskLabel(operation.risk), tone: "neutral" } : null,
       timeBadge(recordTimestamp(operation)),
     ].filter(Boolean) as DirectoryBadge[],
     statusKey: String(operation.status || ""),
+    approvalFilter: operation.status === "pending" ? "pending" as const : "all" as const,
     anchorId: `approval-pendingOperation:${operation.pendingOperationId}`,
   }));
   return [...authorizationItems, ...pendingOperationItems];
@@ -124,6 +157,13 @@ async function scrollToAnchor(anchorId?: string) {
   window.requestAnimationFrame(() => {
     document.getElementById(anchorId)?.scrollIntoView({ block: "start", behavior: "smooth" });
   });
+}
+
+async function selectApprovalItem(item: DirectoryItem) {
+  await approvalFlowConsole.selectApprovalFlowStatus(
+    item.approvalFilter || "all",
+  );
+  await scrollToAnchor(item.anchorId);
 }
 
 function selectWorkspaceItem(item: DirectoryItem) {
@@ -138,8 +178,14 @@ function activeBadge(active?: boolean): DirectoryBadge {
     : { label: "未选中", tone: "muted" };
 }
 
-function timeBadge(value = ""): DirectoryBadge | null {
-  return value ? { label: formatCompactDate(value), title: "最后更新", tone: "neutral" } : null;
+function timeBadge(value: any = ""): DirectoryBadge | null {
+  return value
+    ? {
+        label: formatCompactDate(value),
+        title: directoryText("最后更新", "Last Updated"),
+        tone: "neutral",
+      }
+    : null;
 }
 
 function statusBadge(status: unknown): DirectoryBadge | null {
@@ -170,15 +216,24 @@ function statusLabel(status: string) {
 
 function statusTone(status: unknown): DirectoryBadge["tone"] {
   const value = String(status || "");
-  if (["active", "approved", "completed", "resolved", "watching"].includes(value)) return "success";
-  if (["pending", "partial", "queued", "syncing", "running"].includes(value)) return "warning";
+  if (["active", "approved", "completed", "consumed", "resolved", "watching"].includes(value)) return "success";
+  if (["issuing", "pending", "partial", "queued", "syncing", "running"].includes(value)) return "warning";
   if (["error", "failed", "rejected"].includes(value)) return "danger";
-  if (["idle", "stopped"].includes(value)) return "muted";
+  if (["cancelled", "expired", "idle", "stopped"].includes(value)) return "muted";
   return "neutral";
 }
 
 function recordTimestamp(record: Record<string, unknown>) {
-  return String(record.updatedAt || record.createdAt || record.requestedAt || record.resolvedAt || "");
+  return String(
+    record.consumedAt ||
+      record.completedAt ||
+      record.issuingAt ||
+      record.resolvedAt ||
+      record.updatedAt ||
+      record.createdAt ||
+      record.requestedAt ||
+      "",
+  );
 }
 
 let stopResizeListeners: (() => void) | null = null;
@@ -260,32 +315,38 @@ onBeforeUnmount(stopDirectoryResize);
               :key="item.id"
               class="side-nav-directory-item"
             >
-              <button class="side-nav-directory-item-main" type="button" @click="scrollToAnchor(item.anchorId)">
+              <button class="side-nav-directory-item-main" type="button" @click="selectApprovalItem(item)">
                 <span class="side-nav-directory-item-title">{{ item.title }}</span>
                 <span v-if="item.badges?.length" class="side-nav-directory-item-badges">
                   <span v-for="badge in item.badges" :key="`${item.id}:${badge.label}`" class="side-nav-directory-status-pill" :data-tone="badge.tone || 'neutral'" :title="badge.title">{{ badge.label }}</span>
                 </span>
               </button>
             </li>
-            <li v-if="!pendingApprovalItems.length" class="side-nav-directory-empty">暂无待处理事项</li>
+            <li v-if="!pendingApprovalItems.length" class="side-nav-directory-empty">
+              {{ directoryText("暂无待处理事项", "No Pending Items") }}
+            </li>
           </ul>
         </section>
         <section class="side-nav-directory-section">
-          <p class="side-nav-directory-section-title">历史记录</p>
+          <p class="side-nav-directory-section-title">
+            {{ directoryText("历史记录", "History") }}
+          </p>
           <ul class="side-nav-directory-list">
             <li
               v-for="item in approvalHistoryItems"
               :key="item.id"
               class="side-nav-directory-item"
             >
-              <button class="side-nav-directory-item-main" type="button" @click="scrollToAnchor(item.anchorId)">
+              <button class="side-nav-directory-item-main" type="button" @click="selectApprovalItem(item)">
                 <span class="side-nav-directory-item-title">{{ item.title }}</span>
                 <span v-if="item.badges?.length" class="side-nav-directory-item-badges">
                   <span v-for="badge in item.badges" :key="`${item.id}:${badge.label}`" class="side-nav-directory-status-pill" :data-tone="badge.tone || 'neutral'" :title="badge.title">{{ badge.label }}</span>
                 </span>
               </button>
             </li>
-            <li v-if="!approvalHistoryItems.length" class="side-nav-directory-empty">暂无历史记录</li>
+            <li v-if="!approvalHistoryItems.length" class="side-nav-directory-empty">
+              {{ directoryText("暂无历史记录", "No History") }}
+            </li>
           </ul>
         </section>
       </template>

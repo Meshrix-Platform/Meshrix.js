@@ -22,7 +22,16 @@ export type PublishDescriptorForm = Omit<UpstreamServiceDescriptor, "serviceProt
   referenceUse?: string;
 };
 
-export const descriptorObjectFields = [
+export type DescriptorObjectField =
+  | "interfaceSchemas"
+  | "permissions"
+  | "approvalPolicy"
+  | "trafficPolicy"
+  | "audience"
+  | "tagPolicy"
+  | "circuitBreaker";
+
+export const descriptorObjectFields: readonly DescriptorObjectField[] = [
   "interfaceSchemas",
   "permissions",
   "approvalPolicy",
@@ -30,4 +39,4 @@ export const descriptorObjectFields = [
   "audience",
   "tagPolicy",
   "circuitBreaker"
-] as const;
+];

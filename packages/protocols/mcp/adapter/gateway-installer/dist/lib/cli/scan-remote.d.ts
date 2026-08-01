@@ -1,0 +1,21 @@
+export declare function detectOrbVms(orbBin?: any): Promise<any>;
+export declare function linuxExecutableScanScript(command?: any): any;
+export declare function detectOrbCommand({ orbBin, vmName, vmUser, command }: Record<string, any>): Promise<any>;
+export declare function detectOrbCommandPaths({ orbBin, vmName, vmUser, command }: Record<string, any>): Promise<any>;
+export declare function detectDockerContainers(runtimeBin?: any, kind?: any): Promise<any>;
+export declare function parseRunningTableRows(stdout?: any, { skipHeaderPattern }?: Record<string, any>): any;
+export declare function contextListDedup(contexts?: any): any;
+export declare function detectLimaInstances(limactlBin?: any): Promise<any>;
+export declare function detectColimaInstances(colimaBin?: any): Promise<any>;
+export declare function detectMultipassInstances(multipassBin?: any): Promise<any>;
+export declare function detectLxdLikeInstances(runtimeBin?: any, kind?: any): Promise<any>;
+export declare function detectVagrantInstances(vagrantBin?: any): Promise<any>;
+export declare function detectParallelsVms(prlctlBin?: any): Promise<any>;
+export declare function detectWslDistros(wslBin?: any): Promise<any>;
+export declare function remoteLinuxShell(context?: any, script?: any, options?: Record<string, any>): Promise<any>;
+export declare function remoteLinuxShellWithInput(context?: any, script?: any, input?: any, env?: Record<string, any>, options?: Record<string, any>): Promise<any>;
+export declare function runRemoteLinuxCommand(context?: any, args?: any, options?: Record<string, any>): Promise<any>;
+export declare function detectRemoteLinuxCommandPaths(context?: any, command?: any): Promise<any>;
+export declare function remoteLinuxCommandSupportsMcp(context?: any, command?: any): Promise<any>;
+export declare function remoteClientBaseUrl(context?: any, baseUrl?: any): Promise<any>;
+//# sourceMappingURL=scan-remote.d.ts.map

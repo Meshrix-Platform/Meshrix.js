@@ -6,10 +6,10 @@ import type { useWorkspacesConsole } from "./useWorkspacesConsole";
 
 export type WorkspacesViewContext = ReturnType<typeof useWorkspacesConsole>;
 
-export function provideWorkspacesView(context: WorkspacesViewContext) {
+export function provideWorkspacesView(context: WorkspacesViewContext) : any {
   providePublicWorkspacesView(context);
 }
 
-export function useWorkspacesViewContext() {
+export function useWorkspacesViewContext() : any {
   return usePublicWorkspacesViewContext<WorkspacesViewContext>();
 }

@@ -62,7 +62,7 @@ function handleDocumentKeydown(event: KeyboardEvent) {
 
   const focusable = Array.from(dialogRef.value.querySelectorAll<HTMLElement>(
     "button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex='-1'])",
-  )).filter((element) => !element.hasAttribute("hidden"));
+  )).filter((element: any) => !element.hasAttribute("hidden"));
   if (!focusable.length) {
     event.preventDefault();
     dialogRef.value.focus({ preventScroll: true });
@@ -93,7 +93,7 @@ onBeforeUnmount(() => {
   previouslyFocusedElement = null;
 });
 
-watch(currentConfirm, async (next, previous) => {
+watch(currentConfirm, async (next: any, previous: any) => {
   requireTextInput.value = "";
   settlingConfirmId.value = null;
   if (!next) {

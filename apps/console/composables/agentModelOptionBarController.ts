@@ -40,39 +40,39 @@ export type AgentModelOptionBarEmits = {
   (event: "change", value: AgentOptionValue): void;
 };
 
-export const EMPTY_MODEL_LIBRARY_ACTION = "__meshrix_empty_model_library_action__";
+export const EMPTY_MODEL_LIBRARY_ACTION: any = "__meshrix_empty_model_library_action__";
 
-function normalizedValue(option: AgentOption) {
+function normalizedValue(option: AgentOption) : any {
   return option.agentUid ?? option.value ?? "";
 }
 
-function optionDisabled(option: AgentOption) {
+function optionDisabled(option: AgentOption) : any {
   return option.disabled === true || option.selectable === false || option.enabled === false;
 }
 
 export function useAgentModelOptionBarController(
   props: Readonly<AgentModelOptionBarProps>,
   emit: AgentModelOptionBarEmits,
-) {
-  function normalizedLabel(option: AgentOption) {
-    const label = String(option.label || normalizedValue(option) || "").trim();
+) : any {
+  function normalizedLabel(option: AgentOption) : any {
+    const label: any = String(option.label || normalizedValue(option) || "").trim();
     if (!props.showDisabledReason || !optionDisabled(option)) {
       return label;
     }
-    const reason = String(option.reason || option.disabledReason || "").trim();
+    const reason: any = String(option.reason || option.disabledReason || "").trim();
     return reason ? `${label}（${reason}）` : `${label}（不可用）`;
   }
 
-  const selectOptions = computed(() => {
-    const seen = new Set<string>();
+  const selectOptions: any = computed(() : any => {
+    const seen: any = new Set<string>();
     return (props.options || [])
-      .map((option) => ({
+      .map((option?: any) : any => ({
         value: normalizedValue(option),
         label: normalizedLabel(option),
         disabled: optionDisabled(option),
       }))
-      .filter((option) => {
-        const key = String(option.value || "").trim();
+      .filter((option?: any) : any => {
+        const key: any = String(option.value || "").trim();
         if (!key || seen.has(key)) {
           return false;
         }
@@ -81,30 +81,30 @@ export function useAgentModelOptionBarController(
       });
   });
 
-  const hasConfiguredOptions = computed(() => selectOptions.value.length > 0);
-  const selectValue = computed(() =>
+  const hasConfiguredOptions: any = computed(() : any => selectOptions.value.length > 0);
+  const selectValue: any = computed(() : any =>
     hasConfiguredOptions.value ? String(props.modelValue ?? "") : EMPTY_MODEL_LIBRARY_ACTION,
   );
-  const emptyLibraryActionLabel = computed(() =>
+  const emptyLibraryActionLabel: any = computed(() : any =>
     [props.emptyLibraryActionIcon, props.emptyLibraryLabel]
-      .map((item) => String(item || "").trim())
+      .map((item?: any) : any => String(item || "").trim())
       .filter(Boolean)
       .join(" "),
   );
 
-  function emitValue(value: AgentOptionValue) {
+  function emitValue(value: AgentOptionValue) : any {
     emit("update:modelValue", value);
     emit("change", value);
   }
 
-  function navigateToModelLibrary() {
-    const route = String(props.emptyLibraryRoute || "/admin/agent-config").trim();
+  function navigateToModelLibrary() : any {
+    const route: any = String(props.emptyLibraryRoute || "/admin/agent-config").trim();
     if (!route) return;
     navigateBrowserHashRoute(route, "/admin/agent-config");
   }
 
-  function handleChange(event: Event) {
-    const value = (event.target as HTMLSelectElement | null)?.value || "";
+  function handleChange(event: Event) : any {
+    const value: any = (event.target as HTMLSelectElement | null)?.value || "";
     if (value === EMPTY_MODEL_LIBRARY_ACTION) {
       navigateToModelLibrary();
       return;
@@ -112,13 +112,13 @@ export function useAgentModelOptionBarController(
     emitValue(value);
   }
 
-  function handleSelectClick() {
+  function handleSelectClick() : any {
     if (!hasConfiguredOptions.value) {
       navigateToModelLibrary();
     }
   }
 
-  function handleSelectKeydown(event: KeyboardEvent) {
+  function handleSelectKeydown(event: KeyboardEvent) : any {
     if (!hasConfiguredOptions.value && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
       navigateToModelLibrary();

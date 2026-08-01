@@ -16,13 +16,13 @@ type ConsoleDiscoveryControllerOptions = {
 
 export function createConsoleDiscoveryController(
   options: ConsoleDiscoveryControllerOptions,
-) {
-  const discoveryDraft = ref<DiscoveryConfig>({ ...emptyDiscovery });
-  const discoveryDraftDirty = ref(false);
+) : any {
+  const discoveryDraft: any = ref<DiscoveryConfig>({ ...emptyDiscovery });
+  const discoveryDraftDirty: any = ref(false);
 
   watch(
     discoveryDraft,
-    () => {
+    () : any => {
       if (!options.isApplyingRemoteConsoleDrafts()) {
         discoveryDraftDirty.value = true;
       }
@@ -33,8 +33,8 @@ export function createConsoleDiscoveryController(
   function replaceDiscoveryDraftFromServer(
     value: Partial<DiscoveryConfig> | null | undefined,
     replaceOptions: { markClean?: boolean } = {},
-  ) {
-    const nextDraft = {
+  ) : any {
+    const nextDraft: Record<string, any> = {
       ...emptyDiscovery,
       ...(value || {}),
     };
@@ -44,7 +44,7 @@ export function createConsoleDiscoveryController(
       }
       return;
     }
-    options.applyRemoteConsoleDraftUpdate(() => {
+    options.applyRemoteConsoleDraftUpdate(() : any => {
       discoveryDraft.value = nextDraft;
       if (replaceOptions.markClean !== false) {
         discoveryDraftDirty.value = false;
@@ -52,7 +52,7 @@ export function createConsoleDiscoveryController(
     });
   }
 
-  async function saveDiscovery() {
+  async function saveDiscovery() : Promise<any> {
     options.setBusy("discovery");
     options.error.value = "";
 
@@ -60,7 +60,7 @@ export function createConsoleDiscoveryController(
       await saveDiscoveryConfig(discoveryDraft.value);
       discoveryDraftDirty.value = false;
       await options.refreshState({ forceDrafts: false });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存服务发现配置失败。";
       options.clearAllBusy();

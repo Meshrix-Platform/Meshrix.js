@@ -71,7 +71,7 @@ const canCommit = computed(() => dirty.value && !state.saving && !props.readonly
 
 watch(
   () => stableJsonText(props.modelValue),
-  (nextText) => {
+  (nextText: any) => {
     if (nextText === state.sourceSignature) {
       return;
     }

@@ -58,7 +58,7 @@ function optionIconComponent(icon?: OptionBarIcon) {
 }
 
 function optionIconForValue(value: unknown) {
-  const option = props.options.find((item) => Object.is(item.value, value));
+  const option = props.options.find((item: any) => Object.is(item.value, value));
   return optionIconComponent(option?.icon);
 }
 

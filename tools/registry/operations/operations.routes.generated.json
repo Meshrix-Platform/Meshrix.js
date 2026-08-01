@@ -1,5 +1,5 @@
 {
-  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.mjs",
+  "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
   "routeCount": 592,

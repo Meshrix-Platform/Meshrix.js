@@ -8,7 +8,7 @@ type VersionReleaseSnapshot = {
   productionHealthError?: string;
 };
 
-function errorMessage(error: unknown) {
+function errorMessage(error: unknown) : any {
   return error instanceof Error ? error.message : String(error);
 }
 

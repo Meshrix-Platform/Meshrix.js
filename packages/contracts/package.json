@@ -13,10 +13,14 @@
   },
   "type": "module",
   "exports": {
-    "./*": "./src/*.mjs"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
   },
   "files": [
-    "src/**/*",
+    "dist/**/*",
     "README.md",
     "LICENSE",
     "package.json"

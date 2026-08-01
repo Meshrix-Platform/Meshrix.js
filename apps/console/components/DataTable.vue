@@ -31,6 +31,7 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any, ev
     border
     stripe
     size="small"
+    scrollbar-always-on
     class="meshrix-data-table"
     @scroll="handleScroll"
     @header-dragend="handleHeaderDragend"

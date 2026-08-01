@@ -8,41 +8,41 @@ import {
   validateContextProfileForm,
 } from "../../../apps/console/composables/console-context-compiler-controller";
 
-const contextCompilerClientMock = vi.hoisted(() => ({
+const contextCompilerClientMock: any = vi.hoisted(() : any => ({
   getContextProfiles: vi.fn(),
   listContextBuildRecords: vi.fn(),
   previewContextPack: vi.fn(),
   runContextEvaluation: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/context-compiler-client", () => contextCompilerClientMock);
-vi.mock("../../../apps/console/composables/console-browser-effects", () => ({
+vi.mock("../../../apps/console/lib/context-compiler-client", () : any => contextCompilerClientMock);
+vi.mock("../../../apps/console/composables/console-browser-effects", () : any => ({
   downloadTextFile: vi.fn(),
 }));
 
-function createHarness() {
-  let selectedContextProfileId = "";
-  const error = ref("");
-  const setBusy = vi.fn();
-  const clearAllBusy = vi.fn();
-  const controller = createConsoleContextCompilerController({
+function createHarness() : any {
+  let selectedContextProfileId: any = "";
+  const error: any = ref("");
+  const setBusy: any = vi.fn();
+  const clearAllBusy: any = vi.fn();
+  const controller: any = createConsoleContextCompilerController({
     clearAllBusy,
     error,
-    selectedContextProfileId: () => selectedContextProfileId,
+    selectedContextProfileId: () : any => selectedContextProfileId,
     setBusy,
   });
   return {
     clearAllBusy,
     controller,
     error,
-    selectProfile: (profileId: string) => {
+    selectProfile: (profileId: string) : any => {
       selectedContextProfileId = profileId;
     },
     setBusy,
   };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
   contextCompilerClientMock.getContextProfiles.mockResolvedValue({ profiles: [] });
   contextCompilerClientMock.listContextBuildRecords.mockResolvedValue({ records: [] });
@@ -50,8 +50,8 @@ beforeEach(() => {
   contextCompilerClientMock.runContextEvaluation.mockResolvedValue({ results: [] });
 });
 
-describe("console context profile truthfulness", () => {
-  it("keeps an untouched form empty and only exposes defaults through the add candidate", () => {
+describe("console context profile truthfulness", () : any => {
+  it("keeps an untouched form empty and only exposes defaults through the add candidate", () : any => {
     expect(createContextProfileForm()).toEqual({
       profileId: "",
       label: "",
@@ -62,7 +62,7 @@ describe("console context profile truthfulness", () => {
       operatorGuidanceRatio: "",
     });
 
-    const candidate = createContextProfileCandidateTemplate();
+    const candidate: any = createContextProfileCandidateTemplate();
     expect(candidate).toMatchObject({
       contextWindowTokens: 128_000,
       referenceBudget: 40_960,
@@ -88,11 +88,11 @@ describe("console context profile truthfulness", () => {
       candidate.referenceBudget,
       candidate.historyBudget,
       candidate.recentTurnBudget,
-    ].every((value) => Number(value) % 1024 === 0)).toBe(true);
+    ].every((value?: any) : any => Number(value) % 1024 === 0)).toBe(true);
   });
 
-  it("does not synthesize label, model, numeric, or compression values while editing", () => {
-    const original = {
+  it("does not synthesize label, model, numeric, or compression values while editing", () : any => {
+    const original: Record<string, any> = {
       profileId: "sparse-profile",
       modelAlias: "",
       compression: {
@@ -101,7 +101,7 @@ describe("console context profile truthfulness", () => {
         strategy: "",
       },
     };
-    const form = createContextProfileForm(original);
+    const form: any = createContextProfileForm(original);
 
     expect(form).toEqual({
       profileId: "sparse-profile",
@@ -115,12 +115,12 @@ describe("console context profile truthfulness", () => {
     expect(validateContextProfileForm(form)).toBe("请填写窗口总量。");
     expect(buildContextProfileFromForm(form, original)).toEqual(original);
 
-    const newForm = createContextProfileForm();
+    const newForm: any = createContextProfileForm();
     newForm.profileId = "empty-profile";
     expect(buildContextProfileFromForm(newForm)).toEqual({ profileId: "empty-profile" });
   });
 
-  it("projects missing profile fields as missing instead of deterministic or zero defaults", async () => {
+  it("projects missing profile fields as missing instead of deterministic or zero defaults", async () : Promise<any> => {
     contextCompilerClientMock.getContextProfiles.mockResolvedValue({
       profiles: [
         { profileId: "profile-beta" },
@@ -131,7 +131,7 @@ describe("console context profile truthfulness", () => {
 
     await controller.refreshContextCompiler();
 
-    expect(controller.contextProfileRows.value.map((profile) => profile.profileId)).toEqual([
+    expect(controller.contextProfileRows.value.map((profile?: any) : any => profile.profileId)).toEqual([
       "profile-alpha",
       "profile-beta",
     ]);
@@ -149,8 +149,8 @@ describe("console context profile truthfulness", () => {
   });
 });
 
-describe("console context preview truthfulness", () => {
-  it("starts empty and does not send preview or evaluation requests without a selected profile", async () => {
+describe("console context preview truthfulness", () : any => {
+  it("starts empty and does not send preview or evaluation requests without a selected profile", async () : Promise<any> => {
     const { controller, error, setBusy, clearAllBusy } = createHarness();
 
     expect(controller.contextPreviewTask.value).toBe("");
@@ -174,7 +174,7 @@ describe("console context preview truthfulness", () => {
     expect(error.value).toBe("请先选择上下文配置。");
   });
 
-  it("sends only the selected profile and user-entered task and evidence identifiers", async () => {
+  it("sends only the selected profile and user-entered task and evidence identifiers", async () : Promise<any> => {
     const { controller, selectProfile } = createHarness();
     selectProfile(" profile-a ");
     controller.contextPreviewTask.value = "  inspect supplied evidence  ";
@@ -189,7 +189,7 @@ describe("console context preview truthfulness", () => {
       requiredEvidenceIds: ["evidence-a", "evidence-b"],
       retrievedEvidence: [],
     });
-    const previewPayload = contextCompilerClientMock.previewContextPack.mock.calls[0][0];
+    const previewPayload: any = contextCompilerClientMock.previewContextPack.mock.calls[0][0];
     expect(previewPayload).not.toHaveProperty("systemMemory");
     expect(previewPayload).not.toHaveProperty("operatorGuidance");
     expect(previewPayload).not.toHaveProperty("history");
@@ -199,7 +199,7 @@ describe("console context preview truthfulness", () => {
     controller.contextPreviewRequiredEvidence.value = "";
     await controller.runContextReplayEvaluation();
 
-    const evaluationPayload = contextCompilerClientMock.runContextEvaluation.mock.calls[0][0];
+    const evaluationPayload: any = contextCompilerClientMock.runContextEvaluation.mock.calls[0][0];
     expect(evaluationPayload.profiles).toEqual(["profile-a"]);
     expect(evaluationPayload.cases).toHaveLength(1);
     expect(evaluationPayload.cases[0]).toMatchObject({

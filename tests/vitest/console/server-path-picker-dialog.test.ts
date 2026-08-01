@@ -3,17 +3,17 @@ import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { reactive } from "vue";
 
-const shellState = vi.hoisted(() => ({
+const shellState: any = vi.hoisted(() : any => ({
   context: {} as Record<string, unknown>,
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () => ({
-  useServerConsoleShellContext: () => shellState.context,
+vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+  useServerConsoleShellContext: () : any => shellState.context,
 }));
 
 import ServerPathPickerDialog from "../../../apps/console/components/shell/ServerPathPickerDialog.vue";
 
-function createPathPicker(overrides: Record<string, unknown> = {}) {
+function createPathPicker(overrides: Record<string, unknown> = {}) : any {
   return reactive({
     open: true,
     title: "选择文件",
@@ -55,15 +55,15 @@ function createPathPicker(overrides: Record<string, unknown> = {}) {
   });
 }
 
-function mountDialog(pathPicker = createPathPicker()) {
-  const context = {
+function mountDialog(pathPicker: any = createPathPicker()) : any {
+  const context: Record<string, any> = {
     closeServerPathPicker: vi.fn(),
     confirmServerPathPicker: vi.fn(),
     openPathEntry: vi.fn(),
-    pathEntryMeta: vi.fn((entry: { type: string; byteSize?: number }) =>
+    pathEntryMeta: vi.fn((entry: { type: string; byteSize?: number }) : any =>
       entry.type === "file" ? `${entry.byteSize || 0} B / date` : ""),
     pathPicker,
-    pathPickerModeLabel: vi.fn((mode: string) => (mode === "file" ? "文件" : "目录")),
+    pathPickerModeLabel: vi.fn((mode: string) : any => (mode === "file" ? "文件" : "目录")),
     refreshServerPathBrowser: vi.fn(),
     selectServerPath: vi.fn(),
   };
@@ -78,7 +78,7 @@ function mountDialog(pathPicker = createPathPicker()) {
             props: ["modelValue", "label"],
             emits: ["update:modelValue", "change"],
             methods: {
-              onChange(event: Event) {
+              onChange(event: Event) : any {
                 this.$emit("update:modelValue", (event.target as HTMLInputElement).checked);
                 this.$emit("change");
               },
@@ -100,13 +100,13 @@ function mountDialog(pathPicker = createPathPicker()) {
   };
 }
 
-describe("ServerPathPickerDialog behavior", () => {
-  beforeEach(() => {
+describe("ServerPathPickerDialog behavior", () : any => {
+  beforeEach(() : any => {
     vi.clearAllMocks();
     shellState.context = {};
   });
 
-  it("renders a populated picker and delegates mouse and keyboard actions", async () => {
+  it("renders a populated picker and delegates mouse and keyboard actions", async () : Promise<any> => {
     const { context, wrapper } = mountDialog();
 
     expect(wrapper.find('[role="dialog"]').attributes("aria-label")).toBe("选择文件");
@@ -121,11 +121,11 @@ describe("ServerPathPickerDialog behavior", () => {
     await wrapper.find(".path-picker-close-button").trigger("click");
     expect(context.closeServerPathPicker).toHaveBeenCalledTimes(1);
 
-    const rootButtons = wrapper.findAll(".path-picker-roots button");
+    const rootButtons: any = wrapper.findAll(".path-picker-roots button");
     await rootButtons[0].trigger("click");
     expect(context.refreshServerPathBrowser).toHaveBeenCalledWith("/private/user");
 
-    const toolbarButtons = wrapper.findAll(".path-picker-toolbar button");
+    const toolbarButtons: any = wrapper.findAll(".path-picker-toolbar button");
     await toolbarButtons[0].trigger("click");
     expect(context.refreshServerPathBrowser).toHaveBeenCalledWith("/workspace");
     await toolbarButtons[1].trigger("click");
@@ -134,7 +134,7 @@ describe("ServerPathPickerDialog behavior", () => {
     await wrapper.find(".binary-checkbox-stub input").trigger("change");
     expect(context.refreshServerPathBrowser).toHaveBeenCalledWith();
 
-    const browsable = wrapper.find(".path-picker-entry-main.is-browsable");
+    const browsable: any = wrapper.find(".path-picker-entry-main.is-browsable");
     await browsable.trigger("click");
     await browsable.trigger("keydown.enter");
     await browsable.trigger("keydown.space");
@@ -144,7 +144,7 @@ describe("ServerPathPickerDialog behavior", () => {
     await wrapper.find(".path-picker-entry-actions button").trigger("click");
     expect(context.selectServerPath).toHaveBeenCalledWith("/workspace/docs/readme.md");
 
-    const footerButtons = wrapper.findAll(".path-picker-footer button");
+    const footerButtons: any = wrapper.findAll(".path-picker-footer button");
     await footerButtons[0].trigger("click");
     await footerButtons[1].trigger("click");
     expect(context.confirmServerPathPicker).toHaveBeenCalledTimes(1);
@@ -154,8 +154,8 @@ describe("ServerPathPickerDialog behavior", () => {
     expect(context.closeServerPathPicker).toHaveBeenCalledTimes(3);
   });
 
-  it("renders empty, loading, error, disabled parent, and closed branches", () => {
-    const emptyPicker = createPathPicker({
+  it("renders empty, loading, error, disabled parent, and closed branches", () : any => {
+    const emptyPicker: any = createPathPicker({
       mode: "directory",
       extensions: [],
       loading: false,
@@ -178,7 +178,7 @@ describe("ServerPathPickerDialog behavior", () => {
     expect(wrapper.find(".path-picker-footer button").text()).toBe("取消");
     expect(wrapper.find(".path-picker-footer button").text()).not.toBe("确认");
 
-    const loadingPicker = createPathPicker({
+    const loadingPicker: any = createPathPicker({
       loading: true,
       response: {
         currentPath: "",
@@ -188,10 +188,10 @@ describe("ServerPathPickerDialog behavior", () => {
         entries: [],
       },
     });
-    const loading = mountDialog(loadingPicker).wrapper;
+    const loading: any = mountDialog(loadingPicker).wrapper;
     expect(loading.text()).toContain("正在读取目录");
 
-    const closed = mountDialog(createPathPicker({ open: false })).wrapper;
+    const closed: any = mountDialog(createPathPicker({ open: false })).wrapper;
     expect(closed.find('[role="dialog"]').exists()).toBe(false);
   });
 });

@@ -1,0 +1,71 @@
+{
+  "$schema": "./schema/release-acceptance-standards.schema.json",
+  "version": "v0.0.1:registry:release-acceptance-standards-1",
+  "functionalCompleteness": {
+    "claim": "functional-complete",
+    "requiredForRelease": true,
+    "command": "npm run verify:acceptance",
+    "plan": "end-to-end-release/functional-release-acceptance",
+    "covers": [
+      "source-organization",
+      "static-contracts",
+      "unit-and-integration-behavior",
+      "development-environment-simulation",
+      "failure-injection",
+      "repeatability",
+      "fresh-container-deployment",
+      "privacy-safe-evidence"
+    ]
+  },
+  "realMachineVerification": {
+    "claim": "real-machine-verified",
+    "requiredForRelease": false,
+    "requiresClaim": "functional-complete",
+    "command": "npm run verify:real-machine",
+    "workflow": ".github/workflows/real-machine-validation.yml",
+    "targets": [
+      {
+        "id": "native-linux-x64",
+        "system": "linux-x64",
+        "environment": "native-host",
+        "mode": "optional",
+        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+      },
+      {
+        "id": "native-linux-arm64",
+        "system": "linux-arm64",
+        "environment": "native-host",
+        "mode": "optional",
+        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+      },
+      {
+        "id": "native-macos-arm64",
+        "system": "macos-arm64",
+        "environment": "native-host",
+        "mode": "optional",
+        "simulationCommand": "npm run verify:mcp-release-portable-assembly"
+      },
+      {
+        "id": "native-windows-x64",
+        "system": "windows-x64",
+        "environment": "native-host",
+        "mode": "optional",
+        "simulationCommand": "npm run verify:mcp-release-portable-assembly"
+      },
+      {
+        "id": "public-cloud-single-node",
+        "system": "declared-linux",
+        "environment": "public-cloud",
+        "mode": "optional",
+        "simulationCommand": "npm run verify:enterprise-single-node:ubuntu-container"
+      },
+      {
+        "id": "clean-host-recovery",
+        "system": "declared-linux",
+        "environment": "independent-recovery-host",
+        "mode": "optional",
+        "simulationCommand": "node tools/server-scripts/verify-storage-production-restore-drill.ts"
+      }
+    ]
+  }
+}

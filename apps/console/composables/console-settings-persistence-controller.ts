@@ -34,7 +34,7 @@ type ConsoleSettingsPersistenceControllerOptions = {
 
 export function createConsoleSettingsPersistenceController(
   options: ConsoleSettingsPersistenceControllerOptions,
-) {
+) : any {
   function settingsPayloadWithoutModelLibrary(): Partial<AgentSettings> {
     const {
       modelLibraryAgents: _modelLibraryAgents,
@@ -46,7 +46,7 @@ export function createConsoleSettingsPersistenceController(
     return payload;
   }
 
-  async function saveModuleSettings() {
+  async function saveModuleSettings() : Promise<any> {
     options.setBusy("modules");
     options.error.value = "";
 
@@ -58,14 +58,14 @@ export function createConsoleSettingsPersistenceController(
       });
       options.mountDraftDirty.value = false;
       await options.refreshState({ forceSettings: true, forceDrafts: false });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存设置失败。";
       options.clearAllBusy();
     }
   }
 
-  async function saveMountModules(busy = "mounts") {
+  async function saveMountModules(busy: any = "mounts") : Promise<any> {
     options.setBusy(busy);
     options.error.value = "";
 
@@ -75,7 +75,7 @@ export function createConsoleSettingsPersistenceController(
       });
       options.mountDraftDirty.value = false;
       await options.refreshState({ forceDrafts: false });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存挂载模块失败。";
     } finally {
@@ -83,21 +83,21 @@ export function createConsoleSettingsPersistenceController(
     }
   }
 
-  async function reloadModules() {
+  async function reloadModules() : Promise<any> {
     options.setBusy("module-reload");
     options.error.value = "";
 
     try {
       await reloadRuntimeMounts(options.settingsDraft.value);
       await options.refreshState({ forceDrafts: false });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "重载智能能力失败。";
       options.clearAllBusy();
     }
   }
 
-  async function enableMountModule(name: string) {
+  async function enableMountModule(name: string) : Promise<any> {
     if (!String(options.mountDraft.value[name] || "").trim()) {
       options.error.value = `请先填写 ${moduleNameLabels[name] || name} 的模块路径。`;
       return;
@@ -106,7 +106,7 @@ export function createConsoleSettingsPersistenceController(
     await saveMountModules(`mount:${name}`);
   }
 
-  async function disableMountModule(name: string) {
+  async function disableMountModule(name: string) : Promise<any> {
     options.mountDraft.value = {
       ...options.mountDraft.value,
       [name]: "",
@@ -114,7 +114,7 @@ export function createConsoleSettingsPersistenceController(
     await saveMountModules(`mount:${name}`);
   }
 
-  async function saveSettings() {
+  async function saveSettings() : Promise<any> {
     options.setBusy("settings");
     options.error.value = "";
 
@@ -122,26 +122,26 @@ export function createConsoleSettingsPersistenceController(
       await saveSettingsRequest(settingsPayloadWithoutModelLibrary());
       options.settingsDraftDirty.value = false;
       await options.refreshState({ forceSettings: true, forceDrafts: false });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存基础设置失败。";
       options.clearAllBusy();
     }
   }
 
-  async function saveModelLibrarySettings() {
+  async function saveModelLibrarySettings() : Promise<any> {
     options.setBusy("model-library-save");
     options.error.value = "";
 
     try {
-      const failures = await options.probeModelLibraryBeforeSave();
+      const failures: any = await options.probeModelLibraryBeforeSave();
       if (failures.length) {
-        const details = failures
+        const details: any = failures
           .slice(0, 6)
-          .map(({ entry, result }) => `- ${entry.label || options.modelEntryStatusKey(entry)}：${result.message || "探测失败"}`)
+          .map(({ entry, result }: Record<string, any>) : any => `- ${entry.label || options.modelEntryStatusKey(entry)}：${result.message || "探测失败"}`)
           .join("\n");
-        const suffix = failures.length > 6 ? `\n- 另有 ${failures.length - 6} 个智能体未通过探测。` : "";
-        const confirmed = await confirmConsoleAction(
+        const suffix: any = failures.length > 6 ? `\n- 另有 ${failures.length - 6} 个智能体未通过探测。` : "";
+        const confirmed: any = await confirmConsoleAction(
           `保存前探测发现 ${failures.length} 个智能体不可用：\n${details}${suffix}\n\n是否仍然保存这些配置？`,
         );
         if (!confirmed) {
@@ -151,7 +151,7 @@ export function createConsoleSettingsPersistenceController(
       await saveSettingsRequest(options.settingsPayloadForSave());
       options.settingsDraftDirty.value = false;
       await options.refreshState({ forceSettings: true, forceDrafts: false });
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存模型库配置失败。";
     } finally {

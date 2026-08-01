@@ -11,9 +11,9 @@
     "packages",
     "container",
     "acceptance",
+    "prepublication",
     "github",
-    "localVerification",
-    "journeyGate"
+    "localVerification"
   ],
   "properties": {
     "$schema": { "type": "string" },
@@ -61,33 +61,46 @@
     },
     "acceptance": {
       "type": "object",
-      "required": ["profile", "commandId"],
+      "required": ["profile", "commandId", "requiredClaim", "standardsRegistry"],
       "properties": {
         "profile": { "const": "enterprise-single-node" },
-        "commandId": { "const": "platform-acceptance" }
+        "commandId": { "const": "platform-acceptance" },
+        "requiredClaim": { "const": "functional-complete" },
+        "standardsRegistry": {
+          "const": "tools/registry/release-acceptance-standards.registry.json"
+        }
+      },
+      "additionalProperties": false
+    },
+    "prepublication": {
+      "type": "object",
+      "required": ["requiredClaim", "candidateReceipt", "artifacts"],
+      "properties": {
+        "requiredClaim": {
+          "const": "upstream-publishing-prepublication-passed"
+        },
+        "candidateReceipt": {
+          "const": "build/reports/upstream-service-publishing-candidate.json"
+        },
+        "artifacts": {
+          "type": "array",
+          "minItems": 14,
+          "maxItems": 14,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^build/reports/(?:upstream-service-publishing(?:\\.json|\\.html|/upstream-service-basic-config\\.json|/screenshots/[a-z0-9][a-z0-9-]*\\.png)|release-journey\\.json)$"
+          }
+        }
       },
       "additionalProperties": false
     },
     "github": {
       "type": "object",
-      "required": ["environment", "nodeVersion", "imageVerification"],
+      "required": ["environment", "nodeVersion"],
       "properties": {
         "environment": { "const": "release-candidate" },
-        "nodeVersion": { "type": "string", "pattern": "^24\\.[0-9]+\\.[0-9]+$" },
-        "imageVerification": {
-          "type": "array",
-          "minItems": 2,
-          "uniqueItems": true,
-          "items": {
-            "type": "object",
-            "required": ["platform", "runner"],
-            "properties": {
-              "platform": { "enum": ["linux/amd64", "linux/arm64"] },
-              "runner": { "enum": ["ubuntu-24.04", "ubuntu-24.04-arm"] }
-            },
-            "additionalProperties": false
-          }
-        }
+        "nodeVersion": { "type": "string", "pattern": "^24\\.[0-9]+\\.[0-9]+$" }
       },
       "additionalProperties": false
     },
@@ -97,16 +110,6 @@
       "properties": {
         "engine": { "const": "podman" },
         "evidenceAuthority": { "const": "local-only" }
-      },
-      "additionalProperties": false
-    },
-    "journeyGate": {
-      "type": "object",
-      "required": ["commandId", "required"],
-      "properties": {
-        "commandId": { "const": "verify:release-journey" },
-        "required": { "const": true },
-        "report": { "const": "build/reports/release-journey.json" }
       },
       "additionalProperties": false
     }

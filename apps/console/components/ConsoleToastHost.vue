@@ -3,7 +3,7 @@ import { dismissConsoleToast, useConsoleToasts, type ConsoleToastTone } from "..
 
 const { toasts } = useConsoleToasts();
 
-const TONE_LABELS: Record<ConsoleToastTone, string> = {
+const TONE_LABELS: Record<string, string> = {
   info: "提示",
   success: "成功",
   danger: "错误",

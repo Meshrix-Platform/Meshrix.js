@@ -3,7 +3,7 @@
   "id": "meshrix-crystal",
   "label": {
     "en": "Meshrix Crystal",
-    "zh-CN": "黑晶灿金"
+    "zh-CN": "黑晶蓝调"
   },
   "mode": "dark",
   "tokens": {
@@ -17,11 +17,11 @@
     "text-secondary": "#c8c8c8",
     "text-muted": "#969696",
     "text-disabled": "#5c5c5c",
-    "text-on-brand": "#171300",
-    "brand": "#fef100",
-    "brand-strong": "#fff75c",
-    "brand-subtle": "#2e2909",
-    "brand-muted": "#6b6117",
+    "text-on-brand": "#061021",
+    "brand": "#6aa1ff",
+    "brand-strong": "#93bdff",
+    "brand-subtle": "#12203a",
+    "brand-muted": "#3f5a8c",
     "info": "#5ed7f2",
     "info-surface": "#062029",
     "info-border": "#155c70",

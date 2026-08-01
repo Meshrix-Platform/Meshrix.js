@@ -1,4 +1,4 @@
-export function formatCompactDate(value: string) {
+export function formatCompactDate(value: string) : any {
   if (!value) {
     return "未记录";
   }

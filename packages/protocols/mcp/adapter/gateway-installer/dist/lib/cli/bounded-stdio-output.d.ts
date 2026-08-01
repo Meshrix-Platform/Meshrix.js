@@ -1,0 +1,2 @@
+export declare function createBoundedStdioOutput({ writable, maxQueuedBytes, maxQueuedMessages, drainTimeoutMs, onFailure }?: Record<string, any>): any;
+//# sourceMappingURL=bounded-stdio-output.d.ts.map

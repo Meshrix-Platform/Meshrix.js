@@ -2,16 +2,16 @@ import { readonly, ref } from "vue";
 
 export type ConsoleLocale = "en" | "zh-CN";
 
-export const CONSOLE_LANGUAGE_KEY = "meshrix-language";
+export const CONSOLE_LANGUAGE_KEY: any = "meshrix-language";
 
 function readStoredInitialConsoleLocale(): ConsoleLocale | null {
   if (typeof window === "undefined") {
     return null;
   }
   try {
-    const saved = window.localStorage?.getItem(CONSOLE_LANGUAGE_KEY);
+    const saved: any = window.localStorage?.getItem(CONSOLE_LANGUAGE_KEY);
     return saved === "en" || saved === "zh-CN" ? saved : null;
-  } catch (error) {
+  } catch (error: any) {
     return null;
   }
 }
@@ -34,15 +34,15 @@ export function resolveEffectiveConsoleLocale(mode: ConsoleLocale): ConsoleLocal
   return readDocumentInitialConsoleLocale() || mode;
 }
 
-const consoleLocaleState = ref<ConsoleLocale>(readInitialConsoleLocale());
+const consoleLocaleState: any = ref<ConsoleLocale>(readInitialConsoleLocale());
 
-export const currentConsoleLocale = readonly(consoleLocaleState);
+export const currentConsoleLocale: any = readonly(consoleLocaleState);
 
-export function setConsoleLocaleState(mode: ConsoleLocale) {
+export function setConsoleLocaleState(mode: ConsoleLocale) : any {
   consoleLocaleState.value = mode;
 }
 
-export const consoleLocales = [
+export const consoleLocales: any = [
   { value: "en", label: "English" },
   { value: "zh-CN", label: "简体中文" },
 ] as const;

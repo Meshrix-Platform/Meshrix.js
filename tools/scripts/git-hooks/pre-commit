@@ -2,4 +2,5 @@
 set -eu
 
 repo_root="$(git rev-parse --show-toplevel)"
-node "$repo_root/tools/scripts/verify-git-publication.mjs" --staged
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=source"
+node "$repo_root/tools/scripts/verify-git-publication.ts" --staged

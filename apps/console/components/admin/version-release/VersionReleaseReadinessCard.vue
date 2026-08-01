@@ -5,6 +5,7 @@ import StatusPill from "../../StatusPill.vue";
 import {
   formatDateTime,
   statusLabel,
+  statusTone,
 } from "../../../lib/production-health";
 import type { ProductionHealthResponse } from "../../../lib/version-release";
 
@@ -78,21 +79,21 @@ const readinessMetaItems = computed(() => [
     </div>
 
     <div class="detail-metrics version-release-readiness-metrics">
-      <div>
+      <div :data-tone="statusTone(latestStatus)">
         <span>报告状态</span>
         <strong>{{ statusLabel(latestStatus) }}</strong>
       </div>
-      <div>
+      <div :data-tone="(health?.summary.blockedP0 ?? 0) > 0 ? 'danger' : undefined">
         <span>P0 阻塞</span>
         <strong>{{ health?.summary.blockedP0 ?? 0 }}</strong>
       </div>
-      <div>
+      <div :data-tone="dirtyFileCount > 0 ? 'warning' : undefined">
         <span>脏文件</span>
         <strong>{{ dirtyFileCount }}</strong>
       </div>
-      <div>
+      <div :data-tone="productionClaimAllowed ? 'success' : 'danger'">
         <span>声明</span>
-        <strong>{{ productionClaimAllowed ? "allowed" : "blocked" }}</strong>
+        <strong>{{ productionClaimAllowed ? "允许" : "阻断" }}</strong>
       </div>
     </div>
 

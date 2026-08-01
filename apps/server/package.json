@@ -31,10 +31,14 @@
     "#meshrix/server-runtime/*": "@meshrix/server-runtime/*"
   },
   "exports": {
-    "./*": "./runtime/*.mjs"
+    "./*": {
+      "types": "./dist/runtime/*.d.ts",
+      "source": "./runtime/*.ts",
+      "default": "./dist/runtime/*.js"
+    }
   },
   "files": [
-    "runtime/**/*.mjs",
+    "dist/**/*",
     "LICENSE",
     "package.json"
   ]

@@ -28,7 +28,7 @@ export type ModuleModelAssignmentSelectOption = OptionBarOption & {
 
 export function createConsoleOptionBarController(
   options: ConsoleOptionBarControllerOptions,
-) {
+) : any {
   const enabledBooleanOptionBarOptions: OptionBarOption[] = [
     { value: true, label: "开启" },
     { value: false, label: "关闭" },
@@ -45,14 +45,14 @@ export function createConsoleOptionBarController(
     { value: "all", label: "默认公开给所有功能" },
     { value: "selected", label: "仅公开给选定功能" },
   ];
-  const addableModelProviderOptionBarOptions = computed<OptionBarOption[]>(() =>
-    options.addableModelProviders.value.map((provider) => ({
+  const addableModelProviderOptionBarOptions: any = computed<OptionBarOption[]>(() : any =>
+    options.addableModelProviders.value.map((provider?: any) : any => ({
       value: provider.id,
       label: provider.label,
     })),
   );
-  const authRoleOptionBarOptions = computed<OptionBarOption[]>(() =>
-    (options.authState.value?.roles || []).map((role) => ({
+  const authRoleOptionBarOptions: any = computed<OptionBarOption[]>(() : any =>
+    (options.authState.value?.roles || []).map((role?: any) : any => ({
       value: role.roleId,
       label: role.label,
     })),
@@ -61,7 +61,7 @@ export function createConsoleOptionBarController(
   function moduleModelAssignmentSelectOptions(
     moduleId: string,
   ): ModuleModelAssignmentSelectOption[] {
-    return options.moduleModelAssignmentOptions(moduleId).map((model) => ({
+    return options.moduleModelAssignmentOptions(moduleId).map((model?: any) : any => ({
       value: model.ref,
       label: `${model.label} / ${options.providerLabel(model.provider)}`,
       enabled: model.enabled,

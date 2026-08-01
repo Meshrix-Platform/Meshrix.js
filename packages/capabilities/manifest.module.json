@@ -17,7 +17,7 @@
     {
       "feature": "operation-permission-core",
       "path": "src/operation-permission-core",
-      "fileCount": 34,
+      "fileCount": 35,
       "testSuites": ["governance.operation-permission-protocol-consistency"]
     },
     {

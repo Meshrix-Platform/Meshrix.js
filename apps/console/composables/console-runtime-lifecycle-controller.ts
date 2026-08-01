@@ -30,22 +30,22 @@ type ConsoleRuntimeLifecycleControllerOptions = {
   syncDashboardAlertInbox: (items: DashboardAlert[]) => void;
 };
 
-export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeLifecycleControllerOptions) {
-  let consoleLifecycleRefCount = 0;
+export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeLifecycleControllerOptions) : any {
+  let consoleLifecycleRefCount: any = 0;
   let consoleLifecycleInitInProgress: Promise<void> | null = null;
-  let consoleLifecycleInitialized = false;
-  let consoleLifecycleGeneration = 0;
+  let consoleLifecycleInitialized: any = false;
+  let consoleLifecycleGeneration: any = 0;
 
-  function isGenerationActive(generation: number) {
+  function isGenerationActive(generation: number) : any {
     return consoleLifecycleRefCount > 0 && generation === consoleLifecycleGeneration;
   }
 
-  async function bootstrapConsoleRuntime(generation = consoleLifecycleGeneration) {
+  async function bootstrapConsoleRuntime(generation: any = consoleLifecycleGeneration) : Promise<any> {
     await options.clearBrowserLocalStateFromUrl();
     if (!isGenerationActive(generation)) return;
     options.consoleBootstrapping.value = true;
     try {
-      const session = await options.refreshAuthState();
+      const session: any = await options.refreshAuthState();
       if (!isGenerationActive(generation)) return;
       if (!session?.bootstrap.required && session?.session.authenticated) {
         await options.refreshState({ silent: true });
@@ -64,21 +64,21 @@ export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeL
     }
   }
 
-  function ensureConsoleRuntimeInitialized() {
+  function ensureConsoleRuntimeInitialized() : any {
     if (consoleLifecycleInitialized) {
       return Promise.resolve();
     }
     if (consoleLifecycleInitInProgress) {
       return consoleLifecycleInitInProgress;
     }
-    const generation = consoleLifecycleGeneration;
-    const initialization = (async () => {
+    const generation: any = consoleLifecycleGeneration;
+    const initialization: any = (async () : Promise<any> => {
       try {
         await bootstrapConsoleRuntime(generation);
         if (isGenerationActive(generation)) {
           consoleLifecycleInitialized = true;
         }
-      } catch (nextError) {
+      } catch (nextError: any) {
         if (isGenerationActive(generation)) {
           consoleLifecycleInitialized = false;
         }
@@ -90,7 +90,7 @@ export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeL
       }
     })();
     consoleLifecycleInitInProgress = initialization;
-    void initialization.catch((nextError) => {
+    void initialization.catch((nextError?: any) : any => {
       if (isGenerationActive(generation)) {
         options.onBootstrapError?.(nextError);
       }
@@ -98,7 +98,7 @@ export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeL
     return initialization;
   }
 
-  function cleanupConsoleRuntime() {
+  function cleanupConsoleRuntime() : any {
     consoleLifecycleGeneration += 1;
     options.clearPendingRefreshState();
     options.clearConfigTargetHighlight();
@@ -108,12 +108,12 @@ export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeL
     consoleLifecycleInitInProgress = null;
   }
 
-  function mountConsoleRuntime() {
+  function mountConsoleRuntime() : any {
     consoleLifecycleRefCount += 1;
     return ensureConsoleRuntimeInitialized();
   }
 
-  function unmountConsoleRuntime() {
+  function unmountConsoleRuntime() : any {
     if (consoleLifecycleRefCount > 0) {
       consoleLifecycleRefCount -= 1;
     }

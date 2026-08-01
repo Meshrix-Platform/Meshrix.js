@@ -3,6 +3,7 @@ set -eu
 
 zero_oid=0000000000000000000000000000000000000000
 repo_root="$(git rev-parse --show-toplevel)"
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--conditions=source"
 updates_file="$(mktemp -t meshrix-pre-push)"
 trap 'rm -f "$updates_file"' EXIT HUP INT TERM
 cat > "$updates_file"
@@ -40,4 +41,4 @@ do
   done
 done < "$updates_file"
 
-node "$repo_root/tools/scripts/verify-git-publication.mjs" --pre-push < "$updates_file"
+node "$repo_root/tools/scripts/verify-git-publication.ts" --pre-push < "$updates_file"

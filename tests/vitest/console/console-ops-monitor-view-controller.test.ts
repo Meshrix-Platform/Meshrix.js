@@ -4,11 +4,11 @@ import { useOpsMonitorViewConsole } from "../../../apps/console/composables/cons
 import type { MonitorAlertItem } from "../../../apps/console/lib/types";
 import { monitorAlertSeverityLabel, monitorAlertSeverityTone } from "../../../apps/console/composables/console-status-utils";
 
-const shellContextMock = vi.hoisted(() => ({
+const shellContextMock: any = vi.hoisted(() : any => ({
   useServerConsoleShellContext: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () => ({
+vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
   useServerConsoleShellContext: shellContextMock.useServerConsoleShellContext,
 }));
 
@@ -29,9 +29,9 @@ function makeMonitorAlert(overrides: Record<string, any> = {}): MonitorAlertItem
   };
 }
 
-function createFixture(overrides: Record<string, any> = {}) {
-  const busyKey = ref("");
-  const backgroundProcesses = ref([
+function createFixture(overrides: Record<string, any> = {}) : any {
+  const busyKey: any = ref("");
+  const backgroundProcesses: any = ref([
     {
       role: "daemon",
       label: "daemon",
@@ -44,7 +44,7 @@ function createFixture(overrides: Record<string, any> = {}) {
       restartCount: 1,
     },
   ]);
-  const backgroundProcessStatus = ref({
+  const backgroundProcessStatus: any = ref({
     schemaVersion: "v0.0.1:schema:definition-1",
     ok: true,
     status: "running",
@@ -53,7 +53,7 @@ function createFixture(overrides: Record<string, any> = {}) {
     supervisor: { pid: 11, alive: true, status: "running" },
     processes: backgroundProcesses.value,
   });
-  const monitorAlertConfigText = ref(JSON.stringify({
+  const monitorAlertConfigText: any = ref(JSON.stringify({
     schemaVersion: "v0.0.1:schema:definition-1",
     enabled: true,
     intervalMs: 1000,
@@ -61,8 +61,8 @@ function createFixture(overrides: Record<string, any> = {}) {
     rules: {},
     historyLimit: 20,
   }));
-  const activeMonitorAlerts = ref([makeMonitorAlert({ alertId: "a-1", resourceRef: "q-1", source: "work-queue-observation", role: "daemon" })]);
-  const historyAlert = makeMonitorAlert({
+  const activeMonitorAlerts: any = ref([makeMonitorAlert({ alertId: "a-1", resourceRef: "q-1", source: "work-queue-observation", role: "daemon" })]);
+  const historyAlert: any = makeMonitorAlert({
     alertId: "a-1",
     resourceRef: "q-1",
     source: "work-queue-observation",
@@ -70,7 +70,7 @@ function createFixture(overrides: Record<string, any> = {}) {
     firstSeenAt: "2026-01-01T00:00:00.000Z",
     lastSeenAt: "2026-01-01T00:04:00.000Z",
   });
-  const recentMonitorAlertHistory = ref([
+  const recentMonitorAlertHistory: any = ref([
     historyAlert,
     makeMonitorAlert({
       alertId: "a-2",
@@ -82,22 +82,22 @@ function createFixture(overrides: Record<string, any> = {}) {
       resourceRef: "q-2",
     }),
   ]);
-  const shell = {
-    acknowledgeMonitorAlert: vi.fn(async () => undefined),
+  const shell: Record<string, any> = {
+    acknowledgeMonitorAlert: vi.fn(async () : Promise<any> => undefined),
     backgroundProcessLabel: vi.fn(),
     backgroundProcessStatus,
     backgroundProcessTone: vi.fn(),
     backgroundProcesses,
-    backgroundRunningCount: computed(() =>
-      backgroundProcesses.value.filter((item: any) => item.alive && !item.stale).length,
+    backgroundRunningCount: computed(() : any =>
+      backgroundProcesses.value.filter((item?: any) : any => item.alive && !item.stale).length,
     ),
-    backgroundSupervisorLabel: computed(() => (backgroundProcessStatus.value?.supervisor.alive ? "正常" : "守护进程离线")),
+    backgroundSupervisorLabel: computed(() : any => (backgroundProcessStatus.value?.supervisor.alive ? "正常" : "守护进程离线")),
     busyKey,
     canAdminMaintenanceAgent: ref(false),
-    formatCompactDate: (value: string) => `compact:${value}`,
+    formatCompactDate: (value: string) : any => `compact:${value}`,
     activeMonitorAlerts,
     monitorAlertConfigText,
-    monitorAlertSummary: computed(() => ({
+    monitorAlertSummary: computed(() : any => ({
       activeCount: 1,
       visibleCount: 1,
       recoveredCount: 0,
@@ -120,12 +120,12 @@ function createFixture(overrides: Record<string, any> = {}) {
     processRelationText: vi.fn(),
     processTypeLabel: vi.fn(),
     recentMonitorAlertHistory,
-    saveMonitorAlertConfig: vi.fn(async () => undefined),
-    shouldIncludeMonitorAlertLifecycle: vi.fn((alert: MonitorAlertItem) => alert.ackRequired || alert.active === false || alert.status === "recovered"),
+    saveMonitorAlertConfig: vi.fn(async () : Promise<any> => undefined),
+    shouldIncludeMonitorAlertLifecycle: vi.fn((alert: MonitorAlertItem) : any => alert.ackRequired || alert.active === false || alert.status === "recovered"),
   };
 
   shellContextMock.useServerConsoleShellContext.mockReturnValue(shell as any);
-  const controller = useOpsMonitorViewConsole();
+  const controller: any = useOpsMonitorViewConsole();
 
   return {
     shell,
@@ -133,8 +133,8 @@ function createFixture(overrides: Record<string, any> = {}) {
   };
 }
 
-describe("console ops monitor view controller", () => {
-  it("映射 shell 字段并保留卡片状态数据与汇总标签", () => {
+describe("console ops monitor view controller", () : any => {
+  it("映射 shell 字段并保留卡片状态数据与汇总标签", () : any => {
     const { shell, controller } = createFixture();
 
     expect(controller.backgroundProcessStatus).toBe(shell.backgroundProcessStatus);
@@ -145,11 +145,11 @@ describe("console ops monitor view controller", () => {
     expect(controller.saveMonitorAlertConfig).toBe(shell.saveMonitorAlertConfig);
   });
 
-  it("去重告警并按 merge key 合并 active + history", () => {
+  it("去重告警并按 merge key 合并 active + history", () : any => {
     const { controller } = createFixture();
-    const merged = controller.mergedMonitorAlerts.value;
+    const merged: any = controller.mergedMonitorAlerts.value;
 
-    const ids = merged.map((alert) => alert.alertId);
+    const ids: any = merged.map((alert?: any) : any => alert.alertId);
     expect(ids).toEqual(["a-1", "a-2"]);
     expect(merged[0]).toMatchObject({
       alertId: "a-1",
@@ -158,9 +158,9 @@ describe("console ops monitor view controller", () => {
     });
   });
 
-  it("可生成包含状态、资源引用与来源的告警明细，并在非生命周期模式下省略状态行", () => {
+  it("可生成包含状态、资源引用与来源的告警明细，并在非生命周期模式下省略状态行", () : any => {
     const { controller } = createFixture();
-    const sourceAlert = makeMonitorAlert({
+    const sourceAlert: any = makeMonitorAlert({
       alertId: "a-detail",
       message: "请先检查 PID 9。当前状态 中断。影响 下游任务 依赖丢失。",
       source: "work-queue-observation",
@@ -172,7 +172,7 @@ describe("console ops monitor view controller", () => {
       lastSeenAt: "2026-01-01T00:05:00.000Z",
       acknowledgedAt: "",
     });
-    const withLifecycle = controller.monitorAlertDetailBullets(sourceAlert, true);
+    const withLifecycle: any = controller.monitorAlertDetailBullets(sourceAlert, true);
 
     expect(withLifecycle).toEqual([
       { label: "状态", text: "open" },
@@ -183,9 +183,9 @@ describe("console ops monitor view controller", () => {
       { label: "来源", text: "work-queue-observation，daemon" },
     ]);
 
-    const withoutLifecycle = controller.monitorAlertDetailBullets(sourceAlert, false);
+    const withoutLifecycle: any = controller.monitorAlertDetailBullets(sourceAlert, false);
     expect(withoutLifecycle[0]).toEqual({ label: "资源引用", text: "queue-9" });
-    expect(withoutLifecycle.map((item) => item.label)).toEqual([
+    expect(withoutLifecycle.map((item?: any) : any => item.label)).toEqual([
       "资源引用",
       "处理",
       "状态",
@@ -194,9 +194,9 @@ describe("console ops monitor view controller", () => {
     ]);
   });
 
-  it("空消息会回退到占位详情文本并复用告警工具函数映射", () => {
+  it("空消息会回退到占位详情文本并复用告警工具函数映射", () : any => {
     const { controller } = createFixture();
-    const emptyBullets = controller.monitorAlertDetailBullets(
+    const emptyBullets: any = controller.monitorAlertDetailBullets(
       makeMonitorAlert({
         alertId: "a-empty",
         message: "",

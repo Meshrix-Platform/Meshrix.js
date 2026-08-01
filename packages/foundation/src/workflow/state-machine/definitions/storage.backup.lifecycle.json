@@ -413,14 +413,14 @@
       "obligationId": "PO-STORAGE-BACKUP-RESTORE",
       "method": "verifier_command",
       "params": {
-        "command": "node tools/server-scripts/verify-backup-restore.mjs"
+        "command": "node tools/server-scripts/verify-backup-restore.ts"
       }
     },
     {
       "obligationId": "PO-STORAGE-PRODUCTION-DRILL",
       "method": "required_report",
       "params": {
-        "command": "node tools/server-scripts/verify-storage-production-restore-drill.mjs",
+        "command": "node tools/server-scripts/verify-storage-production-restore-drill.ts",
         "reportPath": "build/reports/storage-production-restore-drill/latest.json"
       }
     },

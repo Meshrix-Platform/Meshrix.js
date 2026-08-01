@@ -18,7 +18,7 @@ const {
 } = useOperationPermissionViewContext();
 
 const grantableToolsets = computed(() =>
-  operationPermissionToolsets.value.filter((item) => item.grantable !== false),
+  operationPermissionToolsets.value.filter((item: any) => item.grantable !== false),
 );
 const selectedScopeCount = computed(() => newGrantScopes.value.length);
 const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
@@ -53,10 +53,12 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
           <small>已选 {{ selectedScopeCount }}</small>
         </div>
         <ScopeSelector
+          v-if="toolScopes.length"
           v-model="newGrantScopes"
           :scopes="toolScopes"
           compact
         />
+        <p v-else class="permission-config-empty">暂无可选授权范围，服务端目录加载后显示在这里。</p>
       </section>
 
       <section class="permission-token-config-section">
@@ -64,7 +66,7 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
           <span>工具集</span>
           <small>已选 {{ selectedToolsetCount }}</small>
         </div>
-        <div class="scope-grid compact-scope-grid">
+        <div v-if="grantableToolsets.length" class="scope-grid compact-scope-grid">
           <button
             v-for="toolset in grantableToolsets"
             :key="toolset.id"
@@ -77,6 +79,7 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
             <span>{{ toolRiskLabel(toolset.maxRisk) }}</span>
           </button>
         </div>
+        <p v-else class="permission-config-empty">暂无可选工具集，服务端目录加载后显示在这里。</p>
       </section>
     </form>
 
@@ -91,3 +94,14 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
     </div>
   </article>
 </template>
+
+<style scoped>
+.permission-config-empty {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+</style>
