@@ -281,7 +281,7 @@
     "release:publish-npm": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/publish-release-set.ts",
     "release:prepare-node-runtime-source-evidence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/prepare-node-runtime-source-evidence.ts",
     "release:generate-provenance": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/generate-provenance.ts",
-    "verify:npm-package-installability": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-npm-package-installability.ts",
+    "verify:npm-package-installability": "npm run build && cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-npm-package-installability.ts",
     "verify:mcp-proxy-transport": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-mcp-proxy-transport.ts",
     "verify:downstream-agent-tool-loop": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-downstream-agent-tool-loop.ts",
     "verify:path-abstraction-audit": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-path-abstraction-audit.ts",

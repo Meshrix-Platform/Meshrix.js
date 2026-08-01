@@ -576,7 +576,7 @@ describe("release workflow supply-chain boundary", () : any => {
     const verifier: any = read("tools/server-scripts/verify-npm-package-installability.ts");
     expect(verifier).toContain('import { discoverReleaseSet } from "./publish-release-set.ts";');
     expect(verifier).toContain('name === "meshrix-mcp-connector"');
-    expect(verifier).toContain('connectorFiles.includes("lib/mcp-proxy-session.ts")');
+    expect(verifier).toContain('connectorFiles.includes("dist/lib/mcp-proxy-session.js")');
     expect(verifier).toContain('"meshrix-mcp", "version", "--json"');
   });
 

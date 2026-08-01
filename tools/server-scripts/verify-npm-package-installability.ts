@@ -204,8 +204,8 @@ try {
   const rootPackage: any = JSON.parse(await fs.readFile("package.json", "utf8"));
   const releaseSet: any = await discoverReleaseSet({ rootDir: process.cwd() });
   assert.equal(releaseSet.version, rootPackage.version, "npm_package_release_set_version_mismatch");
-  const expectedBin: any = "apps/server/bin/meshrix.ts";
-  const expectedServerBin: any = "tools/server-scripts/start-server.ts";
+  const expectedBin: any = "dist/apps/server/bin/meshrix.js";
+  const expectedServerBin: any = "dist/tools/server-scripts/start-server.js";
   assert.equal(rootPackage.bin?.meshrix, expectedBin, "npm_package_cli_bin_contract_invalid");
   assert.equal(
     rootPackage.bin?.["meshrix-server"],
@@ -306,15 +306,15 @@ try {
     "npm_package_server_bin_shebang_missing"
   );
   assert.ok(
-    rootFiles.includes("packages/contracts/src/operations/operation-registry.ts"),
+    rootFiles.includes("dist/packages/contracts/src/operations/operation-registry.js"),
     "npm_package_internal_runtime_source_missing"
   );
   assert.ok(
-    connectorFiles.includes("lib/mcp-proxy-session.ts"),
+    connectorFiles.includes("dist/lib/mcp-proxy-session.js"),
     "npm_package_connector_runtime_source_missing"
   );
   assert.ok(
-    connectorFiles.includes("mcp-identity.ts"),
+    connectorFiles.includes("dist/mcp-identity.js"),
     "npm_package_connector_identity_source_missing"
   );
   record("release-set tarballs are source-portable and exclude host artifacts", "passed", {
@@ -431,7 +431,7 @@ try {
     "npm_package_server_startup_smoke_failed",
     process.execPath,
     [
-      path.join(installedRoot, "tools/server-scripts/verify-start-server-defaults.ts"),
+      path.join(installedRoot, "dist/tools/server-scripts/verify-start-server-defaults.js"),
       "--command",
       installedServerBin
     ],
