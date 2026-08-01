@@ -12,7 +12,23 @@ import {
   mcpSupportedTargetDetails
 } from "../../mcp-release-targets.ts";
 
-export const packageJson: any = JSON.parse(await fs.readFile(new URL("../../package.json", import.meta.url), "utf8"));
+async function readConnectorPackageJson(): Promise<any> {
+  for (const relativePath of ["../../package.json", "../../../package.json"]) {
+    try {
+      const manifest: any = JSON.parse(
+        await fs.readFile(new URL(relativePath, import.meta.url), "utf8")
+      );
+      if (manifest?.name === "meshrix-mcp-connector") return manifest;
+    } catch (error: any) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  const error: Error & Record<string, any> = new Error("Connector package manifest is unavailable.");
+  error.code = "MCP_CONNECTOR_PACKAGE_MANIFEST_MISSING";
+  throw error;
+}
+
+export const packageJson: any = await readConnectorPackageJson();
 
 // Literal field names used in MCP gateway instrumentation.
 export const MCP_OTEL_ATTRIBUTES: Readonly<Record<string, any>> = Object.freeze({
