@@ -22,3 +22,8 @@ export function theilSenSlope(samples: any = [], selector: any = (sample?: any) 
 export function positiveGrowth(finalValue?: any, initialValue?: any) : any {
   return Math.max(0, Number(finalValue || 0) - Number(initialValue || 0));
 }
+
+export function externalMemoryGrowth(finalExternal?: any, initialExternal?: any) : any {
+  // Node reports ArrayBuffer and Buffer allocations as a subset of external.
+  return positiveGrowth(finalExternal, initialExternal);
+}

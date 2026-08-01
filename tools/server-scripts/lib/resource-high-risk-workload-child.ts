@@ -20,6 +20,7 @@ import { createSqliteProtocolEventStore } from "../../../packages/server-runtime
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.ts";
 import { createUploadNoRunCustody } from "../../../packages/server-runtime/src/jobs/upload-no-run-custody.ts";
 import { createUploadSessionStore } from "../../../packages/server-runtime/src/state/upload-session-store.ts";
+import { externalMemoryGrowth } from "./resource-discipline-analysis.ts";
 
 const MIB: any = 1024 * 1024;
 const rootPath: any = path.resolve(String(process.argv[2] || ""));
@@ -94,10 +95,9 @@ async function measureScenario(id?: any, operationCount?: any, run?: any) : Prom
       : 0,
     peakHeapGrowthBytes: Math.max(0, peak.heapUsedBytes - before.heapUsedBytes),
     peakRssGrowthBytes: Math.max(0, peak.rssBytes - before.rssBytes),
-    peakExternalGrowthBytes: Math.max(
-      0,
-      peak.externalBytes + peak.arrayBufferBytes -
-        before.externalBytes - before.arrayBufferBytes
+    peakExternalGrowthBytes: externalMemoryGrowth(
+      peak.externalBytes,
+      before.externalBytes
     ),
     settledHeapGrowthBytes: Math.max(0, settled.heapUsedBytes - before.heapUsedBytes),
     eventLoopDelayMaxMs: Math.round(Number(histogram.max || 0) / 1_000) / 1000,

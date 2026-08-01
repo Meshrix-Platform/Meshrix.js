@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  externalMemoryGrowth,
   median,
   positiveGrowth,
   theilSenSlope
@@ -56,5 +57,9 @@ describe("priority-zero resource discipline", () : any => {
     expect(median([9, 1, 5, 3])).toBe(4);
     expect(positiveGrowth(100, 120)).toBe(0);
     expect(positiveGrowth(140, 120)).toBe(20);
+  });
+
+  it("does not double-count ArrayBuffer memory already included in external", () : any => {
+    expect(externalMemoryGrowth(96 * 1024 * 1024, 64 * 1024 * 1024)).toBe(32 * 1024 * 1024);
   });
 });
