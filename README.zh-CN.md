@@ -8,11 +8,19 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[产品网站](https://meshrix.io) · [概览](#概览) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
+[产品网站](https://meshrix.io) · [概览](#概览) · [当前状态](docs/STATUS.md) · [十大优先问题](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
 
 </div>
 
 本文件是 [README.md](README.md) 的本地化版本。英文是本仓库文档的规范语言，简体中文为本地化语言版本；如有歧义，以英文规范版本为准。
+
+> **核心可信转发要求：身份可验证、权限不放大、内容不篡改、过程可追溯。**
+> 其规范含义由
+> [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> 统一定义。
+
+> **当前优先级：** Meshrix 最有价值的十个未闭环问题按优先级维护在
+> [What's Next](docs/WHATS-NEXT.md)。开始规划、实现或评审项目工作前，请先查看该清单。
 
 ---
 
@@ -22,7 +30,17 @@ Meshrix 以 Node.js 服务端运行，负责转发服务端配置文件声明的
 
 默认运行时自包含。元数据、raw objects、任务、设置、grant、审计记录和 checkpoint 存放在服务端数据目录。外部中间件和服务适配器作为面向特定部署集成的可选增强。
 
-> **当前状态：pre-release。** 源码可用和许可证状态独立于正式生产版本标签。
+> **当前状态：pre-release。** 源码可用、实现、验证、各发布渠道、环境支持与托管
+> 运营是彼此独立的事实。规范状态见 [Status](docs/STATUS.md)。
+
+Meshrix 将强制的功能验收与可选的环境声明严格分开。
+`npm run verify:acceptance` 是 Functional Release Gate（功能完整有效发布门禁），
+必须在发布前通过。通过门禁的不可变候选版本可以继续运行
+`npm run verify:real-machine -- ...`；这一可重复执行的 Real-Machine
+Verification Workflow（真机验证工作流）只为一个确切系统或部署建立
+Environment Support Claim（环境支持声明）。真机是否可用、是否执行或执行失败，
+都不会阻断或改变功能验收结果。完整契约见
+[发布定义](docs/RUNBOOK.md#release-definition-and-publication)。
 
 本文是规范性[英文项目概览](README.md)的简体中文本地化版本。
 
@@ -75,6 +93,8 @@ docker compose up -d
 
 仓库内的 compose 文件默认在 loopback 上启动 API 服务，并把运行数据写入容器卷。该路径默认只提供 API；如需由服务端提供控制台页面，需要先构建控制台产物并使用 server `--with-ui` 路径。
 
+云上生产部署需要把 `docker-compose.enterprise.yml` 与基础文件叠加使用，并提供摘要固定的镜像、HTTPS 公网基准 URL、反向代理的精确来源 IP、独立备份挂载、独立托管的 32 字节本地 Secret Store 主密钥，以及另一份不同的 32 字节操作证据签名密钥。具体命令见[生产容器运行手册](docs/RUNBOOK.md#container-startup)；缺少任一安全输入时生产叠加层会失效关闭。
+
 ## 运维
 
 ```bash
@@ -89,10 +109,14 @@ npm run mcp:doctor
 | `MESHRIX_SERVER_DATA_DIR` | 指定部署数据目录存放运行状态。 |
 | `MESHRIX_SERVER_HOST` | 服务监听地址。 |
 | `MESHRIX_SERVER_PORT` | 服务监听端口。 |
+| `MESHRIX_PUBLIC_BASE_URL` | 由管理员 TLS 反向代理对外公布的 HTTPS URL。 |
+| `MESHRIX_TRUSTED_PROXIES` | 管理员 TLS 反向代理访问 Meshrix 时使用的精确来源 IP 列表。 |
+| `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` | 生产 Secret Store 密钥的绝对宿主机路径；不得放入 Meshrix 数据或备份卷。 |
+| `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` | 独立的生产证据签名密钥绝对宿主机路径；不得与 Secret Store 主密钥相同，也不得放入数据或备份卷。 |
 
 ## 下游智能体客户端
 
-智能体客户端通过 MCP discovery 与受治理的 gateway 调用接入；operation 可见性由 grant 控制。当前文档记录的下游适配器目标范围是 OpenClaw、Codex、Claude Code、Antigravity、OpenCode 和 Pi——以外部 `Meshrix-Plugins` 适配器包的形式交付，而非 Core 依赖。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与[协议](docs/protocols/PROTOCOLS.md)文档。
+智能体客户端通过 MCP discovery 与受治理的 gateway 调用接入；operation 可见性由 grant 控制。当前文档记录的下游适配器目标范围是 OpenClaw、Codex、Claude Code、Antigravity、OpenCode 和 Pi——以外部 `Meshrix-Plugins` 适配器包的形式交付，而非 Meshrix 运行时依赖。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与[协议](docs/protocols/PROTOCOLS.md)文档。
 
 ## 仓库结构
 
@@ -108,7 +132,10 @@ npm run mcp:doctor
 
 | 主题 | 文档 |
 | --- | --- |
-| 产品定义 | [PRODUCT.md](PRODUCT.md) |
+| 十大项目优先问题 | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
+| 产品目标与边界 | [PRODUCT.md](PRODUCT.md) |
+| 领域词汇 | [CONTEXT.md](CONTEXT.md) |
+| 当前状态 | [docs/STATUS.md](docs/STATUS.md) |
 | 文档索引 | [docs/README.md](docs/README.md) |
 | 架构 | [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) |
 | 协议 | [docs/protocols/PROTOCOLS.md](docs/protocols/PROTOCOLS.md) |

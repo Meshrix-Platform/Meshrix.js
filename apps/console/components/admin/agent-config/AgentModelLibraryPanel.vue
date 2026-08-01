@@ -42,7 +42,7 @@ const {
       </div>
 
       <p v-if="visibleModelEntries.length === 0" class="empty-note">
-        当前模型库为空。
+        当前模型库为空。在上方选择供应商后点击“新增模型”添加第一个模型。
       </p>
 
       <div v-else class="model-library-list">
@@ -55,7 +55,7 @@ const {
 
       <div class="source-actions model-library-save-actions">
         <button class="tool-button" type="submit" :disabled="busyKey === 'model-library-save'">
-          {{ busyKey === "model-library-save" ? "探测并保存中" : "保存配置" }}
+          {{ busyKey === "model-library-save" ? "探测并保存中" : "保存模型库" }}
         </button>
       </div>
     </form>

@@ -108,7 +108,7 @@
           },
           "source": {
             "type": "string",
-            "pattern": "^verifiers/[A-Za-z0-9][A-Za-z0-9._/-]*\\.mjs$"
+            "pattern": "^verifiers/[A-Za-z0-9][A-Za-z0-9._/-]*\\.ts$"
           },
           "report": { "type": "string" }
         },
@@ -121,7 +121,7 @@
       "properties": {
         "module": {
           "type": "string",
-          "pattern": "^\\./[A-Za-z0-9][A-Za-z0-9._/-]*\\.mjs$"
+          "pattern": "^\\./[A-Za-z0-9][A-Za-z0-9._/-]*\\.ts$"
         }
       },
       "additionalProperties": false

@@ -44,7 +44,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete strategy-management",
-      "target": "docs/functionality/STRATEGY-MANAGEMENT.md, packages/server-runtime/src/composition/strategy-management-provider.mjs, packages/contracts/src/operations/strategy-permission-operation-definitions.mjs, apps/console/lib/strategy-management.ts, tools/server-scripts/verify-strategy-management.mjs"
+      "target": "docs/functionality/STRATEGY-MANAGEMENT.md, packages/server-runtime/src/composition/strategy-management-provider.ts, packages/contracts/src/operations/strategy-permission-operation-definitions.ts, apps/console/lib/strategy-management.ts, tools/server-scripts/verify-strategy-management.ts"
     },
     "next": [
       "f561ce5f-c681-4b18-906a-5211aee61f2d"

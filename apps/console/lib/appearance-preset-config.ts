@@ -29,9 +29,9 @@ export type AppearancePresetValidationResult =
   | { ok: true; config: AppearancePresetConfig }
   | { ok: false; errors: string[] };
 
-export const DEFAULT_LIGHT_APPEARANCE_PRESET_ID = "geek-light-blue";
-export const DEFAULT_DARK_APPEARANCE_PRESET_ID = "meshrix-crystal";
-export const BUILT_IN_APPEARANCE_PRESET_ORDER = [
+export const DEFAULT_LIGHT_APPEARANCE_PRESET_ID: any = "geek-light-blue";
+export const DEFAULT_DARK_APPEARANCE_PRESET_ID: any = "meshrix-crystal";
+export const BUILT_IN_APPEARANCE_PRESET_ORDER: any = [
   "default-system",
   "meshrix-crystal",
   "geek-light-blue",
@@ -48,19 +48,19 @@ export const BUILT_IN_APPEARANCE_PRESET_ORDER = [
   "cyberpunk",
 ] as const;
 
-const builtInAppearancePresetConfigValues = Object.entries(
+const builtInAppearancePresetConfigValues: any = (Object.entries(
   import.meta.glob("../appearance-presets/*.json", { eager: true, import: "default" }) as Record<string, unknown>,
-)
-  .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath))
-  .map(([, value]) => value);
+) as [string, any][])
+  .sort(([leftPath]: any[], [rightPath]: any[]) : any => leftPath.localeCompare(rightPath))
+  .map(([, value]: any[]) : any => value);
 
-export const APPEARANCE_PRESET_CATALOG_CHANGED_EVENT = "meshrix:appearance-preset-catalog-changed";
+export const APPEARANCE_PRESET_CATALOG_CHANGED_EVENT: any = "meshrix:appearance-preset-catalog-changed";
 
-const idPattern = /^[a-z0-9][a-z0-9-]{1,63}$/;
-const hexColorPattern = /^#[0-9a-fA-F]{6}$/;
-const allowedValuePattern = /^(#[0-9a-fA-F]{6}|rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|1|0?\.\d+)\s*\)|var\(--[a-z0-9-]+\)|(?:-?\d+px\s+){2,4}rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|1|0?\.\d+)\s*\)(?:\s*,\s*(?:-?\d+px\s+){2,4}rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|1|0?\.\d+)\s*\))*)$/;
+const idPattern: any = /^[a-z0-9][a-z0-9-]{1,63}$/;
+const hexColorPattern: any = /^#[0-9a-fA-F]{6}$/;
+const allowedValuePattern: any = /^(#[0-9a-fA-F]{6}|rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|1|0?\.\d+)\s*\)|var\(--[a-z0-9-]+\)|(?:-?\d+px\s+){2,4}rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|1|0?\.\d+)\s*\)(?:\s*,\s*(?:-?\d+px\s+){2,4}rgba\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*(?:0|1|0?\.\d+)\s*\))*)$/;
 
-const requiredRuntimeTokens = [
+const requiredRuntimeTokens: any = [
   "bg-base",
   "bg-surface",
   "bg-subtle",
@@ -79,23 +79,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
-function rgba(hex: string, alpha: number) {
-  const value = hex.replace("#", "");
-  const r = Number.parseInt(value.slice(0, 2), 16);
-  const g = Number.parseInt(value.slice(2, 4), 16);
-  const b = Number.parseInt(value.slice(4, 6), 16);
+function rgba(hex: string, alpha: number) : any {
+  const value: any = hex.replace("#", "");
+  const r: any = Number.parseInt(value.slice(0, 2), 16);
+  const g: any = Number.parseInt(value.slice(2, 4), 16);
+  const b: any = Number.parseInt(value.slice(4, 6), 16);
   return `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(2)})`;
 }
 
-function deriveTokens(mode: Exclude<AppearancePresetMode, "system">, tokens: Record<string, string>) {
-  const brand = tokens.brand || "#2563eb";
-  const danger = tokens.danger || (mode === "dark" ? "#fb7185" : "#b91c1c");
-  const success = tokens.success || (mode === "dark" ? "#4ade80" : "#15803d");
-  const textPrimary = tokens["text-primary"] || (mode === "dark" ? "#f8fafc" : "#0f172a");
-  const textMuted = tokens["text-muted"] || (mode === "dark" ? "#94a3b8" : "#475569");
-  const bgBase = tokens["bg-base"] || (mode === "dark" ? "#0f172a" : "#f8fafc");
-  const bgSubtle = tokens["bg-subtle"] || (mode === "dark" ? "#1f2937" : "#f1f5f9");
-  const borderSubtle = tokens["border-subtle"] || (mode === "dark" ? "#334155" : "#cbd5e1");
+function deriveTokens(mode: Exclude<AppearancePresetMode, "system">, tokens: Record<string, string>) : any {
+  const brand: any = tokens.brand || "#2563eb";
+  const danger: any = tokens.danger || (mode === "dark" ? "#fb7185" : "#b91c1c");
+  const success: any = tokens.success || (mode === "dark" ? "#4ade80" : "#15803d");
+  const textPrimary: any = tokens["text-primary"] || (mode === "dark" ? "#f8fafc" : "#0f172a");
+  const textMuted: any = tokens["text-muted"] || (mode === "dark" ? "#94a3b8" : "#475569");
+  const bgBase: any = tokens["bg-base"] || (mode === "dark" ? "#0f172a" : "#f8fafc");
+  const bgSubtle: any = tokens["bg-subtle"] || (mode === "dark" ? "#1f2937" : "#f1f5f9");
+  const borderSubtle: any = tokens["border-subtle"] || (mode === "dark" ? "#334155" : "#cbd5e1");
 
   return {
     "color-scheme": mode,
@@ -179,7 +179,7 @@ export function validateAppearancePresetConfig(value: unknown): AppearancePreset
         errors.push(`tokens.${token} must be a 6-digit hex color`);
       }
     }
-    for (const [key, tokenValue] of Object.entries(value.tokens)) {
+    for (const [key, tokenValue] of (Object.entries(value.tokens) as [string, any][])) {
       if (!/^[a-z][a-z0-9-]*$/.test(key)) {
         errors.push(`tokens.${key} has an invalid token name`);
       }
@@ -195,9 +195,9 @@ export function validateAppearancePresetConfig(value: unknown): AppearancePreset
   return { ok: true, config: value as AppearancePresetConfig };
 }
 
-function validateBuiltInAppearancePresetConfigs(values: unknown[]) {
-  return sortAppearancePresetConfigs(values.map((value) => {
-    const result = validateAppearancePresetConfig(value);
+function validateBuiltInAppearancePresetConfigs(values: unknown[]) : any {
+  return sortAppearancePresetConfigs(values.map((value?: any) : any => {
+    const result: any = validateAppearancePresetConfig(value);
     if (!result.ok) {
       throw new Error(`Invalid built-in appearance preset: ${result.errors.join("; ")}`);
     }
@@ -205,15 +205,15 @@ function validateBuiltInAppearancePresetConfigs(values: unknown[]) {
   }));
 }
 
-function appearancePresetOrderIndex(id: string) {
-  const index = BUILT_IN_APPEARANCE_PRESET_ORDER.indexOf(id as (typeof BUILT_IN_APPEARANCE_PRESET_ORDER)[number]);
+function appearancePresetOrderIndex(id: string) : any {
+  const index: any = BUILT_IN_APPEARANCE_PRESET_ORDER.indexOf(id as (typeof BUILT_IN_APPEARANCE_PRESET_ORDER)[number]);
   return index >= 0 ? index : Number.POSITIVE_INFINITY;
 }
 
-function sortAppearancePresetConfigs(configs: AppearancePresetConfig[]) {
-  return [...configs].sort((left, right) => {
-    const leftIndex = appearancePresetOrderIndex(left.id);
-    const rightIndex = appearancePresetOrderIndex(right.id);
+function sortAppearancePresetConfigs(configs: AppearancePresetConfig[]) : any {
+  return [...configs].sort((left?: any, right?: any) : any => {
+    const leftIndex: any = appearancePresetOrderIndex(left.id);
+    const rightIndex: any = appearancePresetOrderIndex(right.id);
     if (leftIndex !== rightIndex) {
       return leftIndex - rightIndex;
     }
@@ -221,24 +221,24 @@ function sortAppearancePresetConfigs(configs: AppearancePresetConfig[]) {
   });
 }
 
-export let builtInAppearancePresetConfigs = validateBuiltInAppearancePresetConfigs(builtInAppearancePresetConfigValues);
+export let builtInAppearancePresetConfigs: any = validateBuiltInAppearancePresetConfigs(builtInAppearancePresetConfigValues);
 
-async function loadBuiltInAppearancePresetConfigsFromCurrentGlob() {
+async function loadBuiltInAppearancePresetConfigsFromCurrentGlob() : Promise<any> {
   return validateBuiltInAppearancePresetConfigs(builtInAppearancePresetConfigValues);
 }
 
-let loadBuiltInAppearancePresetConfigsImpl = loadBuiltInAppearancePresetConfigsFromCurrentGlob;
+let loadBuiltInAppearancePresetConfigsImpl: any = loadBuiltInAppearancePresetConfigsFromCurrentGlob;
 
-export async function loadBuiltInAppearancePresetConfigs() {
+export async function loadBuiltInAppearancePresetConfigs() : Promise<any> {
   return loadBuiltInAppearancePresetConfigsImpl();
 }
 
-export async function refreshBuiltInAppearancePresetConfigs() {
+export async function refreshBuiltInAppearancePresetConfigs() : Promise<any> {
   builtInAppearancePresetConfigs = await loadBuiltInAppearancePresetConfigs();
   return builtInAppearancePresetConfigs;
 }
 
-function dispatchAppearancePresetCatalogChanged() {
+function dispatchAppearancePresetCatalogChanged() : any {
   if (typeof window === "undefined") {
     return;
   }
@@ -246,14 +246,14 @@ function dispatchAppearancePresetCatalogChanged() {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.accept((updatedModule) => {
-    const nextModule = updatedModule as
+  import.meta.hot.accept((updatedModule?: any) : any => {
+    const nextModule: any = updatedModule as
       | {
           builtInAppearancePresetConfigs?: AppearancePresetConfig[];
           loadBuiltInAppearancePresetConfigs?: () => Promise<AppearancePresetConfig[]>;
         }
       | undefined;
-    const nextConfigs = nextModule?.builtInAppearancePresetConfigs;
+    const nextConfigs: any = nextModule?.builtInAppearancePresetConfigs;
     if (Array.isArray(nextConfigs)) {
       builtInAppearancePresetConfigs = nextConfigs;
     }
@@ -264,8 +264,8 @@ if (import.meta.hot) {
   });
 }
 
-export function mergeAppearancePresetConfigs(customConfigs: AppearancePresetConfig[] = []) {
-  const byId = new Map<string, AppearancePresetConfig>();
+export function mergeAppearancePresetConfigs(customConfigs: AppearancePresetConfig[] = []) : any {
+  const byId: any = new Map<string, AppearancePresetConfig>();
   for (const config of builtInAppearancePresetConfigs) {
     byId.set(config.id, config);
   }
@@ -275,15 +275,15 @@ export function mergeAppearancePresetConfigs(customConfigs: AppearancePresetConf
   return sortAppearancePresetConfigs([...byId.values()]);
 }
 
-export function findAppearancePresetConfig(id: string, configs: AppearancePresetConfig[]) {
-  return configs.find((config) => config.id === id) || configs.find((config) => config.id === "default-system") || configs[0];
+export function findAppearancePresetConfig(id: string, configs: AppearancePresetConfig[]) : any {
+  return configs.find((config?: any) : any => config.id === id) || configs.find((config?: any) : any => config.id === "default-system") || configs[0];
 }
 
-export function hasAppearancePresetConfig(id: string, configs: AppearancePresetConfig[]) {
-  return configs.some((config) => config.id === id);
+export function hasAppearancePresetConfig(id: string, configs: AppearancePresetConfig[]) : any {
+  return configs.some((config?: any) : any => config.id === id);
 }
 
-export function localizedAppearancePresetLabel(config: AppearancePresetConfig, locale: ConsoleLocale) {
+export function localizedAppearancePresetLabel(config: AppearancePresetConfig, locale: ConsoleLocale) : any {
   return config.label[locale] || config.label.en || config.id;
 }
 
@@ -292,13 +292,13 @@ export function resolveAppearancePresetConfig(
   configs: AppearancePresetConfig[],
   prefersDark: boolean,
 ): ResolvedAppearancePreset {
-  const selected = findAppearancePresetConfig(selectedId, configs);
+  const selected: any = findAppearancePresetConfig(selectedId, configs);
   if (!selected) {
     throw new Error("No appearance preset configs are available");
   }
   if (selected.mode === "system") {
-    const resolvedId = prefersDark ? selected.darkPresetId : selected.lightPresetId;
-    const resolved = resolveAppearancePresetConfig(
+    const resolvedId: any = prefersDark ? selected.darkPresetId : selected.lightPresetId;
+    const resolved: any = resolveAppearancePresetConfig(
       resolvedId || (prefersDark ? DEFAULT_DARK_APPEARANCE_PRESET_ID : DEFAULT_LIGHT_APPEARANCE_PRESET_ID),
       configs,
       prefersDark,
@@ -308,10 +308,10 @@ export function resolveAppearancePresetConfig(
       selectedId: selected.id,
     };
   }
-  const baseId = selected.mode === "dark" ? DEFAULT_DARK_APPEARANCE_PRESET_ID : DEFAULT_LIGHT_APPEARANCE_PRESET_ID;
-  const base = selected.id === baseId ? undefined : findAppearancePresetConfig(baseId, builtInAppearancePresetConfigs);
-  const baseTokens = base?.mode === selected.mode ? deriveTokens(base.mode, base.tokens || {}) : {};
-  const tokens = deriveTokens(selected.mode, {
+  const baseId: any = selected.mode === "dark" ? DEFAULT_DARK_APPEARANCE_PRESET_ID : DEFAULT_LIGHT_APPEARANCE_PRESET_ID;
+  const base: any = selected.id === baseId ? undefined : findAppearancePresetConfig(baseId, builtInAppearancePresetConfigs);
+  const baseTokens: any = base?.mode === selected.mode ? deriveTokens(base.mode, base.tokens || {}) : {};
+  const tokens: any = deriveTokens(selected.mode, {
     ...baseTokens,
     ...(selected.tokens || {}),
   });
@@ -327,7 +327,7 @@ export function resolveAppearancePresetConfig(
 export function parseAppearancePresetConfigText(text: string): AppearancePresetValidationResult {
   try {
     return validateAppearancePresetConfig(JSON.parse(text));
-  } catch (error) {
+  } catch (error: any) {
     return {
       ok: false,
       errors: [error instanceof Error ? error.message : "config must be valid JSON"],

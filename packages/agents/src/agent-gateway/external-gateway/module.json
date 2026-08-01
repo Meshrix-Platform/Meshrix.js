@@ -10,7 +10,7 @@
   "protocol": "v0.0.1:agent:external-gateway-1",
   "components": {
     "externalGateway": {
-      "path": "./index.mjs",
+      "path": "./index.ts",
       "exports": [
         "EXTERNAL_GATEWAY_PROTOCOL_VERSION",
         "EXTERNAL_GATEWAY_REQUIRED_CAPABILITIES",
@@ -47,7 +47,7 @@
     }
   },
   "verification": [
-    "node tools/server-scripts/verify-external-gateway.mjs",
-    "node tools/server-scripts/verify-composition-presets.mjs"
+    "node tools/server-scripts/verify-external-gateway.ts",
+    "node tools/server-scripts/verify-composition-presets.ts"
   ]
 }

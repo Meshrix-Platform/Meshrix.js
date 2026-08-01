@@ -4,21 +4,21 @@ import { mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useOperationPermissionViewConsole } from "../../../apps/console/composables/console-operation-permission-view-controller";
 
-const authorizationGovernanceClientMock = vi.hoisted(() => ({
+const authorizationGovernanceClientMock: any = vi.hoisted(() : any => ({
   getAuthorizationGovernance: vi.fn(),
   upsertAuthorizationGovernance: vi.fn(),
 }));
 
-const shellContextMock = vi.hoisted(() => ({
+const shellContextMock: any = vi.hoisted(() : any => ({
   useServerConsoleShellContext: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/authorization-governance-client", () => ({
+vi.mock("../../../apps/console/lib/authorization-governance-client", () : any => ({
   getAuthorizationGovernance: authorizationGovernanceClientMock.getAuthorizationGovernance,
   upsertAuthorizationGovernance: authorizationGovernanceClientMock.upsertAuthorizationGovernance,
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () => ({
+vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
   useServerConsoleShellContext: shellContextMock.useServerConsoleShellContext,
 }));
 
@@ -45,18 +45,18 @@ type OperationPermissionTool = {
   label: string;
 };
 
-function deferred<T>() {
+function deferred<T>() : any {
   let resolve!: (value: T | PromiseLike<T>) => void;
   let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
+  const promise: any = new Promise<T>((res?: any, rej?: any) : any => {
     resolve = res;
     reject = rej;
   });
   return { promise, resolve, reject };
 }
 
-function flushPromises() {
-  return Promise.resolve().then(() => Promise.resolve()).then(() => nextTick());
+function flushPromises() : any {
+  return Promise.resolve().then(() : any => Promise.resolve()).then(() : any => nextTick());
 }
 
 function makeGovernance(overrides: Partial<GovernanceSummary> = {}): GovernanceSummary {
@@ -71,18 +71,18 @@ function makeGovernance(overrides: Partial<GovernanceSummary> = {}): GovernanceS
   };
 }
 
-function createOperationPermissionShell() {
-  const busyKey = ref("");
-  const issuedToolToken = ref("issued-token");
-  const newGrantLabel = ref("默认智能体");
-  const newGrantScopes = ref(["scope.read"]);
-  const newGrantToolsets = ref(["toolset.read"]);
-  const policyPreviewGrantId = ref("");
-  const policyPreviewProfileId = ref("");
-  const policyPreviewResult = ref<Record<string, unknown> | null>(null);
-  const policyPreviewToolId = ref("tool-a");
-  const selectedToolId = ref("tool-a");
-  const toolGrants = ref<OperationPermissionGrant[]>([
+function createOperationPermissionShell() : any {
+  const busyKey: any = ref("");
+  const issuedToolToken: any = ref("issued-token");
+  const newGrantLabel: any = ref("默认智能体");
+  const newGrantScopes: any = ref(["scope.read"]);
+  const newGrantToolsets: any = ref(["toolset.read"]);
+  const policyPreviewGrantId: any = ref("");
+  const policyPreviewProfileId: any = ref("");
+  const policyPreviewResult: any = ref<Record<string, unknown> | null>(null);
+  const policyPreviewToolId: any = ref("tool-a");
+  const selectedToolId: any = ref("tool-a");
+  const toolGrants: any = ref<OperationPermissionGrant[]>([
     {
       id: "grant-1",
       enabled: true,
@@ -100,42 +100,42 @@ function createOperationPermissionShell() {
       toolDeny: ["tool.deny"],
     },
   ]);
-  const operationPermissionTools = ref<OperationPermissionTool[]>([
+  const operationPermissionTools: any = ref<OperationPermissionTool[]>([
     { id: "tool-a", label: "Tool A" },
     { id: "tool-b", label: "Tool B" },
   ]);
-  const operationPermissionToolsets = ref([
+  const operationPermissionToolsets: any = ref([
     { id: "toolset.read", maxRisk: "read_only", grantable: true },
     { id: "toolset.safe", maxRisk: "safe_write", grantable: true },
     { id: "toolset.admin", maxRisk: "high", grantable: true },
   ]);
-  const toolScopes = ref([
+  const toolScopes: any = ref([
     { id: "scope.read" },
     { id: "scope.write" },
     { id: "scope.admin" },
   ]);
-  const policyPreviewToolOptionBarOptions = computed(() =>
-    operationPermissionTools.value.map((tool) => ({
+  const policyPreviewToolOptionBarOptions: any = computed(() : any =>
+    operationPermissionTools.value.map((tool?: any) : any => ({
       value: tool.id,
       label: `${tool.label} / ${tool.id}`,
     })),
   );
-  const policyPreviewProfileOptionBarOptions = computed(() => [
+  const policyPreviewProfileOptionBarOptions: any = computed(() : any => [
     { value: "", label: "不绑定档案" },
     { value: "profile-1", label: "默认档案 / profile-1" },
   ]);
-  const selectedOperationPermissionTool = computed(() =>
-    operationPermissionTools.value.find((tool) => tool.id === selectedToolId.value) ||
+  const selectedOperationPermissionTool: any = computed(() : any =>
+    operationPermissionTools.value.find((tool?: any) : any => tool.id === selectedToolId.value) ||
     operationPermissionTools.value[0] ||
     null,
   );
-  const enabledToolGrantCount = computed(() => toolGrants.value.filter((grant) => grant.enabled).length);
-  const selectToolForManagement = vi.fn((toolId: string) => {
+  const enabledToolGrantCount: any = computed(() : any => toolGrants.value.filter((grant?: any) : any => grant.enabled).length);
+  const selectToolForManagement: any = vi.fn((toolId: string) : any => {
     selectedToolId.value = toolId;
     policyPreviewToolId.value = toolId;
   });
-  const grantToolRuleState = vi.fn(
-    (grant: { toolAllow?: string[]; toolDeny?: string[] }, toolId: string) => {
+  const grantToolRuleState: any = vi.fn(
+    (grant: { toolAllow?: string[]; toolDeny?: string[] }, toolId: string) : any => {
       if ((grant.toolDeny || []).includes(toolId)) {
         return "deny";
       }
@@ -145,18 +145,18 @@ function createOperationPermissionShell() {
       return "inherit";
     },
   );
-  const grantHasToolset = vi.fn((grant: { toolsets?: string[] }, toolsetId: string) =>
+  const grantHasToolset: any = vi.fn((grant: { toolsets?: string[] }, toolsetId: string) : any =>
     (grant.toolsets || []).includes(toolsetId),
   );
-  const copyIssuedToolToken = vi.fn();
-  const createGrant = vi.fn();
-  const deleteGrant = vi.fn();
-  const rotateGrant = vi.fn();
-  const setGrantToolRule = vi.fn();
-  const toggleGrantToolset = vi.fn();
-  const toggleNewGrantToolset = vi.fn();
-  const updateGrant = vi.fn();
-  const previewToolPolicy = vi.fn();
+  const copyIssuedToolToken: any = vi.fn();
+  const createGrant: any = vi.fn();
+  const deleteGrant: any = vi.fn();
+  const rotateGrant: any = vi.fn();
+  const setGrantToolRule: any = vi.fn();
+  const toggleGrantToolset: any = vi.fn();
+  const toggleNewGrantToolset: any = vi.fn();
+  const updateGrant: any = vi.fn();
+  const previewToolPolicy: any = vi.fn();
 
   return {
     busyKey,
@@ -191,19 +191,19 @@ function createOperationPermissionShell() {
   };
 }
 
-function createHarness() {
-  const operationPermissionConsole = createOperationPermissionShell();
-  const shell = { operationPermissionConsole };
+function createHarness() : any {
+  const operationPermissionConsole: any = createOperationPermissionShell();
+  const shell: Record<string, any> = { operationPermissionConsole };
   shellContextMock.useServerConsoleShellContext.mockReturnValue(shell);
 
   let controller: ReturnType<typeof useOperationPermissionViewConsole> | null = null;
-  const host = defineComponent({
-    setup() {
+  const host: any = defineComponent({
+    setup() : any {
       controller = useOperationPermissionViewConsole();
-      return () => null;
+      return () : any => null;
     },
   });
-  const wrapper = mount(host);
+  const wrapper: any = mount(host);
 
   return {
     controller: controller as ReturnType<typeof useOperationPermissionViewConsole>,
@@ -214,26 +214,26 @@ function createHarness() {
 
 let mountedWrappers: VueWrapper[] = [];
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
   authorizationGovernanceClientMock.getAuthorizationGovernance.mockReset();
   authorizationGovernanceClientMock.upsertAuthorizationGovernance.mockReset();
   shellContextMock.useServerConsoleShellContext.mockReset();
 });
 
-afterEach(() => {
+afterEach(() : any => {
   for (const wrapper of mountedWrappers) {
     wrapper.unmount();
   }
   mountedWrappers = [];
 });
 
-describe("console operation permission view controller extra", () => {
-  it("loads governance, resets the editor on mount, and keeps metrics in sync", async () => {
-    const refreshGate = deferred<{ governance: GovernanceSummary }>();
+describe("console operation permission view controller extra", () : any => {
+  it("loads governance, resets the editor on mount, and keeps metrics in sync", async () : Promise<any> => {
+    const refreshGate: any = deferred<{ governance: GovernanceSummary }>();
     authorizationGovernanceClientMock.getAuthorizationGovernance.mockReturnValueOnce(refreshGate.promise);
 
-    const harness = createHarness();
+    const harness: any = createHarness();
     mountedWrappers.push(harness.wrapper);
 
     await nextTick();
@@ -242,7 +242,7 @@ describe("console operation permission view controller extra", () => {
     expect(harness.controller.authorizationGovernanceEditorKind.value).toBe("team");
     expect(harness.controller.authorizationGovernanceEditorBody.value).toContain("\"team-code\"");
     expect(harness.controller.authorizationGovernanceEditorStatus.value).toBe("");
-    expect(harness.controller.authorizationGovernanceEditorKinds.map((kind) => kind.value)).toEqual([
+    expect(harness.controller.authorizationGovernanceEditorKinds.map((kind?: any) : any => kind.value)).toEqual([
       "role",
       "department",
       "team",
@@ -268,15 +268,15 @@ describe("console operation permission view controller extra", () => {
     ]);
   });
 
-  it("saves governance, refreshes after save, and reports fallback errors", async () => {
+  it("saves governance, refreshes after save, and reports fallback errors", async () : Promise<any> => {
     authorizationGovernanceClientMock.getAuthorizationGovernance
       .mockResolvedValueOnce({ governance: makeGovernance() });
 
-    const harness = createHarness();
+    const harness: any = createHarness();
     mountedWrappers.push(harness.wrapper);
     await flushPromises();
 
-    const saveGate = deferred<void>();
+    const saveGate: any = deferred<void>();
     authorizationGovernanceClientMock.upsertAuthorizationGovernance.mockReturnValueOnce(saveGate.promise);
     authorizationGovernanceClientMock.getAuthorizationGovernance.mockResolvedValueOnce({
       governance: makeGovernance({
@@ -291,7 +291,7 @@ describe("console operation permission view controller extra", () => {
       label: "Saved group",
     });
 
-    const pendingSave = harness.controller.saveAuthorizationGovernanceEditor();
+    const pendingSave: any = harness.controller.saveAuthorizationGovernanceEditor();
     expect(harness.controller.authorizationGovernanceSaving.value).toBe(true);
     expect(harness.controller.authorizationGovernanceEditorStatus.value).toBe("");
     expect(harness.controller.authorizationGovernanceError.value).toBe("");
@@ -321,12 +321,12 @@ describe("console operation permission view controller extra", () => {
     expect(harness.controller.authorizationGovernanceError.value).toBe("load failed");
   });
 
-  it("switches tool selection and exposes governance formatting helpers", async () => {
+  it("switches tool selection and exposes governance formatting helpers", async () : Promise<any> => {
     authorizationGovernanceClientMock.getAuthorizationGovernance.mockResolvedValueOnce({
       governance: makeGovernance({ roles: [] }),
     });
 
-    const harness = createHarness();
+    const harness: any = createHarness();
     mountedWrappers.push(harness.wrapper);
     await flushPromises();
 

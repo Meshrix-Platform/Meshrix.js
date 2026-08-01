@@ -22,22 +22,22 @@ type PendingConsoleConfirm = ConsoleConfirmRequest & {
   resolve: (confirmed: boolean) => void;
 };
 
-const state = reactive({
+const state: any = reactive({
   queue: [] as PendingConsoleConfirm[],
   hostCount: 0,
 });
 
-let nextConfirmId = 1;
+let nextConfirmId: any = 1;
 
-export function hasConsoleConfirmHost() {
+export function hasConsoleConfirmHost() : any {
   return state.hostCount > 0;
 }
 
-export function registerConsoleConfirmHost() {
+export function registerConsoleConfirmHost() : any {
   state.hostCount += 1;
 }
 
-export function unregisterConsoleConfirmHost() {
+export function unregisterConsoleConfirmHost() : any {
   state.hostCount = Math.max(0, state.hostCount - 1);
   if (!state.hostCount) {
     settleAllConsoleConfirms(false);
@@ -45,34 +45,34 @@ export function unregisterConsoleConfirmHost() {
 }
 
 export function requestConsoleConfirm(request: ConsoleConfirmRequest): Promise<boolean> {
-  const message = String(request.message ?? "").trim();
+  const message: any = String(request.message ?? "").trim();
   if (!message || !hasConsoleConfirmHost()) {
     return Promise.resolve(false);
   }
-  return new Promise<boolean>((resolve) => {
+  return new Promise<boolean>((resolve?: any) : any => {
     state.queue.push({ ...request, message, id: nextConfirmId, resolve });
     nextConfirmId += 1;
   });
 }
 
-export function settleConsoleConfirm(confirmed: boolean, expectedId?: number) {
+export function settleConsoleConfirm(confirmed: boolean, expectedId?: number) : any {
   if (expectedId !== undefined && state.queue[0]?.id !== expectedId) {
     return false;
   }
-  const current = state.queue.shift();
+  const current: any = state.queue.shift();
   current?.resolve(confirmed);
   return Boolean(current);
 }
 
-export function settleAllConsoleConfirms(confirmed: boolean) {
+export function settleAllConsoleConfirms(confirmed: boolean) : any {
   while (state.queue.length) {
     settleConsoleConfirm(confirmed);
   }
 }
 
-export function useConsoleConfirmState() {
+export function useConsoleConfirmState() : any {
   return {
-    currentConfirm: computed(() => state.queue[0] ?? null),
+    currentConfirm: computed(() : any => state.queue[0] ?? null),
     settleConsoleConfirm,
   };
 }

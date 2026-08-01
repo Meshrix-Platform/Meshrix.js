@@ -35,23 +35,23 @@ export type AuthSessionsResponse = {
   sessions: Array<Record<string, unknown>>;
 };
 
-export function getAuthSession() {
+export function getAuthSession() : any {
   return getJson<ConsoleAuthSummary>("/api/auth/session");
 }
 
-export function loginAuth(payload: AuthLoginPayload) {
+export function loginAuth(payload: AuthLoginPayload) : any {
   return postJson<ConsoleAuthSummary & { ok: boolean }>("/api/auth/login", payload);
 }
 
-export function logoutAuth() {
+export function logoutAuth() : any {
   return postJson<{ ok: boolean }>("/api/auth/logout", {});
 }
 
-export function listAuthUsers() {
+export function listAuthUsers() : any {
   return getJson<AuthUsersResponse>("/api/auth/users");
 }
 
-export function updateAuthUser(userId: string, payload: AuthUserPatch) {
+export function updateAuthUser(userId: string, payload: AuthUserPatch) : any {
   return postJson<{ user: ConsoleUser; users: ConsoleUser[] }>(
     `/api/auth/users/${encodeURIComponent(userId)}`,
     payload,
@@ -59,24 +59,24 @@ export function updateAuthUser(userId: string, payload: AuthUserPatch) {
   );
 }
 
-export function getAuthOidc() {
+export function getAuthOidc() : any {
   return getJson<{ oidc: ConsoleOidcConfig }>("/api/auth/oidc");
 }
 
-export function saveAuthOidc(payload: AuthOidcPatch) {
+export function saveAuthOidc(payload: AuthOidcPatch) : any {
   return postJson<{ oidc: ConsoleOidcConfig }>("/api/auth/oidc", payload, {
     safetyConfirm: true,
   });
 }
 
-export function listAuthAudit(limit = 100) {
+export function listAuthAudit(limit: any = 100) : any {
   return getJson<AuthAuditResponse>(`/api/auth/audit?limit=${encodeURIComponent(String(limit))}`);
 }
 
-export function listAuthSessions() {
+export function listAuthSessions() : any {
   return getJson<AuthSessionsResponse>("/api/auth/sessions");
 }
 
-export function revokeAuthSession(sessionId: string) {
+export function revokeAuthSession(sessionId: string) : any {
   return postJson<{ ok: boolean }>(`/api/auth/sessions/${encodeURIComponent(sessionId)}/revoke`, {});
 }

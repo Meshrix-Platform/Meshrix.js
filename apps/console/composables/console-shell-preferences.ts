@@ -34,26 +34,26 @@ import {
   type AppearancePresetId,
 } from "./console-shell-preference-effects";
 
-export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<Ref<boolean>> }) {
-  const appearancePresetId = ref<AppearancePresetId>("default-system");
-  const appearancePresetConfigs = ref<AppearancePresetConfig[]>(readAvailableAppearancePresetConfigs());
-  const appearanceCycleScheme = ref<"light" | "dark">(prefersDarkColorScheme() ? "dark" : "light");
-  const lastAppearancePresetByScheme = {
+export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<Ref<boolean>> }) : any {
+  const appearancePresetId: any = ref<AppearancePresetId>("default-system");
+  const appearancePresetConfigs: any = ref<AppearancePresetConfig[]>(readAvailableAppearancePresetConfigs());
+  const appearanceCycleScheme: any = ref<"light" | "dark">(prefersDarkColorScheme() ? "dark" : "light");
+  const lastAppearancePresetByScheme: Record<string, any> = {
     light: DEFAULT_LIGHT_APPEARANCE_PRESET_ID,
     dark: DEFAULT_DARK_APPEARANCE_PRESET_ID,
   };
-  const appearancePresetCatalogMessage = ref("");
-  const appearancePresetImporting = ref(false);
-  const languageMode = ref<ConsoleLocale>("zh-CN");
+  const appearancePresetCatalogMessage: any = ref("");
+  const appearancePresetImporting: any = ref(false);
+  const languageMode: any = ref<ConsoleLocale>("zh-CN");
   let consoleDomLocalizer: ConsoleDomLocalizer | null = null;
   let unsubscribeAppearancePresetCatalogChanges: (() => void) | null = null;
   let appearancePresetCatalogPollTimer: number | null = null;
-  let appearancePresetCatalogRefreshInFlight = false;
-  let appearancePresetCatalogFingerprint = "";
-  let appearancePreferencesMounted = false;
+  let appearancePresetCatalogRefreshInFlight: any = false;
+  let appearancePresetCatalogFingerprint: any = "";
+  let appearancePreferencesMounted: any = false;
 
-  const languageOptionBarOptions = computed(() =>
-    consoleLocales.map((locale) => ({
+  const languageOptionBarOptions: any = computed(() : any =>
+    consoleLocales.map((locale?: any) : any => ({
       value: locale.value,
       label:
         languageMode.value === "en"
@@ -63,126 +63,126 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
           : locale.label,
     })),
   );
-  const msg = computed(() => consoleMessages[languageMode.value]);
-  const appearancePresetOptions = computed(() =>
-    appearancePresetConfigs.value.map((config) => ({
+  const msg: any = computed(() : any => consoleMessages[languageMode.value]);
+  const appearancePresetOptions: any = computed(() : any =>
+    appearancePresetConfigs.value.map((config?: any) : any => ({
       value: config.id,
       label: localizedAppearancePresetLabel(config, languageMode.value),
       swatches: appearancePresetSwatches(config),
     })),
   );
-  const appearanceCycleSchemeOptions = computed(() => [
+  const appearanceCycleSchemeOptions: any = computed(() : any => [
     { value: "dark", label: msg.value.drawer.themeDark, icon: "moon" as const },
     { value: "light", label: msg.value.drawer.themeLight, icon: "sun" as const },
   ]);
-  const appearancePresetOptionsForCycleScheme = computed(() =>
+  const appearancePresetOptionsForCycleScheme: any = computed(() : any =>
     appearancePresetConfigs.value
-      .filter((config) => config.mode === appearanceCycleScheme.value)
-      .map((config) => ({
+      .filter((config?: any) : any => config.mode === appearanceCycleScheme.value)
+      .map((config?: any) : any => ({
         value: config.id,
         label: localizedAppearancePresetLabel(config, languageMode.value),
         swatches: appearancePresetSwatches(config),
       })),
   );
-  const appearancePresetSelectionId = computed(() => {
-    const ids = fixedPresetIdsForScheme(appearanceCycleScheme.value);
+  const appearancePresetSelectionId: any = computed(() : any => {
+    const ids: any = fixedPresetIdsForScheme(appearanceCycleScheme.value);
     return ids.includes(appearancePresetId.value)
       ? appearancePresetId.value
       : preferredPresetIdForScheme(appearanceCycleScheme.value);
   });
-  const appearancePresetLabel = computed(() => {
-    const config = appearancePresetConfigs.value.find((item) => item.id === appearancePresetId.value);
+  const appearancePresetLabel: any = computed(() : any => {
+    const config: any = appearancePresetConfigs.value.find((item?: any) : any => item.id === appearancePresetId.value);
     return config ? localizedAppearancePresetLabel(config, languageMode.value) : appearancePresetId.value;
   });
-  const appearanceCycleSchemeLabel = computed(() =>
+  const appearanceCycleSchemeLabel: any = computed(() : any =>
     appearanceCycleScheme.value === "dark"
       ? msg.value.topbar.appearanceCycleSchemeDarkLabel
       : msg.value.topbar.appearanceCycleSchemeLightLabel,
   );
 
-  function prefersDarkColorScheme() {
+  function prefersDarkColorScheme() : any {
     return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   }
 
-  function schemeForAppearancePreset(presetId: AppearancePresetId) {
-    const config = findAppearancePresetConfig(presetId, appearancePresetConfigs.value);
+  function schemeForAppearancePreset(presetId: AppearancePresetId) : any {
+    const config: any = findAppearancePresetConfig(presetId, appearancePresetConfigs.value);
     if (config?.mode === "light" || config?.mode === "dark") {
       return config.mode;
     }
     return prefersDarkColorScheme() ? "dark" : "light";
   }
 
-  function fixedPresetIdsForScheme(scheme: "light" | "dark") {
+  function fixedPresetIdsForScheme(scheme: "light" | "dark") : any {
     return appearancePresetConfigs.value
-      .filter((config) => config.mode === scheme)
-      .map((config) => config.id);
+      .filter((config?: any) : any => config.mode === scheme)
+      .map((config?: any) : any => config.id);
   }
 
-  function preferredPresetIdForScheme(scheme: "light" | "dark") {
-    const ids = fixedPresetIdsForScheme(scheme);
+  function preferredPresetIdForScheme(scheme: "light" | "dark") : any {
+    const ids: any = fixedPresetIdsForScheme(scheme);
     if (ids.includes(lastAppearancePresetByScheme[scheme])) {
       return lastAppearancePresetByScheme[scheme];
     }
     return ids[0] || "default-system";
   }
 
-  function appearancePresetSwatches(config: AppearancePresetConfig) {
-    const tokens = config.tokens;
+  function appearancePresetSwatches(config: AppearancePresetConfig) : any {
+    const tokens: any = config.tokens;
     if (!tokens) {
       return undefined;
     }
-    const swatches = [
+    const swatches: any = [
       tokens["bg-base"] || tokens["bg-surface"],
       tokens.brand,
       tokens["brand-strong"] || tokens.info || tokens.danger,
-    ].filter((value): value is string => Boolean(value));
+    ].filter((value?: any): value is string => Boolean(value));
     return swatches.length > 0 ? swatches : undefined;
   }
 
-  function applyAppearancePreset(presetId: AppearancePresetId) {
-    const nextPresetId = normalizeAppearancePresetId(presetId, appearancePresetConfigs.value);
+  function applyAppearancePreset(presetId: AppearancePresetId) : any {
+    const nextPresetId: any = normalizeAppearancePresetId(presetId, appearancePresetConfigs.value);
     applyAppearancePresetDocument(nextPresetId, appearancePresetConfigs.value);
     persistAppearancePreset(nextPresetId);
     appearancePresetId.value = nextPresetId;
-    const scheme = schemeForAppearancePreset(nextPresetId);
+    const scheme: any = schemeForAppearancePreset(nextPresetId);
     appearanceCycleScheme.value = scheme;
-    const config = findAppearancePresetConfig(nextPresetId, appearancePresetConfigs.value);
+    const config: any = findAppearancePresetConfig(nextPresetId, appearancePresetConfigs.value);
     if (config?.mode === scheme) {
       lastAppearancePresetByScheme[scheme] = nextPresetId;
     }
   }
 
-  function cycleAppearancePreset() {
-    const ids = fixedPresetIdsForScheme(appearanceCycleScheme.value);
-    const currentIndex = ids.indexOf(appearancePresetId.value);
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % ids.length : 0;
+  function cycleAppearancePreset() : any {
+    const ids: any = fixedPresetIdsForScheme(appearanceCycleScheme.value);
+    const currentIndex: any = ids.indexOf(appearancePresetId.value);
+    const nextIndex: any = currentIndex >= 0 ? (currentIndex + 1) % ids.length : 0;
     applyAppearancePreset(ids[nextIndex] || preferredPresetIdForScheme(appearanceCycleScheme.value));
   }
 
-  function toggleAppearanceCycleScheme() {
-    const nextScheme = appearanceCycleScheme.value === "dark" ? "light" : "dark";
+  function toggleAppearanceCycleScheme() : any {
+    const nextScheme: any = appearanceCycleScheme.value === "dark" ? "light" : "dark";
     setAppearanceCycleScheme(nextScheme);
   }
 
-  function applyLanguage(mode: ConsoleLocale) {
+  function applyLanguage(mode: ConsoleLocale) : any {
     applyConsoleLanguageDocument(mode);
     persistConsoleLanguage(mode);
     setConsoleLocaleState(mode);
     languageMode.value = mode;
-    void nextTick(() => consoleDomLocalizer?.refresh());
+    void nextTick(() : any => consoleDomLocalizer?.refresh());
   }
 
-  function setLanguage(value: string | number | boolean) {
+  function setLanguage(value: string | number | boolean) : any {
     applyLanguage(value === "en" ? "en" : "zh-CN");
   }
 
-  function setAppearancePreset(value: string | number | boolean) {
+  function setAppearancePreset(value: string | number | boolean) : any {
     applyAppearancePreset(normalizeAppearancePresetId(value, appearancePresetConfigs.value));
   }
 
-  function setAppearanceCycleScheme(value: string | number | boolean) {
-    const nextScheme = value === "light" ? "light" : "dark";
-    const currentIds = fixedPresetIdsForScheme(nextScheme);
+  function setAppearanceCycleScheme(value: string | number | boolean) : any {
+    const nextScheme: any = value === "light" ? "light" : "dark";
+    const currentIds: any = fixedPresetIdsForScheme(nextScheme);
     if (appearanceCycleScheme.value === nextScheme && currentIds.includes(appearancePresetId.value)) {
       return;
     }
@@ -190,17 +190,17 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
     applyAppearancePreset(preferredPresetIdForScheme(nextScheme));
   }
 
-  function fingerprintAppearancePresetCatalog(configs: AppearancePresetConfig[]) {
-    return JSON.stringify(configs.map((config) => [config.id, config]));
+  function fingerprintAppearancePresetCatalog(configs: AppearancePresetConfig[]) : any {
+    return JSON.stringify(configs.map((config?: any) : any => [config.id, config]));
   }
 
   function applyAppearancePresetCatalog(
     configs: AppearancePresetConfig[],
     options: { silent?: boolean; preferStored?: boolean; selectedId?: string } = {},
-  ) {
+  ) : any {
     appearancePresetCatalogFingerprint = fingerprintAppearancePresetCatalog(configs);
     appearancePresetConfigs.value = configs;
-    const preferredPresetId =
+    const preferredPresetId: any =
       options.selectedId ||
       (options.preferStored
         ? readStoredAppearancePreset(appearancePresetConfigs.value) || appearancePresetId.value
@@ -213,7 +213,7 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
 
   async function refreshAppearancePresetConfigs(
     options: { silent?: boolean; preferStored?: boolean; refreshBuiltIn?: boolean } = {},
-  ) {
+  ) : Promise<any> {
     if (appearancePresetCatalogRefreshInFlight && options.silent) {
       return;
     }
@@ -222,8 +222,8 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
       if (options.refreshBuiltIn !== false) {
         await refreshAvailableAppearancePresetConfigs();
       }
-      const response = await fetchServerAppearancePresetConfigs();
-      const configs = setServerAppearancePresetConfigs(response.configs || []);
+      const response: any = await fetchServerAppearancePresetConfigs();
+      const configs: any = setServerAppearancePresetConfigs(response.configs || []);
       if (!options.silent || fingerprintAppearancePresetCatalog(configs) !== appearancePresetCatalogFingerprint) {
         applyAppearancePresetCatalog(configs, options);
       }
@@ -231,7 +231,7 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
         appearancePresetCatalogMessage.value =
           `${appearancePresetConfigs.value.length} preset files loaded; ${response.errors.length} server preset file(s) ignored`;
       }
-    } catch (error) {
+    } catch (error: any) {
       if (!options.silent) {
         appearancePresetCatalogMessage.value = error instanceof Error ? error.message : "Preset files failed to load";
       }
@@ -240,11 +240,11 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
     }
   }
 
-  async function importAppearancePresetFileToServer(file: File) {
+  async function importAppearancePresetFileToServer(file: File) : Promise<any> {
     appearancePresetImporting.value = true;
     try {
-      const response = await importServerAppearancePresetText(await file.text());
-      const configs = setServerAppearancePresetConfigs(response.configs || []);
+      const response: any = await importServerAppearancePresetText(await file.text());
+      const configs: any = setServerAppearancePresetConfigs(response.configs || []);
       applyAppearancePresetCatalog(configs, {
         selectedId: response.config?.id,
       });
@@ -254,32 +254,32 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
       if (response.errors?.length) {
         appearancePresetCatalogMessage.value += `; ${response.errors.length} server preset file(s) ignored`;
       }
-    } catch (error) {
+    } catch (error: any) {
       appearancePresetCatalogMessage.value = error instanceof Error ? error.message : "Preset file import failed";
     } finally {
       appearancePresetImporting.value = false;
     }
   }
 
-  function toggleLanguage() {
+  function toggleLanguage() : any {
     applyLanguage(languageMode.value === "en" ? "zh-CN" : "en");
   }
 
-  function tt(text: string) {
+  function tt(text: string) : any {
     return localizeConsoleText(text, resolveEffectiveConsoleLocale(languageMode.value));
   }
 
-  onMounted(() => {
+  onMounted(() : any => {
     appearancePresetConfigs.value = readAvailableAppearancePresetConfigs();
-    const storedPresetId = readStoredAppearancePreset(appearancePresetConfigs.value);
+    const storedPresetId: any = readStoredAppearancePreset(appearancePresetConfigs.value);
     if (storedPresetId) {
       applyAppearancePreset(storedPresetId);
     } else {
       applyAppearancePresetDocument(appearancePresetId.value, appearancePresetConfigs.value);
     }
     applyLanguage(readStoredConsoleLanguage() || languageMode.value);
-    consoleDomLocalizer = installConsoleDomLocalizer(() => resolveEffectiveConsoleLocale(languageMode.value));
-    unsubscribeAppearancePresetCatalogChanges = subscribeAppearancePresetCatalogChanges(() => {
+    consoleDomLocalizer = installConsoleDomLocalizer(() : any => resolveEffectiveConsoleLocale(languageMode.value));
+    unsubscribeAppearancePresetCatalogChanges = subscribeAppearancePresetCatalogChanges(() : any => {
       applyAppearancePresetCatalog(readAvailableAppearancePresetConfigs());
     });
     appearancePreferencesMounted = true;
@@ -287,7 +287,7 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
       void refreshAppearancePresetConfigs({ silent: true, preferStored: true });
     }
     if (typeof window !== "undefined") {
-      appearancePresetCatalogPollTimer = window.setInterval(() => {
+      appearancePresetCatalogPollTimer = window.setInterval(() : any => {
         if (!options.isAuthenticated.value || document.visibilityState === "hidden") {
           return;
         }
@@ -296,19 +296,19 @@ export function useConsoleShellPreferences(options: { isAuthenticated: Readonly<
     }
   });
 
-  watch(options.isAuthenticated, (authenticated) => {
+  watch(options.isAuthenticated, (authenticated?: any) : any => {
     if (!authenticated || !appearancePreferencesMounted) {
       return;
     }
     void refreshAppearancePresetConfigs({ silent: true, preferStored: true });
   });
 
-  watch(languageMode, async () => {
+  watch(languageMode, async () : Promise<any> => {
     await nextTick();
     consoleDomLocalizer?.refresh();
   });
 
-  onBeforeUnmount(() => {
+  onBeforeUnmount(() : any => {
     appearancePreferencesMounted = false;
     unsubscribeAppearancePresetCatalogChanges?.();
     unsubscribeAppearancePresetCatalogChanges = null;

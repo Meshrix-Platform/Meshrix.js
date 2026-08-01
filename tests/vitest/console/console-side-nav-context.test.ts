@@ -11,22 +11,22 @@ import type { AppView } from "../../../apps/console/types/app";
 
 const mounted: VueWrapper[] = [];
 
-function setViewportWidth(width: number) {
+function setViewportWidth(width: number) : any {
   Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
 }
 
-function mountContext(initialView: AppView = "dashboard") {
+function mountContext(initialView: AppView = "dashboard") : any {
   let context: ConsoleSideNavContext | undefined;
-  const activeRouteView = ref<AppView>(initialView);
-  const sideNavCollapsed = ref(false);
-  const shell = {
+  const activeRouteView: any = ref<AppView>(initialView);
+  const sideNavCollapsed: any = ref(false);
+  const shell: any = {
     activeRouteView,
     sideNavCollapsed,
   } as unknown as ServerConsoleShellContext;
-  const Host = defineComponent({
-    setup() {
+  const Host: any = defineComponent({
+    setup() : any {
       context = createConsoleSideNavContext(shell);
-      return () => null;
+      return () : any => null;
     },
   });
   mounted.push(mount(Host));
@@ -36,7 +36,7 @@ function mountContext(initialView: AppView = "dashboard") {
   return { activeRouteView, context, sideNavCollapsed };
 }
 
-beforeEach(() => {
+beforeEach(() : any => {
   window.localStorage.clear();
   setViewportWidth(1440);
   vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({
@@ -46,7 +46,7 @@ beforeEach(() => {
   }));
 });
 
-afterEach(() => {
+afterEach(() : any => {
   while (mounted.length) {
     mounted.pop()?.unmount();
   }
@@ -54,8 +54,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("console side nav width bounds", () => {
-  it("clamps persisted and setter widths while preserving main content space", async () => {
+describe("console side nav width bounds", () : any => {
+  it("clamps persisted and setter widths while preserving main content space", async () : Promise<any> => {
     window.localStorage.setItem("meshrix:console:sideNavWidth", "99999");
     window.localStorage.setItem("meshrix:console:sideNavDirectoryWidth", "99999");
 
@@ -73,7 +73,7 @@ describe("console side nav width bounds", () => {
     expect(context.sideNavWidth.value + context.sideNavDirectoryWidth.value + 480).toBeLessThanOrEqual(1440);
   });
 
-  it("reconverges both widths when the viewport shrinks", async () => {
+  it("reconverges both widths when the viewport shrinks", async () : Promise<any> => {
     const { context } = mountContext("workspaces");
     await nextTick();
     context.setSideNavWidth(420);
@@ -88,7 +88,7 @@ describe("console side nav width bounds", () => {
     expect(context.sideNavWidth.value + context.sideNavDirectoryWidth.value + 480).toBe(980);
   });
 
-  it("treats the primary nav as an overlay at narrow desktop widths", async () => {
+  it("treats the primary nav as an overlay at narrow desktop widths", async () : Promise<any> => {
     setViewportWidth(800);
     const { context } = mountContext("workspaces");
     await nextTick();
@@ -100,25 +100,25 @@ describe("console side nav width bounds", () => {
     expect(context.sideNavDirectoryWidth.value).toBe(320);
   });
 
-  it("falls back safely when browser storage is empty, malformed, or unavailable", () => {
+  it("falls back safely when browser storage is empty, malformed, or unavailable", () : any => {
     window.localStorage.setItem("meshrix:console:sideNavWidth", "   ");
     window.localStorage.setItem("meshrix:console:sideNavDirectoryWidth", "not-a-number");
-    const first = mountContext();
+    const first: any = mountContext();
 
     expect(first.context.sideNavWidth.value).toBe(220);
     expect(first.context.sideNavDirectoryWidth.value).toBe(220);
 
     mounted.pop()?.unmount();
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() : any => {
       throw new DOMException("Storage unavailable", "SecurityError");
     });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() : any => {
       throw new DOMException("Storage unavailable", "SecurityError");
     });
-    const second = mountContext();
+    const second: any = mountContext();
 
     expect(second.context.sideNavWidth.value).toBe(220);
-    expect(() => second.context.setSideNavWidth(260)).not.toThrow();
+    expect(() : any => second.context.setSideNavWidth(260)).not.toThrow();
     expect(second.context.sideNavWidth.value).toBe(260);
   });
 });

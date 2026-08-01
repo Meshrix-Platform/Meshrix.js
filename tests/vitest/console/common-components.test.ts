@@ -17,13 +17,13 @@ import {
   SegmentedToggle as RegisteredSegmentedToggle,
 } from "../../../apps/console/components/common";
 
-const navigateBrowserHashRouteMock = vi.hoisted(() => vi.fn());
+const navigateBrowserHashRouteMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../apps/console/lib/browser-window", () => ({
+vi.mock("../../../apps/console/lib/browser-window", () : any => ({
   navigateBrowserHashRoute: navigateBrowserHashRouteMock,
 }));
 
-const ElSelectStub = defineComponent({
+const ElSelectStub: any = defineComponent({
   name: "ElSelect",
   props: [
     "modelValue",
@@ -40,8 +40,8 @@ const ElSelectStub = defineComponent({
     "size",
   ],
   emits: ["update:modelValue", "change"],
-  setup(props, { emit, slots }) {
-    return () =>
+  setup(props: any, { emit, slots }: Record<string, any>) : any {
+    return () : any =>
       h("div", { class: "option-bar-select-stub-shell" }, [
         h("div", { class: "option-bar-selected-label-stub" }, slots.label?.({
           label: props.modelValue === "a" ? "Alpha" : String(props.modelValue ?? ""),
@@ -58,8 +58,8 @@ const ElSelectStub = defineComponent({
             "data-placeholder": props.placeholder,
             "data-popper-class": props.popperClass,
             "data-size": props.size,
-            onChange: (event: Event) => {
-              const value = (event.target as HTMLSelectElement).value;
+            onChange: (event: Event) : any => {
+              const value: any = (event.target as HTMLSelectElement).value;
               emit("update:modelValue", value);
               emit("change", value);
             },
@@ -70,11 +70,11 @@ const ElSelectStub = defineComponent({
   },
 });
 
-const ElOptionStub = defineComponent({
+const ElOptionStub: any = defineComponent({
   name: "ElOption",
   props: ["label", "value", "disabled"],
-  setup(props, { slots }) {
-    return () =>
+  setup(props: any, { slots }: Record<string, any>) : any {
+    return () : any =>
       h(
         "option",
         {
@@ -86,12 +86,12 @@ const ElOptionStub = defineComponent({
   },
 });
 
-const ElTableStub = defineComponent({
+const ElTableStub: any = defineComponent({
   name: "ElTable",
   props: ["data", "rowKey", "emptyText", "loading"],
   emits: ["scroll", "header-dragend"],
-  setup(props, { emit, slots }) {
-    return () =>
+  setup(props: any, { emit, slots }: Record<string, any>) : any {
+    return () : any =>
       h(
         "div",
         {
@@ -99,7 +99,7 @@ const ElTableStub = defineComponent({
           "data-row-key": typeof props.rowKey === "function" ? "function" : String(props.rowKey ?? ""),
           "data-empty-text": String(props.emptyText ?? ""),
           "data-loading": String(Boolean(props.loading)),
-          onScroll: (event: Event) => emit("scroll", event),
+          onScroll: (event: Event) : any => emit("scroll", event),
         },
         [
           h(
@@ -107,7 +107,7 @@ const ElTableStub = defineComponent({
             {
               class: "header-dragend-trigger",
               type: "button",
-              onClick: (event: Event) => emit("header-dragend", 120, 80, { property: "name" }, event),
+              onClick: (event: Event) : any => emit("header-dragend", 120, 80, { property: "name" }, event),
             },
             "drag",
           ),
@@ -117,9 +117,9 @@ const ElTableStub = defineComponent({
   },
 });
 
-describe("console common components behavior", () => {
-  it("toggles BinaryCheckbox and leaves disabled instances unchanged", async () => {
-    const wrapper = mount(BinaryCheckbox, {
+describe("console common components behavior", () : any => {
+  it("toggles BinaryCheckbox and leaves disabled instances unchanged", async () : Promise<any> => {
+    const wrapper: any = mount(BinaryCheckbox, {
       props: {
         modelValue: false,
         label: "允许上传",
@@ -132,7 +132,7 @@ describe("console common components behavior", () => {
     expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([true]);
     expect(wrapper.emitted("change")?.[0]).toEqual([true]);
 
-    const disabled = mount(BinaryCheckbox, {
+    const disabled: any = mount(BinaryCheckbox, {
       props: {
         modelValue: true,
         label: "禁用项",
@@ -143,7 +143,7 @@ describe("console common components behavior", () => {
     expect(disabled.emitted("update:modelValue")).toBeUndefined();
     expect(disabled.attributes("data-checked")).toBe("true");
 
-    const readonly = mount(BinaryCheckbox, {
+    const readonly: any = mount(BinaryCheckbox, {
       props: {
         modelValue: true,
         label: "只读项",
@@ -155,8 +155,8 @@ describe("console common components behavior", () => {
     expect(readonly.attributes("aria-readonly")).toBe("true");
   });
 
-  it("renders SegmentedToggle grid state and emits selected values", async () => {
-    const wrapper = mount(SegmentedToggle, {
+  it("renders SegmentedToggle grid state and emits selected values", async () : Promise<any> => {
+    const wrapper: any = mount(SegmentedToggle, {
       props: {
         modelValue: "summary",
         ariaLabel: "视图",
@@ -173,7 +173,7 @@ describe("console common components behavior", () => {
     expect(wrapper.attributes("aria-label")).toBe("视图");
     expect(wrapper.classes()).toContain("size-large");
     expect(wrapper.attributes("style")).toContain("repeat(3, minmax(0, 1fr))");
-    expect(wrapper.findAll('[role="tab"]').map((item) => item.attributes("aria-selected"))).toEqual([
+    expect(wrapper.findAll('[role="tab"]').map((item?: any) : any => item.attributes("aria-selected"))).toEqual([
       "true",
       "false",
       "false",
@@ -184,8 +184,8 @@ describe("console common components behavior", () => {
     expect(wrapper.emitted("change")?.[0]).toEqual(["detail"]);
   });
 
-  it("forwards OptionBar props and Element Plus select events", async () => {
-    const wrapper = mount(OptionBar, {
+  it("forwards OptionBar props and Element Plus select events", async () : Promise<any> => {
+    const wrapper: any = mount(OptionBar, {
       props: {
         modelValue: "a",
         label: "模式",
@@ -211,10 +211,10 @@ describe("console common components behavior", () => {
     });
 
     expect(wrapper.find(".option-bar-label").text()).toBe("模式");
-    const select = wrapper.find("select");
+    const select: any = wrapper.find("select");
     expect(select.attributes("data-placeholder")).toBe("请选择");
     expect(select.attributes("data-popper-class")).toBe("custom-popper");
-    expect(select.findAll("option").map((option) => option.text())).toEqual(["Alpha", "Beta"]);
+    expect(select.findAll("option").map((option?: any) : any => option.text())).toEqual(["Alpha", "Beta"]);
     expect(wrapper.findAll(".option-bar-option-swatch")).toHaveLength(3);
     expect(wrapper.findAll(".option-bar-option-icon").length).toBeGreaterThanOrEqual(2);
     expect(wrapper.find(".option-bar-selected-label-stub .option-bar-option-icon").exists()).toBe(true);
@@ -225,9 +225,9 @@ describe("console common components behavior", () => {
     expect(wrapper.emitted("change")?.[0]).toEqual(["b"]);
   });
 
-  it("normalizes AgentModelOptionBar options and navigates when the model library is empty", async () => {
+  it("normalizes AgentModelOptionBar options and navigates when the model library is empty", async () : Promise<any> => {
     navigateBrowserHashRouteMock.mockClear();
-    const wrapper = mount(AgentModelOptionBar, {
+    const wrapper: any = mount(AgentModelOptionBar, {
       props: {
         modelValue: "",
         label: "默认智能体",
@@ -242,7 +242,7 @@ describe("console common components behavior", () => {
     });
 
     expect(wrapper.find(".agent-option-label").text()).toBe("默认智能体");
-    expect(wrapper.findAll("option").map((option) => option.text())).toEqual([
+    expect(wrapper.findAll("option").map((option?: any) : any => option.text())).toEqual([
       "未分配智能体",
       "Agent A",
       "Agent B（维护中）",
@@ -252,7 +252,7 @@ describe("console common components behavior", () => {
     expect(wrapper.emitted("update:modelValue")?.[0]).toEqual(["agent-a"]);
     expect(wrapper.emitted("change")?.[0]).toEqual(["agent-a"]);
 
-    const emptyWrapper = mount(AgentModelOptionBar, {
+    const emptyWrapper: any = mount(AgentModelOptionBar, {
       props: {
         modelValue: "",
         options: [],
@@ -265,15 +265,15 @@ describe("console common components behavior", () => {
     await emptyWrapper.find("select").trigger("click");
     expect(navigateBrowserHashRouteMock).toHaveBeenCalledWith("/admin/models", "/admin/agent-config");
 
-    const event = new KeyboardEvent("keydown", { key: "Enter" });
-    const preventDefault = vi.spyOn(event, "preventDefault");
+    const event: any = new KeyboardEvent("keydown", { key: "Enter" });
+    const preventDefault: any = vi.spyOn(event, "preventDefault");
     await emptyWrapper.find("select").element.dispatchEvent(event);
     expect(preventDefault).toHaveBeenCalled();
   });
 
-  it("wraps DataTable Element Plus events and slots", async () => {
-    const rowKey = (row: { id: string }) => row.id;
-    const wrapper = mount(DataTable, {
+  it("wraps DataTable Element Plus events and slots", async () : Promise<any> => {
+    const rowKey: any = (row: { id: string }) : any => row.id;
+    const wrapper: any = mount(DataTable, {
       props: {
         data: [{ id: "row-1", name: "Alpha" }],
         rowKey,
@@ -293,7 +293,7 @@ describe("console common components behavior", () => {
       },
     });
 
-    const table = wrapper.find(".meshrix-data-table");
+    const table: any = wrapper.find(".meshrix-data-table");
     expect(table.attributes("data-row-key")).toBe("function");
     expect(table.attributes("data-empty-text")).toBe("暂无数据");
     expect(wrapper.find(".table-slot").text()).toBe("列内容");
@@ -304,8 +304,8 @@ describe("console common components behavior", () => {
     expect(wrapper.emitted("header-dragend")?.[0].slice(0, 3)).toEqual([120, 80, { property: "name" }]);
   });
 
-  it("toggles SplitToggleCard from summary and ignores nested interactive targets", async () => {
-    const wrapper = mount(SplitToggleCard, {
+  it("toggles SplitToggleCard from summary and ignores nested interactive targets", async () : Promise<any> => {
+    const wrapper: any = mount(SplitToggleCard, {
       props: {
         as: "article",
         expanded: true,
@@ -331,20 +331,20 @@ describe("console common components behavior", () => {
     expect(wrapper.emitted("toggle")).toHaveLength(3);
   });
 
-  it("exports common component registry entries and reuse policy", () => {
+  it("exports common component registry entries and reuse policy", () : any => {
     expect(RegisteredAgentModelOptionBar).toBe(AgentModelOptionBar);
     expect(RegisteredBinaryCheckbox).toBe(BinaryCheckbox);
     expect(RegisteredSegmentedToggle).toBe(SegmentedToggle);
     expect(commonComponentReusePolicy.length).toBeGreaterThan(0);
-    expect(commonComponentRegistry.map((entry) => entry.name)).toEqual(expect.arrayContaining([
+    expect(commonComponentRegistry.map((entry?: any) : any => entry.name)).toEqual(expect.arrayContaining([
       "BinaryCheckbox",
       "OptionBar",
       "AgentModelOptionBar",
       "SegmentedToggle",
     ]));
-    expect(commonComponentRegistry.every((entry) => [
+    expect(commonComponentRegistry.every((entry?: any) : any => [
       "apps/console/components/",
       "packages/ui-console/src/",
-    ].some((root) => entry.file.startsWith(root)))).toBe(true);
+    ].some((root?: any) : any => entry.file.startsWith(root)))).toBe(true);
   });
 });

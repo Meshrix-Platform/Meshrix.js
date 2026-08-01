@@ -6,7 +6,7 @@ import type {
   RuntimeMountsResponse,
 } from "./types";
 
-export function saveRuntimeMounts(payload: Partial<RuntimeMountConfig>) {
+export function saveRuntimeMounts(payload: Partial<RuntimeMountConfig>) : any {
   return postJson<RuntimeMountsResponse>(
     "/api/runtime/mounts",
     { value: payload },
@@ -14,7 +14,7 @@ export function saveRuntimeMounts(payload: Partial<RuntimeMountConfig>) {
   );
 }
 
-export function reloadRuntimeMounts(settings?: AgentSettings) {
+export function reloadRuntimeMounts(settings?: AgentSettings) : any {
   return postJson<RuntimeMountReloadResponse>(
     "/api/runtime/mounts/reload",
     settings ? { settings } : {},

@@ -3,29 +3,29 @@ import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import BridgeDownloadButton from "../../../apps/console/components/BridgeDownloadButton.vue";
 
-const bridgeMock = vi.hoisted(() => ({
+const bridgeMock: any = vi.hoisted(() : any => ({
   downloadFile: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/bridge", () => ({
+vi.mock("../../../apps/console/lib/bridge", () : any => ({
   bridge: {
     downloadFile: bridgeMock.downloadFile,
   },
 }));
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
   bridgeMock.downloadFile.mockReset();
 });
 
-describe("BridgeDownloadButton behavior", () => {
-  it("downloads with a custom filename and emits the result", async () => {
+describe("BridgeDownloadButton behavior", () : any => {
+  it("downloads with a custom filename and emits the result", async () : Promise<any> => {
     bridgeMock.downloadFile.mockResolvedValue({
       fileName: "report.csv",
       ok: true,
       size: 42,
     });
-    const wrapper = mount(BridgeDownloadButton, {
+    const wrapper: any = mount(BridgeDownloadButton, {
       props: {
         buttonClass: "bridge-download-link",
         busyLabel: "正在保存",
@@ -51,9 +51,9 @@ describe("BridgeDownloadButton behavior", () => {
     expect(wrapper.find("button").text()).toBe("保存 CSV");
   });
 
-  it("reports download failures and renders the error message", async () => {
+  it("reports download failures and renders the error message", async () : Promise<any> => {
     bridgeMock.downloadFile.mockRejectedValue(new Error("download denied"));
-    const wrapper = mount(BridgeDownloadButton, {
+    const wrapper: any = mount(BridgeDownloadButton, {
       props: {
         href: "/api/export/denied",
       },
@@ -68,9 +68,9 @@ describe("BridgeDownloadButton behavior", () => {
     expect(wrapper.emitted("downloaded")).toBeUndefined();
   });
 
-  it("uses a generic failure message for non-Error rejections", async () => {
+  it("uses a generic failure message for non-Error rejections", async () : Promise<any> => {
     bridgeMock.downloadFile.mockRejectedValue("plain failure");
-    const wrapper = mount(BridgeDownloadButton, {
+    const wrapper: any = mount(BridgeDownloadButton, {
       props: {
         href: "/api/export/plain",
       },
@@ -83,19 +83,19 @@ describe("BridgeDownloadButton behavior", () => {
     expect(wrapper.emitted("failed")?.[0]).toEqual(["下载失败。"]);
   });
 
-  it("does not start downloads while disabled or without a usable href", async () => {
-    const disabled = mount(BridgeDownloadButton, {
+  it("does not start downloads while disabled or without a usable href", async () : Promise<any> => {
+    const disabled: any = mount(BridgeDownloadButton, {
       props: {
         disabled: true,
         href: "/api/export/report",
       },
     });
-    const missingHref = mount(BridgeDownloadButton, {
+    const missingHref: any = mount(BridgeDownloadButton, {
       props: {
         href: "",
       },
     });
-    const placeholderHref = mount(BridgeDownloadButton, {
+    const placeholderHref: any = mount(BridgeDownloadButton, {
       props: {
         href: "#",
       },

@@ -109,7 +109,7 @@ function fileWithRelativePath(file: File, relativePath: string) {
 
 async function collectDirectoryFiles(
   directoryHandle: BrowserDirectoryHandle,
-  prefix = directoryHandle.name,
+  prefix: any = directoryHandle.name,
 ): Promise<File[]> {
   const files: File[] = [];
   const iterable = directoryHandle.values

@@ -40,26 +40,26 @@ export type UploadProgressState = {
   tone: string;
 };
 
-export const uploadFileListIcons = {
+export const uploadFileListIcons: Record<string, any> = {
   chevronDown: "/icons/octicon-chevron-down-16.svg",
   file: "/icons/octicon-file-24.svg",
   folder: "/icons/octicon-file-directory-fill-24.svg",
   upload: "/icons/octicon-upload-24.svg",
 };
 
-export const uploadProgressStepLabels = ["已选择", "上传", "解析", "入库", "完成"];
-export const uploadTotalProgressSteps = uploadProgressStepLabels.length;
+export const uploadProgressStepLabels: any[] = ["已选择", "上传", "解析", "入库", "完成"];
+export const uploadTotalProgressSteps: any = uploadProgressStepLabels.length;
 
 export function buildUploadFileEntries(options: {
   files: File[];
   mode: "upload" | "download";
   resultFiles: FileListResultEntry[];
-}) {
+}) : any {
   if (options.mode === "download") {
-    return options.resultFiles.map((file, index): UploadFileEntry => {
-      const relativePath = String(file.relativePath || file.name);
-      const name = String(file.name || relativePath || "result");
-      const extension = String(
+    return options.resultFiles.map((file?: any, index?: any): UploadFileEntry => {
+      const relativePath: any = String(file.relativePath || file.name);
+      const name: any = String(file.name || relativePath || "result");
+      const extension: any = String(
         file.extension || (name.includes(".") ? name.split(".").pop() : "FILE") || "FILE",
       ).toUpperCase();
       return {
@@ -79,12 +79,12 @@ export function buildUploadFileEntries(options: {
     });
   }
 
-  return options.files.map((file, index): UploadFileEntry => {
-    const relativePath = String((file as FileWithRelativePath).webkitRelativePath || file.name);
-    const segments = relativePath.split(/[\\/]/g).filter(Boolean);
-    const name = segments.at(-1) || file.name;
-    const directory = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
-    const extension = name.includes(".") ? name.split(".").pop()?.toUpperCase() || "FILE" : "FILE";
+  return options.files.map((file?: any, index?: any): UploadFileEntry => {
+    const relativePath: any = String((file as FileWithRelativePath).webkitRelativePath || file.name);
+    const segments: any = relativePath.split(/[\\/]/g).filter(Boolean);
+    const name: any = segments.at(-1) || file.name;
+    const directory: any = segments.length > 1 ? segments.slice(0, -1).join("/") : "";
+    const extension: any = name.includes(".") ? name.split(".").pop()?.toUpperCase() || "FILE" : "FILE";
     return {
       key: `${relativePath}:${file.size}:${file.lastModified}:${index}`,
       name,
@@ -102,7 +102,7 @@ export function summarizeUploadSelection(options: {
   formatBytes: (bytes: number) => string;
   mode: "upload" | "download";
   summary: string;
-}) {
+}) : any {
   if (options.summary) {
     return options.summary;
   }
@@ -110,8 +110,8 @@ export function summarizeUploadSelection(options: {
     if (options.fileEntries.length === 0) {
       return "0 个文件";
     }
-    const knownBytes = options.fileEntries.reduce(
-      (sum, file) => sum + Math.max(0, Number(file.size || 0)),
+    const knownBytes: any = options.fileEntries.reduce(
+      (sum?: any, file?: any) : any => sum + Math.max(0, Number(file.size || 0)),
       0,
     );
     return knownBytes > 0
@@ -121,7 +121,7 @@ export function summarizeUploadSelection(options: {
   if (options.files.length === 0) {
     return "0 个文件";
   }
-  const totalBytes = options.files.reduce((sum, file) => sum + file.size, 0);
+  const totalBytes: any = options.files.reduce((sum?: any, file?: any) : any => sum + file.size, 0);
   return `${options.files.length} 个文件 · ${options.formatBytes(totalBytes)}`;
 }
 
@@ -133,7 +133,7 @@ export function resolveUploadProgressState(options: {
   jobStatusLabels: Record<string, string>;
   jobStatusTone: (status: string) => string;
 }): UploadProgressState {
-  const job = options.ingestJob;
+  const job: any = options.ingestJob;
   if (options.files.length === 0) {
     return {
       completedSteps: 0,
@@ -169,7 +169,7 @@ export function resolveUploadProgressState(options: {
       tone: options.jobStatusTone(job.status),
     };
   }
-  const progressPercent = Math.max(0, Math.min(100, Number(job.progressPercent || 0)));
+  const progressPercent: any = Math.max(0, Math.min(100, Number(job.progressPercent || 0)));
   return {
     completedSteps: Math.max(
       2,

@@ -7,14 +7,14 @@ export type ModelProbePayload = {
   settings?: AgentSettings;
 };
 
-export function getSettings() {
+export function getSettings() : any {
   return getJson<AgentSettings>("/api/settings");
 }
 
-export function saveSettings(settings: Partial<AgentSettings>) {
+export function saveSettings(settings: Partial<AgentSettings>) : any {
   return postJson<AgentSettings>("/api/settings", settings, { safetyConfirm: true });
 }
 
-export function probeModel(payload: ModelProbePayload) {
+export function probeModel(payload: ModelProbePayload) : any {
   return postJson<ModelProbeResponse>("/api/settings/model-probe", payload);
 }

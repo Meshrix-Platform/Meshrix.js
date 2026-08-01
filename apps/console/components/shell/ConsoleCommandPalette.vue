@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ADMIN_ROUTE_REGISTRY } from "../../router/admin-route-registry.mjs";
+import { ADMIN_ROUTE_REGISTRY } from "../../router/admin-route-registry.ts";
 import { isAdminPluginConsoleEntry } from "../../router/plugin-console-routes";
 import {
   closeConsoleCommandPalette,
@@ -111,7 +111,7 @@ watch(filteredItems, () => {
   activeIndex.value = 0;
 });
 
-watch(paletteOpen, async (open) => {
+watch(paletteOpen, async (open: any) => {
   if (!open) {
     return;
   }

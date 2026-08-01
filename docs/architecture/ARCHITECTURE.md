@@ -1,5 +1,10 @@
 # Architecture
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 Meshrix is an open, private-deployable gateway platform for agent access and governed service forwarding.
 
 ## Runtime Shape
@@ -14,6 +19,37 @@ Meshrix is an open, private-deployable gateway platform for agent access and gov
 | Agents | `packages/agents/` | Agent gateway, workspace files, sessions, contributions, maintenance runtime. |
 | Protocols | `packages/protocols/` | HTTP, MCP, pubsub, storage, checkpoint, console protocol facades, and native MCP installer scripts. |
 | Console | `apps/console/`, `packages/ui-console/` | Operator administration workflows. |
+
+## Edge And Semantic Gateway Layers
+
+Meshrix separates deployment-edge networking from governed application
+forwarding.
+
+An operator may place Nginx, Caddy, Envoy, or another independently admitted
+reverse proxy in front of Meshrix for TLS termination, HTTP-version
+negotiation, connection handling, coarse-grained rate limiting, load
+balancing, and other edge concerns. The baseline Meshrix runtime remains
+self-contained and does not require an external proxy. An edge proxy is never
+an identity, policy, credential, Operation Permission, approval, or audit
+authority, and forwarded metadata cannot replace authenticated Meshrix
+principal or process identity.
+
+The Node.js runtime is the embedded deployment profile and current semantic
+gateway implementation. It owns MCP and RPC interpretation, operation
+resolution, governed permit preparation and consumption, policy and approval
+coordination, credential application, protocol sessions, upstream forwarding,
+and redacted governance evidence. These responsibilities remain inside
+Meshrix when an external edge is present; they are not delegated to a generic
+reverse proxy.
+
+A separately deployed Go data plane is an optional future enhancement, not a
+current runtime capability. It may be introduced only when representative
+capacity evidence establishes an independently scalable forwarding boundary
+after connection pooling, storage, policy evaluation, and upstream latency
+have been accounted for. It must consume the same language-independent
+protocol, operation catalog, immutable snapshot, audience, and governed permit
+contracts. It must not mint permits, specialize policy, or create a second
+authorization or evidence authority.
 
 ## Source File Organization
 
@@ -43,7 +79,7 @@ Refactoring must not add repeated traversal, allocation, serialization, dynamic 
 
 Automated gates continue to enforce objective structure: registered dependency direction, feature ownership, public facades, runnable entrypoint ownership, semantic current-boundary names, type safety, tests, and defined performance contracts. File length, function length, export count, complexity, dependency fan-in or fan-out, and change frequency remain review signals rather than standalone acceptance criteria.
 
-`npm run verify:repo-organization` records this policy in `build/reports/repo-organization.json`. The report explicitly marks the numeric line-count gate as disabled and includes a non-blocking TypeScript AST advisory. That advisory may identify independent exported declaration components as review candidates and shared-state or module-initialization coupling as mechanical-split cautions. It does not prove that a file must or cannot be split, and its findings never determine release readiness.
+`npm run verify:repo-organization` records this policy in `build/reports/repo-organization.json`. The report explicitly marks the numeric line-count gate as disabled and includes a non-blocking TypeScript AST advisory. That advisory may identify independent exported declaration components as review candidates and shared-state or module-initialization coupling as mechanical-split cautions. It does not prove that a file must or cannot be split, and its findings never determine the Functional Release Gate result.
 
 Every completed split migrates callers, exports, configuration, registries, tests, fixtures, generated projections, and documentation to the new boundary, then removes the superseded path and compatibility artifacts.
 
@@ -81,7 +117,7 @@ An immutable proof profile may commit a bounded Intent and Outcome; a mutable
 store may prepare and settle one row. Ordinary success logs, routine denials,
 traces, and metrics are aggregated, sampled, or shed and do not duplicate that
 proof. A path without sink-bound permit validation or bounded mandatory proof
-is non-converged and cannot support a release-readiness claim. This paragraph
+is non-converged and fails the Functional Release Gate. This paragraph
 is an acceptance invariant, not a blanket claim that every current path has
 completed the migration.
 
@@ -229,13 +265,19 @@ The production runtime implements this boundary through the public publishing ro
 
 Server and client implementations are completely decoupled behind published communication protocols. Core may depend only on protocol-owned schemas, negotiated capabilities, wire state machines, and declared ports. Core source, runtime composition, plans, tests, release gates, and acceptance reducers must not import, discover, execute, or wait for a client repository, client implementation, client build, client plan, client test, client report, or client receipt.
 
-Server verification uses neutral protocol peers, generated fixtures, and frozen wire corpora to prove authentication, authorization, scoped notification, catalog pull, acknowledgement, disconnect, timeout, and reconnect-fence behavior. Client adoption, cache replacement, UI observation, platform lifecycle, packaging, and product evidence are separate compatibility facts. They cannot block or promote server implementation, server publication, or server release readiness.
+Server verification uses neutral protocol peers, generated fixtures, and frozen
+wire corpora to prove authentication, authorization, scoped notification,
+catalog pull, acknowledgement, disconnect, timeout, and reconnect-fence
+behavior. Client adoption and client product evidence are separate
+compatibility facts. Real-machine platform lifecycle evidence is owned by an
+optional Real-Machine Verification Workflow. Neither category can block or
+promote server implementation, publication, or the Functional Release Gate.
 
 ## Communication Service
 
 `communication-service` belongs to the capability layer and records stable core protocol-facing services used by downstream clients. It declares **MCP Server** as `mcp-server-side`.
 
-The service provider keeps the MCP route target, protocol versions, and module path aligned with `downstream-client-aspect` and `packages/protocols/mcp/adapter/http-mcp-adapter.mjs`. Optional protocol capabilities enter the runtime only through verified package contributions; the Core communication-service provider does not import or register product implementations.
+The service provider keeps the MCP route target, protocol versions, and module path aligned with `downstream-client-aspect` and `packages/protocols/mcp/adapter/http-mcp-adapter.ts`. Optional protocol capabilities enter the runtime only through verified package contributions; the Core communication-service provider does not import or register product implementations.
 
 ## MCP Native Installer
 

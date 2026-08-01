@@ -13,15 +13,15 @@ export type ServerPathBrowsePayload = {
   includeHidden?: boolean;
 };
 
-export function getRuntimeInfo() {
+export function getRuntimeInfo() : any {
   return getJson<RuntimeInfoResponse>("/api/runtime/info");
 }
 
-export function browseServerPath(payload: ServerPathBrowsePayload) {
+export function browseServerPath(payload: ServerPathBrowsePayload) : any {
   return postJson<ServerPathBrowseResponse>("/api/runtime/path-browse", payload);
 }
 
-export function buildRuntimeAssembly(payload: RuntimeAssemblyBuildPayload) {
+export function buildRuntimeAssembly(payload: RuntimeAssemblyBuildPayload) : any {
   return postJson<RuntimeAssemblyBuildResponse>(
     "/api/runtime/assembly/build",
     payload,

@@ -3,14 +3,14 @@ import type { useMaintenanceAgentViewConsole } from "./console-maintenance-agent
 
 export type MaintenanceAgentViewContext = ReturnType<typeof useMaintenanceAgentViewConsole>;
 
-const maintenanceAgentViewKey = Symbol("maintenance-agent-view") as InjectionKey<MaintenanceAgentViewContext>;
+const maintenanceAgentViewKey: any = Symbol("maintenance-agent-view") as InjectionKey<MaintenanceAgentViewContext>;
 
-export function provideMaintenanceAgentView(context: MaintenanceAgentViewContext) {
+export function provideMaintenanceAgentView(context: MaintenanceAgentViewContext) : any {
   provide(maintenanceAgentViewKey, context);
 }
 
-export function useMaintenanceAgentViewContext() {
-  const context = inject(maintenanceAgentViewKey);
+export function useMaintenanceAgentViewContext() : any {
+  const context: any = inject(maintenanceAgentViewKey);
   if (!context) {
     throw new Error("Maintenance agent view context is not available");
   }

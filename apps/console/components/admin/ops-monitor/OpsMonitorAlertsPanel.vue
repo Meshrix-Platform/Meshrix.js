@@ -22,6 +22,17 @@ const {
   shouldIncludeMonitorAlertLifecycle = () => false,
   visibleMonitorAlerts = ref([]),
 } = useOpsMonitorViewContext();
+
+const monitorAlertStatusLabels: Record<string, string> = {
+  healthy: "正常",
+  alerting: "报警中",
+  unconfigured: "未配置",
+};
+
+function monitorAlertStateStatusLabel(status: unknown) {
+  const key = String(status || "").trim();
+  return monitorAlertStatusLabels[key] || key || "未读取";
+}
 </script>
 
 <template>
@@ -31,13 +42,13 @@ const {
         <h3>监控报警</h3>
       </div>
       <div class="section-tags">
-        <span>{{ monitorAlertState?.status || "未读取" }}</span>
+        <span>{{ monitorAlertStateStatusLabel(monitorAlertState?.status) }}</span>
         <span>可见 {{ visibleMonitorAlerts.length }}</span>
         <span>严重 {{ monitorAlertSummary.criticalCount }}</span>
         <span>历史 {{ monitorAlertHistoryRows.length }}</span>
       </div>
     </div>
-    <div class="job-table compact-job-table monitor-alert-table monitor-alert-active-table">
+    <div v-if="visibleMonitorAlerts.length" class="job-table compact-job-table monitor-alert-table monitor-alert-active-table">
       <div class="job-table-header">
         <span>级别</span>
         <span>报警</span>
@@ -85,7 +96,7 @@ const {
       :subtitle="`${monitorAlertHistoryRows.length} 条`"
       open
     >
-      <div class="job-table compact-job-table monitor-alert-table monitor-alert-history-table">
+      <div v-if="monitorAlertHistoryRows.length" class="job-table compact-job-table monitor-alert-table monitor-alert-history-table">
         <div class="job-table-header">
           <span>级别</span>
           <span>报警</span>

@@ -1,5 +1,10 @@
 # Server Runtime
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 The server runtime owns process startup, settings, HTTP lifecycle, operation dispatch, jobs, upload sessions, provider composition, feature manifests, operational boundaries, and local runtime state.
 
 ## Responsibilities
@@ -59,7 +64,7 @@ receipt fact and are verified by recomputing the expected commitment.
 This boundary specializes the project-wide [Governed Execution And Minimum
 Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md) policy.
 
-Operation proof is evidence, not authorization. Release acceptance additionally
+Operation proof is evidence, not authorization. The Functional Release Gate additionally
 requires a canonical, short-lived execution permit whose provenance and exact
 principal, operation, resource, revision, approval, audience, request, deadline,
 and effect bindings are revalidated by the final protected sink. Locks, queues,
@@ -74,10 +79,10 @@ committed and verified, the runtime denies before the protected boundary. If
 Outcome settlement fails after an external effect, the lifecycle remains
 `in_doubt` and blind retry is fenced.
 
-This is a maintenance and readiness invariant. A current dispatcher, protocol,
-streaming, queue, maintenance, or plugin path that cannot present the same
-permit to its final sink remains non-converged and cannot support a readiness
-claim.
+This is a maintenance and Functional Release Gate invariant. A current
+dispatcher, protocol, streaming, queue, maintenance, or plugin path that cannot
+present the same permit to its final sink remains non-converged and fails the
+gate.
 
 The queue application port owns durable queue admission, scheduling, state
 transitions, recovery, and inspection. The job manager owns job execution and
@@ -101,6 +106,33 @@ overwriting the original metadata.
 
 The default deployment is self-contained and uses repository-owned runtime services plus local storage. Optional middleware integrations require explicit configuration and verifier coverage.
 
+## Optional Integration Lifecycle
+
+Core composition owns one bounded integration task supervisor. It is created
+with an empty adapter set by default, so an unconfigured deployment creates no
+integration task, connection, retry timer, or shutdown dependency. Trusted
+composition code may register an explicitly enabled and configured adapter
+through the Host port; malformed, disabled, and unconfigured entries project a
+typed unavailable state and are never called.
+
+The supervisor starts adapter connection work only after the HTTP listener,
+discovery state, startup projections, and Core request admission are ready.
+Connect and execution share fixed concurrency and queue limits. Connect,
+execution, close, retry count, retry delay, adapter count, and shutdown all have
+hard ceilings. A connect or task that does not settle after cancellation is
+fenced, so later calls cannot accumulate additional orphaned work. Adapter
+errors are reduced to stable codes; prompts, inputs, provider responses,
+credentials, exception messages, paths, and endpoints are not retained in its
+status projection or logs.
+
+Shutdown first stops adapter admission, cancels queued and active work, clears
+retry timers, and gives each adapter one bounded close attempt. A slow or failed
+adapter close is reported as `integration_close_timeout` or
+`integration_close_failed` but cannot veto Core dependency shutdown. Concrete
+OIDC, OTLP, webhook, model-provider, datastore, and external-service adapters
+remain independently owned detachable capabilities and must explicitly adopt
+this lifecycle before claiming supervised availability.
+
 ## Upstream Publishing Lifecycle
 
 The server composition binds the authenticated publishing application, dedicated manifest writer, validated observer-to-snapshot transaction, Operation Permission catalog replacement, scoped audience publication, and protocol-delivery session state without absorbing their domain logic. Deployment configuration supplies distinct manifest and mutable runtime-state roots. A control-plane writer publishes canonical manifests; the gateway runtime reads them through a read-only identity. Filesystem events only mark the manifest set dirty. A bounded scheduler validates a complete candidate revision, builds an immutable snapshot away from request handling, and swaps one reference after validation. Shutdown stops admission, observer scheduling, candidate builds, publication events, and protocol-delivery tracking in dependency order.
@@ -111,7 +143,7 @@ Operation Permission, tag projection, downstream invalidation, and protocol ackn
 
 The Host plugin artifact authority discovers only immutable installed artifact snapshots. It validates each bounded deterministic inventory against the explicitly configured public Ed25519 keys in `runtime.pluginArtifactTrustedPublicKeys`; an absent or empty trust object trusts no artifact. Production runtime loading never scans `plugins/`, resolves a repository-relative entry, searches package roots, or installs an artifact automatically. A deployment selects verified installed plugins through the explicit array-valued `runtime.enabledPlugins` field. Per-plugin settings are supplied only through the object-valued `runtime.pluginConfigurations` field, and an optional lowercase `runtime.deploymentProfileId` binds the enabled ids, configured ids, exact manifest identities and digests, and deterministic dependency order into one immutable deployment profile. No profile is synthesized when the field is absent. Missing fields remain empty, and a configuration for an unknown or disabled plugin fails before listening. The packaged `server:start` command has no string, CLI, environment, or legacy aliases for those fields. The Compose deployment forwards `MESHRIX_RUNTIME_CONFIG` only as the path of a runtime-config JSON already available inside the container. Manifest metadata, feature flags, and `defaultEnabled` cannot enable a plugin. Invalid ids, duplicates, unknown plugins, missing dependencies, ledger mismatch, and profile drift fail closed. Changing the selection, configuration, trust set, or profile requires a controlled restart.
 
-An executable plugin manifest declares one normalized `.mjs` entry inside its signed artifact. The loader rejects path traversal, symbolic-link entries, unknown manifest fields, missing dependencies, dependency cycles, duplicate claims, mount conflicts, route conflicts, and routes to unavailable mounts. Dependencies activate before dependents. The fixed `activatePlugin` export must return the exact manifest-declared mounts, an exact executable contribution map, and a `close` function. Contribution maps cover operations, routes, MCP tools, console entries, and state machines; omitted or invented ids fail activation. Verifier contracts are manifest data, but executable verifier hooks are assembled by the Host from the verified artifact snapshot and cannot be supplied as plugin functions. Core composition snapshots and recursively freezes contribution declarations once, then exposes read-only maps instead of mutable plugin-owned registries. Startup failure closes registered plugin resources and previously activated plugins in reverse order; normal runtime shutdown uses the same reverse-order lifecycle. A disabled plugin artifact is not imported and contributes no registration.
+An executable plugin manifest declares one normalized `.ts` entry inside its signed artifact. The loader rejects path traversal, symbolic-link entries, unknown manifest fields, missing dependencies, dependency cycles, duplicate claims, mount conflicts, route conflicts, and routes to unavailable mounts. Dependencies activate before dependents. The fixed `activatePlugin` export must return the exact manifest-declared mounts, an exact executable contribution map, and a `close` function. Contribution maps cover operations, routes, MCP tools, console entries, and state machines; omitted or invented ids fail activation. Verifier contracts are manifest data, but executable verifier hooks are assembled by the Host from the verified artifact snapshot and cannot be supplied as plugin functions. Core composition snapshots and recursively freezes contribution declarations once, then exposes read-only maps instead of mutable plugin-owned registries. Startup failure closes registered plugin resources and previously activated plugins in reverse order; normal runtime shutdown uses the same reverse-order lifecycle. A disabled plugin artifact is not imported and contributes no registration.
 
 Each selected plugin receives an opaque `pluginData` capability, not a data-root path. Its bounded file operations validate relative segments, reject symbolic links and boundary escape, restrict created directories and files, and translate filesystem failures into fixed plugin-data error codes. Plugins that need workspace content receive a separate read/write workspace capability with the same path-opacity rule; they never receive the server workspace root. Per-plugin configuration is recursively snapshotted and frozen, while host capabilities are projected through fixed method facades rather than exposing the mutable host context.
 
@@ -121,19 +153,19 @@ The mount manager grants Host capabilities only when both the verified signed ma
 
 Opaque payload custody is bounded by record count, total bytes, per-payload bytes, and a fixed TTL. Each record is bound to the exact owner generation, tenant, session, and turn scope, supports digest-checked idempotency, and is cleared when the consuming plugin generation closes. It is temporary custody, not durable plugin state.
 
-Server composition creates Host-owned capabilities before plugin activation. Each port accepts only declared purposes, binds records to an authenticated owner generation and caller-supplied digest, enforces bounded time, record, and byte capacity, and keeps secret material behind Core custody. A Host-injected port remains owned by its injector; otherwise server composition closes the port on startup rollback and normal shutdown.
+Server composition creates Host-owned capabilities before plugin activation. Each port accepts only declared purposes, binds records to an authenticated owner generation and caller-supplied digest, enforces bounded time, record, and byte capacity, and keeps secret material behind Meshrix custody. A Host-injected port remains owned by its injector; otherwise server composition closes the port on startup rollback and normal shutdown.
 
-Controlled execution adapters are created only from explicit Host configuration. Every execution target supplies its own target reference, configured sandbox workload kind, output contract, capability set, and resource limits. The runtime does not infer a target, workload, policy, command, or host executable. Empty or incomplete configuration produces no production adapter and a requesting plugin fails closed. Lifecycle-safe bindings use existing Core process-identity and sandbox owners; they do not add another identity store or execution path.
+Controlled execution adapters are created only from explicit Host configuration. Every execution target supplies its own target reference, configured sandbox workload kind, output contract, capability set, and resource limits. The runtime does not infer a target, workload, policy, command, or host executable. Empty or incomplete configuration produces no production adapter and a requesting plugin fails closed. Lifecycle-safe bindings use existing Meshrix process-identity and sandbox owners; they do not add another identity store or execution path.
 
 Selected plugin modules are privileged in-process deployment code, not a sandbox boundary. Signed immutable artifacts and entry-path checks provide provenance, integrity, and declared-loading enforcement; they do not make hostile JavaScript safe. Operators must review, sign, trust, and explicitly select the artifacts they deploy.
 
 The [Execution Sandbox architecture](../architecture/EXECUTION-SANDBOX.md) isolates agent-controlled or otherwise untrusted workloads requested by trusted platform and plugin code; it does not isolate the plugin module itself. A plugin requests governed execution only through the narrow Host port and cannot receive a container socket, virtualization handle, host process API, raw credential, or host path. Empty or unavailable sandbox configuration denies execution, and the runtime has no host-process fallback. Manifest verifier contracts identify only verifier modules within the signed artifact and dedicated `plugin_verifier.*` workload kinds. The Host resolves the module from the verified snapshot, executes it only through the controlled sandbox, and accepts only a terminal receipt bound to the plugin, input digest, successful terminal state, and completed destruction.
 
-The repository builds no product plugin implementation. Core composition consumes only dynamic contributions from verified installed packages selected by explicit deployment configuration; it does not copy plugin operations into the static Core registry or provide a parallel compatibility registration. With an empty plugin selection, no plugin operations, routes, MCP outlets, console entries, state machines, or verifier hooks are active, while generic Core workspace and context operations remain available.
+The repository builds no product plugin implementation. Meshrix composition consumes only dynamic contributions from verified installed packages selected by explicit deployment configuration; it does not copy plugin operations into the static Meshrix registry or provide a parallel compatibility registration. With an empty plugin selection, no plugin operations, routes, MCP outlets, console entries, state machines, or verifier hooks are active, while generic Meshrix workspace and context operations remain available.
 
 Server bootstrap constructs the Core `agent-workspace-core` provider but never creates product data. An empty workspace store remains empty until an authenticated, authorized `agent_workspaces.create` operation succeeds. This keeps ownership, naming, audit evidence, and lifecycle intent explicit and avoids startup side effects.
 
-External single-plugin bundles use the closed package protocol in [Plugin Package and Loading](../protocols/PLUGIN-PACKAGE-AND-LOADING.md): source-neutral acquisition, payload and archive digests, verified custody, and a fenced lifecycle that stages only verified packages before atomic contribution publication. GitHub Release acquisition resolves one explicit repository, release, and prebuilt asset through the Release API under host, redirect, byte, time, retry, and cancellation budgets; it stops at content-addressed acquired bytes and never clones, builds, configures, stages, or enables a plugin. Offline local-package acquisition imports one explicit file under a configured import root with the same acquired-byte boundary, without network access, symlink following, path disclosure, or enablement side effects. `node tools/server-scripts/verify-plugin-bundle-protocol.mjs` verifies the bundle cut. `npm run verify:plugin-runtime` verifies the installed-artifact manifest/runtime contract, installed-artifact independence, deployment-profile binding, default-off behavior, invalid selections, dependency ordering, removal recovery, rollback, retryable cleanup, path-opaque capabilities, Host-controlled verifier hooks, and packaged-source closure.
+External single-plugin bundles use the closed package protocol in [Plugin Package and Loading](../protocols/PLUGIN-PACKAGE-AND-LOADING.md): source-neutral acquisition, payload and archive digests, verified custody, and a fenced lifecycle that stages only verified packages before atomic contribution publication. GitHub Release acquisition resolves one explicit repository, release, and prebuilt asset through the Release API under host, redirect, byte, time, retry, and cancellation budgets; it stops at content-addressed acquired bytes and never clones, builds, configures, stages, or enables a plugin. Offline local-package acquisition imports one explicit file under a configured import root with the same acquired-byte boundary, without network access, symlink following, path disclosure, or enablement side effects. `node tools/server-scripts/verify-plugin-bundle-protocol.ts` verifies the bundle cut. `npm run verify:plugin-runtime` verifies the installed-artifact manifest/runtime contract, installed-artifact independence, deployment-profile binding, default-off behavior, invalid selections, dependency ordering, removal recovery, rollback, retryable cleanup, path-opaque capabilities, Host-controlled verifier hooks, and packaged-source closure.
 
 ## Operation Routing
 
@@ -160,7 +192,13 @@ shapes, and RPC methods fail index compilation before dispatch.
 
 `createServerRuntime` owns one operation `LockManager` for its full lifecycle. The self-contained runtime uses the SQLite backend on the runtime storage database. Embedders may inject another conforming manager through `createServerRuntime`, `createServerCompositionRoot`, `startHttpServer`, or `bootstrapServer`; the runtime still destroys the injected manager before closing storage. An explicit operation concurrency scope is stable across processes; otherwise the PostgreSQL manager namespace or the constant `server` scope is used. Local filesystem paths are not part of distributed lock identity.
 
-The executable server does not currently construct a PostgreSQL manager from environment or persisted settings. A distributed deployment therefore requires programmatic manager injection, including its secret-bearing pool configuration. Publication of a declarative PostgreSQL lock-backend configuration remains blocked until a secret-reference contract and live PostgreSQL integration verifier exist.
+The executable server does not currently construct a PostgreSQL manager from
+environment or persisted settings. A distributed deployment therefore requires
+programmatic manager injection, including its secret-bearing pool
+configuration. Declarative PostgreSQL lock-backend configuration is outside the
+current functional release scope until a secret-reference contract and a
+repeatable PostgreSQL integration verifier exist. This does not affect the
+self-contained single-node release boundary.
 
 Registered operations with `concurrencySafe: true` execute without a dispatcher lock. Every other operation acquires a lock for its scoped `concurrencyGroup` before the side-effect boundary. The dispatcher renews the lease while the controller is running, rejects an acquisition or heartbeat failure without exposing backend details, and releases the handle in `finally`.
 
@@ -172,14 +210,21 @@ Operation Permission and maintenance timeouts abort queued acquisition and wait 
 
 HTTP request admission starts closed. The listener returns `503` until discovery activation and every startup lifecycle task complete, then the composition root opens admission once before returning the server handle. Shutdown permanently seals admission, drains requests, then aborts remaining operation signals and waits again. If an active task or task-owner close barrier still cannot settle, shutdown fails with the runtime lock and storage dependencies left open for a retry instead of closing them underneath running work. The maintenance worker accepts the same injected lock manager through the background-worker registry, waits for its active run before closing the Operation Permission store, and closes job, runtime, and event-bus dependencies only after task owners settle. Runtime, composition, maintenance-worker, and listen failures unwind initialized resources in reverse dependency order. SQLite-backed constructor failures close any database handle opened before schema or prepared-statement initialization failed.
 
+Startup event publication reads its five fixed platform projections through the
+Core-owned Startup Snapshot port. The port exposes named read methods only; it
+does not accept an operation identifier, actor, alternate registry, or generic
+internal dispatch request. Non-public operation dispatch without an explicit
+authorization path remains denied.
+
 ## Verification
 
 ```bash
 npm run typecheck
 npm run verify:plugin-bundle-protocol
 npm run verify:plugin-runtime
+npm run server:verify:integration-task-supervisor
 npm test -- --suite runtime.operation-routing
-node tests/run.mjs --suite runtime.operation-dispatch-lock
+node tests/run.ts --suite runtime.operation-dispatch-lock
 npm run server:verify:architecture-graph
 npm test -- --suite domains.manifest
 npm test

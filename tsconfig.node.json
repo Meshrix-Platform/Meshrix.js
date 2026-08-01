@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "customConditions": ["source"],
+    "rootDir": ".",
+    "outDir": "dist",
+    "allowJs": false,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "inlineSources": true,
+    "noEmitOnError": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "apps/server/**/*.ts",
+    "packages/**/*.ts",
+    "tools/**/*.ts"
+  ],
+  "exclude": [
+    "apps/console/**",
+    "packages/ui-console/**",
+    "tests/**",
+    "node_modules/**",
+    "build/**",
+    "dist/**",
+    "**/dist/**"
+  ]
+}

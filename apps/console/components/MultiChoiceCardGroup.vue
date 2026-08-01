@@ -41,8 +41,8 @@ function updateOption(value: string, checked: boolean) {
     next.delete(value);
   }
   const nextValue = props.options
-    .map((option) => option.value)
-    .filter((optionValue) => next.has(optionValue));
+    .map((option: any) => option.value)
+    .filter((optionValue: any) => next.has(optionValue));
   emit("update:modelValue", nextValue);
   emit("change", nextValue);
 }

@@ -255,9 +255,9 @@
       "forbiddenTargets": [
         "packages/agents/src/workspace-governance/**",
         "packages/foundation/src/observability/readiness-baseline/**",
-        "packages/foundation/src/observability/executive-report.mjs",
-        "packages/foundation/src/observability/sample-capability-pack.mjs",
-        "packages/foundation/src/security/security-alerts.mjs"
+        "packages/foundation/src/observability/executive-report.ts",
+        "packages/foundation/src/observability/sample-capability-pack.ts",
+        "packages/foundation/src/security/security-alerts.ts"
       ],
       "severity": "error"
     },
@@ -274,7 +274,7 @@
         "package-import"
       ],
       "forbiddenTargets": [
-        "packages/foundation/src/security/security-permissions-provider.mjs"
+        "packages/foundation/src/security/security-permissions-provider.ts"
       ],
       "severity": "error"
     },

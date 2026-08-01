@@ -44,6 +44,7 @@
         "checkpoints",
         "reducerInputs",
         "requiredReportSpecs",
+        "acceptanceStandards",
         "generatedProjections",
         "sourceAuthorities"
       ],
@@ -54,6 +55,7 @@
         "checkpoints": { "type": "string", "minLength": 1 },
         "reducerInputs": { "type": "string", "minLength": 1 },
         "requiredReportSpecs": { "type": "string", "minLength": 1 },
+        "acceptanceStandards": { "type": "string", "minLength": 1 },
         "generatedProjections": { "type": "string", "minLength": 1 },
         "sourceAuthorities": { "type": "string", "minLength": 1 }
       },

@@ -6,7 +6,8 @@ import {
 } from "../lib/operation-permission-client";
 import type { OptionBarOption } from "../types/app";
 
-type OperationPermissionPendingStatus = "all" | "pending" | "approved" | "rejected";
+type OperationPermissionPendingStatus =
+  "all" | "pending" | "approved" | "rejected";
 
 type ConsoleOperationPermissionPendingControllerOptions = {
   clearBusy: (key: string) => void;
@@ -16,38 +17,52 @@ type ConsoleOperationPermissionPendingControllerOptions = {
 
 export function createConsoleOperationPermissionPendingController(
   options: ConsoleOperationPermissionPendingControllerOptions,
-) {
-  const operationPermissionPendingOperations = ref<OperationPermissionPendingOperation[]>([]);
-  const operationPermissionPendingStatus = ref<OperationPermissionPendingStatus>("pending");
+) : any {
+  const operationPermissionPendingOperations: any = ref<
+    OperationPermissionPendingOperation[]
+  >([]);
+  const operationPermissionPendingStatus: any =
+    ref<OperationPermissionPendingStatus>("pending");
   const operationPermissionPendingStatusOptionBarOptions: OptionBarOption[] = [
     { value: "pending", label: "待审批" },
     { value: "approved", label: "已批准" },
     { value: "rejected", label: "已拒绝" },
     { value: "all", label: "所有" },
   ];
+  let refreshGeneration: any = 0;
 
-  async function refreshOperationPermissionPendingOperations() {
-    const busy = "operation-permission-pending:refresh";
+  async function refreshOperationPermissionPendingOperations() : Promise<any> {
+    const generation: any = ++refreshGeneration;
+    const status: any = operationPermissionPendingStatus.value;
+    const busy: any = "operation-permission-pending:refresh";
     options.setBusy(busy);
     try {
-      const result = await listPendingOperations(operationPermissionPendingStatus.value, 100);
-      operationPermissionPendingOperations.value = Array.isArray(result.pendingOperations)
+      const result: any = await listPendingOperations(status, 100);
+      if (generation !== refreshGeneration) return;
+      operationPermissionPendingOperations.value = Array.isArray(
+        result.pendingOperations,
+      )
         ? result.pendingOperations
         : [];
-    } catch (nextError) {
+    } catch (nextError: any) {
+      if (generation !== refreshGeneration) return;
       operationPermissionPendingOperations.value = [];
       options.error.value =
-        nextError instanceof Error ? nextError.message : "加载 Operation Permission 待审批事项失败。";
+        nextError instanceof Error
+          ? nextError.message
+          : "加载 Operation Permission 待审批事项失败。";
     } finally {
-      options.clearBusy(busy);
+      if (generation === refreshGeneration) {
+        options.clearBusy(busy);
+      }
     }
   }
 
   async function resolveOperationPermissionPendingOperation(
     pendingOperationId: string,
     resolution: "approved" | "rejected",
-  ) {
-    const busy = `operation-permission-pending:resolve:${pendingOperationId}`;
+  ) : Promise<any> {
+    const busy: any = `operation-permission-pending:resolve:${pendingOperationId}`;
     options.setBusy(busy);
     try {
       await resolvePendingOperationApi(pendingOperationId, {
@@ -55,9 +70,13 @@ export function createConsoleOperationPermissionPendingController(
         reason: "resolved_from_console_approval_flow",
       });
       await refreshOperationPermissionPendingOperations();
-    } catch (nextError) {
+      return true;
+    } catch (nextError: any) {
       options.error.value =
-        nextError instanceof Error ? nextError.message : "处理 Operation Permission 待审批事项失败。";
+        nextError instanceof Error
+          ? nextError.message
+          : "处理 Operation Permission 待审批事项失败。";
+      return false;
     } finally {
       options.clearBusy(busy);
     }

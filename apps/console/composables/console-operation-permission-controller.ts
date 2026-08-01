@@ -25,35 +25,35 @@ type ConsoleOperationPermissionControllerOptions = {
 
 export function createConsoleOperationPermissionController(
   options: ConsoleOperationPermissionControllerOptions,
-) {
-  const operationPermissionCatalogState = ref<OperationPermissionCatalog | null>(null);
-  const operationPermissionGrantsState = ref<OperationPermissionGrant[]>([]);
-  const operationPermissionMetricsState = ref<OperationPermissionMetrics | null>(null);
-  const operationPermissionAuditItems = ref<OperationPermissionAuditItem[]>([]);
-  const selectedOperationPermissionToolId = ref("meshrix.gateway.health");
-  const policyPreviewToolId = ref("meshrix.gateway.health");
-  const policyPreviewProfileId = ref("gateway-operator");
-  const policyPreviewGrantId = ref("");
-  const policyPreviewResult = ref<Record<string, unknown> | null>(null);
-  const selectedOperationPermissionToolsetId = ref("");
+) : any {
+  const operationPermissionCatalogState: any = ref<OperationPermissionCatalog | null>(null);
+  const operationPermissionGrantsState: any = ref<OperationPermissionGrant[]>([]);
+  const operationPermissionMetricsState: any = ref<OperationPermissionMetrics | null>(null);
+  const operationPermissionAuditItems: any = ref<OperationPermissionAuditItem[]>([]);
+  const selectedOperationPermissionToolId: any = ref("meshrix.gateway.health");
+  const policyPreviewToolId: any = ref("meshrix.gateway.health");
+  const policyPreviewProfileId: any = ref("gateway-operator");
+  const policyPreviewGrantId: any = ref("");
+  const policyPreviewResult: any = ref<Record<string, unknown> | null>(null);
+  const selectedOperationPermissionToolsetId: any = ref("");
 
-  const toolScopes = computed(() => operationPermissionCatalogState.value?.scopes || []);
-  const toolCatalog = computed(() => operationPermissionCatalogState.value?.tools || []);
-  const operationPermissionTools = computed<OperationPermissionTool[]>(() => operationPermissionCatalogState.value?.tools || []);
-  const operationPermissionToolsets = computed<OperationPermissionToolset[]>(
-    () => operationPermissionCatalogState.value?.toolsets || [],
+  const toolScopes: any = computed(() : any => operationPermissionCatalogState.value?.scopes || []);
+  const toolCatalog: any = computed(() : any => operationPermissionCatalogState.value?.tools || []);
+  const operationPermissionTools: any = computed<OperationPermissionTool[]>(() : any => operationPermissionCatalogState.value?.tools || []);
+  const operationPermissionToolsets: any = computed<OperationPermissionToolset[]>(
+    () : any => operationPermissionCatalogState.value?.toolsets || [],
   );
-  const operationPermissionProfiles = computed<OperationPermissionProfile[]>(
-    () => operationPermissionCatalogState.value?.profiles || [],
+  const operationPermissionProfiles: any = computed<OperationPermissionProfile[]>(
+    () : any => operationPermissionCatalogState.value?.profiles || [],
   );
-  const operationPermissionToolGroups = computed<OperationPermissionToolGroup[]>(() => {
-    const catalogGroups = operationPermissionCatalogState.value?.toolGroups;
+  const operationPermissionToolGroups: any = computed<OperationPermissionToolGroup[]>(() : any => {
+    const catalogGroups: any = operationPermissionCatalogState.value?.toolGroups;
     if (catalogGroups?.length) {
       return catalogGroups;
     }
     const groups: OperationPermissionToolGroup[] = [];
     for (const toolset of operationPermissionToolsets.value) {
-      const tools = operationPermissionTools.value.filter((tool) => tool.toolsets.includes(toolset.id));
+      const tools: any = operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.includes(toolset.id));
       if (!tools.length) {
         continue;
       }
@@ -66,58 +66,58 @@ export function createConsoleOperationPermissionController(
         defaultForAgents: toolset.defaultForAgents === true,
         grantable: toolset.grantable !== false,
         maxRisk: tools.reduce(
-          (max, tool) => (riskRank(tool.risk) > riskRank(max) ? tool.risk : max),
+          (max?: any, tool?: any) : any => (riskRank(tool.risk) > riskRank(max) ? tool.risk : max),
           "read_only",
         ),
         toolCount: tools.length,
-        activeToolCount: tools.filter((tool) => tool.status === "active").length,
-        internalToolCount: tools.filter((tool) => tool.status === "internal").length,
-        writeToolCount: tools.filter((tool) => tool.readOnly === false).length,
-        sampleToolIds: tools.slice(0, 6).map((tool) => tool.id),
+        activeToolCount: tools.filter((tool?: any) : any => tool.status === "active").length,
+        internalToolCount: tools.filter((tool?: any) : any => tool.status === "internal").length,
+        writeToolCount: tools.filter((tool?: any) : any => tool.readOnly === false).length,
+        sampleToolIds: tools.slice(0, 6).map((tool?: any) : any => tool.id),
       });
     }
-    return groups.sort((left, right) => {
+    return groups.sort((left?: any, right?: any) : any => {
       if (left.defaultForAgents !== right.defaultForAgents) {
         return left.defaultForAgents ? -1 : 1;
       }
       return left.label.localeCompare(right.label);
     });
   });
-  const activeOperationPermissionToolCount = computed(
-    () => operationPermissionTools.value.filter((tool) => tool.status === "active").length,
+  const activeOperationPermissionToolCount: any = computed(
+    () : any => operationPermissionTools.value.filter((tool?: any) : any => tool.status === "active").length,
   );
-  const internalOperationPermissionToolCount = computed(
-    () => operationPermissionTools.value.filter((tool) => tool.status === "internal").length,
+  const internalOperationPermissionToolCount: any = computed(
+    () : any => operationPermissionTools.value.filter((tool?: any) : any => tool.status === "internal").length,
   );
-  const operationPermissionStatusRows = computed(() =>
-    Object.entries(operationPermissionMetricsState.value?.byStatus || {}).map(([label, value]) => ({
+  const operationPermissionStatusRows: any = computed(() : any =>
+    (Object.entries(operationPermissionMetricsState.value?.byStatus || {}) as [string, any][]).map(([label, value]: any[]) : any => ({
       label,
       value,
     })),
   );
-  const operationPermissionRiskRows = computed(() =>
-    Object.entries(operationPermissionMetricsState.value?.byRisk || {}).map(([label, value]) => ({
+  const operationPermissionRiskRows: any = computed(() : any =>
+    (Object.entries(operationPermissionMetricsState.value?.byRisk || {}) as [string, any][]).map(([label, value]: any[]) : any => ({
       label,
       value,
     })),
   );
-  const defaultAgentToolsetIds = computed(
-    () => new Set(operationPermissionToolsets.value.filter((toolset) => toolset.defaultForAgents).map((toolset) => toolset.id)),
+  const defaultAgentToolsetIds: any = computed(
+    () : any => new Set<any>(operationPermissionToolsets.value.filter((toolset?: any) : any => toolset.defaultForAgents).map((toolset?: any) : any => toolset.id)),
   );
-  const defaultAgentToolCount = computed(
-    () => operationPermissionTools.value.filter((tool) => tool.toolsets.some((toolset) => defaultAgentToolsetIds.value.has(toolset))).length,
+  const defaultAgentToolCount: any = computed(
+    () : any => operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.some((toolset?: any) : any => defaultAgentToolsetIds.value.has(toolset))).length,
   );
-  const selectedOperationPermissionToolset = computed(
-    () => operationPermissionToolGroups.value.find((group) => group.id === selectedOperationPermissionToolsetId.value) || null,
+  const selectedOperationPermissionToolset: any = computed(
+    () : any => operationPermissionToolGroups.value.find((group?: any) : any => group.id === selectedOperationPermissionToolsetId.value) || null,
   );
-  const selectedOperationPermissionToolsetTools = computed<OperationPermissionTool[]>(() => {
+  const selectedOperationPermissionToolsetTools: any = computed<OperationPermissionTool[]>(() : any => {
     if (!selectedOperationPermissionToolsetId.value) {
       return [];
     }
-    return operationPermissionTools.value.filter((tool) => tool.toolsets.includes(selectedOperationPermissionToolsetId.value));
+    return operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.includes(selectedOperationPermissionToolsetId.value));
   });
 
-  function riskRank(risk = "read_only") {
+  function riskRank(risk: any = "read_only") : any {
     const ranks: Record<string, number> = {
       read_only: 0,
       safe_write: 1,
@@ -127,23 +127,23 @@ export function createConsoleOperationPermissionController(
     return ranks[String(risk || "read_only")] ?? ranks.read_only;
   }
 
-  const selectedOperationPermissionTool = computed(() => {
-    const selectedId = selectedOperationPermissionToolId.value || policyPreviewToolId.value;
-    return operationPermissionTools.value.find((tool) => tool.id === selectedId) || operationPermissionTools.value[0] || null;
+  const selectedOperationPermissionTool: any = computed(() : any => {
+    const selectedId: any = selectedOperationPermissionToolId.value || policyPreviewToolId.value;
+    return operationPermissionTools.value.find((tool?: any) : any => tool.id === selectedId) || operationPermissionTools.value[0] || null;
   });
 
-  const policyPreviewCandidateTools = computed(() => {
+  const policyPreviewCandidateTools: any = computed(() : any => {
     if (selectedOperationPermissionToolsetTools.value.length > 0) {
       return selectedOperationPermissionToolsetTools.value;
     }
-    const profile = operationPermissionProfiles.value.find((item) => item.id === policyPreviewProfileId.value);
-    const profileToolsets = new Set(profile?.toolsets || []);
-    const profileAllow = new Set(profile?.toolAllow || []);
-    const profileDeny = new Set(profile?.toolDeny || []);
-    const baseTools = profileToolsets.size > 0
-      ? operationPermissionTools.value.filter((tool) => tool.toolsets.some((toolset) => profileToolsets.has(toolset)))
-      : operationPermissionTools.value.filter((tool) => tool.toolsets.some((toolset) => defaultAgentToolsetIds.value.has(toolset)));
-    return baseTools.filter((tool) => {
+    const profile: any = operationPermissionProfiles.value.find((item?: any) : any => item.id === policyPreviewProfileId.value);
+    const profileToolsets: any = new Set<any>(profile?.toolsets || []);
+    const profileAllow: any = new Set<any>(profile?.toolAllow || []);
+    const profileDeny: any = new Set<any>(profile?.toolDeny || []);
+    const baseTools: any = profileToolsets.size > 0
+      ? operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.some((toolset?: any) : any => profileToolsets.has(toolset)))
+      : operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.some((toolset?: any) : any => defaultAgentToolsetIds.value.has(toolset)));
+    return baseTools.filter((tool?: any) : any => {
       if (profileDeny.has(tool.id)) {
         return false;
       }
@@ -154,62 +154,62 @@ export function createConsoleOperationPermissionController(
     });
   });
 
-  const policyPreviewToolOptionBarOptions = computed<OptionBarOption[]>(() =>
-    policyPreviewCandidateTools.value.map((tool) => ({
+  const policyPreviewToolOptionBarOptions: any = computed<OptionBarOption[]>(() : any =>
+    policyPreviewCandidateTools.value.map((tool?: any) : any => ({
       value: tool.id,
       label: `${tool.label} / ${tool.id}`,
     })),
   );
 
-  const policyPreviewProfileOptionBarOptions = computed<OptionBarOption[]>(() => [
+  const policyPreviewProfileOptionBarOptions: any = computed<OptionBarOption[]>(() : any => [
     { value: "", label: "不绑定档案" },
-    ...operationPermissionProfiles.value.map((profile) => ({
+    ...operationPermissionProfiles.value.map((profile?: any) : any => ({
       value: profile.id,
       label: `${profile.label} / ${profile.id}`,
     })),
   ]);
 
-  function previewToolDefinition() {
-    return operationPermissionTools.value.find((tool) => tool.id === policyPreviewToolId.value) || null;
+  function previewToolDefinition() : any {
+    return operationPermissionTools.value.find((tool?: any) : any => tool.id === policyPreviewToolId.value) || null;
   }
 
-  function selectToolForManagement(toolId: string) {
+  function selectToolForManagement(toolId: string) : any {
     selectedOperationPermissionToolId.value = toolId;
     policyPreviewToolId.value = toolId;
   }
 
-  function selectOperationPermissionToolset(toolsetId: string) {
+  function selectOperationPermissionToolset(toolsetId: string) : any {
     selectedOperationPermissionToolsetId.value = toolsetId;
-    const firstTool = selectedOperationPermissionToolsetTools.value[0] || null;
+    const firstTool: any = selectedOperationPermissionToolsetTools.value[0] || null;
     if (firstTool) {
       selectToolForManagement(firstTool.id);
     }
   }
 
-  function ensureSelectedOperationPermissionToolset() {
-    const groups = operationPermissionToolGroups.value;
+  function ensureSelectedOperationPermissionToolset() : any {
+    const groups: any = operationPermissionToolGroups.value;
     if (groups.length === 0) {
       selectedOperationPermissionToolsetId.value = "";
       return;
     }
 
-    const selectedGroupStillExists = groups.some((group) => group.id === selectedOperationPermissionToolsetId.value);
+    const selectedGroupStillExists: any = groups.some((group?: any) : any => group.id === selectedOperationPermissionToolsetId.value);
     if (!selectedGroupStillExists) {
       selectedOperationPermissionToolsetId.value = groups[0].id;
     }
 
-    const visibleTools = selectedOperationPermissionToolsetTools.value;
+    const visibleTools: any = selectedOperationPermissionToolsetTools.value;
     if (visibleTools.length === 0) {
       return;
     }
-    const selectedToolStillVisible = visibleTools.some((tool) => tool.id === selectedOperationPermissionToolId.value);
+    const selectedToolStillVisible: any = visibleTools.some((tool?: any) : any => tool.id === selectedOperationPermissionToolId.value);
     if (!selectedToolStillVisible) {
       selectToolForManagement(visibleTools[0].id);
     }
   }
 
-  function policyPreviewGrant() {
-    const tool = previewToolDefinition();
+  function policyPreviewGrant() : any {
+    const tool: any = previewToolDefinition();
     return {
       id: "console-preview-grant",
       label: "Console preview grant",
@@ -222,8 +222,8 @@ export function createConsoleOperationPermissionController(
     };
   }
 
-  async function refreshOperationPermission(optionsArg: { silent?: boolean } = {}) {
-    const showBusy = !optionsArg.silent;
+  async function refreshOperationPermission(optionsArg: { silent?: boolean } = {}) : Promise<any> {
+    const showBusy: any = !optionsArg.silent;
     if (showBusy) {
       options.setBusy("operation-permission");
     }
@@ -247,7 +247,7 @@ export function createConsoleOperationPermissionController(
         selectedOperationPermissionToolId.value = catalog.tools[0].id;
       }
       ensureSelectedOperationPermissionToolset();
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "刷新智能体工具失败。";
     } finally {
@@ -285,7 +285,7 @@ export function createConsoleOperationPermissionController(
     operationPermissionGrantsState,
   });
 
-  async function previewToolPolicy() {
+  async function previewToolPolicy() : Promise<any> {
     if (!policyPreviewToolId.value) {
       options.error.value = "请选择需要预览的工具。";
       return;
@@ -307,7 +307,7 @@ export function createConsoleOperationPermissionController(
         payload.profileId = policyPreviewProfileId.value.trim();
       }
       policyPreviewResult.value = await previewToolPolicyApi(payload);
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "工具策略预览失败。";
     } finally {

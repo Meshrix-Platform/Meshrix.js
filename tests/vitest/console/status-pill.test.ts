@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import StatusPill from "../../../apps/console/components/StatusPill.vue";
 import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
 
-afterEach(() => {
+afterEach(() : any => {
   setConsoleLocaleState("zh-CN");
 });
 
-describe("StatusPill behavior", () => {
-  it("uses explicit tones, aria labels, and optional dots", () => {
-    const wrapper = mount(StatusPill, {
+describe("StatusPill behavior", () : any => {
+  it("uses explicit tones, aria labels, and optional dots", () : any => {
+    const wrapper: any = mount(StatusPill, {
       props: {
         ariaLabel: "Custom status",
         label: "Running",
@@ -26,20 +26,20 @@ describe("StatusPill behavior", () => {
     expect(wrapper.find(".standard-status-pill-label").text()).toBe("运行中");
   });
 
-  it("derives success and neutral tones from enabled state", () => {
-    const enabled = mount(StatusPill, {
+  it("derives success and neutral tones from enabled state", () : any => {
+    const enabled: any = mount(StatusPill, {
       props: {
         enabled: true,
         label: "enabled",
       },
     });
-    const disabled = mount(StatusPill, {
+    const disabled: any = mount(StatusPill, {
       props: {
         enabled: false,
         label: 404,
       },
     });
-    const neutral = mount(StatusPill, {
+    const neutral: any = mount(StatusPill, {
       props: {
         label: "neutral",
       },
@@ -55,9 +55,9 @@ describe("StatusPill behavior", () => {
     expect(neutral.attributes("data-enabled")).toBeUndefined();
   });
 
-  it("localizes display and accessible labels from the console locale", async () => {
+  it("localizes display and accessible labels from the console locale", async () : Promise<any> => {
     setConsoleLocaleState("en");
-    const wrapper = mount(StatusPill, {
+    const wrapper: any = mount(StatusPill, {
       props: {
         label: "运行中",
         tone: "completed",
@@ -69,9 +69,9 @@ describe("StatusPill behavior", () => {
     expect(wrapper.attributes("aria-label")).toBe("Running");
   });
 
-  it("localizes cleared approval status labels", () => {
+  it("localizes cleared approval status labels", () : any => {
     setConsoleLocaleState("en");
-    const wrapper = mount(StatusPill, {
+    const wrapper: any = mount(StatusPill, {
       props: {
         label: "已清空",
         tone: "success",

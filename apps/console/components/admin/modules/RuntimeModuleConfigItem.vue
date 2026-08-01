@@ -7,6 +7,7 @@ import StatusPill from "../../StatusPill.vue";
 import {
   currentModulePathPlaceholder,
   moduleAvailabilityLabel,
+  moduleAvailabilityTone,
   moduleCapabilityText,
   moduleStatusText,
   type RuntimeModuleRow,
@@ -41,7 +42,7 @@ const {
     <div class="mount-config-heading">
       <strong>{{ item.label }}</strong>
       <StatusPill
-        :enabled="item.externalEnabled"
+        :tone="moduleAvailabilityTone(item)"
         :label="moduleAvailabilityLabel(item)"
       />
     </div>
@@ -69,6 +70,7 @@ const {
         </div>
       </label>
       <div class="mount-config-actions">
+        <span class="mount-config-toggle-label">{{ item.externalEnabled ? "已开启" : "已关闭" }}</span>
         <FeatureToggle
           :model-value="item.externalEnabled"
           :aria-label="item.externalEnabled ? `关闭${item.label}` : `开启${item.label}`"
@@ -83,3 +85,12 @@ const {
     </div>
   </article>
 </template>
+
+<style scoped>
+.mount-config-toggle-label {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+</style>

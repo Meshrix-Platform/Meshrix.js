@@ -4,8 +4,8 @@ import type {
 } from "../lib/types";
 import { clientAlignmentTone } from "@meshrix/ui-console/console-client-display-utils";
 
-export function queueLifecycleTone(status: string) {
-  const normalized = String(status || "").toLowerCase();
+export function queueLifecycleTone(status: string) : any {
+  const normalized: any = String(status || "").toLowerCase();
   if (["interrupted", "failed", "missing"].includes(normalized)) {
     return "danger";
   }
@@ -21,7 +21,7 @@ export function queueLifecycleTone(status: string) {
   return "neutral";
 }
 
-export function queueLifecycleLabel(status: string) {
+export function queueLifecycleLabel(status: string) : any {
   const labels: Record<string, string> = {
     open: "运行中",
     queued: "排队中",
@@ -39,7 +39,7 @@ export function queueLifecycleLabel(status: string) {
   return labels[String(status || "").toLowerCase()] || status || "未知";
 }
 
-export function maintenanceAgentStatusTone(status: string) {
+export function maintenanceAgentStatusTone(status: string) : any {
   if (status === "awaiting_approval" || status === "queued") {
     return "queued";
   }
@@ -55,7 +55,7 @@ export function maintenanceAgentStatusTone(status: string) {
   return "failed";
 }
 
-export function maintenanceAgentStatusLabel(status: string) {
+export function maintenanceAgentStatusLabel(status: string) : any {
   const labels: Record<string, string> = {
     awaiting_approval: "待审批",
     queued: "排队",
@@ -69,7 +69,7 @@ export function maintenanceAgentStatusLabel(status: string) {
   return labels[status] || status || "未知";
 }
 
-export function backgroundProcessTone(status: string) {
+export function backgroundProcessTone(status: string) : any {
   if (status === "running") {
     return "running";
   }
@@ -85,7 +85,7 @@ export function backgroundProcessTone(status: string) {
   return "failed";
 }
 
-export function backgroundProcessLabel(status: string) {
+export function backgroundProcessLabel(status: string) : any {
   const labels: Record<string, string> = {
     running: "运行中",
     standby: "待接管",
@@ -100,24 +100,24 @@ export function backgroundProcessLabel(status: string) {
   return labels[status] || status || "未知";
 }
 
-export function processTypeLabel(processType?: string) {
+export function processTypeLabel(processType?: string) : any {
   return processType === "daemon" ? "守护进程" : "服务进程";
 }
 
-export function processRelationText(processItem: BackgroundProcessStatus["processes"][number]) {
-  const services = processItem.services?.length
+export function processRelationText(processItem: BackgroundProcessStatus["processes"][number]) : any {
+  const services: any = processItem.services?.length
 	    ? `服务：${processItem.services.join("，")}`
     : "";
-  const monitors = processItem.monitors?.length
+  const monitors: any = processItem.monitors?.length
 	    ? `监控：${processItem.monitors.join("，")}`
     : "";
-  const alerts = processItem.alerts?.length
+  const alerts: any = processItem.alerts?.length
 	    ? `报警：${processItem.alerts.join("，")}`
     : "";
   return [services, monitors, alerts].filter(Boolean).join("；") || processItem.description || "无关联说明";
 }
 
-export function processRelationBullets(processItem: BackgroundProcessStatus["processes"][number]) {
+export function processRelationBullets(processItem: BackgroundProcessStatus["processes"][number]) : any {
   return [
     processItem.services?.length
 	      ? { label: "服务", text: processItem.services.join("，") }
@@ -128,10 +128,10 @@ export function processRelationBullets(processItem: BackgroundProcessStatus["pro
     processItem.alerts?.length
 	      ? { label: "报警", text: processItem.alerts.join("，") }
       : null,
-  ].filter((item): item is { label: string; text: string } => Boolean(item));
+  ].filter((item?: any): item is { label: string; text: string } => Boolean(item));
 }
 
-export function monitorAlertSeverityTone(severity: string) {
+export function monitorAlertSeverityTone(severity: string) : any {
   if (severity === "critical") {
     return "failed";
   }
@@ -141,7 +141,7 @@ export function monitorAlertSeverityTone(severity: string) {
   return "running";
 }
 
-export function monitorAlertSeverityLabel(severity: string) {
+export function monitorAlertSeverityLabel(severity: string) : any {
   const labels: Record<string, string> = {
     critical: "严重",
     warning: "警告",
@@ -150,7 +150,7 @@ export function monitorAlertSeverityLabel(severity: string) {
   return labels[severity] || severity || "未知";
 }
 
-export function maintenanceAgentRiskLabel(risk: string) {
+export function maintenanceAgentRiskLabel(risk: string) : any {
   const labels: Record<string, string> = {
     read_only: "只读",
     safe_write: "安全写入",
@@ -160,11 +160,11 @@ export function maintenanceAgentRiskLabel(risk: string) {
   return labels[risk] || risk || "未知";
 }
 
-export function alignmentTone(state: ClientAlignmentState) {
+export function alignmentTone(state: ClientAlignmentState) : any {
   return clientAlignmentTone(state);
 }
 
-export function alignmentProgress(state: ClientAlignmentState) {
+export function alignmentProgress(state: ClientAlignmentState) : any {
   switch (state) {
     case "aligned":
       return 100;

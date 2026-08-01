@@ -1,15 +1,15 @@
 import type { OperationPermissionScope, OperationPermissionToolset } from "../lib/types";
 import { maintenanceAgentRiskLabel } from "./console-status-utils";
 
-export function scopeLabel(scopeId: string, scopes: readonly OperationPermissionScope[] = []) {
-  return scopes.find((scope) => scope.id === scopeId)?.label || scopeId;
+export function scopeLabel(scopeId: string, scopes: readonly OperationPermissionScope[] = []) : any {
+  return scopes.find((scope?: any) : any => scope.id === scopeId)?.label || scopeId;
 }
 
-export function toolRiskLabel(risk: string) {
+export function toolRiskLabel(risk: string) : any {
   return maintenanceAgentRiskLabel(risk);
 }
 
-export function toolStatusLabel(status: string) {
+export function toolStatusLabel(status: string) : any {
   const labels: Record<string, string> = {
     active: "可执行",
     internal: "内部运行时",
@@ -19,6 +19,6 @@ export function toolStatusLabel(status: string) {
   return labels[status] || status || "未知";
 }
 
-export function toolsetLabel(toolsetId: string, toolsets: readonly OperationPermissionToolset[] = []) {
-  return toolsets.find((toolset) => toolset.id === toolsetId)?.label || toolsetId;
+export function toolsetLabel(toolsetId: string, toolsets: readonly OperationPermissionToolset[] = []) : any {
+  return toolsets.find((toolset?: any) : any => toolset.id === toolsetId)?.label || toolsetId;
 }

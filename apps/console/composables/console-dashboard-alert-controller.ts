@@ -38,8 +38,8 @@ type DashboardAlertControllerOptions = {
   visibleModelEntries: ComputedRef<AgentModelConfig[]>;
 };
 
-export function createConsoleDashboardAlertController(options: DashboardAlertControllerOptions) {
-  const configurationAlerts = createConsoleDashboardConfigurationAlertController({
+export function createConsoleDashboardAlertController(options: DashboardAlertControllerOptions) : any {
+  const configurationAlerts: any = createConsoleDashboardConfigurationAlertController({
     gatewayAssistantAgentOptions: options.gatewayAssistantAgentOptions,
     gatewayAssistantForm: options.gatewayAssistantForm,
     agentModelAssignmentOptions: options.agentModelAssignmentOptions,
@@ -52,7 +52,7 @@ export function createConsoleDashboardAlertController(options: DashboardAlertCon
     visibleModelEntries: options.visibleModelEntries,
   });
 
-  const alertInbox = createConsoleDashboardAlertInboxController({
+  const alertInbox: any = createConsoleDashboardAlertInboxController({
     acknowledgeMonitorAlert: options.acknowledgeMonitorAlert,
     activeMonitorAlerts: options.activeMonitorAlerts,
     agentConfigurationAlerts: configurationAlerts.agentConfigurationAlerts,

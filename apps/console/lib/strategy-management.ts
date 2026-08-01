@@ -1,9 +1,9 @@
 import { getJson } from "@meshrix/ui-console/bridge-http";
 import { callRpc } from "@meshrix/ui-console/rpc-client";
 
-const MAX_CAPABILITIES = 32;
-const MAX_PUBLIC_LIST_ITEMS = 16;
-const MAX_PUBLIC_TEXT_LENGTH = 256;
+const MAX_CAPABILITIES: any = 32;
+const MAX_PUBLIC_LIST_ITEMS: any = 16;
+const MAX_PUBLIC_TEXT_LENGTH: any = 256;
 
 export type StrategyDescription = {
   protocolVersion: string;
@@ -33,18 +33,18 @@ export type StrategyPreviewResult = {
 
 function boundedText(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
-  const normalized = value.trim();
+  const normalized: any = value.trim();
   return normalized ? normalized.slice(0, MAX_PUBLIC_TEXT_LENGTH) : undefined;
 }
 
 function boundedStrings(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const values = [...new Set(value.map(boundedText).filter((item): item is string => Boolean(item)))];
+  const values: any[] = [...new Set<any>(value.map(boundedText).filter((item?: any): item is string => Boolean(item)))];
   return values.length ? values.slice(0, MAX_PUBLIC_LIST_ITEMS) : undefined;
 }
 
 function publicDecision(value: unknown): StrategyPolicyDecision {
-  const source = value && typeof value === "object" && !Array.isArray(value)
+  const source: any = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
   return {
@@ -68,18 +68,18 @@ export function isStrategyPreviewCapability(capability: string): boolean {
 }
 
 export async function loadStrategyDescription(): Promise<StrategyDescription> {
-  const response = await getJson<Partial<StrategyDescription>>("/api/strategy");
-  const protocolVersion = boundedText(response?.protocolVersion) || "";
-  const capabilities = [...new Set(
+  const response: any = await getJson<Partial<StrategyDescription>>("/api/strategy");
+  const protocolVersion: any = boundedText(response?.protocolVersion) || "";
+  const capabilities: any = [...new Set<any>(
     (Array.isArray(response?.capabilities) ? response.capabilities : [])
       .map(boundedText)
-      .filter((item): item is string => Boolean(item)),
+      .filter((item?: any): item is string => Boolean(item)),
   )].slice(0, MAX_CAPABILITIES);
   return { protocolVersion, capabilities };
 }
 
 export function parseStrategyPreviewInput(input: string): Record<string, unknown> {
-  const parsed = JSON.parse(input.trim() || "{}");
+  const parsed: any = JSON.parse(input.trim() || "{}");
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("预览输入必须是 JSON 对象。");
   }
@@ -94,13 +94,13 @@ export async function previewStrategyCapability(
     return { state: "error", decision: null, error: "请选择服务端提供的策略预览能力。" };
   }
   try {
-    const response = await callRpc<unknown>(capability, input);
-    const responseObject = response && typeof response === "object" && !Array.isArray(response)
+    const response: any = await callRpc<unknown>(capability, input);
+    const responseObject: any = response && typeof response === "object" && !Array.isArray(response)
       ? response as Record<string, unknown>
       : null;
-    const decision = publicDecision(responseObject?.decision ?? response);
-    const denied = decision.effect === "deny" || decision.effect === "require_confirmation" || decision.allowed === false;
-    const accepted = decision.effect === "allow" || decision.allowed === true;
+    const decision: any = publicDecision(responseObject?.decision ?? response);
+    const denied: any = decision.effect === "deny" || decision.effect === "require_confirmation" || decision.allowed === false;
+    const accepted: any = decision.effect === "allow" || decision.allowed === true;
     if (!denied && !accepted) {
       return { state: "error", decision: null, error: "服务端未返回可识别的策略结果。" };
     }

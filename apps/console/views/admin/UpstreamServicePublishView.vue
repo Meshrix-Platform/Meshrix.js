@@ -119,9 +119,9 @@ function descriptorPayload(): UpstreamServiceDescriptor {
     "requestMediaTypes", "responseMediaTypes",
     "referenceType", "referenceValue", "referenceRevision", "referenceUse"
   ]);
-  return Object.fromEntries(Object.entries(form).filter(([key, value]) =>
+  return Object.fromEntries(Object.entries(form).filter(([key, value]: readonly any[]) =>
     !excluded.has(key) && value !== undefined && value !== ""
-  )) as UpstreamServiceDescriptor;
+  )) as unknown as UpstreamServiceDescriptor;
 }
 
 async function publishService() {
@@ -157,7 +157,7 @@ async function publishService() {
     setRevision.value = published.setRevision;
     status.value = "Service is server-published; checking runtime health.";
     healthResult.value = await checkUpstreamServiceRuntimeHealth(result.serviceId);
-    status.value = healthResult.value.ok === true
+    status.value = healthResult.value?.ok === true
       ? "Service is server-published and runtime health passed."
       : "Service is server-published, but runtime health did not pass.";
     await refreshServices();
@@ -227,16 +227,16 @@ refreshServices();
   <section class="upstream-publish-layout">
     <header class="publish-toolbar">
       <button class="table-action" type="button" :disabled="loading" @click="refreshServices">
-        {{ loading ? "Loading..." : "Refresh" }}
+        {{ loading ? "加载中" : "刷新" }}
       </button>
-      <button class="table-action" type="button" @click="resetForm">New Service</button>
-      <span class="toolbar-count" aria-live="polite"><strong>{{ services.length }}</strong> published services</span>
+      <button class="table-action" type="button" @click="resetForm">新建服务</button>
+      <span class="toolbar-count" aria-live="polite"><strong>{{ services.length }}</strong> 个已发布服务</span>
     </header>
 
     <ConsoleInlineAlert v-if="error" tone="danger">{{ error }}</ConsoleInlineAlert>
     <ConsoleInlineAlert v-if="status" :tone="healthResult && healthResult.ok !== true ? 'danger' : 'success'">{{ status }}</ConsoleInlineAlert>
     <section v-if="healthResult" class="health-result" aria-live="polite">
-      <h2>Runtime health result</h2>
+      <h2>运行时健康检查结果</h2>
       <pre>{{ JSON.stringify(healthResult, null, 2) }}</pre>
     </section>
 

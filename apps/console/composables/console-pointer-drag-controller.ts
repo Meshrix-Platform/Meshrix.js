@@ -6,13 +6,13 @@ type PointerDragControllerOptions = {
   onStop?: () => void;
 };
 
-export function createConsolePointerDragController(options: PointerDragControllerOptions) {
-  const dragging = ref(false);
+export function createConsolePointerDragController(options: PointerDragControllerOptions) : any {
+  const dragging: any = ref(false);
   let dragDocument: Document | null = null;
-  let previousBodyCursor = "";
-  let previousBodyUserSelect = "";
+  let previousBodyCursor: any = "";
+  let previousBodyUserSelect: any = "";
 
-  function clearBodyDragStyle() {
+  function clearBodyDragStyle() : any {
     if (!dragDocument?.body) {
       return;
     }
@@ -20,7 +20,7 @@ export function createConsolePointerDragController(options: PointerDragControlle
     dragDocument.body.style.userSelect = previousBodyUserSelect;
   }
 
-  function applyBodyDragStyle(nextDocument: Document) {
+  function applyBodyDragStyle(nextDocument: Document) : any {
     if (!nextDocument.body) {
       return;
     }
@@ -30,7 +30,7 @@ export function createConsolePointerDragController(options: PointerDragControlle
     nextDocument.body.style.userSelect = "none";
   }
 
-  function removeDocumentListeners() {
+  function removeDocumentListeners() : any {
     if (!dragDocument) {
       return;
     }
@@ -39,7 +39,7 @@ export function createConsolePointerDragController(options: PointerDragControlle
     dragDocument.removeEventListener("pointercancel", stopPointerDrag);
   }
 
-  function stopPointerDrag() {
+  function stopPointerDrag() : any {
     if (!dragging.value) {
       return;
     }
@@ -50,21 +50,21 @@ export function createConsolePointerDragController(options: PointerDragControlle
     options.onStop?.();
   }
 
-  function handlePointerMove(event: PointerEvent) {
+  function handlePointerMove(event: PointerEvent) : any {
     if (!dragging.value) {
       return;
     }
     options.onMove(event);
   }
 
-  function documentForEvent(event: PointerEvent) {
-    const target = event.currentTarget as HTMLElement | null;
+  function documentForEvent(event: PointerEvent) : any {
+    const target: any = event.currentTarget as HTMLElement | null;
     return target?.ownerDocument || (typeof document !== "undefined" ? document : null);
   }
 
-  function startPointerDrag(event: PointerEvent) {
+  function startPointerDrag(event: PointerEvent) : any {
     stopPointerDrag();
-    const nextDocument = documentForEvent(event);
+    const nextDocument: any = documentForEvent(event);
     if (!nextDocument) {
       return;
     }

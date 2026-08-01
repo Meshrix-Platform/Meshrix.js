@@ -66,7 +66,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete container-deployment-resumability",
-      "target": "tools/registry/open-platform-capability-matrix.json, packages/foundation/config/deployment/README.md, tools/server-scripts/verify-platform-acceptance.mjs, tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.mjs, docs/RUNBOOK.md"
+      "target": "tools/registry/open-platform-capability-matrix.json, packages/foundation/config/deployment/README.md, tools/server-scripts/verify-platform-acceptance.ts, tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts, docs/RUNBOOK.md"
     },
     "next": [
       "2a03f84d-0df2-47f3-b1fa-d0d3d733491c"

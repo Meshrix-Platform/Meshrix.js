@@ -13,10 +13,10 @@ const props = defineProps<{
   plugins: DashboardPluginStatus[];
 }>();
 
-const orderedPlugins = computed(() => [...props.plugins].sort((left, right) =>
+const orderedPlugins = computed(() => [...props.plugins].sort((left: any, right: any) =>
   left.id.localeCompare(right.id),
 ));
-const effectiveCount = computed(() => props.plugins.filter((plugin) => plugin.effective).length);
+const effectiveCount = computed(() => props.plugins.filter((plugin: any) => plugin.effective).length);
 </script>
 
 <template>
@@ -44,6 +44,8 @@ const effectiveCount = computed(() => props.plugins.filter((plugin) => plugin.ef
         <span class="dashboard-plugin-version">v{{ plugin.version }}</span>
       </div>
     </div>
-    <div v-else class="dashboard-plugin-empty">暂无已装载插件</div>
+    <div v-else class="dashboard-plugin-empty">
+      暂无已装载插件。在服务端配置中启用插件后，会显示在这里。
+    </div>
   </article>
 </template>

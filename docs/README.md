@@ -1,5 +1,10 @@
 # Meshrix Documentation
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+> [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
+> owns their normative meaning.
+
 This directory contains the formal technical documentation for installing,
 running, operating, integrating, and verifying Meshrix as a
 private-deployable open platform.
@@ -21,7 +26,13 @@ governance authority admits the exact principal, operation, resource, policy,
 approval, audience, and effect, and the protected sink consumes that bound
 permit. A transport, controller preflight, internal caller, or approval record
 is not independent authority. A path that has not converged on this boundary
-must not support a release-readiness claim.
+fails the Functional Release Gate.
+
+The [Runbook release contract](RUNBOOK.md#release-definition-and-publication)
+separates the mandatory Functional Release Gate from optional Real-Machine
+Verification Workflows and their Environment Support Claims. Functional
+acceptance is a prerequisite for every real-machine workflow. A real-machine
+receipt never blocks, promotes, or changes functional acceptance.
 
 Governance evidence and ordinary telemetry have different value. Protected
 access and side effects require the minimum bounded lifecycle proof. Routine
@@ -41,11 +52,20 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
+The [What's Next register](WHATS-NEXT.md) is the canonical priority index for
+the ten highest-value active project problems. Its order is priority, and every
+entry must retain the background, objective problem, affected scenarios, and
+possible solution paths required by its maintenance standard. It summarizes
+tracked facts without replacing the owning implementation, architecture
+decision, execution plan, verifier, acceptance receipt, or release authority.
+
 ## Project Documents
 
 | Topic | Document |
 | --- | --- |
 | Product definition | [../PRODUCT.md](../PRODUCT.md) |
+| Domain language | [../CONTEXT.md](../CONTEXT.md) |
+| Current five-dimension status | [STATUS.md](STATUS.md) |
 | Contribution process | [../CONTRIBUTING.md](../CONTRIBUTING.md) |
 | Code of conduct | [../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) |
 | Security policy | [../SECURITY.md](../SECURITY.md) |
@@ -53,10 +73,13 @@ maintenance, operational evidence, and workload-conformance gates.
 | Governed release status | [releases/README.md](releases/README.md) |
 | License | [../LICENSE](../LICENSE) |
 
-## Core Documents
+## Meshrix Technical Documents
 
 | Topic | Document |
 | --- | --- |
+| Current status | [STATUS.md](STATUS.md) |
+| Highest-value open problems | [WHATS-NEXT.md](WHATS-NEXT.md) |
+| Release definition and publication | [RUNBOOK.md#release-definition-and-publication](RUNBOOK.md#release-definition-and-publication) |
 | Runtime operation | [RUNBOOK.md](RUNBOOK.md) |
 | Architecture | [architecture/ARCHITECTURE.md](architecture/ARCHITECTURE.md) |
 | Generated system architecture | [architecture/MESHRIX-SYSTEM-ARCHITECTURE.html](architecture/MESHRIX-SYSTEM-ARCHITECTURE.html) |
@@ -74,10 +97,10 @@ maintenance, operational evidence, and workload-conformance gates.
 
 The state-machine document is generated from
 `tools/registry/state-machines/state-machine-integrity.registry.json` by
-`node tools/generators/generate-state-machine-docs.mjs`. Do not edit the
+`node tools/generators/generate-state-machine-docs.ts`. Do not edit the
 projection manually. The architecture HTML diagrams are projections of
-`packages/contracts/src/modules/manifest.mjs`; update their digest markers with
-`node tools/generators/generate-architecture-diagram-digests.mjs`.
+`packages/contracts/src/modules/manifest.ts`; update their digest markers with
+`node tools/generators/generate-architecture-diagram-digests.ts`.
 
 ## External Maintenance Framework
 
@@ -89,7 +112,7 @@ Use `$lico-feature-reassembly` and the `lico-dev reassembly` commands for a
 source split, package extraction, ownership move, protocol separation, or
 multi-surface feature closure. Use `lico-dev workflow plan changed` for the
 path-selected verification closure and `lico-dev workflow plan reassembly` for
-the Core structural closure.
+the Meshrix structural closure.
 
 This documentation remains a factual input to that framework:
 

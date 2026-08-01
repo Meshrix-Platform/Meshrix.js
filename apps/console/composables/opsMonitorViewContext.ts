@@ -3,14 +3,14 @@ import type { useOpsMonitorViewConsole } from "./console-ops-monitor-view-contro
 
 export type OpsMonitorViewContext = ReturnType<typeof useOpsMonitorViewConsole>;
 
-const opsMonitorViewKey = Symbol("ops-monitor-view") as InjectionKey<OpsMonitorViewContext>;
+const opsMonitorViewKey: any = Symbol("ops-monitor-view") as InjectionKey<OpsMonitorViewContext>;
 
-export function provideOpsMonitorView(context: OpsMonitorViewContext) {
+export function provideOpsMonitorView(context: OpsMonitorViewContext) : any {
   provide(opsMonitorViewKey, context);
 }
 
-export function useOpsMonitorViewContext() {
-  const context = inject(opsMonitorViewKey);
+export function useOpsMonitorViewContext() : any {
+  const context: any = inject(opsMonitorViewKey);
   if (!context) {
     throw new Error("Ops monitor view context is not available");
   }

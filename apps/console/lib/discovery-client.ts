@@ -5,11 +5,11 @@ import type {
   DiscoveryConfigResponse,
 } from "./types";
 
-export function getDiscoveryConfig() {
+export function getDiscoveryConfig() : any {
   return getJson<DiscoveryConfigResponse>("/api/discovery/config");
 }
 
-export function saveDiscoveryConfig(config: DiscoveryConfig) {
+export function saveDiscoveryConfig(config: DiscoveryConfig) : any {
   return postJson<DiscoveryConfigResponse>(
     "/api/discovery/config",
     { value: config },
@@ -17,6 +17,6 @@ export function saveDiscoveryConfig(config: DiscoveryConfig) {
   );
 }
 
-export function getDiscoveryClients() {
+export function getDiscoveryClients() : any {
   return getJson<DiscoveryClientsResponse>("/api/discovery/clients");
 }

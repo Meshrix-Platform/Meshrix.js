@@ -11,11 +11,11 @@ type JsonRpcEnvelope<T> = {
   };
 };
 
-let rpcSequence = 0;
+let rpcSequence: any = 0;
 
 export async function callRpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-  const id = `console-rpc-${++rpcSequence}`;
-  const envelope = await postJson<JsonRpcEnvelope<T>>("/api/rpc", {
+  const id: any = `console-rpc-${++rpcSequence}`;
+  const envelope: any = await postJson<JsonRpcEnvelope<T>>("/api/rpc", {
     jsonrpc: "2.0",
     id,
     method,

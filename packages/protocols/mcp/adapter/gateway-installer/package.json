@@ -12,14 +12,11 @@
     "directory": "packages/protocols/mcp/adapter/gateway-installer"
   },
   "bin": {
-    "meshrix-mcp": "bin/meshrix-mcp.mjs"
+    "meshrix-mcp": "dist/bin/meshrix-mcp.js"
   },
   "files": [
-    "bin/",
-    "lib/",
+    "dist/**/*",
     "LICENSE",
-    "mcp-identity.mjs",
-    "mcp-release-targets.mjs",
     "README.md",
     "package.json"
   ],

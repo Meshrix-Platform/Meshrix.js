@@ -1,7 +1,7 @@
 import { computed } from "vue";
 import { useServerConsoleShellContext } from "./serverConsoleShellContext";
 
-export function useStorageViewConsole() {
+export function useStorageViewConsole() : any {
   const {
     busyKey,
     consoleState,
@@ -13,7 +13,7 @@ export function useStorageViewConsole() {
     totalMountCount,
   } = useServerConsoleShellContext();
 
-  const enabledMountPercent = computed(() =>
+  const enabledMountPercent: any = computed(() : any =>
     totalMountCount.value ? (enabledMountCount.value / totalMountCount.value) * 100 : 0,
   );
 

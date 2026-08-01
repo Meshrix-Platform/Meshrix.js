@@ -2,11 +2,11 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const bridge = vi.hoisted(() => ({ getJson: vi.fn() }));
-const rpc = vi.hoisted(() => ({ callRpc: vi.fn() }));
+const bridge: any = vi.hoisted(() : any => ({ getJson: vi.fn() }));
+const rpc: any = vi.hoisted(() : any => ({ callRpc: vi.fn() }));
 
-vi.mock("@meshrix/ui-console/bridge-http", () => bridge);
-vi.mock("@meshrix/ui-console/rpc-client", () => rpc);
+vi.mock("@meshrix/ui-console/bridge-http", () : any => bridge);
+vi.mock("@meshrix/ui-console/rpc-client", () : any => rpc);
 
 import {
   loadStrategyDescription,
@@ -14,7 +14,7 @@ import {
 } from "../../../apps/console/lib/strategy-management";
 import StrategyManagementView from "../../../apps/console/views/admin/StrategyManagementView.vue";
 
-beforeEach(() => {
+beforeEach(() : any => {
   vi.clearAllMocks();
   bridge.getJson.mockResolvedValue({
     protocolVersion: "strategy-protocol",
@@ -26,9 +26,9 @@ beforeEach(() => {
   });
 });
 
-describe("Strategy Management Console", () => {
-  it("loads only the server capability description without probing on mount", async () => {
-    const wrapper = mount(StrategyManagementView);
+describe("Strategy Management Console", () : any => {
+  it("loads only the server capability description without probing on mount", async () : Promise<any> => {
+    const wrapper: any = mount(StrategyManagementView);
     try {
       await flushPromises();
       expect(bridge.getJson).toHaveBeenCalledWith("/api/strategy");
@@ -43,9 +43,9 @@ describe("Strategy Management Console", () => {
     }
   });
 
-  it("keeps a truthful empty state when the server describes no capabilities", async () => {
+  it("keeps a truthful empty state when the server describes no capabilities", async () : Promise<any> => {
     bridge.getJson.mockResolvedValue({ protocolVersion: "strategy-protocol", capabilities: [] });
-    const wrapper = mount(StrategyManagementView);
+    const wrapper: any = mount(StrategyManagementView);
     try {
       await flushPromises();
       expect(wrapper.text()).toContain("服务端当前未提供策略能力");
@@ -56,7 +56,7 @@ describe("Strategy Management Console", () => {
     }
   });
 
-  it("runs only an explicitly selected preview and renders bounded public facts", async () => {
+  it("runs only an explicitly selected preview and renders bounded public facts", async () : Promise<any> => {
     rpc.callRpc.mockResolvedValue({
       effect: "deny",
       reasonCode: "workflow_blocked",
@@ -65,7 +65,7 @@ describe("Strategy Management Console", () => {
       privatePolicy: "must-not-render",
       subject: "must-not-render",
     });
-    const wrapper = mount(StrategyManagementView);
+    const wrapper: any = mount(StrategyManagementView);
     try {
       await flushPromises();
       await wrapper.find("select").setValue("strategy.workflow_policy.evaluate");
@@ -85,8 +85,8 @@ describe("Strategy Management Console", () => {
     }
   });
 
-  it("bounds invalid input and request failures as error state", async () => {
-    const wrapper = mount(StrategyManagementView);
+  it("bounds invalid input and request failures as error state", async () : Promise<any> => {
+    const wrapper: any = mount(StrategyManagementView);
     try {
       await flushPromises();
       await wrapper.find("select").setValue("strategy.route_policy.evaluate");
@@ -109,8 +109,8 @@ describe("Strategy Management Console", () => {
   });
 });
 
-describe("Strategy Management client", () => {
-  it("deduplicates and bounds description capabilities", async () => {
+describe("Strategy Management client", () : any => {
+  it("deduplicates and bounds description capabilities", async () : Promise<any> => {
     bridge.getJson.mockResolvedValue({
       protocolVersion: " strategy-protocol ",
       capabilities: ["strategy.workflow_policy.evaluate", "strategy.workflow_policy.evaluate"],
@@ -121,7 +121,7 @@ describe("Strategy Management client", () => {
     });
   });
 
-  it("rejects capabilities outside the server preview namespace without an RPC call", async () => {
+  it("rejects capabilities outside the server preview namespace without an RPC call", async () : Promise<any> => {
     await expect(previewStrategyCapability("strategy.describe", {})).resolves.toEqual({
       state: "error",
       decision: null,
@@ -130,7 +130,7 @@ describe("Strategy Management client", () => {
     expect(rpc.callRpc).not.toHaveBeenCalled();
   });
 
-  it("classifies an explicit allow decision as accepted", async () => {
+  it("classifies an explicit allow decision as accepted", async () : Promise<any> => {
     rpc.callRpc.mockResolvedValue({ effect: "allow", reasonCode: "route_allowed", allowed: true });
     await expect(previewStrategyCapability("strategy.route_policy.evaluate", { routeId: "fixture" }))
       .resolves.toEqual({
@@ -140,7 +140,7 @@ describe("Strategy Management client", () => {
       });
   });
 
-  it("unwraps the bounded tool-policy decision envelope", async () => {
+  it("unwraps the bounded tool-policy decision envelope", async () : Promise<any> => {
     rpc.callRpc.mockResolvedValue({
       decision: {
         effect: "deny",

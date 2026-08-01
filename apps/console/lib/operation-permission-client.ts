@@ -40,43 +40,43 @@ export type UpdateToolGrantPayload = Partial<
   >
 >;
 
-export function getOperationPermissionCatalog() {
+export function getOperationPermissionCatalog() : any {
   return getJson<OperationPermissionCatalog>("/api/operation-permission/v1/catalog");
 }
 
-export function getOperationPermissionAudit(limit = 50) {
+export function getOperationPermissionAudit(limit: any = 50) : any {
   return getJson<OperationPermissionAuditResponse>(
     `/api/operation-permission/v1/audit?limit=${encodeURIComponent(String(limit))}`,
   );
 }
 
-export function getOperationPermissionMetrics() {
+export function getOperationPermissionMetrics() : any {
   return getJson<OperationPermissionMetricsResponse>("/api/operation-permission/v1/metrics/summary");
 }
 
-export function getOperationPermissionMetricsHealth() {
+export function getOperationPermissionMetricsHealth() : any {
   return getJson<Record<string, unknown>>("/api/operation-permission/v1/metrics/health");
 }
 
-export function exportOperationPermissionMetrics() {
+export function exportOperationPermissionMetrics() : any {
   return getJson<Record<string, unknown>>("/api/operation-permission/v1/metrics/export");
 }
 
-export function previewToolPolicy(payload: Record<string, unknown>) {
+export function previewToolPolicy(payload: Record<string, unknown>) : any {
   return postJson<Record<string, unknown>>("/api/operation-permission/v1/policy/preview", payload);
 }
 
-export function getOperationPermissionGrants() {
+export function getOperationPermissionGrants() : any {
   return getJson<OperationPermissionGrantsResponse>("/api/operation-permission/v1/grants");
 }
 
-export function createToolGrant(payload: CreateToolGrantPayload) {
+export function createToolGrant(payload: CreateToolGrantPayload) : any {
   return postJson<OperationPermissionGrantIssue>("/api/operation-permission/v1/grants", payload, {
     safetyConfirm: true,
   });
 }
 
-export function updateToolGrant(grantId: string, payload: UpdateToolGrantPayload) {
+export function updateToolGrant(grantId: string, payload: UpdateToolGrantPayload) : any {
   return postJson<{ grant: OperationPermissionGrant }>(
     `/api/operation-permission/v1/grants/${encodeURIComponent(grantId)}`,
     payload,
@@ -84,7 +84,7 @@ export function updateToolGrant(grantId: string, payload: UpdateToolGrantPayload
   );
 }
 
-export function deleteToolGrant(grantId: string) {
+export function deleteToolGrant(grantId: string) : any {
   return postJson<{ grant: OperationPermissionGrant }>(
     `/api/operation-permission/v1/grants/${encodeURIComponent(grantId)}/revoke`,
     { reason: "revoked_from_console" },
@@ -92,7 +92,7 @@ export function deleteToolGrant(grantId: string) {
   );
 }
 
-export function rotateToolGrantToken(grantId: string) {
+export function rotateToolGrantToken(grantId: string) : any {
   return postJson<OperationPermissionGrantIssue>(
     `/api/operation-permission/v1/grants/${encodeURIComponent(grantId)}/rotate`,
     {},
@@ -100,7 +100,7 @@ export function rotateToolGrantToken(grantId: string) {
   );
 }
 
-export function listPendingOperations(status = "pending", limit = 100) {
+export function listPendingOperations(status: any = "pending", limit: any = 100) : any {
   return getJson<OperationPermissionPendingOperationsResponse>(
     `/api/operation-permission/v1/pending-operations?status=${encodeURIComponent(status)}&limit=${encodeURIComponent(String(limit))}`,
   );
@@ -109,7 +109,7 @@ export function listPendingOperations(status = "pending", limit = 100) {
 export function resolvePendingOperation(
   pendingOperationId: string,
   payload: Record<string, unknown>,
-) {
+) : any {
   return postJson<Record<string, unknown>>(
     `/api/operation-permission/v1/pending-operations/${encodeURIComponent(pendingOperationId)}/resolve`,
     payload,

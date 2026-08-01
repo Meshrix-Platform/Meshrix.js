@@ -11,7 +11,7 @@ import {
   modelLibraryProviderDefinitions,
 } from "./console-defaults";
 
-const intelligentModuleIds = new Set(intelligentModuleDefinitions.map((definition) => definition.id));
+const intelligentModuleIds: any = new Set<any>(intelligentModuleDefinitions.map((definition?: any) : any => definition.id));
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -20,12 +20,12 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export function normalizeModelLibraryEntries(value: unknown): CloudProvider[] {
-  const allowed = new Set(modelLibraryProviderDefinitions.map((item) => item.id));
-  const entries = Array.isArray(value) ? value : [];
-  const seen = new Set<string>();
+  const allowed: any = new Set<any>(modelLibraryProviderDefinitions.map((item?: any) : any => item.id));
+  const entries: any = Array.isArray(value) ? value : [];
+  const seen: any = new Set<string>();
   return entries
-    .map((item) => String(item || "").trim() as CloudProvider)
-    .filter((item: any) => {
+    .map((item?: any) : any => String(item || "").trim() as CloudProvider)
+    .filter((item?: any) : any => {
       if (!allowed.has(item) || seen.has(item)) {
         return false;
       }
@@ -34,27 +34,27 @@ export function normalizeModelLibraryEntries(value: unknown): CloudProvider[] {
     });
 }
 
-export function modelAgentUid(...parts: unknown[]) {
-  const source = parts
-    .map((part) => String(part ?? "").trim())
+export function modelAgentUid(...parts: unknown[]) : any {
+  const source: any = parts
+    .map((part?: any) : any => String(part ?? "").trim())
     .filter(Boolean)
     .join("\n") || String(Date.now());
-  let hash = 2166136261;
-  let hash2 = 2166136261;
-  for (let index = 0; index < source.length; index += 1) {
-    const code = source.charCodeAt(index);
+  let hash: any = 2166136261;
+  let hash2: any = 2166136261;
+  for (let index: any = 0; index < source.length; index += 1) {
+    const code: any = source.charCodeAt(index);
     hash ^= code;
     hash = Math.imul(hash, 16777619);
     hash2 ^= code + index + 1;
     hash2 = Math.imul(hash2, 16777619);
   }
-  const partA = (hash >>> 0).toString(16).padStart(8, "0");
-  const partB = (hash2 >>> 0).toString(16).padStart(8, "0");
+  const partA: any = (hash >>> 0).toString(16).padStart(8, "0");
+  const partB: any = (hash2 >>> 0).toString(16).padStart(8, "0");
   return `agent_${partA}${partB}`;
 }
 
-export function modelEntryStringField(entry: Partial<AgentModelConfig>, keys: string[]) {
-  const record = asRecord(entry) || {};
+export function modelEntryStringField(entry: Partial<AgentModelConfig>, keys: string[]) : any {
+  const record: any = asRecord(entry) || {};
   for (const key of keys) {
     if (Object.prototype.hasOwnProperty.call(record, key)) {
       return String(record[key] ?? "").trim();
@@ -63,7 +63,7 @@ export function modelEntryStringField(entry: Partial<AgentModelConfig>, keys: st
   return undefined;
 }
 
-export function modelProviderLabel(provider: CloudProvider | string) {
+export function modelProviderLabel(provider: CloudProvider | string) : any {
   switch (provider) {
     case "openai":
       return "OpenAI";
@@ -82,18 +82,18 @@ export function modelProviderLabel(provider: CloudProvider | string) {
 
 export function normalizeAgentModelEntry(
   entry: Partial<AgentModelConfig>,
-  index = 0,
+  index: any = 0,
 ): AgentModelConfig {
-  const provider = String(entry.provider || "") as CloudProvider;
-  const model = modelEntryStringField(entry, ["model", "engine"]) ?? "";
-  const label =
+  const provider: any = String(entry.provider || "") as CloudProvider;
+  const model: any = modelEntryStringField(entry, ["model", "engine"]) ?? "";
+  const label: any =
     modelEntryStringField(entry, ["label", "agentName"]) ?? "";
-  const agentName = modelEntryStringField(entry, ["agentName", "label"]) ?? "";
-  const engine = modelEntryStringField(entry, ["engine"]) ?? "";
-  const existingInstanceId = String(entry.instanceId || "").trim();
-  const explicitUid = String(entry.uid || "").trim();
-  const existingAlias = String(entry.alias || "").trim();
-  const uid = explicitUid ||
+  const agentName: any = modelEntryStringField(entry, ["agentName", "label"]) ?? "";
+  const engine: any = modelEntryStringField(entry, ["engine"]) ?? "";
+  const existingInstanceId: any = String(entry.instanceId || "").trim();
+  const explicitUid: any = String(entry.uid || "").trim();
+  const existingAlias: any = String(entry.alias || "").trim();
+  const uid: any = explicitUid ||
     existingInstanceId ||
     existingAlias;
   void index;
@@ -126,7 +126,7 @@ export function normalizeAgentModelEntry(
 }
 
 function normalizeTokenPrefix(value: unknown): string {
-  const prefix = String(value ?? "");
+  const prefix: any = String(value ?? "");
   if (/[\r\n\0]/u.test(prefix)) {
     throw new TypeError("模型凭据前缀不能包含换行或 NUL 字符。");
   }
@@ -134,12 +134,12 @@ function normalizeTokenPrefix(value: unknown): string {
 }
 
 function normalizeTokenHeader(value: unknown): string {
-  const header = String(value ?? "").trim();
+  const header: any = String(value ?? "").trim();
   if (!header) return "";
   if (!/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u.test(header)) {
     throw new TypeError("模型凭据请求头不是合法的 HTTP 字段名。");
   }
-  if (new Set([
+  if (new Set<any>([
     "connection", "content-length", "cookie", "host", "keep-alive",
     "proxy-connection", "set-cookie", "te", "trailer", "transfer-encoding", "upgrade",
   ]).has(header.toLowerCase())) {
@@ -149,7 +149,7 @@ function normalizeTokenHeader(value: unknown): string {
 }
 
 function normalizeModelEndpoint(value: unknown): string {
-  const endpoint = String(value ?? "").trim();
+  const endpoint: any = String(value ?? "").trim();
   if (!endpoint) return "";
   let parsed: URL;
   try {
@@ -157,7 +157,7 @@ function normalizeModelEndpoint(value: unknown): string {
   } catch {
     throw new TypeError("模型端点必须是绝对 HTTP(S) URL。");
   }
-  if (!new Set(["http:", "https:"]).has(parsed.protocol)) {
+  if (!new Set<any>(["http:", "https:"]).has(parsed.protocol)) {
     throw new TypeError("模型端点必须使用 HTTP 或 HTTPS。");
   }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) {
@@ -167,20 +167,20 @@ function normalizeModelEndpoint(value: unknown): string {
 }
 
 export function normalizeAgentModuleAccess(value?: Partial<AgentModuleAccess>): AgentModuleAccess {
-  const record = asRecord(value) || {};
-  const mode = String(record.mode || "").trim() === "all" ? "all" : "selected";
-  const moduleIds = Array.isArray(record.moduleIds)
+  const record: any = asRecord(value) || {};
+  const mode: any = String(record.mode || "").trim() === "all" ? "all" : "selected";
+  const moduleIds: any = Array.isArray(record.moduleIds)
     ? record.moduleIds
-      .map((item) => String(item || "").trim())
-      .filter((item) => item && intelligentModuleIds.has(item))
+      .map((item?: any) : any => String(item || "").trim())
+      .filter((item?: any) : any => item && intelligentModuleIds.has(item))
     : [];
   return {
     mode,
-    moduleIds: [...new Set(moduleIds)],
+    moduleIds: [...new Set<any>(moduleIds)],
   };
 }
 
-export function modelEntryParameters(entry: AgentModelConfig) {
+export function modelEntryParameters(entry: AgentModelConfig) : any {
   try {
     return JSON.parse(String(entry.parametersText || "{}"));
   } catch {
@@ -188,7 +188,7 @@ export function modelEntryParameters(entry: AgentModelConfig) {
   }
 }
 
-export function redactAgentModelEntryForExport(entry: AgentModelConfig) {
+export function redactAgentModelEntryForExport(entry: AgentModelConfig) : any {
   return {
     ...entry,
     apiKey: "",
@@ -200,13 +200,13 @@ export function redactAgentModelEntryForExport(entry: AgentModelConfig) {
 
 export function redactedProviderSettingsForAgentExport(
   entry: AgentModelConfig,
-) {
+) : any {
   return { provider: String(entry.provider || "") };
 }
 
-export function moduleAgentProfileJson(value?: string, fallback?: Record<string, unknown>) {
+export function moduleAgentProfileJson(value?: string, fallback?: Record<string, unknown>) : any {
   try {
-    const parsed = JSON.parse(String(value || "{}"));
+    const parsed: any = JSON.parse(String(value || "{}"));
     return asRecord(parsed) || {};
   } catch {
     return fallback || {};
@@ -214,9 +214,9 @@ export function moduleAgentProfileJson(value?: string, fallback?: Record<string,
 }
 
 export function normalizeModuleAgentProfile(profile?: Partial<ModuleAgentProfile>): ModuleAgentProfile {
-  const incoming = profile || {};
-  const parameters = moduleAgentProfileJson(incoming.parametersText, asRecord(incoming.parameters) || {});
-  const dependencyContext = moduleAgentProfileJson(
+  const incoming: any = profile || {};
+  const parameters: any = moduleAgentProfileJson(incoming.parametersText, asRecord(incoming.parameters) || {});
+  const dependencyContext: any = moduleAgentProfileJson(
     incoming.dependencyContextText,
     asRecord(incoming.dependencyContext) || {},
   );
@@ -234,21 +234,21 @@ export function normalizeModuleAgentProfile(profile?: Partial<ModuleAgentProfile
   };
 }
 
-export function normalizeModuleAgentProfilesForDraft(settings: AgentSettings) {
-  const incoming = asRecord(settings.moduleAgentProfiles) || {};
+export function normalizeModuleAgentProfilesForDraft(settings: AgentSettings) : any {
+  const incoming: any = asRecord(settings.moduleAgentProfiles) || {};
   const next: AgentSettings["moduleAgentProfiles"] = {};
   for (const moduleDefinition of intelligentModuleDefinitions) {
-    const group = asRecord(incoming[moduleDefinition.id]) || {};
-    const agents = asRecord(group.agents) || {};
+    const group: any = asRecord(incoming[moduleDefinition.id]) || {};
+    const agents: any = asRecord(group.agents) || {};
     const nextAgents: Record<string, ModuleAgentProfile> = {};
-    for (const [agentId, profile] of Object.entries(agents)) {
-      const normalizedAgentId = String(agentId || "").trim();
+    for (const [agentId, profile] of (Object.entries(agents) as [string, any][])) {
+      const normalizedAgentId: any = String(agentId || "").trim();
       if (!normalizedAgentId) {
         continue;
       }
       nextAgents[normalizedAgentId] = normalizeModuleAgentProfile(profile as Partial<ModuleAgentProfile>);
     }
-    const primaryAgent = String(group.primaryAgent || "").trim();
+    const primaryAgent: any = String(group.primaryAgent || "").trim();
     if (primaryAgent || Object.keys(nextAgents).length > 0) {
       next[moduleDefinition.id] = {
         primaryAgent,
@@ -259,18 +259,18 @@ export function normalizeModuleAgentProfilesForDraft(settings: AgentSettings) {
   return next;
 }
 
-export function normalizeAgentLocalCommandsForDraft(settings: AgentSettings) {
-  const localSettings = settings.agentToolExecution?.local || emptySettings.agentToolExecution.local;
-  const commands = Array.isArray(localSettings.commands)
+export function normalizeAgentLocalCommandsForDraft(settings: AgentSettings) : any {
+  const localSettings: any = settings.agentToolExecution?.local || emptySettings.agentToolExecution.local;
+  const commands: any = Array.isArray(localSettings.commands)
     ? localSettings.commands
     : emptySettings.agentToolExecution.local.commands;
   return commands
-    .map((item, index) => {
+    .map((item?: any, index?: any) : any => {
       void index;
-      const commandId = String(item.commandId || "").trim();
-      const command = String(item.command || "").trim();
-      const variables = Array.isArray(item.variables) ? item.variables : [];
-      const rawArgs = Array.isArray(item.args) ? item.args.map((arg) => String(arg)) : [];
+      const commandId: any = String(item.commandId || "").trim();
+      const command: any = String(item.command || "").trim();
+      const variables: any = Array.isArray(item.variables) ? item.variables : [];
+      const rawArgs: any = Array.isArray(item.args) ? item.args.map((arg?: any) : any => String(arg)) : [];
       return {
         ...item,
         commandId,
@@ -283,5 +283,5 @@ export function normalizeAgentLocalCommandsForDraft(settings: AgentSettings) {
         allowExtraArgs: item.allowExtraArgs === true,
       };
     })
-    .filter((item) => item.commandId && item.command);
+    .filter((item?: any) : any => item.commandId && item.command);
 }

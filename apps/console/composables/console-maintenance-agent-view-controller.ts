@@ -6,7 +6,7 @@ import {
   maintenanceAgentStatusTone,
 } from "./console-status-utils";
 
-export function useMaintenanceAgentViewConsole() {
+export function useMaintenanceAgentViewConsole() : any {
   const {
     addMaintenanceAgentSchedule,
     approveMaintenanceAgentRun,

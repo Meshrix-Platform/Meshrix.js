@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "inlineSources": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "tests/run.ts",
+    "tests/verify-script-registry.ts",
+    "tests/verify-secret-hygiene.ts"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "build/**",
+    "dist/**",
+    "**/dist/**"
+  ]
+}

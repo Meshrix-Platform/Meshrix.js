@@ -11,7 +11,7 @@
 }
 
 .system-overview-metrics {
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .detail-metrics {
@@ -43,6 +43,19 @@
   font-size: var(--text-3xl);
   font-weight: 600;
   letter-spacing: -0.04em;
+}
+
+/* Optional semantic tone for a metric value (e.g. blocked/failed counts). */
+.detail-metrics div[data-tone="danger"] strong {
+  color: var(--danger);
+}
+
+.detail-metrics div[data-tone="warning"] strong {
+  color: var(--warning-text);
+}
+
+.detail-metrics div[data-tone="success"] strong {
+  color: var(--success);
 }
 
 .mount-list {

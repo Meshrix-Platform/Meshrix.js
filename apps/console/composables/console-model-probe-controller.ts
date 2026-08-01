@@ -23,7 +23,7 @@ type ConsoleModelProbeControllerOptions = {
 
 export function createConsoleModelProbeController(
   options: ConsoleModelProbeControllerOptions,
-) {
+) : any {
   function modelProbeFailureResult(entry: AgentModelConfig, message: string): ModelProbeResponse {
     return {
       ok: false,
@@ -37,7 +37,7 @@ export function createConsoleModelProbeController(
     };
   }
 
-  function modelProbeSettingsForEntry(entry: AgentModelConfig) {
+  function modelProbeSettingsForEntry(entry: AgentModelConfig) : any {
     void entry;
     return options.settingsPayloadForSave();
   }
@@ -53,18 +53,18 @@ export function createConsoleModelProbeController(
     });
   }
 
-  async function probeModelEntry(entry: AgentModelConfig) {
-    const key = options.modelEntryStatusKey(entry);
+  async function probeModelEntry(entry: AgentModelConfig) : Promise<any> {
+    const key: any = options.modelEntryStatusKey(entry);
     options.setBusy(`model-probe:${key}`);
     options.error.value = "";
     try {
-      const result = await runModelEntryProbe(entry);
+      const result: any = await runModelEntryProbe(entry);
       options.modelProbeResults.value = {
         ...options.modelProbeResults.value,
         [key]: result,
       };
-    } catch (nextError) {
-      const message = nextError instanceof Error ? nextError.message : "模型探测失败。";
+    } catch (nextError: any) {
+      const message: any = nextError instanceof Error ? nextError.message : "模型探测失败。";
       options.modelProbeResults.value = {
         ...options.modelProbeResults.value,
         [key]: modelProbeFailureResult(entry, message),
@@ -75,20 +75,20 @@ export function createConsoleModelProbeController(
     }
   }
 
-  async function probeModelLibraryBeforeSave() {
+  async function probeModelLibraryBeforeSave() : Promise<any> {
     const failures: Array<{ entry: AgentModelConfig; result: ModelProbeResponse }> = [];
     const nextResults: Record<string, ModelProbeResponse> = {};
     for (const entry of options.visibleModelEntries.value) {
-      const key = options.modelEntryStatusKey(entry);
+      const key: any = options.modelEntryStatusKey(entry);
       try {
-        const result = await runModelEntryProbe(entry);
+        const result: any = await runModelEntryProbe(entry);
         nextResults[key] = result;
         if (!result.ok) {
           failures.push({ entry, result });
         }
-      } catch (nextError) {
-        const message = nextError instanceof Error ? nextError.message : "模型探测失败。";
-        const result = modelProbeFailureResult(entry, message);
+      } catch (nextError: any) {
+        const message: any = nextError instanceof Error ? nextError.message : "模型探测失败。";
+        const result: any = modelProbeFailureResult(entry, message);
         nextResults[key] = result;
         failures.push({ entry, result });
       }
@@ -100,36 +100,36 @@ export function createConsoleModelProbeController(
     return failures;
   }
 
-  function modelEntryProbeResult(entry: AgentModelConfig) {
+  function modelEntryProbeResult(entry: AgentModelConfig) : any {
     return options.modelProbeResults.value[options.modelEntryStatusKey(entry)] || null;
   }
 
-  function modelEntryProbeStatusLabel(entry: AgentModelConfig) {
-    const probe = modelEntryProbeResult(entry);
+  function modelEntryProbeStatusLabel(entry: AgentModelConfig) : any {
+    const probe: any = modelEntryProbeResult(entry);
     if (!probe) {
       return "";
     }
     return probe.ok ? "探测通过" : "探测失败";
   }
 
-  function modelEntryProbeStatusTone(entry: AgentModelConfig) {
-    const probe = modelEntryProbeResult(entry);
+  function modelEntryProbeStatusTone(entry: AgentModelConfig) : any {
+    const probe: any = modelEntryProbeResult(entry);
     if (!probe) {
       return "neutral";
     }
     return probe.ok ? "success" : "danger";
   }
 
-  function modelEntryStatusLabel(entry: AgentModelConfig) {
-    const probe = options.modelProbeResults.value[options.modelEntryStatusKey(entry)];
+  function modelEntryStatusLabel(entry: AgentModelConfig) : any {
+    const probe: any = options.modelProbeResults.value[options.modelEntryStatusKey(entry)];
     if (probe) {
       return probe.ok ? "探测通过" : "探测失败";
     }
     return options.modelEntryConfigured(entry) ? "已配置" : "未配置";
   }
 
-  function modelEntryStatusTone(entry: AgentModelConfig) {
-    const probe = options.modelProbeResults.value[options.modelEntryStatusKey(entry)];
+  function modelEntryStatusTone(entry: AgentModelConfig) : any {
+    const probe: any = options.modelProbeResults.value[options.modelEntryStatusKey(entry)];
     if (probe) {
       return probe.ok ? "success" : "danger";
     }

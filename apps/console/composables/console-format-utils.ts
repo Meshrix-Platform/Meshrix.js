@@ -1,31 +1,31 @@
 import type { SplitJobStatus } from "../lib/types";
 export { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 
-export function parseFilterDate(value: string, boundary: "start" | "end") {
+export function parseFilterDate(value: string, boundary: "start" | "end") : any {
   if (!value) {
     return 0;
   }
-  const suffix = boundary === "start" ? "T00:00:00" : "T23:59:59";
-  const time = new Date(`${value}${suffix}`).getTime();
+  const suffix: any = boundary === "start" ? "T00:00:00" : "T23:59:59";
+  const time: any = new Date(`${value}${suffix}`).getTime();
   return Number.isFinite(time) ? time : 0;
 }
 
-function padDatePart(value: number) {
+function padDatePart(value: number) : any {
   return String(value).padStart(2, "0");
 }
 
-export function formatMachineDate(value: string, mode: "compact" | "full") {
+export function formatMachineDate(value: string, mode: "compact" | "full") : any {
   if (!value) {
     return "未记录";
   }
-  const date = new Date(value);
+  const date: any = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  const month = padDatePart(date.getMonth() + 1);
-  const day = padDatePart(date.getDate());
-  const hour = padDatePart(date.getHours());
-  const minute = padDatePart(date.getMinutes());
+  const month: any = padDatePart(date.getMonth() + 1);
+  const day: any = padDatePart(date.getDate());
+  const hour: any = padDatePart(date.getHours());
+  const minute: any = padDatePart(date.getMinutes());
   if (mode === "compact") {
     return `${month}-${day} ${hour}:${minute}`;
   }
@@ -36,16 +36,16 @@ export function formatMachineDate(value: string, mode: "compact" | "full") {
   ].join("-") + ` ${hour}:${minute}:${padDatePart(date.getSeconds())}`;
 }
 
-export function csvCell(value: unknown) {
+export function csvCell(value: unknown) : any {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
-export function jsonPreview(value: unknown) {
+export function jsonPreview(value: unknown) : any {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
-export function safeDownloadName(value: string, fallback = "export") {
-  const normalized = String(value || "")
+export function safeDownloadName(value: string, fallback: any = "export") : any {
+  const normalized: any = String(value || "")
     .trim()
     .replace(/[\\/:*?"<>|]+/g, "-")
     .replace(/\s+/g, "-")
@@ -54,8 +54,8 @@ export function safeDownloadName(value: string, fallback = "export") {
   return normalized || fallback;
 }
 
-export function formatBytes(value: unknown) {
-  const bytes = Number(value || 0);
+export function formatBytes(value: unknown) : any {
+  const bytes: any = Number(value || 0);
   if (!Number.isFinite(bytes) || bytes <= 0) {
     return "0 B";
   }
@@ -71,16 +71,16 @@ export function formatBytes(value: unknown) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
-export function parseTime(value?: string) {
+export function parseTime(value?: string) : any {
   if (!value) {
     return 0;
   }
 
-  const time = new Date(value).getTime();
+  const time: any = new Date(value).getTime();
   return Number.isFinite(time) ? time : 0;
 }
 
-export function formatDate(value: string) {
+export function formatDate(value: string) : any {
   if (!value) {
     return "未记录";
   }
@@ -94,21 +94,21 @@ export function formatDate(value: string) {
   }
 }
 
-export function formatDuration(start?: string, end?: string) {
-  const startedAt = parseTime(start);
-  const endedAt = parseTime(end) || Date.now();
+export function formatDuration(start?: string, end?: string) : any {
+  const startedAt: any = parseTime(start);
+  const endedAt: any = parseTime(end) || Date.now();
 
   if (!startedAt || endedAt <= startedAt) {
     return "--";
   }
 
-  let totalSeconds = Math.floor((endedAt - startedAt) / 1000);
-  const days = Math.floor(totalSeconds / 86400);
+  let totalSeconds: any = Math.floor((endedAt - startedAt) / 1000);
+  const days: any = Math.floor(totalSeconds / 86400);
   totalSeconds -= days * 86400;
-  const hours = Math.floor(totalSeconds / 3600);
+  const hours: any = Math.floor(totalSeconds / 3600);
   totalSeconds -= hours * 3600;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds - minutes * 60;
+  const minutes: any = Math.floor(totalSeconds / 60);
+  const seconds: any = totalSeconds - minutes * 60;
 
   if (days > 0) {
     return `${days}d ${hours}h`;
@@ -125,6 +125,6 @@ export function formatDuration(start?: string, end?: string) {
   return `${seconds}s`;
 }
 
-export function jobStatusTone(status: SplitJobStatus) {
+export function jobStatusTone(status: SplitJobStatus) : any {
   return status;
 }

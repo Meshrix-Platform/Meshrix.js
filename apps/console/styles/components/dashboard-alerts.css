@@ -129,6 +129,21 @@
   font-weight: 700;
 }
 
+/* Tone the category label so it stays legible on tinted alert surfaces
+   (plain muted gray falls below readable contrast on dark danger/warning cards). */
+.dashboard-todo-item[data-tone="danger"] .dashboard-todo-kind {
+  color: var(--danger);
+}
+
+.dashboard-todo-item[data-tone="warning"] .dashboard-todo-kind,
+.dashboard-todo-item[data-tone="running"] .dashboard-todo-kind {
+  color: var(--warning-text);
+}
+
+.dashboard-todo-item[data-tone="success"] .dashboard-todo-kind {
+  color: var(--success);
+}
+
 .dashboard-todo-item strong {
   min-width: 0;
   color: var(--text-primary);

@@ -252,7 +252,7 @@ export const consoleSegmentPairs: ConsolePhrasePair[] = [
   ["时间线和检索网络的核心分析管线", "timeline, and retrieval network core analysis pipeline"],
   ["批次回调", "Batch Callback"],
   ["已禁用", "Disabled"],
-  ["填写外置模块 .mjs 路径", "Enter external module .mjs path"],
+  ["填写外置模块 .ts 路径", "Enter external module .ts path"],
   ["开启分析引擎", "Enable Analysis Engine"],
   ["展开配置", "Expand Config"],
   ["开启 HTTP 调用", "Enable HTTP Calls"],

@@ -13,10 +13,26 @@
   },
   "type": "module",
   "imports": {
-    "#meshrix/authorization-engine": "./src/security/authorization/authorization-engine.mjs",
-    "#meshrix/client-strings": "./src/security/client-strings.mjs",
-    "#meshrix/server-config": "./src/config/server-config.mjs",
-    "#meshrix/trusted-client-ip": "./src/security/trusted-client-ip.mjs"
+    "#meshrix/authorization-engine": {
+      "types": "./dist/security/authorization/authorization-engine.d.ts",
+      "source": "./src/security/authorization/authorization-engine.ts",
+      "default": "./dist/security/authorization/authorization-engine.js"
+    },
+    "#meshrix/client-strings": {
+      "types": "./dist/security/client-strings.d.ts",
+      "source": "./src/security/client-strings.ts",
+      "default": "./dist/security/client-strings.js"
+    },
+    "#meshrix/server-config": {
+      "types": "./dist/config/server-config.d.ts",
+      "source": "./src/config/server-config.ts",
+      "default": "./dist/config/server-config.js"
+    },
+    "#meshrix/trusted-client-ip": {
+      "types": "./dist/security/trusted-client-ip.d.ts",
+      "source": "./src/security/trusted-client-ip.ts",
+      "default": "./dist/security/trusted-client-ip.js"
+    }
   },
   "dependencies": {
     "@meshrix/contracts": "0.0.1",
@@ -27,10 +43,14 @@
     "undici": "^8.8.0"
   },
   "exports": {
-    "./*": "./src/*.mjs"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
   },
   "files": [
-    "src/**/*",
+    "dist/**/*",
     "config/**/*",
     "README.md",
     "LICENSE",

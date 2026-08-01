@@ -37,7 +37,7 @@ type AgentSelectionAlertParams = {
 };
 
 function agentSelectionAlert(params: AgentSelectionAlertParams): AgentConfigurationAlert | null {
-  const value = String(params.value || "").trim();
+  const value: any = String(params.value || "").trim();
   if (!value) {
     return {
       alertId: params.alertId,
@@ -51,7 +51,7 @@ function agentSelectionAlert(params: AgentSelectionAlertParams): AgentConfigurat
       targetId: params.targetId,
     };
   }
-  const option = params.options.find((item) => item.value === value);
+  const option: any = params.options.find((item?: any) : any => item.value === value);
   if (!option?.enabled) {
     return {
       alertId: params.alertId,
@@ -72,8 +72,8 @@ function agentSelectionAlert(params: AgentSelectionAlertParams): AgentConfigurat
 
 export function createConsoleDashboardConfigurationAlertController(
   options: DashboardConfigurationAlertControllerOptions,
-) {
-  const agentConfigurationAlerts = computed<AgentConfigurationAlert[]>(() => {
+) : any {
+  const agentConfigurationAlerts: any = computed<AgentConfigurationAlert[]>(() : any => {
     const alerts: AgentConfigurationAlert[] = [];
     if (options.visibleModelEntries.value.length === 0) {
       alerts.push({
@@ -131,8 +131,8 @@ export function createConsoleDashboardConfigurationAlertController(
       if (!options.moduleNeedsIntelligence(moduleDefinition.id)) {
         continue;
       }
-      const refValue = options.moduleModelRef(moduleDefinition.id);
-      const option = options.agentModelAssignmentOptions.value.find((item) => item.ref === refValue);
+      const refValue: any = options.moduleModelRef(moduleDefinition.id);
+      const option: any = options.agentModelAssignmentOptions.value.find((item?: any) : any => item.ref === refValue);
       if (!refValue) {
         if (moduleDefinition.alertRequired === false) {
           continue;
@@ -167,9 +167,9 @@ export function createConsoleDashboardConfigurationAlertController(
     return alerts;
   });
 
-  const agentConfigurationAlertSummary = computed(() => {
-    const dangerCount = agentConfigurationAlerts.value.filter((item) => item.tone === "danger").length;
-    const warningCount = agentConfigurationAlerts.value.length - dangerCount;
+  const agentConfigurationAlertSummary: any = computed(() : any => {
+    const dangerCount: any = agentConfigurationAlerts.value.filter((item?: any) : any => item.tone === "danger").length;
+    const warningCount: any = agentConfigurationAlerts.value.length - dangerCount;
     if (agentConfigurationAlerts.value.length === 0) {
       return "所有需要智能体的功能都已显式绑定可用智能体。";
     }

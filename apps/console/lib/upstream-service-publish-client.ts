@@ -70,11 +70,11 @@ export interface ServiceDetailResponse {
 
 export type UpstreamServiceRuntimeHealth = { ok: boolean; [key: string]: unknown };
 
-function idempotencyKey(action: string) {
+function idempotencyKey(action: string) : any {
   return `${action}:${crypto.randomUUID()}`;
 }
 
-function commandBase(action: string, expectedServiceRevision: number, expectedSetRevision: number) {
+function commandBase(action: string, expectedServiceRevision: number, expectedSetRevision: number) : any {
   return {
     schemaVersion: UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION,
     action,
@@ -84,7 +84,7 @@ function commandBase(action: string, expectedServiceRevision: number, expectedSe
   };
 }
 
-export function createUpstreamService(serviceKey: string, descriptor: UpstreamServiceDescriptor, expectedSetRevision: number) {
+export function createUpstreamService(serviceKey: string, descriptor: UpstreamServiceDescriptor, expectedSetRevision: number) : any {
   return sendJson<PublishingResult>("/api/gateway/v1/services", "POST", {
     ...commandBase("create", 0, expectedSetRevision),
     serviceKey,
@@ -97,7 +97,7 @@ export function replaceUpstreamService(
   descriptor: UpstreamServiceDescriptor,
   expectedServiceRevision: number,
   expectedSetRevision: number,
-) {
+) : any {
   return sendJson<PublishingResult>(`/api/gateway/v1/services/${encodeURIComponent(serviceId)}`, "PUT", {
     ...commandBase("replace", expectedServiceRevision, expectedSetRevision),
     serviceId,
@@ -105,14 +105,14 @@ export function replaceUpstreamService(
   });
 }
 
-function stateCommand(action: "disable" | "remove" | "republish", serviceId: string, serviceRevision: number, setRevision: number) {
+function stateCommand(action: "disable" | "remove" | "republish", serviceId: string, serviceRevision: number, setRevision: number) : any {
   return {
     ...commandBase(action, serviceRevision, setRevision),
     serviceId,
   };
 }
 
-export function disableUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) {
+export function disableUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) : any {
   return sendJson<PublishingResult>(
     `/api/gateway/v1/services/${encodeURIComponent(serviceId)}/disable`,
     "POST",
@@ -120,7 +120,7 @@ export function disableUpstreamService(serviceId: string, serviceRevision: numbe
   );
 }
 
-export function republishUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) {
+export function republishUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) : any {
   return sendJson<PublishingResult>(
     `/api/gateway/v1/services/${encodeURIComponent(serviceId)}/republish`,
     "POST",
@@ -128,7 +128,7 @@ export function republishUpstreamService(serviceId: string, serviceRevision: num
   );
 }
 
-export function removeUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) {
+export function removeUpstreamService(serviceId: string, serviceRevision: number, setRevision: number) : any {
   return sendJson<PublishingResult>(
     `/api/gateway/v1/services/${encodeURIComponent(serviceId)}`,
     "DELETE",
@@ -137,15 +137,15 @@ export function removeUpstreamService(serviceId: string, serviceRevision: number
   );
 }
 
-export function listPublishedServices() {
+export function listPublishedServices() : any {
   return getJson<ServiceListResponse>("/api/gateway/v1/services");
 }
 
-export function getPublishedService(serviceId: string) {
+export function getPublishedService(serviceId: string) : any {
   return getJson<ServiceDetailResponse>(`/api/gateway/v1/services/${encodeURIComponent(serviceId)}`);
 }
 
-export function checkUpstreamServiceRuntimeHealth(serviceId: string) {
+export function checkUpstreamServiceRuntimeHealth(serviceId: string) : any {
   return getJson<UpstreamServiceRuntimeHealth>(
     `/api/gateway/v1/external-services/${encodeURIComponent(serviceId)}/health`,
   );
@@ -154,16 +154,16 @@ export function checkUpstreamServiceRuntimeHealth(serviceId: string) {
 export async function waitForUpstreamServicePublication(
   serviceId: string,
   options: { maxAttempts?: number; intervalMs?: number; delay?: (milliseconds: number) => Promise<void> } = {},
-) {
-  const maxAttempts = options.maxAttempts ?? 20;
-  const intervalMs = options.intervalMs ?? 500;
-  const delay = options.delay ?? ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)));
+) : Promise<any> {
+  const maxAttempts: any = options.maxAttempts ?? 20;
+  const intervalMs: any = options.intervalMs ?? 500;
+  const delay: any = options.delay ?? ((milliseconds: number) : any => new Promise<void>((resolve?: any) : any => setTimeout(resolve, milliseconds)));
   if (!Number.isSafeInteger(maxAttempts) || maxAttempts < 1) throw new Error("maxAttempts must be a positive integer.");
 
   let latest: ServiceDetailResponse | undefined;
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+  for (let attempt: any = 0; attempt < maxAttempts; attempt += 1) {
     latest = await getPublishedService(serviceId);
-    if (latest.service.publication.status === "server_published" || latest.service.state === "server_published") {
+    if (latest?.service.publication.status === "server_published" || latest?.service.state === "server_published") {
       return latest;
     }
     if (attempt + 1 < maxAttempts) await delay(intervalMs);

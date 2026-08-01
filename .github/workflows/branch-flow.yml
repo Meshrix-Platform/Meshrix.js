@@ -1,6 +1,9 @@
 # Public clean-rebuild workflow registration anchor.
 name: Branch flow
 
+env:
+  NODE_OPTIONS: --conditions=source
+
 on:
   push:
     branches: ["nightly", "stable", "release"]
@@ -31,10 +34,10 @@ jobs:
         with:
           node-version: "24"
       - name: Verify branch flow fixtures
-        run: node tools/scripts/verify-branch-flow.mjs --self-test
+        run: node tools/scripts/verify-branch-flow.ts --self-test
       - name: Verify branch flow
-        run: node tools/scripts/verify-branch-flow.mjs
+        run: node tools/scripts/verify-branch-flow.ts
       - name: Verify publication policy fixtures
-        run: node tools/scripts/verify-git-publication.mjs --self-test
+        run: node tools/scripts/verify-git-publication.ts --self-test
       - name: Verify published tree
-        run: node tools/scripts/verify-git-publication.mjs --index
+        run: node tools/scripts/verify-git-publication.ts --index

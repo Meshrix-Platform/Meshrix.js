@@ -9,20 +9,20 @@ export type ConsoleServerEventControllerOptions = {
   refreshState: (options?: { silent?: boolean }) => Promise<void>;
 };
 
-export function createConsoleServerEventController(options: ConsoleServerEventControllerOptions) {
-  const serverEventCursor = ref(0);
-  const serverEventSubscriptionStopped = ref(false);
-  const serverEventSubscriptionGeneration = ref(0);
-  const serverEventAbortController = ref<AbortController | null>(null);
-  const serverEventDelay = createConsoleTimeoutController();
-  const serverEventTimer = serverEventDelay.timer;
-  const serverEventTimerResolve = ref<(() => void) | null>(null);
+export function createConsoleServerEventController(options: ConsoleServerEventControllerOptions) : any {
+  const serverEventCursor: any = ref(0);
+  const serverEventSubscriptionStopped: any = ref(false);
+  const serverEventSubscriptionGeneration: any = ref(0);
+  const serverEventAbortController: any = ref<AbortController | null>(null);
+  const serverEventDelay: any = createConsoleTimeoutController();
+  const serverEventTimer: any = serverEventDelay.timer;
+  const serverEventTimerResolve: any = ref<(() => void) | null>(null);
 
-  function resetServerEventCursor() {
+  function resetServerEventCursor() : any {
     serverEventCursor.value = 0;
   }
 
-  function clearServerEventTimer() {
+  function clearServerEventTimer() : any {
     serverEventDelay.stop();
     if (serverEventTimerResolve.value) {
       serverEventTimerResolve.value();
@@ -30,11 +30,11 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
     }
   }
 
-  function waitForServerEventRetry(ms: number) {
-    return new Promise<void>((resolve) => {
+  function waitForServerEventRetry(ms: number) : any {
+    return new Promise<void>((resolve?: any) : any => {
       clearServerEventTimer();
       serverEventTimerResolve.value = resolve;
-      const scheduledTimer = serverEventDelay.schedule(() => {
+      const scheduledTimer: any = serverEventDelay.schedule(() : any => {
         serverEventTimerResolve.value = null;
         resolve();
       }, ms);
@@ -45,18 +45,18 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
     });
   }
 
-  function isAbortError(nextError: unknown) {
+  function isAbortError(nextError: unknown) : any {
     return (
       (nextError instanceof DOMException && nextError.name === "AbortError") ||
       (nextError instanceof Error && nextError.name === "AbortError")
     );
   }
 
-  function nextCursorFromProtocolEvents(events: ProtocolEvent[]) {
-    return events.reduce((cursor, event) => Math.max(cursor, event.offset + 1), 0);
+  function nextCursorFromProtocolEvents(events: ProtocolEvent[]) : any {
+    return events.reduce((cursor?: any, event?: any) : any => Math.max(cursor, event.offset + 1), 0);
   }
 
-  function stopServerEventSubscription() {
+  function stopServerEventSubscription() : any {
     serverEventSubscriptionStopped.value = true;
     serverEventSubscriptionGeneration.value += 1;
     clearServerEventTimer();
@@ -66,7 +66,7 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
     }
   }
 
-  async function runServerEventSubscription(generation = serverEventSubscriptionGeneration.value) {
+  async function runServerEventSubscription(generation: any = serverEventSubscriptionGeneration.value) : Promise<any> {
     if (
       serverEventSubscriptionStopped.value ||
       generation !== serverEventSubscriptionGeneration.value
@@ -74,11 +74,11 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
       return;
     }
 
-    const controller = new AbortController();
+    const controller: any = new AbortController();
     serverEventAbortController.value = controller;
-    const requestCursor = serverEventCursor.value;
+    const requestCursor: any = serverEventCursor.value;
     try {
-      const response = await subscribeEvents({
+      const response: any = await subscribeEvents({
         cursor: requestCursor,
         topic: options.currentTopics(),
         timeoutMs: requestCursor === 0 ? 0 : 25000,
@@ -91,15 +91,15 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
       ) {
         return;
       }
-      const snapshotEvents = requestCursor === 0 ? response.snapshots || [] : [];
-      const snapshotCursor = nextCursorFromProtocolEvents(snapshotEvents);
-      const liveEvents =
+      const snapshotEvents: any = requestCursor === 0 ? response.snapshots || [] : [];
+      const snapshotCursor: any = nextCursorFromProtocolEvents(snapshotEvents);
+      const liveEvents: any =
         snapshotCursor > 0
-          ? response.events.filter((event) => event.offset >= snapshotCursor)
+          ? response.events.filter((event?: any) : any => event.offset >= snapshotCursor)
           : response.events;
-      const incomingEvents = [...snapshotEvents, ...liveEvents];
-      const hasUpdates = incomingEvents.length > 0;
-      const handledUpdates = incomingEvents.filter(options.applyServerEvent).length;
+      const incomingEvents: any[] = [...snapshotEvents, ...liveEvents];
+      const hasUpdates: any = incomingEvents.length > 0;
+      const handledUpdates: any = incomingEvents.filter(options.applyServerEvent).length;
       serverEventCursor.value = Math.max(
         serverEventCursor.value,
         response.nextCursor || 0,
@@ -109,7 +109,7 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
       if (hasUpdates && handledUpdates < incomingEvents.length) {
         await options.refreshState({ silent: true });
       }
-    } catch (nextError) {
+    } catch (nextError: any) {
       if (
         isAbortError(nextError) ||
         serverEventSubscriptionStopped.value ||
@@ -128,13 +128,13 @@ export function createConsoleServerEventController(options: ConsoleServerEventCo
       !serverEventSubscriptionStopped.value &&
       generation === serverEventSubscriptionGeneration.value
     ) {
-      serverEventDelay.schedule(() => {
+      serverEventDelay.schedule(() : any => {
         void runServerEventSubscription(generation);
       }, 100);
     }
   }
 
-  function startServerEventSubscription() {
+  function startServerEventSubscription() : any {
     stopServerEventSubscription();
     serverEventCursor.value = 0;
     serverEventSubscriptionStopped.value = false;

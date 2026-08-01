@@ -47,12 +47,12 @@ const selectedServerAddressRow = computed(() => {
   if (!selectedUrl) {
     return null;
   }
-  return serverAddressRows.value.find((row) => normalizeServerAddressUrl(row.url) === selectedUrl) || null;
+  return serverAddressRows.value.find((row: any) => normalizeServerAddressUrl(row.url) === selectedUrl) || null;
 });
 
 function persistServerAddressRows() {
   const addresses = uniqueServerAddressStrings(
-    serverAddressRows.value.map((row) => row.url.trim()).filter(Boolean),
+    serverAddressRows.value.map((row: any) => row.url.trim()).filter(Boolean),
   );
   writeStoredServerAddresses({
     activeUrl: selectedServerUrl.value.trim(),
@@ -67,8 +67,8 @@ function hydrateServerAddressRows() {
   const activeUrl = storedActiveUrl || currentUrl;
   const existingRows = new Map(
     serverAddressRows.value
-      .map((row) => [normalizeServerAddressUrl(row.url), row] as const)
-      .filter(([url]) => Boolean(url)),
+      .map((row: any) => [normalizeServerAddressUrl(row.url), row] as const)
+      .filter(([url]: readonly any[]) => Boolean(url)),
   );
   const addresses = uniqueServerAddressStrings([
     ...stored.addresses,
@@ -76,7 +76,7 @@ function hydrateServerAddressRows() {
     ...(activeUrl ? [activeUrl] : []),
   ]);
 
-  serverAddressRows.value = (addresses.length ? addresses : [""]).map((address) => {
+  serverAddressRows.value = (addresses.length ? addresses : [""]).map((address: any) => {
     const normalizedAddress = normalizeServerAddressUrl(address);
     const existingRow = normalizedAddress ? existingRows.get(normalizedAddress) : null;
     const isConnectedAddress =
@@ -115,7 +115,7 @@ function removeServerAddressRow(row: ServerAddressRow) {
 
   const removedUrl = normalizeServerAddressUrl(row.url);
   const wasSelected = Boolean(removedUrl && removedUrl === normalizeServerAddressUrl(selectedServerUrl.value));
-  serverAddressRows.value = serverAddressRows.value.filter((item) => item.id !== row.id);
+  serverAddressRows.value = serverAddressRows.value.filter((item: any) => item.id !== row.id);
   if (wasSelected) {
     selectedServerUrl.value = normalizeServerAddressUrl(serverAddressRows.value[0]?.url) || "";
   }

@@ -9,12 +9,12 @@
     "server:mcp:register"
   ],
   "verifierScripts": [
-    "tools/server-scripts/verify-mcp-client-identity-proof.mjs",
-    "tools/server-scripts/verify-mcp-process-identity-credential-store.mjs",
-    "tools/server-scripts/verify-node-runtime-supply-chain.mjs",
-    "tools/server-scripts/verify-mcp-release-portable-assembly.mjs",
-    "tools/server-scripts/verify-mcp-proxy-transport.mjs",
-    "tools/server-scripts/verify-downstream-agent-tool-loop.mjs"
+    "tools/server-scripts/verify-mcp-client-identity-proof.ts",
+    "tools/server-scripts/verify-mcp-process-identity-credential-store.ts",
+    "tools/server-scripts/verify-node-runtime-supply-chain.ts",
+    "tools/server-scripts/verify-mcp-release-portable-assembly.ts",
+    "tools/server-scripts/verify-mcp-proxy-transport.ts",
+    "tools/server-scripts/verify-downstream-agent-tool-loop.ts"
   ],
   "evidenceReports": [
     "build/reports/mcp-client-identity-proof.json",

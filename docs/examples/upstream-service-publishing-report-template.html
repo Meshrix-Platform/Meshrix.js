@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Meshrix Upstream Service Publishing Report Template</title>
+  <style>
+    :root { color: #17231d; background: #e4e8e3; font: 15px/1.6 system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { max-width: 1120px; margin: 24px auto; overflow-x: hidden; overflow-y: auto; background: #f3f4ef; border: 1px solid #d5ddd6; }
+    header, section { padding: 42px clamp(24px, 7vw, 76px); border-bottom: 1px solid #d9e0da; }
+    section { content-visibility: auto; contain-intrinsic-size: auto 560px; }
+    header { background: #17231d; color: white; }
+    h1 { margin: .15em 0; font-size: clamp(2.3rem, 6vw, 4.8rem); line-height: 1; }
+    h2, h3 { margin: .2em 0 .7em; }
+    .eyebrow { color: #176547; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .status, .placeholder, .catalog { padding: 16px; border: 1px solid #bcc8bf; border-radius: 12px; background: white; }
+    .status { display: inline-block; color: #6044a8; font-weight: 800; }
+    .catalog { margin-top: 16px; }
+    .report-navigation { display: flex; gap: 8px; padding: 14px 20px; overflow-x: auto; background: white; border-bottom: 1px solid #d9e0da; }
+    .report-navigation a { flex: 0 0 auto; color: #176547; font-size: .78rem; font-weight: 750; }
+    .skip-link { position: fixed; top: 12px; left: 12px; z-index: 30; padding: 8px 12px; background: white; color: #17231d; transform: translateY(-180%); }
+    .skip-link:focus { transform: translateY(0); }
+    .table-shell { width: 100%; overflow-x: auto; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    th, td { padding: 11px 12px; border: 1px solid #d9e0da; text-align: left; vertical-align: top; }
+    th { color: #657269; background: #f8faf7; font-size: .72rem; text-transform: uppercase; }
+    .language-switch { position: fixed; top: 12px; right: 12px; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #17231dea; }
+    button { padding: 7px 11px; border: 0; border-radius: 999px; background: transparent; color: white; cursor: pointer; }
+    button[aria-pressed="true"] { background: white; color: #17231d; }
+    @media (max-width: 700px) { body { margin: 0; border: 0; } header, section { padding-inline: 20px; } }
+    @media print { body { margin: 0; border: 0; } .language-switch, .report-navigation, .skip-link { display: none; } section { break-inside: avoid; content-visibility: visible; contain-intrinsic-size: auto; } }
+  </style>
+</head>
+<body data-report-template="upstream-service-publishing" data-report-portability="single-file">
+  <a class="skip-link" href="#report-content"><span data-en="Skip to report content" data-zh="跳到报告内容">Skip to report content</span></a>
+  <nav class="language-switch" aria-label="Language / 语言">
+    <button type="button" data-language="zh-CN" aria-pressed="false">中文</button>
+    <button type="button" data-language="en" aria-pressed="true">English</button>
+  </nav>
+  <header>
+    <p><span data-en="Portable single-file structural template — not release evidence" data-zh="可携带的单文件结构模板——不是发布证据">Portable single-file structural template — not release evidence</span></p>
+    <h1><span data-en="Upstream Service Publishing" data-zh="上游服务发布">Upstream Service Publishing</span></h1>
+    <p class="status"><span data-en="Not executed" data-zh="未执行">Not executed</span></p>
+    <p><span data-en="Generated reports embed every verified image and downloadable attachment; no neighboring resource files are required." data-zh="生成的报告会内嵌每一张已验证图片及可下载附件，无需任何同目录资源文件。">Generated reports embed every verified image and downloadable attachment; no neighboring resource files are required.</span></p>
+    <p><span data-en="Live Console screenshots are captured at a 1440 × 1000 CSS viewport with 2× device scale, producing 2880 × 2000 PNG evidence." data-zh="实时管控台截图采用 1440 × 1000 CSS 视口及 2× 设备缩放，生成 2880 × 2000 PNG 证据。">Live Console screenshots are captured at a 1440 × 1000 CSS viewport with 2× device scale, producing 2880 × 2000 PNG evidence.</span></p>
+  </header>
+  <nav class="report-navigation" aria-label="Report sections"><a href="#executive-summary"><span data-en="Executive summary" data-zh="执行摘要">Executive summary</span></a><a href="#safe-configuration"><span data-en="Exact safe configuration" data-zh="精确安全配置">Exact safe configuration</span></a><a href="#mcp-acceptance"><span data-en="MCP acceptance matrix" data-zh="MCP 验收矩阵">MCP acceptance matrix</span></a><a href="#live-console-evidence"><span data-en="Live Console evidence" data-zh="实时管控台证据">Live Console evidence</span></a><a href="#golden-path"><span data-en="Golden path" data-zh="黄金路径">Golden path</span></a><a href="#requirements"><span data-en="Requirements" data-zh="需求">Requirements</span></a><a href="#production-composition"><span data-en="Production composition" data-zh="生产组成">Production composition</span></a><a href="#revision-semantics"><span data-en="Revision semantics" data-zh="修订语义">Revision semantics</span></a><a href="#protocol-delivery"><span data-en="Protocol delivery" data-zh="协议交付">Protocol delivery</span></a><a href="#provenance"><span data-en="Provenance" data-zh="来源">Provenance</span></a></nav>
+  <main id="report-content" tabindex="-1">
+  <section id="executive-summary" aria-labelledby="executive-summary-title" data-report-section="executive-summary">
+        <p class="eyebrow"><span data-en="Executive summary" data-zh="执行摘要">Executive summary</span></p>
+        <h2 id="executive-summary-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+        <article class="catalog" data-report-slot="candidate-scope">
+          <h3><span data-en="Candidate scope — not bound" data-zh="候选范围——未绑定">Candidate scope — not bound</span></h3>
+          <p><span data-en="Not executed; no candidate claim is present." data-zh="未执行；不存在候选声明。">Not executed; no candidate claim is present.</span></p>
+        </article>
+      </section>
+  <section id="safe-configuration" aria-labelledby="safe-configuration-title" data-report-section="safe-configuration">
+        <p class="eyebrow"><span data-en="Exact safe configuration" data-zh="精确安全配置">Exact safe configuration</span></p>
+        <h2 id="safe-configuration-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+        <article class="catalog" data-report-slot="upstream-publication-runtime-health">
+          <h3><span data-en="Publication and runtime health — required" data-zh="发布与运行时健康——必填">Publication and runtime health — required</span></h3>
+          <p><span data-en="Not executed; populate only from the bounded upstream-publish receipt." data-zh="未执行；只能从有界 upstream-publish 收据填充。">Not executed; populate only from the bounded upstream-publish receipt.</span></p>
+        </article>
+        <article class="catalog" data-report-slot="upstream-service-interface-catalog">
+          <h3><span data-en="Published upstream interfaces — required" data-zh="已发布上游接口——必填">Published upstream interfaces — required</span></h3>
+          <p><span data-en="Fill this catalog only from the digest-bound publication input." data-zh="此清单只能从摘要绑定的实际发布输入中填写。">Fill this catalog only from the digest-bound publication input.</span></p>
+          <div class="table-shell"><table><caption><span data-en="Published upstream interface catalog" data-zh="已发布上游接口清单">Published upstream interface catalog</span></caption><thead><tr><th><span data-en="Interface" data-zh="接口">Interface</span></th><th><span data-en="Method and path" data-zh="方法与路径">Method and path</span></th><th><span data-en="Request and upload" data-zh="请求与上传">Request and upload</span></th><th><span data-en="Response and download" data-zh="响应与下载">Response and download</span></th><th><span data-en="Gateway governance" data-zh="网关治理">Gateway governance</span></th></tr></thead>
+          <tbody><tr data-service-interface="required-placeholder"><td colspan="5"><span data-en="Required before generation: health route plus every published operation. Do not invent a download endpoint." data-zh="生成前必填：健康检查路径及每个已发布操作。不得虚构下载接口。">Required before generation: health route plus every published operation. Do not invent a download endpoint.</span></td></tr></tbody></table></div>
+        </article>
+      </section>
+  <section id="mcp-acceptance" aria-labelledby="mcp-acceptance-title" data-report-section="mcp-acceptance">
+        <p class="eyebrow"><span data-en="MCP acceptance matrix" data-zh="MCP 验收矩阵">MCP acceptance matrix</span></p>
+        <h2 id="mcp-acceptance-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+        <div class="table-shell" data-report-slot="client-lifecycle"><table><caption><span data-en="Client lifecycle — required" data-zh="客户端生命周期——必填">Client lifecycle — required</span></caption><thead><tr><th><span data-en="Client" data-zh="客户端">Client</span></th><th><span data-en="Discovery" data-zh="发现">Discovery</span></th><th><span data-en="Install" data-zh="安装">Install</span></th><th><span data-en="Upload" data-zh="上传">Upload</span></th><th>tools/list</th><th>full-access-debug</th><th>require-approval-debug</th><th><span data-en="Uninstall" data-zh="卸载">Uninstall</span></th><th><span data-en="Cleanup" data-zh="清理">Cleanup</span></th></tr></thead><tbody><tr><td colspan="9"><span data-en="Not executed" data-zh="未执行">Not executed</span></td></tr></tbody></table></div>
+      </section>
+  <section id="live-console-evidence" aria-labelledby="live-console-evidence-title" data-report-section="live-console-evidence">
+        <p class="eyebrow"><span data-en="Live Console evidence" data-zh="实时管控台证据">Live Console evidence</span></p>
+        <h2 id="live-console-evidence-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+        <ol class="catalog" data-report-slot="visual-evidence-index"><li><span data-en="Not executed; ten ordered Console evidence entries are required." data-zh="未执行；需要十条有序管控台证据索引。">Not executed; ten ordered Console evidence entries are required.</span></li></ol>
+      </section>
+  <section id="golden-path" aria-labelledby="golden-path-title" data-report-section="golden-path">
+        <p class="eyebrow"><span data-en="Golden path" data-zh="黄金路径">Golden path</span></p>
+        <h2 id="golden-path-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+      </section>
+  <section id="requirements" aria-labelledby="requirements-title" data-report-section="requirements">
+        <p class="eyebrow"><span data-en="Requirements" data-zh="需求">Requirements</span></p>
+        <h2 id="requirements-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+      </section>
+  <section id="production-composition" aria-labelledby="production-composition-title" data-report-section="production-composition">
+        <p class="eyebrow"><span data-en="Production composition" data-zh="生产组成">Production composition</span></p>
+        <h2 id="production-composition-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+      </section>
+  <section id="revision-semantics" aria-labelledby="revision-semantics-title" data-report-section="revision-semantics">
+        <p class="eyebrow"><span data-en="Revision semantics" data-zh="修订语义">Revision semantics</span></p>
+        <h2 id="revision-semantics-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+      </section>
+  <section id="protocol-delivery" aria-labelledby="protocol-delivery-title" data-report-section="protocol-delivery">
+        <p class="eyebrow"><span data-en="Protocol delivery" data-zh="协议交付">Protocol delivery</span></p>
+        <h2 id="protocol-delivery-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+      </section>
+  <section id="provenance" aria-labelledby="provenance-title" data-report-section="provenance">
+        <p class="eyebrow"><span data-en="Provenance" data-zh="来源">Provenance</span></p>
+        <h2 id="provenance-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
+        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
+        <article class="catalog" data-report-slot="journey-timings"><h3><span data-en="Journey timings" data-zh="路线耗时">Journey timings</span></h3><p><span data-en="Not executed" data-zh="未执行">Not executed</span></p></article>
+        <article class="catalog" data-report-slot="cleanup-summary"><h3><span data-en="Cleanup summary" data-zh="清理摘要">Cleanup summary</span></h3><p><span data-en="Not executed" data-zh="未执行">Not executed</span></p></article>
+      </section>
+  </main>
+  <script>
+    (() => {
+      const buttons = Array.from(document.querySelectorAll("[data-language]"));
+      const nodes = Array.from(document.querySelectorAll("[data-en][data-zh]"));
+      const applyLanguage = (requested) => {
+        const language = requested === "zh-CN" ? "zh-CN" : "en";
+        document.documentElement.lang = language;
+        for (const node of nodes) node.textContent = language === "zh-CN" ? node.dataset.zh : node.dataset.en;
+        for (const button of buttons) button.setAttribute("aria-pressed", String(button.dataset.language === language));
+      };
+      for (const button of buttons) button.addEventListener("click", () => applyLanguage(button.dataset.language));
+      applyLanguage(navigator.language.toLowerCase().startsWith("zh") ? "zh-CN" : "en");
+    })();
+  </script>
+</body>
+</html>

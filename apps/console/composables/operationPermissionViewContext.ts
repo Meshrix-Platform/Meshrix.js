@@ -3,14 +3,14 @@ import type { useOperationPermissionViewConsole } from "./console-operation-perm
 
 export type OperationPermissionViewContext = ReturnType<typeof useOperationPermissionViewConsole>;
 
-const operationPermissionViewKey = Symbol("operation-permission-view") as InjectionKey<OperationPermissionViewContext>;
+const operationPermissionViewKey: any = Symbol("operation-permission-view") as InjectionKey<OperationPermissionViewContext>;
 
-export function provideOperationPermissionView(context: OperationPermissionViewContext) {
+export function provideOperationPermissionView(context: OperationPermissionViewContext) : any {
   provide(operationPermissionViewKey, context);
 }
 
-export function useOperationPermissionViewContext() {
-  const context = inject(operationPermissionViewKey);
+export function useOperationPermissionViewContext() : any {
+  const context: any = inject(operationPermissionViewKey);
   if (!context) {
     throw new Error("Operation Permission view context is not available");
   }

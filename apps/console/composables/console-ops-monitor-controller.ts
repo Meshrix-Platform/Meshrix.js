@@ -31,14 +31,14 @@ type ConsoleOpsMonitorControllerOptions = {
 
 export function createConsoleOpsMonitorController(
   options: ConsoleOpsMonitorControllerOptions,
-) {
-  const backgroundProcessStatus = ref<BackgroundProcessStatus | null>(null);
-  const monitorAlertState = ref<MonitorAlertState | null>(null);
-  const monitorAlertConfigText = ref("");
+) : any {
+  const backgroundProcessStatus: any = ref<BackgroundProcessStatus | null>(null);
+  const monitorAlertState: any = ref<MonitorAlertState | null>(null);
+  const monitorAlertConfigText: any = ref("");
 
-  const backgroundProcesses = computed(() => backgroundProcessStatus.value?.processes || []);
-  const backgroundSupervisorLabel = computed(() => {
-    const status = backgroundProcessStatus.value;
+  const backgroundProcesses: any = computed(() : any => backgroundProcessStatus.value?.processes || []);
+  const backgroundSupervisorLabel: any = computed(() : any => {
+    const status: any = backgroundProcessStatus.value;
     if (!status) {
       return "未读取";
     }
@@ -47,10 +47,10 @@ export function createConsoleOpsMonitorController(
     }
     return status.ok ? "正常" : "降级";
   });
-  const backgroundRunningCount = computed(
-    () => backgroundProcesses.value.filter((item) => item.alive && !item.stale).length,
+  const backgroundRunningCount: any = computed(
+    () : any => backgroundProcesses.value.filter((item?: any) : any => item.alive && !item.stale).length,
   );
-  const monitorAlertSummary = computed(() => monitorAlertState.value?.summary || {
+  const monitorAlertSummary: any = computed(() : any => monitorAlertState.value?.summary || {
     activeCount: 0,
     visibleCount: 0,
     recoveredCount: 0,
@@ -58,17 +58,17 @@ export function createConsoleOpsMonitorController(
     warningCount: 0,
     historyCount: 0,
   });
-  const activeMonitorAlerts = computed(() => monitorAlertState.value?.activeAlerts || []);
-  const recentMonitorAlertHistory = computed(() => (monitorAlertState.value?.history || []).slice(0, 8));
-  const workQueueObservationState = computed(() => monitorAlertState.value?.workQueueObservation || null);
-  const workQueueRows = computed<WorkQueueRow[]>(() => {
+  const activeMonitorAlerts: any = computed(() : any => monitorAlertState.value?.activeAlerts || []);
+  const recentMonitorAlertHistory: any = computed(() : any => (monitorAlertState.value?.history || []).slice(0, 8));
+  const workQueueObservationState: any = computed(() : any => monitorAlertState.value?.workQueueObservation || null);
+  const workQueueRows: any = computed<WorkQueueRow[]>(() : any => {
     const rows: WorkQueueRow[] = [];
 
     for (const job of options.consoleState.value?.jobs.items || []) {
-      const registration = job.unifiedRegistration;
-      const relations = registration?.relations || {};
-      const attributes = registration?.attributes || {};
-      const queueId = job.queueId || "";
+      const registration: any = job.unifiedRegistration;
+      const relations: any = registration?.relations || {};
+      const attributes: any = registration?.attributes || {};
+      const queueId: any = job.queueId || "";
       rows.push({
         rowId: `split-job:${job.id}`,
         queueId: queueId || `job:${job.id}`,
@@ -91,9 +91,9 @@ export function createConsoleOpsMonitorController(
     }
 
     for (const run of options.allMaintenanceAgentRuns.value) {
-      const registration = run.unifiedRegistration;
-      const relations = registration?.relations || {};
-      const attributes = registration?.attributes || {};
+      const registration: any = run.unifiedRegistration;
+      const relations: any = registration?.relations || {};
+      const attributes: any = registration?.attributes || {};
       rows.push({
         rowId: registration?.registrationId || `maintenance-agent:${run.runId}`,
         queueId: String(relations.queueId || `maintenance:${run.runId}`),
@@ -115,7 +115,7 @@ export function createConsoleOpsMonitorController(
       });
     }
 
-    const activeRank = (row: WorkQueueRow) =>
+    const activeRank: any = (row: WorkQueueRow) : any =>
       ["interrupted", "failed"].includes(row.status) || row.lifecycleStatus === "interrupted"
         ? 0
         : ["running", "queued", "awaiting_approval", "open"].includes(row.status) || row.lifecycleStatus === "open"
@@ -123,24 +123,24 @@ export function createConsoleOpsMonitorController(
           : row.lifecycleStatus === "recovered"
             ? 2
             : 3;
-    return rows.sort((left, right) => {
-      const rankDelta = activeRank(left) - activeRank(right);
+    return rows.sort((left?: any, right?: any) : any => {
+      const rankDelta: any = activeRank(left) - activeRank(right);
       if (rankDelta !== 0) {
         return rankDelta;
       }
       return Date.parse(right.updatedAt || right.startedAt || "") - Date.parse(left.updatedAt || left.startedAt || "");
     });
   });
-  const workQueueSummary = computed(() => ({
+  const workQueueSummary: any = computed(() : any => ({
     total: workQueueRows.value.length,
-    active: workQueueRows.value.filter((row) =>
+    active: workQueueRows.value.filter((row?: any) : any =>
       ["queued", "running", "awaiting_approval"].includes(row.status) || row.lifecycleStatus === "open",
     ).length,
-    interrupted: workQueueRows.value.filter((row) => row.lifecycleStatus === "interrupted" || row.status === "interrupted").length,
-    recovered: workQueueRows.value.filter((row) => row.lifecycleStatus === "recovered" || row.status === "recovered").length,
+    interrupted: workQueueRows.value.filter((row?: any) : any => row.lifecycleStatus === "interrupted" || row.status === "interrupted").length,
+    recovered: workQueueRows.value.filter((row?: any) : any => row.lifecycleStatus === "recovered" || row.status === "recovered").length,
   }));
 
-  async function acknowledgeMonitorAlert(alertId: string) {
+  async function acknowledgeMonitorAlert(alertId: string) : Promise<any> {
     if (!options.canAdminMaintenanceAgent.value) {
       options.error.value = "当前账号没有维护配置权限。";
       return;
@@ -148,10 +148,10 @@ export function createConsoleOpsMonitorController(
     options.setBusy(`monitor-alert:ack:${alertId}`);
     options.error.value = "";
     try {
-      const state = await acknowledgeMonitorAlertRequest(alertId);
+      const state: any = await acknowledgeMonitorAlertRequest(alertId);
       monitorAlertState.value = state;
       monitorAlertConfigText.value = jsonPreview(state.config);
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "确认报警失败。";
     } finally {
@@ -159,7 +159,7 @@ export function createConsoleOpsMonitorController(
     }
   }
 
-  async function recoverBackgroundSupervisor() {
+  async function recoverBackgroundSupervisor() : Promise<any> {
     if (!options.canAdminMaintenanceAgent.value) {
       options.error.value = "当前账号没有维护配置权限。";
       return;
@@ -167,7 +167,7 @@ export function createConsoleOpsMonitorController(
     options.setBusy("background-supervisor:recover");
     options.error.value = "";
     try {
-      const response = await recoverBackgroundSupervisorRequest();
+      const response: any = await recoverBackgroundSupervisorRequest();
       if (response.backgroundProcessStatus) {
         backgroundProcessStatus.value = response.backgroundProcessStatus;
       } else {
@@ -177,15 +177,15 @@ export function createConsoleOpsMonitorController(
         monitorAlertState.value = response.monitorAlertState;
         monitorAlertConfigText.value = jsonPreview(response.monitorAlertState.config);
       } else {
-        const state = await getMonitorAlerts();
+        const state: any = await getMonitorAlerts();
         monitorAlertState.value = state;
         monitorAlertConfigText.value = jsonPreview(state.config);
       }
       if (!response.recovery?.ok) {
-        const reason = response.recovery?.reason || response.recovery?.action || "unknown";
+        const reason: any = response.recovery?.reason || response.recovery?.action || "unknown";
         options.error.value = `拉起后台 Worker 管理进程未成功：${reason}`;
       }
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "拉起后台 Worker 管理进程失败。";
     } finally {
@@ -193,7 +193,7 @@ export function createConsoleOpsMonitorController(
     }
   }
 
-  async function refreshBackgroundProcesses(refreshOptions: { silent?: boolean } = {}) {
+  async function refreshBackgroundProcesses(refreshOptions: { silent?: boolean } = {}) : Promise<any> {
     if (!options.canReadMaintenanceAgent.value) {
       return;
     }
@@ -203,7 +203,7 @@ export function createConsoleOpsMonitorController(
     options.error.value = "";
     try {
       backgroundProcessStatus.value = await getBackgroundProcesses();
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "刷新后台进程状态失败。";
     } finally {
@@ -213,7 +213,7 @@ export function createConsoleOpsMonitorController(
     }
   }
 
-  async function refreshMonitorAlerts(refreshOptions: { silent?: boolean } = {}) {
+  async function refreshMonitorAlerts(refreshOptions: { silent?: boolean } = {}) : Promise<any> {
     if (!options.canReadMaintenanceAgent.value) {
       return;
     }
@@ -222,10 +222,10 @@ export function createConsoleOpsMonitorController(
     }
     options.error.value = "";
     try {
-      const state = await getMonitorAlerts();
+      const state: any = await getMonitorAlerts();
       monitorAlertState.value = state;
       monitorAlertConfigText.value = jsonPreview(state.config);
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "刷新监控报警失败。";
     } finally {
@@ -235,7 +235,7 @@ export function createConsoleOpsMonitorController(
     }
   }
 
-  async function saveMonitorAlertConfig() {
+  async function saveMonitorAlertConfig() : Promise<any> {
     if (!options.canAdminMaintenanceAgent.value) {
       options.error.value = "当前账号没有维护配置权限。";
       return;
@@ -243,11 +243,11 @@ export function createConsoleOpsMonitorController(
     options.setBusy("monitor-alerts:save");
     options.error.value = "";
     try {
-      const parsed = JSON.parse(monitorAlertConfigText.value || "{}");
-      const state = await saveMonitorAlertConfigRequest(parsed);
+      const parsed: any = JSON.parse(monitorAlertConfigText.value || "{}");
+      const state: any = await saveMonitorAlertConfigRequest(parsed);
       monitorAlertState.value = state;
       monitorAlertConfigText.value = jsonPreview(state.config);
-    } catch (nextError) {
+    } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存监控报警配置失败。";
     } finally {

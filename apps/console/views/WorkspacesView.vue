@@ -16,7 +16,7 @@ const shell = useServerConsoleShellContext();
 const { workspacesConsole: workspacesView } = shell;
 const localDirectoryEntry = computed(() =>
   (shell.consoleState.value?.features?.plugins?.consoleEntries || []).find(
-    (entry) => entry.slotId === 'workspace.local-directory' && canAccessPluginConsoleEntry(
+    (entry: any) => entry.slotId === 'workspace.local-directory' && canAccessPluginConsoleEntry(
       entry as PluginConsoleEntry,
       shell.canAccessRouteMeta,
     ),

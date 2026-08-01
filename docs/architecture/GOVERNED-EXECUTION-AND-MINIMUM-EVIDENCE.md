@@ -1,8 +1,11 @@
 # Governed Execution And Minimum Evidence
 
+> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> non-amplifying authority, content integrity, and end-to-end traceability.
+
 ## Status And Scope
 
-This document is the canonical Core maintenance and release-readiness policy
+This document is the canonical Meshrix maintenance and Functional Release Gate policy
 for protected access, side effects, and their evidence. Every maintainer-facing
 document, Better Plan node, workflow, protocol projection, runtime path, and
 generated documentation projection under `docs/` inherits this policy. A more
@@ -10,7 +13,7 @@ specific contract may strengthen it but must not weaken or bypass it.
 
 This is an acceptance invariant, not a blanket statement that every existing
 runtime path has completed the migration. A path that does not meet it remains
-non-converged and must stay outside a release-readiness claim.
+non-converged and fails the Functional Release Gate.
 
 ## Existential Invariant
 

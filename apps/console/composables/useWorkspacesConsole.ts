@@ -22,21 +22,21 @@ type WorkspacesConsoleOptions = {
   globalBusyKey?: Ref<string>;
 };
 
-export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) {
-  const globalBusyKey = options.globalBusyKey ?? ref('');
-  const localBusyKey = ref('');
-  const busyKey = computed(() => localBusyKey.value || globalBusyKey.value);
+export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : any {
+  const globalBusyKey: any = options.globalBusyKey ?? ref('');
+  const localBusyKey: any = ref('');
+  const busyKey: any = computed(() : any => localBusyKey.value || globalBusyKey.value);
 
-  const workspaces        = ref<WsWorkspace[]>([]);
-  const sessions          = ref<WsSession[]>([]);
-  const selectedId        = ref('');
-  const expandedWorkspaceId = ref('');
-  const chainData         = ref<any>(null);
-  const contextData       = ref<any>(null);
-  const workspaceFilesData = ref<any>(null);
-  const localError        = ref('');
-  const panel             = ref<WorkspacePanel>('list');
-  const selection = useWorkspaceSelectionController({
+  const workspaces: any        = ref<WsWorkspace[]>([]);
+  const sessions: any          = ref<WsSession[]>([]);
+  const selectedId: any        = ref('');
+  const expandedWorkspaceId: any = ref('');
+  const chainData: any         = ref<any>(null);
+  const contextData: any       = ref<any>(null);
+  const workspaceFilesData: any = ref<any>(null);
+  const localError: any        = ref('');
+  const panel: any             = ref<WorkspacePanel>('list');
+  const selection: any = useWorkspaceSelectionController({
     workspaces,
     selectedId,
     panel,
@@ -137,7 +137,7 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) {
     reloadWorkspaceList: load,
   });
 
-  async function load() {
+  async function load() : Promise<any> {
     setBusy('ws:load');
     localError.value = '';
     try {
@@ -151,12 +151,12 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) {
     finally { clearBusy(); }
   }
 
-  async function loadChain(id: string) {
+  async function loadChain(id: string) : Promise<any> {
     chainData.value = null; contextData.value = null; workspaceFilesData.value = null;
     resetWorkspaceAssetState();
     resetWorkspaceCheckpoints();
     try {
-      const bundle = await workspacesClient.getWorkspaceChainBundle(id);
+      const bundle: any = await workspacesClient.getWorkspaceChainBundle(id);
       chainData.value = bundle.chain;
       contextData.value = bundle.context;
       workspaceFilesData.value = bundle.files;
@@ -164,17 +164,17 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) {
     } catch (e: unknown) { localError.value = errorMessage(e); }
   }
 
-  async function reloadWorkspaceChain() {
+  async function reloadWorkspaceChain() : Promise<any> {
     if (selectedId.value) {
       await loadChain(selectedId.value);
     }
   }
 
-  function showListPanel() {
+  function showListPanel() : any {
     panel.value = 'list';
   }
 
-  watch(selectedId, (id) => {
+  watch(selectedId, (id?: any) : any => {
     if (id) {
       if (panel.value === 'list') expandedWorkspaceId.value = id;
       loadChain(id);
@@ -183,7 +183,7 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) {
     }
   });
 
-  watch(panel, (next) => {
+  watch(panel, (next?: any) : any => {
     if (next === 'list') {
       if (selectedId.value) expandedWorkspaceId.value = selectedId.value;
     } else {
@@ -191,31 +191,31 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) {
     }
   });
 
-  function openLocalDir() {
+  function openLocalDir() : any {
     panel.value = 'localDir';
   }
 
-  async function openWorkspaceAssets() {
+  async function openWorkspaceAssets() : Promise<any> {
     panel.value = await prepareWorkspaceAssetsPanel();
   }
 
   // busyKey helpers (work on the existing string-compat ref)
-  function setBusy(k: string)  { localBusyKey.value = k; }
-  function clearBusy()         { localBusyKey.value = ''; }
+  function setBusy(k: string)  : any { localBusyKey.value = k; }
+  function clearBusy()         : any { localBusyKey.value = ''; }
 
-  async function copyToClipboard(event: MouseEvent, text: string) {
+  async function copyToClipboard(event: MouseEvent, text: string) : Promise<any> {
     if (!text) return;
     try {
       await copyConsoleTextWithFeedback(event, text);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to copy: ', err);
     }
   }
 
   // ─── Init ─────────────────────────────────────────────────────────────────────
   usePageRefreshHandler(
-    (detail) => detail.viewId === 'workspaces',
-    async () => {
+    (detail?: any) : any => detail.viewId === 'workspaces',
+    async () : Promise<any> => {
       await load();
       if (selectedId.value) {
         await loadChain(selectedId.value);

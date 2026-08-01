@@ -3,9 +3,9 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import FeatureToggle from "../../../apps/console/components/FeatureToggle.vue";
 
-describe("FeatureToggle", () => {
-  it("renders switch state and emits model updates", async () => {
-    const wrapper = mount(FeatureToggle, {
+describe("FeatureToggle", () : any => {
+  it("renders switch state and emits model updates", async () : Promise<any> => {
+    const wrapper: any = mount(FeatureToggle, {
       props: {
         modelValue: false,
         onLabel: "Enabled",
@@ -23,8 +23,8 @@ describe("FeatureToggle", () => {
     expect(wrapper.emitted("change")?.[0]).toEqual([true]);
   });
 
-  it("does not emit when disabled", async () => {
-    const wrapper = mount(FeatureToggle, {
+  it("does not emit when disabled", async () : Promise<any> => {
+    const wrapper: any = mount(FeatureToggle, {
       props: {
         modelValue: true,
         disabled: true,

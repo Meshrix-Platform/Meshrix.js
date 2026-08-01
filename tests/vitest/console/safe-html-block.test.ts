@@ -5,8 +5,8 @@ import SafeHtmlBlock from "../../../apps/console/components/SafeHtmlBlock.vue";
 
 const mounted: VueWrapper[] = [];
 
-function mountBlock(props: Record<string, unknown>) {
-  const wrapper = mount(SafeHtmlBlock, {
+function mountBlock(props: Record<string, unknown>) : any {
+  const wrapper: any = mount(SafeHtmlBlock, {
     attachTo: document.body,
     attrs: {
       class: "safe-html-test",
@@ -22,16 +22,16 @@ function mountBlock(props: Record<string, unknown>) {
   return wrapper;
 }
 
-afterEach(() => {
+afterEach(() : any => {
   while (mounted.length) {
     mounted.pop()?.unmount();
   }
   document.body.innerHTML = "";
 });
 
-describe("SafeHtmlBlock", () => {
-  it("uses markdown sanitizer, custom tags and forwarded attrs", () => {
-    const wrapper = mountBlock({
+describe("SafeHtmlBlock", () : any => {
+  it("uses markdown sanitizer, custom tags and forwarded attrs", () : any => {
+    const wrapper: any = mountBlock({
       tag: "article",
       source: "markdownToSafeHtml",
       html: `
@@ -50,7 +50,7 @@ describe("SafeHtmlBlock", () => {
     expect(wrapper.find("script").exists()).toBe(false);
     expect(wrapper.find("iframe").exists()).toBe(false);
 
-    const links = wrapper.findAll("a");
+    const links: any = wrapper.findAll("a");
     expect(links).toHaveLength(2);
     expect(links[0].attributes("href")).toBeUndefined();
     expect(links[0].attributes("onclick")).toBeUndefined();
@@ -58,7 +58,7 @@ describe("SafeHtmlBlock", () => {
     expect(links[1].attributes("target")).toBe("_blank");
     expect(links[1].attributes("rel")).toBe("noreferrer noopener");
 
-    const images = wrapper.findAll("img");
+    const images: any = wrapper.findAll("img");
     expect(images).toHaveLength(2);
     expect(images[0].attributes("src")).toBeUndefined();
     expect(images[0].attributes("onerror")).toBeUndefined();
@@ -66,8 +66,8 @@ describe("SafeHtmlBlock", () => {
     expect(images[1].attributes("loading")).toBe("lazy");
   });
 
-  it("sanitizes evidence html while allowing normalized iframe, links and images", () => {
-    const wrapper = mountBlock({
+  it("sanitizes evidence html while allowing normalized iframe, links and images", () : any => {
+    const wrapper: any = mountBlock({
       source: "renderEvidenceReadableHtml",
       html: `
         <section onclick="bad()">
@@ -89,19 +89,19 @@ describe("SafeHtmlBlock", () => {
       `,
     });
 
-    const section = wrapper.find("section");
+    const section: any = wrapper.find("section");
     expect(section.exists()).toBe(true);
     expect(section.attributes("onclick")).toBeUndefined();
     expect(wrapper.text()).not.toContain("removed");
 
-    const links = wrapper.findAll("a");
+    const links: any = wrapper.findAll("a");
     expect(links[0].attributes("href")).toBe("https://example.test/doc");
     expect(links[0].attributes("style")).toBeUndefined();
     expect(links[0].attributes("target")).toBe("_blank");
     expect(links[0].attributes("rel")).toBe("noreferrer noopener");
     expect(links[1].attributes("href")).toBeUndefined();
 
-    const images = wrapper.findAll("img");
+    const images: any = wrapper.findAll("img");
     expect(images[0].attributes("src")).toBe("/asset.png");
     expect(images[0].attributes("width")).toBe("120");
     expect(images[0].attributes("height")).toBeUndefined();
@@ -109,7 +109,7 @@ describe("SafeHtmlBlock", () => {
     expect(images[0].attributes("loading")).toBe("lazy");
     expect(images[1].attributes("src")).toBeUndefined();
 
-    const iframe = wrapper.get("iframe");
+    const iframe: any = wrapper.get("iframe");
     expect(iframe.attributes("src")).toBeUndefined();
     expect(iframe.attributes("srcdoc")).toContain("Frame");
     expect(iframe.attributes("referrerpolicy")).toBe("no-referrer");
@@ -118,8 +118,8 @@ describe("SafeHtmlBlock", () => {
     expect(iframe.attributes("height")).toBe("240");
   });
 
-  it("reacts when html or sanitizer source props change", async () => {
-    const wrapper = mountBlock({
+  it("reacts when html or sanitizer source props change", async () : Promise<any> => {
+    const wrapper: any = mountBlock({
       source: "renderEvidenceReadableHtml",
       html: "<iframe class=\"rendered-email-frame\" srcdoc=\"<p>Frame</p>\"></iframe>",
     });

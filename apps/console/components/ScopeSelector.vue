@@ -25,7 +25,7 @@ const groups = computed(() => {
   // Sort keys alphabetically
   return Object.keys(result)
     .sort()
-    .reduce((obj, key) => {
+    .reduce((obj: any, key: any) => {
       obj[key] = result[key];
       return obj;
     }, {} as Record<string, OperationPermissionScope[]>);
@@ -45,18 +45,18 @@ const categoryLabels: Record<string, string> = {
 const getCategoryLabel = (key: string) => categoryLabels[key] || key.charAt(0).toUpperCase() + key.slice(1);
 
 const isCategoryAllSelected = (categoryScopes: OperationPermissionScope[]) => {
-  return categoryScopes.every(scope => props.modelValue.includes(scope.id));
+  return categoryScopes.every((scope: any) => props.modelValue.includes(scope.id));
 };
 
 const toggleCategory = (categoryScopes: OperationPermissionScope[]) => {
   if (props.disabled) return;
   const allSelected = isCategoryAllSelected(categoryScopes);
-  const ids = categoryScopes.map(s => s.id);
+  const ids = categoryScopes.map((s: any) => s.id);
 
   let newValue = [...props.modelValue];
   if (allSelected) {
     // Remove all
-    newValue = newValue.filter(id => !ids.includes(id));
+    newValue = newValue.filter((id: any) => !ids.includes(id));
   } else {
     // Add all missing
     for (const id of ids) {
@@ -72,7 +72,7 @@ const toggleScope = (scopeId: string) => {
   if (props.disabled) return;
   let newValue = [...props.modelValue];
   if (newValue.includes(scopeId)) {
-    newValue = newValue.filter(id => id !== scopeId);
+    newValue = newValue.filter((id: any) => id !== scopeId);
   } else {
     newValue.push(scopeId);
   }

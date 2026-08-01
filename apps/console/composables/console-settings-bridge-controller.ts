@@ -24,40 +24,40 @@ type SettingsPersistenceActions = {
   saveSettings: () => Promise<unknown>;
 };
 
-export function createConsoleSettingsBridgeController() {
-  let applyingRemoteConsoleDrafts = false;
+export function createConsoleSettingsBridgeController() : any {
+  let applyingRemoteConsoleDrafts: any = false;
   let settingsDraftActions: SettingsDraftActions | null = null;
   let settingsPersistenceActions: SettingsPersistenceActions | null = null;
 
-  function bindSettingsDraftActions(actions: SettingsDraftActions) {
+  function bindSettingsDraftActions(actions: SettingsDraftActions) : any {
     settingsDraftActions = actions;
     return actions;
   }
 
-  function bindSettingsPersistenceActions(actions: SettingsPersistenceActions) {
+  function bindSettingsPersistenceActions(actions: SettingsPersistenceActions) : any {
     settingsPersistenceActions = actions;
     return actions;
   }
 
-  function settingsDraftController() {
+  function settingsDraftController() : any {
     if (!settingsDraftActions) {
       throw new Error("Settings draft controller has not been initialized.");
     }
     return settingsDraftActions;
   }
 
-  function settingsPersistenceController() {
+  function settingsPersistenceController() : any {
     if (!settingsPersistenceActions) {
       throw new Error("Settings persistence controller has not been initialized.");
     }
     return settingsPersistenceActions;
   }
 
-  function isApplyingRemoteConsoleDrafts() {
+  function isApplyingRemoteConsoleDrafts() : any {
     return applyingRemoteConsoleDrafts;
   }
 
-  function applyRemoteConsoleDraftUpdate(update: () => void) {
+  function applyRemoteConsoleDraftUpdate(update: () => void) : any {
     applyingRemoteConsoleDrafts = true;
     try {
       update();
@@ -66,72 +66,72 @@ export function createConsoleSettingsBridgeController() {
     }
   }
 
-  function normalizeModelLibraryAgents(settings: AgentSettings) {
+  function normalizeModelLibraryAgents(settings: AgentSettings) : any {
     return settingsDraftController().normalizeModelLibraryAgents(settings);
   }
 
-  function moduleAgentProfilesPayload() {
+  function moduleAgentProfilesPayload() : any {
     return settingsDraftController().moduleAgentProfilesPayload();
   }
 
-  function normalizeRemoteSettings(settings: AgentSettings) {
+  function normalizeRemoteSettings(settings: AgentSettings) : any {
     return settingsDraftController().normalizeRemoteSettings(settings);
   }
 
-  function settingsPayloadForSave() {
+  function settingsPayloadForSave() : any {
     return settingsDraftController().settingsPayloadForSave();
   }
 
-  function normalizedSettingsFromServer(settings: AgentSettings) {
+  function normalizedSettingsFromServer(settings: AgentSettings) : any {
     return settingsDraftController().normalizedSettingsFromServer(settings);
   }
 
-  function remoteDraftEquals(left: unknown, right: unknown) {
+  function remoteDraftEquals(left: unknown, right: unknown) : any {
     return settingsDraftController().remoteDraftEquals(left, right);
   }
 
-  function settingsDraftEquals(left: AgentSettings, right: AgentSettings) {
+  function settingsDraftEquals(left: AgentSettings, right: AgentSettings) : any {
     return settingsDraftController().settingsDraftEquals(left, right);
   }
 
   function replaceSettingsDraftFromServer(
     settings: AgentSettings,
     options: { markClean?: boolean } = {},
-  ) {
+  ) : any {
     settingsDraftController().replaceSettingsDraftFromServer(settings, options);
   }
 
-  async function saveModuleSettings() {
+  async function saveModuleSettings() : Promise<any> {
     return settingsPersistenceController().saveModuleSettings();
   }
 
-  async function saveMountModules(busy = "mounts") {
+  async function saveMountModules(busy: any = "mounts") : Promise<any> {
     return settingsPersistenceController().saveMountModules(busy);
   }
 
-  async function reloadModules() {
+  async function reloadModules() : Promise<any> {
     return settingsPersistenceController().reloadModules();
   }
 
-  async function enableMountModule(name: string) {
+  async function enableMountModule(name: string) : Promise<any> {
     return settingsPersistenceController().enableMountModule(name);
   }
 
-  async function disableMountModule(name: string) {
+  async function disableMountModule(name: string) : Promise<any> {
     return settingsPersistenceController().disableMountModule(name);
   }
 
-  async function saveSettings() {
+  async function saveSettings() : Promise<any> {
     return settingsPersistenceController().saveSettings();
   }
 
-  async function saveModelLibrarySettings() {
+  async function saveModelLibrarySettings() : Promise<any> {
     return settingsPersistenceController().saveModelLibrarySettings();
   }
 
   return {
     applyRemoteConsoleDraftUpdate,
-    get applyingRemoteConsoleDrafts() {
+    get applyingRemoteConsoleDrafts() : any {
       return applyingRemoteConsoleDrafts;
     },
     bindSettingsDraftActions,

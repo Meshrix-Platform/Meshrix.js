@@ -50,7 +50,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete console-administration",
-      "target": "apps/console/router/admin-route-registry.mjs, apps/console/router/index.ts, apps/console/router/route-access-policy.mjs, apps/console/components/shell/ConsoleSideNav.vue, packages/foundation/config/frontend-feature-registry.yaml, tools/server-scripts/verify-console-administration-coverage.mjs"
+      "target": "apps/console/router/admin-route-registry.ts, apps/console/router/index.ts, apps/console/router/route-access-policy.ts, apps/console/components/shell/ConsoleSideNav.vue, packages/foundation/config/frontend-feature-registry.yaml, tools/server-scripts/verify-console-administration-coverage.ts"
     },
     "next": [
       "eb729631-1fea-4cfb-b751-f09679748d77"

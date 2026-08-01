@@ -28,7 +28,7 @@ export type AgentModelEntryCardContext = Pick<
   | "toggleModelLibraryCard"
 >;
 
-const agentModelEntryCardKey = Symbol("agent-model-entry-card") as InjectionKey<AgentModelEntryCardContext>;
+const agentModelEntryCardKey: any = Symbol("agent-model-entry-card") as InjectionKey<AgentModelEntryCardContext>;
 
 export function createAgentModelEntryCardContext(
   shell: ServerConsoleShellContext,
@@ -60,12 +60,12 @@ export function createAgentModelEntryCardContext(
   };
 }
 
-export function provideAgentModelEntryCardContext(context: AgentModelEntryCardContext) {
+export function provideAgentModelEntryCardContext(context: AgentModelEntryCardContext) : any {
   provide(agentModelEntryCardKey, context);
 }
 
-export function useAgentModelEntryCardContext() {
-  const context = inject(agentModelEntryCardKey);
+export function useAgentModelEntryCardContext() : any {
+  const context: any = inject(agentModelEntryCardKey);
   if (!context) {
     throw new Error("Agent model entry card context is not available");
   }

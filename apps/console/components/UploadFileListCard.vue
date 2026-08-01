@@ -62,7 +62,7 @@ function t(value: string) {
 
 const isBusy = computed(() => props.busyKey === "upload:ingest");
 const isDownloadMode = computed(() => props.mode === "download");
-const progressStepLabels = computed(() => uploadProgressStepLabels.map((label) => t(label)));
+const progressStepLabels = computed(() => uploadProgressStepLabels.map((label: any) => t(label)));
 
 const fileEntries = computed<UploadFileEntry[]>(() =>
   buildUploadFileEntries({
