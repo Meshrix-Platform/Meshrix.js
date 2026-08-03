@@ -4,17 +4,14 @@ import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapte
 import { writeDeviceDiscovery } from "./device-config.ts";
 import { ensureService, verifyMcpTools } from "./discovery.ts";
 import {
-  assertProcessIdentityInstallLocation,
+  assertSupportedInstallLocation,
   chooseAutoUpdate,
   chooseInstallCandidates,
-  finalizeRevokedLocalMcpCredential,
-  notifyLocalMcpUninstall,
-  requestLocalMcpGrant,
   resolveHubForInstall,
   resolveInstallToken
 } from "./interactive.ts";
 import { discoveryRegistryPath } from "./device-discovery-registry.ts";
-import { redactSensitiveText, redactToken } from "./installer-output-safety.ts";
+import { redactSensitiveText } from "./installer-output-safety.ts";
 import { canUseInstallTui, installerOptions } from "./installer-options.ts";
 import { resolveClientAdapterForTarget, scanInstallTargets } from "./scan-candidates.ts";
 import {
@@ -24,77 +21,20 @@ import {
   shellCommandForScan
 } from "./guidance.ts";
 
-async function rollbackIssuedInstallGrant(options?: any, target?: any, tokenInfo?: any) : Promise<any> {
-  const grantId: any = String(tokenInfo?.grant?.id || "");
-  if (!tokenInfo?.issuedNow || !grantId) {
-    return null;
-  }
-  const notified: any = await notifyLocalMcpUninstall(options, {
-    targets: [target],
-    expectedGrantIds: { [target]: grantId }
-  });
-  const targetResult: any = notified.perTarget?.[target];
-  if (targetResult?.ok !== true) {
-    return {
-      ok: false,
-      serverGrantRevoked: false,
-      localCredentialRemoved: false,
-      credentialRetainedForRecovery: true,
-      error: targetResult?.error || "Newly issued MCP grant rollback was not confirmed."
-    };
-  }
-  const finalized: any = await finalizeRevokedLocalMcpCredential(target, grantId);
-  return {
-    ...finalized,
-    serverGrantRevoked: true
-  };
-}
-
 export async function installTargets({ options, targets, token, tokenInfo = null, optionOverrides = {} }: Record<string, any>) : Promise<any> {
   const mergedOptions: Record<string, any> = {
     ...options,
     ...optionOverrides
   };
-  assertProcessIdentityInstallLocation(mergedOptions, targets);
+  assertSupportedInstallLocation(mergedOptions, targets);
   const settings: any = installerOptions(mergedOptions);
   const verify: any = !mergedOptions["no-verify"];
 
-  try {
-    await ensureService(settings.baseUrl);
-  } catch (error: any) {
-    const rollbacks: any[] = [];
-    for (const target of targets) {
-      const targetInfo: any = tokenInfo?.grantsByTarget?.[target] || tokenInfo;
-      const rollback: any = await rollbackIssuedInstallGrant(mergedOptions, target, targetInfo).catch(() : any => ({
-        ok: false,
-        credentialRetainedForRecovery: true
-      }));
-      if (rollback) {
-        rollbacks.push(rollback);
-      }
-    }
-    const rollbackIncomplete: any = rollbacks.some((rollback?: any) : any => rollback.ok === false);
-    const suffix: any = rollbackIncomplete
-      ? " Newly issued authorization rollback was not fully confirmed; its credential was retained for recovery."
-      : "";
-    throw new Error(`${error?.message || String(error)}${suffix}`);
-  }
+  await ensureService(settings.baseUrl);
 
   const installed: Record<string, any> = {};
   for (const target of targets) {
-    let targetToken: any = token;
-    let targetTokenInfo: any = tokenInfo;
     try {
-      if (!targetToken && tokenInfo?.grantsByTarget?.[target]?.token) {
-        targetTokenInfo = tokenInfo.grantsByTarget[target];
-        targetToken = targetTokenInfo.token;
-      } else if (!targetToken && tokenInfo?.perTarget) {
-        targetTokenInfo = await requestLocalMcpGrant(mergedOptions, {
-          targets: [target],
-          autoUpdate: Boolean(mergedOptions.__meshrixAutoUpdate ?? tokenInfo.autoUpdate)
-        });
-        targetToken = targetTokenInfo.token;
-      }
       const client: any = await resolveClientAdapterForTarget(
         target,
         settings,
@@ -119,36 +59,20 @@ export async function installTargets({ options, targets, token, tokenInfo = null
         adapterPackage: adapterExecution.adapter.coordinate,
         adapterCacheHit: adapterExecution.cache.hit
       };
-      const httpVerification: any = verify ? await verifyMcpTools({ baseUrl: settings.baseUrl, token: targetToken, target }) : null;
+      const httpVerification: any = verify ? await verifyMcpTools({ baseUrl: settings.baseUrl, token, target }) : null;
       installed[target] = {
         ok: true,
         status: "installed",
-        tokenPrefix: targetTokenInfo?.tokenPrefix || redactToken(targetToken),
-        tokenSource: targetTokenInfo?.source || "provided",
+        tokenSource: tokenInfo?.source || "provided",
         ...(clientResult || {}),
         httpVerification
       };
     } catch (error: any) {
-      const authorizationRollback: any = await rollbackIssuedInstallGrant(
-        mergedOptions,
-        target,
-        targetTokenInfo
-      ).catch(() : any => ({
-        ok: false,
-        serverGrantRevoked: false,
-        localCredentialRemoved: false,
-        credentialRetainedForRecovery: true,
-        error: "Newly issued MCP grant rollback failed."
-      }));
-      const rollbackSuffix: any = authorizationRollback?.ok === false
-        ? " Newly issued authorization rollback was not fully confirmed; its credential was retained for recovery."
-        : "";
       installed[target] = {
         ok: false,
         status: "failed",
         installMode: targetInstallMode(target),
-        error: `${redactSensitiveText(error?.message || String(error), [targetToken || token])}${rollbackSuffix}`,
-        ...(authorizationRollback ? { authorizationRollback } : {})
+        error: redactSensitiveText(error?.message || String(error), [token])
       };
     }
   }
@@ -156,7 +80,6 @@ export async function installTargets({ options, targets, token, tokenInfo = null
   const discoveryManifest: any = await writeDeviceDiscovery({
     baseUrl: settings.baseUrl,
     installed,
-    token,
     tokenEnv: settings.tokenEnv,
     discoveryPath: discoveryRegistryPath(mergedOptions)
   });
@@ -167,9 +90,7 @@ export async function installTargets({ options, targets, token, tokenInfo = null
       status: value.status || (value.ok === false ? "failed" : "installed"),
       error: value.error || "",
       tokenSource: value.tokenSource || tokenInfo?.source || "provided",
-      tokenPrefix: value.tokenPrefix || tokenInfo?.tokenPrefix || redactToken(token),
       httpVerification: value.httpVerification || null,
-      ...(value.authorizationRollback ? { authorizationRollback: value.authorizationRollback } : {}),
       adapterPackage: value.adapterPackage || "",
       adapterCacheHit: value.adapterCacheHit === true
     };
@@ -191,14 +112,14 @@ export async function installTargets({ options, targets, token, tokenInfo = null
 
 function assertSelectedInstallLocations(options?: any, selected: any = []) : any {
   for (const candidate of selected) {
-    assertProcessIdentityInstallLocation({
+    assertSupportedInstallLocation({
       ...options,
       ...(candidate.optionOverrides || {})
     }, [candidate.target]);
   }
 }
 
-export async function installTuiCommand(options?: any) : Promise<any> {
+export async function installTuiCommand(options?: any, tokenInfo?: any) : Promise<any> {
   const settings: any = installerOptions(options);
   await ensureService(settings.baseUrl);
   const scan: any = await scanInstallTargets(options);
@@ -219,7 +140,6 @@ export async function installTuiCommand(options?: any) : Promise<any> {
   const selectedTargets: any[] = [...new Set<any>(selected.map((candidate?: any) : any => candidate.target))];
   const autoUpdate: any = await chooseAutoUpdate();
   options.__meshrixAutoUpdate = autoUpdate;
-  const tokenInfo: any = await resolveInstallToken(options, { targets: selectedTargets, autoUpdate });
   const hasPerCandidateOverrides: any = selected.some((candidate?: any) : any =>
     Object.keys(candidate.optionOverrides || {}).length > 0
   );
@@ -314,7 +234,7 @@ export function noDetectedClientGuidance(candidates: any = [], options: Record<s
   };
 }
 
-export async function installAutoDetectedCommand(resolvedOptions?: any) : Promise<any> {
+export async function installAutoDetectedCommand(resolvedOptions?: any, tokenInfo?: any) : Promise<any> {
   const scan: any = await scanInstallTargets(resolvedOptions);
   const selected: any = scan.candidates.filter((candidate?: any) : any => candidate.status === "detected");
   const candidates: any = scan.candidates.map(summarizeInstallCandidate);
@@ -334,7 +254,6 @@ export async function installAutoDetectedCommand(resolvedOptions?: any) : Promis
   const autoUpdate: any = Boolean(resolvedOptions["auto-update"]);
   resolvedOptions.__meshrixAutoUpdate = autoUpdate;
   const selectedTargets: any[] = [...new Set<any>(selected.map((candidate?: any) : any => candidate.target))];
-  const tokenInfo: any = await resolveInstallToken(resolvedOptions, { targets: selectedTargets, autoUpdate });
   const result: any = await installSelectedCandidates({ options: resolvedOptions, selected, tokenInfo });
   return {
     ...result,
@@ -344,6 +263,7 @@ export async function installAutoDetectedCommand(resolvedOptions?: any) : Promis
 }
 
 export async function installCommand(options?: any) : Promise<any> {
+  const tokenInfo: any = await resolveInstallToken(options);
   const initialTargetOpt: any = option(options, "target", "");
   const prevalidatedTargets: any = initialTargetOpt && !isAutoTargetRequest(initialTargetOpt)
     ? parseTargets(initialTargetOpt)
@@ -359,19 +279,18 @@ export async function installCommand(options?: any) : Promise<any> {
     };
   }
   if (canUseInstallTui(options)) {
-    return installTuiCommand(resolvedOptions);
+    return installTuiCommand(resolvedOptions, tokenInfo);
   }
   const targetOpt: any = option(resolvedOptions, "target", "");
   if (!targetOpt) {
-    return installAutoDetectedCommand(resolvedOptions);
+    return installAutoDetectedCommand(resolvedOptions, tokenInfo);
   }
   if (isAutoTargetRequest(targetOpt)) {
-    return installAutoDetectedCommand(resolvedOptions);
+    return installAutoDetectedCommand(resolvedOptions, tokenInfo);
   }
   const targets: any = prevalidatedTargets || parseTargets(targetOpt);
   const autoUpdate: any = Boolean(resolvedOptions["auto-update"]);
   resolvedOptions.__meshrixAutoUpdate = autoUpdate;
-  const tokenInfo: any = await resolveInstallToken(resolvedOptions, { targets, autoUpdate });
   return installTargets({
     options: resolvedOptions,
     targets,

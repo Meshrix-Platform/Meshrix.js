@@ -44,7 +44,7 @@ export function useAgentAssignmentView() : any {
     gatewayAssistantAgentOptions,
     gatewayAssistantForm,
     agentSelectorOptions,
-    busyKey,
+    isBusy,
     error,
     highlightedConfigTarget,
     intelligentModuleDefinitions,
@@ -73,18 +73,18 @@ export function useAgentAssignmentView() : any {
   const activeProbeScope: any = ref<"" | "capability" | "module">("");
   const capabilityProbeFailures: any = ref<AssignmentProbeFailure[]>([]);
   const moduleProbeFailures: any = ref<AssignmentProbeFailure[]>([]);
-  const agentAssignmentSaving: any = computed(() : any => busyKey.value === "settings" || Boolean(activeProbeScope.value));
+  const agentAssignmentSaving: any = computed(() : any => isBusy("settings") || Boolean(activeProbeScope.value));
   const capabilitySaveButtonText: any = computed(() : any => {
     if (activeProbeScope.value === "capability") {
       return "检测中";
     }
-    return busyKey.value === "settings" ? "保存中" : "保存";
+    return isBusy("settings") ? "保存中" : "保存";
   });
   const moduleSaveButtonText: any = computed(() : any => {
     if (activeProbeScope.value === "module") {
       return "检测中";
     }
-    return busyKey.value === "settings" ? "保存中" : "保存";
+    return isBusy("settings") ? "保存中" : "保存";
   });
 
   const routeConfigTarget: any = computed(() : any => {
@@ -461,7 +461,7 @@ export function useAgentAssignmentView() : any {
     targets: AssignmentProbeTarget[],
     failureRef: typeof capabilityProbeFailures,
   ) : Promise<any> {
-    if (activeProbeScope.value || busyKey.value === "settings") {
+    if (activeProbeScope.value || isBusy("settings")) {
       return;
     }
     activeProbeScope.value = scope;

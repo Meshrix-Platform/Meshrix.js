@@ -13,6 +13,11 @@ import {
 } from "../lib/tag-management-client";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import { confirmConsoleAction } from "./console-browser-effects";
+import {
+  tagManagementRoleScopeTagId,
+  tagManagementTagName,
+  tagManagementTreeParentId,
+} from "../i18n/tag-management";
 
 type TagEditor = {
   tagId: string;
@@ -32,17 +37,22 @@ export type TagManagementTreeRow = {
 
 export const tagManagementKindOptions: any[] = [
   { value: "", label: "全部类型" },
-  { value: "role", label: "role" },
-  { value: "group", label: "group" },
-  { value: "organization", label: "organization" },
-  { value: "character", label: "character" },
-  { value: "custom", label: "custom" },
+  { value: "role", label: "角色" },
+  { value: "group", label: "分组" },
+  { value: "organization", label: "组织" },
+  { value: "character", label: "特征" },
+  { value: "custom", label: "自定义" },
 ];
 
 export const tagManagementStatusOptions: any[] = [
   { value: "", label: "全部状态" },
-  { value: "active", label: "active" },
-  { value: "archived", label: "archived" },
+  { value: "active", label: "启用" },
+  { value: "archived", label: "归档" },
+];
+
+export const tagManagementArchiveOptions: any[] = [
+  { value: false, label: "仅显示当前标签" },
+  { value: true, label: "包含归档标签" },
 ];
 
 function emptyEditor(): TagEditor {
@@ -82,22 +92,40 @@ function editorFromTag(tag: TagManagementTag): TagEditor {
   };
 }
 
-function sortTags(tags: TagManagementTag[]) : any {
+const rootTagOrder: Readonly<Record<string, number>> = Object.freeze({
+  "role:owner": 0,
+  "role:maintainer": 10,
+  "role:viewer": 20,
+  "organization:group": 100,
+});
+
+function sortTags(tags: TagManagementTag[], parentId = "") : any {
   return [...tags].sort((a?: any, b?: any) : any =>
+    (parentId === "" ? (rootTagOrder[a.tagId] ?? 100) - (rootTagOrder[b.tagId] ?? 100) : 0) ||
     `${a.kind}:${a.label}:${a.tagId}`.localeCompare(`${b.kind}:${b.label}:${b.tagId}`),
   );
 }
 
-function buildTreeRows(tags: TagManagementTag[]): TagManagementTreeRow[] {
+export function buildTreeRows(tags: TagManagementTag[]): TagManagementTreeRow[] {
   const rows: TagManagementTreeRow[] = [];
-  const tagIds: any = new Set<any>(tags.map((tag?: any) : any => tag.tagId));
+  const tagsById: any = new Map<string, TagManagementTag>(
+    tags.map((tag?: any) : any => [tag.tagId, tag]),
+  );
   const childrenByParent: any = new Map<string, TagManagementTag[]>();
+  const scopedRolesByTagId: any = new Map<string, TagManagementTag[]>();
   for (const tag of tags) {
-    const parentId: any = tag.parentTagId && tagIds.has(tag.parentTagId) ? tag.parentTagId : "";
+    const parentId: any = tagManagementTreeParentId(tag, tagsById);
     childrenByParent.set(parentId, [...(childrenByParent.get(parentId) || []), tag]);
+    const scopeTagId: any = tagManagementRoleScopeTagId(tag.tagId);
+    if (scopeTagId && tagsById.has(scopeTagId)) {
+      scopedRolesByTagId.set(scopeTagId, [...(scopedRolesByTagId.get(scopeTagId) || []), tag]);
+    }
   }
   for (const [parentId, children] of childrenByParent.entries()) {
-    childrenByParent.set(parentId, sortTags(children));
+    childrenByParent.set(parentId, sortTags(children, parentId));
+  }
+  for (const [scopeTagId, roles] of scopedRolesByTagId.entries()) {
+    scopedRolesByTagId.set(scopeTagId, sortTags(roles, scopeTagId));
   }
 
   const visited: any = new Set<string>();
@@ -105,6 +133,9 @@ function buildTreeRows(tags: TagManagementTag[]): TagManagementTreeRow[] {
     if (visited.has(tag.tagId)) return;
     visited.add(tag.tagId);
     rows.push({ tag, depth });
+    for (const scopedRole of scopedRolesByTagId.get(tag.tagId) || []) {
+      visit(scopedRole, depth);
+    }
     for (const child of childrenByParent.get(tag.tagId) || []) {
       visit(child, depth + 1);
     }
@@ -158,7 +189,10 @@ export function useTagManagementConsole() : any {
   const parentTagOptions: any = computed(() : any =>
     tags.value
       .filter((tag?: any) : any => tag.tagId !== editor.value.tagId && tag.status !== "archived")
-      .map((tag?: any) : any => ({ value: tag.tagId, label: `${tag.label} (${tag.tagId})` })),
+      .map((tag?: any) : any => ({
+        value: tag.tagId,
+        label: `${tagManagementTagName(tag.tagId, tag.label)} (${tag.tagId})`,
+      })),
   );
   const selectedProjectionPayload: any = computed(() : any => formatJson(selectedProjection.value?.payload || {}));
   const selectedTagMetadata: any = computed(() : any => formatJson(selectedTag.value?.metadata || {}));

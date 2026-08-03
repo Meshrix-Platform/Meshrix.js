@@ -14,7 +14,7 @@ import { createSignedMcpHeaders, createVerifierMcpProcessIdentity } from "./mcp-
 import { createUpstreamGatewayFixture, createUpstreamGatewayE2eServices, gatewayOperationNames, runConcurrentTrafficSlotWorkflow, structuredPayload } from "./lib/upstream-gateway-e2e-helpers.ts";
 import { loadVerifierPublishedServices, seedVerifierUpstreamServices, verifierOpaqueServiceId, writeVerifierLocalUpstreamSecret } from "./lib/upstream-gateway-verifier-publication.ts";
 import { createRawMcpCaller, runAggregateTrafficPolicyWorkflow, runEndpointPoolWorkflow, runProjectedToolWorkflows, runUrlAuthorityEscapeWorkflow } from "./lib/upstream-gateway-projected-tools-workflows.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
 
 const REPORT_PATH: any = "build/reports/upstream-gateway-e2e.json";
@@ -210,7 +210,7 @@ async function consoleOperation(operationId?: any, input: Record<string, any> = 
       upstreamGatewayRegistry: consoleUpstreamGatewayRegistry,
       subject: {
         subjectId: "verifier-console-subject",
-        roleId: "admin",
+        roleId: "maintainer",
         scopes: ["gateway:read", "gateway:write", "gateway:maintain", "gateway:admin"]
       }
     }
@@ -232,10 +232,9 @@ async function createGrant(label?: any, toolsets?: any, extra: Record<string, an
   const allowedSecretBindings: any = Object.hasOwn(extra, "allowedSecretBindings")
     ? extra.allowedSecretBindings
     : descriptors.flatMap((descriptor?: any) : any => descriptor.credentialBindingIds || []);
-  const identity: any = createVerifierMcpProcessIdentity({ target: "codex", label });
-  const response: any = await issueVerifierLocalMcpGrant({
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    grantRequest: {
+    access: {
       targets: ["codex"],
       label,
       connectorVersion: "verify-upstream-gateway-e2e",
@@ -244,24 +243,15 @@ async function createGrant(label?: any, toolsets?: any, extra: Record<string, an
       dynamicCapabilities,
       allowedServiceIds,
       allowedSecretBindings,
-      ...extra,
-      processIdentity: identity.request
+      ...extra
     }
   });
-  assert.equal(response.status, 201, JSON.stringify(response.payload, null, 2));
-  assert.ok(response.payload.token);
-  assert.ok(response.payload.processIdentity?.clientIdentityPackage);
-  dynamicSecretNeedles.add(String(response.payload.token));
-  mcpIdentityByToken.set(response.payload.token, {
-    identity,
-    clientIdentityPackage: response.payload.processIdentity.clientIdentityPackage
-  });
-  return response.payload.token;
+  assert.ok(response.apiKey);
+  dynamicSecretNeedles.add(response.apiKey);
+  return response.apiKey;
 }
 
 async function callMcp(token?: any, toolName?: any, operation?: any, input: Record<string, any> = {}, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
-  const binding: any = mcpIdentityByToken.get(token);
-  assert.ok(binding, "MCP token must have a verifier process identity binding");
   const body: any = JSON.stringify(mcpRequest("tools/call", {
     name: toolName,
     arguments: {
@@ -273,14 +263,7 @@ async function callMcp(token?: any, toolName?: any, operation?: any, input: Reco
   }, id));
   const response: any = await fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: createSignedMcpHeaders({
-      token,
-      body,
-      nonce: `verify-upstream-gateway-${id}`,
-      url: new URL("/mcp", server.url),
-      privateKeyPem: binding.identity.keyPair.privateKeyPem,
-      clientIdentityPackage: binding.clientIdentityPackage
-    }),
+    headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "codex" },
     body
   });
   assert.equal(expectedStatuses.includes(response.status), true, `Unexpected MCP HTTP status ${response.status}: ${JSON.stringify(response.payload, null, 2)}`);

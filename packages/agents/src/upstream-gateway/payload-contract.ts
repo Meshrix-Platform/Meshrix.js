@@ -6,6 +6,7 @@ import {
 } from "@meshrix/contracts/upstream-service-publishing";
 
 const MAX_PAYLOAD_BYTES: any = 2 * 1024 * 1024 * 1024;
+const DEFAULT_RESPONSE_MAX_BYTES: any = 8 * 1024 * 1024;
 const MEDIA_TYPE: any = /^[A-Za-z0-9!#$&^_.+-]+\/(?:\*|[A-Za-z0-9!#$&^_.+-]+)$/u;
 const SAFE_MAPPING_NAME: any = /^[A-Za-z][A-Za-z0-9_.-]{0,127}$/u;
 
@@ -63,12 +64,12 @@ function positiveBytes(value?: any, label?: any, ceiling: any = MAX_PAYLOAD_BYTE
   return number;
 }
 
-function uniqueMediaTypes(value?: any, label?: any) : any {
+function uniqueMediaTypes(value?: any, label?: any, { allowWildcard = false }: Record<string, any> = {}) : any {
   if (!Array.isArray(value) || value.length === 0) {
     throw payloadError("payload_representation_invalid", `${label} must contain at least one media type.`);
   }
   const normalized: any[] = [...new Set<any>(value.map((entry?: any) : any => String(entry || "").trim().toLowerCase()))];
-  if (normalized.some((entry?: any) : any => !MEDIA_TYPE.test(entry))) {
+  if (normalized.some((entry?: any) : any => !(allowWildcard && entry === "*/*") && !MEDIA_TYPE.test(entry))) {
     throw payloadError("payload_representation_invalid", `${label} contains an invalid media type.`);
   }
   return Object.freeze(normalized);
@@ -132,7 +133,13 @@ function compileMultipartMapping(value?: any) : any {
 export function compilePayloadTransport(operation: Record<string, any> = {}) : any {
   const source: any = plainObject(operation.payloadTransport);
   const request: any = plainObject(source.request);
-  const response: any = plainObject(source.response);
+  const response: any = source.response === undefined
+    ? {
+        mode: "opaque_stream",
+        maxBytes: DEFAULT_RESPONSE_MAX_BYTES,
+        mediaTypes: ["*/*"]
+      }
+    : plainObject(source.response);
   if (!isUpstreamRequestRepresentationMode(request.mode)) {
     throw payloadError("payload_representation_invalid", "Operation request representation mode is required.");
   }
@@ -156,7 +163,7 @@ export function compilePayloadTransport(operation: Record<string, any> = {}) : a
   const compiledResponse: Record<string, any> = {
     mode: response.mode,
     maxBytes: positiveBytes(response.maxBytes, "payloadTransport.response.maxBytes"),
-    mediaTypes: uniqueMediaTypes(response.mediaTypes, "payloadTransport.response.mediaTypes"),
+    mediaTypes: uniqueMediaTypes(response.mediaTypes, "payloadTransport.response.mediaTypes", { allowWildcard: true }),
     allowRanges: response.allowRanges === true
   };
   if (request.mode === "structured_json" && !compiledRequest.mediaTypes.includes("application/json")) {

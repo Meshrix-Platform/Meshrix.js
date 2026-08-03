@@ -12,7 +12,7 @@ type ReadonlyRef<T> = {
 };
 
 type ConsoleModelRepositoryControllerOptions = {
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   modelEntryBindingSummary: (entry: AgentModelConfig) => string;
   modelEntryIsBound: (entry: AgentModelConfig) => boolean;
@@ -106,7 +106,7 @@ export function createConsoleModelRepositoryController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "移除模型配置失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`model-remove:${removeKey}`);
     }
   }
 

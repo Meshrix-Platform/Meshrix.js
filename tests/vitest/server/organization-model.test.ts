@@ -4,143 +4,144 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  ORGANIZATION_MODEL_PROTOCOL_VERSION,
-  MESHRIX_ROOT_ORGANIZATION_ID,
-  MESHRIX_ROOT_ORGANIZATION_LABEL,
-  createOrganizationModelStore
+  ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS,
+  ORGANIZATION_TEMPLATE_SCHEMA_VERSION,
+  createOrganizationGovernanceService,
+  importOrganizationGovernanceTemplate,
+  normalizeOrganizationGovernanceDraft
 } from "../../../packages/foundation/src/security/authorization/organization-model.ts";
+import { createTagManagementStore } from "../../../packages/server-runtime/src/state/tag-management-store.ts";
 
-const tempRoots: any[] = [];
-
-async function tempRoot() : Promise<any> {
-  const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-org-model-"));
-  tempRoots.push(root);
-  return root;
+const roots: string[] = [];
+async function temporaryRoot(): Promise<string> {
+  const value: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-org-template-"));
+  roots.push(value);
+  return value;
 }
-
 afterEach(async () : Promise<any> => {
-  await Promise.all(tempRoots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
+  await Promise.all(roots.splice(0).map((root?: any) : any => fs.rm(root, { recursive: true, force: true })));
 });
 
-describe("organization model store behavior", () : any => {
-  it("seeds root, upserts organizations and users, moves nodes, and persists metadata", async () : Promise<any> => {
-    const rootPath: any = await tempRoot();
-    const store: any = createOrganizationModelStore({ rootPath });
-
-    expect(store.getNode(MESHRIX_ROOT_ORGANIZATION_ID)).toMatchObject({
-      protocolVersion: ORGANIZATION_MODEL_PROTOCOL_VERSION,
-      nodeId: MESHRIX_ROOT_ORGANIZATION_ID,
-      nodeType: "root",
-      label: MESHRIX_ROOT_ORGANIZATION_LABEL,
-      metadata: { authorizationBoundary: false }
-    });
-
-    const engineering: any = store.upsertOrganization({
-      organizationId: " engineering org ",
-      label: "Engineering",
-      metadata: { costCenter: "eng" }
-    });
-    expect(engineering).toMatchObject({
-      nodeId: "engineering-org",
-      nodeType: "organization",
-      parentId: MESHRIX_ROOT_ORGANIZATION_ID,
-      label: "Engineering",
-      metadata: { costCenter: "eng" }
-    });
-
-    const platform: any = store.upsertOrganization({
-      nodeId: "platform",
-      parentOrganizationId: "engineering-org",
-      name: "Platform"
-    });
-    const user: any = store.attachUser({
-      userId: " user 1 ",
-      organizationId: "platform",
-      displayName: "Alice",
-      username: "alice@example.test",
-      metadata: { role: "admin" }
-    });
-
-    expect(platform.parentId).toBe("engineering-org");
-    expect(user).toMatchObject({
-      nodeId: "user-1",
-      nodeType: "user",
-      parentId: "platform",
-      label: "Alice",
-      username: "alice@example.test",
-      metadata: { role: "admin" }
-    });
-    expect(store.listChildren("engineering-org").map((node?: any) : any => node.nodeId)).toEqual(["platform"]);
-    expect(store.pathForNode("user-1").map((node?: any) : any => node.nodeId)).toEqual([
-      MESHRIX_ROOT_ORGANIZATION_ID,
-      "engineering-org",
-      "platform",
-      "user-1"
+describe("organization governance TOML anti-corruption layer", () : any => {
+  it("loads the file-backed enterprise catalog and explicit restricted roles", async () : Promise<any> => {
+    const store: any = createTagManagementStore({ rootPath: await temporaryRoot() });
+    const service: any = createOrganizationGovernanceService({ tagManagementStore: store });
+    expect(service.listOrganizationGovernanceTemplates()).toEqual([
+      expect.objectContaining({ templateKey: "enterprise-group", nodeCount: 5, tagCount: 5, roleCount: 5 })
     ]);
-
-    const moved: any = store.moveNode("user-1", "engineering-org");
-    expect(moved.parentId).toBe("engineering-org");
-    expect(store.pathForNode("user-1").map((node?: any) : any => node.nodeId)).toEqual([
-      MESHRIX_ROOT_ORGANIZATION_ID,
-      "engineering-org",
-      "user-1"
+    const draft: any = service.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    expect(draft.schemaVersion).toBe(ORGANIZATION_TEMPLATE_SCHEMA_VERSION);
+    expect(draft.organizationDepth).toBe(2);
+    expect(draft.nodes.map((node?: any) : any => node.nodeType)).toEqual([
+      "group", "organization", "organization", "department", "team"
     ]);
-
-    const updated: any = store.attachUser({
-      id: "user-1",
-      orgId: "engineering-org",
-      username: "alice2@example.test",
-      metadata: "bad-metadata"
-    });
-    expect(updated).toMatchObject({
-      label: "alice2@example.test",
-      username: "alice2@example.test",
-      metadata: {}
-    });
-    expect(updated.createdAt).toBe(user.createdAt);
-
-    expect(store.describeModel()).toMatchObject({
-      protocolVersion: ORGANIZATION_MODEL_PROTOCOL_VERSION,
-      nodeCount: 4,
-      organizationCount: 2,
-      userCount: 1,
-      authorizationBoundary: false,
-      capabilityKernelBoundary: "excluded"
-    });
+    expect(draft.roles.every((role?: any) : any =>
+      JSON.stringify(role.managementActions) === JSON.stringify(ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS) &&
+      role.businessResourceActions.length === 0 && role.assignedSubjectIds.length === 0)).toBe(true);
+    expect(draft.roles.map((role?: any) : any => [role.scopeNodeId, role.managementActions])).toEqual([
+      ["organization:group", [...ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS]],
+      ["organization:primary", [...ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS]],
+      ["organization:secondary", [...ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS]],
+      ["group:department", [...ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS]],
+      ["group:team", [...ORGANIZATION_GOVERNANCE_MANAGEMENT_ACTIONS]],
+    ]);
     store.close();
-
-    const reopened: any = createOrganizationModelStore({ rootPath });
-    expect(reopened.getNode("user-1")).toMatchObject({
-      username: "alice2@example.test",
-      parentId: "engineering-org"
-    });
-    reopened.close();
   });
 
-  it("rejects invalid node types, reserved root mutations, unknown parents, user children, and cycles", async () : Promise<any> => {
-    const rootPath: any = await tempRoot();
-    const store: any = createOrganizationModelStore({ rootPath });
+  it("imports one local TOML and derives graph depth without client authority", () : any => {
+    const draft: any = importOrganizationGovernanceTemplate(`
+schema_version = "v0.0.1:authorization:organization-template-1"
+[template]
+key = "local-example"
+name = "Local example"
+description = "Explicit local draft"
+[[nodes]]
+id = "organization:group"
+type = "group"
+parent = ""
+name = "Group"
+[[nodes]]
+id = "group:department"
+type = "department"
+parent = "organization:group"
+name = "Department"
+[[tags]]
+id = "organization:group"
+kind = "organization"
+label = "Group"
+parent = ""
+description = "Group scope"
+scope_prerequisites = []
+[[roles]]
+id = "organization-administrator:group"
+name = "Group administrator"
+scope_node_id = "organization:group"
+management_actions = ["organization.structure.read"]
+`, "local.toml");
+    expect(draft).toMatchObject({ templateKey: "local-example", organizationDepth: 0 });
+  });
 
-    expect(() : any => store.upsertOrganization({ organizationId: MESHRIX_ROOT_ORGANIZATION_ID }))
-      .toThrow("Meshrix Root id is reserved");
-    expect(() : any => store.moveNode(MESHRIX_ROOT_ORGANIZATION_ID, MESHRIX_ROOT_ORGANIZATION_ID))
-      .toThrow("Meshrix Root cannot be moved");
-    expect(() : any => store.moveNode("missing", MESHRIX_ROOT_ORGANIZATION_ID))
-      .toThrow("Unknown organization node");
-    expect(() : any => store.upsertOrganization({ nodeId: "child", parentId: "missing" }))
-      .toThrow("Unknown organization parent");
+  it.each([
+    ["unknown authority", { businessResourceActions: ["business:*"] }],
+    ["subject assignment", { assignedSubjectIds: ["subject"] }],
+    ["unsupported action", { managementActions: ["business.read"] }]
+  ])("rejects %s", (_label?: any, rolePatch?: any) : any => {
+    expect(() : any => normalizeOrganizationGovernanceDraft({
+      schemaVersion: ORGANIZATION_TEMPLATE_SCHEMA_VERSION,
+      templateKey: "invalid",
+      templateName: "Invalid",
+      description: "Invalid fixture",
+      organizationDepth: 0,
+      nodes: [{ nodeId: "group", nodeType: "group", parentId: "", name: "Group" }],
+      tags: [],
+      roles: [{
+        roleId: "organization-administrator:group",
+        name: "Administrator",
+        scopeNodeId: "group",
+        scopeNodeType: "group",
+        managementActions: ["organization.structure.read"],
+        businessResourceActions: [],
+        assignedSubjectIds: [],
+        ...rolePatch
+      }]
+    })).toThrowError(expect.objectContaining({ code: "organization_governance_invalid" }));
+  });
+});
 
-    const org: any = store.upsertOrganization({ id: "org-a", label: "Org A" });
-    const child: any = store.upsertOrganization({ id: "org-b", parentId: org.nodeId, label: "Org B" });
-    const user: any = store.attachUser({ id: "user-a", parentId: child.nodeId, username: "user-a" });
+describe("organization governance canonical tag-store aggregate", () : any => {
+  it("starts empty and atomically publishes one revision-bound aggregate", async () : Promise<any> => {
+    const store: any = createTagManagementStore({ rootPath: await temporaryRoot() });
+    const service: any = createOrganizationGovernanceService({ tagManagementStore: store });
+    const empty: any = service.getOrganizationGovernance();
+    expect(empty).toMatchObject({ configured: false, revision: 0, nodes: [], tags: [], roles: [] });
+    const draft: any = service.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    expect(service.previewOrganizationGovernance(draft)).toEqual(draft);
+    expect(service.getOrganizationGovernance()).toEqual(empty);
+    const published: any = service.publishOrganizationGovernance({ ...draft, expectedRevision: 0 });
+    expect(published).toMatchObject({ configured: true, revision: 1, templateKey: "enterprise-group" });
+    expect(store.listTags({ includeArchived: false }).map((tag?: any) : any => tag.tagId))
+      .toEqual(expect.arrayContaining([...draft.tags.map((tag?: any) : any => tag.tagId), ...draft.roles.map((role?: any) : any => `role:${role.roleId}`)]));
+    expect(store.listAuthorizationRoles({ includeDisabled: false })
+      .filter((role?: any) : any => role.roleId.startsWith("organization-administrator:")))
+      .toHaveLength(5);
+    for (const role of draft.roles) {
+      const scopeTag: any = draft.tags.find((tag?: any) : any => tag.tagId === role.scopeNodeId);
+      expect(store.getTag(`role:${role.roleId}`)?.parentTagId).toBe(scopeTag.parentTagId);
+    }
+    expect(() : any => service.publishOrganizationGovernance({ ...draft, expectedRevision: 0 }))
+      .toThrowError(expect.objectContaining({ code: "organization_governance_revision_conflict", currentRevision: 1 }));
+    expect(service.getOrganizationGovernance()).toEqual(published);
+    store.close();
+  });
 
-    expect(() : any => store.upsertOrganization({ id: "bad-child", parentId: user.nodeId }))
-      .toThrow("Users cannot have child");
-    expect(() : any => store.moveNode(org.nodeId, child.nodeId)).toThrow("cycles");
-
-    expect(store.getNode("missing")).toBeNull();
-    expect(store.listChildren("missing")).toEqual([]);
-    expect(store.pathForNode("missing")).toEqual([]);
+  it("rejects unmanaged tag and role collisions without mutating the aggregate", async () : Promise<any> => {
+    const store: any = createTagManagementStore({ rootPath: await temporaryRoot() });
+    const service: any = createOrganizationGovernanceService({ tagManagementStore: store });
+    const draft: any = service.importOrganizationGovernance({ templateKey: "enterprise-group" });
+    store.upsertTag({ tagId: draft.tags[0].tagId, kind: draft.tags[0].kind, label: "User managed" });
+    expect(() : any => service.publishOrganizationGovernance({ ...draft, expectedRevision: 0 }))
+      .toThrowError(expect.objectContaining({ code: "organization_governance_collision" }));
+    expect(service.getOrganizationGovernance()).toMatchObject({ configured: false, revision: 0 });
     store.close();
   });
 });

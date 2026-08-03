@@ -115,16 +115,32 @@ function renderUpstreamServicePublishingHtml(
 }
 
 const VISUAL_EVIDENCE: readonly any[] = Object.freeze([
-  ["console-authenticated", "Authenticated Meshrix Console", "/admin/publish-upstream-service"],
+  ["console-authenticated", "Authenticated Meshrix Workbench", "/"],
+  ["console-organization-permissions", "Published organization and permission projection", "/admin/organization-governance"],
   ["console-upstream-basic-config", "Upstream service basic configuration", "/admin/publish-upstream-service"],
   ["console-upstream-operation-config", "Upstream operation configuration", "/admin/publish-upstream-service"],
   ["console-upstream-published", "Published upstream service and runtime health", "/admin/publish-upstream-service"],
   ["console-published-tool", "Published operation in the tool catalog", "/admin/tool-list"],
-  ["console-token-authorization-pending", "Pending MCP device authorization", "/approval"],
-  ["console-token-authorization-consumed", "Completed MCP device authorization", "/approval"],
+  ["console-api-key-generated", "Issued organization-scoped API Key record", "/admin/api-key-distribution"],
+  ["console-downstream-agent-configured", "Downstream agent configured with the pre-issued API Key", "/admin/api-key-distribution"],
   ["console-operation-approval-pending", "Pending Operation Permission approval", "/approval"],
   ["console-operation-approval-completed", "Completed Operation Permission approval", "/approval"],
   ["console-downstream-mcp-call", "Downstream MCP call in the Console audit", "/admin/tool-stats"]
+]);
+const MANUAL_GROUPS: readonly any[] = Object.freeze([
+  ["organization-structure-configuration", "组织架构的配置", [
+    "console-authenticated", "console-organization-permissions"
+  ]],
+  ["upstream-service-registration-publishing", "上游服务的注册到发布", [
+    "console-upstream-basic-config", "console-upstream-operation-config", "console-upstream-published"
+  ]],
+  ["tool-permission-configuration", "工具权限的配置", [
+    "console-published-tool", "console-api-key-generated"
+  ]],
+  ["mcp-service-request", "MCP 服务的请求", [
+    "console-downstream-agent-configured", "console-operation-approval-pending",
+    "console-operation-approval-completed", "console-downstream-mcp-call"
+  ]]
 ]);
 const VERIFIED_JOURNEY_STEP_IDS: any = Object.freeze(
   RELEASE_JOURNEY_STEPS.filter((id?: any) : any => id !== "cleanup")
@@ -381,8 +397,14 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain("&lt;control &amp; plane&gt;");
     expect(html).toContain("Registration to downstream invocation");
     expect(html).toContain("从注册到下游调用");
-    expect(html).toContain("Real product pages from configuration to MCP invocation");
-    expect(html).toContain("从配置到 MCP 调用的真实产品页面");
+    expect(html).toContain("Publish an Upstream Service through Meshrix");
+    expect(html).toContain("通过 Meshrix 发布上游服务");
+    expect(html).toContain("Where to go");
+    expect(html).toContain("去哪里");
+    expect(html).toContain("What is produced");
+    expect(html).toContain("生成什么");
+    expect(html).toContain("Why this matters");
+    expect(html).toContain("这一步的作用");
     expect(html).toContain("local Git-ignored build output");
     expect(html).toContain("本地 Git 忽略的 build 产物");
     expect(html).toContain("Open actual JSON configuration");
@@ -432,10 +454,10 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain('data-evidence-kind="decision"');
     expect(html).toContain('data-evidence-kind="execution"');
     expect(html).toContain('data-evidence-kind="audit"');
-    expect(html).toContain('data-alt-en="Authenticated Meshrix Console"');
-    expect(html).toContain('data-alt-zh="已认证的 Meshrix 管控台"');
+    expect(html).toContain('data-alt-en="Authenticated Meshrix Workbench"');
+    expect(html).toContain('data-alt-zh="已认证的 Meshrix 工作台"');
     expect(html).toContain("image.dataset.altZh");
-    expect(html.match(/<figure data-evidence-kind=/gu)).toHaveLength(10);
+    expect(html.match(/<article class="manual-step"[^>]*data-evidence-kind=/gu)).toHaveLength(VISUAL_EVIDENCE.length);
     expect(html).toContain("MESHRIX_BUILD_TARGET=runtime-ui");
     expect(html).toContain("MESHRIX_SERVER_WITH_UI=1");
     expect(html).toContain("@media (max-width: 900px)");
@@ -451,8 +473,8 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).not.toMatch(/svc_[A-Za-z0-9_-]+/u);
     expect(html).toContain('<link rel="icon" href="data:,">');
     expect(html).toContain('data-report-portability="single-file"');
-    expect(html.match(/src="data:image\/png;base64,/gu)).toHaveLength(10);
-    expect(html.match(/2880×2000 · 2×/gu)).toHaveLength(10);
+    expect(html.match(/src="data:image\/png;base64,/gu)).toHaveLength(VISUAL_EVIDENCE.length);
+    expect(html.match(/2880×2000 · 2×/gu)).toHaveLength(VISUAL_EVIDENCE.length);
     expect(html).toContain('href="data:application/json;charset=utf-8;base64,');
     expect(html).toContain('data-report-slot="candidate-scope"');
     expect(html).toMatch(
@@ -477,29 +499,26 @@ describe("upstream service publishing HTML report", () : any => {
     expect(scriptBodies.every((body?: any) : any => !FORBIDDEN_INLINE_SCRIPT_API.test(body))).toBe(true);
   });
 
-  it("preserves the report section order while refining the internal cards", () : any => {
+  it("keeps the operation guide first and moves technical material into the final appendix", () : any => {
     const html: any = renderUpstreamServicePublishingHtml(verifiedReport(), verifiedJourneyReport());
     const sectionLabels: any = [...html.matchAll(
       /<p class="eyebrow"><span data-en="([^"]+)"/gu
     )].map((match?: any) : any => match[1]);
 
-    expect(sectionLabels).toEqual([
-      "Executive summary",
-      "Exact safe configuration",
-      "MCP acceptance matrix",
-      "Live Console evidence",
-      "Golden path",
-      "Requirements",
-      "Production composition",
-      "Revision semantics",
-      "Protocol delivery",
-      "Provenance"
-    ]);
+    expect(sectionLabels.slice(0, 2)).toEqual(["Operation guide", "Appendix"]);
+    expect(sectionLabels).toContain("Executive summary");
+    expect(sectionLabels).toContain("Exact safe configuration");
+    expect(sectionLabels).toContain("MCP acceptance matrix");
+    expect(sectionLabels).not.toContain("Live Console evidence");
     expect([...html.matchAll(/data-report-section="([^"]+)"/gu)].map((match?: any) : any => match[1]))
       .toEqual(UPSTREAM_SERVICE_PUBLISHING_REPORT_SECTIONS.map(([id]: any[]) : any => id));
+    expect(html.indexOf('data-report-section="operation-guide"'))
+      .toBeLessThan(html.indexOf('data-report-section="appendix"'));
+    expect(html.indexOf('data-report-section="appendix"'))
+      .toBeLessThan(html.indexOf('data-appendix-section="executive-summary"'));
   });
 
-  it("keeps ten semantic sections navigable with captions, scoped status, and bounded timing", () : any => {
+  it("renders an eleven-step Console manual followed by a bounded appendix", () : any => {
     const html: any = renderUpstreamServicePublishingHtml(
       verifiedReport(),
       verifiedJourneyReport()
@@ -515,13 +534,19 @@ describe("upstream service publishing HTML report", () : any => {
     const lifecycleTable: any = reportTable(html, "client-lifecycle");
     const journeyStepTable: any = reportTable(html, "journey-step-status");
     const cleanupTable: any = reportTable(html, "cleanup-summary");
-    const evidenceIndex: any = html.match(
-      /<ol\b[^>]*data-report-slot="visual-evidence-index"[^>]*>[\s\S]*?<\/ol>/u
-    )?.[0] || "";
-    const evidenceTargets: any = [...evidenceIndex.matchAll(/href="#([^"]+)"/gu)]
+    const manualGroupTags: any[] = [...html.matchAll(
+      /<section\b[^>]*data-manual-group="([^"]+)"[^>]*>[\s\S]*?<\/section>/gu
+    )];
+    const groupIndexes: any[] = [...html.matchAll(
+      /<ol\b[^>]*data-manual-group-index="([^"]+)"[^>]*>[\s\S]*?<\/ol>/gu
+    )];
+    const evidenceTargets: any = groupIndexes.flatMap((groupIndex?: any) : any =>
+      [...groupIndex[0].matchAll(/href="#([^"]+)"/gu)].map((match?: any) : any => match[1])
+    );
+    const stepIds: any = [...html.matchAll(/<article\b[^>]*\bclass="manual-step"[^>]*\bid="([^"]+)"[^>]*>/gu)]
       .map((match?: any) : any => match[1]);
-    const figureIds: any = [...html.matchAll(/<figure\b[^>]*\bid="([^"]+)"[^>]*>/gu)]
-      .map((match?: any) : any => match[1]);
+    const manualSteps: any = [...html.matchAll(/<article\b[^>]*\bclass="manual-step"[^>]*>[\s\S]*?<\/article>/gu)]
+      .map((match?: any) : any => match[0]);
 
     expect(html.match(/<main\b/gu)).toHaveLength(1);
     expect(navigation).toBeTruthy();
@@ -538,8 +563,8 @@ describe("upstream service publishing HTML report", () : any => {
     expect(captions).toHaveLength(tables.length);
 
     const safeConfiguration: any = html.slice(
-      html.indexOf('data-report-section="safe-configuration"'),
-      html.indexOf('data-report-section="mcp-acceptance"')
+      html.indexOf('data-appendix-section="safe-configuration"'),
+      html.indexOf('data-appendix-section="mcp-acceptance"')
     );
     const runtimeHealthOffset: any = safeConfiguration.indexOf(
       'data-report-slot="upstream-publication-runtime-health"'
@@ -584,15 +609,31 @@ describe("upstream service publishing HTML report", () : any => {
       0
     )).toBe(VERIFIED_CLEANUP_DURATION_MS);
 
-    expect(images).toHaveLength(10);
+    expect(images).toHaveLength(VISUAL_EVIDENCE.length);
     expect(images.every((tag?: any) : any => tag.includes('loading="lazy"'))).toBe(true);
     expect(images.every((tag?: any) : any => tag.includes('decoding="async"'))).toBe(true);
     expect(images.every((tag?: any) : any => /\balt="[^"]+"/u.test(tag))).toBe(true);
     expect(images.every((tag?: any) : any => tag.includes('width="2880"'))).toBe(true);
     expect(images.every((tag?: any) : any => tag.includes('height="2000"'))).toBe(true);
+    expect(manualSteps).toHaveLength(VISUAL_EVIDENCE.length);
+    expect(manualGroupTags.map((match?: any) : any => match[1]))
+      .toEqual(MANUAL_GROUPS.map(([id]: any[]) : any => id));
+    expect(groupIndexes.map((match?: any) : any => match[1]))
+      .toEqual(MANUAL_GROUPS.map(([id]: any[]) : any => id));
+    for (const [groupId, chineseTitle, stepIds] of MANUAL_GROUPS) {
+      const group: any = manualGroupTags.find((match?: any) : any => match[1] === groupId)?.[0] || "";
+      expect(group).toContain(chineseTitle);
+      expect([...group.matchAll(/data-manual-step="([^"]+)"/gu)].map((match?: any) : any => match[1]))
+        .toEqual(stepIds);
+    }
+    for (const step of manualSteps) {
+      expect([...step.matchAll(/data-manual-field="([^"]+)"/gu)].map((match?: any) : any => match[1]))
+        .toEqual(["location", "action", "result", "purpose"]);
+      expect(step).toContain("<figure>");
+    }
     expect(evidenceTargets).toHaveLength(VISUAL_EVIDENCE.length);
     expect(new Set<any>(evidenceTargets).size).toBe(VISUAL_EVIDENCE.length);
-    expect(figureIds).toEqual(evidenceTargets);
+    expect(stepIds).toEqual(evidenceTargets);
   });
 
   it("keeps the tracked blank template aligned with the renderer contract", () : any => {
@@ -603,18 +644,28 @@ describe("upstream service publishing HTML report", () : any => {
     expect(template).toBe(renderUpstreamServicePublishingBlankTemplate());
     expect(template).toContain('data-report-template="upstream-service-publishing"');
     expect(template).toContain('data-report-portability="single-file"');
-    expect(template).toContain("embed every verified image and downloadable attachment");
-    expect(template).toContain("内嵌每一张已验证图片及可下载附件");
-    expect([...template.matchAll(/data-report-slot="([^"]+)"/gu)].map((match?: any) : any => match[1]))
-      .toEqual([
-        "candidate-scope",
-        "upstream-publication-runtime-health",
-        "upstream-service-interface-catalog",
-        "client-lifecycle",
-        "visual-evidence-index",
-        "journey-timings",
-        "cleanup-summary"
-      ]);
+    expect(template).toContain("embed verified images and downloadable attachments");
+    expect(template).toContain("内嵌已验证图片和可下载附件");
+    const templateSlots: any = [...template.matchAll(/data-report-slot="([^"]+)"/gu)]
+      .map((match?: any) : any => match[1]);
+    expect(templateSlots).toContain("operation-guide-groups");
+    expect(templateSlots).toContain("candidate-scope");
+    expect(templateSlots).toContain("upstream-publication-runtime-health");
+    expect(templateSlots).toContain("upstream-service-interface-catalog");
+    expect(templateSlots).toContain("client-lifecycle");
+    expect(templateSlots).toContain("journey-timings");
+    expect(templateSlots).toContain("cleanup-summary");
+    expect(templateSlots.filter((slot?: any) : any => slot.startsWith("manual-screenshot-")))
+      .toHaveLength(VISUAL_EVIDENCE.length);
+    const placeholderSteps: any = [...template.matchAll(/<article\b[^>]*data-manual-step="[^"]+"[^>]*>[\s\S]*?<\/article>/gu)]
+      .map((match?: any) : any => match[0]);
+    expect(placeholderSteps).toHaveLength(VISUAL_EVIDENCE.length);
+    expect([...template.matchAll(/data-manual-group="([^"]+)"/gu)].map((match?: any) : any => match[1]))
+      .toEqual(MANUAL_GROUPS.map(([id]: any[]) : any => id));
+    expect(placeholderSteps.every((step?: any) : any =>
+      [...step.matchAll(/data-manual-field="([^"]+)"/gu)].map((match?: any) : any => match[1]).join(",")
+        === "location,action,result,purpose"
+    )).toBe(true);
     expect(template.indexOf('data-report-slot="upstream-publication-runtime-health"'))
       .toBeLessThan(template.indexOf('data-report-slot="upstream-service-interface-catalog"'));
     expect(englishTableHeaders(reportTable(template, "client-lifecycle")))
@@ -867,8 +918,11 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain("Run the complete upstream publishing journey again");
     expect(html).toContain("Completed journey steps");
     expect(html).toContain("Cleanup progress");
-    expect(html).toContain("<code>step-11</code>");
-    expect(html).not.toContain("<code>step-12</code>");
+    const journeyStepCount: any = RELEASE_JOURNEY_STEPS.filter((step?: any) : any => step !== "cleanup").length;
+    const lastBoundedStep: any = `step-${String(journeyStepCount - 1).padStart(2, "0")}`;
+    const firstExcludedStep: any = `step-${String(journeyStepCount).padStart(2, "0")}`;
+    expect(html).toContain(`<code>${lastBoundedStep}</code>`);
+    expect(html).not.toContain(`<code>${firstExcludedStep}</code>`);
     expect(html).toContain("<code>cleanup-31</code>");
     expect(html).not.toContain("<code>cleanup-32</code>");
     expect(html).not.toContain("step-message-must-not-render");

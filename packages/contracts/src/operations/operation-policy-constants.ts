@@ -83,22 +83,19 @@ export const EXTERNAL_AUTH_OPERATION_IDS: any = new Set<any>([
   "agent_sync.publish",
   "operation_permission.execute",
   "operation_permission.batch",
-  "operation_permission.dry_run",
-  "operation_permission.mcp.request_authorization"
+  "operation_permission.dry_run"
 ]);
 
 export const EXTERNAL_AUTH_MISSING_CODE_DECORATORS: any = new Map<any, any>([
   ["operation_permission.execute", "missing_token"],
   ["operation_permission.batch", "missing_token"],
-  ["operation_permission.dry_run", "missing_token"],
-  ["operation_permission.mcp.request_authorization", "missing_token"]
+  ["operation_permission.dry_run", "missing_token"]
 ]);
 
 export const EXTERNAL_AUTH_VERIFIER_DECORATORS: any = new Map<any, any>([
   ["operation_permission.execute", { method: "verifyToolSkillExternalAuth" }],
   ["operation_permission.batch", { method: "verifyToolSkillExternalAuth" }],
-  ["operation_permission.dry_run", { method: "verifyToolSkillExternalAuth" }],
-  ["operation_permission.mcp.request_authorization", { method: "verifyToolSkillExternalAuth", recordUse: true }]
+  ["operation_permission.dry_run", { method: "verifyToolSkillExternalAuth" }]
 ]);
 
 export const REQUIRED_SCOPE_DECORATORS: any = new Map<any, any>([

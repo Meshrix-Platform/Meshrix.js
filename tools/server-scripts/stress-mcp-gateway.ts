@@ -16,7 +16,7 @@ import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import { upstreamOperationCapabilityId } from "../../packages/agents/src/upstream-gateway/operation-capability.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./lib/upstream-gateway-verifier-publication.ts";
 
 const REPORT_PATH: any = "build/reports/mcp-gateway-load.json";
@@ -176,18 +176,11 @@ function defaultIdentityHash({ publicKeyHash = "", clientFingerprint = {} }: Rec
 }
 
 function mcpHeaders({ body = "" }: Record<string, any> = {}) : any {
+  void body;
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
     "X-Meshrix-Api-Key": token,
-    "X-Meshrix-MCP-Target": "codex",
-    ...createProcessIdentityRequestHeaders({
-      privateKeyPem: processIdentityKeyPair?.privateKeyPem || "",
-      method: "POST",
-      url: new URL(`${server.url}/mcp`),
-      body,
-      clientIdentityPackage
-    })
+    "X-Meshrix-MCP-Target": "codex"
   };
 }
 
@@ -217,12 +210,10 @@ async function callMcp(body?: any) : Promise<any> {
   });
 }
 
-async function createLocalGrant() : Promise<any> {
-  processIdentityKeyPair = generateProcessIdentityClientKeyPair();
-  const clientFingerprint: any = stressClientFingerprint();
-  const response: any = await issueVerifierLocalMcpGrant({
+async function createVerifierApiKey() : Promise<any> {
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    grantRequest: {
+    access: {
       targets: ["codex"],
       label: "stress-mcp-gateway",
       connectorVersion: "stress-mcp-gateway",
@@ -231,23 +222,11 @@ async function createLocalGrant() : Promise<any> {
         { serviceId: SERVICE_ID },
         { operationKey: "echo" }
       )],
-      allowedServiceIds: [SERVICE_ID],
-      processIdentity: {
-        clientId: "codex",
-        installationId: "stress-mcp-gateway-install",
-        processPublicKeyPem: processIdentityKeyPair.publicKeyPem,
-        clientFingerprint,
-        defaultIdentityHash: defaultIdentityHash({
-          publicKeyHash: processIdentityKeyPair.publicKeyHash,
-          clientFingerprint
-        })
-      }
+      allowedServiceIds: [SERVICE_ID]
     }
   });
-  assert.equal(response.status, 201, JSON.stringify(response.payload));
-  clientIdentityPackage = response.payload.processIdentity?.clientIdentityPackage || null;
-  assert.equal(Boolean(clientIdentityPackage), true);
-  return response.payload.token;
+  assert.ok(response.apiKey);
+  return response.apiKey;
 }
 
 function createSafetyMonitor() : any {
@@ -391,7 +370,7 @@ try {
     }
   });
   await installAuthenticatedFetch(server);
-  token = await createLocalGrant();
+  token = await createVerifierApiKey();
 
   const initializeBody: any = JSON.stringify({
       jsonrpc: "2.0",

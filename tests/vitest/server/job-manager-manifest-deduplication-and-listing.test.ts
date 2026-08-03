@@ -42,7 +42,7 @@ vi.mock("#meshrix/product-api", async () : Promise<any> => {
   };
 });
 
-import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.ts";
+import { createTestJobManager } from "./job-manager-test-harness.ts";
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.ts";
 import { serverToken } from "#meshrix/product-api";
 
@@ -114,7 +114,7 @@ describe("job manager behavior", () : any => {
       const firstCheckpoint: any = "manifest-checkpoint-a";
       const secondCheckpoint: any = "manifest-checkpoint-b";
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: false
@@ -188,7 +188,7 @@ describe("job manager behavior", () : any => {
         checkpointId: serverToken("checkpoint", completedId)
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false
       });
@@ -250,7 +250,7 @@ describe("job manager behavior", () : any => {
         result
       );
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: false
@@ -277,7 +277,7 @@ describe("job manager behavior", () : any => {
 
   it("会在关闭后拒绝新任务", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: true
       });

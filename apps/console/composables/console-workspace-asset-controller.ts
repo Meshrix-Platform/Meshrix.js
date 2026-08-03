@@ -8,7 +8,7 @@ type WorkspaceAssetControllerOptions = {
   selectedId: Ref<string>;
   localError: Ref<string>;
   setBusy: (key: string) => void;
-  clearBusy: () => void;
+  clearBusy: (key: string) => void;
   confirmAction?: ConsoleConfirmAction;
 };
 
@@ -65,7 +65,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:assets-list");
     }
   }
 
@@ -89,7 +89,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:asset-read");
     }
   }
 
@@ -123,7 +123,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:asset-submit");
     }
   }
 
@@ -140,7 +140,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:asset-receipts");
     }
   }
 
@@ -157,7 +157,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:asset-backfill");
     }
   }
 
@@ -185,7 +185,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:operation-history");
     }
   }
 
@@ -203,7 +203,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:operation-revert-preview");
     }
   }
 
@@ -224,7 +224,7 @@ export function useWorkspaceAssetController(options: WorkspaceAssetControllerOpt
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:operation-revert-apply");
     }
   }
 

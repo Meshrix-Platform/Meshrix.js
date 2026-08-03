@@ -42,6 +42,38 @@ export function uniqueStrings(values: any = []) : any {
   return [...new Set<any>(values.map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
 }
 
+export function authorizationPolicy(authorization: any = null) : any {
+  return authorization?.restriction || authorization?.grant || null;
+}
+
+export function authorizationSubject(authorization: any = null) : any {
+  if (authorization?.subject && typeof authorization.subject === "object") {
+    return authorization.subject;
+  }
+  const grant: any = authorization?.grant;
+  return grant
+    ? {
+        type: "tool-grant",
+        subjectId: String(grant.id || ""),
+        username: String(grant.label || grant.id || ""),
+        scopes: uniqueStrings(grant.scopes || []),
+        capabilities: uniqueStrings(grant.capabilities || [])
+      }
+    : { type: "anonymous", subjectId: "", username: "", scopes: [], capabilities: [] };
+}
+
+export function authorizationSubjectId(authorization: any = null) : string {
+  return String(authorizationSubject(authorization).subjectId || "");
+}
+
+export function authorizationGrantId(authorization: any = null) : string {
+  return String(authorization?.grant?.id || "");
+}
+
+export function authorizationSubjectType(authorization: any = null) : string {
+  return String(authorizationSubject(authorization).type || "anonymous");
+}
+
 export function sameStringSet(left: any = [], right: any = []) : any {
   const normalizedLeft: any = uniqueStrings(left).sort();
   const normalizedRight: any = uniqueStrings(right).sort();

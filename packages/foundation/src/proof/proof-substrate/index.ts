@@ -14,7 +14,6 @@ import {
   cidForBytes,
   createRepairPlanner,
   createVerificationFailure,
-  envelopeSigningHash,
   PACTIUM_PACKAGE_VERSION,
   PACTIUM_PROTOCOL,
   PACTIUM_SCHEMA_VERSION,
@@ -901,8 +900,11 @@ function meshrixMeshEvidenceExtensions({ input = {}, entry = null, phase = "outc
 }
 
 function meshrixMeshEnvelopeSigningHash(envelope?: any) : any {
-  return envelopeSigningHash({
-    ...envelope,
+  return protocolHash("proof.envelope.signing", {
+    ...asObject(envelope),
+    envelopeId: undefined,
+    replayed: false,
+    disposition: undefined,
     extensions: asArray(envelope?.extensions).filter(
       (extension?: any) : any => extension?.name !== MESHRIX_SIGNATURE_EXTENSION
     )

@@ -1,6 +1,3 @@
-import { randomBytes } from "node:crypto";
-
-import { deleteProcessIdentity, loadProcessIdentity, saveProcessIdentity } from "../process-identity-store.ts";
 import {
   MCP_INTERFACE_VERSION,
   MCP_SERVER_NAME,
@@ -11,10 +8,11 @@ import {
 import { normalizeTarget, option } from "./basic-utils.ts";
 import { writeServerConfigProfile, serverConfigCommand } from "./device-config.ts";
 import {
+  discardConfiguredApiKeyEnvironment,
   discoverMeshrixHub,
   ensureService,
   optionsWithDiscoveredBaseUrl,
-  resolveToken,
+  resolveApiKey,
   verifyMcpTools
 } from "./discovery.ts";
 import {
@@ -38,6 +36,7 @@ import { scanInstallTargets } from "./scan-candidates.ts";
 import { uninstallCommand } from "./uninstall-command.ts";
 
 export async function registerCommand(options?: any) : Promise<any> {
+  discardConfiguredApiKeyEnvironment(options);
   const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
   const settings: any = installerOptions(resolvedOptions);
   const parsedBaseUrl: any = new URL(settings.baseUrl);
@@ -116,6 +115,7 @@ export async function fetchDiscoveryUrl(url?: any) : Promise<any> {
 }
 
 export async function discoverLocalCommand(options?: any) : Promise<any> {
+  discardConfiguredApiKeyEnvironment(options);
   const discovered: any = await discoverMeshrixHub(options);
   if (!discovered.ok) {
     return {
@@ -141,10 +141,10 @@ export async function discoverLocalCommand(options?: any) : Promise<any> {
 }
 
 export async function doctorCommand(options?: any) : Promise<any> {
+  const token: any = await resolveApiKey(options, { required: false });
   const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
   const settings: any = installerOptions(resolvedOptions);
   const discovered: any = resolvedOptions.__meshrixDiscovery || null;
-  const token: any = await resolveToken(resolvedOptions, { required: false });
   const target: any = normalizeTarget(option(resolvedOptions, "target", process.env.MESHRIX_MCP_TARGET || ""));
   const deviceManifestPath: any = discoveryRegistryPath(resolvedOptions);
   const discovery: any = await fetchJson(`${settings.baseUrl}/api/mcp/discovery`);
@@ -269,6 +269,7 @@ export async function doctorCommand(options?: any) : Promise<any> {
 }
 
 export async function discoverCommand(options?: any) : Promise<any> {
+  discardConfiguredApiKeyEnvironment(options);
   const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
   const baseUrl: any = installerOptions(resolvedOptions).baseUrl;
   const discovery: any = await fetchJson(`${baseUrl}/api/mcp/discovery`);
@@ -285,6 +286,7 @@ export async function discoverCommand(options?: any) : Promise<any> {
 }
 
 export async function scanCommand(options?: any) : Promise<any> {
+  discardConfiguredApiKeyEnvironment(options);
   const discovered: any = await discoverMeshrixHub(options);
   const scanOptions: any = discovered.ok
     ? { ...options, "resolved-url": discovered.baseUrl, __meshrixDiscovery: discovered }
@@ -306,57 +308,6 @@ export async function scanCommand(options?: any) : Promise<any> {
   };
 }
 
-export async function identityStoreSelfTestCommand(options: Record<string, any> = {}) : Promise<any> {
-  const target: any = normalizeTarget(option(options, "target", `verify-${randomBytes(6).toString("hex")}`));
-  if (!target.startsWith("verify-")) {
-    throw new Error("identity-store-self-test only accepts verify-* targets.");
-  }
-  await deleteProcessIdentity(target);
-  const secretMarker: any = `verify-private-key-${randomBytes(18).toString("base64url")}`;
-  const grantMarker: any = `verify-grant-${randomBytes(24).toString("base64url")}`;
-  const record: Record<string, any> = {
-    schemaVersion: "v0.0.1:process-identity:mcp-self-test-1",
-    target,
-    baseUrl: "http://127.0.0.1:0",
-    savedAt: new Date().toISOString(),
-    grantToken: grantMarker,
-    privateKeyPem: secretMarker,
-    clientIdentityPackage: {
-      clientId: target,
-      packageId: `pkg_${randomBytes(10).toString("base64url")}`,
-      processKey: {
-        processKeyId: `pkey_${randomBytes(10).toString("base64url")}`
-      },
-      clientFingerprint: {
-        fingerprintId: `fp_${randomBytes(8).toString("base64url")}`,
-        machineInstanceId: `machine_${randomBytes(8).toString("base64url")}`,
-        appInstanceId: `app_${randomBytes(8).toString("base64url")}`,
-        runtimeInstanceId: `runtime_${randomBytes(8).toString("base64url")}`,
-        fingerprintHash: `sha256:${randomBytes(24).toString("base64url")}`
-      }
-    },
-    serverIdentity: null
-  };
-  try {
-    const saved: any = await saveProcessIdentity(target, record);
-    const loaded: any = await loadProcessIdentity(target);
-    if (!loaded || loaded.privateKeyPem !== secretMarker || loaded.grantToken !== grantMarker) {
-      throw new Error("MCP process identity credential store roundtrip failed.");
-    }
-    return {
-      ok: true,
-      target,
-      storageBackend: loaded.storageBackend || saved.storageBackend || "",
-      systemCredential: (loaded.storageBackend || saved.storageBackend || "") !== "private-file-fallback",
-      fileFallback: (loaded.storageBackend || saved.storageBackend || "") === "private-file-fallback",
-      credentialRef: saved.filePath ? "" : saved.reference || loaded.credentialRef || "",
-      fileModeChecked: saved.filePath ? true : false
-    };
-  } finally {
-    await deleteProcessIdentity(target);
-  }
-}
-
 export const MESHRIX_MCP_COMMAND_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
   install: installCommand,
   register: registerCommand,
@@ -367,6 +318,5 @@ export const MESHRIX_MCP_COMMAND_REGISTRY: Readonly<Record<string, any>> = Objec
   doctor: doctorCommand,
   discover: discoverCommand,
   fetch: fetchCommand,
-  "server-config": serverConfigCommand,
-  "identity-store-self-test": identityStoreSelfTestCommand
+  "server-config": serverConfigCommand
 });

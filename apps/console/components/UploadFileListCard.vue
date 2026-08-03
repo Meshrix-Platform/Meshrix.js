@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<{
   resultFiles?: FileListResultEntry[];
   canSubmit?: boolean;
   canWriteJobs?: boolean;
-  busyKey?: string;
+  ingesting?: boolean;
   ingestJob?: SplitJob | null;
   ingestProgress?: string;
   jobStatusLabels?: Record<string, string>;
@@ -38,7 +38,7 @@ const props = withDefaults(defineProps<{
   resultFiles: () => [],
   canSubmit: false,
   canWriteJobs: false,
-  busyKey: "",
+  ingesting: false,
   ingestJob: null,
   ingestProgress: "",
   jobStatusLabels: () => ({}),
@@ -60,7 +60,7 @@ function t(value: string) {
   return localizeConsoleText(value, locale.value);
 }
 
-const isBusy = computed(() => props.busyKey === "upload:ingest");
+const isBusy = computed(() => props.ingesting);
 const isDownloadMode = computed(() => props.mode === "download");
 const progressStepLabels = computed(() => uploadProgressStepLabels.map((label: any) => t(label)));
 

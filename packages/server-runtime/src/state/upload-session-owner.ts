@@ -17,7 +17,10 @@ export function normalizeUploadSessionOwner(owner: Record<string, any> = {}) : a
   const username: any = text(owner.username || owner.ownerUsername);
   const ownerIds: any = [subjectId, userId, username].filter(Boolean);
   if (ownerIds.length === 0) {
-    throw new Error("upload session 需要调用者归属。");
+    const error: Error & Record<string, any> = new Error("upload session 需要调用者归属。");
+    error.code = "upload_owner_required";
+    error.statusCode = 400;
+    throw error;
   }
 
   return {
@@ -27,6 +30,7 @@ export function normalizeUploadSessionOwner(owner: Record<string, any> = {}) : a
     username,
     roleId: text(owner.roleId || owner.ownerRoleId || owner.role),
     tenantId: text(owner.tenantId || owner.ownerTenantId || owner.tenant),
+    organizationNodeId: text(owner.organizationNodeId || owner.ownerOrganizationNodeId),
     scopes,
     canAccessAll: Boolean(owner.canAccessAll || owner.accessAll || owner.readAll || owner.admin)
   };
@@ -36,6 +40,7 @@ export function uploadSessionOwnerKey(owner?: any) : any {
   return hashClientString(
     JSON.stringify({
       tenantId: owner.tenantId,
+      organizationNodeId: owner.organizationNodeId,
       subjectId: owner.subjectId,
       userId: owner.userId,
       username: owner.username
@@ -50,6 +55,7 @@ export function uploadSessionOwnerTrace(owner?: any) : any {
     ownerUserHash: hashClientString(owner.userId, "upload.owner.user"),
     ownerUsernameHash: hashClientString(owner.username, "upload.owner.username"),
     ownerTenantHash: hashClientString(owner.tenantId, "upload.owner.tenant"),
+    ownerOrganizationHash: hashClientString(owner.organizationNodeId, "upload.owner.organization"),
     canAccessAll: owner.canAccessAll === true
   };
 }
@@ -61,6 +67,7 @@ export function uploadSessionOwnerFields(owner?: any) : any {
     ownerUsername: owner.username,
     ownerRoleId: owner.roleId,
     ownerTenantId: owner.tenantId,
+    ownerOrganizationNodeId: owner.organizationNodeId,
     ownerKey: uploadSessionOwnerKey(owner)
   };
 }
@@ -96,9 +103,20 @@ export function uploadSessionOwnerAccess(meta?: any, ownerInput?: any) : any {
     return { ok: false, owner };
   }
 
+  const storedOrganizationNodeId: any = text(meta.ownerOrganizationNodeId);
+  if (
+    storedOrganizationNodeId
+    && owner.organizationNodeId
+    && storedOrganizationNodeId !== owner.organizationNodeId
+  ) {
+    return { ok: false, reasonCode: "upload_session_organization_mismatch", owner };
+  }
+
   const callerIds: any = callerOwnerIds(owner);
+  const ownerMatches: any = callerIds.some((callerId?: any) : any => storedOwnerIds.includes(callerId));
   return {
-    ok: callerIds.some((callerId?: any) : any => storedOwnerIds.includes(callerId)),
+    ok: ownerMatches,
+    reasonCode: ownerMatches ? "upload_session_owner_match" : "upload_session_owner_mismatch",
     owner
   };
 }
@@ -106,6 +124,7 @@ export function uploadSessionOwnerAccess(meta?: any, ownerInput?: any) : any {
 export function uploadSessionAccessError(sessionId?: any) : any {
   const error: Error & Record<string, any> = new Error(`上传会话不存在或不可访问：${sessionId}`);
   error.code = "upload_session_not_found";
+  error.statusCode = 404;
   return error;
 }
 

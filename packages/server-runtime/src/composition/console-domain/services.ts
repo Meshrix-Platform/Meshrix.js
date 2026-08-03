@@ -7,7 +7,6 @@ import {
   buildRuntimeInfoSettings
 } from "./state-projections.ts";
 import { buildRuntimeConsoleSummary } from "./runtime-summary.ts";
-import { buildOperationPermissionClientConnectionRows } from "./operation-permission-client-connections.ts";
 import * as appearancePresetCatalog from "./appearance-presets/appearance-preset-store.ts";
 
 const CONSOLE_OPERATION_PROVIDER_METHODS: readonly any[] = Object.freeze([
@@ -87,7 +86,6 @@ export function createConsoleDomainServices({
       }),
     buildRuntimeConsoleSummary,
     executeConsoleDomainOperation,
-    buildOperationPermissionClientConnectionRows,
     uploadSessionStore,
     appearancePresetCatalog,
     consoleOperationProviders: Object.freeze({ ...consoleOperationProviders }),

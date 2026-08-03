@@ -17,14 +17,14 @@
     {
       "feature": "operation-permission-core",
       "path": "src/operation-permission-core",
-      "fileCount": 35,
+      "fileCount": 36,
       "testSuites": ["governance.operation-permission-protocol-consistency"]
     },
     {
       "feature": "skills",
       "path": "src/skills",
       "fileCount": 6,
-      "testSuites": ["downstream-mcp.authorization-request-filters"]
+      "testSuites": ["downstream-mcp.installer-convergence"]
     }
   ]
 }

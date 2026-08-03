@@ -12,7 +12,7 @@ function trustedAdapter(target?: any, label?: any) : any {
       packageName,
       version,
       coordinate: `${packageName}@${version}`,
-      entrypoint: "adapter.ts",
+      entrypoint: "adapter.mjs",
       protocol: MCP_CLIENT_ADAPTER_PROTOCOL,
       source: "npm",
       trustPolicy: "npm-exact-coordinate",

@@ -176,7 +176,7 @@ function testGuardFalseBlocksTransition() : any {
   const resultWithAdmin: any = machine.transition(state, "test.rerun", {
     actor: "admin-user",
     guardContext: {
-      subjectPermissions: { admin: true, roles: ["admin"] },
+      subjectPermissions: { admin: true, roles: ["maintainer"] },
     },
   });
 
@@ -479,7 +479,7 @@ function testSequenceVerificationEnforcesGuards() : any {
     { event: "test.approve" },
     {
       event: "test.rerun",
-      context: { guardContext: { subjectPermissions: { admin: true, roles: ["admin"] } } },
+      context: { guardContext: { subjectPermissions: { admin: true, roles: ["maintainer"] } } },
     },
   ]);
   assert(allowed.valid === true, "guarded sequence succeeds with valid guard context");

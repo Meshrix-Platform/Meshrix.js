@@ -32,6 +32,15 @@ import { createServerConsoleDomainServices } from "../../../packages/server-runt
 import { createLocalCustodyKeyBroker } from "../../../packages/server-runtime/src/execution-sandbox/custody-key-broker.ts";
 import { createUploadNoRunCustody } from "../../../packages/server-runtime/src/jobs/upload-no-run-custody.ts";
 import { createUploadSessionStore } from "../../../packages/server-runtime/src/state/upload-session-store.ts";
+import { createUploadSessionHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-upload-handlers.ts";
+import { apiKeyUploadAuthSession } from "../../../packages/protocols/http/controllers/jobs-controller-access.ts";
+import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
+import { createSqliteProtocolEventStore } from "../../../packages/server-runtime/src/events/sqlite-protocol-event-store.ts";
+import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event-bus.ts";
+import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
+import { createOperationProofSubstrate } from "../../../packages/foundation/src/proof/proof-substrate/index.ts";
+import { createOperationAuditStore } from "../../../packages/foundation/src/security/operation-audit.ts";
+import { RELEASE_JOURNEY_FIXTURE_BYTES } from "../../../tools/server-scripts/lib/release-journey-fixture.ts";
 
 const POSIX: any = process.platform !== "win32";
 const itPosix: any = POSIX ? it : it.skip;
@@ -67,6 +76,7 @@ const EXPECTED_RESOLVED_FILE_KEYS: readonly any[] = Object.freeze([
   "originalFileName",
   "providerId",
   "relativePath",
+  "resourceRef",
   "sha256",
   "sourceMetadata",
   "sourceNameHash",
@@ -342,6 +352,128 @@ afterEach(async () : Promise<any> => {
     await fs.rm(root, { recursive: true, force: true });
   }
   vi.clearAllMocks();
+});
+
+itPosix("accepts a scoped API key raw PUT through the registered HTTP dispatcher", async () : Promise<any> => {
+  const fixture: any = openFixture(await tempRoot());
+  const bytes: any = RELEASE_JOURNEY_FIXTURE_BYTES;
+  const authorization: any = Object.freeze({
+    credentialKind: "scoped_api_key",
+    keyId: "key-fixture",
+    workloadPrincipalId: "workload-fixture",
+    organizationNodeId: "organization:fixture",
+    lifecycleRevision: 1,
+    policyFingerprint: "policy-fixture",
+    policy: Object.freeze({
+      scopeIds: Object.freeze(["uploads:write"]),
+      allowedTools: Object.freeze(["uploads.create_session", "uploads.upload_chunk"]),
+      resources: Object.freeze({ workspaceIds: Object.freeze([]) })
+    })
+  });
+  const authSession: any = apiKeyUploadAuthSession(authorization);
+  const owner: any = authSession.user;
+  const digest: any = createHash("sha256").update(bytes).digest("hex");
+  const created: any = await fixture.uploadSessionStore.createOrResumeUploadSession({
+    checkpoint: { checkpointId: "api-key-http-dispatch" },
+    manifest: { manifestDigest: digest, inputDigest: digest },
+    files: [{ relativePath: "chinese-input.txt", sha256: digest, byteSize: bytes.length, mediaType: "text/plain; charset=utf-8" }],
+    owner
+  });
+  const eventStore: any = createSqliteProtocolEventStore({ userDataPath: fixture.root });
+  const protocolEventBus: any = createProtocolEventBus({ eventStore });
+  resourceClosers.push(async () : Promise<any> => {
+    await protocolEventBus.close();
+    eventStore.close();
+  });
+  const handlers: any = createUploadSessionHandlers({
+    checkpointUploadSessionStore: fixture.uploadSessionStore,
+    protocolEventBus
+  });
+  const response: any = {
+    statusCode: 200,
+    headers: {},
+    chunks: [],
+    setHeader(name?: any, value?: any) : any { this.headers[name] = value; },
+    getHeader(name?: any) : any { return this.headers[name]; },
+    writeHead(statusCode?: any, headers: any = {}) : any { this.statusCode = statusCode; Object.assign(this.headers, headers); },
+    write(chunk?: any) : any { if (chunk !== undefined && chunk !== null) this.chunks.push(Buffer.from(chunk)); },
+    end(chunk?: any) : any { this.write(chunk); this.ended = true; }
+  };
+  const lockManager: any = {
+    config: { defaultTtlMs: 30_000, heartbeatIntervalMs: 10_000 },
+    acquire: async (lockKey?: any) : Promise<any> => ({
+      lockKey,
+      fencingToken: "fence-fixture",
+      expiresAt: new Date(Date.now() + 30_000),
+      released: false,
+      heartbeat: async () : Promise<any> => true,
+      release: async function() : Promise<any> { this.released = true; }
+    })
+  };
+  const proofSubstrate: any = createOperationProofSubstrate({ userDataPath: fixture.root });
+  const operationAuditStore: any = createOperationAuditStore({ userDataPath: fixture.root });
+  resourceClosers.push(async () : Promise<any> => {
+    proofSubstrate.close();
+    operationAuditStore.close();
+  });
+  const currentAuthorization: any = Object.freeze({
+    ok: true,
+    actor: owner,
+    authSession,
+    apiKeyAuthorization: authorization,
+    revalidateAuthorization: async () : Promise<any> => currentAuthorization
+  });
+  const controllers: any = {
+    jobs: handlers,
+    system: { verifyConsoleOrToolSkillExternalAuth: async () : Promise<any> => currentAuthorization }
+  };
+  const createResponse: any = {
+    statusCode: 200,
+    headers: {},
+    chunks: [],
+    setHeader(name?: any, value?: any) : any { this.headers[name] = value; },
+    getHeader(name?: any) : any { return this.headers[name]; },
+    writeHead(statusCode?: any, headers: any = {}) : any { this.statusCode = statusCode; Object.assign(this.headers, headers); },
+    write(chunk?: any) : any { if (chunk !== undefined && chunk !== null) this.chunks.push(Buffer.from(chunk)); },
+    end(chunk?: any) : any { this.write(chunk); this.ended = true; }
+  };
+  const createBody: any = Buffer.from(JSON.stringify({
+    checkpoint: { checkpointId: "api-key-http-create" },
+    manifest: { manifestDigest: digest, inputDigest: digest },
+    files: [{ relativePath: "chinese-input.txt", sha256: digest, byteSize: bytes.length, mediaType: "text/plain; charset=utf-8" }]
+  }));
+  await dispatchRegisteredHttpOperation({
+    operations: SERVER_API_OPERATIONS,
+    controllers,
+    method: "POST",
+    url: new URL("/api/upload-sessions", "http://server.invalid"),
+    request: { headers: {}, onNarrowTransition: vi.fn() },
+    response: createResponse,
+    requestBody: createBody,
+    lockManager,
+    operationAuditStore,
+    operationProofSubstrate: proofSubstrate,
+    concurrencyScope: "api-key-upload-fixture"
+  });
+  expect(createResponse.statusCode).toBe(200);
+  const request: any = { headers: {}, onNarrowTransition: vi.fn() };
+  const dispatched: any = await dispatchRegisteredHttpOperation({
+    operations: SERVER_API_OPERATIONS,
+    controllers,
+    method: "PUT",
+    url: new URL(`/api/upload-sessions/${created.sessionId}/files/0?offset=0`, "http://server.invalid"),
+    request,
+    response,
+    requestBody: bytes,
+    lockManager,
+    operationAuditStore,
+    operationProofSubstrate: proofSubstrate,
+    concurrencyScope: "api-key-upload-fixture"
+  });
+
+  expect(dispatched).toBe(true);
+  expect(response.statusCode).toBe(200);
+  expect(JSON.parse(Buffer.concat(response.chunks).toString("utf8"))).toMatchObject({ status: "complete" });
 });
 
 function uploadDeclaration(bytes?: any, {

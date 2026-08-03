@@ -110,8 +110,6 @@ const REQUIRED_TERMS: Readonly<Record<string, any>> = Object.freeze({
     "npm run verify:enterprise-audit-retention-redaction"
   ],
   "docs/functionality/SECURITY-AUTHORIZATION.md": [
-    "npm run verify:mcp-client-identity-proof",
-    "npm run verify:mcp-process-identity-credential-store",
     "npm run verify:security-alert-lifecycle",
     "security_alerts.list"
   ]

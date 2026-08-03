@@ -24,15 +24,15 @@ function createHarness() : any {
   let selectedContextProfileId: any = "";
   const error: any = ref("");
   const setBusy: any = vi.fn();
-  const clearAllBusy: any = vi.fn();
+  const clearBusy: any = vi.fn();
   const controller: any = createConsoleContextCompilerController({
-    clearAllBusy,
+    clearBusy,
     error,
     selectedContextProfileId: () : any => selectedContextProfileId,
     setBusy,
   });
   return {
-    clearAllBusy,
+    clearBusy,
     controller,
     error,
     selectProfile: (profileId: string) : any => {
@@ -151,7 +151,7 @@ describe("console context profile truthfulness", () : any => {
 
 describe("console context preview truthfulness", () : any => {
   it("starts empty and does not send preview or evaluation requests without a selected profile", async () : Promise<any> => {
-    const { controller, error, setBusy, clearAllBusy } = createHarness();
+    const { controller, error, setBusy, clearBusy } = createHarness();
 
     expect(controller.contextPreviewTask.value).toBe("");
     expect(controller.contextPreviewPayload()).toEqual({
@@ -170,7 +170,7 @@ describe("console context preview truthfulness", () : any => {
     expect(contextCompilerClientMock.getContextProfiles).not.toHaveBeenCalled();
     expect(contextCompilerClientMock.listContextBuildRecords).not.toHaveBeenCalled();
     expect(setBusy).not.toHaveBeenCalled();
-    expect(clearAllBusy).not.toHaveBeenCalled();
+    expect(clearBusy).not.toHaveBeenCalled();
     expect(error.value).toBe("请先选择上下文配置。");
   });
 

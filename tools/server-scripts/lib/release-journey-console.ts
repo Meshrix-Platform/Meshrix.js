@@ -74,7 +74,14 @@ export function createConsoleClient({ baseUrl, addNeedle = () : any => {}, fetch
       error.code = "release_journey_login_failed";
       throw error;
     }
-    return { username, roleId: String(result.payload?.session?.user?.roleId || "") };
+    const scopes: any[] = Array.isArray(result.payload?.session?.user?.scopes)
+      ? result.payload.session.user.scopes.map((scope?: any) : any => String(scope || ""))
+      : [];
+    return {
+      username,
+      roleId: String(result.payload?.session?.user?.roleId || ""),
+      runtimeAdministrationAuthorized: scopes.includes("runtime:admin")
+    };
   }
 
   return { api, login };
@@ -138,12 +145,6 @@ export async function inspectPublishedUpstreamService({
       endpoints: Number(health.payload?.endpointCount || 0)
     }
   };
-}
-
-export async function listPendingAuthorizationRequests(consoleClient?: any) : Promise<any> {
-  const result: any = await consoleClient.api("/api/console/mcp/authorization/requests?status=pending");
-  if (!result.ok) return [];
-  return Array.isArray(result.payload?.requests) ? result.payload.requests : [];
 }
 
 export async function listPendingOperations(consoleClient?: any, { status = "pending", limit = 100 }: Record<string, any> = {}) : Promise<any> {

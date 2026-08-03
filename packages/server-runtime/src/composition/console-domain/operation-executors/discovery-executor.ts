@@ -108,16 +108,11 @@ export async function executeDiscoveryOperation({ operationId, input = {}, conte
     if (typeof clientRegistryService.listClientRegistrations !== "function") {
       return result(503, { error: "客户端登记存储不可用。" });
     }
-    const domainServices: any = context.consoleDomainServices || {};
     return result(200, buildClientConnectionList(
       clientRegistryService.listClientRegistrations({
         offlineAfterSeconds: discoveryState.offlineAfterSeconds
       }),
-      typeof domainServices.buildOperationPermissionClientConnectionRows === "function"
-        ? await domainServices.buildOperationPermissionClientConnectionRows(context.toolSkillManagementProvider, {
-            offlineAfterSeconds: discoveryState.offlineAfterSeconds
-          })
-        : []
+      []
     ));
   }
 

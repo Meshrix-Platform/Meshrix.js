@@ -43,13 +43,13 @@ describe("Authorization engine", () : any => {
     expect(decision.reasonCode).toBe("missing_capabilities");
   });
 
-  it("allows admin wildcard capabilities when scopes are present", () : any => {
+  it("allows wildcard capabilities when explicit administration scope is present", () : any => {
     const decision: any = evaluateAuthorizationPolicy({
       operation: writeOperation,
       subject: {
         type: "user",
         subjectId: "admin-1",
-        roleId: "admin",
+        roleId: "maintainer",
         capabilities: ["cap:api:*"],
         scopes: ["auth:admin", "workspace:write"],
         maxRisk: "safe_write"
@@ -73,7 +73,7 @@ describe("Authorization engine", () : any => {
       subject: {
         type: "user",
         subjectId: "admin-2",
-        roleId: "admin",
+        roleId: "maintainer",
         capabilities: ["cap:api:workspace.checkpoint.restore"],
         scopes: ["auth:admin", "workspace:write", "checkpoint:restore"],
         maxRisk: "destructive"

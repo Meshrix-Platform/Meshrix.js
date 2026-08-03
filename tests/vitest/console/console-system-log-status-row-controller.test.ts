@@ -6,7 +6,7 @@ function readonlyValue<T>(value: T) : any {
 }
 
 describe("console system log status row controller behavior", () : any => {
-  it("builds status log rows across queue, jobs, processes, alerts, config, tools, and auth audit", () : any => {
+  it("builds status log rows across queue, jobs, processes, alerts, tools, and auth audit", () : any => {
     const rows: any = buildSystemStatusLogRows({
       activeMonitorAlerts: readonlyValue([
         {
@@ -22,17 +22,6 @@ describe("console system log status row controller behavior", () : any => {
           source: "work-queue-observation",
           status: "open",
           title: "Critical alert",
-        },
-      ] as never),
-      agentConfigurationAlerts: readonlyValue([
-        {
-          alertId: "config-alert-a",
-          category: "agent",
-          detail: "缺少模型配置",
-          status: "open",
-          targetId: "module-a",
-          title: "Model missing",
-          tone: "danger",
         },
       ] as never),
       authAudit: readonlyValue([
@@ -174,7 +163,6 @@ describe("console system log status row controller behavior", () : any => {
       "process:stale-service",
       "alert:alert-critical-long-id:2026-06-04T10:02:00.000Z",
       "alert:alert-recovered:2026-06-04T09:10:00.000Z",
-      "config-alert:config-alert-a",
       "tool-audit:tool-execution-a",
       "operation-audit:audit-auth-a",
       "operation-audit:audit-operation-b",
@@ -225,38 +213,31 @@ describe("console system log status row controller behavior", () : any => {
     });
 
     expect(rows[6]).toMatchObject({
-      kindLabel: "配置报警",
-      progressPercent: 0,
-      error: "缺少模型配置",
-      target: "agent / Model missing",
-    });
-    expect(rows[7]).toMatchObject({
       kindLabel: "调用记录",
       statusLabel: "failed，deny",
       target: "repo.status",
       error: "policy_denied",
     });
-    expect(rows[7].stage).toContain("只读");
-    expect(rows[7].detail).toContain("trace trace-a");
+    expect(rows[6].stage).toContain("只读");
+    expect(rows[6].detail).toContain("trace trace-a");
 
-    expect(rows[8]).toMatchObject({
+    expect(rows[7]).toMatchObject({
       kindLabel: "认证日志",
       target: "Ada，auth.login",
       statusLabel: "ok",
     });
-    expect(rows[8].detail).toContain("<redacted>");
-    expect(rows[9]).toMatchObject({
+    expect(rows[7].detail).toContain("<redacted>");
+    expect(rows[8]).toMatchObject({
       kindLabel: "操作日志",
       target: "anonymous，storage.backups.restore",
       error: "denied",
     });
-    expect(rows[9].detail).toContain("backup-a");
+    expect(rows[8].detail).toContain("backup-a");
   });
 
   it("returns no rows when all inputs are empty", () : any => {
     expect(buildSystemStatusLogRows({
       activeMonitorAlerts: readonlyValue([]),
-      agentConfigurationAlerts: readonlyValue([]),
       authAudit: readonlyValue([]),
       backgroundProcesses: readonlyValue([]),
       backgroundProcessStatus: readonlyValue(null),

@@ -2,8 +2,7 @@ import crypto from "node:crypto";
 
 export const DEFAULT_ROLES: Readonly<Record<string, any>> = Object.freeze({
   owner: { roleId: "owner", label: "Owner", scopes: [] },
-  admin: { roleId: "admin", label: "Admin", scopes: [] },
-  operator: { roleId: "operator", label: "Operator", scopes: [] },
+  maintainer: { roleId: "maintainer", label: "Maintainer", scopes: [] },
   viewer: { roleId: "viewer", label: "Viewer", scopes: [] }
 });
 
@@ -168,9 +167,47 @@ export function ensureSchema(db?: any) : any {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS authorization_api_key_recovery_assignments (
+      assignment_id TEXT PRIMARY KEY,
+      subject_id TEXT NOT NULL,
+      root_node_id TEXT NOT NULL,
+      action TEXT NOT NULL CHECK(action = 'operation_permission.api_keys.manage'),
+      enabled INTEGER NOT NULL DEFAULT 1,
+      server_authored INTEGER NOT NULL CHECK(server_authored = 1),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_key_recovery_subject_root
+      ON authorization_api_key_recovery_assignments(subject_id, root_node_id, action);
+
     CREATE INDEX IF NOT EXISTS idx_authorization_approvals_user ON authorization_approval_grants(user_id);
     CREATE INDEX IF NOT EXISTS idx_authorization_approvals_agent ON authorization_approval_grants(agent_id);
   `);
+
+  const migrationVersion: any = Number(db.pragma("user_version", { simple: true }) || 0);
+  if (migrationVersion < 1) {
+    db.transaction(() : any => {
+      const rows: any[] = db.prepare(`
+        SELECT user_id, role_ids_json
+        FROM authorization_user_policies
+      `).all();
+      const updateRoles: any = db.prepare(`
+        UPDATE authorization_user_policies
+        SET role_ids_json = ?
+        WHERE user_id = ?
+      `);
+      for (const row of rows) {
+        const roleIds: any[] = parseJson(row.role_ids_json, []);
+        if (!Array.isArray(roleIds)) continue;
+        const migrated: any[] = uniqueStrings(roleIds.map((roleId?: any) : any =>
+          ["admin", "operator"].includes(String(roleId || "")) ? "maintainer" : roleId));
+        if (JSON.stringify(migrated) !== JSON.stringify(roleIds)) {
+          updateRoles.run(stringifyJson(migrated, []), row.user_id);
+        }
+      }
+      db.pragma("user_version = 1");
+    })();
+  }
 }
 
 export function userPolicyFromRow(row?: any) : any {

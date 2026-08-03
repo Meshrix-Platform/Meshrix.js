@@ -28,7 +28,6 @@ import { executeWorkspaceAuditOperation } from "./operation-executors/workspace-
 import { executeAuthorizationFacadeOperation } from "./operation-executors/authorization-facade-executor.ts";
 import { executeAgentSyncOperation } from "./operation-executors/agent-sync-executor.ts";
 import { executeOperationPermissionPassthroughOperation } from "./operation-executors/operation-permission-passthrough-executor.ts";
-import { executeOperationPermissionAuthorizationOperation } from "./operation-executors/operation-permission-authorization-executor.ts";
 import {
   executeContextRuntimeOperation,
   executeMaintenanceAgentOperation,
@@ -130,6 +129,10 @@ export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.f
   "authorization.denied_requests.list",
   "authorization.governance.summary",
   "authorization.governance.updated",
+  "authorization.organization_governance.get",
+  "authorization.organization_governance.import",
+  "authorization.organization_governance.preview",
+  "authorization.organization_governance.publish",
   "authorization.loan_records.list",
   "authorization.policy.evaluate",
   "authorization.receipts.list",
@@ -197,9 +200,6 @@ export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.f
   "model_routing.health",
   "observability.trace.get",
   "operation_permission.http.passthrough",
-  "operation_permission.mcp.list_requests",
-  "operation_permission.mcp.request_authorization",
-  "operation_permission.mcp.resolve_request",
   "permissions.updated",
   "production.health",
   "readiness.baseline.status",
@@ -337,7 +337,6 @@ export const CONSOLE_DOMAIN_OPERATION_EXECUTOR_REGISTRY: readonly any[] = Object
   { featureId: "authorization-facade", handler: executeAuthorizationFacadeOperation },
   { featureId: "workspace-audit", handler: executeWorkspaceAuditOperation },
   { featureId: "agent-sync", handler: executeAgentSyncOperation },
-  { featureId: "operation-permission-authorization", handler: executeOperationPermissionAuthorizationOperation },
   { featureId: "strategy-management", handler: executeStrategyManagementOperation },
   { featureId: "security-alerts", handler: executeSecurityAlertsOperation },
   { featureId: "operation-permission-passthrough", handler: executeOperationPermissionPassthroughOperation },

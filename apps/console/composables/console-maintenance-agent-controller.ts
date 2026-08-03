@@ -23,7 +23,7 @@ type MaintenanceAgentState = NonNullable<ServerConsoleState["maintenanceAgent"]>
 
 type ConsoleMaintenanceAgentControllerOptions = {
   canReadMaintenanceAgent: ComputedRef<boolean>;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   consoleState: Ref<ServerConsoleState | null>;
   error: Ref<string>;
   modelEntryStatusKey: (entry: AgentModelConfig) => string;
@@ -186,7 +186,7 @@ export function createConsoleMaintenanceAgentController(
         nextError instanceof Error ? nextError.message : "刷新智能巡检失败。";
     } finally {
       if (!refreshOptions.silent) {
-        options.clearAllBusy();
+        options.clearBusy("maintenance-agent:refresh");
       }
     }
   }
@@ -206,7 +206,7 @@ export function createConsoleMaintenanceAgentController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存智能巡检配置失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("maintenance-agent:config");
     }
   }
 
@@ -257,7 +257,7 @@ export function createConsoleMaintenanceAgentController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "智能巡检对话执行失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("maintenance-agent:chat");
     }
   }
 
@@ -276,7 +276,7 @@ export function createConsoleMaintenanceAgentController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "维护 runbook 执行失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("maintenance-agent:run");
     }
   }
 
@@ -300,7 +300,7 @@ export function createConsoleMaintenanceAgentController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "维护计划审批失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`maintenance-agent:approve:${run.runId}`);
     }
   }
 
@@ -318,7 +318,7 @@ export function createConsoleMaintenanceAgentController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "维护运行取消失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`maintenance-agent:cancel:${run.runId}`);
     }
   }
 

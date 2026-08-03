@@ -3,6 +3,7 @@ import {
   RELEASE_JOURNEY_VISUAL_CAPTURE,
   readPngDimensions
 } from "./release-journey-visual-contract.ts";
+import { RELEASE_JOURNEY_STEPS } from "./release-journey-report.ts";
 
 export const UPSTREAM_SERVICE_PUBLISHING_HTML_REPORT_PATH: any =
   "build/reports/upstream-service-publishing.html";
@@ -12,16 +13,8 @@ export const UPSTREAM_SERVICE_PUBLISHING_BLANK_TEMPLATE_PATH: any =
   "docs/examples/upstream-service-publishing-report-template.html";
 
 export const UPSTREAM_SERVICE_PUBLISHING_REPORT_SECTIONS: readonly any[] = Object.freeze([
-  ["executive-summary", "Executive summary", "执行摘要"],
-  ["safe-configuration", "Exact safe configuration", "精确安全配置"],
-  ["mcp-acceptance", "MCP acceptance matrix", "MCP 验收矩阵"],
-  ["live-console-evidence", "Live Console evidence", "实时管控台证据"],
-  ["golden-path", "Golden path", "黄金路径"],
-  ["requirements", "Requirements", "需求"],
-  ["production-composition", "Production composition", "生产组成"],
-  ["revision-semantics", "Revision semantics", "修订语义"],
-  ["protocol-delivery", "Protocol delivery", "协议交付"],
-  ["provenance", "Provenance", "来源"]
+  ["operation-guide", "Operation guide", "操作手册"],
+  ["appendix", "Appendix", "附录"]
 ]);
 
 const INTERFACE_CATALOG_COLUMNS: readonly any[] = Object.freeze([
@@ -106,48 +99,167 @@ const FLOW: readonly any[] = Object.freeze([
 ]);
 
 const VISUAL_TITLES: Readonly<Record<string, any>> = Object.freeze({
-  "console-authenticated": "已认证的 Meshrix 管控台",
+  "console-authenticated": "已认证的 Meshrix 工作台",
+  "console-organization-permissions": "已发布的组织与权限配置",
   "console-upstream-basic-config": "上游服务基础配置",
   "console-upstream-operation-config": "上游操作配置",
   "console-upstream-published": "已发布上游服务及运行时健康状态",
   "console-published-tool": "工具目录中的已发布操作",
-  "console-token-authorization-pending": "待处理的 MCP 设备授权",
-  "console-token-authorization-consumed": "已完成的 MCP 设备授权",
+  "console-api-key-generated": "生成 API Key",
+  "console-downstream-agent-configured": "配置到下游智能体",
   "console-operation-approval-pending": "待处理的 Operation Permission 审批",
   "console-operation-approval-completed": "已完成的 Operation Permission 审批",
   "console-downstream-mcp-call": "管控台审计中的下游 MCP 调用"
 });
 
 const VISUAL_CONTEXT: Readonly<Record<string, any>> = Object.freeze({
-  "console-authenticated": ["access", "Authenticated session", "已认证会话"],
+  "console-authenticated": ["access", "Default Workbench", "默认工作台"],
+  "console-organization-permissions": ["governance", "Organization and permission projection", "组织与权限投影"],
   "console-upstream-basic-config": ["configuration", "Service subject", "服务主体"],
   "console-upstream-operation-config": ["configuration", "Operation impact", "操作影响"],
   "console-upstream-published": ["publication", "Published revision", "已发布修订"],
   "console-published-tool": ["discovery", "Granted surface", "授权能力面"],
-  "console-token-authorization-pending": ["decision", "Authorization decision", "授权决定"],
-  "console-token-authorization-consumed": ["outcome", "Authorization outcome", "授权结果"],
+  "console-api-key-generated": ["credential", "Issued API Key record", "已签发 API Key 记录"],
+  "console-downstream-agent-configured": ["configuration", "Downstream agent configuration", "下游代理配置"],
   "console-operation-approval-pending": ["decision", "Execution decision", "执行决定"],
   "console-operation-approval-completed": ["execution", "Execution outcome", "执行结果"],
   "console-downstream-mcp-call": ["audit", "Audit closure", "审计闭环"]
 });
 
+const OPERATION_MANUAL: Readonly<Record<string, any>> = Object.freeze({
+  "console-authenticated": {
+    location: ["Sign in at /login and remain on the default Workbench (/).", "在 /login 登录并停留在默认工作台（/）。"],
+    action: ["Submit the Console administrator sign-in form and confirm that the default Workbench opens with no credential field populated.", "提交管控台管理员登录表单，确认默认工作台打开，且任何凭据输入框都没有残留内容。"],
+    result: ["An authenticated Console session on the default operational Workbench.", "生成位于默认运维工作台的已认证管控台会话。"],
+    purpose: ["Establish the human administrator identity used by every subsequent governance action.", "建立后续所有治理操作所依赖的人类管理员身份。"]
+  },
+  "console-organization-permissions": {
+    location: ["Open Permissions → Organization Structure (/admin/organization-governance).", "进入“权限 → 组织架构”（/admin/organization-governance）。"],
+    action: ["Choose the Group template, validate it, publish it, and inspect the hierarchy, template tags, and scoped administrator roles.", "选择“集团”模板，完成验证与发布，并检查组织层级、模板标签和各级管理员角色。"],
+    result: ["A published organization baseline with five hierarchy nodes, governed tags, and matching administrator-role projections.", "生成已发布的组织治理基线，包含五个层级节点、受治理标签及对应管理员角色投影。"],
+    purpose: ["Define which organizational scope can receive credentials, discover tools, and administer subordinate resources.", "定义哪些组织范围可以获得密钥、发现工具并管理下级资源。"]
+  },
+  "console-upstream-basic-config": {
+    location: ["Open Services → Publish Service and the service information tab (/admin/publish-upstream-service).", "进入“服务 → 发布服务”，打开服务信息页签（/admin/publish-upstream-service）。"],
+    action: ["Import the verified JSON descriptor and load it into the editor; review the service identity, protocol, target, and health route.", "导入已验证的 JSON 描述文件并加载到编辑器，检查服务标识、协议、目标和健康检查路径。"],
+    result: ["A browser publishing draft bound to the exact downloadable JSON configuration.", "生成与可下载真实 JSON 配置精确绑定的浏览器发布草稿。"],
+    purpose: ["Describe the upstream service through a closed, reviewable configuration before publishing it.", "在发布前用封闭且可审查的配置描述上游服务。"]
+  },
+  "console-upstream-operation-config": {
+    location: ["Stay in Services → Publish Service and open Advanced JSON.", "停留在“服务 → 发布服务”，打开“高级 JSON”。"],
+    action: ["Review both conversion operations, especially the artifact_multipart request mapping and multipart maxBytes limit.", "检查两个转换操作，重点确认 artifact_multipart 请求映射和 multipart maxBytes 上限。"],
+    result: ["Two governed operation definitions for immediate and approval-required conversion over the same upstream route.", "生成两个受治理的转换操作定义：一个立即执行，一个需要审批，二者指向同一上游路由。"],
+    purpose: ["Bind file transport, limits, risk, and approval behavior before the gateway can expose the operation.", "在网关暴露操作前绑定文件传输、大小限制、风险和审批行为。"]
+  },
+  "console-upstream-published": {
+    location: ["Stay in Services → Publish Service (/admin/publish-upstream-service).", "停留在“服务 → 发布服务”（/admin/publish-upstream-service）。"],
+    action: ["Select Publish and wait for the Console to report successful publication and runtime health.", "点击“发布”，等待管控台显示发布成功和运行时健康检查通过。"],
+    result: ["A durable service revision loaded by the gateway with healthy upstream endpoints.", "生成由网关加载的持久服务修订，并确认上游端点健康。"],
+    purpose: ["Make the service executable only after the manifest, gateway snapshot, and permission catalog agree.", "仅在清单、网关快照和权限目录一致后，才让服务具备可执行性。"]
+  },
+  "console-published-tool": {
+    location: ["Open Tools → Tool List (/admin/tool-list).", "进入“工具 → 工具列表”（/admin/tool-list）。"],
+    action: ["Search for the published service and confirm that its operation appears in the governed tool catalog.", "搜索刚发布的服务，确认对应操作已经出现在受治理工具目录中。"],
+    result: ["A discoverable MCP tool projection linked to the published service operation.", "生成与已发布服务操作关联、可被发现的 MCP 工具投影。"],
+    purpose: ["Verify that publication reached the discovery surface without bypassing organization and permission policy.", "验证发布结果已到达发现层，同时没有绕过组织与权限策略。"]
+  },
+  "console-api-key-generated": {
+    location: ["Open Permissions → Key Distribution (/admin/api-key-distribution).", "进入“权限 → 密钥分发”（/admin/api-key-distribution）。"],
+    action: ["Create an organization-scoped workload key, copy it only during the one-time reveal, distribute it to the client, then dismiss the plaintext permanently.", "创建限定组织范围的工作负载密钥，仅在一次性显示期间复制并分发给客户端，随后永久关闭明文。"],
+    result: ["A redacted distributed-key record bound to the Team scope, allowed tools, capabilities, limits, and expiry.", "生成一条经过遮盖的已分发密钥记录，并绑定团队范围、允许工具、能力、使用限制和有效期。"],
+    purpose: ["Give the MCP workload a verifiable non-forgeable identity with least-privilege authority and revocation control.", "为 MCP 工作负载提供不可伪造、可验证的身份，并具备最小权限与撤销控制。"]
+  },
+  "console-downstream-agent-configured": {
+    location: ["Remain in Permissions → Key Distribution (/admin/api-key-distribution).", "停留在“权限 → 密钥分发”（/admin/api-key-distribution）。"],
+    action: ["Configure the real downstream connector through MESHRIX_MCP_TOKEN or token stdin, while the client stores only the environment-variable placeholder.", "通过 MESHRIX_MCP_TOKEN 或标准输入密钥配置真实下游连接器，客户端仅保存环境变量占位符。"],
+    result: ["The installed connector uses the pre-issued organization-scoped API Key as its only ordinary MCP credential.", "已安装连接器仅使用预签发的组织范围 API Key 作为普通 MCP 凭证。"],
+    purpose: ["Bind the real downstream configuration action to a privacy-safe operator-visible handoff.", "将真实下游配置动作绑定到隐私安全、操作员可见的交付说明。"]
+  },
+  "console-operation-approval-pending": {
+    location: ["Open Approval Flow and select pending operation decisions (/approval).", "进入“审批流”，查看待处理的操作审批（/approval）。"],
+    action: ["Inspect each convert-require-approval-debug request and approve the current decision layer.", "检查每个 convert-require-approval-debug 请求，并批准当前审批层。"],
+    result: ["One bounded execution permit for each approved conversion request; no upstream conversion has run yet.", "为每个已批准转换请求生成一次有界执行许可；此时上游转换尚未执行。"],
+    purpose: ["Separate the authorization decision from the external side effect and prevent approval from becoming standing authority.", "将授权决定与外部副作用分离，防止一次审批演变成长期权限。"]
+  },
+  "console-operation-approval-completed": {
+    location: ["Remain in Approval Flow and switch to all operation records.", "停留在“审批流”，切换到全部操作记录。"],
+    action: ["Confirm that each approved conversion advanced to completed exactly once.", "确认每个已批准转换都恰好执行一次并进入已完成状态。"],
+    result: ["Completed approval records correlated with one resumed conversion per request.", "生成与每个请求单次恢复转换相关联的已完成审批记录。"],
+    purpose: ["Prove that the approval was consumed once and could not replay or authorize unrelated work.", "证明审批只被消费一次，不能重放，也不能授权无关操作。"]
+  },
+  "console-downstream-mcp-call": {
+    location: ["Open Tools → Tool Statistics (/admin/tool-stats).", "进入“工具 → 工具统计”（/admin/tool-stats）。"],
+    action: ["Refresh the current page and inspect the recent-call audit for both conversion branches and the client matrix.", "刷新当前页面，检查最近调用审计中的两个转换分支及客户端矩阵。"],
+    result: ["A closed audit trail from client request through authorization, upstream conversion, PDF artifact retrieval, and cleanup.", "生成从客户端请求、授权、上游转换、PDF 制品获取到清理完成的闭环审计记录。"],
+    purpose: ["Confirm the complete MCP-to-upstream path produced the expected artifact and remained traceable without exposing protected identities.", "确认 MCP 到上游的完整链路产出预期制品，并在不暴露受保护身份的前提下保持可追溯。"]
+  }
+});
+
 const VISUAL_ORDER: any = Object.freeze(Object.keys(VISUAL_TITLES));
-const JOURNEY_STEP_ORDER: readonly any[] = Object.freeze([
-  "preflight",
-  "stack-build-up",
-  "admin-bootstrap",
-  "upstream-publish",
-  "adapter-seed",
-  "client-discovery",
-  "connector-install-matrix",
-  "binary-upload-matrix",
-  "mcp-acceptance-matrix",
-  "approval-branch",
-  "artifact-fetch",
-  "pdf-verify"
+const MANUAL_GROUPS: readonly any[] = Object.freeze([
+  {
+    id: "organization-structure-configuration",
+    title: ["Organization structure configuration", "组织架构的配置"],
+    purpose: [
+      "Establish the administrator session and publish the organization hierarchy that scopes every later permission.",
+      "建立管理员会话并发布组织层级，为后续所有权限划定范围。"
+    ],
+    stepIds: ["console-authenticated", "console-organization-permissions"]
+  },
+  {
+    id: "upstream-service-registration-publishing",
+    title: ["Upstream service registration and publishing", "上游服务的注册到发布"],
+    purpose: [
+      "Register the service descriptor and operation mapping, then publish a healthy governed revision.",
+      "登记服务描述与操作映射，并发布一个健康且受治理的服务修订。"
+    ],
+    stepIds: ["console-upstream-basic-config", "console-upstream-operation-config", "console-upstream-published"]
+  },
+  {
+    id: "tool-permission-configuration",
+    title: ["Tool permission configuration", "工具权限的配置"],
+    purpose: [
+      "Confirm the published tool surface and issue the least-privilege API Key that may use it.",
+      "确认已发布的工具能力面，并签发可使用该工具的最小权限 API Key。"
+    ],
+    stepIds: ["console-published-tool", "console-api-key-generated"]
+  },
+  {
+    id: "mcp-service-request",
+    title: ["MCP service request", "MCP 服务的请求"],
+    purpose: [
+      "Configure the downstream agent, complete required approval, and verify the final MCP request audit.",
+      "配置下游智能体、完成必要审批，并核验最终 MCP 请求审计。"
+    ],
+    stepIds: [
+      "console-downstream-agent-configured",
+      "console-operation-approval-pending",
+      "console-operation-approval-completed",
+      "console-downstream-mcp-call"
+    ]
+  }
 ]);
+const JOURNEY_STEP_ORDER: readonly any[] = Object.freeze(
+  RELEASE_JOURNEY_STEPS.filter((stepId?: any) : any => stepId !== "cleanup")
+);
 const VISUAL_EVIDENCE_FILE_PREFIX: any =
   "build/reports/upstream-service-publishing/screenshots/";
+
+function renderManualGroups({ articleById, indexItem }: Record<string, any>) : string {
+  return MANUAL_GROUPS.map((group?: any, groupIndex?: any) : any => {
+    const groupTitleId: any = `manual-group-${group.id}-title`;
+    const groupedIndex: any = group.stepIds.map((stepId?: any) : any => indexItem(stepId)).join("");
+    const groupedArticles: any = group.stepIds.map((stepId?: any) : any => articleById.get(stepId) || "").join("");
+    return `<section class="manual-group" id="manual-group-${escapeHtml(group.id)}" data-manual-group="${escapeHtml(group.id)}" aria-labelledby="${groupTitleId}">
+      <header class="manual-group-header">
+        <span class="manual-group-number">${bilingual(`Part ${groupIndex + 1}`, `第 ${groupIndex + 1} 组`)}</span>
+        <div><h3 id="${groupTitleId}">${bilingual(group.title[0], group.title[1])}</h3><p>${bilingual(group.purpose[0], group.purpose[1])}</p></div>
+      </header>
+      <ol class="manual-index manual-group-index" data-manual-group-index="${escapeHtml(group.id)}">${groupedIndex}</ol>
+      <div class="visual-grid manual-group-steps" data-manual-group-steps="${escapeHtml(group.id)}">${groupedArticles}</div>
+    </section>`;
+  }).join("");
+}
 
 export function renderUpstreamServicePublishingHtml(
   report?: any,
@@ -433,7 +545,7 @@ export function renderUpstreamServicePublishingHtml(
         <td>${bilingual("Passed", "通过")}</td>
         <td>${escapeHtml(detail.durationMs)} ms</td>
       </tr>`).join("");
-  const visualEvidence: any = journeyReport.visualEvidence.map((item?: any, index?: any) : any => {
+  const visualEvidenceArticles: any[] = journeyReport.visualEvidence.map((item?: any, index?: any) : any => {
     const prefix: any = "build/reports/";
     if (
       item?.status !== "passed"
@@ -463,6 +575,17 @@ export function renderUpstreamServicePublishingHtml(
     const chineseTitle: any = VISUAL_TITLES[item.id] || item.title;
     const [contextKind, contextEnglish, contextChinese] =
       VISUAL_CONTEXT[item.id] || ["evidence", "Evidence", "证据"];
+    const manual: any = OPERATION_MANUAL[item.id];
+    if (
+      !manual
+      || [manual.location, manual.action, manual.result, manual.purpose].some(
+        (field?: any) : any => !Array.isArray(field) || field.length !== 2 || field.some((value?: any) : any => !String(value || "").trim())
+      )
+    ) {
+      const error: Error & Record<string, any> = new Error("The operation manual step is incomplete.");
+      error.code = "upstream_service_publishing_html_operation_manual_invalid";
+      throw error;
+    }
     const embeddedImageSource: any = renderEmbeddedVisualEvidenceSource({
       item,
       visualEvidenceFiles
@@ -471,21 +594,38 @@ export function renderUpstreamServicePublishingHtml(
       ? `<a class="evidence-file" href="${escapeHtml(embeddedBasicConfigHref)}" download="upstream-service-basic-config.json">${bilingual("Open actual JSON configuration", "打开真实 JSON 配置文件")}<code>application/json · sha256:${escapeHtml(basicConfig.sha256.slice(0, 12))}</code></a>`
       : "";
     const figureId: any = `evidence-${item.id}`;
-    return `<figure data-evidence-kind="${contextKind}" id="${figureId}">
-      <div class="evidence-image"><img src="${embeddedImageSource}" width="${escapeHtml(item.pixelWidth)}" height="${escapeHtml(item.pixelHeight)}" loading="lazy" decoding="async" alt="${escapeHtml(item.title)}" data-alt-en="${escapeHtml(item.title)}" data-alt-zh="${escapeHtml(chineseTitle)}"></div>
-      <figcaption>
-        <span class="evidence-step">${bilingual(`Step ${index + 1}`, `步骤 ${index + 1}`)}</span>
-        <span class="evidence-context">${bilingual(contextEnglish, contextChinese)}</span>
-        <strong>${bilingual(item.title, chineseTitle)}</strong>
-        <code>${escapeHtml(item.route)} · ${escapeHtml(item.pixelWidth)}×${escapeHtml(item.pixelHeight)} · 2× · sha256:${escapeHtml(item.sha256.slice(0, 12))}</code>
-        ${configAttachment}
-      </figcaption>
-    </figure>`;
-  }).join("");
-  const visualEvidenceIndex: any = journeyReport.visualEvidence.map((item?: any) : any => {
-    const chineseTitle: any = VISUAL_TITLES[item.id] || item.title;
-    return `<li><a href="#evidence-${item.id}">${bilingual(item.title, chineseTitle)}</a></li>`;
-  }).join("");
+    return `<article class="manual-step" data-manual-step="${escapeHtml(item.id)}" data-evidence-kind="${contextKind}" id="${figureId}">
+      <header class="manual-step-header">
+        <span class="manual-step-number">${bilingual(`Step ${index + 1}`, `步骤 ${index + 1}`)}</span>
+        <div><p class="evidence-context">${bilingual(contextEnglish, contextChinese)}</p><h3>${bilingual(item.title, chineseTitle)}</h3></div>
+      </header>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt>${bilingual("Where to go", "去哪里")}</dt><dd>${bilingual(manual.location[0], manual.location[1])}<code>${escapeHtml(item.route)}</code></dd></div>
+        <div data-manual-field="action"><dt>${bilingual("What to do", "操作什么")}</dt><dd>${bilingual(manual.action[0], manual.action[1])}</dd></div>
+        <div data-manual-field="result"><dt>${bilingual("What is produced", "生成什么")}</dt><dd>${bilingual(manual.result[0], manual.result[1])}</dd></div>
+        <div data-manual-field="purpose"><dt>${bilingual("Why this matters", "这一步的作用")}</dt><dd>${bilingual(manual.purpose[0], manual.purpose[1])}</dd></div>
+      </dl>
+      <figure>
+        <div class="evidence-image"><img src="${embeddedImageSource}" width="${escapeHtml(item.pixelWidth)}" height="${escapeHtml(item.pixelHeight)}" loading="lazy" decoding="async" alt="${escapeHtml(item.title)}" data-alt-en="${escapeHtml(item.title)}" data-alt-zh="${escapeHtml(chineseTitle)}"></div>
+        <figcaption><strong>${bilingual("Console checkpoint", "管控台检查点")}</strong><code>${escapeHtml(item.pixelWidth)}×${escapeHtml(item.pixelHeight)} · 2× · sha256:${escapeHtml(item.sha256.slice(0, 12))}</code>${configAttachment}</figcaption>
+      </figure>
+    </article>`;
+  });
+  const visualEvidenceArticleById: any = new Map(
+    journeyReport.visualEvidence.map((item?: any, index?: any) : any => [item.id, visualEvidenceArticles[index]])
+  );
+  const visualEvidenceItemById: any = new Map(
+    journeyReport.visualEvidence.map((item?: any) : any => [item.id, item])
+  );
+  const visualEvidence: any = renderManualGroups({
+    articleById: visualEvidenceArticleById,
+    indexItem: (stepId?: any) : any => {
+      const item: any = visualEvidenceItemById.get(stepId);
+      const stepNumber: any = VISUAL_ORDER.indexOf(stepId) + 1;
+      const chineseTitle: any = VISUAL_TITLES[stepId] || item?.title;
+      return `<li value="${stepNumber}"><a href="#evidence-${escapeHtml(stepId)}">${bilingual(`Step ${stepNumber}: ${item?.title || stepId}`, `第 ${stepNumber} 步：${chineseTitle || stepId}`)}</a></li>`;
+    }
+  });
   if (
     candidateReceipt?.claim !== "upstream-publishing-prepublication-passed"
     || !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u
@@ -574,11 +714,11 @@ export function renderUpstreamServicePublishingHtml(
       font-variant-numeric: tabular-nums;
     }
     .cover {
-      min-height: 590px;
-      padding: 76px clamp(32px, 8vw, 92px);
+      min-height: 340px;
+      padding: 64px clamp(32px, 8vw, 92px);
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
+      justify-content: center;
       background: var(--ink);
       color: #fff;
     }
@@ -599,6 +739,7 @@ export function renderUpstreamServicePublishingHtml(
       line-height: .98;
       letter-spacing: -.055em;
     }
+    .manual-scope { max-width: 760px; margin: 18px 0 0; color: #d6e1db; font-size: 1.08rem; }
     .verdict {
       display: inline-flex;
       align-items: center;
@@ -632,6 +773,16 @@ export function renderUpstreamServicePublishingHtml(
       contain-intrinsic-size: auto 760px;
     }
     .section:last-of-type { border-bottom: 0; }
+    .appendix { background: #edf0ec; }
+    .appendix-stack { display: grid; gap: 22px; }
+    .appendix-section {
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--paper);
+      break-inside: avoid;
+    }
+    .appendix-section > .section-heading { margin-bottom: 20px; }
     .section-heading {
       max-width: 760px;
       margin-bottom: 26px;
@@ -885,11 +1036,122 @@ export function renderUpstreamServicePublishingHtml(
       text-transform: uppercase;
     }
     .state-stack--approval { color: var(--decision); }
+    .manual-groups {
+      display: grid;
+      gap: 48px;
+    }
+    .manual-group {
+      padding: 0;
+      border: 0;
+    }
+    .manual-group + .manual-group {
+      padding-top: 48px;
+      border-top: 1px solid var(--line-strong);
+    }
+    .manual-group-header {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .manual-group-header h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(1.7rem, 3vw, 2.25rem);
+      line-height: 1.12;
+    }
+    .manual-group-header p {
+      max-width: 780px;
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+    .manual-group-number {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      padding: 6px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--accent-deep);
+      font-size: .74rem;
+      font-weight: 850;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
+    .manual-index {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 24px;
+      margin: 0 0 28px;
+      padding: 20px 24px 20px 42px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+    .manual-index a { color: var(--accent-deep); font-weight: 750; }
+    .manual-group-index { margin-bottom: 24px; }
     .visual-grid {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: 24px;
+      gap: 34px;
     }
+    .manual-step {
+      padding: 26px;
+      border: 1px solid var(--line-strong);
+      border-radius: 18px;
+      background: var(--surface);
+      break-inside: avoid;
+    }
+    .manual-step[data-evidence-kind="decision"] {
+      border-color: #b9aadf;
+      box-shadow: inset 4px 0 0 var(--decision);
+    }
+    .manual-step[data-evidence-kind="execution"],
+    .manual-step[data-evidence-kind="outcome"] {
+      border-color: #dec99e;
+      box-shadow: inset 4px 0 0 var(--execution);
+    }
+    .manual-step[data-evidence-kind="audit"] {
+      border-color: #9dc7b2;
+      box-shadow: inset 4px 0 0 var(--accent);
+    }
+    .manual-step-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .manual-step-header h3 { margin: 2px 0 0; font-size: 1.45rem; line-height: 1.2; }
+    .manual-step-number {
+      flex: 0 0 auto;
+      padding: 8px 12px;
+      border-radius: 9px;
+      background: var(--accent-soft);
+      color: var(--accent-deep);
+      font-weight: 850;
+    }
+    .manual-instructions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      margin: 0 0 20px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--line);
+    }
+    .manual-instructions > div { min-width: 0; padding: 16px 18px; background: var(--surface-subtle); }
+    .manual-instructions dt {
+      margin-bottom: 5px;
+      color: var(--accent);
+      font-size: .72rem;
+      font-weight: 850;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .manual-instructions dd { margin: 0; color: var(--ink-soft); }
+    .manual-instructions code { display: block; margin-top: 5px; color: var(--muted); font-size: .78rem; }
     .visual-grid figure {
       margin: 0;
       overflow: hidden;
@@ -897,19 +1159,6 @@ export function renderUpstreamServicePublishingHtml(
       border-radius: 16px;
       background: var(--surface);
       break-inside: avoid;
-    }
-    .visual-grid figure[data-evidence-kind="decision"] {
-      border-color: #b9aadf;
-      box-shadow: inset 4px 0 0 var(--decision);
-    }
-    .visual-grid figure[data-evidence-kind="execution"],
-    .visual-grid figure[data-evidence-kind="outcome"] {
-      border-color: #dec99e;
-      box-shadow: inset 4px 0 0 var(--execution);
-    }
-    .visual-grid figure[data-evidence-kind="audit"] {
-      border-color: #9dc7b2;
-      box-shadow: inset 4px 0 0 var(--accent);
     }
     .evidence-image {
       padding: 10px;
@@ -1219,6 +1468,8 @@ export function renderUpstreamServicePublishingHtml(
       .cover-meta, .metrics, .config-grid, .provenance, .approval-proof {
         grid-template-columns: 1fr;
       }
+      .manual-index, .manual-instructions, .manual-group-header { grid-template-columns: 1fr; }
+      .manual-step { padding: 18px; }
       .cover-meta { gap: 8px; }
       .approval-proof article { border-right: 0; border-bottom: 1px solid var(--line); }
       .approval-proof article:last-child { border-bottom: 0; }
@@ -1258,9 +1509,9 @@ export function renderUpstreamServicePublishingHtml(
         box-shadow: none;
       }
       .cover {
-        min-height: 245mm;
-        padding: 18mm;
-        break-after: page;
+        min-height: 62mm;
+        padding: 14mm;
+        break-after: auto;
       }
       .section {
         padding: 11mm 4mm;
@@ -1273,6 +1524,7 @@ export function renderUpstreamServicePublishingHtml(
         page-break-after: avoid;
       }
       h2, h3 { break-after: avoid; }
+      .manual-group-header,
       .metric, .panel, .config-card, .approval-proof, .approval-proof article,
       .table-shell, table, tr, figure, .flow li, .decision-contract article {
         break-inside: avoid;
@@ -1304,21 +1556,29 @@ export function renderUpstreamServicePublishingHtml(
   </nav>
   <header class="cover">
     <div class="cover-main">
-      <p class="kicker">${bilingual("Mandatory pre-release evidence", "发布前强制证据")}</p>
-      <h1>${bilingual("Upstream Service Publishing", "上游服务发布")}</h1>
-      <p class="verdict">${bilingual("Scoped upstream journey verified", "限定上游路线验证通过")}</p>
-    </div>
-    <div class="cover-meta">
-      <p><strong>${bilingual("Generated", "生成时间")}</strong><br>${escapeHtml(journeyReport.generatedAt)}</p>
-      <p>${bilingual("Deployment mode: isolated external-service journey", "部署模式：隔离的外部服务旅程")}</p>
-      <p>${bilingual("Storage: local Git-ignored build output; cloud upload disabled", "存储：本地 Git 忽略的 build 产物；禁止上传云端")}</p>
-      <p data-report-timing="journey-total" data-duration-ms="${totalDurationMs}"><strong>${bilingual("Journey duration", "路线耗时")}</strong><br>${totalDurationMs} ms</p>
-      <p data-report-cleanup="passed" data-duration-ms="${cleanupDurationMs}"><strong>${bilingual("Cleanup", "清理")}</strong><br>${cleanupDurationMs} ms · ${bilingual("passed", "通过")}</p>
+      <p class="kicker">${bilingual("Console operation manual", "管控台操作手册")}</p>
+      <h1>${bilingual("Publish an Upstream Service through Meshrix", "通过 Meshrix 发布上游服务")}</h1>
+      <p class="manual-scope">${bilingual("Follow these eleven Console steps from administrator sign-in through organization governance, API Key distribution, MCP conversion, and final audit.", "从管理员登录开始，依次完成下面十一个管控台步骤，直至组织治理、API Key 分发、MCP 转换和最终审计全部闭环。")}</p>
     </div>
   </header>
   ${reportNavigation}
   <main id="report-content" tabindex="-1">
-  <section class="section" id="executive-summary" aria-labelledby="executive-summary-title" data-report-section="executive-summary">
+  <section class="section" id="operation-guide" aria-labelledby="operation-guide-title" data-report-section="operation-guide">
+    <header class="section-heading">
+      <p class="eyebrow">${bilingual("Operation guide", "操作手册")}</p>
+      <h2 id="operation-guide-title">${bilingual("Operate the complete publishing flow step by step", "按步骤完成完整发布流程")}</h2>
+      <p class="section-intro">${bilingual("Each step states where to go, what to operate, what the action produces, and why it exists. The screenshot below each instruction is the verified Console checkpoint from that exact stage.", "每一步都说明去哪里、操作什么、生成什么以及这一步的作用；说明下方的截图来自该阶段经过验证的真实管控台检查点。")}</p>
+    </header>
+    <div class="manual-groups" data-report-slot="operation-guide-groups">${visualEvidence}</div>
+  </section>
+  <section class="section appendix" id="appendix" aria-labelledby="appendix-title" data-report-section="appendix">
+    <header class="section-heading">
+      <p class="eyebrow">${bilingual("Appendix", "附录")}</p>
+      <h2 id="appendix-title">${bilingual("Verification details and technical reference", "验证详情与技术参考")}</h2>
+      <p class="section-intro">${bilingual("The material below supports release verification but is not required to follow the Console procedure above.", "以下内容用于支撑发布验证，不影响按照上方管控台步骤完成操作。")}</p>
+    </header>
+    <div class="appendix-stack">
+  <section class="appendix-section" id="executive-summary" aria-labelledby="executive-summary-title" data-appendix-section="executive-summary">
     <header class="section-heading">
       <p class="eyebrow">${bilingual("Executive summary", "执行摘要")}</p>
       <h2 id="executive-summary-title">${bilingual("One governed route, one verified result", "一条受治理路径，一个已验证结果")}</h2>
@@ -1350,7 +1610,7 @@ export function renderUpstreamServicePublishingHtml(
     </div>
     <p class="authority-note">${bilingual(candidateBound ? "This HTML document is a local-only human-readable projection of a scoped candidate receipt. Synthetic fixture and generated platform identifiers remain visible; credentials and protected identities remain protected. The Functional Release Gate remains the sole platform release authority." : "This HTML document is a local-only human-readable projection of fresh scoped evidence. It remains unbound until an external candidate receipt hashes the final HTML and complete artifact set; it is not a candidate-passed claim. The Functional Release Gate remains the sole platform release authority.", candidateBound ? "此 HTML 文档是限定候选收据的本地可读投影。合成测试与平台生成标识保持可见；凭据及受保护身份仍受保护。Functional Release Gate 仍是唯一的平台发布权威。" : "此 HTML 文档是全新限定证据的本地可读投影。在外部候选收据对最终 HTML 与完整制品集进行哈希绑定前，它保持未绑定状态，也不构成候选通过声明。Functional Release Gate 仍是唯一的平台发布权威。")}</p>
   </section>
-  <section class="section" id="safe-configuration" aria-labelledby="safe-configuration-title" data-report-section="safe-configuration">
+  <section class="appendix-section" id="safe-configuration" aria-labelledby="safe-configuration-title" data-appendix-section="safe-configuration">
     <header class="section-heading">
       <p class="eyebrow">${bilingual("Exact safe configuration", "精确安全配置")}</p>
       <h2 id="safe-configuration-title">${bilingual("Startup, binary upload, and downstream connector", "启动参数、二进制上传与下游连接器")}</h2>
@@ -1401,18 +1661,13 @@ export function renderUpstreamServicePublishingHtml(
       </article>
     </div>
   </section>
-  <section class="section" id="mcp-acceptance" aria-labelledby="mcp-acceptance-title" data-report-section="mcp-acceptance">
+  <section class="appendix-section" id="mcp-acceptance" aria-labelledby="mcp-acceptance-title" data-appendix-section="mcp-acceptance">
     <header class="section-heading"><p class="eyebrow">${bilingual("MCP acceptance matrix", "MCP 验收矩阵")}</p><h2 id="mcp-acceptance-title">${bilingual(fallbackUsed ? "No local client was detected; MCP protocol simulation was used" : "Every detected local client completed a real connector request", fallbackUsed ? "未发现本机客户端；已使用 MCP 协议模拟" : "每个已发现的本机客户端均完成真实连接器请求")}</h2></header>
     <div class="table-shell" data-report-slot="client-lifecycle"><table><caption>${bilingual("Detected-client connector lifecycle acceptance", "已发现客户端连接器生命周期验收")}</caption><thead><tr><th>${bilingual("Client", "客户端")}</th><th>${bilingual("Discovery", "发现")}</th><th>${bilingual("Install", "安装")}</th><th>${bilingual("Upload", "上传")}</th><th>tools/list</th><th>full-access-debug</th><th>require-approval-debug</th><th>${bilingual("Uninstall", "卸载")}</th><th>${bilingual("Cleanup", "清理")}</th></tr></thead><tbody>${clientMatrix}</tbody></table></div>
     <p class="note">${bilingual(fallbackUsed ? "All seven supported client commands were absent. Simulation is a declared fallback and does not count as client compatibility evidence." : "Not detected means the supported client command was absent on this host. Every detected row is mandatory and passed in an isolated temporary client configuration; simulation is forbidden while any real client is detected.", fallbackUsed ? "全部七个受支持客户端命令均不存在。模拟是明确标注的回退，不计作客户端兼容性证据。" : "未发现表示本机不存在该受支持客户端命令。每个已发现行均为强制验收项，并在隔离的临时客户端配置中通过；只要发现任一真实客户端，就禁止使用模拟。")}</p>
     <p class="note">${bilingual(`The audit also contains ${approvalReceipt.expectedOutOfScopeWorkspaceDenials} expected meshrix.agentWorkspace.list denials—one per execution target. Workspace authority is deliberately absent from this journey Grant; these boundary denials prove that full-access-debug does not widen unrelated authority and are not failures of either format-convert interface.`, `审计还包含 ${approvalReceipt.expectedOutOfScopeWorkspaceDenials} 条预期的 meshrix.agentWorkspace.list 拒绝记录，每个执行目标一条。本次路线 Grant 有意不授予工作空间权限；这些边界拒绝证明 full-access-debug 不会扩大无关权限，并非两个格式转换接口的失败。`)}</p>
   </section>
-  <section class="section" id="live-console-evidence" aria-labelledby="live-console-evidence-title" data-report-section="live-console-evidence">
-    <header class="section-heading"><p class="eyebrow">${bilingual("Live Console evidence", "实时管控台证据")}</p><h2 id="live-console-evidence-title">${bilingual("Real product pages from configuration to MCP invocation", "从配置到 MCP 调用的真实产品页面")}</h2><p class="section-intro">${bilingual("Decision screenshots identify the subject and effect; execution and audit screenshots independently show what happened afterward.", "决策截图说明主体与影响；执行和审计截图分别展示之后实际发生的结果。")}</p></header>
-    <ol class="boundaries" data-report-slot="visual-evidence-index">${visualEvidenceIndex}</ol>
-    <div class="visual-grid">${visualEvidence}</div>
-  </section>
-  <section class="section" id="golden-path" aria-labelledby="golden-path-title" data-report-section="golden-path">
+  <section class="appendix-section" id="golden-path" aria-labelledby="golden-path-title" data-appendix-section="golden-path">
     <header class="section-heading"><p class="eyebrow">${bilingual("Golden path", "黄金路径")}</p><h2 id="golden-path-title">${bilingual("Registration to downstream invocation", "从注册到下游调用")}</h2><p class="section-intro">${bilingual("The route separates requester, approver, execution permit, and audit so a decision is never mistaken for the resulting effect.", "该路径分离请求者、审批者、执行许可与审计，避免将审批决定误认为执行结果。")}</p></header>
     <ol class="flow">${flow}</ol>
     <div class="decision-contract">
@@ -1421,21 +1676,25 @@ export function renderUpstreamServicePublishingHtml(
       <article><p class="card-kicker">${bilingual("Audit closure", "审计闭环")}</p><h3>${bilingual("How it remains traceable", "如何保持可追溯")}</h3><dl><dt>${bilingual("Decision", "决定")}</dt><dd>${bilingual("Pending → approved", "待审批 → 已批准")}</dd><dt>${bilingual("Execution", "执行")}</dt><dd>${bilingual("Approved → completed once", "已批准 → 单次完成")}</dd><dt>${bilingual("Boundary", "边界")}</dt><dd>${escapeHtml(approvalReceipt.expectedOutOfScopeWorkspaceDenials)} ${bilingual("expected non-amplification denials", "条预期的权限不扩张拒绝")}</dd></dl></article>
     </div>
   </section>
-  <section class="section" id="requirements" aria-labelledby="requirements-title" data-report-section="requirements"><header class="section-heading"><p class="eyebrow">${bilingual("Requirements", "需求")}</p><h2 id="requirements-title">${bilingual("Verified assertions", "已验证断言")}</h2></header><div class="table-shell"><table><caption>${bilingual("Verified requirement assertions", "已验证需求断言")}</caption><thead><tr><th>${bilingual("Requirement", "需求")}</th><th>${bilingual("Phase", "阶段")}</th><th>${bilingual("Result", "结果")}</th></tr></thead><tbody>${assertions}</tbody></table></div></section>
-  <section class="section" id="production-composition" aria-labelledby="production-composition-title" data-report-section="production-composition"><header class="section-heading"><p class="eyebrow">${bilingual("Production composition", "生产组成")}</p><h2 id="production-composition-title">${bilingual("Traversed boundaries", "已穿越边界")}</h2></header><ul class="boundaries">${boundaries}</ul></section>
-  <section class="section" id="revision-semantics" aria-labelledby="revision-semantics-title" data-report-section="revision-semantics"><header class="section-heading"><p class="eyebrow">${bilingual("Revision semantics", "修订语义")}</p><h2 id="revision-semantics-title">${bilingual("Lifecycle outcomes", "生命周期结果")}</h2></header><div class="table-shell"><table><caption>${bilingual("Verified revision lifecycle outcomes", "已验证修订生命周期结果")}</caption><thead><tr><th>${bilingual("Scenario", "场景")}</th><th>${bilingual("Revision", "修订")}</th><th>${bilingual("Outcome", "结果")}</th></tr></thead><tbody>${revisions}</tbody></table></div></section>
-  <section class="section" id="protocol-delivery" aria-labelledby="protocol-delivery-title" data-report-section="protocol-delivery"><header class="section-heading"><p class="eyebrow">${bilingual("Protocol delivery", "协议交付")}</p><h2 id="protocol-delivery-title">${bilingual("Downstream cohorts", "下游队列")}</h2></header><div class="table-shell"><table><caption>${bilingual("Verified downstream protocol cohorts", "已验证下游协议队列")}</caption><thead><tr><th>${bilingual("Cohort", "队列")}</th><th>${bilingual("Outcome", "结果")}</th><th>${bilingual("Count", "数量")}</th></tr></thead><tbody>${cohorts}</tbody></table></div></section>
-  <section class="section" id="provenance" aria-labelledby="provenance-title" data-report-section="provenance">
+  <section class="appendix-section" id="requirements" aria-labelledby="requirements-title" data-appendix-section="requirements"><header class="section-heading"><p class="eyebrow">${bilingual("Requirements", "需求")}</p><h2 id="requirements-title">${bilingual("Verified assertions", "已验证断言")}</h2></header><div class="table-shell"><table><caption>${bilingual("Verified requirement assertions", "已验证需求断言")}</caption><thead><tr><th>${bilingual("Requirement", "需求")}</th><th>${bilingual("Phase", "阶段")}</th><th>${bilingual("Result", "结果")}</th></tr></thead><tbody>${assertions}</tbody></table></div></section>
+  <section class="appendix-section" id="production-composition" aria-labelledby="production-composition-title" data-appendix-section="production-composition"><header class="section-heading"><p class="eyebrow">${bilingual("Production composition", "生产组成")}</p><h2 id="production-composition-title">${bilingual("Traversed boundaries", "已穿越边界")}</h2></header><ul class="boundaries">${boundaries}</ul></section>
+  <section class="appendix-section" id="revision-semantics" aria-labelledby="revision-semantics-title" data-appendix-section="revision-semantics"><header class="section-heading"><p class="eyebrow">${bilingual("Revision semantics", "修订语义")}</p><h2 id="revision-semantics-title">${bilingual("Lifecycle outcomes", "生命周期结果")}</h2></header><div class="table-shell"><table><caption>${bilingual("Verified revision lifecycle outcomes", "已验证修订生命周期结果")}</caption><thead><tr><th>${bilingual("Scenario", "场景")}</th><th>${bilingual("Revision", "修订")}</th><th>${bilingual("Outcome", "结果")}</th></tr></thead><tbody>${revisions}</tbody></table></div></section>
+  <section class="appendix-section" id="protocol-delivery" aria-labelledby="protocol-delivery-title" data-appendix-section="protocol-delivery"><header class="section-heading"><p class="eyebrow">${bilingual("Protocol delivery", "协议交付")}</p><h2 id="protocol-delivery-title">${bilingual("Downstream cohorts", "下游队列")}</h2></header><div class="table-shell"><table><caption>${bilingual("Verified downstream protocol cohorts", "已验证下游协议队列")}</caption><thead><tr><th>${bilingual("Cohort", "队列")}</th><th>${bilingual("Outcome", "结果")}</th><th>${bilingual("Count", "数量")}</th></tr></thead><tbody>${cohorts}</tbody></table></div></section>
+  <section class="appendix-section" id="provenance" aria-labelledby="provenance-title" data-appendix-section="provenance">
     <header class="section-heading"><p class="eyebrow">${bilingual("Provenance", "来源")}</p><h2 id="provenance-title">${bilingual("Evidence identity", "证据标识")}</h2></header>
     <div class="provenance">
       <div class="panel"><p><strong>${bilingual("Schema", "模式")}</strong><br>${escapeHtml(report.schemaVersion)}</p><p><strong>${bilingual("Command", "命令")}</strong><br>${escapeHtml(report.commandId)}</p></div>
       <div class="panel"><p><strong>${bilingual("Source revision", "源修订")}</strong><br>${escapeHtml(report.sourceRevision)}</p><p><strong>${bilingual("Payload digest", "载荷摘要")}</strong><br>${escapeHtml(report.payloadDigest)}</p></div>
+      <div class="panel"><p><strong>${bilingual("Generated", "生成时间")}</strong><br>${escapeHtml(journeyReport.generatedAt)}</p><p>${bilingual("Deployment mode: isolated external-service journey", "部署模式：隔离的外部服务旅程")}</p><p>${bilingual("This report is local Git-ignored build output.", "本报告是本地 Git 忽略的 build 产物。")}</p></div>
+      <div class="panel"><p data-report-timing="journey-total" data-duration-ms="${totalDurationMs}"><strong>${bilingual("Journey duration", "路线耗时")}</strong><br>${totalDurationMs} ms</p><p data-report-cleanup="passed" data-duration-ms="${cleanupDurationMs}"><strong>${bilingual("Cleanup", "清理")}</strong><br>${cleanupDurationMs} ms · ${bilingual("passed", "通过")}</p></div>
     </div>
     <div class="table-shell" data-report-slot="journey-step-status">
       <table><caption>${bilingual("Journey step status and bounded duration", "路线步骤状态与有界耗时")}</caption><thead><tr><th>${bilingual("Step", "步骤")}</th><th>${bilingual("Status", "状态")}</th><th>${bilingual("Duration", "耗时")}</th></tr></thead><tbody>${journeyStepRows}</tbody></table>
     </div>
     <div class="table-shell" data-report-slot="cleanup-summary">
       <table><caption>${bilingual("Cleanup status and bounded duration", "清理状态与有界耗时")}</caption><thead><tr><th>${bilingual("Cleanup", "清理")}</th><th>${bilingual("Status", "状态")}</th><th>${bilingual("Duration", "耗时")}</th></tr></thead><tbody>${cleanupRows}</tbody></table>
+    </div>
+  </section>
     </div>
   </section>
   </main>
@@ -1568,40 +1827,48 @@ function renderFailedUpstreamServicePublishingHtml(journeyReport?: any) : any {
 }
 
 export function renderUpstreamServicePublishingBlankTemplate() : any {
-  const sections: any = UPSTREAM_SERVICE_PUBLISHING_REPORT_SECTIONS.map(
-    ([id, english, chinese]: any[]) : any => {
-      let sectionSlots: any = "";
-      if (id === "executive-summary") {
-        sectionSlots = `<article class="catalog" data-report-slot="candidate-scope">
-          <h3>${bilingual("Candidate scope — not bound", "候选范围——未绑定")}</h3>
-          <p>${bilingual("Not executed; no candidate claim is present.", "未执行；不存在候选声明。")}</p>
-        </article>`;
-      } else if (id === "safe-configuration") {
-        sectionSlots = `<article class="catalog" data-report-slot="upstream-publication-runtime-health">
-          <h3>${bilingual("Publication and runtime health — required", "发布与运行时健康——必填")}</h3>
-          <p>${bilingual("Not executed; populate only from the bounded upstream-publish receipt.", "未执行；只能从有界 upstream-publish 收据填充。")}</p>
-        </article>
-        <article class="catalog" data-report-slot="upstream-service-interface-catalog">
-          <h3>${bilingual("Published upstream interfaces — required", "已发布上游接口——必填")}</h3>
-          <p>${bilingual("Fill this catalog only from the digest-bound publication input.", "此清单只能从摘要绑定的实际发布输入中填写。")}</p>
-          <div class="table-shell"><table><caption>${bilingual("Published upstream interface catalog", "已发布上游接口清单")}</caption><thead><tr>${INTERFACE_CATALOG_COLUMNS.map(([columnEnglish, columnChinese]: any[]) : any => `<th>${bilingual(columnEnglish, columnChinese)}</th>`).join("")}</tr></thead>
-          <tbody><tr data-service-interface="required-placeholder"><td colspan="5">${bilingual("Required before generation: health route plus every published operation. Do not invent a download endpoint.", "生成前必填：健康检查路径及每个已发布操作。不得虚构下载接口。")}</td></tr></tbody></table></div>
-        </article>`;
-      } else if (id === "mcp-acceptance") {
-        sectionSlots = `<div class="table-shell" data-report-slot="client-lifecycle"><table><caption>${bilingual("Client lifecycle — required", "客户端生命周期——必填")}</caption><thead><tr><th>${bilingual("Client", "客户端")}</th><th>${bilingual("Discovery", "发现")}</th><th>${bilingual("Install", "安装")}</th><th>${bilingual("Upload", "上传")}</th><th>tools/list</th><th>full-access-debug</th><th>require-approval-debug</th><th>${bilingual("Uninstall", "卸载")}</th><th>${bilingual("Cleanup", "清理")}</th></tr></thead><tbody><tr><td colspan="9">${bilingual("Not executed", "未执行")}</td></tr></tbody></table></div>`;
-      } else if (id === "live-console-evidence") {
-        sectionSlots = `<ol class="catalog" data-report-slot="visual-evidence-index"><li>${bilingual("Not executed; ten ordered Console evidence entries are required.", "未执行；需要十条有序管控台证据索引。")}</li></ol>`;
-      } else if (id === "provenance") {
-        sectionSlots = `<article class="catalog" data-report-slot="journey-timings"><h3>${bilingual("Journey timings", "路线耗时")}</h3><p>${bilingual("Not executed", "未执行")}</p></article>
-        <article class="catalog" data-report-slot="cleanup-summary"><h3>${bilingual("Cleanup summary", "清理摘要")}</h3><p>${bilingual("Not executed", "未执行")}</p></article>`;
-      }
-      return `<section id="${id}" aria-labelledby="${id}-title" data-report-section="${id}">
-        <p class="eyebrow">${bilingual(english, chinese)}</p>
-        <h2 id="${id}-title">${bilingual("Not executed", "未执行")}</h2>
-        <div class="placeholder">${bilingual("Populate from verified evidence when generating a release report.", "生成发布报告时从已验证证据中填充。")}</div>
-${sectionSlots ? `        ${sectionSlots}\n` : ""}      </section>`;
+  const manualStepArticles: any[] = VISUAL_ORDER.map((id?: any, index?: any) : any => {
+    const instruction: any = OPERATION_MANUAL[id];
+    return `<article class="manual-step" id="manual-step-${id}" data-manual-step="${id}">
+      <h3>${bilingual(`Step ${index + 1}: ${VISUAL_CONTEXT[id][1]}`, `第 ${index + 1} 步：${VISUAL_CONTEXT[id][2]}`)}</h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt>${bilingual("Where to go", "去哪里")}</dt><dd>${bilingual(instruction.location[0], instruction.location[1])}</dd></div>
+        <div data-manual-field="action"><dt>${bilingual("What to do", "操作什么")}</dt><dd>${bilingual(instruction.action[0], instruction.action[1])}</dd></div>
+        <div data-manual-field="result"><dt>${bilingual("What is produced", "生成什么")}</dt><dd>${bilingual(instruction.result[0], instruction.result[1])}</dd></div>
+        <div data-manual-field="purpose"><dt>${bilingual("Why this matters", "这一步的作用")}</dt><dd>${bilingual(instruction.purpose[0], instruction.purpose[1])}</dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-${id}">${bilingual("Not executed; insert the verified Console screenshot for this exact step.", "未执行；请在此插入这一步对应的已验证管控台截图。")}</div>
+    </article>`;
+  });
+  const manualArticleById: any = new Map(
+    VISUAL_ORDER.map((id?: any, index?: any) : any => [id, manualStepArticles[index]])
+  );
+  const manualGroups: any = renderManualGroups({
+    articleById: manualArticleById,
+    indexItem: (stepId?: any) : any => {
+      const stepNumber: any = VISUAL_ORDER.indexOf(stepId) + 1;
+      return `<li value="${stepNumber}"><a href="#manual-step-${stepId}">${bilingual(`Step ${stepNumber}: ${VISUAL_CONTEXT[stepId][1]}`, `第 ${stepNumber} 步：${VISUAL_CONTEXT[stepId][2]}`)}</a></li>`;
     }
-  ).join("\n  ");
+  });
+  const appendixSections: any = `<section class="appendix-section" data-appendix-section="executive-summary">
+    <article class="catalog" data-report-slot="candidate-scope"><h3>${bilingual("Candidate scope — not bound", "候选范围——未绑定")}</h3><p>${bilingual("Not executed; no candidate claim is present.", "未执行；不存在候选声明。")}</p></article>
+  </section>
+  <section class="appendix-section" data-appendix-section="safe-configuration">
+    <article class="catalog" data-report-slot="upstream-publication-runtime-health"><h3>${bilingual("Publication and runtime health — required", "发布与运行时健康——必填")}</h3><p>${bilingual("Not executed; populate only from the bounded upstream-publish receipt.", "未执行；只能从有界 upstream-publish 收据填充。")}</p></article>
+    <article class="catalog" data-report-slot="upstream-service-interface-catalog"><h3>${bilingual("Published upstream interfaces — required", "已发布上游接口——必填")}</h3><p>${bilingual("Fill this catalog only from the digest-bound publication input.", "此清单只能从摘要绑定的实际发布输入中填写。")}</p><div class="table-shell"><table><caption>${bilingual("Published upstream interface catalog", "已发布上游接口清单")}</caption><thead><tr>${INTERFACE_CATALOG_COLUMNS.map(([columnEnglish, columnChinese]: any[]) : any => `<th>${bilingual(columnEnglish, columnChinese)}</th>`).join("")}</tr></thead><tbody><tr data-service-interface="required-placeholder"><td colspan="5">${bilingual("Required before generation: health route plus every published operation. Do not invent a download endpoint.", "生成前必填：健康检查路径及每个已发布操作。不得虚构下载接口。")}</td></tr></tbody></table></div></article>
+  </section>
+  <section class="appendix-section" data-appendix-section="mcp-acceptance"><div class="table-shell" data-report-slot="client-lifecycle"><table><caption>${bilingual("Client lifecycle — required", "客户端生命周期——必填")}</caption><thead><tr><th>${bilingual("Client", "客户端")}</th><th>${bilingual("Discovery", "发现")}</th><th>${bilingual("Install", "安装")}</th><th>${bilingual("Upload", "上传")}</th><th>tools/list</th><th>full-access-debug</th><th>require-approval-debug</th><th>${bilingual("Uninstall", "卸载")}</th><th>${bilingual("Cleanup", "清理")}</th></tr></thead><tbody><tr><td colspan="9">${bilingual("Not executed", "未执行")}</td></tr></tbody></table></div></section>
+  <section class="appendix-section" data-appendix-section="provenance"><article class="catalog" data-report-slot="journey-timings"><h3>${bilingual("Journey timings", "路线耗时")}</h3><p>${bilingual("Not executed", "未执行")}</p></article><article class="catalog" data-report-slot="cleanup-summary"><h3>${bilingual("Cleanup summary", "清理摘要")}</h3><p>${bilingual("Not executed", "未执行")}</p></article><article class="catalog"><p>${bilingual("Generated reports are portable single files that embed verified images and downloadable attachments. Console screenshots use the governed capture contract.", "生成的报告是可携带的单文件，会内嵌已验证图片和可下载附件；管控台截图遵循受治理的采集契约。")}</p></article></section>`;
+  const sections: any = `<section id="operation-guide" aria-labelledby="operation-guide-title" data-report-section="operation-guide">
+    <p class="eyebrow">${bilingual("Operation guide", "操作手册")}</p>
+    <h2 id="operation-guide-title">${bilingual("Publish an upstream service from the Console", "从管控台发布上游服务")}</h2>
+    <div class="manual-groups" data-report-slot="operation-guide-groups">${manualGroups}</div>
+  </section>
+  <section id="appendix" aria-labelledby="appendix-title" data-report-section="appendix">
+    <p class="eyebrow">${bilingual("Appendix", "附录")}</p>
+    <h2 id="appendix-title">${bilingual("Verification details and supporting records", "验证明细与支撑记录")}</h2>
+    ${appendixSections}
+  </section>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -1619,9 +1886,23 @@ ${sectionSlots ? `        ${sectionSlots}\n` : ""}      </section>`;
     h1 { margin: .15em 0; font-size: clamp(2.3rem, 6vw, 4.8rem); line-height: 1; }
     h2, h3 { margin: .2em 0 .7em; }
     .eyebrow { color: #176547; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-    .status, .placeholder, .catalog { padding: 16px; border: 1px solid #bcc8bf; border-radius: 12px; background: white; }
+    .status, .placeholder, .catalog, .manual-step { padding: 16px; border: 1px solid #bcc8bf; border-radius: 12px; background: white; }
     .status { display: inline-block; color: #6044a8; font-weight: 800; }
     .catalog { margin-top: 16px; }
+    .manual-groups { display: grid; gap: 42px; }
+    .manual-group { padding: 0; border: 0; content-visibility: visible; }
+    .manual-group + .manual-group { padding-top: 42px; border-top: 1px solid #bcc8bf; }
+    .manual-group-header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; padding: 0; border: 0; background: transparent; color: #17231d; }
+    .manual-group-header h3 { margin: 0; font-size: 1.8rem; line-height: 1.15; }
+    .manual-group-header p { margin: 7px 0 0; color: #657269; }
+    .manual-group-number { align-self: start; padding: 5px 9px; border: 1px solid #bcc8bf; border-radius: 999px; color: #176547; font-size: .75rem; font-weight: 800; }
+    .manual-index { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-bottom: 24px; }
+    .manual-step { margin-top: 18px; }
+    .manual-instructions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .manual-instructions > div { padding: 12px; border: 1px solid #d9e0da; border-radius: 10px; }
+    .manual-instructions dt { color: #657269; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+    .manual-instructions dd { margin: 4px 0 0; }
+    .appendix-section { padding: 0; border: 0; }
     .report-navigation { display: flex; gap: 8px; padding: 14px 20px; overflow-x: auto; background: white; border-bottom: 1px solid #d9e0da; }
     .report-navigation a { flex: 0 0 auto; color: #176547; font-size: .78rem; font-weight: 750; }
     .skip-link { position: fixed; top: 12px; left: 12px; z-index: 30; padding: 8px 12px; background: white; color: #17231d; transform: translateY(-180%); }
@@ -1633,8 +1914,8 @@ ${sectionSlots ? `        ${sectionSlots}\n` : ""}      </section>`;
     .language-switch { position: fixed; top: 12px; right: 12px; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #17231dea; }
     button { padding: 7px 11px; border: 0; border-radius: 999px; background: transparent; color: white; cursor: pointer; }
     button[aria-pressed="true"] { background: white; color: #17231d; }
-    @media (max-width: 700px) { body { margin: 0; border: 0; } header, section { padding-inline: 20px; } }
-    @media print { body { margin: 0; border: 0; } .language-switch, .report-navigation, .skip-link { display: none; } section { break-inside: avoid; content-visibility: visible; contain-intrinsic-size: auto; } }
+    @media (max-width: 700px) { body { margin: 0; border: 0; } header, section { padding-inline: 20px; } .manual-index, .manual-instructions, .manual-group-header { grid-template-columns: 1fr; } }
+    @media print { body { margin: 0; border: 0; } .language-switch, .report-navigation, .skip-link { display: none; } section, .manual-step, .manual-group-header { break-inside: avoid; content-visibility: visible; contain-intrinsic-size: auto; } }
   </style>
 </head>
 <body data-report-template="upstream-service-publishing" data-report-portability="single-file">
@@ -1644,11 +1925,10 @@ ${sectionSlots ? `        ${sectionSlots}\n` : ""}      </section>`;
     <button type="button" data-language="en" aria-pressed="true">English</button>
   </nav>
   <header>
-    <p>${bilingual("Portable single-file structural template — not release evidence", "可携带的单文件结构模板——不是发布证据")}</p>
-    <h1>${bilingual("Upstream Service Publishing", "上游服务发布")}</h1>
+    <p>${bilingual("Console operation manual", "管控台操作手册")}</p>
+    <h1>${bilingual("Publish an Upstream Service through Meshrix", "通过 Meshrix 发布上游服务")}</h1>
+    <p>${bilingual("Follow the verified Console journey from sign-in through downstream MCP invocation.", "按照已验证的管控台路线，从登录开始完成下游 MCP 调用。")}</p>
     <p class="status">${bilingual("Not executed", "未执行")}</p>
-    <p>${bilingual("Generated reports embed every verified image and downloadable attachment; no neighboring resource files are required.", "生成的报告会内嵌每一张已验证图片及可下载附件，无需任何同目录资源文件。")}</p>
-    <p>${bilingual("Live Console screenshots are captured at a 1440 × 1000 CSS viewport with 2× device scale, producing 2880 × 2000 PNG evidence.", "实时管控台截图采用 1440 × 1000 CSS 视口及 2× 设备缩放，生成 2880 × 2000 PNG 证据。")}</p>
   </header>
   ${renderReportNavigation()}
   <main id="report-content" tabindex="-1">

@@ -38,6 +38,7 @@ describe("Strategy Management Console", () : any => {
       expect(wrapper.text()).not.toContain("packages/");
       expect(wrapper.text()).not.toContain("运行时策略");
       expect(wrapper.text()).not.toContain("策略项");
+      expect(wrapper.findAll("button").some((button: any) => button.text() === "刷新")).toBe(false);
     } finally {
       wrapper.unmount();
     }

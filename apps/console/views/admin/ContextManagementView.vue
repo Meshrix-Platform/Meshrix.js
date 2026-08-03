@@ -18,7 +18,7 @@ import ContextPresetModal from './context-management/ContextPresetModal.vue';
 import ContextPreviewPanel from './context-management/ContextPreviewPanel.vue';
 
 const {
-  busyKey,
+  isBusy,
   contextBuildRecordRows,
   contextEvaluationResult,
   contextPreviewRequiredEvidence,
@@ -169,7 +169,8 @@ async function deletePreset(profile: ContextProfileRow) {
                 <ContextPreviewPanel
                   v-model:task="contextPreviewTask"
                   v-model:required-evidence="contextPreviewRequiredEvidence"
-                  :busy-key="busyKey"
+                  :preview-busy="isBusy('context:preview')"
+                  :evaluation-busy="isBusy('context:evaluation')"
                   :export-disabled="!contextBuildRecordRows.length"
                   @preview="previewContextCompiler"
                   @evaluate="runContextReplayEvaluation"

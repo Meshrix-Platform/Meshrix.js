@@ -27,6 +27,7 @@ The default local server URL is `http://127.0.0.1:7228`.
 - Name extracted modules by stable responsibility and ownership; do not create numeric, stage-named, or pass-through shards.
 - Update documentation when public behavior, configuration, commands, or verification changes.
 - Add or update tests for behavior changes.
+- Render sibling buttons or button-like controls placed in the same horizontal action group at one shared explicit height. Different button implementations, wrappers, variants, or labels must not produce uneven controls on the same visual row; use the shared horizontal action-group contract instead of page-specific height exceptions.
 
 ## Documentation Rules
 

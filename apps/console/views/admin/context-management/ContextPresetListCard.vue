@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
+
 export interface ContextPresetProfileRow {
   profileId: string;
   label: string;
@@ -111,9 +113,17 @@ const emit = defineEmits<{
         </span>
       </footer>
     </article>
-    <div v-if="!profiles.length" class="empty-profile-state">
-      暂无上下文配置。点击“新增预设”即可添加。
-    </div>
+    <ConsoleEmptyState
+      v-if="!profiles.length"
+      title="暂无上下文配置"
+      description="新增一个预设即可开始配置上下文编译器。"
+    >
+      <template #action>
+        <button class="tool-button" type="button" @click="emit('add')">
+          新增预设
+        </button>
+      </template>
+    </ConsoleEmptyState>
   </div>
 </template>
 
@@ -228,15 +238,7 @@ const emit = defineEmits<{
   color: var(--el-text-color-regular);
 }
 
-.empty-profile-state {
-  padding: 3rem 1.5rem;
-  text-align: center;
-  background: var(--el-bg-color-page);
-  border: 1px dashed var(--el-border-color);
-  border-radius: 8px;
-  color: var(--el-text-color-secondary);
-  font-size: 0.875rem;
-}
+
 
 @media (max-width: 720px) {
   .context-profile-item-header {

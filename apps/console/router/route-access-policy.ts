@@ -1,7 +1,7 @@
 /**
  * ROUTE ACCESS POLICY REGISTRY — pure data + policy helpers.
  *
- * Route visibility is capability driven. Roles such as owner/admin/operator/viewer
+ * Route visibility is capability driven. Roles such as owner/maintainer/viewer
  * are only server-side configuration bundles that resolve to scopes; the UI asks
  * whether the current subject satisfies a route policy.
  */

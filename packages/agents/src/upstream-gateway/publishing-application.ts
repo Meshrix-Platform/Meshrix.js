@@ -158,12 +158,14 @@ function validatePayloadTransport(operation?: any, serviceProtocol?: any) : any 
     transport.request,
     "descriptor.operations.payloadTransport.request must be an object."
   );
-  const response: any = assertPlainObject(
-    transport.response,
-    "descriptor.operations.payloadTransport.response must be an object."
-  );
   assertClosedFields(request, PAYLOAD_REQUEST_FIELDS, "descriptor.operations.payloadTransport.request");
-  assertClosedFields(response, PAYLOAD_RESPONSE_FIELDS, "descriptor.operations.payloadTransport.response");
+  if (transport.response !== undefined) {
+    const response: any = assertPlainObject(
+      transport.response,
+      "descriptor.operations.payloadTransport.response must be an object."
+    );
+    assertClosedFields(response, PAYLOAD_RESPONSE_FIELDS, "descriptor.operations.payloadTransport.response");
+  }
   if (request.multipart !== undefined) {
     const multipart: any = assertPlainObject(request.multipart, "payloadTransport.request.multipart must be an object.");
     assertClosedFields(multipart, MULTIPART_FIELDS, "payloadTransport.request.multipart");

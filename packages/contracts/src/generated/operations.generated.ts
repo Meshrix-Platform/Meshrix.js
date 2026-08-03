@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:440fe654fb253906
+ * Hash: sha256:31c07b414e693a15
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:440fe654fb253906";
+export const GENERATED_OPERATIONS_HASH = "sha256:31c07b414e693a15";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -532,6 +532,924 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false,
       "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "authorization.organization_governance.get",
+    "feature": "auth",
+    "label": "读取组织治理架构",
+    "description": "Protocol operation for authorization.organization_governance.get.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleAuthorizationOrganizationGovernanceGet"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/authorization/organization-governance",
+      "query": [],
+      "coerce": {},
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "authorization.organization_governance.get",
+      "params": [],
+      "query": []
+    },
+    "cli": {
+      "command": [
+        "authorization",
+        "organization_governance",
+        "get"
+      ],
+      "usage": "authorization organization_governance get"
+    },
+    "requiredScopes": [
+      "auth:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "required": []
+    },
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "security-authorization",
+      "organization-governance",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "readOnly": true,
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "get",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "get",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": true,
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "auth",
+      "operationName": "authorization_organization_governance_get"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "authorization.organization_governance.import",
+    "feature": "auth",
+    "label": "导入组织治理模板",
+    "description": "Protocol operation for authorization.organization_governance.import.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleAuthorizationOrganizationGovernanceImport"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/authorization/organization-governance/import",
+      "query": [],
+      "coerce": {},
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "authorization.organization_governance.import",
+      "body": "params",
+      "params": []
+    },
+    "cli": {
+      "command": [
+        "authorization",
+        "organization_governance",
+        "import"
+      ],
+      "usage": "authorization organization_governance import --body request.json"
+    },
+    "requiredScopes": [
+      "auth:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "templateKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 262144
+        },
+        "fileName": {
+          "type": "string",
+          "pattern": "^[^/\\\\]{1,200}\\.toml$"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "templateKey"
+          ]
+        },
+        {
+          "required": [
+            "source",
+            "fileName"
+          ]
+        }
+      ],
+      "required": []
+    },
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "security-authorization",
+      "organization-governance",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "readOnly": true,
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "strict",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "import",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "import",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": true,
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "auth",
+      "operationName": "authorization_organization_governance_import"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "authorization.organization_governance.preview",
+    "feature": "auth",
+    "label": "验证组织治理架构",
+    "description": "Protocol operation for authorization.organization_governance.preview.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleAuthorizationOrganizationGovernancePreview"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/authorization/organization-governance/preview",
+      "query": [],
+      "coerce": {},
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "authorization.organization_governance.preview",
+      "body": "params",
+      "params": []
+    },
+    "cli": {
+      "command": [
+        "authorization",
+        "organization_governance",
+        "preview"
+      ],
+      "usage": "authorization organization_governance preview --body request.json"
+    },
+    "requiredScopes": [
+      "auth:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "templateKey",
+        "templateName",
+        "description",
+        "organizationDepth",
+        "nodes",
+        "tags",
+        "roles"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "enum": [
+            "v0.0.1:authorization:organization-template-1"
+          ]
+        },
+        "templateKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "templateName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "organizationDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "nodes": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "required": [
+              "nodeId",
+              "nodeType",
+              "parentId",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "nodeType": {
+                "type": "string",
+                "enum": [
+                  "group",
+                  "organization",
+                  "department",
+                  "team"
+                ]
+              },
+              "parentId": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "organizationLevel": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              }
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "required": [
+              "tagId",
+              "kind",
+              "label",
+              "parentTagId",
+              "description",
+              "scopePrerequisites"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tagId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "organization",
+                  "group",
+                  "role",
+                  "custom"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "parentTagId": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "scopePrerequisites": {
+                "type": "array",
+                "maxItems": 64,
+                "items": {
+                  "type": "string",
+                  "maxLength": 160
+                }
+              }
+            }
+          }
+        },
+        "roles": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "required": [
+              "roleId",
+              "name",
+              "scopeNodeId",
+              "scopeNodeType",
+              "managementActions",
+              "businessResourceActions",
+              "assignedSubjectIds"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "roleId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "scopeNodeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "scopeNodeType": {
+                "type": "string",
+                "enum": [
+                  "group",
+                  "organization",
+                  "department",
+                  "team"
+                ]
+              },
+              "managementActions": {
+                "type": "array",
+                "maxItems": 64,
+                "items": {
+                  "type": "string",
+                  "maxLength": 160
+                }
+              },
+              "businessResourceActions": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "assignedSubjectIds": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "security-authorization",
+      "organization-governance",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "readOnly": true,
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "strict",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "preview",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "preview",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": true,
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "auth",
+      "operationName": "authorization_organization_governance_preview"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "authorization.organization_governance.publish",
+    "feature": "auth",
+    "label": "发布组织治理架构",
+    "description": "Protocol operation for authorization.organization_governance.publish.",
+    "aliases": [],
+    "target": {
+      "controller": "system",
+      "method": "handleAuthorizationOrganizationGovernancePublish"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/authorization/organization-governance/publish",
+      "query": [],
+      "coerce": {},
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "authorization.organization_governance.publish",
+      "body": "params",
+      "params": []
+    },
+    "cli": {
+      "command": [
+        "authorization",
+        "organization_governance",
+        "publish"
+      ],
+      "usage": "authorization organization_governance publish --body request.json"
+    },
+    "requiredScopes": [
+      "auth:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedRevision",
+        "schemaVersion",
+        "templateKey",
+        "templateName",
+        "description",
+        "organizationDepth",
+        "nodes",
+        "tags",
+        "roles"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "schemaVersion": {
+          "type": "string",
+          "enum": [
+            "v0.0.1:authorization:organization-template-1"
+          ]
+        },
+        "templateKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "templateName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "organizationDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        },
+        "nodes": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "required": [
+              "nodeId",
+              "nodeType",
+              "parentId",
+              "name"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "nodeType": {
+                "type": "string",
+                "enum": [
+                  "group",
+                  "organization",
+                  "department",
+                  "team"
+                ]
+              },
+              "parentId": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "organizationLevel": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 32
+              }
+            }
+          }
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "required": [
+              "tagId",
+              "kind",
+              "label",
+              "parentTagId",
+              "description",
+              "scopePrerequisites"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tagId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "organization",
+                  "group",
+                  "role",
+                  "custom"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "parentTagId": {
+                "type": "string",
+                "maxLength": 160
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              "scopePrerequisites": {
+                "type": "array",
+                "maxItems": 64,
+                "items": {
+                  "type": "string",
+                  "maxLength": 160
+                }
+              }
+            }
+          }
+        },
+        "roles": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "object",
+            "required": [
+              "roleId",
+              "name",
+              "scopeNodeId",
+              "scopeNodeType",
+              "managementActions",
+              "businessResourceActions",
+              "assignedSubjectIds"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "roleId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "scopeNodeId": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "scopeNodeType": {
+                "type": "string",
+                "enum": [
+                  "group",
+                  "organization",
+                  "department",
+                  "team"
+                ]
+              },
+              "managementActions": {
+                "type": "array",
+                "maxItems": 64,
+                "items": {
+                  "type": "string",
+                  "maxLength": 160
+                }
+              },
+              "businessResourceActions": {
+                "type": "array",
+                "maxItems": 0
+              },
+              "assignedSubjectIds": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "safety": {
+      "risk": "repair_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "auth:admin",
+      "requiresConfirmation": true,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "deprecated": false,
+    "replacementService": "",
+    "replacementOperationPrefix": "",
+    "lifecycle": {},
+    "aspects": [
+      "security-authorization",
+      "organization-governance",
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "strict",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "publish",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "auth",
+      "resourceKind": "auth",
+      "capabilityVerb": "publish",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": false,
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "risk": "repair_write",
+    "otel": {
+      "semanticGroup": "auth",
+      "operationName": "authorization_organization_governance_publish"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
       "redaction": "default"
     }
   },
@@ -28938,6 +29856,959 @@ export const SERVER_API_OPERATIONS: any = [
     }
   },
   {
+    "id": "operation_permission.api_keys.issuer_scopes",
+    "feature": "operation_permission",
+    "label": "读取 API Key 签发范围",
+    "target": {
+      "controller": "system",
+      "method": "handleOperationPermissionPassthrough"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/operation-permission/v1/api-keys/issuer-scopes",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "operation_permission.api_keys.issuer_scopes",
+      "syntheticPath": "/api/operation-permission/v1/api-keys/issuer-scopes"
+    },
+    "requiredScopes": [
+      "console:read"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "readOnly": true,
+    "concurrencySafe": true,
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "issuer-scopes",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "issuer-scopes",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "读取 API Key 签发范围",
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "operation_permission",
+      "operationName": "operation_permission_api_keys_issuer_scopes"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "operation_permission.api_keys.list",
+    "feature": "operation_permission",
+    "label": "列出 API Key",
+    "target": {
+      "controller": "system",
+      "method": "handleOperationPermissionPassthrough"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/operation-permission/v1/api-keys",
+      "localInForwardMode": true,
+      "query": [
+        {
+          "name": "status",
+          "aliases": [
+            "status"
+          ]
+        },
+        {
+          "name": "organizationNodeId",
+          "aliases": [
+            "organizationNodeId",
+            "organization-node-id"
+          ]
+        },
+        {
+          "name": "cursor",
+          "aliases": [
+            "cursor"
+          ]
+        },
+        {
+          "name": "limit",
+          "aliases": [
+            "limit"
+          ]
+        }
+      ],
+      "coerce": {
+        "limit": "number"
+      }
+    },
+    "rpc": {
+      "method": "operation_permission.api_keys.list",
+      "syntheticPath": "/api/operation-permission/v1/api-keys"
+    },
+    "requiredScopes": [
+      "console:read"
+    ],
+    "readOnly": true,
+    "concurrencySafe": true,
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "list",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "list",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "organizationNodeId": {
+          "type": "string"
+        },
+        "cursor": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number"
+        }
+      }
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "列出 API Key",
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "operation_permission",
+      "operationName": "operation_permission_api_keys_list"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "operation_permission.api_keys.create",
+    "feature": "operation_permission",
+    "label": "创建 API Key",
+    "target": {
+      "controller": "system",
+      "method": "handleOperationPermissionPassthrough"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/operation-permission/v1/api-keys",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "operation_permission.api_keys.create",
+      "syntheticPath": "/api/operation-permission/v1/api-keys",
+      "body": "params"
+    },
+    "requiredScopes": [
+      "console:read"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workloadDisplayName",
+        "organizationNodeId",
+        "expiresAt",
+        "policy"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "workloadDisplayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "organizationNodeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "expiresAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "protocol",
+            "serviceIds",
+            "capabilityIds",
+            "toolsetIds",
+            "allowedTools",
+            "deniedTools",
+            "scopeIds",
+            "maximumRisk",
+            "audience",
+            "resources",
+            "processIdentity",
+            "limits",
+            "catalogFingerprint"
+          ],
+          "properties": {
+            "protocol": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "serviceIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 256
+            },
+            "capabilityIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 256
+            },
+            "toolsetIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 256
+            },
+            "allowedTools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 256
+            },
+            "deniedTools": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 256
+            },
+            "scopeIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "maxItems": 256
+            },
+            "maximumRisk": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            },
+            "audience": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "serverAudience",
+                "targetIds",
+                "connectorPackageIds"
+              ],
+              "properties": {
+                "serverAudience": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "targetIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "connectorPackageIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                }
+              }
+            },
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "mode",
+                "workspaceIds",
+                "dataClassifications",
+                "egressClasses",
+                "semanticFamilies",
+                "capabilityDomains",
+                "capabilityVerbs",
+                "resourceKinds",
+                "effectKinds",
+                "secretBindingIds",
+                "allowedOrigins",
+                "allowedCidrs"
+              ],
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "workspaceIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "dataClassifications": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "egressClasses": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "semanticFamilies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "capabilityDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "capabilityVerbs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "resourceKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "effectKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "secretBindingIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "allowedOrigins": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                },
+                "allowedCidrs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                }
+              }
+            },
+            "processIdentity": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512
+                },
+                "allowedPublicKeyFingerprints": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "maxItems": 256
+                }
+              },
+              "required": [
+                "mode"
+              ]
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "maxUses",
+                "requestsPerWindow",
+                "windowSeconds",
+                "maxConcurrentEffects"
+              ],
+              "properties": {
+                "maxUses": {
+                  "type": "number"
+                },
+                "requestsPerWindow": {
+                  "type": "number"
+                },
+                "windowSeconds": {
+                  "type": "number"
+                },
+                "maxConcurrentEffects": {
+                  "type": "number"
+                }
+              }
+            },
+            "catalogFingerprint": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 512
+            }
+          }
+        }
+      }
+    },
+    "safety": {
+      "risk": "repair_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": true,
+      "requiresConfirmationExplicit": false,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "create",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "create",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": false,
+    "audit": {
+      "enabled": true,
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": true,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "创建 API Key",
+    "risk": "repair_write",
+    "otel": {
+      "semanticGroup": "operation_permission",
+      "operationName": "operation_permission_api_keys_create"
+    },
+    "auditPolicy": {
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "operation_permission.api_keys.rotate",
+    "feature": "operation_permission",
+    "label": "轮换 API Key",
+    "target": {
+      "controller": "system",
+      "method": "handleOperationPermissionPassthrough"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/operation-permission/v1/api-keys/:keyId/rotate",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "operation_permission.api_keys.rotate",
+      "syntheticPath": "/api/operation-permission/v1/api-keys/:keyId/rotate",
+      "params": [
+        {
+          "name": "keyId",
+          "aliases": [
+            "keyId",
+            "key-id",
+            "id"
+          ],
+          "required": true
+        }
+      ],
+      "body": "params"
+    },
+    "requiredScopes": [
+      "console:read"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedLifecycleRevision",
+        "keyId"
+      ],
+      "properties": {
+        "keyId": {
+          "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "expectedLifecycleRevision": {
+          "type": "number"
+        }
+      }
+    },
+    "safety": {
+      "risk": "repair_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": true,
+      "requiresConfirmationExplicit": false,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "rotate",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "rotate",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": false,
+    "audit": {
+      "enabled": true,
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": true,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "轮换 API Key",
+    "risk": "repair_write",
+    "otel": {
+      "semanticGroup": "operation_permission",
+      "operationName": "operation_permission_api_keys_rotate"
+    },
+    "auditPolicy": {
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "operation_permission.api_keys.revoke",
+    "feature": "operation_permission",
+    "label": "吊销 API Key",
+    "target": {
+      "controller": "system",
+      "method": "handleOperationPermissionPassthrough"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/operation-permission/v1/api-keys/:keyId/revoke",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "operation_permission.api_keys.revoke",
+      "syntheticPath": "/api/operation-permission/v1/api-keys/:keyId/revoke",
+      "params": [
+        {
+          "name": "keyId",
+          "aliases": [
+            "keyId",
+            "key-id",
+            "id"
+          ],
+          "required": true
+        }
+      ],
+      "body": "params"
+    },
+    "requiredScopes": [
+      "console:read"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedLifecycleRevision",
+        "reasonCode",
+        "keyId"
+      ],
+      "properties": {
+        "keyId": {
+          "type": "string"
+        },
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "expectedLifecycleRevision": {
+          "type": "number"
+        },
+        "reasonCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "safety": {
+      "risk": "repair_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": true,
+      "requiresConfirmationExplicit": false,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "revoke",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "operation_permission",
+      "resourceKind": "operation_permission",
+      "capabilityVerb": "revoke",
+      "effectKind": "repair-write",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrencySafe": false,
+    "audit": {
+      "enabled": true,
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": true,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "吊销 API Key",
+    "risk": "repair_write",
+    "otel": {
+      "semanticGroup": "operation_permission",
+      "operationName": "operation_permission_api_keys_revoke"
+    },
+    "auditPolicy": {
+      "recordInput": true,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
     "id": "operation_permission.catalog",
     "feature": "operation_permission",
     "label": "工具管理目录",
@@ -33232,441 +35103,6 @@ export const SERVER_API_OPERATIONS: any = [
     "otel": {
       "semanticGroup": "operation_permission",
       "operationName": "operation_permission_pending_operations_resolve"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "operation_permission.mcp.request_authorization",
-    "feature": "operation_permission",
-    "label": "MCP 请求授权",
-    "target": {
-      "controller": "system",
-      "method": "handleCreateMcpAuthorizationRequest"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/mcp/authorization/request",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "operation_permission.mcp.request_authorization"
-    },
-    "cli": {
-      "command": [
-        "mcp",
-        "authorization",
-        "request"
-      ],
-      "usage": "mcp authorization request --body payload.json"
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "externalAuth": true,
-    "externalAuthVerifier": {
-      "method": "verifyToolSkillExternalAuth",
-      "recordUse": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "claimTokenHash"
-      ],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        },
-        "claimTokenHash": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "targets": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "connectorVersion": {
-          "type": "string"
-        },
-        "agentProfileId": {
-          "type": "string"
-        },
-        "processIdentity": {
-          "type": "object"
-        },
-        "label": {
-          "type": "string"
-        },
-        "grantMode": {
-          "type": "string"
-        },
-        "toolsets": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "scopes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "maxRisk": {
-          "type": "string"
-        },
-        "metadata": {
-          "type": "object"
-        }
-      }
-    },
-    "safety": {
-      "risk": "safe_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuthMissingCode": "missing_token",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "operation_permission",
-      "resourceKind": "operation_permission",
-      "capabilityVerb": "request-authorization",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "operation_permission",
-      "resourceKind": "operation_permission",
-      "capabilityVerb": "request-authorization",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrencySafe": false,
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "MCP 请求授权",
-    "risk": "safe_write",
-    "otel": {
-      "semanticGroup": "operation_permission",
-      "operationName": "operation_permission_mcp_request_authorization"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "operation_permission.mcp.list_requests",
-    "feature": "operation_permission",
-    "label": "MCP 授权请求列表",
-    "target": {
-      "controller": "system",
-      "method": "handleListMcpAuthorizationRequests"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/console/mcp/authorization/requests",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "operation_permission.mcp.list_requests"
-    },
-    "cli": {
-      "command": [
-        "mcp",
-        "authorization",
-        "list"
-      ],
-      "usage": "mcp authorization list"
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": true,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "operation_permission",
-      "resourceKind": "operation_permission",
-      "capabilityVerb": "list-requests",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "operation_permission",
-      "resourceKind": "operation_permission",
-      "capabilityVerb": "list-requests",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrencySafe": true,
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "MCP 授权请求列表",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "operation_permission",
-      "operationName": "operation_permission_mcp_list_requests"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "operation_permission.mcp.resolve_request",
-    "feature": "operation_permission",
-    "label": "处理 MCP 授权请求",
-    "target": {
-      "controller": "system",
-      "method": "handleResolveMcpAuthorizationRequest"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/console/mcp/authorization/requests/:requestId/resolve",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "operation_permission.mcp.resolve_request"
-    },
-    "cli": {
-      "command": [
-        "mcp",
-        "authorization",
-        "resolve"
-      ],
-      "usage": "mcp authorization resolve --id REQUEST_ID --body payload.json"
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "resolution"
-      ],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        },
-        "requestId": {
-          "type": "string"
-        },
-        "resolution": {
-          "type": "string",
-          "enum": [
-            "approved",
-            "denied"
-          ]
-        },
-        "reason": {
-          "type": "string"
-        },
-        "clientName": {
-          "type": "string"
-        },
-        "scopes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "toolsets": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "toolAllow": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "operation_permission",
-      "resourceKind": "operation_permission",
-      "capabilityVerb": "resolve-request",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "operation_permission",
-      "resourceKind": "operation_permission",
-      "capabilityVerb": "resolve-request",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrencySafe": false,
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "处理 MCP 授权请求",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "operation_permission",
-      "operationName": "operation_permission_mcp_resolve_request"
     },
     "auditPolicy": {
       "recordInput": true,

@@ -37,7 +37,7 @@ beforeEach(() : any => {
   document.documentElement.lang = "zh-CN";
   setConsoleLocaleState("zh-CN");
   shellContextMock.current = {
-    busyKey: ref(""),
+    isBusy: () => false,
     consoleState: ref({
       clients: { summary: { offlineCount: 0, totalCount: 0 } },
       features: { plugins: { effectivePlugins: [], loadedPlugins: [] } },
@@ -52,16 +52,15 @@ beforeEach(() : any => {
   approvalFlowMock.current = {
     approvalFlowCards: ref([
       {
-        key: "authorization:request-a",
-        kind: "authorization",
+        key: "pendingOperation:request-a",
+        kind: "pendingOperation",
         tone: "warning",
-        label: "MCP 客户端授权",
-        title: "Self-reported client",
+        label: "Operation Permission 审批",
+        title: "Governed operation",
         summary: "Review this request in the approval decision center.",
         meta: ["待决定", "等待审批"],
-        request: {
-          requestId: "request-a",
-          requestKind: "generic",
+        pendingOperation: {
+          pendingOperationId: "request-a",
           status: "pending",
         },
       },
@@ -81,7 +80,7 @@ describe("Dashboard approval entry", () : any => {
       },
     });
 
-    expect(wrapper.text()).toContain("MCP 客户端授权");
+    expect(wrapper.text()).toContain("Operation Permission 审批");
     expect(wrapper.find('[data-action="open-approval-center"]').exists()).toBe(
       true,
     );

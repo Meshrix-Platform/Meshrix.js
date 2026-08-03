@@ -9,12 +9,12 @@ import {
   parseMcpCatalogFacts,
   parseMcpCatalogInvalidation
 } from "../../../packages/contracts/src/mcp-catalog-delivery.ts";
-import { issueVerifierLocalMcpGrant } from "./local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
 import {
-  bindVerifierLocalMcpGrantIdentity,
-  createVerifierLocalMcpGrantIdentity,
+  bindVerifierApiKey,
+  createVerifierApiKeyAccess,
   verifierMcpRequestHeaders
-} from "./local-mcp-verifier-identity.ts";
+} from "./verifier-mcp-api-key.ts";
 
 // This is a protocol negotiation value accepted by the server grant endpoint.
 // The verifier remains a neutral wire peer and imports no client implementation.
@@ -46,16 +46,15 @@ export async function issueNeutralMcpProtocolGrant({
   const normalizedPeerId: any = String(peerId || "primary").replace(/[^a-z0-9-]+/giu, "-").slice(0, 48);
   const target: any = PEER_TARGET;
   const identityByToken: any = new Map<any, any>();
-  const verifierIdentity: any = createVerifierLocalMcpGrantIdentity({
+  const verifierAccess: any = createVerifierApiKeyAccess({
     target,
     label: `neutral-protocol-peer-${normalizedPeerId}`
   });
-  const response: any = await issueVerifierLocalMcpGrant({
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    approvalAuth,
-    grantRequest: {
+    consoleAuth: approvalAuth,
+    access: {
       targets: [target],
-      label: "Neutral protocol peer",
       connectorVersion: "protocol-peer",
       grantMode: "maintain",
       maxRisk,
@@ -63,19 +62,18 @@ export async function issueNeutralMcpProtocolGrant({
       dynamicCapabilities,
       allowedServiceIds,
       allowedSecretBindings,
-      processIdentity: verifierIdentity.request
+      label: verifierAccess.label
     }
   });
-  const token: any = String(response.payload.token || "");
-  const grantId: any = String(response.payload.grantId || response.payload.grant?.id || "");
-  assert.ok(token && grantId, "Neutral protocol grant issuance failed.");
-  bindVerifierLocalMcpGrantIdentity({
+  const token: any = response.apiKey;
+  const keyId: any = response.record.keyId;
+  assert.ok(token && keyId, "Neutral protocol API Key issuance failed.");
+  bindVerifierApiKey({
     identityByToken,
     token,
-    identity: verifierIdentity.identity,
-    payload: response.payload
+    record: response.record
   });
-  return Object.freeze({ token, grantId, identityByToken, target });
+  return Object.freeze({ token, keyId, identityByToken, target });
 }
 
 export function createMcpCatalogProtocolPeer({

@@ -16,7 +16,6 @@ import type {
 } from "../lib/types";
 import type {
   AdminView,
-  AgentConfigurationAlert,
   CloudProvider,
   RefreshStateOptions,
 } from "../types/app";
@@ -58,7 +57,6 @@ import { createConsoleDiscoveryController } from "./console-discovery-controller
 import { CONSOLE_EVENT_TOPICS, createConsoleEventRouter } from "./console-event-router";
 import { createConsoleJobController } from "./console-job-controller";
 import { createConsoleMaintenanceAgentController } from "./console-maintenance-agent-controller";
-import { createConsoleMcpAuthorizationController } from "./console-mcp-authorization-controller";
 import { createConsoleModelLibraryController } from "./console-model-library-controller";
 import {
   modelEntryParameters,
@@ -84,11 +82,10 @@ export type DebugTab = string;
 export interface ConsoleController {
   activeConsoleFeatureIds: ComputedRef<string[]>;
   adminView: Ref<string>;
-  busyKey: ComputedRef<string>;
+  isAnyBusy: ComputedRef<boolean>;
   canAccessAdminView: (adminView?: string) => boolean;
   canAccessRouteMeta: (meta?: unknown) => boolean;
   canAccessView: (view?: string) => boolean;
-  clearAllBusy: () => void;
   clearBusy: (key: string) => void;
   closeDrawer: () => void;
   consoleState: Ref<ServerConsoleState | null>;
@@ -205,8 +202,7 @@ export function useConsole() : any {
 
   const refreshStateController: any = createConsoleRefreshStateController({
     applyConsoleState,
-    busyKey: busyController.busyKey,
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     error,
     serverAvailable,
     setBusy: busyController.setBusy,
@@ -219,17 +215,12 @@ export function useConsole() : any {
   const authController: any = createConsoleAuthController({
     consoleState,
     error,
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     refreshState: refreshStateController.refreshState,
     resetServerEventCursor: serverEventController.resetServerEventCursor,
     setBusy: busyController.setBusy,
     startServerEventSubscription: serverEventController.startServerEventSubscription,
     stopServerEventSubscription: serverEventController.stopServerEventSubscription,
-  });
-  const mcpAuthorizationController: any = createConsoleMcpAuthorizationController({
-    clearBusy: busyController.clearBusy,
-    error,
-    setBusy: busyController.setBusy,
   });
   const operationPermissionPendingController: any = createConsoleOperationPermissionPendingController({
     clearBusy: busyController.clearBusy,
@@ -238,12 +229,8 @@ export function useConsole() : any {
   });
   const approvalFlowSelectionController: any =
     createConsoleApprovalFlowSelectionController({
-      mcpAuthorizationStatus:
-        mcpAuthorizationController.mcpAuthorizationStatus,
       operationPermissionPendingStatus:
         operationPermissionPendingController.operationPermissionPendingStatus,
-      refreshMcpAuthorizationRequests:
-        mcpAuthorizationController.refreshMcpAuthorizationRequests,
       refreshOperationPermissionPendingOperations:
         operationPermissionPendingController.refreshOperationPermissionPendingOperations,
     });
@@ -266,7 +253,7 @@ export function useConsole() : any {
       gatewayAssistantForm.value.modelAlias ||
       "",
     ),
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     currentAgentModelOptionLabel: agentSelectorController.currentAgentModelOptionLabel,
     error,
     modelLibraryExpandedCards,
@@ -309,7 +296,7 @@ export function useConsole() : any {
   });
   const discoveryController: any = createConsoleDiscoveryController({
     applyRemoteConsoleDraftUpdate: settingsBridge.applyRemoteConsoleDraftUpdate,
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     error,
     isApplyingRemoteConsoleDrafts: settingsBridge.isApplyingRemoteConsoleDrafts,
     refreshState: refreshStateController.refreshState,
@@ -317,12 +304,12 @@ export function useConsole() : any {
     setBusy: busyController.setBusy,
   });
   const operationPermissionController: any = createConsoleOperationPermissionController({
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     error,
     setBusy: busyController.setBusy,
   });
   const settingsPersistenceController: any = createConsoleSettingsPersistenceController({
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     error,
     modelEntryStatusKey: modelLibraryController.modelEntryStatusKey,
     mountDraft: runtimeMountController.mountDraft,
@@ -338,7 +325,7 @@ export function useConsole() : any {
 
   const maintenanceAgentController: any = createConsoleMaintenanceAgentController({
     canReadMaintenanceAgent: authController.canReadMaintenanceAgent,
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     consoleState,
     error,
     modelEntryStatusKey: modelLibraryController.modelEntryStatusKey,
@@ -349,14 +336,14 @@ export function useConsole() : any {
     allMaintenanceAgentRuns: maintenanceAgentController.allMaintenanceAgentRuns,
     canAdminMaintenanceAgent: authController.canAdminMaintenanceAgent,
     canReadMaintenanceAgent: authController.canReadMaintenanceAgent,
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     consoleState,
     error,
     setBusy: busyController.setBusy,
   });
   const clientController: any = createConsoleClientController({ consoleState });
   const jobController: any = createConsoleJobController({
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     confirmAction: confirmConsoleAction,
     consoleState,
     error,
@@ -460,55 +447,20 @@ export function useConsole() : any {
     highlightedTarget: highlightedConfigTarget,
   });
 
-  async function openAgentConfigurationAlert(alertItem: AgentConfigurationAlert) : Promise<any> {
-    const targetId: any = String(alertItem.targetId || "").trim();
-    if (alertItem.view === "admin" && alertItem.adminView) {
-      if (!canAccessAdminView(alertItem.adminView)) {
-        await router.push(firstAccessibleRoutePath());
-        return;
-      }
-      adminView.value = alertItem.adminView;
-      await router.push({
-        path: "/admin/" + adminSectionToSlug(alertItem.adminView),
-        query: targetId ? { configTarget: targetId } : {},
-      });
-    } else if (alertItem.view) {
-      const opened: any = await switchView(alertItem.view);
-      if (!opened) {
-        return;
-      }
-    }
-    if (targetId) {
-      await targetHighlightController.scrollToConfigTarget(targetId);
-    }
-  }
-
   const dashboardAlertController: any = createConsoleDashboardAlertController({
     acknowledgeMonitorAlert: opsMonitorController.acknowledgeMonitorAlert,
     activeMonitorAlerts: opsMonitorController.activeMonitorAlerts,
-    agentModelAssignmentOptions: modelLibraryController.agentModelAssignmentOptions,
-    agentSelectorOptions: agentSelectorController.agentSelectorOptions,
     backgroundProcesses: opsMonitorController.backgroundProcesses,
     error,
-    gatewayAssistantAgentOptions: agentSelectorController.gatewayAssistantAgentOptions,
-    gatewayAssistantForm,
-    moduleModelRef: modelLibraryController.moduleModelRef,
-    moduleNeedsIntelligence: modelLibraryController.moduleNeedsIntelligence,
     openAdmin: (view?: any) : any => {
       void openAdmin(view);
     },
-    openAgentConfigurationAlert,
     recoverBackgroundSupervisor: opsMonitorController.recoverBackgroundSupervisor,
     refreshMonitorAlerts: opsMonitorController.refreshMonitorAlerts,
-    ruleAuthoringForm,
-    ruleAuthoringModelOptions,
-    settingsDraft,
-    visibleModelEntries: modelLibraryController.visibleModelEntries,
   });
 
   const systemLogRowController: any = createConsoleSystemLogRowController({
     activeMonitorAlerts: opsMonitorController.activeMonitorAlerts,
-    agentConfigurationAlerts: dashboardAlertController.agentConfigurationAlerts,
     agentSelectionReferenceLogs: agentSelectionReferenceController.agentSelectionReferenceLogs,
     authAudit: authController.authAudit,
     backgroundProcesses: opsMonitorController.backgroundProcesses,
@@ -528,7 +480,7 @@ export function useConsole() : any {
     providerLabel: modelLibraryController.providerLabel,
   });
   const contextCompilerController: any = createConsoleContextCompilerController({
-    clearAllBusy: busyController.clearAllBusy,
+    clearBusy: busyController.clearBusy,
     error,
     selectedContextProfileId: () : any => String(
       settingsDraft.value.gatewayAssistantDefaults?.contextProfileId || "",
@@ -623,7 +575,6 @@ export function useConsole() : any {
     intelligentModuleDefinitions,
     modelProbeResults,
     openAdmin,
-    openAgentConfigurationAlert,
     openDrawer,
     ruleAuthoringForm,
     ruleAuthoringModelOptions,
@@ -638,7 +589,6 @@ export function useConsole() : any {
     ...refreshStateController,
     ...serverEventController,
     ...authController,
-    ...mcpAuthorizationController,
     ...operationPermissionPendingController,
     ...approvalFlowSelectionController,
     ...agentSelectorController,

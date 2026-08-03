@@ -84,7 +84,7 @@ function agentGatewayMcpProvider({ settings, authorization }: Record<string, any
   const catalog: any = createToolCatalog({ operations: SERVER_API_OPERATIONS });
   const tool: any = catalog.tools.find((item?: any) : any => item.operationId === "agent_gateway.call");
   return {
-    authorizeRequest: async () : Promise<any> => authorization,
+    authorizeMcpClientRequest: async () : Promise<any> => authorization,
     listVisibleTools: () : any => authorization?.ok === true ? [tool] : [],
     visibleGrantSummary: () : any => ({
       id: authorization?.grant?.id || "",

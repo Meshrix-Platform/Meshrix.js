@@ -22,6 +22,12 @@ withDefaults(defineProps<{
   >
     <strong class="console-empty-state-title">{{ title }}</strong>
     <span v-if="description" class="console-empty-state-description">{{ description }}</span>
+    <div
+      v-if="$slots.action"
+      class="console-empty-state-actions horizontal-action-group"
+    >
+      <slot name="action" />
+    </div>
     <slot />
   </component>
 </template>
@@ -73,6 +79,20 @@ withDefaults(defineProps<{
   max-width: 360px;
   font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
+}
+
+/* 起步操作区沿用共享的水平操作组契约，保持同一行控件等高。 */
+.console-empty-state-actions {
+  --horizontal-action-control-height: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+  margin-top: var(--space-2);
+}
+
+.console-empty-state.is-compact .console-empty-state-actions {
+  margin-top: var(--space-1);
 }
 
 .console-empty-state.tone-danger .console-empty-state-title {

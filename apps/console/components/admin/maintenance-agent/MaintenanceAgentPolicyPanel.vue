@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import OptionBar from "@meshrix/ui-console/option-bar";
+import FeatureToggle from "../../FeatureToggle.vue";
 import { useMaintenanceAgentViewContext } from "../../../composables/maintenanceAgentViewContext";
 
 const {
   addMaintenanceAgentSchedule,
   autoApproveRiskOptionBarOptions,
-  busyKey,
+  isBusy,
   canAdminMaintenanceAgent,
-  enabledBooleanOptionBarOptions,
   formatCompactDate,
   maintenanceAgentConfig,
   maintenanceAgentRunbook,
@@ -41,10 +41,10 @@ const {
       </button>
     </div>
     <div class="form-grid compact-form-grid">
-      <OptionBar
+      <FeatureToggle
         v-model="maintenanceAgentConfig.enabled"
         label="启用"
-        :options="enabledBooleanOptionBarOptions"
+        :aria-label="maintenanceAgentConfig.enabled ? '停用维护智能体' : '启用维护智能体'"
       />
       <OptionBar
         v-model="maintenanceAgentConfig.plannerMode"
@@ -78,13 +78,10 @@ const {
         </span>
         <input v-model.number="schedule.intervalMinutes" type="number" min="1" max="525600" />
         <span class="source-actions">
-          <button
-            class="table-action"
-            type="button"
-            @click="schedule.enabled = !schedule.enabled"
-          >
-            {{ schedule.enabled ? "停用" : "启用" }}
-          </button>
+          <FeatureToggle
+            v-model="schedule.enabled"
+            :aria-label="schedule.enabled ? `停用计划 ${schedule.label}` : `启用计划 ${schedule.label}`"
+          />
           <button
             class="table-action danger-link"
             type="button"
@@ -102,10 +99,11 @@ const {
       <button
         class="primary-action"
         type="button"
-        :disabled="!canAdminMaintenanceAgent || busyKey === 'maintenance-agent:config'"
+        :disabled="!canAdminMaintenanceAgent || isBusy('maintenance-agent:config')"
+        :aria-busy="isBusy('maintenance-agent:config')"
         @click="saveMaintenanceAgentConfig"
       >
-        {{ busyKey === "maintenance-agent:config" ? "保存中" : "保存策略" }}
+        {{ isBusy("maintenance-agent:config") ? "保存中" : "保存策略" }}
       </button>
     </div>
   </article>

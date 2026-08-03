@@ -6,7 +6,7 @@ import AgentModelEntryCard from "./AgentModelEntryCard.vue";
 const {
   addModelProvider,
   addableModelProviderOptionBarOptions,
-  busyKey,
+  isBusy,
   highlightedConfigTarget,
   saveModelLibrarySettings,
   selectedModelProvider,
@@ -54,8 +54,8 @@ const {
       </div>
 
       <div class="source-actions model-library-save-actions">
-        <button class="tool-button" type="submit" :disabled="busyKey === 'model-library-save'">
-          {{ busyKey === "model-library-save" ? "探测并保存中" : "保存模型库" }}
+        <button class="tool-button" type="submit" :disabled="isBusy('model-library-save')">
+          {{ isBusy("model-library-save") ? "探测并保存中" : "保存模型库" }}
         </button>
       </div>
     </form>

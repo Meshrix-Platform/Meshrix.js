@@ -4,7 +4,7 @@ import { useOperationPermissionViewContext } from "../../../composables/operatio
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
 
 const {
-  busyKey,
+  isBusy,
   setGrantToolRule,
   toolGrants,
   operationPermissionTools,
@@ -195,7 +195,8 @@ function setRowRule(row: GrantToolRuleRow, rule: "inherit" | "allow" | "deny") {
           <button
             class="table-action"
             type="button"
-            :disabled="busyKey === `grant:${row.grantId}`"
+            :disabled="isBusy(`grant:${row.grantId}`)"
+            :aria-busy="isBusy(`grant:${row.grantId}`)"
             @click="setRowRule(row, 'inherit')"
           >
             继承
@@ -203,7 +204,8 @@ function setRowRule(row: GrantToolRuleRow, rule: "inherit" | "allow" | "deny") {
           <button
             class="table-action"
             type="button"
-            :disabled="busyKey === `grant:${row.grantId}`"
+            :disabled="isBusy(`grant:${row.grantId}`)"
+            :aria-busy="isBusy(`grant:${row.grantId}`)"
             @click="setRowRule(row, 'allow')"
           >
             允许
@@ -211,7 +213,8 @@ function setRowRule(row: GrantToolRuleRow, rule: "inherit" | "allow" | "deny") {
           <button
             class="table-action danger-action"
             type="button"
-            :disabled="busyKey === `grant:${row.grantId}`"
+            :disabled="isBusy(`grant:${row.grantId}`)"
+            :aria-busy="isBusy(`grant:${row.grantId}`)"
             @click="setRowRule(row, 'deny')"
           >
             未启用

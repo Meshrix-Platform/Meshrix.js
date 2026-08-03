@@ -55,6 +55,45 @@ export function createSystemControllerFoundationHandlers({
         errorMessage: "读取统一权限治理摘要失败。"
       });
     },
+    async handleAuthorizationOrganizationGovernanceGet({ operation, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "authorization.organization_governance.get",
+        response,
+        authSession,
+        errorMessage: "读取组织治理架构失败。"
+      });
+    },
+    async handleAuthorizationOrganizationGovernanceImport({ operation, requestBody, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "authorization.organization_governance.import",
+        input: protocolPayload(requestBody),
+        response,
+        authSession,
+        errorMessage: "导入组织治理模板失败。"
+      });
+    },
+    async handleAuthorizationOrganizationGovernancePreview({ operation, requestBody, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "authorization.organization_governance.preview",
+        input: protocolPayload(requestBody),
+        response,
+        authSession,
+        errorMessage: "验证组织治理架构失败。"
+      });
+    },
+    async handleAuthorizationOrganizationGovernancePublish({ operation, requestBody, response, authSession }: Record<string, any>) : Promise<any> {
+      await sendAuthorizationOperation({
+        operation,
+        operationId: "authorization.organization_governance.publish",
+        input: protocolPayload(requestBody),
+        response,
+        authSession,
+        errorMessage: "发布组织治理架构失败。"
+      });
+    },
     async handleTagManagementTagsList({ operation, url, response, authSession }: Record<string, any>) : Promise<any> {
       await sendAuthorizationOperation({
         operation,
@@ -309,36 +348,6 @@ export function createSystemControllerFoundationHandlers({
         response,
         context: authorizationFacadeContext(authSession),
         errorMessage: "读取授权拒绝请求失败。"
-      });
-    },
-    async handleCreateMcpAuthorizationRequest({ operation, request, requestBody, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "operation_permission.mcp.request_authorization",
-        input: protocolPayload(requestBody),
-        response,
-        context: { toolSkillManagementProvider: getToolSkillManagementProvider(), request },
-        errorMessage: "MCP Authorization API request failed."
-      });
-    },
-    async handleListMcpAuthorizationRequests({ operation, url, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "operation_permission.mcp.list_requests",
-        input: protocolPayload(Buffer.alloc(0), url),
-        response,
-        context: { toolSkillManagementProvider: getToolSkillManagementProvider() },
-        errorMessage: "MCP Authorization API list failed."
-      });
-    },
-    async handleResolveMcpAuthorizationRequest({ operation, requestId, requestBody, response, authSession }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "operation_permission.mcp.resolve_request",
-        input: {
-          ...protocolPayload(requestBody),
-          requestId
-        },
-        response,
-        context: { toolSkillManagementProvider: getToolSkillManagementProvider(), authSession },
-        errorMessage: "MCP Authorization API resolve failed."
       });
     },
     async handleOperationPermissionPassthrough({ operation, request, requestBody, url, response, params = {}, operationLock = null, signal = null }: Record<string, any>) : Promise<any> {

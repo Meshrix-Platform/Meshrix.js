@@ -296,12 +296,6 @@ function createOperationPermissionStoreFromResources({
     getPendingOperation: ctx.getPendingOperation,
     listPendingOperations: ctx.listPendingOperations,
     resolvePendingOperation: ctx.resolvePendingOperation,
-    createMcpAuthorizationRequest: ctx.createMcpAuthorizationRequest,
-    getMcpAuthorizationRequest: ctx.getMcpAuthorizationRequest,
-    listMcpAuthorizationRequests: ctx.listMcpAuthorizationRequests,
-    resolveMcpAuthorizationRequest: ctx.resolveMcpAuthorizationRequest,
-    claimMcpAuthorizationRequest: ctx.claimMcpAuthorizationRequest,
-    completeMcpAuthorizationRequest: ctx.completeMcpAuthorizationRequest,
     capabilityKeyProvider: resolvedCapabilityKeyProvider,
     capabilityBindingGuard: resolvedCapabilityBindingGuard,
     isClosed() : any {

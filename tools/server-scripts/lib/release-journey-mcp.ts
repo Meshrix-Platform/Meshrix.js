@@ -11,7 +11,6 @@ import { createHash } from "node:crypto";
 
 import { createMcpProxyStdioClient } from "./mcp-proxy-stdio-client.ts";
 import { authHeaders } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts";
-import { processIdentityHeaders } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/process-identity-request.ts";
 import { resolveProxyCredentials } from "../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts";
 
 // Client-side mirror of packages/agents/src/upstream-gateway/support.ts
@@ -22,6 +21,15 @@ export function safePublicToolSegment(value: any = "") : any {
     .replace(/[^A-Za-z0-9_-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "service";
+}
+
+export function releaseJourneyUploadCheckpointId(target: any, fixtureSha256: any) : any {
+  const targetDigest: any = createHash("sha256")
+    .update("release-journey-upload-target\0")
+    .update(String(target || ""))
+    .digest("hex")
+    .slice(0, 16);
+  return `release-journey-${String(fixtureSha256 || "").slice(0, 16)}-${targetDigest}`;
 }
 
 function contentItemsOf(result?: any) : any {
@@ -45,7 +53,7 @@ export async function uploadBinaryFixtureThroughConnector({
   addNeedle = () : any => {},
   fetchImpl = fetch,
   resolveCredentials = resolveProxyCredentials,
-  buildIdentityHeaders = processIdentityHeaders
+  buildIdentityHeaders = () : any => ({})
 }: Record<string, any> = {}) : Promise<any> {
   if (!Buffer.isBuffer(fixtureBytes) || fixtureBytes.length === 0) {
     throw new TypeError("uploadBinaryFixtureThroughConnector requires non-empty fixture bytes.");
@@ -64,7 +72,7 @@ export async function uploadBinaryFixtureThroughConnector({
     .digest("hex");
   const createUrl: any = new URL("/api/upload-sessions", normalizedBaseUrl);
   const createBody: any = JSON.stringify({
-    checkpoint: { checkpointId: `release-journey-${sha256.slice(0, 16)}` },
+    checkpoint: { checkpointId: releaseJourneyUploadCheckpointId(target, sha256) },
     manifest: { manifestDigest, inputDigest: sha256 },
     files: [{
       relativePath: fileName,
@@ -79,7 +87,7 @@ export async function uploadBinaryFixtureThroughConnector({
     body: createBody,
     identity
   });
-  if (!createIdentityHeaders["x-meshrix-signature"]) {
+  if (!createIdentityHeaders["x-meshrix-signature"] && !String(token || "").startsWith("mxak1.")) {
     const error: Error & Record<string, any> = new Error("Connector process identity is required for binary upload.");
     error.code = "release_journey_upload_identity_missing";
     throw error;
@@ -118,7 +126,8 @@ export async function uploadBinaryFixtureThroughConnector({
     body: fixtureBytes,
     identity
   });
-  if (!uploadIdentityHeaders["x-meshrix-signature"]) {
+  const processIdentityBound: any = Boolean(uploadIdentityHeaders["x-meshrix-signature"]);
+  if (!processIdentityBound && !String(token || "").startsWith("mxak1.")) {
     const error: Error & Record<string, any> = new Error("Connector process identity is required for binary upload.");
     error.code = "release_journey_upload_identity_missing";
     throw error;
@@ -141,7 +150,26 @@ export async function uploadBinaryFixtureThroughConnector({
     || Number(file?.receivedBytes || file?.byteSize || 0) !== fixtureBytes.length
   ) {
     const error: Error & Record<string, any> = new Error(`Connector binary upload chunk failed with status ${uploadedResponse.status}.`);
-    error.code = "release_journey_upload_chunk_failed";
+    const responseCode: any = String(
+      uploaded?.error?.code || uploaded?.reasonCode || uploaded?.code || ""
+    ).replace(/[^a-z0-9_]+/giu, "_").slice(0, 80);
+    const responseMessage: any = typeof uploaded?.error === "string"
+      ? uploaded.error
+      : String(uploaded?.error?.message || "");
+    const boundedCode: any = responseCode || (
+      /最低证据|proof/iu.test(responseMessage)
+        ? "operation_proof_unavailable"
+        : /执行授权已失效|authorization.*(?:stale|expired|denied)/iu.test(responseMessage)
+          ? "execution_authorization_denied"
+          : /服务器处理请求失败|server.*request.*failed/iu.test(responseMessage)
+            ? "handler_effect_failed"
+        : /授权|authorization/iu.test(responseMessage)
+          ? "authorization_unavailable"
+          : ""
+    );
+    error.code = boundedCode
+      ? `release_journey_upload_chunk_${boundedCode}`
+      : "release_journey_upload_chunk_failed";
     error.statusCode = Number(uploadedResponse.status || 0);
     throw error;
   }
@@ -157,7 +185,8 @@ export async function uploadBinaryFixtureThroughConnector({
       sha256,
       reference: "upload:<session-id>:0",
       ownerBound: true,
-      processIdentityBound: true,
+      processIdentityBound,
+      workloadIdentityBound: true,
       status: "complete"
     }
   };
@@ -245,6 +274,7 @@ export async function runMcpJourney({
   fixtureFileName,
   artifactReference,
   operationKey = "convert-full-access-debug",
+  expectedCoreTools = ["meshrix.discovery", "meshrix.gateway"],
   expectedOperationKeys = [
     "convert-require-approval-debug",
     "convert-full-access-debug"
@@ -290,7 +320,7 @@ export async function runMcpJourney({
     const toolsList: any = await client.request("tools/list", {});
     const toolNames: any = (toolsList?.result?.tools || []).map((tool?: any) : any => tool.name);
     receipt.tools = toolNames;
-    for (const expected of ["meshrix.discovery", "meshrix.gateway", ...expectedUpstreamTools]) {
+    for (const expected of [...expectedCoreTools, ...expectedUpstreamTools]) {
       if (!toolNames.includes(expected)) {
         const error: Error & Record<string, any> = new Error(`Expected MCP tool ${expected} is not visible; saw ${toolNames.join(", ")}.`);
         error.code = "release_journey_tool_missing";
@@ -340,6 +370,131 @@ export async function runMcpJourney({
     return { receipt, artifactUrl: linkUrl.toString(), artifactId: receipt.convert.artifactId };
   } finally {
     await client.close().catch(() : any => {});
+  }
+}
+
+export async function runMcpDeniedCall({
+  connectorScript,
+  target,
+  baseUrl,
+  toolName,
+  artifactReference,
+  env = {},
+  expectedCodes = []
+}: Record<string, any> = {}) : Promise<any> {
+  const client: any = createMcpProxyStdioClient({
+    connectorScript,
+    target,
+    baseUrl,
+    env,
+    timeoutMs: 30_000,
+    redactText: () : any => "[redacted]"
+  });
+  let initialized: any = false;
+  try {
+    await client.request("initialize", {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "meshrix-neutral-mcp-peer", version: "1" }
+    });
+    await client.notify("notifications/initialized", {});
+    initialized = true;
+    const response: any = await client.request("tools/call", {
+      name: toolName,
+      arguments: { arguments: { file: artifactReference, targetFormat: "pdf" } }
+    });
+    const serialized: any = JSON.stringify(response);
+    const denied: any = response?.error || response?.result?.isError === true ||
+      /denied|forbidden|not visible|unknown tool|unauthorized/iu.test(serialized);
+    if (!denied || contentItemsOf(response).some((item?: any) : any => item?.type === "resource_link")) {
+      throw Object.assign(new Error("API key disallowed MCP operation was not denied."), {
+        code: "release_journey_api_key_operation_not_denied"
+      });
+    }
+    const publicCode: any = String(findObjectField(response, "code") || "");
+    if (expectedCodes.length > 0 && publicCode && !expectedCodes.includes(publicCode)) {
+      throw Object.assign(new Error("API key MCP denial returned an unexpected code."), {
+        code: "release_journey_api_key_denial_code_invalid"
+      });
+    }
+    return { denied: true, code: publicCode || "operation_denied", upstreamEffect: false };
+  } catch (error: any) {
+    const denialCode: any = String(error?.code || "");
+    const denialStatus: any = Number(error?.statusCode || 0);
+    const denialRpcCode: any = Number(error?.rpcCode || 0);
+    if (
+      initialized ||
+      [401, 403, 404].includes(denialStatus) ||
+      denialRpcCode === -32601 ||
+      /denied|forbidden|not_visible|unknown_tool|unauthorized|api_key_policy/iu.test(denialCode) ||
+      /denied|forbidden|unknown tool|unauthorized|authorization failed|api key|HTTP 40[013]/iu.test(
+        String(error?.message || "")
+      )
+    ) {
+      return { denied: true, code: denialCode || "transport_denied", upstreamEffect: false };
+    }
+    throw error;
+  } finally {
+    await client.close().catch(() : any => {});
+  }
+}
+
+export async function probeApiKeyUploadRequest({
+  baseUrl,
+  target,
+  env = {},
+  method = "POST",
+  pathname = "/api/upload-sessions",
+  body = Buffer.from("{}"),
+  ambiguousCredential = false
+}: Record<string, any> = {}) : Promise<any> {
+  const previous: Record<string, any> = {};
+  for (const [key, value] of (Object.entries(env) as [string, any][])) {
+    previous[key] = process.env[key];
+    process.env[key] = value;
+  }
+  try {
+    let credentials: any;
+    try {
+      credentials = await resolveProxyCredentials({ target });
+    } catch (error: any) {
+      if (/missing MCP credential/iu.test(String(error?.message || ""))) {
+        return Object.freeze({
+          status: 0,
+          ok: false,
+          code: "missing_mcp_credential"
+        });
+      }
+      throw error;
+    }
+    const { token } = credentials;
+    const url: any = new URL(pathname, baseUrl);
+    const requestBody: any = method === "GET"
+      ? Buffer.alloc(0)
+      : Buffer.isBuffer(body) ? body : Buffer.from(String(body || ""));
+    const headers: Record<string, any> = {
+      ...authHeaders(token, target)
+    };
+    if (ambiguousCredential) headers.Authorization = "Bearer x";
+    if (method === "POST") headers["Content-Type"] = "application/json";
+    else if (method === "PUT") headers["Content-Type"] = "application/octet-stream";
+    const response: any = await fetch(url, {
+      method,
+      headers,
+      body: method === "GET" ? undefined : requestBody,
+      signal: AbortSignal.timeout(30_000)
+    });
+    const payload: any = await jsonResponse(response);
+    return Object.freeze({
+      status: response.status,
+      ok: response.ok,
+      code: String(payload?.error?.code || payload?.reasonCode || payload?.code || "")
+    });
+  } finally {
+    for (const [key, value] of (Object.entries(previous) as [string, any][])) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
   }
 }
 
@@ -470,8 +625,8 @@ export async function runConnectorFetch({
   };
 }
 
-// Diagnostic: repeat the artifact GET with the connector's own signed
-// identity and surface the server's status and public error code. Used only
+// Diagnostic: repeat the artifact GET with the connector's scoped API Key
+// and surface the server's status and public error code. Used only
 // to enrich a failed artifact-fetch step; emits no token material.
 export async function diagnoseArtifactGet({ artifactUrl, target = "kimi", env = {} }: Record<string, any> = {}) : Promise<any> {
   const previous: Record<string, any> = {};
@@ -481,17 +636,13 @@ export async function diagnoseArtifactGet({ artifactUrl, target = "kimi", env = 
   }
   try {
     const { authHeaders } = await import("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/discovery.ts");
-    const { processIdentityHeaders } = await import("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/process-identity-request.ts");
     const { resolveProxyCredentials } = await import("../../../packages/protocols/mcp/adapter/gateway-installer/lib/cli/proxy-command.ts");
-    const { target: resolvedTarget, token, identity } = await resolveProxyCredentials({ target });
+    const { target: resolvedTarget, token } = await resolveProxyCredentials({ target });
     const response: any = await fetch(artifactUrl, {
       method: "GET",
       redirect: "error",
       signal: AbortSignal.timeout(15000),
-      headers: {
-        ...authHeaders(token, resolvedTarget),
-        ...processIdentityHeaders({ method: "GET", url: new URL(artifactUrl), body: "", identity })
-      }
+      headers: authHeaders(token, resolvedTarget)
     });
     let code: any = "";
     try {

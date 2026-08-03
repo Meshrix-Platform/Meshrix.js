@@ -1,6 +1,5 @@
 param(
   [Parameter(Position = 0)]
-  [ValidateSet("install", "register", "scan", "discover-local", "uninstall", "doctor", "help", "version")]
   [string]$Command = "install",
   [string]$Target = "",
   [string]$Url = "",
@@ -10,7 +9,6 @@ param(
   [switch]$TokenStdin,
   [string]$ScanPorts = "",
   [switch]$NoVerify,
-  [switch]$NoAutoToken,
   [Parameter(DontShow = $true)]
   [Alias("Token")]
   [string]$RejectedRawToken = "",
@@ -26,9 +24,17 @@ function Write-Failure([string]$Message) {
       ConvertTo-Json -Compress |
       Write-Output
   } else {
-    Write-Error $Message
+    [Console]::Error.WriteLine($Message)
   }
   exit 1
+}
+
+$AllowedCommands = @("install", "register", "scan", "discover-local", "uninstall", "doctor", "help", "version")
+if ($Command -notin $AllowedCommands) {
+  if ($Command -match 'mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}') {
+    Write-Failure "Raw API Keys are not accepted in process arguments. Use -TokenStdin or an exported API Key environment variable."
+  }
+  Write-Failure "Unsupported installer command."
 }
 
 function Test-TokenEnvironmentName([string]$Name) {
@@ -61,12 +67,21 @@ if (-not (Test-TokenEnvironmentName $TokenEnv)) {
 }
 
 if ($PSBoundParameters.ContainsKey("RejectedRawToken")) {
-  Write-Failure "Raw tokens are not accepted in process arguments. Use -TokenStdin or an exported token environment variable."
+  Write-Failure "Raw API Keys are not accepted in process arguments. Use -TokenStdin or an exported API Key environment variable."
 }
 
 foreach ($Argument in @($RemainingArgs) | Where-Object { $null -ne $_ }) {
+  if ($Argument -match 'mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}') {
+    Write-Failure "Raw API Keys are not accepted in process arguments. Use -TokenStdin or an exported API Key environment variable."
+  }
   if ($Argument -eq "--token" -or $Argument.StartsWith("--token=")) {
-    Write-Failure "Raw tokens are not accepted in process arguments. Use -TokenStdin or an exported token environment variable."
+    Write-Failure "Raw API Keys are not accepted in process arguments. Use -TokenStdin or an exported API Key environment variable."
+  }
+}
+
+foreach ($Argument in @($Target, $Url, $DiscoveryFile, $ScanPorts) | Where-Object { $null -ne $_ }) {
+  if ($Argument -match 'mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}') {
+    Write-Failure "Raw API Keys are not accepted in process arguments. Use -TokenStdin or an exported API Key environment variable."
   }
 }
 
@@ -79,7 +94,6 @@ if ($DiscoveryFile) { $ConnectorArguments += @("--discovery-file", $DiscoveryFil
 if ($TokenStdin) { $ConnectorArguments += "--token-stdin" }
 if ($ScanPorts) { $ConnectorArguments += @("--scan-ports", $ScanPorts) }
 if ($NoVerify) { $ConnectorArguments += "--no-verify" }
-if ($NoAutoToken) { $ConnectorArguments += "--no-auto-token" }
 $ConnectorArguments += @($RemainingArgs)
 
 $SiblingExecutable = @(

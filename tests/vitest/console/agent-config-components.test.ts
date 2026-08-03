@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AgentInvocationSettingsPanel from "../../../apps/console/components/admin/agent-config/AgentInvocationSettingsPanel.vue";
 import AgentModelEntrySummaryActions from "../../../apps/console/components/admin/agent-config/AgentModelEntrySummaryActions.vue";
+import { createConsoleBusyController } from "../../../apps/console/composables/console-busy-controller";
 
 const shellContext: any = vi.hoisted(() : any => ({} as any));
 const modelEntryContext: any = vi.hoisted(() : any => ({} as any));
@@ -79,7 +80,7 @@ const JsonConfigFileEditorStub: any = defineComponent({
 });
 
 function resetShellContext() : any {
-  shellContext.busyKey = ref("");
+  shellContext.isBusy = () => false;
   shellContext.saveSettings = vi.fn(async () : Promise<any> => undefined);
   shellContext.settingsDraft = ref({
     agentToolExecution: {
@@ -102,8 +103,11 @@ function resetShellContext() : any {
   });
 }
 
+let modelEntryBusy: any;
+
 function resetModelEntryContext() : any {
-  modelEntryContext.busyKey = ref("");
+  modelEntryBusy = createConsoleBusyController();
+  modelEntryContext.isBusy = modelEntryBusy.isBusy;
   modelEntryContext.duplicateModelEntry = vi.fn();
   modelEntryContext.exportAgentModelEntryConfig = vi.fn();
   modelEntryContext.modelEntryBindingSummary = vi.fn(() : any => "任务 A");
@@ -214,7 +218,7 @@ describe("agent config components", () : any => {
     expect(modelEntryContext.duplicateModelEntry).toHaveBeenCalledWith(entry);
     expect(modelEntryContext.removeModelProvider).toHaveBeenCalledWith(entry);
 
-    modelEntryContext.busyKey.value = "model-probe:openai:gpt-unit";
+    modelEntryBusy.setBusy("model-probe:openai:gpt-unit");
     await nextTick();
     expect(buttons[0].attributes("disabled")).toBeDefined();
     expect(buttons[0].text()).toBe("探测中");
@@ -222,7 +226,8 @@ describe("agent config components", () : any => {
     wrapper.unmount();
     mounted.pop();
 
-    modelEntryContext.busyKey.value = "model-remove:openai:gpt-unit";
+    modelEntryBusy.clearBusy("model-probe:openai:gpt-unit");
+    modelEntryBusy.setBusy("model-remove:openai:gpt-unit");
     modelEntryContext.modelEntryIsBound.mockReturnValue(true);
     const boundWrapper: any = mountEntryActions(entry);
     const boundRemoveButton: any = boundWrapper.findAll("button")[3];

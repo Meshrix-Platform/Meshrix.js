@@ -2,7 +2,8 @@
 import { useWorkspacesViewContext } from "../../../composables/workspacesViewContext";
 
 const {
-  busyKey,
+  isBusy,
+  isBusyPrefix,
   hotSwapProfile,
   panel,
   profileForm,
@@ -25,8 +26,8 @@ const {
       <label><span>模型别名（agentId）</span><input v-model="profileForm.modelAlias" autocomplete="off" /></label>
     </div>
     <div class="module-actions">
-      <button class="tool-button" type="button" :disabled="!!busyKey" @click="hotSwapProfile">
-        {{ busyKey === 'ws:profile' ? '切换中…' : '热切换 Profile' }}
+      <button class="tool-button" type="button" :disabled="isBusyPrefix('ws:')" @click="hotSwapProfile">
+        {{ isBusy('ws:profile') ? '切换中…' : '热切换 Profile' }}
       </button>
       <button class="tool-button tool-button-ghost" type="button" @click="panel = 'list'">取消</button>
     </div>

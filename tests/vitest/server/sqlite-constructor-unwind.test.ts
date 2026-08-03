@@ -38,7 +38,8 @@ function databaseFixture({
   closeOrder = [],
   execError = null,
   prepareError = null,
-  closeError = null
+  closeError = null,
+  migrationVersion = 0
 }: Record<string, any> = {}) : any {
   const statement: Record<string, any> = {
     all: vi.fn(() : any => []),
@@ -49,6 +50,7 @@ function databaseFixture({
     exec: vi.fn(() : any => {
       if (execError) throw execError;
     }),
+    pragma: vi.fn(() : any => migrationVersion),
     transaction: vi.fn((work?: any) : any => work),
     prepare: vi.fn(() : any => {
       if (prepareError) throw prepareError;
@@ -300,7 +302,8 @@ describe("SQLite constructor unwind", () : any => {
     const consoleDatabase: any = databaseFixture({
       name: "console",
       closeOrder,
-      prepareError: constructionFailure
+      prepareError: constructionFailure,
+      migrationVersion: Number.MAX_SAFE_INTEGER
     });
     const authorizationDatabase: any = databaseFixture({ name: "authorization", closeOrder });
     const governanceDatabase: any = databaseFixture({

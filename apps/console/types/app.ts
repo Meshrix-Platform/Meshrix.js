@@ -60,22 +60,6 @@ export type HistorySessionPanelItem = {
   actionDisabled?: boolean;
 };
 
-export type AgentConfigurationAlert = {
-  alertId: string;
-  category: string;
-  title: string;
-  detail: string;
-  status: string;
-  tone: "danger" | "warning" | "success";
-  view?: AppView;
-  adminView?: AdminView;
-  targetId?: string;
-  value?: string;
-  options?: Array<Record<string, unknown>>;
-  actionLabel?: string;
-  source?: string;
-};
-
 export type DashboardAlert = {
   alertId: string;
   category: string;
@@ -85,7 +69,7 @@ export type DashboardAlert = {
   tone: "danger" | "warning" | "success";
   actionLabel: string;
   actionKind?: "open" | "recover-supervisor" | string;
-  source: "monitor" | "configuration" | string;
+  source: "monitor";
   live?: boolean;
   firstSeenAt?: string;
   lastSeenAt?: string;
@@ -96,7 +80,6 @@ export type DashboardAlert = {
     status?: string;
     [key: string]: unknown;
   };
-  configAlert?: AgentConfigurationAlert;
 };
 
 export type SystemLogRow = {

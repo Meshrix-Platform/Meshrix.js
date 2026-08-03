@@ -12,7 +12,7 @@ withDefaults(
     grants?: OperationPermissionGrant[];
     toolOptions?: OptionBarOption[];
     profileOptions?: OptionBarOption[];
-    busyKey?: string;
+    policyPreviewBusy?: boolean;
     previewResult?: Record<string, unknown> | null;
   }>(),
   {
@@ -20,7 +20,7 @@ withDefaults(
     grants: () => [],
     toolOptions: () => [],
     profileOptions: () => [],
-    busyKey: "",
+    policyPreviewBusy: false,
     previewResult: null,
   },
 );
@@ -83,10 +83,10 @@ const policyPreviewGrantId = defineModel<string>("policyPreviewGrantId", { requi
       <button
         class="tool-button"
         type="button"
-        :disabled="busyKey === 'tool-policy-preview'"
+        :disabled="policyPreviewBusy"
         @click="emit('preview')"
       >
-        {{ busyKey === "tool-policy-preview" ? "评估中" : "评估策略" }}
+        {{ policyPreviewBusy ? "评估中" : "评估策略" }}
       </button>
     </div>
     <pre v-if="previewResult">{{ jsonPreview(previewResult) }}</pre>

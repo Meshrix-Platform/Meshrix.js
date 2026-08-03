@@ -23,7 +23,7 @@ type ConsoleShellPageRefreshControllerOptions = {
   activeRouteAdminView: ComputedRef<string>;
   activeRouteDebugTab: ComputedRef<string>;
   activeRouteView: ComputedRef<string>;
-  busyKey: ComputedRef<string>;
+  isAnyBusy: ComputedRef<boolean>;
   hasFeature: (featureId: string) => boolean;
   msg: ComputedRef<PageRefreshMessages>;
   refreshAuthAdmin: () => MaybePromise<unknown>;
@@ -32,7 +32,6 @@ type ConsoleShellPageRefreshControllerOptions = {
   refreshContextCompiler: () => MaybePromise<unknown>;
   refreshDashboardAlertsSnapshot: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshMaintenanceAgent: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
-  refreshMcpAuthorizationRequests: () => MaybePromise<unknown>;
   refreshMonitorAlerts: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshOperationPermissionPendingOperations: () => MaybePromise<unknown>;
   refreshState: (options?: RefreshStateOptions) => MaybePromise<unknown>;
@@ -52,7 +51,6 @@ async function waitForPageRefreshTasks(tasks: Promise<unknown>[]) : Promise<any>
 export function createConsoleShellPageRefreshController(options: ConsoleShellPageRefreshControllerOptions) : any {
   const pageRefreshPendingCount: any = ref(0);
   const pageRefreshActionBusy: any = computed(() : any => pageRefreshPendingCount.value > 0);
-  const busyKey: any = computed(() : any => options.busyKey?.value || "");
   const pageRefreshMessages: any = computed(() : any => options.msg?.value || {
     actions: {
       refreshing: "刷新中",
@@ -60,7 +58,7 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
     },
   });
   const pageRefreshBusy: any = computed(() : any =>
-    pageRefreshActionBusy.value || Boolean(busyKey.value),
+    pageRefreshActionBusy.value || options.isAnyBusy.value,
   );
   const pageRefreshTitle: any = computed(() : any =>
     pageRefreshBusy.value ? `${pageRefreshMessages.value.actions.refreshing}...` : pageRefreshMessages.value.actions.refreshPage,
@@ -158,10 +156,7 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
         await options.refreshDashboardAlertsSnapshot({ silent: false });
         return;
       case "approval":
-        await Promise.all([
-          options.refreshMcpAuthorizationRequests(),
-          options.refreshOperationPermissionPendingOperations(),
-        ]);
+        await options.refreshOperationPermissionPendingOperations();
         return;
       case "workspaces":
         await options.refreshAuthState();
@@ -178,7 +173,7 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
   }
 
   async function refreshCurrentPage() : Promise<any> {
-    if (pageRefreshActionBusy.value) {
+    if (pageRefreshBusy.value) {
       return;
     }
     await trackPageRefreshTask((async () : Promise<any> => {

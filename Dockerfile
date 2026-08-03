@@ -7,7 +7,7 @@ FROM ${NODE_BASE_IMAGE} AS deps
 ARG ROOTFS=/
 WORKDIR app
 
-COPY package.json package-lock.json tsconfig.json vite.config.ts LICENSE ./
+COPY package.json package-lock.json tsconfig.json tsconfig.node.json vite.config.ts LICENSE ./
 COPY apps/server/package.json ./apps/server/package.json
 COPY apps/console/package.json ./apps/console/package.json
 COPY packages/agents/package.json ./packages/agents/package.json
@@ -47,11 +47,13 @@ RUN --mount=type=cache,id=meshrix-core-npm,target=${ROOTFS}var/cache/meshrix/npm
 FROM deps AS build
 
 COPY apps/server ./apps/server
+COPY apps/console ./apps/console
 COPY packages ./packages
 COPY content ./content
 COPY tools ./tools
 COPY docs ./docs
 
+RUN npm run build:node
 RUN npm prune --omit=dev
 
 FROM deps AS build-ui

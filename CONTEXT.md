@@ -12,6 +12,9 @@ implementation, verification, release, support, or hosted operation.
 | **Operation** | A named, bounded action exposed through a Meshrix-owned governance boundary. |
 | **Operation catalog** | The authoritative set of operations and their governance-relevant definitions. |
 | **Operation Permission** | The Meshrix domain that owns operation grouping, grants, policy evaluation, approval requirements, admission, execution authorization, audit, and metrics. |
+| **Organization governance snapshot** | The single server-owned, revisioned aggregate that records a configured hierarchy, template-managed tags, and explicit restricted-empty scoped administrator roles. |
+| **Organization governance template draft** | A server-normalized TOML hierarchy, tag, and scoped-role proposal that is not configured state until an administrator publishes it against the current snapshot revision. |
+| **Organization node scope** | The group, recursive organization, department, or team node and its descendants within which an explicit organization-management action may be evaluated. A node name or administrator-role label is not authority. |
 | **Grant** | Current, scoped authority for a principal to discover or request an operation. A grant is not an execution result. |
 | **Approval** | A required human or policy decision attached to a specific proposed operation. Approval does not replace current identity, grant, or sink admission. |
 | **Execution permit** | Short-lived, exact authority minted by the canonical governance path for one protected effect. |

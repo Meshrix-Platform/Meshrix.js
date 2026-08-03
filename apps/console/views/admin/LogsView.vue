@@ -24,7 +24,6 @@ onBeforeUnmount(() => {
 });
 const {
   adminView,
-  busyKey,
   currentView,
   error,
   exportSystemLogRows,
@@ -75,7 +74,7 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any) {
                 <span>报警 {{ monitorAlertSummary.visibleCount || monitorAlertSummary.activeCount }}</span>
               </div>
             </div>
-            <div class="system-log-filters">
+            <div class="filter-control-grid system-log-filters">
               <label class="system-log-filter-field">
                 <span>模糊匹配</span>
                 <input v-model="systemLogFilters.fuzzy" type="search" placeholder="任意关键词" />

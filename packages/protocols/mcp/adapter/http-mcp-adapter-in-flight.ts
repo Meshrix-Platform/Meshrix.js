@@ -5,6 +5,7 @@ import {
   normalizeMcpProxySessionId
 } from "#meshrix/contracts/mcp-catalog-delivery";
 import { jsonRpcError } from "./http-mcp-adapter-response.ts";
+import { mcpAuthorizationId } from "./http-mcp-adapter-session.ts";
 
 const DEFAULT_MAX_IN_FLIGHT: any = 1_024;
 const DEFAULT_MAX_IN_FLIGHT_PER_SCOPE: any = 64;
@@ -59,7 +60,7 @@ function headerValue(request?: any, name?: any) : any {
 }
 
 function cancellationScopeFingerprint({ authenticatedGrant, request }: Record<string, any>) : any {
-  const grantId: any = boundedString(authenticatedGrant?.grant?.id, MAX_SCOPE_PART_BYTES);
+  const grantId: any = boundedString(mcpAuthorizationId(authenticatedGrant), MAX_SCOPE_PART_BYTES);
   if (!grantId) {
     return "";
   }

@@ -83,8 +83,6 @@
         "tools/server-scripts/mcp-doctor.ts",
         "tools/server-scripts/verify-mcp-installer-convergence.ts",
         "tools/server-scripts/verify-mcp-release-target-scope.ts",
-        "tools/server-scripts/verify-mcp-client-identity-proof.ts",
-        "tools/server-scripts/verify-mcp-process-identity-credential-store.ts",
         "tools/server-scripts/verify-mcp-release-portable-assembly.ts",
         "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
         "tools/server-scripts/verify-mcp-proxy-transport.ts"

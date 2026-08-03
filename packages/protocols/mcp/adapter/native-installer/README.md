@@ -8,18 +8,19 @@ After the release gate passes, the user entrypoints are platform-native:
 - Windows uses `meshrix-mcp-install.ps1` and `meshrix-mcp-uninstall.ps1`.
 - Windows entrypoints use the PowerShell scripts exclusively.
 
-The scripts are narrow launchers. They reject token arguments, validate token
-environment names, and delegate to the connector from the same verified
+The scripts are narrow launchers. They reject API Keys in arguments, validate
+environment-variable names, and delegate to the connector from the same verified
 portable bundle. The connector exclusively owns signed hub discovery, local
-agent search, grants, batch install, interactive selection, client config, and
-uninstall. Shell and PowerShell remain narrow launchers for that connector-owned
-workflow.
+agent search, batch install, interactive selection, client config, and local
+uninstall. A pre-issued strict `mxak1` API Key must be supplied through protected
+standard input or the configured environment variable. Shell and PowerShell
+remain narrow launchers for that connector-owned workflow.
 
 Supported targets are backed by pinned external client-adapter packages from Meshrix-Plugins. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
 
 This release installs local connector-managed clients only. OrbStack and
 remote-Linux direct HTTP client modes are outside the published support matrix
-and fail before a device-authorization grant is requested.
+and fail before installation begins.
 
 After GitHub Release publication, download a versioned portable archive,
 `RELEASE_SHA256SUMS`, and `RELEASE_SHA256SUMS.sigstore.json`. Verify the

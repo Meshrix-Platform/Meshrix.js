@@ -52,7 +52,11 @@ and then runs the service health check. Import never starts a service, installs
 a plugin, or embeds credential material.
 
 Every HTTP or JSON-RPC operation now publishes an explicit `payloadTransport`
-contract. `structured_json` retains bounded JSON validation and projection;
+contract. The request representation is explicit; an HTTP operation may omit
+the response representation to use governed native passthrough (an 8 MiB
+bounded `opaque_stream` with an allowlisted response-header policy). Explicit
+`structured_json`, `opaque_stream`, or `artifact` response settings remain
+available when the caller needs them. `structured_json` retains bounded JSON validation and projection;
 `opaque_stream` carries native HTTP bytes; `artifact_body` and
 `artifact_multipart` resolve owner-bound upload, artifact, or workspace-file
 references; and an
@@ -72,7 +76,7 @@ publish response.
 One governed transaction preserves safe forwarding behavior:
 
 1. Authenticate the service developer and bind create, replace, disable, or republish to a server-owned service identity, maintainer authority, expected revision, and idempotency key.
-2. Parse a closed, bounded publishing command for REST or JSON-RPC operations, explicit request and response representations, typed certificate and credential references, permissions, risk, approval, traffic policy, and allowed organization, team, role, grant, or other governed audiences.
+2. Parse a closed, bounded publishing command for REST or JSON-RPC operations, an explicit request representation and optional HTTP response representation, typed certificate and credential references, permissions, risk, approval, traffic policy, and allowed organization, team, role, grant, or other governed audiences.
 3. Compile canonical manifest bytes without evaluating caller data as a path, filename, command, template, environment name, header name, expression, or configuration fragment.
 4. Persist through a dedicated control-plane writer into a server-configured manifest root. The gateway identity has read and traverse access only, mutable runtime state uses another root, and publication uses durable staging and atomic replacement.
 5. Treat filesystem events as invalidation hints, validate a complete manifest-set revision, build an immutable snapshot outside the request path, and atomically swap one reference without restarting the server. An invalid candidate leaves the last accepted snapshot authoritative.
@@ -158,7 +162,7 @@ authorizes the caller.
 4. Apply the descriptor traffic policy through the gateway's token-bucket-with-concurrency control.
 5. Redact secrets before logging or auditing.
 6. Call the upstream service through the operation's explicit representation adapter.
-7. For structured JSON, validate `responseSchema`, project `publicResponseFields`, and redact sensitive fields. For opaque HTTP, stream permitted headers and exact bytes. For an artifact response, commit it to owner-bound storage and expose only its resource metadata.
+7. By default, pass the upstream response through without implicit redaction, field projection, or response reconstruction. If an operation explicitly configures `responseSchema`, `publicResponseFields`, or `sensitiveBodyFields`, apply that policy before public output. For opaque HTTP, stream permitted headers and exact bytes. For an artifact response, commit it to owner-bound storage and expose only its resource metadata.
 8. Emit audit and metrics.
 
 Native HTTP callers use
@@ -205,7 +209,7 @@ Canonical gateway verification runs against the repository's self-contained upst
 
 Server protocol conformance uses a neutral downstream peer generated from the MCP and catalog-delivery contracts. It exercises initialize, initialized notification, tools/list, governed tools/call, denied destructive call, cancellation, scoped invalidation, authenticated pull, acknowledgement, disconnect, and reconnect fencing without loading a connector or client implementation. Target-specific connector and client probes remain separate compatibility checks and cannot block or promote a server receipt.
 
-Native downstream installation obtains a grant through the local device-authorization request, authenticated console approval, and one-time claim consumption flow. The installer never receives a console cookie or CSRF token, and it does not treat loopback location or process identity as authorization. A user may instead provide an already issued grant through standard input or a named environment variable. Uninstall notification uses an existing grant and does not mint a replacement credential when none is available.
+Native downstream installation requires an administrator-issued scoped API Key supplied through the documented environment variable or protected standard input. The connector validates the key before I/O, stores only the environment-variable reference, and sends only `X-Meshrix-Api-Key`. The server authenticates the workload before catalog projection and routes every permitted call through canonical Operation Permission; optional pending-operation approval remains a separate post-authentication control. Local uninstall removes connector-managed configuration without a credential or server request.
 
 The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. The catalog pins external packages from Meshrix-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
 
@@ -231,7 +235,7 @@ Other upstream services use the same descriptor and operation policy model. A li
 
 ## Response Policy
 
-HTTP, JSON-RPC, and MCP operations may declare a JSON `responseSchema`, `publicResponseFields`, and `sensitiveBodyFields` on each operation descriptor. Any configured schema, public-field projection, or sensitive-field filter requires a structured JSON response; a non-JSON or malformed response is rejected before public output instead of falling back to opaque text. For MCP, the policy applies to `structuredContent` or JSON text before public projection, and configured filtering rejects opaque text blocks. A configured schema must also validate before forwarding. Public responses contain only the declared dotted JSON paths after configured and known credential-like fields are redacted. Raw upstream MCP error text is not copied into public errors or persisted audit payloads.
+HTTP, JSON-RPC, and MCP operations may declare a JSON `responseSchema`, `publicResponseFields`, and `sensitiveBodyFields` on each operation descriptor. With none of those fields configured, the gateway does not redact, project, or reconstruct the upstream result; structured callers still receive the normal protocol envelope, while native HTTP transit preserves the upstream response bytes. Any explicitly configured schema, public-field projection, or sensitive-field filter requires a structured JSON response; a non-JSON or malformed response is rejected before public output instead of falling back to opaque text. For MCP, the policy applies to `structuredContent` or JSON text before public projection, and configured filtering rejects opaque text blocks. A configured schema must also validate before forwarding. Public responses contain only the declared dotted JSON paths after configured fields are redacted. Raw upstream MCP error text is not copied into public errors or persisted audit payloads.
 
 ## Verification Evidence
 

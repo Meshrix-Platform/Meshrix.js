@@ -4,7 +4,7 @@ import { jsonPreview } from "../../../composables/console-format-utils";
 import OptionBar from "@meshrix/ui-console/option-bar";
 
 const {
-  busyKey,
+  isBusy,
   policyPreviewGrantId,
   policyPreviewProfileId,
   policyPreviewProfileOptionBarOptions,
@@ -42,10 +42,11 @@ const {
       <button
         class="tool-button"
         type="button"
-        :disabled="busyKey === 'tool-policy-preview'"
+        :disabled="isBusy('tool-policy-preview')"
+        :aria-busy="isBusy('tool-policy-preview')"
         @click="previewToolPolicy"
       >
-        {{ busyKey === "tool-policy-preview" ? "评估中" : "评估策略" }}
+        {{ isBusy("tool-policy-preview") ? "评估中" : "评估策略" }}
       </button>
     </div>
     <pre v-if="policyPreviewResult">{{ jsonPreview(policyPreviewResult) }}</pre>

@@ -1,0 +1,126 @@
+schema_version = "v0.0.1:authorization:organization-template-1"
+
+[template]
+key = "enterprise-group"
+name = "Enterprise group"
+description = "Group, two organization levels, department, and team"
+
+[[nodes]]
+id = "organization:group"
+type = "group"
+parent = ""
+name = "Group"
+
+[[nodes]]
+id = "organization:primary"
+type = "organization"
+parent = "organization:group"
+name = "Primary organization"
+
+[[nodes]]
+id = "organization:secondary"
+type = "organization"
+parent = "organization:primary"
+name = "Secondary organization"
+
+[[nodes]]
+id = "group:department"
+type = "department"
+parent = "organization:secondary"
+name = "Department"
+
+[[nodes]]
+id = "group:team"
+type = "team"
+parent = "group:department"
+name = "Team"
+
+[[tags]]
+id = "organization:group"
+kind = "organization"
+label = "Group"
+parent = ""
+description = "Group scope"
+scope_prerequisites = []
+
+[[tags]]
+id = "organization:primary"
+kind = "organization"
+label = "Primary organization"
+parent = "organization:group"
+description = "Primary organization scope"
+scope_prerequisites = []
+
+[[tags]]
+id = "organization:secondary"
+kind = "organization"
+label = "Secondary organization"
+parent = "organization:primary"
+description = "Secondary organization scope"
+scope_prerequisites = []
+
+[[tags]]
+id = "group:department"
+kind = "group"
+label = "Department"
+parent = "organization:secondary"
+description = "Department scope"
+scope_prerequisites = []
+
+[[tags]]
+id = "group:team"
+kind = "group"
+label = "Team"
+parent = "group:department"
+description = "Team scope"
+scope_prerequisites = []
+
+[[roles]]
+id = "organization-administrator:group"
+name = "Group administrator"
+scope_node_id = "organization:group"
+management_actions = [
+  "organization.structure.read",
+  "organization.membership.read",
+  "organization.membership.manage",
+]
+
+[[roles]]
+id = "organization-administrator:primary"
+name = "Primary organization administrator"
+scope_node_id = "organization:primary"
+management_actions = [
+  "organization.structure.read",
+  "organization.membership.read",
+  "organization.membership.manage",
+]
+
+[[roles]]
+id = "organization-administrator:secondary"
+name = "Secondary organization administrator"
+scope_node_id = "organization:secondary"
+management_actions = [
+  "organization.structure.read",
+  "organization.membership.read",
+  "organization.membership.manage",
+]
+
+[[roles]]
+id = "organization-administrator:department"
+name = "Department administrator"
+scope_node_id = "group:department"
+management_actions = [
+  "organization.structure.read",
+  "organization.membership.read",
+  "organization.membership.manage",
+]
+
+[[roles]]
+id = "organization-administrator:team"
+name = "Team administrator"
+scope_node_id = "group:team"
+management_actions = [
+  "organization.structure.read",
+  "organization.membership.read",
+  "organization.membership.manage",
+]

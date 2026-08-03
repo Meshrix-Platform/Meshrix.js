@@ -5,7 +5,7 @@ import { useMaintenanceAgentViewContext } from "../../../composables/maintenance
 
 const {
   approveMaintenanceAgentRun,
-  busyKey,
+  isBusy,
   canApproveMaintenanceAgent,
   canRunMaintenanceAgent,
   cancelMaintenanceAgentRun,
@@ -52,7 +52,8 @@ const {
             v-if="run.status === 'awaiting_approval'"
             class="table-action"
             type="button"
-            :disabled="!canApproveMaintenanceAgent || busyKey === `maintenance-agent:approve:${run.runId}`"
+            :disabled="!canApproveMaintenanceAgent || isBusy(`maintenance-agent:approve:${run.runId}`)"
+            :aria-busy="isBusy(`maintenance-agent:approve:${run.runId}`)"
             @click="approveMaintenanceAgentRun(run)"
           >
             批准
@@ -61,7 +62,8 @@ const {
             v-if="!['completed', 'completed_with_errors', 'failed', 'cancelled', 'rejected'].includes(run.status)"
             class="table-action danger-action"
             type="button"
-            :disabled="!canRunMaintenanceAgent || busyKey === `maintenance-agent:cancel:${run.runId}`"
+            :disabled="!canRunMaintenanceAgent || isBusy(`maintenance-agent:cancel:${run.runId}`)"
+            :aria-busy="isBusy(`maintenance-agent:cancel:${run.runId}`)"
             @click="cancelMaintenanceAgentRun(run)"
           >
             取消

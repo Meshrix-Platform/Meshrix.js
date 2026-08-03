@@ -15,10 +15,6 @@ const checks: any[] = [
     args: ["tools/server-scripts/verify-process-identity.ts"]
   },
   {
-    label: "MCP client identity proof",
-    args: ["tools/server-scripts/verify-mcp-client-identity-proof.ts"]
-  },
-  {
     label: "security alert lifecycle",
     args: ["tools/server-scripts/verify-security-alert-lifecycle.ts"]
   }

@@ -7,7 +7,7 @@ import FeatureToggle from "../../FeatureToggle.vue";
 import ScopeSelector from "../../ScopeSelector.vue";
 
 const {
-  busyKey,
+  isBusy,
   deleteGrant,
   enabledToolGrantCount,
   formatCompactDate,
@@ -72,13 +72,14 @@ function grantExceptionCount(grant: { toolAllow?: string[]; toolDeny?: string[] 
               on-label="授权已启用"
               off-label="授权已停用"
               :aria-label="grant.enabled ? '停用授权' : '启用授权'"
-              :disabled="busyKey === `grant:${grant.id}`"
+              :disabled="isBusy(`grant:${grant.id}`)"
+              :aria-busy="isBusy(`grant:${grant.id}`)"
               @update:model-value="updateGrant(grant, { enabled: $event })"
             />
-            <button class="table-action" type="button" :disabled="busyKey === `grant:${grant.id}`" @click="rotateGrant(grant)">
+            <button class="table-action" type="button" :disabled="isBusy(`grant:${grant.id}`)" @click="rotateGrant(grant)">
               轮换
             </button>
-            <button class="table-action danger-action" type="button" :disabled="busyKey === `grant:${grant.id}`" @click="deleteGrant(grant)">
+            <button class="table-action danger-action" type="button" :disabled="isBusy(`grant:${grant.id}`)" @click="deleteGrant(grant)">
               撤销
             </button>
           </div>
@@ -115,7 +116,8 @@ function grantExceptionCount(grant: { toolAllow?: string[]; toolDeny?: string[] 
           <ScopeSelector
             :model-value="grant.scopes"
             :scopes="toolScopes"
-            :disabled="busyKey === `grant:${grant.id}`"
+            :disabled="isBusy(`grant:${grant.id}`)"
+            :aria-busy="isBusy(`grant:${grant.id}`)"
             @update:model-value="(v) => updateGrant(grant, { scopes: v })"
             compact
           />
@@ -133,10 +135,11 @@ function grantExceptionCount(grant: { toolAllow?: string[]; toolDeny?: string[] 
               class="scope-chip"
               :class="{ active: grantHasToolset(grant, toolset.id) }"
               type="button"
-              :disabled="busyKey === `grant:${grant.id}`"
+              :disabled="isBusy(`grant:${grant.id}`)"
+              :aria-busy="isBusy(`grant:${grant.id}`)"
               @click="toggleGrantToolset(grant, toolset.id)"
             >
-              <strong>{{ toolset.label }}</strong>
+              <strong>{{ grantToolsetLabel(toolset.id) }}</strong>
             </button>
           </div>
         </details>

@@ -4,6 +4,8 @@ import {
   canonicalDecode,
   canonicalEncode,
   cidForCanonical,
+  createAppendOnlyEventLog,
+  createContentAddressedStore,
   PACTIUM_PACKAGE_VERSION,
   PACTIUM_PROOF_TYPES,
   PACTIUM_PROTOCOL,
@@ -162,40 +164,18 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
   const indexEngine: any = runtime.indexEngine;
   const pins: any = new Map<any, any>();
 
-  async function putBlock(value?: any, options: Record<string, any> = {}) : Promise<any> {
-    const codec: any = text(options.codec, "pactium-canonical") === "raw" ? "raw" : "pactium-canonical";
-    return storage.putBlock(value, {
-      codec,
-      kind: text(options.kind || options.metadata?.kind, "meshrix.cas-block"),
-      refs: asArray(options.refs).map(text).filter(Boolean)
-    });
-  }
-
-  async function getBlock(cid?: any) : Promise<any> {
-    const record: any = await storage.getBlock(text(cid));
-    if (!record) return null;
-    const bytes: any = Buffer.from(record.bytes || Buffer.from(String(record.payloadBase64 || ""), "base64"));
-    return {
-      ...record,
-      bytes,
-      value: record.codec === "raw" ? null : canonicalDecode(bytes)
-    };
-  }
-
-  async function walk(rootCid?: any) : Promise<any> {
-    return storage.walk(text(rootCid));
-  }
+  const contentAddressedStore: any = createContentAddressedStore({
+    storage,
+    defaultKind: "meshrix.cas-block"
+  });
 
   const cas: Readonly<Record<string, any>> = Object.freeze({
-    putBlock,
-    getBlock,
-    hasBlock(cid?: any) : any {
-      return storage.hasBlock(text(cid));
-    },
-    walk,
-    async listMissing(rootCid?: any) : Promise<any> {
-      return (await walk(rootCid)).missing;
-    },
+    putBlock: contentAddressedStore.putBlock,
+    getBlock: contentAddressedStore.getBlock,
+    hasBlock: contentAddressedStore.hasBlock,
+    walk: contentAddressedStore.walk,
+    listMissing: contentAddressedStore.listMissing,
+    verify: contentAddressedStore.verify,
     async pin(rootCid?: any, policy: Record<string, any> = {}) : Promise<any> {
       const normalizedPolicy: any = normalizeCanonical(asObject(policy));
       pins.set(rootCid, normalizedPolicy);
@@ -237,7 +217,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         metadata: normalizeCanonical(asObject(metadata)),
         createdAt: nowIso()
       };
-      const block: any = await putBlock(manifest, {
+      const block: any = await cas.putBlock(manifest, {
         refs: manifest.refs,
         kind: "meshrix.merkle-dag.manifest"
       });
@@ -248,7 +228,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
     },
     async verify(rootCid?: any) : Promise<any> {
-      const result: any = await walk(rootCid);
+      const result: any = await cas.walk(rootCid);
       return {
         ok: result.missing.length === 0,
         rootCid,
@@ -257,7 +237,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
       };
     },
     async diff(_leftRootCid?: any, rightRootCid?: any) : Promise<any> {
-      const right: any = await walk(rightRootCid);
+      const right: any = await cas.walk(rightRootCid);
       return {
         missing: right.missing,
         rightBlockCount: right.blockCount
@@ -329,44 +309,28 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }
   });
 
-  async function loadEvents(partitionId?: any) : Promise<any> {
-    if (!storage.inMemory) storage.clearCache?.();
-    return asArray(await storage.getProtocolObject(EVENT_LOG_SCOPE, storageKey("event-log", partitionId), []));
-  }
-
-  async function saveEvents(partitionId?: any, events?: any) : Promise<any> {
-    await storage.putProtocolObject(EVENT_LOG_SCOPE, storageKey("event-log", partitionId), events);
-  }
+  // Caller-owned locking: compound state commits already hold the storage write
+  // lock, so the Pactium helper must not take a nested lock on append.
+  const protocolEventLog: any = createAppendOnlyEventLog({
+    storage,
+    protocolObjectScope: EVENT_LOG_SCOPE,
+    hashDomain: "meshrix.state-event",
+    createEventId: ({ partitionId, operationId }: Record<string, any> = {}) : any =>
+      serverToken("state_event", partitionId, operationId || "", nowIso(), randomUUID()),
+    withWriteLock: (task?: any) : any => task()
+  });
 
   async function appendEventUnlocked(input: Record<string, any> = {}) : Promise<any> {
-      const partitionId: any = text(input.partitionId || input.scope, "default");
-      const events: any = await loadEvents(partitionId);
-      const previous: any = events.at(-1) || null;
-      const event: Record<string, any> = {
-        protocol: PACTIUM_PROTOCOL,
-        schema: PACTIUM_SCHEMA_VERSION,
-        eventId: serverToken("state_event", partitionId, input.operationId || "", nowIso(), randomUUID()),
-        partitionId,
-        operationId: text(input.operationId),
-        offset: events.length,
-        beforeRoot: text(input.beforeRoot),
-        afterRoot: text(input.afterRoot),
-        contentRefs: asArray(input.contentRefs).map(text).filter(Boolean),
-        payload: normalizeCanonical(asObject(input.payload)),
-        prevEventHash: previous?.eventHash || "",
-        createdAt: nowIso()
-      };
-      event.eventHash = protocolHash("meshrix.state-event", {
-        ...event,
-        eventHash: undefined
-      });
-      events.push(event);
-      await saveEvents(partitionId, events);
-      return event;
+    // Meshrix-normalize before Pactium so event payloads / eventHash match
+    // commit records that already use normalizeCanonical(asObject(...)).
+    return protocolEventLog.appendEvent({
+      ...input,
+      payload: normalizeCanonical(asObject(input.payload))
+    });
   }
 
   const eventLog: Readonly<Record<string, any>> = Object.freeze({
-    async appendEvent(input: Record<string, any> = {}) : Promise<any> {
+    appendEvent(input: Record<string, any> = {}) : any {
       const partitionId: any = text(input.partitionId || input.scope, "default");
       return withSerializedStorageMutation(
         storage,
@@ -374,39 +338,9 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         () : any => appendEventUnlocked(input)
       );
     },
-    async listEvents(partitionId?: any, { limit = 100 }: Record<string, any> = {}) : Promise<any> {
-      const events: any = await loadEvents(partitionId);
-      return [...events].reverse().slice(0, Math.max(1, Math.min(Number(limit || 100), 10000)));
-    },
-    async getEvent(partitionId?: any, offset?: any) : Promise<any> {
-      const normalizedOffset: any = Number(offset);
-      if (!Number.isSafeInteger(normalizedOffset) || normalizedOffset < 0) {
-        return null;
-      }
-      const events: any = await loadEvents(partitionId);
-      return events[normalizedOffset] || null;
-    },
-    async verifyPartition(partitionId?: any) : Promise<any> {
-      const events: any = await loadEvents(partitionId);
-      let previousHash: any = "";
-      for (let index: any = 0; index < events.length; index += 1) {
-        const event: any = events[index];
-        const expectedHash: any = protocolHash("meshrix.state-event", {
-          ...event,
-          eventHash: undefined
-        });
-        if (event.offset !== index || event.prevEventHash !== previousHash || event.eventHash !== expectedHash) {
-          return {
-            ok: false,
-            partitionId,
-            eventCount: events.length,
-            failedOffset: index
-          };
-        }
-        previousHash = event.eventHash;
-      }
-      return { ok: true, partitionId, eventCount: events.length };
-    }
+    listEvents: protocolEventLog.listEvents,
+    getEvent: protocolEventLog.getEvent,
+    verifyPartition: protocolEventLog.verifyPartition
   });
 
   async function loadStateRoot(scope?: any) : Promise<any> {
@@ -543,7 +477,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
   }
 
   async function verifyRestoreLineage({ scope, targetRoot, allowedOperationIds = [], anchor = null, maxSuffixEvents = 256 }: Record<string, any>) : Promise<any> {
-    const events: any = await loadEvents(scope);
+    const events: any = [...await eventLog.listEvents(scope, { limit: 10000 })].reverse();
     const anchorOffset: any = Number(anchor?.offset);
     const anchoredEvent: any = Number.isInteger(anchorOffset) ? events[anchorOffset] : null;
     const anchorIndex: any = anchoredEvent?.eventHash === text(anchor?.eventHash) && anchoredEvent?.afterRoot === targetRoot
@@ -888,7 +822,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         records,
         createdAt: nowIso()
       };
-      const block: any = await putBlock(segment, {
+      const block: any = await cas.putBlock(segment, {
         refs: records.map((record?: any) : any => record.chunkCid),
         kind: "meshrix.lsm-segment"
       });
@@ -934,7 +868,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
         records: sortedChunkRecords(records),
         createdAt: nowIso()
       };
-      const block: any = await putBlock(compacted, {
+      const block: any = await cas.putBlock(compacted, {
         refs: segments.map((segment?: any) : any => segment.rootCid).filter(Boolean),
         kind: "meshrix.lsm-compacted-segment"
       });

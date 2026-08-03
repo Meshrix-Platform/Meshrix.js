@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { RouterLink } from "vue-router";
 import { useUpstreamGatewayView } from "./upstream-gateway/useUpstreamGatewayView";
+import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
 import ConsoleEmptyState from "../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
+
+const { canAccessAdminView } = useServerConsoleShellContext();
 
 const {
   audit,
@@ -23,15 +27,34 @@ const {
 <template>
   <section class="upstream-gateway-layout">
     <header class="gateway-toolbar">
-      <button class="table-action" type="button" :disabled="loading" @click="refreshGateway">
-        {{ loading ? "刷新中" : "刷新" }}
-      </button>
       <span>服务 {{ services.length }}</span>
       <span>转发 {{ metrics.totalForwardCount || 0 }}</span>
       <span>失败 {{ metrics.totalFailureCount || 0 }}</span>
+      <button
+        class="table-action gateway-refresh-action"
+        type="button"
+        :disabled="loading"
+        :aria-busy="loading"
+        @click="refreshGateway"
+      >
+        {{ loading ? "刷新中" : "刷新" }}
+      </button>
     </header>
 
-    <ConsoleInlineAlert v-if="error" tone="danger">{{ error }}</ConsoleInlineAlert>
+    <ConsoleInlineAlert v-if="error" tone="danger">
+      {{ error }}
+      <template #action>
+        <button
+          class="table-action"
+          type="button"
+          :disabled="loading"
+          :aria-busy="loading"
+          @click="refreshGateway"
+        >
+          {{ loading ? "重试中" : "重试" }}
+        </button>
+      </template>
+    </ConsoleInlineAlert>
     <ConsoleInlineAlert v-if="status" tone="success">{{ status }}</ConsoleInlineAlert>
 
     <main class="gateway-grid">
@@ -55,7 +78,18 @@ const {
           </span>
           <span class="gateway-state-dot" :class="gatewayStateClass(service.disabled)" :aria-label="service.disabled ? 'disabled' : 'active'" />
         </button>
-        <ConsoleEmptyState v-if="!services.length" compact title="暂无上游服务" />
+        <ConsoleEmptyState
+          v-if="!services.length && !loading"
+          compact
+          title="暂无上游服务"
+          description="发布一个上游服务后，这里会显示它的运行时快照。"
+        >
+          <template v-if="canAccessAdminView('upstreamServicePublish')" #action>
+            <RouterLink class="table-action" to="/admin/publish-upstream-service">
+              发布服务
+            </RouterLink>
+          </template>
+        </ConsoleEmptyState>
       </section>
 
       <section class="gateway-stack">
@@ -65,7 +99,16 @@ const {
               <h3>{{ selectedService?.label || "未选择服务" }}</h3>
               <p>{{ selectedService?.baseUrl || "external_services.*" }}</p>
             </div>
-            <span class="gateway-state">{{ selectedOperation?.operationKey || "none" }}</span>
+            <div class="gateway-service-actions">
+              <span class="gateway-state">{{ selectedOperation?.operationKey || "none" }}</span>
+              <RouterLink
+                v-if="selectedService && canAccessAdminView('upstreamServicePublish')"
+                class="table-action"
+                :to="{ path: '/admin/publish-upstream-service', query: { serviceId: selectedService.serviceId } }"
+              >
+                管理发布
+              </RouterLink>
+            </div>
           </div>
           <table class="gateway-table">
             <thead>
@@ -85,7 +128,21 @@ const {
               </tr>
             </tbody>
           </table>
-          <ConsoleEmptyState v-if="!(selectedService?.operations || []).length" compact title="暂无操作" />
+          <ConsoleEmptyState
+            v-if="!(selectedService?.operations || []).length"
+            compact
+            title="暂无操作"
+            :description="selectedService ? '在发布流程中添加工具路径后，这里会列出该服务的操作。' : ''"
+          >
+            <template v-if="selectedService && canAccessAdminView('upstreamServicePublish')" #action>
+              <RouterLink
+                class="table-action"
+                :to="{ path: '/admin/publish-upstream-service', query: { serviceId: selectedService.serviceId } }"
+              >
+                添加工具路径
+              </RouterLink>
+            </template>
+          </ConsoleEmptyState>
         </section>
 
         <section class="gateway-panel">
@@ -96,7 +153,7 @@ const {
             </div>
           </div>
           <p class="empty-copy">
-            此处显示已通过服务发布流程接受并加载的运行时快照。创建、更新、停用、重新发布和移除操作请在“发布上游服务”页面完成。
+            此处显示已通过服务发布流程接受并加载的运行时快照。创建操作请在“发布服务”页面完成；更新、停用、重新发布和移除可通过上方“管理发布”进入。
           </p>
         </section>
 
@@ -125,7 +182,7 @@ const {
               </tr>
             </tbody>
           </table>
-          <ConsoleEmptyState v-if="!audit.length" compact title="暂无审计事件" />
+          <ConsoleEmptyState v-if="!audit.length && !loading" compact title="暂无审计事件" />
         </section>
 
       </section>
@@ -157,6 +214,12 @@ const {
 .gateway-stack {
   display: grid;
   gap: 14px;
+}
+
+.gateway-service-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
 }
 
 .gateway-panel {

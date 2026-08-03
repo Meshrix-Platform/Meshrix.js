@@ -4,11 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { serverToken } from "#meshrix/client-strings";
 
-import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.ts";
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.ts";
 import {
   persistJobTerminal
 } from "../../../packages/server-runtime/src/jobs/jobs/job-manager-persistence.ts";
+import { createTestJobManager } from "./job-manager-test-harness.ts";
 
 const loggerMock: any = vi.hoisted(() : any => ({
   info: vi.fn(),
@@ -121,7 +121,7 @@ describe("job manager extra", () : any => {
   it("创建、列举与读取：持久化元数据与 payload，支持 checkpoint 去重", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
       const protocolEventBus: any = createEventBusSpy();
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false,
         protocolEventBus
@@ -179,7 +179,7 @@ describe("job manager extra", () : any => {
         return COMPLETED_RESULT;
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -236,7 +236,7 @@ describe("job manager extra", () : any => {
         throw new Error("mock execution failed");
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -268,7 +268,7 @@ describe("job manager extra", () : any => {
         executionSignal = options.signal;
         return pendingJobExecution(options);
       });
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus: createEventBusSpy(),
         processingEnabled: true
@@ -303,7 +303,7 @@ describe("job manager extra", () : any => {
         stage: "处理中文件"
       }));
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -334,7 +334,7 @@ describe("job manager extra", () : any => {
   it("取消进行中任务会保留可观察的 cancelled 终态和任务工件", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
       scheduleJobExecution((options?: any) : any => pendingJobExecution(options));
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus: createEventBusSpy(),
         processingEnabled: true
@@ -367,7 +367,7 @@ describe("job manager extra", () : any => {
         stage: "准备回退"
       }));
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -401,7 +401,7 @@ describe("job manager extra", () : any => {
         progressPercent: 25,
         stage: "等待关闭重试"
       }));
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus: createEventBusSpy(),
         processingEnabled: true,
@@ -444,7 +444,7 @@ describe("job manager extra", () : any => {
   it("外部模式：queued 任务可直接删除", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
       const protocolEventBus: any = createEventBusSpy();
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: false
@@ -487,7 +487,7 @@ describe("job manager extra", () : any => {
         throw new Error("execution task failed unexpectedly");
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -528,7 +528,7 @@ describe("job manager extra", () : any => {
         checkpointId: "persisted-missing-payload-checkpoint"
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -567,7 +567,7 @@ describe("job manager extra", () : any => {
         "utf8"
       );
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus: createEventBusSpy(),
         processingEnabled: true
@@ -592,7 +592,7 @@ describe("job manager extra", () : any => {
       scheduleJobExecution(async () : Promise<any> => COMPLETED_RESULT);
       scheduleJobExecution(async () : Promise<any> => COMPLETED_RESULT);
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         protocolEventBus,
         processingEnabled: true
@@ -650,7 +650,7 @@ describe("job manager extra", () : any => {
 
   it("队列基础设施终态会幂等收口 queued 与 running 任务投影", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
-      const manager: any = createJobManager({ userDataPath, processingEnabled: true });
+      const manager: any = createTestJobManager({ userDataPath, processingEnabled: true });
       const queued: any = await manager.createJob({ inputText: "queued projection" });
       const queuedFailed: any = await manager.failJobFromQueue(queued.id, {
         stage: "队列执行失败",

@@ -12,7 +12,7 @@ import {
 import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
 
 const {
-  busyKey,
+  isBusy,
   canBrowseServerPaths,
   consoleState,
   enabledMountCount,
@@ -46,18 +46,20 @@ function moduleDetailItems(item: RuntimeModuleRow) {
       <button
         class="tool-button tool-button-ghost"
         type="button"
-        :disabled="busyKey === 'module-reload'"
+        :disabled="isBusy('module-reload')"
+        :aria-busy="isBusy('module-reload')"
         @click="reloadModules()"
       >
-        {{ busyKey === "module-reload" ? "重载中" : "重载模块" }}
+        {{ isBusy("module-reload") ? "重载中" : "重载模块" }}
       </button>
       <button
         class="tool-button"
         type="button"
-        :disabled="busyKey === 'mounts'"
+        :disabled="isBusy('mounts')"
+        :aria-busy="isBusy('mounts')"
         @click="saveMountModules()"
       >
-        {{ busyKey === "mounts" ? "保存中" : "保存配置" }}
+        {{ isBusy("mounts") ? "保存中" : "保存配置" }}
       </button>
     </div>
 
@@ -111,7 +113,8 @@ function moduleDetailItems(item: RuntimeModuleRow) {
           <button
             class="tool-button tool-button-ghost compact-action"
             type="button"
-            :disabled="busyKey === `mount:${item.name}`"
+            :disabled="isBusy(`mount:${item.name}`)"
+            :aria-busy="isBusy(`mount:${item.name}`)"
             @click="toggleMountPathEdit(item)"
           >
             {{ isMountPathEditing(item.name) ? "确认" : "修改" }}

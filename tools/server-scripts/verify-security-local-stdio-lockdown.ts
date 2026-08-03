@@ -12,7 +12,7 @@ import {
   generateProcessIdentityClientKeyPair
 } from "../../packages/foundation/src/security/process-identity/index.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const SECURITY_DESIGN_PATH: any = "docs/functionality/SECURITY-AUTHORIZATION.md";
@@ -231,31 +231,22 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
     assertNoPublicLocalStdioExposure(initialize.payload.result, "MCP initialize result");
 
     const verifierIdentity: any = createVerifierClientIdentity("codex");
-    const grant: any = await issueVerifierLocalMcpGrant({
+    const apiKey: any = await issueVerifierMcpApiKey({
       server,
-      grantRequest: {
+      access: {
         targets: ["codex"],
         label: "verify-security-local-process-lockdown",
         connectorVersion: "security",
         processIdentity: verifierIdentity.request
       }
     });
-    assert.equal(grant.status, 201);
-    assert.ok(grant.payload.token);
-    assert.ok(grant.payload.processIdentity?.clientIdentityPackage);
+    assert.ok(apiKey.apiKey);
 
     const mcpUrl: any = new URL("/mcp", server.url);
     const toolsListBody: any = JSON.stringify(mcpRequest("tools/list", {}, 2));
     const toolsList: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: signedApiKeyHeaders({
-        token: grant.payload.token,
-        privateKeyPem: verifierIdentity.keyPair.privateKeyPem,
-        clientIdentityPackage: grant.payload.processIdentity.clientIdentityPackage,
-        body: toolsListBody,
-        url: mcpUrl,
-        nonce: "verify-security-tools-list"
-      }),
+      headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": apiKey.apiKey, "X-Meshrix-MCP-Target": "codex" },
       body: toolsListBody
     });
     assert.equal(toolsList.status, 200);
@@ -270,14 +261,7 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
     }, 3));
     const capabilities: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: signedApiKeyHeaders({
-        token: grant.payload.token,
-        privateKeyPem: verifierIdentity.keyPair.privateKeyPem,
-        clientIdentityPackage: grant.payload.processIdentity.clientIdentityPackage,
-        body: capabilitiesBody,
-        url: mcpUrl,
-        nonce: "verify-security-capabilities"
-      }),
+      headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": apiKey.apiKey, "X-Meshrix-MCP-Target": "codex" },
       body: capabilitiesBody
     });
     assert.equal(capabilities.status, 200);

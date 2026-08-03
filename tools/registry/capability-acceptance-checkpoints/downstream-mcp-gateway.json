@@ -14,9 +14,9 @@
         "text": "Unauthorized capability use creates or links a pending approval request when policy allows escalation.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
-          }
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
+}
         ]
       },
       {
@@ -48,8 +48,8 @@
         "text": "Hard-denied MCP calls do not create approvals; policy-marked escalatable denies create pending approval before side effects.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",
@@ -84,8 +84,8 @@
         "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "plugin-runtime",

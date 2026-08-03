@@ -31,7 +31,7 @@ import {
 import { structuredPayload } from "./lib/upstream-gateway-e2e-helpers.ts";
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./lib/upstream-gateway-verifier-publication.ts";
 import { upstreamOperationCapabilityId } from "../../packages/agents/src/upstream-gateway/operation-capability.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REPORT_PATH: any = "build/reports/upstream-gateway-external-compatibility.json";
@@ -254,7 +254,7 @@ async function consoleOperation(operationId?: any, input: Record<string, any> = 
       userDataPath,
       subject: {
         subjectId: "verifier-console-subject",
-        roleId: "admin",
+        roleId: "maintainer",
         scopes: ["gateway:read", "gateway:write", "gateway:maintain", "gateway:admin"]
       }
     }
@@ -271,34 +271,24 @@ async function createGrant(label?: any, toolsets?: any, {
   dynamicCapabilities = [],
   allowedServiceIds = []
 }: Record<string, any> = {}) : Promise<any> {
-  const identity: any = createVerifierMcpProcessIdentity({ target: "codex", label });
-  const response: any = await issueVerifierLocalMcpGrant({
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    grantRequest: {
+    access: {
       targets: ["codex"],
       label,
       connectorVersion: "verify-upstream-gateway-external-compatibility",
       grantMode: "maintain",
       toolsets,
       dynamicCapabilities,
-      allowedServiceIds,
-      processIdentity: identity.request
+      allowedServiceIds
     }
   });
-  assert.equal(response.status, 201, JSON.stringify(response.payload, null, 2));
-  assert.ok(response.payload.token);
-  assert.ok(response.payload.processIdentity?.clientIdentityPackage);
-  dynamicSecretNeedles.add(String(response.payload.token));
-  mcpIdentityByToken.set(response.payload.token, {
-    identity,
-    clientIdentityPackage: response.payload.processIdentity.clientIdentityPackage
-  });
-  return response.payload.token;
+  assert.ok(response.apiKey);
+  dynamicSecretNeedles.add(response.apiKey);
+  return response.apiKey;
 }
 
 async function callMcp(token?: any, toolName?: any, operation?: any, input: Record<string, any> = {}, id: any = 1) : Promise<any> {
-  const binding: any = mcpIdentityByToken.get(token);
-  assert.ok(binding, "MCP token must have a verifier process identity binding");
   const body: any = JSON.stringify(mcpRequest("tools/call", {
     name: toolName,
     arguments: {
@@ -310,14 +300,7 @@ async function callMcp(token?: any, toolName?: any, operation?: any, input: Reco
   }, id));
   const response: any = await fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: createSignedMcpHeaders({
-      token,
-      body,
-      nonce: `verify-upstream-external-${id}-${++mcpNonceSequence}`,
-      url: new URL("/mcp", server.url),
-      privateKeyPem: binding.identity.keyPair.privateKeyPem,
-      clientIdentityPackage: binding.clientIdentityPackage
-    }),
+    headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "codex" },
     body
   });
   assert.equal(response.status, 200, `Unexpected MCP HTTP status ${response.status}`);

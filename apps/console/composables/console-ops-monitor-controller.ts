@@ -23,7 +23,7 @@ type ConsoleOpsMonitorControllerOptions = {
   allMaintenanceAgentRuns: ComputedRef<MaintenanceAgentRun[]>;
   canAdminMaintenanceAgent: ComputedRef<boolean>;
   canReadMaintenanceAgent: ComputedRef<boolean>;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   consoleState: Ref<ServerConsoleState | null>;
   error: Ref<string>;
   setBusy: (key: string) => void;
@@ -155,7 +155,7 @@ export function createConsoleOpsMonitorController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "确认报警失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`monitor-alert:ack:${alertId}`);
     }
   }
 
@@ -189,7 +189,7 @@ export function createConsoleOpsMonitorController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "拉起后台 Worker 管理进程失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("background-supervisor:recover");
     }
   }
 
@@ -208,7 +208,7 @@ export function createConsoleOpsMonitorController(
         nextError instanceof Error ? nextError.message : "刷新后台进程状态失败。";
     } finally {
       if (!refreshOptions.silent) {
-        options.clearAllBusy();
+        options.clearBusy("background-processes:refresh");
       }
     }
   }
@@ -230,7 +230,7 @@ export function createConsoleOpsMonitorController(
         nextError instanceof Error ? nextError.message : "刷新监控报警失败。";
     } finally {
       if (!refreshOptions.silent) {
-        options.clearAllBusy();
+        options.clearBusy("monitor-alerts:refresh");
       }
     }
   }
@@ -251,7 +251,7 @@ export function createConsoleOpsMonitorController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存监控报警配置失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("monitor-alerts:save");
     }
   }
 

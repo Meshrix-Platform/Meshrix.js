@@ -7,6 +7,7 @@ import {
   SANDBOX_CUSTODY_ENVELOPE_SCHEMA,
   normalizeCustodyHandle
 } from "#meshrix/foundation/execution-sandbox/custody-contracts";
+import { assertConsumedGovernedExecutionPermit } from "#meshrix/foundation/security/governed-execution-permit-authority";
 import {
   CHUNK_BYTES,
   CONTENT_ALGORITHM,
@@ -1347,6 +1348,7 @@ export function createUploadNoRunCustody({
     owner,
     resourceRef,
     authorizationReceipt,
+    governedExecutionReceipt,
     maxBytes,
     signal
   }: Record<string, any> = {}) : Promise<any> {
@@ -1376,32 +1378,46 @@ export function createUploadNoRunCustody({
       throw fail("upload_custody_read_denied", "Upload custody read is denied.");
     }
 
-    let authorization: any;
-    try {
-      authorization = await reauthorizeCustodyRead({
-        authorizationReceipt,
-        audience: READ_AUDIENCE,
-        custodyRef: normalizedRef,
-        contentDigest: normalizedContentDigest,
-        envelopeDigest: normalizedEnvelopeDigest,
-        byteCount: normalizedByteCount,
-        ownerBindingDigest: ownerDigest,
-        resourceRef: normalizedResourceRef
-      });
-    } catch (error: any) {
+    let evidenceRef: any = "";
+    if (governedExecutionReceipt) {
+      try {
+        const receipt: any = assertConsumedGovernedExecutionPermit(
+          governedExecutionReceipt,
+          { audience: "upstream-structured-http-final-effect" }
+        );
+        evidenceRef = receipt.proofRef;
+      } catch (error: any) {
+        throw fail("upload_custody_read_denied", "Upload custody read is denied.", null, error);
+      }
+    } else {
+      let authorization: any;
+      try {
+        authorization = await reauthorizeCustodyRead({
+          authorizationReceipt,
+          audience: READ_AUDIENCE,
+          custodyRef: normalizedRef,
+          contentDigest: normalizedContentDigest,
+          envelopeDigest: normalizedEnvelopeDigest,
+          byteCount: normalizedByteCount,
+          ownerBindingDigest: ownerDigest,
+          resourceRef: normalizedResourceRef
+        });
+      } catch (error: any) {
+        assertAbort(signal);
+        throw fail("upload_custody_read_denied", "Upload custody read is denied.", null, error);
+      }
       assertAbort(signal);
-      throw fail("upload_custody_read_denied", "Upload custody read is denied.", null, error);
-    }
-    assertAbort(signal);
-    if (
-      authorization?.allowed !== true ||
-      authorization.revoked === true ||
-      !String(authorization.evidenceRef || "").trim() ||
-      authorization.currentPolicyRevision !== authorizationReceipt?.policyRevision ||
-      authorization.currentGrantRevision !== authorizationReceipt?.grantRevision ||
-      authorization.decisionRef !== authorizationReceipt?.decisionRef
-    ) {
-      throw fail("upload_custody_read_denied", "Upload custody read is denied.");
+      if (
+        authorization?.allowed !== true ||
+        authorization.revoked === true ||
+        !String(authorization.evidenceRef || "").trim() ||
+        authorization.currentPolicyRevision !== authorizationReceipt?.policyRevision ||
+        authorization.currentGrantRevision !== authorizationReceipt?.grantRevision ||
+        authorization.decisionRef !== authorizationReceipt?.decisionRef
+      ) {
+        throw fail("upload_custody_read_denied", "Upload custody read is denied.");
+      }
+      evidenceRef = authorization.evidenceRef;
     }
 
     const opened: any = await storageProvider.openPrivateNoExecObjectReadStream({
@@ -1420,7 +1436,7 @@ export function createUploadNoRunCustody({
     });
     return Object.freeze({
       receipt: Object.freeze({
-        authorizationEvidenceRef: String(authorization.evidenceRef),
+        authorizationEvidenceRef: String(evidenceRef),
         byteCount: normalizedByteCount,
         contentDigest: normalizedContentDigest,
         custodyRef: normalizedRef,

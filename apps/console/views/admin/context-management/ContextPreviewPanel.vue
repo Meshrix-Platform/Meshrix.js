@@ -1,9 +1,11 @@
 <script setup lang="ts">
 withDefaults(defineProps<{
-  busyKey?: string;
+  previewBusy?: boolean;
+  evaluationBusy?: boolean;
   exportDisabled?: boolean;
 }>(), {
-  busyKey: "",
+  previewBusy: false,
+  evaluationBusy: false,
   exportDisabled: false,
 });
 
@@ -32,18 +34,18 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
     <button
       class="tool-button primary-action"
       type="button"
-      :disabled="busyKey === 'context:preview'"
+      :disabled="previewBusy"
       @click="emit('preview')"
     >
-      {{ busyKey === "context:preview" ? "预览中" : "预览 ContextPack" }}
+      {{ previewBusy ? "预览中" : "预览 ContextPack" }}
     </button>
     <button
       class="tool-button tool-button-ghost"
       type="button"
-      :disabled="busyKey === 'context:evaluation'"
+      :disabled="evaluationBusy"
       @click="emit('evaluate')"
     >
-      {{ busyKey === "context:evaluation" ? "评估中" : "运行 Replay 评估" }}
+      {{ evaluationBusy ? "评估中" : "运行 Replay 评估" }}
     </button>
     <button
       class="tool-button tool-button-ghost"

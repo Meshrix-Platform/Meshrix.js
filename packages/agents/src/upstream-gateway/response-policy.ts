@@ -134,15 +134,15 @@ export function normalizeResponseBodyFields(value?: any) : any {
     .filter(Boolean);
 }
 
-export function sensitiveFieldMatcher(configuredFields: any = []) : any {
+export function sensitiveFieldMatcher(configuredFields: any = [], { includeDefaults = true }: Record<string, any> = {}) : any {
   const configured: any = new Set<any>(normalizeSensitiveBodyFields(configuredFields));
   return (key?: any, pathParts: any = []) : any => {
     const normalizedKey: any = text(key).toLowerCase();
     const compactKey: any = normalizedKey.replace(/[-.\s]/g, "_");
-    if (
+    if (includeDefaults && (
       DEFAULT_SENSITIVE_BODY_FIELD_NAMES.has(normalizedKey) ||
       DEFAULT_SENSITIVE_BODY_FIELD_NAMES.has(compactKey)
-    ) {
+    )) {
       return true;
     }
     const dottedPath: any = pathParts
@@ -170,7 +170,7 @@ export function visitStructuredValue(value?: any, visitor?: any, pathParts: any 
 }
 
 export function redactStructuredValue(value?: any, configuredFields: any = []) : any {
-  const matches: any = sensitiveFieldMatcher(configuredFields);
+  const matches: any = sensitiveFieldMatcher(configuredFields, { includeDefaults: false });
   const redact: any = (current?: any, pathParts: any = []) : any => {
     if (Array.isArray(current)) {
       return current.map((item?: any) : any => redact(item, [...pathParts, "[]"]));
@@ -252,7 +252,7 @@ export function filterStructuredValue(value?: any, publicFields: any = []) : any
   return projected === undefined ? {} : projected;
 }
 
-function responseSchemaConfigured(schema?: any) : any {
+export function responseSchemaConfigured(schema?: any) : any {
   if (schema === undefined) return false;
   return !(
     schema &&

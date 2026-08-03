@@ -5,13 +5,13 @@ import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
 
 const {
   backfillWorkspaceAssets,
-  busyKey,
+  isBusy,
+  isBusyPrefix,
   applyWorkspaceOperationRevert,
   loadWorkspaceAssetReceipts,
   loadWorkspaceOperationHistory,
   panel,
   previewWorkspaceOperationRevert,
-  refreshWorkspaceAssets,
   selectWorkspaceAsset,
   selected,
   selectedWorkspaceAsset,
@@ -35,9 +35,6 @@ const {
       <section class="asset-workbench-column">
         <div class="section-header compact">
           <h5>资产目录</h5>
-          <button class="table-action" type="button" :disabled="!!busyKey" @click="refreshWorkspaceAssets">
-            {{ busyKey === 'ws:assets-list' ? '刷新中…' : '刷新' }}
-          </button>
         </div>
         <div class="form-grid compact-grid">
           <OptionBar
@@ -79,8 +76,8 @@ const {
       <section class="asset-workbench-column">
         <div class="section-header compact">
           <h5>提交</h5>
-          <button class="table-action" type="button" :disabled="!!busyKey" @click="backfillWorkspaceAssets">
-            {{ busyKey === 'ws:asset-backfill' ? 'Backfill…' : 'Backfill' }}
+          <button class="table-action" type="button" :disabled="isBusyPrefix('ws:')" @click="backfillWorkspaceAssets">
+            {{ isBusy('ws:asset-backfill') ? 'Backfill…' : 'Backfill' }}
           </button>
         </div>
         <div class="form-grid">
@@ -91,11 +88,11 @@ const {
           <textarea v-model="workspaceAssetForm.content" rows="5" spellcheck="false"></textarea>
         </label>
         <div class="module-actions">
-          <button class="tool-button" type="button" :disabled="!!busyKey" @click="submitWorkspaceAsset">
-            {{ busyKey === 'ws:asset-submit' ? '提交中…' : '提交资产' }}
+          <button class="tool-button" type="button" :disabled="isBusyPrefix('ws:')" @click="submitWorkspaceAsset">
+            {{ isBusy('ws:asset-submit') ? '提交中…' : '提交资产' }}
           </button>
-          <button class="tool-button tool-button-ghost" type="button" :disabled="!workspaceAssetForm.assetRef || !!busyKey" @click="loadWorkspaceAssetReceipts">
-            {{ busyKey === 'ws:asset-receipts' ? '读取中…' : 'Receipt' }}
+          <button class="tool-button tool-button-ghost" type="button" :disabled="!workspaceAssetForm.assetRef || isBusyPrefix('ws:')" @click="loadWorkspaceAssetReceipts">
+            {{ isBusy('ws:asset-receipts') ? '读取中…' : 'Receipt' }}
           </button>
           <button class="tool-button tool-button-ghost" type="button" @click="panel = 'list'">关闭</button>
         </div>
@@ -106,14 +103,14 @@ const {
       <div class="section-header compact">
         <h5>Operation History / Audit</h5>
         <div class="asset-operation-actions">
-          <button class="table-action" type="button" :disabled="!!busyKey" @click="loadWorkspaceOperationHistory">
-            {{ busyKey === 'ws:operation-history' ? '读取中…' : '加载历史' }}
+          <button class="table-action" type="button" :disabled="isBusyPrefix('ws:')" @click="loadWorkspaceOperationHistory">
+            {{ isBusy('ws:operation-history') ? '读取中…' : '加载历史' }}
           </button>
-          <button class="table-action" type="button" :disabled="!!busyKey" @click="previewWorkspaceOperationRevert">
-            {{ busyKey === 'ws:operation-revert-preview' ? '预览中…' : 'Revert Preview' }}
+          <button class="table-action" type="button" :disabled="isBusyPrefix('ws:')" @click="previewWorkspaceOperationRevert">
+            {{ isBusy('ws:operation-revert-preview') ? '预览中…' : 'Revert Preview' }}
           </button>
-          <button class="table-action danger-link" type="button" :disabled="!!busyKey || !workspaceOperationRevertPreview" @click="applyWorkspaceOperationRevert">
-            {{ busyKey === 'ws:operation-revert-apply' ? '应用中…' : 'Revert Apply' }}
+          <button class="table-action danger-link" type="button" :disabled="isBusyPrefix('ws:') || !workspaceOperationRevertPreview" @click="applyWorkspaceOperationRevert">
+            {{ isBusy('ws:operation-revert-apply') ? '应用中…' : 'Revert Apply' }}
           </button>
         </div>
       </div>

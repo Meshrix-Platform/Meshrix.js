@@ -1,4 +1,3 @@
-import { loadProcessIdentity } from "../process-identity-store.ts";
 import {
   createMcpProxySessionId,
   MCP_PROXY_SESSION_HEADER,
@@ -8,8 +7,9 @@ import { createBoundedStdioOutput } from "./bounded-stdio-output.ts";
 import { HTTP_TIMEOUT_MS } from "./constants.ts";
 import { normalizeTarget, option } from "./basic-utils.ts";
 import { fetchJson } from "./http-json-client.ts";
-import { optionsWithDiscoveredBaseUrl, resolveToken, signedAuthHeaders } from "./discovery.ts";
+import { authHeaders, optionsWithDiscoveredBaseUrl, resolveApiKey } from "./discovery.ts";
 import { installerOptions } from "./installer-options.ts";
+import { redactSensitiveText } from "./installer-output-safety.ts";
 
 export const MCP_STDIO_FRAMING_JSONL: any = "jsonl";
 export const MCP_STDIO_FRAMING_CONTENT_LENGTH: any = "content-length";
@@ -153,18 +153,19 @@ export async function forwardProxyMessage({
     timeoutMs: HTTP_TIMEOUT_MS,
     signal,
     headers: {
-      ...await signedAuthHeaders({ baseUrl, token, target, method: "POST", body }),
+      ...authHeaders(token, target),
       [MCP_PROXY_SESSION_HEADER]: correlationSessionId
     },
     body
   });
   if (!response.ok) {
+    const reason: any = response.payload?.error?.message || response.payload?.error || `Meshrix MCP proxy failed with HTTP ${response.status}`;
     return {
       jsonrpc: "2.0",
       id: message?.id ?? null,
       error: {
         code: -32001,
-        message: response.payload?.error?.message || response.payload?.error || `Meshrix MCP proxy failed with HTTP ${response.status}`
+        message: redactSensitiveText(reason, [token])
       }
     };
   }
@@ -565,30 +566,19 @@ export function createProxyStdioTransport(options: Record<string, any> = {}) : a
 
 export async function resolveProxyCredentials(options: Record<string, any> = {}) : Promise<any> {
   const target: any = normalizeTarget(option(options, "target", "opencode")) || "opencode";
-  const providedToken: any = await resolveToken(options, { required: false });
-  const identity: any = await loadProcessIdentity(target);
-  if (!identity) {
-    throw new Error(`Missing local process identity for ${target}. Run meshrix-mcp install --target ${target} first.`);
-  }
-  const token: any = providedToken || String(identity.grantToken || "").trim();
-  if (!token) {
-    throw new Error(
-      `Missing stored MCP grant credential for ${target}. ` +
-      `Run meshrix-mcp uninstall --target ${target}, then reinstall before starting the proxy.`
-    );
-  }
+  const token: any = await resolveApiKey(options, { required: true });
   return {
     target,
     token,
-    identity,
-    tokenSource: providedToken ? "provided" : "credential-store"
+    tokenSource: "provided"
   };
 }
 
 export async function proxyCommand(options: Record<string, any> = {}) : Promise<any> {
+  const credentials: any = await resolveProxyCredentials(options);
   const resolved: any = await optionsWithDiscoveredBaseUrl(options);
   const settings: any = installerOptions(resolved);
-  const { target, token } = await resolveProxyCredentials(options);
+  const { target, token } = credentials;
   const transport: any = createProxyStdioTransport({
     baseUrl: settings.baseUrl,
     token,

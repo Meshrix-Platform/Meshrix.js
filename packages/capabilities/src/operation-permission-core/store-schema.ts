@@ -199,6 +199,73 @@ export function ensureSchema(db?: any) : any {
     CREATE INDEX IF NOT EXISTS idx_tool_grant_owner_revocation_targets_pending
       ON tool_grant_owner_revocation_targets(idempotency_key, capability_invalidated, binding_invalidated, grant_id);
 
+    CREATE TABLE IF NOT EXISTS api_key_records (
+      key_id TEXT PRIMARY KEY,
+      display_prefix TEXT NOT NULL,
+      credential_fingerprint TEXT NOT NULL UNIQUE,
+      verifier_generation TEXT NOT NULL,
+      verifier_digest BLOB NOT NULL UNIQUE,
+      workload_principal_id TEXT NOT NULL UNIQUE,
+      workload_display_name TEXT NOT NULL,
+      organization_node_id TEXT NOT NULL,
+      organization_lineage_digest TEXT NOT NULL,
+      organization_revision_at_issue INTEGER NOT NULL CHECK(organization_revision_at_issue > 0),
+      policy_json TEXT NOT NULL CHECK(json_valid(policy_json) AND json_type(policy_json) = 'object'),
+      policy_fingerprint TEXT NOT NULL,
+      status TEXT NOT NULL CHECK(status IN ('active', 'revoked', 'expired', 'exhausted')),
+      lifecycle_revision INTEGER NOT NULL CHECK(lifecycle_revision > 0),
+      use_count INTEGER NOT NULL DEFAULT 0 CHECK(use_count >= 0),
+      max_uses INTEGER NOT NULL CHECK(max_uses > 0),
+      requests_per_window INTEGER NOT NULL CHECK(requests_per_window > 0),
+      window_seconds INTEGER NOT NULL CHECK(window_seconds > 0),
+      max_concurrent_effects INTEGER NOT NULL CHECK(max_concurrent_effects > 0),
+      created_at TEXT NOT NULL,
+      rotated_at TEXT,
+      revoked_at TEXT,
+      expires_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_key_records_org_status_created
+      ON api_key_records(organization_node_id, status, created_at, key_id);
+    CREATE INDEX IF NOT EXISTS idx_api_key_records_active_generation
+      ON api_key_records(verifier_generation, status);
+
+    CREATE TABLE IF NOT EXISTS api_key_usage_windows (
+      key_id TEXT NOT NULL,
+      window_start INTEGER NOT NULL,
+      request_count INTEGER NOT NULL CHECK(request_count >= 0),
+      expires_at INTEGER NOT NULL,
+      PRIMARY KEY (key_id, window_start),
+      FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_key_usage_windows_expiry ON api_key_usage_windows(expires_at);
+
+    CREATE TABLE IF NOT EXISTS api_key_effect_leases (
+      key_id TEXT NOT NULL,
+      lease_id TEXT NOT NULL,
+      lifecycle_revision INTEGER NOT NULL,
+      policy_fingerprint TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (key_id, lease_id),
+      FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_key_effect_leases_expiry ON api_key_effect_leases(expires_at);
+
+    CREATE TABLE IF NOT EXISTS api_key_lifecycle_events (
+      event_id TEXT PRIMARY KEY,
+      key_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      reason_code TEXT NOT NULL,
+      lifecycle_revision INTEGER NOT NULL,
+      policy_fingerprint TEXT NOT NULL,
+      organization_revision INTEGER NOT NULL,
+      use_count INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE RESTRICT
+    );
+    CREATE INDEX IF NOT EXISTS idx_api_key_lifecycle_events_key
+      ON api_key_lifecycle_events(key_id, created_at);
+
     CREATE TRIGGER IF NOT EXISTS validate_tool_grants_json_insert
     BEFORE INSERT ON tool_grants
     WHEN CASE
@@ -257,31 +324,6 @@ export function ensureSchema(db?: any) : any {
     CREATE INDEX IF NOT EXISTS idx_http_request_metric_events_created ON http_request_metric_events(created_at);
     CREATE INDEX IF NOT EXISTS idx_http_request_metric_events_route ON http_request_metric_events(route);
 
-    CREATE TABLE IF NOT EXISTS mcp_authorization_requests (
-      request_id TEXT PRIMARY KEY,
-      client_name TEXT NOT NULL DEFAULT '',
-      requested_scopes_json TEXT NOT NULL DEFAULT '[]',
-      requested_tools_json TEXT NOT NULL DEFAULT '[]',
-      reason TEXT NOT NULL DEFAULT '',
-      request_kind TEXT NOT NULL DEFAULT 'generic',
-      request_payload_json TEXT NOT NULL DEFAULT '{}',
-      claim_token_hash TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'pending',
-      source_ip TEXT NOT NULL DEFAULT '',
-      grant_id TEXT NOT NULL DEFAULT '',
-      grant_ids_json TEXT NOT NULL DEFAULT '[]',
-      expires_at TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL,
-      resolved_at TEXT NOT NULL DEFAULT '',
-      resolved_by TEXT NOT NULL DEFAULT '',
-      issuing_at TEXT NOT NULL DEFAULT '',
-      consumed_at TEXT NOT NULL DEFAULT '',
-      replay_envelope_json TEXT NOT NULL DEFAULT '',
-      replay_expires_at TEXT NOT NULL DEFAULT '',
-      error_code TEXT NOT NULL DEFAULT ''
-    );
-    CREATE INDEX IF NOT EXISTS idx_mcp_auth_req_status ON mcp_authorization_requests(status);
-
     CREATE TABLE IF NOT EXISTS tool_pending_operations (
       pending_operation_id TEXT PRIMARY KEY,
       trace_id TEXT NOT NULL DEFAULT '',
@@ -302,6 +344,7 @@ export function ensureSchema(db?: any) : any {
       risk_reason TEXT NOT NULL DEFAULT '',
       original_input_json TEXT NOT NULL DEFAULT '{}',
       resume_input_json TEXT NOT NULL DEFAULT '{}',
+      credential_authorization_json TEXT NOT NULL DEFAULT '{}',
       redacted_input_json TEXT NOT NULL DEFAULT '{}',
       context_json TEXT NOT NULL DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'pending',
@@ -327,27 +370,6 @@ export function ensureSchema(db?: any) : any {
     // version 1: baseline — all tables above were created by the initial db.exec.
     // Reserve this slot so existing databases get user_version = 1 applied.
     { version: 1, up: () : any => {} },
-    // version 2: add mcp_authorization_requests
-    {
-      version: 2,
-      up: (db?: any) : any => {
-        db.exec(`
-          CREATE TABLE IF NOT EXISTS mcp_authorization_requests (
-            request_id TEXT PRIMARY KEY,
-            client_name TEXT NOT NULL DEFAULT '',
-            requested_scopes_json TEXT NOT NULL DEFAULT '[]',
-            requested_tools_json TEXT NOT NULL DEFAULT '[]',
-            reason TEXT NOT NULL DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'pending',
-            source_ip TEXT NOT NULL DEFAULT '',
-            grant_id TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL,
-            resolved_at TEXT NOT NULL DEFAULT ''
-          );
-          CREATE INDEX IF NOT EXISTS idx_mcp_auth_req_status ON mcp_authorization_requests(status);
-        `);
-      }
-    },
     // version 3: request metrics and byte-rate columns for traffic telemetry.
     {
       version: 3,
@@ -455,39 +477,6 @@ export function ensureSchema(db?: any) : any {
         );
       }
     },
-    // version 7: bind native MCP installation approvals to immutable, expiring requests.
-    {
-      version: 7,
-      up: (db?: any) : any => {
-        addColumnIfMissing(db, "mcp_authorization_requests", "request_kind", "request_kind TEXT NOT NULL DEFAULT 'generic'");
-        addColumnIfMissing(db, "mcp_authorization_requests", "request_payload_json", "request_payload_json TEXT NOT NULL DEFAULT '{}'");
-        addColumnIfMissing(db, "mcp_authorization_requests", "claim_token_hash", "claim_token_hash TEXT NOT NULL DEFAULT ''");
-        addColumnIfMissing(db, "mcp_authorization_requests", "grant_ids_json", "grant_ids_json TEXT NOT NULL DEFAULT '[]'");
-        addColumnIfMissing(db, "mcp_authorization_requests", "expires_at", "expires_at TEXT NOT NULL DEFAULT ''");
-        addColumnIfMissing(db, "mcp_authorization_requests", "resolved_by", "resolved_by TEXT NOT NULL DEFAULT ''");
-        addColumnIfMissing(db, "mcp_authorization_requests", "issuing_at", "issuing_at TEXT NOT NULL DEFAULT ''");
-        addColumnIfMissing(db, "mcp_authorization_requests", "consumed_at", "consumed_at TEXT NOT NULL DEFAULT ''");
-        addColumnIfMissing(db, "mcp_authorization_requests", "error_code", "error_code TEXT NOT NULL DEFAULT ''");
-      }
-    },
-    // version 8: retain a short-lived claim-encrypted response for retry-safe device authorization.
-    {
-      version: 8,
-      up: (db?: any) : any => {
-        addColumnIfMissing(
-          db,
-          "mcp_authorization_requests",
-          "replay_envelope_json",
-          "replay_envelope_json TEXT NOT NULL DEFAULT ''"
-        );
-        addColumnIfMissing(
-          db,
-          "mcp_authorization_requests",
-          "replay_expires_at",
-          "replay_expires_at TEXT NOT NULL DEFAULT ''"
-        );
-      }
-    },
     // version 9: cross-reference permission audit rows to the proof-substrate ledger.
     {
       version: 9,
@@ -572,6 +561,96 @@ export function ensureSchema(db?: any) : any {
           CREATE INDEX IF NOT EXISTS idx_tool_grant_owner_revocation_targets_pending
             ON tool_grant_owner_revocation_targets(idempotency_key, capability_invalidated, binding_invalidated, grant_id);
         `);
+      }
+    },
+    // version 11: direct, hierarchy-scoped mxak1 credentials and atomic lifecycle state.
+    {
+      version: 11,
+      up: (db?: any) : any => {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS api_key_records (
+            key_id TEXT PRIMARY KEY,
+            display_prefix TEXT NOT NULL,
+            credential_fingerprint TEXT NOT NULL UNIQUE,
+            verifier_generation TEXT NOT NULL,
+            verifier_digest BLOB NOT NULL UNIQUE,
+            workload_principal_id TEXT NOT NULL UNIQUE,
+            workload_display_name TEXT NOT NULL,
+            organization_node_id TEXT NOT NULL,
+            organization_lineage_digest TEXT NOT NULL,
+            organization_revision_at_issue INTEGER NOT NULL CHECK(organization_revision_at_issue > 0),
+            policy_json TEXT NOT NULL CHECK(json_valid(policy_json) AND json_type(policy_json) = 'object'),
+            policy_fingerprint TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('active', 'revoked', 'expired', 'exhausted')),
+            lifecycle_revision INTEGER NOT NULL CHECK(lifecycle_revision > 0),
+            use_count INTEGER NOT NULL DEFAULT 0 CHECK(use_count >= 0),
+            max_uses INTEGER NOT NULL CHECK(max_uses > 0),
+            requests_per_window INTEGER NOT NULL CHECK(requests_per_window > 0),
+            window_seconds INTEGER NOT NULL CHECK(window_seconds > 0),
+            max_concurrent_effects INTEGER NOT NULL CHECK(max_concurrent_effects > 0),
+            created_at TEXT NOT NULL,
+            rotated_at TEXT,
+            revoked_at TEXT,
+            expires_at TEXT NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_api_key_records_org_status_created
+            ON api_key_records(organization_node_id, status, created_at, key_id);
+          CREATE INDEX IF NOT EXISTS idx_api_key_records_active_generation
+            ON api_key_records(verifier_generation, status);
+          CREATE TABLE IF NOT EXISTS api_key_usage_windows (
+            key_id TEXT NOT NULL,
+            window_start INTEGER NOT NULL,
+            request_count INTEGER NOT NULL CHECK(request_count >= 0),
+            expires_at INTEGER NOT NULL,
+            PRIMARY KEY (key_id, window_start),
+            FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_api_key_usage_windows_expiry ON api_key_usage_windows(expires_at);
+          CREATE TABLE IF NOT EXISTS api_key_effect_leases (
+            key_id TEXT NOT NULL,
+            lease_id TEXT NOT NULL,
+            lifecycle_revision INTEGER NOT NULL,
+            policy_fingerprint TEXT NOT NULL,
+            expires_at INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (key_id, lease_id),
+            FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_api_key_effect_leases_expiry ON api_key_effect_leases(expires_at);
+          CREATE TABLE IF NOT EXISTS api_key_lifecycle_events (
+            event_id TEXT PRIMARY KEY,
+            key_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            reason_code TEXT NOT NULL,
+            lifecycle_revision INTEGER NOT NULL,
+            policy_fingerprint TEXT NOT NULL,
+            organization_revision INTEGER NOT NULL,
+            use_count INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (key_id) REFERENCES api_key_records(key_id) ON DELETE RESTRICT
+          );
+          CREATE INDEX IF NOT EXISTS idx_api_key_lifecycle_events_key
+            ON api_key_lifecycle_events(key_id, created_at);
+        `);
+      }
+    },
+    // version 12: retain only the immutable API-key authorization facts needed to resume approval safely.
+    {
+      version: 12,
+      up: (db?: any) : any => {
+        addColumnIfMissing(
+          db,
+          "tool_pending_operations",
+          "credential_authorization_json",
+          "credential_authorization_json TEXT NOT NULL DEFAULT '{}'"
+        );
+      }
+    },
+    // version 13: remove retired MCP device authorization state.
+    {
+      version: 13,
+      up: (db?: any) : any => {
+        db.exec("DROP TABLE IF EXISTS mcp_authorization_requests;");
       }
     }
   ]);

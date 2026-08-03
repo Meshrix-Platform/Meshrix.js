@@ -85,7 +85,6 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
   "downstream-agent.tool-loop-evidence": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
   "mcp-client.proxy-transport-evidence": "tools/server-scripts/lib/mcp-proxy-transport-evidence.ts",
   "mcp-release.targets": "packages/protocols/mcp/adapter/mcp-release-targets.ts",
-  "mcp-process-identity.credential-store-evidence": "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts",
   "composition.source-package": "tools/server-scripts/package-server-source.ts",
   "package-scripts.classification": "tools/scripts/package-script-registry.ts",
   "open-platform.capability-surface": "tools/registry/open-platform-capability-matrix.json",

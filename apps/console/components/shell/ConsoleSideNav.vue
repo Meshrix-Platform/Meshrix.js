@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount } from "vue";
 import { useConsoleSideNavContext } from "../../composables/consoleSideNavContext";
-import ConsoleSideNavAgentSection from "./side-nav/ConsoleSideNavAgentSection.vue";
 import ConsoleSideNavBackdrop from "./side-nav/ConsoleSideNavBackdrop.vue";
 import ConsoleSideNavBrand from "./side-nav/ConsoleSideNavBrand.vue";
 import ConsoleSideNavFooter from "./side-nav/ConsoleSideNavFooter.vue";
-import ConsoleSideNavIntegrationSection from "./side-nav/ConsoleSideNavIntegrationSection.vue";
+import ConsoleSideNavModelSection from "./side-nav/ConsoleSideNavModelSection.vue";
+import ConsoleSideNavOperationsSection from "./side-nav/ConsoleSideNavOperationsSection.vue";
+import ConsoleSideNavPermissionSection from "./side-nav/ConsoleSideNavPermissionSection.vue";
 import ConsoleSideNavPrimaryLinks from "./side-nav/ConsoleSideNavPrimaryLinks.vue";
-import ConsoleSideNavOperationPermissionSection from "./side-nav/ConsoleSideNavOperationPermissionSection.vue";
-import ConsoleSideNavPluginSection from "./side-nav/ConsoleSideNavPluginSection.vue";
+import ConsoleSideNavServiceSection from "./side-nav/ConsoleSideNavServiceSection.vue";
 import ConsoleSideNavSystemSection from "./side-nav/ConsoleSideNavSystemSection.vue";
+import ConsoleSideNavToolsSection from "./side-nav/ConsoleSideNavToolsSection.vue";
 import ConsoleSideNavVersionSection from "./side-nav/ConsoleSideNavVersionSection.vue";
 
 defineOptions({ name: "ConsoleSideNav" });
@@ -110,11 +111,12 @@ onBeforeUnmount(stopSideNavResize);
         </div>
         <template v-else>
           <ConsoleSideNavPrimaryLinks />
-          <ConsoleSideNavAgentSection />
-          <ConsoleSideNavIntegrationSection />
-          <ConsoleSideNavPluginSection />
-          <ConsoleSideNavOperationPermissionSection />
+          <ConsoleSideNavServiceSection />
+          <ConsoleSideNavToolsSection />
+          <ConsoleSideNavPermissionSection />
+          <ConsoleSideNavModelSection />
           <ConsoleSideNavSystemSection />
+          <ConsoleSideNavOperationsSection />
           <ConsoleSideNavVersionSection />
         </template>
       </nav>

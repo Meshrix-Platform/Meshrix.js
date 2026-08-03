@@ -10,7 +10,7 @@ import {
 describe("operation permission view context behavior", () : any => {
   it("provides and reads the permissions view context", () : any => {
     const context: any = {
-      busyKey: "permissions-busy",
+      isBusy: () => false,
       toolGrants: [{ id: "grant-a" }],
       toolScopes: [{ id: "scope-a" }],
     } as any;

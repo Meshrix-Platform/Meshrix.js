@@ -41,6 +41,7 @@ const IGNORED_DIRECTORIES: any = new Set<any>([
 
 const IGNORED_RELATIVE_PATHS: any = new Set<any>([
   ".git",
+  ".claude/settings.local.json",
   "tools/config-scanner.ts"
 ]);
 

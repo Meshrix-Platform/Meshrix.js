@@ -218,6 +218,51 @@ export function createAuthorizationGovernanceStore({
     return db.prepare("SELECT * FROM authorization_user_policies ORDER BY user_id ASC").all().map(userPolicyFromRow);
   }
 
+  function upsertApiKeyRecoveryAssignment(input: Record<string, any> = {}) : any {
+    const subjectId: any = String(input.subjectId || "").trim();
+    const rootNodeId: any = String(input.rootNodeId || "").trim();
+    if (!subjectId || !rootNodeId || input.action !== "operation_permission.api_keys.manage") {
+      throw new TypeError("API Key recovery assignment is invalid.");
+    }
+    const existing: any = db.prepare(`SELECT * FROM authorization_api_key_recovery_assignments
+      WHERE subject_id = ? AND root_node_id = ? AND action = ?`)
+      .get(subjectId, rootNodeId, input.action);
+    const timestamp: any = nowIso();
+    const assignmentId: any = existing?.assignment_id || randomId("api_key_recovery");
+    db.prepare(`INSERT INTO authorization_api_key_recovery_assignments (
+      assignment_id, subject_id, root_node_id, action, enabled, server_authored, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT(assignment_id) DO UPDATE SET
+      enabled = excluded.enabled, updated_at = excluded.updated_at`)
+      .run(assignmentId, subjectId, rootNodeId, input.action, input.enabled === false ? 0 : 1,
+        existing?.created_at || timestamp, timestamp);
+    const assignment: any = {
+      assignmentId,
+      subjectId,
+      rootNodeId,
+      action: input.action,
+      enabled: input.enabled !== false,
+      serverAuthored: true,
+      createdAt: existing?.created_at || timestamp,
+      updatedAt: timestamp
+    };
+    appendEvent("api-key-recovery-assignment", assignmentId, existing ? "update" : "create", assignment);
+    return Object.freeze(assignment);
+  }
+
+  function listApiKeyRecoveryAssignments() : any {
+    return db.prepare(`SELECT * FROM authorization_api_key_recovery_assignments ORDER BY assignment_id ASC`)
+      .all().map((row?: any) : any => Object.freeze({
+        assignmentId: row.assignment_id,
+        subjectId: row.subject_id,
+        rootNodeId: row.root_node_id,
+        action: row.action,
+        enabled: Boolean(row.enabled),
+        serverAuthored: row.server_authored === 1,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+      }));
+  }
+
   function upsertAgentGroup(input: Record<string, any> = {}) : any {
     return resolvedTagManagementStore.upsertAuthorizationAgentGroup(input);
   }
@@ -594,6 +639,8 @@ export function createAuthorizationGovernanceStore({
     listUserPolicies,
     getUserPolicy,
     upsertUserPolicy,
+    upsertApiKeyRecoveryAssignment,
+    listApiKeyRecoveryAssignments,
     listAgentGroups,
     getAgentGroup,
     upsertAgentGroup,

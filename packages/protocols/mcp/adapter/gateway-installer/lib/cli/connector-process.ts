@@ -69,11 +69,18 @@ function childProcessEnv(extraEnv: Record<string, any> = {}, { clean = false }: 
         "SystemRoot", "ComSpec", "PATHEXT", "LANG", "LC_ALL"
       ].flatMap((name?: any) : any => typeof process.env[name] === "string" ? [[name, process.env[name]]] : []))
     : process.env;
-  return {
+  const env: Record<string, any> = {
     ...inherited,
     ...PACKAGE_MANAGER_DISCOVERY_ENV,
     ...(extraEnv || {})
   };
+  // npm can expose a user-level `allowScripts` policy to child processes as a
+  // project-scoped CLI setting. npm 11 rejects that synthesized setting before
+  // an otherwise script-disabled adapter install can start, so rely on the
+  // explicit `--ignore-scripts` argument and do not forward the incompatible
+  // ambient setting.
+  delete env.npm_config_allow_scripts;
+  return env;
 }
 
 export async function run(command?: any, args: any = [], options: Record<string, any> = {}) : Promise<any> {

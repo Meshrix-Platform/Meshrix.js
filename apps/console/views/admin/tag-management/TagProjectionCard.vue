@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TagManagementProjection } from "../../../lib/tag-management-client";
+import { tagManagementText } from "../../../i18n/tag-management";
 
 withDefaults(defineProps<{
   selectedProjection?: TagManagementProjection | null;
@@ -16,22 +17,22 @@ withDefaults(defineProps<{
   <section class="surface-card tag-projection-card">
     <div class="section-header">
       <div>
-        <h3>Projection Payload</h3>
-        <p>{{ selectedProjection?.entityType || "无投影" }}</p>
+        <h3>{{ tagManagementText("投影详情", "Projection Details") }}</h3>
+        <p>{{ selectedProjection?.entityType || tagManagementText("无投影", "No Projection") }}</p>
       </div>
       <span>{{ projections.length }}</span>
     </div>
     <dl v-if="selectedProjection" class="tag-detail-meta compact">
       <div>
-        <dt>entityType</dt>
+        <dt>{{ tagManagementText("对象类型", "Entity Type") }}</dt>
         <dd>{{ selectedProjection.entityType }}</dd>
       </div>
       <div>
-        <dt>entityId</dt>
+        <dt>{{ tagManagementText("对象标识", "Entity ID") }}</dt>
         <dd>{{ selectedProjection.entityId }}</dd>
       </div>
       <div>
-        <dt>updatedAt</dt>
+        <dt>{{ tagManagementText("更新时间", "Updated At") }}</dt>
         <dd>{{ selectedProjection.updatedAt }}</dd>
       </div>
     </dl>

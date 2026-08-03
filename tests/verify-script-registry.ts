@@ -240,7 +240,6 @@ const REQUIRED_FACT_AUTHORITY_PATHS: readonly any[] = Object.freeze([
   "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
   "tools/server-scripts/lib/mcp-proxy-transport-evidence.ts",
   "packages/protocols/mcp/adapter/mcp-release-targets.ts",
-  "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts",
   "packages/foundation/src/security/process-identity/index.ts",
   "tools/server-scripts/package-server-source.ts",
   "tools/scripts/package-script-registry.ts",
@@ -257,7 +256,6 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
   "downstream-agent.tool-loop-evidence": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
   "mcp-client.proxy-transport-evidence": "tools/server-scripts/lib/mcp-proxy-transport-evidence.ts",
   "mcp-release.targets": "packages/protocols/mcp/adapter/mcp-release-targets.ts",
-  "mcp-process-identity.credential-store-evidence": "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts",
   "composition.source-package": "tools/server-scripts/package-server-source.ts",
   "package-scripts.classification": "tools/scripts/package-script-registry.ts",
   "open-platform.capability-surface": "tools/registry/open-platform-capability-matrix.json"
@@ -279,8 +277,6 @@ const RELEASE_EVIDENCE_FRESHNESS_HELPER: any =
 const UPSTREAM_FIXTURE_TRANSIT_HELPER_PATTERN: any = /createUpstreamFixtureTransitReadiness/u;
 const UPSTREAM_MCP_GATEWAY_HELPER_PATTERN: any = /createUpstreamMcpGatewayReadiness/u;
 const DOWNSTREAM_AGENT_TOOL_LOOP_HELPER_PATTERN: any = /createDownstreamAgentToolLoopReadiness/u;
-const MCP_CREDENTIAL_STORE_HELPER_PATTERN: any = /createMcpProcessIdentityCredentialStoreReadiness/u;
-const MCP_CREDENTIAL_STORE_REPORT_PATH_PATTERN: any = /MCP_PROCESS_IDENTITY_CREDENTIAL_STORE_REPORT_PATH/u;
 const PLATFORM_ACCEPTANCE_REPORT_CATALOG_IMPORT_PATTERN: any = /platform-acceptance-report-catalog\.ts/u;
 const RELEASE_AGGREGATOR_FULL_AGGREGATION_PATTERN: any = /commandExecutionMode:\s*["']dag-parallel-full-aggregation["']/u;
 const RELEASE_COMMAND_DAG_RUNNER_IMPORT_PATTERN: any = /release-command-dag-runner\.ts/u;
@@ -1612,21 +1608,6 @@ if (releaseSourceOfTruthFindings.length > 0) {
 console.log("11. Checking MCP downstream evidence source of truth...");
 const downstreamEvidenceSourceOfTruthFindings: any[] = [];
 const downstreamEvidenceSourceChecks: any[] = [
-  {
-    source: RELEASE_EVIDENCE_READINESS_HELPER,
-    helperPattern: MCP_CREDENTIAL_STORE_HELPER_PATTERN,
-    registeredReportPath: "build/reports/mcp-process-identity-credential-store.json",
-    expectedReducer: REQUIRED_REPORT_REDUCERS.MCP_PROCESS_IDENTITY_CREDENTIAL_STORE,
-    kind: "missing-mcp-credential-store-readiness-helper",
-    detail: "MCP process identity credential-store release evidence must be reduced through mcp-process-identity-credential-store-evidence.ts from the shared release evidence reducer"
-  },
-  {
-    source: "tools/server-scripts/verify-mcp-process-identity-credential-store.ts",
-    helperPattern: MCP_CREDENTIAL_STORE_HELPER_PATTERN,
-    pathPattern: MCP_CREDENTIAL_STORE_REPORT_PATH_PATTERN,
-    kind: "missing-mcp-credential-store-readiness-helper",
-    detail: "MCP process identity credential-store reports must publish the shared readiness reducer projection"
-  }
 ];
 for (const check of downstreamEvidenceSourceChecks) {
   const source: any = await fs.readFile(path.join(repoRoot, check.source), "utf8");

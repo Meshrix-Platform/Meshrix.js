@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import OptionBar from "@meshrix/ui-console/option-bar";
+import FeatureToggle from "../FeatureToggle.vue";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
 import { formatCompactDate } from "../../composables/console-format-utils";
 import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
@@ -9,9 +10,8 @@ const {
   authRoleOptionBarOptions,
   authSessions,
   authUsers,
-  busyKey,
+  isBusy,
   canAdminAuth,
-  enabledBooleanOptionBarOptions,
   oidcAllowedDomainsText,
   oidcDraft,
   oidcRoleMappingText,
@@ -56,14 +56,13 @@ const {
                 :options="authRoleOptionBarOptions"
                 @change="updateConsoleUserRole(user, String($event))"
               />
-              <button
-                class="table-action auth-user-toggle-action"
-                type="button"
-                :disabled="busyKey === `auth:user:${user.userId}`"
-                @click="updateConsoleUser(user, { enabled: !user.enabled })"
-              >
-                {{ user.enabled ? "停用" : "启用" }}
-              </button>
+              <FeatureToggle
+                :disabled="isBusy(`auth:user:${user.userId}`)"
+                :aria-busy="isBusy(`auth:user:${user.userId}`)"
+                :model-value="user.enabled"
+                :aria-label="user.enabled ? `停用用户 ${user.username}` : `启用用户 ${user.username}`"
+                @update:model-value="updateConsoleUser(user, { enabled: $event })"
+              />
             </div>
           </div>
         </div>
@@ -75,10 +74,10 @@ const {
           <span>{{ oidcDraft.enabled ? "已启用" : "未启用" }}</span>
         </div>
         <div class="form-grid compact-form-grid">
-          <OptionBar
+          <FeatureToggle
             v-model="oidcDraft.enabled"
             label="启用"
-            :options="enabledBooleanOptionBarOptions"
+            :aria-label="oidcDraft.enabled ? '停用 OIDC' : '启用 OIDC'"
           />
           <label>
             <span>Issuer</span>
@@ -108,10 +107,11 @@ const {
         <button
           class="tool-button"
           type="button"
-          :disabled="busyKey === 'auth:oidc'"
+          :disabled="isBusy('auth:oidc')"
+          :aria-busy="isBusy('auth:oidc')"
           @click="saveOidcConfig"
         >
-          {{ busyKey === "auth:oidc" ? "保存中" : "保存 OIDC" }}
+          {{ isBusy("auth:oidc") ? "保存中" : "保存 OIDC" }}
         </button>
       </section>
 
@@ -132,7 +132,8 @@ const {
             <button
               class="table-action"
               type="button"
-              :disabled="busyKey === `auth:session:${session.sessionId}`"
+              :disabled="isBusy(`auth:session:${session.sessionId}`)"
+              :aria-busy="isBusy(`auth:session:${session.sessionId}`)"
               @click="revokeConsoleSession(String(session.sessionId))"
             >
               撤销
@@ -221,10 +222,6 @@ const {
   gap: var(--space-2);
   width: 100%;
   min-width: 0;
-}
-
-.auth-user-toggle-action {
-  width: 100%;
 }
 
 @media (max-width: 720px) {

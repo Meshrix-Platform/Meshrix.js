@@ -4,16 +4,11 @@ type ConsoleContext = ReturnType<typeof useConsole>;
 
 const approvalFlowShellKeys: any = [
   "approvalFlowSelectedStatus",
-  "busyKey",
-  "mcpAuthorizationRequests",
-  "mcpAuthorizationStatus",
-  "mcpAuthorizationStatusOptionBarOptions",
+  "isBusy",
   "operationPermissionPendingOperations",
   "operationPermissionPendingStatus",
   "operationPermissionPendingStatusOptionBarOptions",
-  "refreshMcpAuthorizationRequests",
   "refreshOperationPermissionPendingOperations",
-  "resolveMcpAuthorizationRequest",
   "resolveOperationPermissionPendingOperation",
   "selectApprovalFlowStatus",
 ] as const satisfies readonly (keyof ConsoleContext)[];

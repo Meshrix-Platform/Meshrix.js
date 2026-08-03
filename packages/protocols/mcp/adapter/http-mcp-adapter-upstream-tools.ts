@@ -7,8 +7,8 @@ import {
   publicMcpEnvelopeValue
 } from "./http-mcp-adapter-response.ts";
 import {
-  mcpAuthSessionFromGrant,
-  mcpSubjectFromGrant
+  mcpAuthSessionFromAuthorization,
+  mcpSubjectFromAuthorization
 } from "./http-mcp-adapter-session.ts";
 
 function plainObject(value?: any) : any {
@@ -108,7 +108,7 @@ export async function executeUpstreamToolViaGatewayForward({
       })
     };
   }
-  const grantSubject: any = mcpSubjectFromGrant(authorization.grant || null);
+  const grantSubject: any = mcpSubjectFromAuthorization(authorization);
   const grantMetadata: any = plainObject(authorization.grant?.metadata);
   const dynamicCapability: any = plainObject(visibleTool?._meta?.dynamicCapability);
   const grantAgentId: any = String(
@@ -123,12 +123,12 @@ export async function executeUpstreamToolViaGatewayForward({
     transport: "mcp",
     client: request?.headers?.["user-agent"] || "",
     traceId: request?.__meshrixRequestId || "",
-    operatorId: grantAgentId || grantSubject.subjectId || authorization.grant?.id || "",
+    operatorId: grantAgentId || grantSubject.subjectId || "",
     agentId: grantAgentId,
     profileId: grantAgentId,
     agentProfileId: grantAgentId,
     subject: grantSubject,
-    authSession: mcpAuthSessionFromGrant(authorization.grant || null),
+    authSession: mcpAuthSessionFromAuthorization(authorization),
     intent: toolName,
     requestedScopes: visibleTool?._meta?.requiredScopes || [],
     // Published upstream capability identities are evaluated by Operation Permission's
@@ -179,15 +179,21 @@ export async function executeUpstreamToolViaGatewayForward({
     signal
   });
   if (!result.ok) {
-    const error: any = publicPayload?.error || {};
+    const nestedError: any = publicPayload?.error && typeof publicPayload.error === "object"
+      ? publicPayload.error
+      : {};
+    const errorMessage: any = typeof publicPayload?.error === "string"
+      ? publicPayload.error
+      : nestedError.message;
+    const errorCode: any = String(nestedError.code || publicPayload?.code || "").trim();
     const status: any = result.status || 500;
     return {
       httpStatus: status === 401 || status === 403 || status === 429 ? status : 200,
-      body: jsonRpcError(id, -32000, error.message || "Upstream MCP tool call failed.", {
-        code: error.code || "upstream_tool_call_failed",
+      body: jsonRpcError(id, -32000, errorMessage || "Upstream MCP tool call failed.", {
+        code: errorCode || "upstream_tool_call_failed",
         status,
         toolName,
-        details: publicMcpEnvelopeValue(error.details || {}),
+        details: publicMcpEnvelopeValue(nestedError.details || {}),
         traceId: publicMcpEnvelopeString(result.payload?.traceId || "")
       })
     };

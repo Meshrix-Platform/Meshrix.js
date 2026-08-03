@@ -4,7 +4,7 @@ import JsonConfigFileEditor from "../../JsonConfigFileEditor.vue";
 import AgentConfigInvocationToggle from "./AgentConfigInvocationToggle.vue";
 
 const {
-  busyKey,
+  isBusy,
   saveSettings,
   settingsDraft,
 } = useServerConsoleShellContext();
@@ -41,7 +41,7 @@ async function saveFunctionCallSchema(value: unknown) {
         <div class="invocation-toggle-row">
           <AgentConfigInvocationToggle
             v-model="settingsDraft.agentToolExecution.http.enabled"
-            label="开启 HTTP 调用"
+            label="HTTP 调用"
           />
         </div>
         <div class="form-grid compact-form-grid invocation-config-grid">
@@ -69,7 +69,7 @@ async function saveFunctionCallSchema(value: unknown) {
         <div class="invocation-toggle-row">
           <AgentConfigInvocationToggle
             v-model="settingsDraft.agentToolExecution.local.enabled"
-            label="开启 CLI 调用"
+            label="CLI 调用"
           />
         </div>
         <div class="form-grid compact-form-grid invocation-config-grid">
@@ -99,8 +99,8 @@ async function saveFunctionCallSchema(value: unknown) {
         :rows="12"
       />
       <div class="source-actions">
-        <button class="tool-button" type="submit" :disabled="busyKey === 'settings'">
-          {{ busyKey === "settings" ? "保存中" : "保存工具调用配置" }}
+        <button class="tool-button" type="submit" :disabled="isBusy('settings')">
+          {{ isBusy("settings") ? "保存中" : "保存工具调用配置" }}
         </button>
       </div>
     </form>

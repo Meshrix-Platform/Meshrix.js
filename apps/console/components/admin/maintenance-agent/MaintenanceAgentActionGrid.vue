@@ -3,7 +3,7 @@ import OptionBar from "@meshrix/ui-console/option-bar";
 import { useMaintenanceAgentViewContext } from "../../../composables/maintenanceAgentViewContext";
 
 const {
-  busyKey,
+  isBusy,
   canRunMaintenanceAgent,
   maintenanceAgentRunbook,
   maintenanceAgentRunbookOptionBarOptions,
@@ -29,16 +29,18 @@ const {
       <button
         class="tool-button"
         type="button"
-        :disabled="!canRunMaintenanceAgent || !maintenanceAgentRunbook || busyKey === 'maintenance-agent:run'"
+        :disabled="!canRunMaintenanceAgent || !maintenanceAgentRunbook || isBusy('maintenance-agent:run')"
+        :aria-busy="isBusy('maintenance-agent:run')"
         @click="runMaintenanceAgentRunbook"
       >
-        {{ busyKey === "maintenance-agent:run" ? "执行中" : "运行" }}
+        {{ isBusy("maintenance-agent:run") ? "执行中" : "运行" }}
       </button>
       <div class="maintenance-agent-quick-actions">
         <button
           class="tool-button tool-button-ghost"
           type="button"
-          :disabled="!canRunMaintenanceAgent || busyKey === 'maintenance-agent:run'"
+          :disabled="!canRunMaintenanceAgent || isBusy('maintenance-agent:run')"
+          :aria-busy="isBusy('maintenance-agent:run')"
           @click="runMaintenanceAgentGatewayReview"
         >
           网关治理巡检

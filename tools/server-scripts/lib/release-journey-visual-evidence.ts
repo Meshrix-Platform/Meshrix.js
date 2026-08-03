@@ -5,8 +5,11 @@ import path from "node:path";
 import { chromium } from "playwright";
 import {
   RELEASE_JOURNEY_VISUAL_CAPTURE,
+  RELEASE_JOURNEY_VISUAL_CHECKPOINTS,
   readPngDimensions
 } from "./release-journey-visual-contract.ts";
+
+export { RELEASE_JOURNEY_VISUAL_CHECKPOINTS } from "./release-journey-visual-contract.ts";
 
 export const RELEASE_JOURNEY_VISUAL_ROOT: any =
   "build/reports/upstream-service-publishing/screenshots";
@@ -17,24 +20,9 @@ export const RELEASE_JOURNEY_VISUAL_PROTECTED_SELECTORS: readonly any[] = Object
   "[data-protected]"
 ]);
 
-export const RELEASE_JOURNEY_VISUAL_CHECKPOINTS: readonly any[] = Object.freeze([
-  ["console-authenticated", "Authenticated Meshrix Console", "/admin/publish-upstream-service"],
-  ["console-upstream-basic-config", "Upstream service basic configuration", "/admin/publish-upstream-service"],
-  ["console-upstream-operation-config", "Upstream operation configuration", "/admin/publish-upstream-service"],
-  ["console-upstream-published", "Published upstream service and runtime health", "/admin/publish-upstream-service"],
-  ["console-published-tool", "Published operation in the tool catalog", "/admin/tool-list"],
-  ["console-token-authorization-pending", "Pending MCP device authorization", "/approval"],
-  ["console-token-authorization-consumed", "Completed MCP device authorization", "/approval"],
-  ["console-operation-approval-pending", "Pending Operation Permission approval", "/approval"],
-  ["console-operation-approval-completed", "Completed Operation Permission approval", "/approval"],
-  ["console-downstream-mcp-call", "Downstream MCP call in the Console audit", "/admin/tool-stats"]
-]);
-
 export const RELEASE_JOURNEY_APPROVAL_UI: Readonly<Record<string, any>> = Object.freeze({
   card: '[data-testid="approval-request-card"], [data-approval-kind], .approval-request-card',
-  authorizationCard: '[data-approval-kind="authorization"]',
   operationCard: '[data-approval-kind="pendingOperation"]',
-  mcpApprove: '[data-action="mcp-approve"]',
   operationApprove: '[data-action="operation-approve"]',
   protected: "[data-protected]",
   technicalDetails: 'details[data-section="technical-details"]',
@@ -104,6 +92,21 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
   const page: any = await context.newPage();
   const evidence: any[] = [];
   const browserFindings: any[] = [];
+  function publicBrowserFindingPath(sourcePath: any = "") : string {
+    const segments: any[] = String(sourcePath || "")
+      .split("/")
+      .filter(Boolean);
+    if (segments[0] === "api" && segments[1] === "operation-permission" && segments[2] === "v1") {
+      const suffix: any = segments[3] === "api-keys" && segments[4] === "issuer-scopes"
+        ? ["issuer-scopes"]
+        : [];
+      return `/${[...segments.slice(0, 4), ...suffix].join("/")}`;
+    }
+    if (segments[0] === "api") {
+      return `/${segments.slice(0, 2).join("/") || "api"}`;
+    }
+    return segments.length > 0 ? `/${segments[0]}` : "/";
+  }
   page.on("console", (message?: any) : any => {
     if (message.type() === "error") {
       const resourceFailure: any = /Failed to load resource|ERR_/u.test(message.text());
@@ -113,9 +116,10 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       } catch {}
       if (resourceFailure && sourcePath === "/api/appearance-presets") return;
       const status: any = /status of (\d+)/u.exec(message.text())?.[1] || "unknown";
+      const publicSourcePath: any = publicBrowserFindingPath(sourcePath);
       browserFindings.push(resourceFailure
-        ? `resource-load-error:${status}:${sourcePath}`
-        : `console-error:${sourcePath}`);
+        ? `resource-load-error:${status}:${publicSourcePath}`
+        : `console-error:${publicSourcePath}`);
     }
   });
   page.on("pageerror", () : any => browserFindings.push("pageerror"));
@@ -148,9 +152,21 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
         element.dispatchEvent(new Event("input", { bubbles: true }));
       }
     });
+    await page.waitForURL((url?: any) : any => url.hash === "#/", { timeout: 30_000 });
+    await page.locator(".dashboard-view").waitFor({ state: "visible", timeout: 30_000 });
+    return capture("console-authenticated");
+  }
+
+  async function ensureAuthenticated({ username, password }: Record<string, any>) : Promise<any> {
+    await page.goto(`${baseUrl}/#/admin/publish-upstream-service`, { waitUntil: "networkidle" });
+    if (new URL(page.url()).hash.includes("/login")) {
+      await page.locator('input[autocomplete="username"]').fill(username);
+      await page.locator('input[autocomplete="current-password"]').fill(password);
+      await page.locator("form.auth-form").getByRole("button").click();
+      await page.waitForURL((url?: any) : any => !url.hash.includes("/login"), { timeout: 30_000 });
+    }
     await gotoConsoleRoute("/admin/publish-upstream-service");
     await page.locator(".upstream-publish-layout").waitFor({ state: "visible", timeout: 30_000 });
-    return capture("console-authenticated");
   }
 
   async function loadAndPublishUpstreamService(descriptorDocument?: any) : Promise<any> {
@@ -166,18 +182,19 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     await descriptorInput.waitFor({ state: "attached", timeout: 30_000 });
     await descriptorInput.waitFor({ state: "visible", timeout: 30_000 });
     await descriptorInput.fill(JSON.stringify(descriptorDocument, null, 2));
-    await importPanel.getByRole("button", { name: /加载草稿|Load draft/u }).click();
+    await importPanel.locator('[data-action="validate-service-json"]').click();
+    const loadDraftButton: any = importPanel.locator('[data-action="load-service-draft"]');
+    await loadDraftButton.waitFor({ state: "visible", timeout: 30_000 });
+    await loadDraftButton.click();
     await page.getByText(/草稿已加载|Draft loaded/u).waitFor();
     await importPanel.locator("summary").click();
 
-    await page.getByRole("tab", { name: /基本信息|Basic/u }).click();
+    await page.getByRole("tab", { name: /基本信息|服务信息|Service information|Basic/u }).click();
     await page.locator(".publish-form").scrollIntoViewIfNeeded();
     await capture("console-upstream-basic-config");
 
     await page.getByRole("tab", { name: /高级 JSON|Advanced JSON/u }).click();
-    const operationDescriptors: any = page.getByRole("region", {
-      name: "Imported operation descriptors"
-    });
+    const operationDescriptors: any = page.locator(".operation-descriptor-preview");
     await operationDescriptors.waitFor({ state: "visible", timeout: 30_000 });
     const operationDescriptorText: any = await operationDescriptors.locator("pre").innerText();
     if (
@@ -216,6 +233,184 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     return Object.freeze({ serviceId: publishPayload.serviceId });
   }
 
+  async function configureOrganizationGovernance() : Promise<any> {
+    await gotoConsoleRoute("/admin/organization-governance");
+    const organizationView: any = page.locator(".organization-governance-layout");
+    await organizationView.waitFor({ state: "visible", timeout: 30_000 });
+    if (await organizationView.getAttribute("data-server-state") !== "published") {
+      await page.getByRole("button", { name: /^(集团|Group)$/u }).click();
+      await page.locator(".organization-governance-workspace").waitFor({ state: "visible", timeout: 30_000 });
+      await page.getByRole("button", { name: /验证有效性|Validate/u }).click();
+      await page.getByText(/服务端验证通过|Server validation passed/u).waitFor({ timeout: 30_000 });
+      const hierarchyText: any[] = await page.locator(".organization-governance-node-row small").allTextContents();
+      const tagSection: any = page.locator("section.organization-governance-roles").filter({
+        has: page.locator("#organization-tag-title")
+      });
+      const roleSection: any = page.locator("section.organization-governance-roles").filter({
+        has: page.locator("#organization-role-title")
+      });
+      const tagRows: any[] = await tagSection.locator(".organization-governance-role-list li").allTextContents();
+      const roleRows: any[] = await roleSection.locator(".organization-governance-role-list li").allTextContents();
+      const expectedNodes: any[] = [
+        "organization:group",
+        "organization:primary",
+        "organization:secondary",
+        "group:department",
+        "group:team"
+      ];
+      if (JSON.stringify(hierarchyText.map((value?: any) : any => value.trim())) !== JSON.stringify(expectedNodes) ||
+        tagRows.length !== expectedNodes.length || roleRows.length !== expectedNodes.length ||
+        expectedNodes.some((nodeId?: any) : any => !tagRows.some((row?: any) : any => row.includes(nodeId))) ||
+        !roleRows.every((row?: any) : any => /管理员|administrator/iu.test(row))) {
+        throw visualError("release_journey_api_key_organization_projection_incomplete");
+      }
+      await page.getByRole("button", { name: /^(发布|Publish)$/u }).click();
+      const publishDialog: any = page.locator(".console-confirm-dialog").last();
+      const publishConfirmationVisible: any = await publishDialog
+        .waitFor({ state: "visible", timeout: 1_500 })
+        .then(() : any => true)
+        .catch(() : any => false);
+      if (publishConfirmationVisible) {
+        await publishDialog.getByRole("button", { name: /^(发布|Publish)$/u }).click();
+      }
+      await page.getByText(/模板已发布|template published/u).waitFor({ timeout: 30_000 });
+      await page.waitForLoadState("networkidle");
+    }
+    if (!evidence.some((item?: any) : any => item.id === "console-organization-permissions")) {
+      const workspace: any = page.locator(".organization-governance-workspace");
+      if (!await workspace.isVisible()) {
+        await organizationView.getByRole("button", {
+          name: /基于已发布版本编辑|Edit from Published Version/u
+        }).click();
+        await workspace.waitFor({ state: "visible", timeout: 30_000 });
+      }
+      await page.locator(".view-content").evaluate((element?: any) : any => {
+        element.scrollTo({ top: 220, left: 0, behavior: "instant" });
+      });
+      await capture("console-organization-permissions");
+    }
+    return Object.freeze({
+      templateKey: "enterprise-group",
+      hierarchyVerified: true,
+      tagsVerified: true,
+      administratorRolesVerified: true
+    });
+  }
+
+  async function provisionApiKeyWorkload({
+    serviceId,
+    targetIds = ["codex"],
+    operationKey = "convert-full-access-debug",
+    organizationNodeId = "group:team",
+    workloadName = "Release journey PDF workload",
+    allowedTools = null,
+    toolsetIds = ["meshrix.gateway.write"],
+    capabilityIds = null,
+    permissionScopeIds = ["gateway:read", "gateway:write", "storage:read", "storage:write", "uploads:write"],
+    requestsPerMinute = 128
+  }: Record<string, any> = {}) : Promise<any> {
+    const organization: any = await configureOrganizationGovernance();
+
+    await gotoConsoleRoute("/admin/api-key-distribution");
+    const keyView: any = page.locator(".api-key-distribution-layout");
+    await keyView.waitFor({ state: "visible", timeout: 30_000 });
+    await keyView.locator(".api-key-create-card").waitFor({ state: "visible", timeout: 30_000 });
+    const field: any = (label: RegExp, selector: any = "input,textarea,select") : any =>
+      keyView.locator("label").filter({ hasText: label }).locator(selector).first();
+    const immediateTool: any = `upstream.${serviceId}.${operationKey}`;
+    const expiresAt: any = new Date(Date.now() + 60 * 60_000);
+    const localExpiresAt: any = new Date(expiresAt.getTime() - expiresAt.getTimezoneOffset() * 60_000)
+      .toISOString()
+      .slice(0, 16);
+    await field(/显示名称|Display Name|工作负载名称|Workload Name/u, "input").fill(workloadName);
+    await field(/所属层级|Owning Level|组织范围|Organization Scope/u, "select").selectOption(organizationNodeId);
+    await field(/到期时间|Expires At/u, "input").fill(localExpiresAt);
+    await field(/最高风险级别|Maximum Risk/u, "select").selectOption("medium");
+    await field(/服务 ID|Service IDs/u, "textarea").fill(serviceId);
+    await field(/能力 ID|Capability IDs/u, "textarea").fill((capabilityIds || [
+      `cap:upstream:${serviceId}:${operationKey}`
+    ]).join("\n"));
+    await field(/允许的工具|Allowed Tools/u, "textarea").fill((allowedTools || [
+      "uploads.create_session",
+      "uploads.get_session",
+      "uploads.upload_chunk",
+      "meshrix.gateway.artifacts.get",
+      immediateTool
+    ]).join("\n"));
+    await field(/工具集 ID|Toolset IDs/u, "textarea").fill(toolsetIds.join("\n"));
+    await field(/权限范围 ID|Permission Scope IDs/u, "textarea").fill(permissionScopeIds.join("\n"));
+    const connectionSection: any = keyView.locator("details.api-key-policy-section").filter({
+      hasText: /连接目标与资源|Connection Targets and Resources|连接目标与资源限制|Connection and Resource Restrictions/u
+    });
+    if (!await connectionSection.evaluate((element?: any) : any => element.open === true)) {
+      await connectionSection.locator("summary").click();
+    }
+    const targetCard: any = connectionSection.locator(".multi-choice-list-card").filter({
+      hasText: /客户端目标|Client Targets/u
+    }).first();
+    for (const targetId of targetIds) {
+      const checkbox: any = targetCard.locator(`.multi-choice-list-item[title="${targetId}"]`).first();
+      if (!(await checkbox.count())) continue;
+      if (await checkbox.getAttribute("aria-checked") !== "true"
+        && await checkbox.getAttribute("data-checked") !== "true") {
+        await checkbox.click();
+      }
+    }
+    const resourceSwitch: any = connectionSection.getByRole("switch");
+    if (await resourceSwitch.getAttribute("aria-checked") !== "true") await resourceSwitch.click();
+    const limitsSection: any = keyView.locator("details.api-key-policy-section").filter({
+      hasText: /调用限制|Call Limits|进程身份与使用限制|Process Identity and Usage Limits/u
+    });
+    if (!await limitsSection.evaluate((element?: any) : any => element.open === true)) {
+      await limitsSection.locator("summary").click();
+    }
+    await field(/每分钟调用次数|Calls per minute|每窗口请求数|Requests per Window/u, "input").fill(String(requestsPerMinute));
+    await field(/最大并发量|Maximum concurrency|最多并发操作|Maximum Concurrent Effects/u, "input").fill("2");
+
+    const createButton: any = keyView.getByRole("button", { name: /创建并显示一次|Create and Show Once/u });
+    if (await createButton.isDisabled()) throw visualError("release_journey_api_key_draft_invalid");
+    await createButton.click();
+    const createDialog: any = page.locator(".console-confirm-dialog").last();
+    await createDialog.waitFor({ state: "visible", timeout: 10_000 });
+    const responsePromise: any = page.waitForResponse((response?: any) : any => {
+      const responseUrl: any = new URL(response.url());
+      return response.request().method() === "POST" && responseUrl.origin === expectedOrigin &&
+        responseUrl.pathname === "/api/operation-permission/v1/api-keys";
+    }, { timeout: 30_000 });
+    await createDialog.getByRole("button", { name: /创建并显示一次|Create and Show Once/u }).click();
+    const createResponse: any = await responsePromise;
+    const created: any = await createResponse.json();
+    const secretOutput: any = keyView.locator("[data-one-time-secret]");
+    await secretOutput.waitFor({ state: "visible", timeout: 30_000 });
+    const apiKey: any = String(await secretOutput.textContent() || "").trim();
+    if (!createResponse.ok() || !/^mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}$/u.test(apiKey) ||
+      apiKey !== created?.apiKey || !created?.record?.keyId ||
+      created?.record?.organizationNodeId !== organizationNodeId) {
+      throw visualError("release_journey_api_key_one_time_response_invalid");
+    }
+    await keyView.getByRole("button", { name: /关闭且不再显示|Dismiss Permanently/u }).click();
+    await secretOutput.waitFor({ state: "detached", timeout: 10_000 });
+    if (!evidence.some((item?: any) : any => item.id === "console-api-key-generated")) {
+      const issuedRecord: any = keyView.locator(".api-key-record").filter({ hasText: workloadName }).first();
+      await issuedRecord.waitFor({ state: "visible", timeout: 30_000 });
+      await issuedRecord.scrollIntoViewIfNeeded();
+      await capture("console-api-key-generated", {
+        masks: [issuedRecord.locator(".api-key-metadata > div:nth-child(-n+2) dd")]
+      });
+    }
+    return Object.freeze({
+      apiKey,
+      record: Object.freeze({
+        keyId: String(created.record.keyId),
+        workloadPrincipalId: String(created.record.workloadPrincipalId),
+        organizationNodeId: String(created.record.organizationNodeId),
+        lifecycleRevision: Number(created.record.lifecycleRevision),
+        policyFingerprint: String(created.record.policyFingerprint)
+      }),
+      organization
+    });
+  }
+
   async function capturePublishedTool(serviceId?: any) : Promise<any> {
     await gotoConsoleRoute("/admin/tool-list");
     const search: any = page.getByRole("searchbox", { name: "搜索并跳转工具" });
@@ -227,57 +422,18 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     return capture("console-published-tool");
   }
 
-  async function approvePendingAuthorizations({ clientNames = ["Kimi"] }: Record<string, any> = {}) : Promise<any> {
-    await gotoConsoleRoute("/approval");
-    const cards: any[] = [];
-    for (const clientName of clientNames) {
-      const card: any = await approvalCard({
-        kindSelector: RELEASE_JOURNEY_APPROVAL_UI.authorizationCard,
-        hasText: clientName
-      });
-      await card.waitFor({ state: "visible", timeout: 30_000 });
-      cards.push(card);
+  async function captureDownstreamAgentConfigured({ installedCount = 0 }: Record<string, any> = {}) : Promise<any> {
+    if (!Number.isSafeInteger(installedCount) || installedCount <= 0) {
+      throw visualError("release_journey_visual_api_key_configuration_unverified");
     }
-    const firstCard: any = page
-      .locator(RELEASE_JOURNEY_APPROVAL_UI.authorizationCard)
-      .first();
-    await firstCard.waitFor({ state: "visible", timeout: 30_000 });
-    await expandTechnicalDetails(firstCard);
-    await resetApprovalEvidenceScroll();
-    const masks: any = cards.flatMap((card?: any) : any => protectedAuthorizationMasks(card));
-    await capture("console-token-authorization-pending", { masks });
-    for (const card of cards) {
-      await approveCard({
-        card,
-        actionSelector: RELEASE_JOURNEY_APPROVAL_UI.mcpApprove,
-        actionName:
-          /^(批准|批准本次安装|批准本次授权|Approve|Approve This Installation|Approve This Authorization)$/u,
-        confirmName:
-          /^(批准本次安装|批准本次授权|Approve This Installation|Approve This Authorization)$/u
-      });
-      await card.waitFor({ state: "hidden", timeout: 30_000 });
+    await gotoConsoleRoute("/admin/api-key-distribution");
+    const workspace: any = page.locator('[data-testid="api-key-distribution-workspace"]');
+    await workspace.waitFor({ state: "visible", timeout: 30_000 });
+    if (await page.locator("[data-one-time-secret]").count() > 0) {
+      throw visualError("release_journey_visual_credential_present");
     }
-  }
-
-  async function captureCompletedAuthorizations({ clientNames = ["Kimi"] }: Record<string, any> = {}) : Promise<any> {
-    await gotoConsoleRoute("/approval");
-    await selectApprovalStatus({
-      stableSelector: RELEASE_JOURNEY_APPROVAL_UI.allStatus,
-      name: /全部|所有|All/u
-    });
-    const cards: any[] = [];
-    for (const clientName of clientNames) {
-      const card: any = await approvalCard({
-        kindSelector: RELEASE_JOURNEY_APPROVAL_UI.authorizationCard,
-        hasText: clientName
-      });
-      await card.waitFor({ state: "visible", timeout: 30_000 });
-      cards.push(card);
-    }
-    await resetApprovalEvidenceScroll();
-    await capture("console-token-authorization-consumed", {
-      masks: cards.flatMap((card?: any) : any => protectedAuthorizationMasks(card))
-    });
+    await workspace.scrollIntoViewIfNeeded();
+    await capture("console-downstream-agent-configured");
   }
 
   async function approvePendingOperations({ toolName, expectedCount }: Record<string, any>) : Promise<any> {
@@ -301,14 +457,20 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     for (let index: any = 0; index < expectedCount; index += 1) {
       const countBefore: any = await cards.count();
       const card: any = cards.first();
-      await approveCard({
-        card,
-        actionSelector: RELEASE_JOURNEY_APPROVAL_UI.operationApprove,
-        actionName:
-          /^(批准请求|通过当前审批层|Approve Request|Approve Current Layer)$/u,
-        confirmName:
-          /^(批准请求|通过当前审批层|Approve Request|Approve Current Layer)$/u
-      });
+      try {
+        await approveCard({
+          card,
+          actionSelector: RELEASE_JOURNEY_APPROVAL_UI.operationApprove,
+          actionName:
+            /^(批准请求|通过当前审批层|Approve Request|Approve Current Layer)$/u,
+          confirmName:
+            /^(批准请求|通过当前审批层|Approve Request|Approve Current Layer)$/u
+        });
+      } catch (error: any) {
+        error.code = `${String(error?.code || "release_journey_visual_approval_failed")}_item_${index + 1}`;
+        error.message = error.code;
+        throw error;
+      }
       const deadline: any = Date.now() + 30_000;
       while (Date.now() < deadline && await cards.count() >= countBefore) {
         await page.waitForTimeout(100);
@@ -342,8 +504,10 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     await gotoConsoleRoute("/admin/tool-stats");
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForURL((url?: any) : any => url.hash === "#/admin/tool-stats");
+    const refreshButton: any = page.locator(".topbar button.tool-button-icon").first();
+    await refreshButton.waitFor({ state: "visible", timeout: 30_000 });
+    await refreshButton.click();
     await page.locator(".tool-audit-table").waitFor({ state: "visible", timeout: 30_000 });
-    await page.locator(".topbar button.tool-button-icon").click();
     const rows: any = page.locator(".tool-audit-table .job-row");
     const deadline: any = Date.now() + 30_000;
     while (Date.now() < deadline && await rows.count() < minimumRowCount) {
@@ -623,8 +787,35 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       ? stableAction
       : card.getByRole("button", { name: actionName }).first();
     await action.waitFor({ state: "visible", timeout: 30_000 });
+    const responsePromise: any = page.waitForResponse((response?: any) : any => {
+      const responseUrl: any = new URL(response.url());
+      return response.request().method() === "POST" && responseUrl.origin === expectedOrigin &&
+        /\/(?:authorization\/requests|pending-operations)\/[^/]+\/resolve$/u.test(responseUrl.pathname);
+    }, { timeout: 30_000 });
     await action.click();
     await confirmApprovalIfPresent(confirmName);
+    const response: any = await responsePromise;
+    if (!response.ok()) {
+      let publicCode: any = "unknown";
+      try {
+        const responseText: any = await response.text();
+        const payload: any = responseText ? JSON.parse(responseText) : {};
+        publicCode = String(
+          payload?.error?.code ||
+          (typeof payload?.error === "string" && /\b[a-z][a-z0-9_]{3,80}\b/iu.exec(payload.error)?.[0]) ||
+          payload?.reasonCode ||
+          payload?.code ||
+          "unknown"
+        ).replace(/[^a-z0-9_]+/giu, "_").slice(0, 80) || "unknown";
+      } catch {}
+      if (publicCode === "unknown") {
+        const requestHeaders: any = response.request().headers();
+        publicCode = `unknown_csrf_${Boolean(requestHeaders["x-meshrix-csrf"])}_confirm_${Boolean(requestHeaders["x-meshrix-safety-confirm"])}`;
+      }
+      throw visualError(
+        `release_journey_visual_approval_failed_http_${response.status()}_${publicCode}`
+      );
+    }
   }
 
   async function confirmApprovalIfPresent(confirmName?: any) : Promise<any> {
@@ -648,10 +839,12 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
 
   return {
     login,
+    ensureAuthenticated,
     loadAndPublishUpstreamService,
+    configureOrganizationGovernance,
+    provisionApiKeyWorkload,
     capturePublishedTool,
-    approvePendingAuthorizations,
-    captureCompletedAuthorizations,
+    captureDownstreamAgentConfigured,
     approvePendingOperations,
     captureCompletedOperations,
     captureDownstreamMcpCalls,
@@ -716,14 +909,6 @@ export async function validateReleaseJourneyVisualEvidence({
     source: "meshrix-web-console",
     visualEvidencePassed: true
   });
-}
-
-function protectedAuthorizationMasks(card?: any) : any {
-  return [
-    card.locator(".approval-request-card-meta span").filter({ hasText: /验证码/u }),
-    card.locator(".approval-request-card-meta span").filter({ hasText: /^请求\s/u }),
-    card.locator(".approval-request-card-meta span").filter({ hasText: /进程密钥指纹/u })
-  ];
 }
 
 function isUsableRectangle(rectangle?: any) : any {

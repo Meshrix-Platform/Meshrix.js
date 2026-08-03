@@ -395,7 +395,7 @@ async function main() : Promise<any> {
   const owner: any = await auth.ensureInitialOwner();
   const otherPassword: any = "other-admin-fixture-credential";
   const viewerPassword: any = "viewer-fixture-credential";
-  await auth.createUser({ username: "other.admin", password: otherPassword, roleId: "admin" });
+  await auth.createUser({ username: "other.maintainer", password: otherPassword, roleId: "maintainer" });
   await auth.createUser({ username: "read.viewer", password: viewerPassword, roleId: "viewer" });
   await auth.close();
   tagStore.close();
@@ -409,7 +409,7 @@ async function main() : Promise<any> {
   });
   servers.push(server);
   const ownerSession: any = await login(server.url, owner.username, owner.password);
-  const otherSession: any = await login(server.url, "other.admin", otherPassword);
+  const otherSession: any = await login(server.url, "other.maintainer", otherPassword);
   const viewerSession: any = await login(server.url, "read.viewer", viewerPassword);
   const collection: any = "/api/gateway/v1/services";
   const create: any = command("create", {

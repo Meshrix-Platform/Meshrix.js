@@ -197,7 +197,7 @@ try {
       user: {
         userId: "maintenance-agent-verifier",
         username: "maintenance-agent-verifier",
-        roleId: "admin"
+        roleId: "maintainer"
       }
     }
   };

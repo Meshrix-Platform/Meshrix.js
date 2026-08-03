@@ -1,83 +1,53 @@
-import fs from "node:fs";
 import path from "node:path";
 import {
+  PACTIUM_MANIFEST_FILE as PACTIUM_PACKAGE_MANIFEST_FILE,
+  PACTIUM_PACKAGE_VERSION,
+  PACTIUM_PROTOCOL,
+  PACTIUM_SCHEMA_VERSION,
+  PACTIUM_SQLITE_FILE as PACTIUM_PACKAGE_SQLITE_FILE,
+  PROTOCOL_STORAGE_CATEGORY,
+  assertCurrentDataDir,
+  classifyProtocolStorageArtifact,
   createPactium,
   createStoragePort,
   createVerifiableIndexEngine,
-  PACTIUM_PACKAGE_VERSION,
-  PACTIUM_PROTOCOL,
-  PACTIUM_SCHEMA_VERSION
+  inspectDataDir
 } from "pactium";
 import { ServerConfig } from "#meshrix/server-config";
 import { reconcileStorageRestoreTransactionsSync } from "../../storage/restore-transaction.ts";
 import { acquireStorageRuntimeLease } from "../../storage/storage-lifecycle-lock.ts";
 
-export const PACTIUM_MANIFEST_FILE: any = "pactium-manifest.json";
-export const PACTIUM_SQLITE_FILE: any = "pactium.sqlite";
-export const PROTOCOL_SUBSTRATE_STORAGE_CATEGORY: any = "protocol-substrate";
+/** @deprecated Use `PACTIUM_MANIFEST_FILE` from `pactium`. Removal: next major (Meshrix 1.0.0). */
+export const PACTIUM_MANIFEST_FILE: any = PACTIUM_PACKAGE_MANIFEST_FILE;
+/** @deprecated Use `PACTIUM_SQLITE_FILE` from `pactium`. Removal: next major (Meshrix 1.0.0). */
+export const PACTIUM_SQLITE_FILE: any = PACTIUM_PACKAGE_SQLITE_FILE;
+/** @deprecated Use `PROTOCOL_STORAGE_CATEGORY` from `pactium`. Removal: next major (Meshrix 1.0.0). */
+export const PROTOCOL_SUBSTRATE_STORAGE_CATEGORY: any = PROTOCOL_STORAGE_CATEGORY;
 
+/**
+ * @deprecated Use `classifyProtocolStorageArtifact` from `pactium`. Removal: next major (Meshrix 1.0.0).
+ */
 export function classifyProtocolSubstrateStorageArtifact(relativePath: any = "") : any {
-  const value: any = String(relativePath || "").replace(/\\/g, "/");
-  if (
-    value === PACTIUM_MANIFEST_FILE ||
-    value === PACTIUM_SQLITE_FILE ||
-    value === `${PACTIUM_SQLITE_FILE}-wal` ||
-    value === `${PACTIUM_SQLITE_FILE}-shm` ||
-    value.startsWith("cas/") ||
-    value.startsWith("protocol/")
-  ) {
-    return PROTOCOL_SUBSTRATE_STORAGE_CATEGORY;
-  }
-  return "";
-}
-
-function readJsonSync(filePath?: any) : any {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
-    return null;
-  }
+  return classifyProtocolStorageArtifact(relativePath);
 }
 
 export function resolveMeshrixPactiumDataDir(userDataPath: any = "") : any {
   return path.resolve(String(userDataPath || ServerConfig.getDataDir()));
 }
 
+/**
+ * @deprecated Use `inspectDataDir` from `pactium` with an explicit `dataDir`. Removal: next major (Meshrix 1.0.0).
+ */
 export function inspectPactiumFreshDataDir({ userDataPath = "" }: Record<string, any> = {}) : any {
-  const dataDir: any = resolveMeshrixPactiumDataDir(userDataPath);
-  const manifestPath: any = path.join(dataDir, PACTIUM_MANIFEST_FILE);
-  const manifest: any = readJsonSync(manifestPath);
-  const findings: any[] = [];
-
-  if (manifest && (manifest.protocol !== PACTIUM_PROTOCOL || manifest.schema !== PACTIUM_SCHEMA_VERSION)) {
-    findings.push({
-      kind: "non-current-pactium-manifest",
-      path: manifestPath,
-      detail: `${manifest.protocol || "unknown"}:${manifest.schema || "unknown"}`
-    });
-  }
-
-  return {
-    ok: findings.length === 0,
-    dataDir,
-    protocol: PACTIUM_PROTOCOL,
-    schema: PACTIUM_SCHEMA_VERSION,
-    packageVersion: PACTIUM_PACKAGE_VERSION,
-    findings
-  };
+  return inspectDataDir({ dataDir: resolveMeshrixPactiumDataDir(userDataPath) });
 }
 
+/**
+ * @deprecated Use `assertCurrentDataDir` from `pactium` with an explicit `dataDir`. Removal: next major (Meshrix 1.0.0).
+ */
 export function assertPactiumFreshDataDir(input: Record<string, any> = {}) : any {
-  const result: any = inspectPactiumFreshDataDir(input);
-  if (result.ok) {
-    return result;
-  }
-  const detail: any = result.findings
-    .map((finding?: any) : any => `${finding.kind}: ${finding.path}`)
-    .join("; ");
-  throw new Error(
-    `Pactium ${PACTIUM_PACKAGE_VERSION} requires a current Pactium data directory (${detail}).`
-  );
+  const dataDir: any = resolveMeshrixPactiumDataDir(input.userDataPath || input.dataDir || "");
+  return assertCurrentDataDir({ dataDir });
 }
 
 export function createMeshrixPactiumRuntime({
@@ -104,7 +74,7 @@ export function createMeshrixPactiumRuntime({
   let resolvedIndexEngine: any;
   try {
     if (runtimeLease) reconcileStorageRestoreTransactionsSync(resolvedDataDir);
-    assertPactiumFreshDataDir({ userDataPath: resolvedDataDir });
+    assertCurrentDataDir({ dataDir: resolvedDataDir });
     resolvedStorage = storage || createStoragePort({
       dataDir: resolvedDataDir,
       inMemory,

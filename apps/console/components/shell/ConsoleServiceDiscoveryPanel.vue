@@ -15,7 +15,7 @@ import { createServerAddressRow } from "./service-discovery/server-address-rows"
 import type { ServerAddressRow } from "./service-discovery/types";
 
 const {
-  busyKey,
+  isBusy,
   consoleState,
   discoveryDraft,
   error,
@@ -267,7 +267,7 @@ watch(
     </section>
 
     <ConsoleServiceDiscoverySaveBar
-      :saving="busyKey === 'discovery'"
+      :saving="isBusy('discovery')"
       :save-label="msg.drawer.saveDiscovery"
       :saving-label="msg.drawer.saving"
       :message="localSaveMessage"

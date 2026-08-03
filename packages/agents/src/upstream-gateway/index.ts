@@ -91,7 +91,8 @@ export function createUpstreamGatewayRegistry({
   securityPermissions = null,
   mcpSessionManager = null,
   artifactTransitPort = null,
-  secretKeyProvider = null
+  secretKeyProvider = null,
+  claimProtectedSinkAttempt = claimFinalProtectedSinkAttempt
 }: Record<string, any> = {}) : any {
   const persistenceEnabled: any = Boolean(userDataPath);
   const filePath: any = persistenceEnabled ? runtimePath(userDataPath) : "";
@@ -568,7 +569,7 @@ export function createUpstreamGatewayRegistry({
       : operation.timeoutMs;
   }
 
-  async function requestBodySourceFor(operation?: any, input?: any, subject?: any) : Promise<any> {
+  async function requestBodySourceFor(operation?: any, input?: any, subject?: any, readAccess: Record<string, any> = {}) : Promise<any> {
     const transport: any = compilePayloadTransport(operation);
     const requestPolicy: any = transport.request;
     if (requestPolicy.mode === "artifact_body") {
@@ -577,6 +578,7 @@ export function createUpstreamGatewayRegistry({
         reference: argumentsValue[requestPolicy.artifactArgument],
         artifactPort: requireArtifactTransitPort(),
         subject,
+        readAccess,
         maxBytes: requestPolicy.maxBytes
       });
     }
@@ -586,6 +588,7 @@ export function createUpstreamGatewayRegistry({
         fields: requestArguments(input),
         artifactPort: requireArtifactTransitPort(),
         subject,
+        readAccess,
         maxBytes: requestPolicy.maxBytes
       });
     }
@@ -633,9 +636,47 @@ export function createUpstreamGatewayRegistry({
     const targetUrl: any = safeTargetUrl(service, operation, input, endpoint);
     const method: any = configuredHttpMethod(operation);
     const credentials: any = await credentialMaterialFor(service, operation, { targetUrl });
+    const sinkInput: any = clone(input);
+    const providerInput: any = input?.[PROJECTED_PROVIDER_INPUT];
+    const sinkInputDigest: any = digestFinalProtectedSinkInput(
+      providerInput ? clone(providerInput) : sinkInput
+    );
+    const targetFacts: any = structuredTargetFacts({
+      service,
+      operation,
+      input: sinkInput,
+      endpoint,
+      inputDigest: sinkInputDigest
+    });
+    const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
+    if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) {
+      finalEffectAuthorityRequired();
+    }
+    const governedExecutionReceipt: any = await claimProtectedSinkAttempt({
+      attempt: finalProtectedSinkPermit,
+      targetSelector: targetFacts.targetSelector,
+      effect: targetFacts.effect,
+      resourceRevision: targetFacts.resourceRevision,
+      resolveCurrentResource: async () : Promise<any> => {
+        const currentFacts: any = currentStructuredTargetFacts({
+          serviceId: service.serviceId,
+          operationKey: operation.operationKey,
+          endpointId: endpoint?.endpointId || "primary",
+          input: sinkInput,
+          inputDigest: sinkInputDigest
+        });
+        return Object.freeze({
+          effect: currentFacts.effect,
+          resourceRevision: currentFacts.resourceRevision
+        });
+      }
+    });
     const source: any = ["GET", "HEAD"].includes(method)
       ? null
-      : await requestBodySourceFor(operation, input, subject);
+      : await requestBodySourceFor(operation, input, subject, {
+          governedExecutionReceipt,
+          signal: options.signal || null
+        });
     const headers: Record<string, any> = {
       ...configuredHeaders(service),
       ...credentials.headers,
@@ -979,7 +1020,13 @@ export function createUpstreamGatewayRegistry({
     getService(serviceId?: any) : any {
       return publicService(requireService(serviceId));
     },
-    evaluateProjectedOperationAudience({ grant = null, tool = null, purpose = "discovery" }: Record<string, any> = {}) : any {
+    evaluateProjectedOperationAudience({
+      grant = null,
+      restriction = null,
+      subject = null,
+      tool = null,
+      purpose = "discovery"
+    }: Record<string, any> = {}) : any {
       if (tool?.upstreamProjectedOperation !== true) {
         return Object.freeze({
           allowed: true,
@@ -992,6 +1039,8 @@ export function createUpstreamGatewayRegistry({
       const service: any = services.get(serviceId) || null;
       return evaluateAudienceDecision({
         grant,
+        restriction,
+        subject,
         service,
         tagStore: resolvedTagStore,
         purpose,
@@ -1009,7 +1058,13 @@ export function createUpstreamGatewayRegistry({
         }
       });
     },
-    evaluateDiscoveredMcpToolAudience({ grant = null, tool = null, purpose = "discovery" }: Record<string, any> = {}) : any {
+    evaluateDiscoveredMcpToolAudience({
+      grant = null,
+      restriction = null,
+      subject = null,
+      tool = null,
+      purpose = "discovery"
+    }: Record<string, any> = {}) : any {
       const meta: any = object(tool?._meta);
       if (meta.upstreamMcp !== true) {
         return Object.freeze({
@@ -1022,6 +1077,8 @@ export function createUpstreamGatewayRegistry({
       const service: any = services.get(text(meta.serviceId)) || null;
       return evaluateAudienceDecision({
         grant,
+        restriction,
+        subject,
         service,
         tagStore: resolvedTagStore,
         purpose,

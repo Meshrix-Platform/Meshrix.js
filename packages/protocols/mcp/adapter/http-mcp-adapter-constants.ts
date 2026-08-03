@@ -12,7 +12,6 @@ export {
 
 export const MCP_PROTOCOL_VERSION: any = "2025-06-18";
 export const DEFAULT_TIMEOUT_MS: any = 300_000;
-export const MCP_LOCAL_AUTHORIZATION_MAX_BODY_BYTES: any = 128 * 1024;
 export const MCP_INTERFACE_VERSION: any = "v0.0.1:mcp:interface-1";
 export const MCP_TOOLSET_VERSION: any = "2026-05-25.1";
 export const MCP_DISCOVERY_TOOL_NAME: any = "meshrix.discovery";

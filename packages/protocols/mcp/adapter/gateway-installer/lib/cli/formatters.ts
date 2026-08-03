@@ -45,8 +45,8 @@ export function formatTargetInstallLine(target?: any, item: Record<string, any> 
     lines.push(`      Reason: ${item.error || "Install failed."}`);
     return lines;
   }
-  if (item.tokenSource || item.tokenPrefix) {
-    lines.push(`      Auth: ${item.tokenSource || "provided"}${item.tokenPrefix ? ` (${item.tokenPrefix})` : ""}`);
+  if (item.tokenSource) {
+    lines.push(`      Auth: ${item.tokenSource}`);
   }
   if (item.httpVerification) {
     lines.push(

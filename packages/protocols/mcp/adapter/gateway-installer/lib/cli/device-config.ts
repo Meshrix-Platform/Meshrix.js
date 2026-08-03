@@ -15,7 +15,7 @@ import {
   supportedTargetDetails
 } from "./constants.ts";
 import { option, targetInstallMode } from "./basic-utils.ts";
-import { discoverMeshrixHub, explicitBaseUrl, publishLaunchctlEnv } from "./discovery.ts";
+import { discardConfiguredApiKeyEnvironment, discoverMeshrixHub, explicitBaseUrl, publishLaunchctlEnv } from "./discovery.ts";
 import {
   deviceDiscoveryEnv,
   discoveryRegistryPath,
@@ -23,7 +23,6 @@ import {
   writeJson
 } from "./device-discovery-registry.ts";
 import { githubOneLineMcpInstallCommand, run, shellQuote } from "./connector-process.ts";
-import { redactToken } from "./installer-output-safety.ts";
 
 export function buildDeviceHubManifest({
   baseUrl,
@@ -148,8 +147,9 @@ export function buildDeviceHubManifest({
           priorityTargets: [...PRIORITY_INSTALL_TARGETS]
         },
         auth: {
-          type: "device-authorization-or-provided-token",
-          acceptedHeaders: ["Authorization: Bearer <token>", "X-Meshrix-Api-Key", "X-Meshrix-MCP-Target"],
+          type: "api-key",
+          input: "protected-stdin-or-environment",
+          acceptedHeaders: ["X-Meshrix-Api-Key", "X-Meshrix-MCP-Target"],
           tokenEnv
         },
         targets
@@ -171,7 +171,7 @@ export async function publishDeviceHubManifest({ baseUrl, targets, tokenEnv = DE
   };
 }
 
-export async function writeDeviceDiscovery({ baseUrl, installed, token, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = true, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
+export async function writeDeviceDiscovery({ baseUrl, installed, tokenEnv = DEFAULT_TOKEN_ENV, publishEnv = true, discoveryPath = discoveryRegistryPath() }: Record<string, any>) : Promise<any> {
   const manifestPath: any = discoveryPath;
   const existingManifest: any = await readJson(manifestPath, {});
   const existingServer: any = existingManifest?.servers?.[MCP_SERVER_NAME] || {};
@@ -187,8 +187,7 @@ export async function writeDeviceDiscovery({ baseUrl, installed, token, tokenEnv
           }
         : {
           installMode: installed[target].installMode,
-          status: "installed",
-          tokenPrefix: installed[target].tokenPrefix || redactToken(token)
+          status: "installed"
         }
       : existingTargets[target] || {
           installMode: "supported",
@@ -347,6 +346,7 @@ export async function resetServerConfig({ options, publishEnv = true }: Record<s
 }
 
 export async function serverConfigCommand(options?: any) : Promise<any> {
+  discardConfiguredApiKeyEnvironment(options);
   const discoveryPath: any = discoveryRegistryPath(options);
   if (options.reset) {
     return resetServerConfig({ options, publishEnv: !options["no-env"] });

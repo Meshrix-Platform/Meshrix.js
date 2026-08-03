@@ -78,8 +78,6 @@ export const MESHRIX_MCP_URL_ENV: any = "MESHRIX_MCP_URL";
 export const MESHRIX_MCP_DISCOVERY_URL_ENV: any = "MESHRIX_MCP_DISCOVERY_URL";
 export const MESHRIX_MCP_DISCOVERY_FILE_ENV: any = "MESHRIX_MCP_DISCOVERY_FILE";
 export const DEFAULT_DISCOVERY_REGISTRY: any = path.join(os.homedir(), ".meshrix", "mcp", "servers.json");
-export const PROCESS_IDENTITY_CANONICAL_REQUEST_VERSION: any = "MESHRIX-PROCESS-IDENTITY-V1";
-export const CLIENT_FINGERPRINT_VERSION: any = "v0.0.1:client:fingerprint-1";
 export const DEFAULT_SCAN_PORTS: any[] = [7228, 7229, 7230, 7231, 7232, 7233, 7234, 7235, 7236, 7237];
 export const TARGET_ALIASES: any = new Map<any, any>([
   ["open-code", "opencode"]

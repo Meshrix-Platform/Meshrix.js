@@ -1,12 +1,21 @@
 <script setup lang="ts">
-import { ref, reactive } from "vue";
+import { onMounted, reactive, ref } from "vue";
+import { useRoute } from "vue-router";
+import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
-import PublishServiceListPanel from "./upstream-service-publish/PublishServiceListPanel.vue";
 import PublishServiceForm from "./upstream-service-publish/PublishServiceForm.vue";
 import PortableServiceImportPanel from "./upstream-service-publish/PortableServiceImportPanel.vue";
-import type { PortableUpstreamServiceImport } from "@meshrix/contracts/upstream-service-publishing";
+import {
+  UPSTREAM_SERVICE_DESCRIPTOR_FIELDS,
+  type PortableUpstreamServiceImport,
+} from "@meshrix/contracts/upstream-service-publishing";
 import type { PublishDescriptorForm } from "./upstream-service-publish/publish-form-model";
 import { confirmConsoleAction } from "../../composables/console-browser-effects";
+import {
+  readBrowserLocalStorageItem,
+  removeBrowserLocalStorageItem,
+  writeBrowserLocalStorageItem,
+} from "../../lib/browser-window";
 import {
   createUpstreamService,
   replaceUpstreamService,
@@ -17,17 +26,27 @@ import {
   getPublishedService,
   waitForUpstreamServicePublication,
   checkUpstreamServiceRuntimeHealth,
-  type PublishedServiceSummary,
   type UpstreamServiceDescriptor,
   type UpstreamServiceRuntimeHealth,
 } from "../../lib/upstream-service-publish-client";
 
 defineOptions({ name: "UpstreamServicePublishView" });
 
+const LOCAL_DRAFT_KEY = "meshrix.console.upstream-service-publish-draft";
+const LOCAL_DRAFT_SCHEMA_VERSION = "v0.0.1:console:upstream-service-publish-draft-1";
+const LOCAL_DRAFT_MAX_BYTES = 256 * 1024;
+const formEditorFields = [
+  "serviceKey", "operationKey", "method", "path", "risk",
+  "requestRepresentationMode", "responseRepresentationMode", "requestMaxBytes", "responseMaxBytes",
+  "requestMediaTypes", "responseMediaTypes",
+  "credentialMode", "credentialSelection", "savedCredentialOptions",
+] as const;
+const localDraftFields = [...new Set([...UPSTREAM_SERVICE_DESCRIPTOR_FIELDS, ...formEditorFields])];
+
+const route = useRoute();
 const loading = ref(false);
 const error = ref("");
 const status = ref("");
-const services = ref<PublishedServiceSummary[]>([]);
 const setRevision = ref(0);
 const selectedServiceId = ref("");
 const selectedServiceRevision = ref(0);
@@ -52,21 +71,84 @@ function emptyForm(): PublishDescriptorForm {
   responseMaxBytes: "",
   requestMediaTypes: "",
   responseMediaTypes: "",
-  referenceType: "",
-  referenceValue: "",
-  referenceRevision: "",
-  referenceUse: "",
+  credentialMode: "none",
+  credentialSelection: "",
+  savedCredentialOptions: [],
   };
 }
 
 const form = reactive<PublishDescriptorForm>(emptyForm());
+
+function isSafeDraftValue(value: unknown, depth = 0): boolean {
+  if (depth > 20) return false;
+  if (value === null || typeof value === "string" || typeof value === "boolean") return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.length <= 1_000 && value.every((entry: unknown) => isSafeDraftValue(entry, depth + 1));
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  return keys.length <= 1_000 && keys.every((key: string) =>
+    !["__proto__", "prototype", "constructor"].includes(key) && isSafeDraftValue(record[key], depth + 1)
+  );
+}
+
+function localDraftFormSnapshot(): Record<string, unknown> {
+  return Object.fromEntries(localDraftFields
+    .filter((field: string) => Object.prototype.hasOwnProperty.call(form, field))
+    .map((field: string) => [field, (form as Record<string, unknown>)[field]]));
+}
+
+function readLocalDraft(): { serviceId: string; form: Record<string, unknown> } | null {
+  const serialized = readBrowserLocalStorageItem(LOCAL_DRAFT_KEY);
+  if (!serialized) return null;
+  if (serialized.length > LOCAL_DRAFT_MAX_BYTES) throw new Error("Saved browser draft is too large.");
+  const draft = JSON.parse(serialized) as Record<string, unknown>;
+  if (
+    draft.schemaVersion !== LOCAL_DRAFT_SCHEMA_VERSION ||
+    typeof draft.serviceId !== "string" ||
+    !draft.form || typeof draft.form !== "object" || Array.isArray(draft.form) ||
+    !isSafeDraftValue(draft.form)
+  ) {
+    throw new Error("Saved browser draft has an invalid format.");
+  }
+  const storedForm = draft.form as Record<string, unknown>;
+  return {
+    serviceId: draft.serviceId,
+    form: Object.fromEntries(localDraftFields
+      .filter((field: string) => Object.prototype.hasOwnProperty.call(storedForm, field))
+      .map((field: string) => [field, storedForm[field]])),
+  };
+}
+
+function clearLocalDraft() {
+  removeBrowserLocalStorageItem(LOCAL_DRAFT_KEY);
+}
+
+function saveLocalDraft() {
+  error.value = "";
+  try {
+    const serialized = JSON.stringify({
+      schemaVersion: LOCAL_DRAFT_SCHEMA_VERSION,
+      serviceId: selectedServiceId.value,
+      form: localDraftFormSnapshot(),
+    });
+    if (serialized.length > LOCAL_DRAFT_MAX_BYTES) {
+      throw new Error("The form is too large to save in this browser.");
+    }
+    if (!writeBrowserLocalStorageItem(LOCAL_DRAFT_KEY, serialized)) {
+      throw new Error("Browser storage is unavailable.");
+    }
+    status.value = "Draft saved in this browser.";
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : "Failed to save the browser draft.";
+  }
+}
 
 async function refreshServices() {
   loading.value = true;
   error.value = "";
   try {
     const result = await listPublishedServices();
-    services.value = result.services || [];
     setRevision.value = result.setRevision;
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to list services.";
@@ -91,6 +173,9 @@ function loadImportedDraft(document: PortableUpstreamServiceImport) {
   Object.assign(form, document.descriptor);
   form.operations = [...(document.descriptor.operations || [])];
   form.references = [...(document.descriptor.references || [])];
+  form.savedCredentialOptions = [...form.references];
+  form.credentialMode = form.references.length ? "saved" : "none";
+  form.credentialSelection = form.references.length ? "0" : "";
   status.value = "Draft loaded. Review it, then select Publish.";
 }
 
@@ -105,6 +190,9 @@ async function selectService(serviceId: string) {
     setRevision.value = result.setRevision;
     Object.assign(form, result.service.descriptor || {});
     form.references = [...result.service.references];
+    form.savedCredentialOptions = [...form.references];
+    form.credentialMode = form.references.length ? "saved" : "none";
+    form.credentialSelection = form.references.length ? "0" : "";
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : "Failed to load service.";
   } finally {
@@ -112,12 +200,34 @@ async function selectService(serviceId: string) {
   }
 }
 
+function applyLocalDraftForm(draftForm: Record<string, unknown>) {
+  const hasCredentialEditorState = Object.prototype.hasOwnProperty.call(draftForm, "credentialMode") ||
+    Object.prototype.hasOwnProperty.call(draftForm, "savedCredentialOptions");
+  Object.assign(form, draftForm);
+  if (!hasCredentialEditorState) {
+    form.savedCredentialOptions = [...(form.references || [])];
+    form.credentialMode = form.references?.length ? "saved" : "none";
+    form.credentialSelection = form.references?.length ? "0" : "";
+  }
+}
+
+async function restoreLocalDraft(draft: { serviceId: string; form: Record<string, unknown> }) {
+  if (draft.serviceId) {
+    await selectService(draft.serviceId);
+    if (selectedServiceId.value !== draft.serviceId) return;
+  } else {
+    resetForm();
+  }
+  applyLocalDraftForm(draft.form);
+  status.value = "Draft restored from this browser.";
+}
+
 function descriptorPayload(): UpstreamServiceDescriptor {
   const excluded = new Set([
     "serviceKey", "operationKey", "method", "path", "risk",
     "requestRepresentationMode", "responseRepresentationMode", "requestMaxBytes", "responseMaxBytes",
     "requestMediaTypes", "responseMediaTypes",
-    "referenceType", "referenceValue", "referenceRevision", "referenceUse"
+    "credentialMode", "credentialSelection", "savedCredentialOptions"
   ]);
   return Object.fromEntries(Object.entries(form).filter(([key, value]: readonly any[]) =>
     !excluded.has(key) && value !== undefined && value !== ""
@@ -126,11 +236,15 @@ function descriptorPayload(): UpstreamServiceDescriptor {
 
 async function publishService() {
   if (!selectedServiceId.value && !form.serviceKey.trim()) {
-    error.value = "Service key is required.";
+    error.value = "Service identifier is required.";
     return;
   }
   if (!form.serviceProtocol) {
     error.value = "Protocol must be selected explicitly.";
+    return;
+  }
+  if (form.credentialMode === "saved" && !form.references?.length) {
+    error.value = "Select a saved credential before publishing, or choose no authentication.";
     return;
   }
   loading.value = true;
@@ -151,6 +265,7 @@ async function publishService() {
     selectedServiceId.value = result.serviceId;
     selectedServiceRevision.value = result.serviceRevision;
     setRevision.value = result.setRevision;
+    clearLocalDraft();
     status.value = "Service accepted; waiting for server publication.";
     const published = await waitForUpstreamServicePublication(result.serviceId);
     selectedServiceRevision.value = published.service.serviceRevision;
@@ -210,6 +325,7 @@ async function removeSelected() {
   error.value = "";
   try {
     await removeUpstreamService(selectedServiceId.value, selectedServiceRevision.value, setRevision.value);
+    clearLocalDraft();
     resetForm();
     status.value = "Service removed.";
     await refreshServices();
@@ -220,19 +336,35 @@ async function removeSelected() {
   }
 }
 
-refreshServices();
+onMounted(async () => {
+  await refreshServices();
+  const serviceId = String(route.query.serviceId || "").trim();
+  let draft: ReturnType<typeof readLocalDraft> = null;
+  try {
+    draft = readLocalDraft();
+  } catch (e: unknown) {
+    clearLocalDraft();
+    error.value = e instanceof Error ? e.message : "Saved browser draft could not be restored.";
+  }
+  if (serviceId) {
+    await selectService(serviceId);
+    if (draft?.serviceId === serviceId && selectedServiceId.value === serviceId) {
+      applyLocalDraftForm(draft.form);
+      status.value = "Draft restored from this browser.";
+    }
+    return;
+  }
+  if (draft) await restoreLocalDraft(draft);
+});
+
+usePageRefreshHandler(
+  (detail: any) => detail.viewId === "admin" && detail.adminView === "upstreamServicePublish",
+  refreshServices,
+);
 </script>
 
 <template>
   <section class="upstream-publish-layout">
-    <header class="publish-toolbar">
-      <button class="table-action" type="button" :disabled="loading" @click="refreshServices">
-        {{ loading ? "加载中" : "刷新" }}
-      </button>
-      <button class="table-action" type="button" @click="resetForm">新建服务</button>
-      <span class="toolbar-count" aria-live="polite"><strong>{{ services.length }}</strong> 个已发布服务</span>
-    </header>
-
     <ConsoleInlineAlert v-if="error" tone="danger">{{ error }}</ConsoleInlineAlert>
     <ConsoleInlineAlert v-if="status" :tone="healthResult && healthResult.ok !== true ? 'danger' : 'success'">{{ status }}</ConsoleInlineAlert>
     <section v-if="healthResult" class="health-result" aria-live="polite">
@@ -246,15 +378,11 @@ refreshServices();
     />
 
     <main class="publish-grid">
-      <PublishServiceListPanel
-        :services="services"
-        :selected-service-id="selectedServiceId"
-        @select="selectService"
-      />
       <PublishServiceForm
         :form="form"
         :selected-service-id="selectedServiceId"
         :loading="loading"
+        @save="saveLocalDraft"
         @publish="publishService"
         @disable="disableSelected"
         @republish="republishSelected"
@@ -271,20 +399,7 @@ refreshServices();
   gap: 1rem;
   height: 100%;
 }
-.publish-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-.toolbar-count {
-  margin-left: auto;
-  font-size: 0.85rem;
-  opacity: 0.7;
-}
 .publish-grid {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 1.5rem;
   flex: 1;
   min-height: 0;
 }
@@ -300,18 +415,4 @@ refreshServices();
 .health-result h2 { margin: 0 0 0.5rem; font-size: 0.95rem; }
 .health-result pre { margin: 0; overflow-x: auto; font-size: 0.8rem; }
 
-@media (max-width: 900px) {
-  .publish-toolbar {
-    flex-wrap: wrap;
-  }
-
-  .toolbar-count {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
-
-  .publish-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 </style>

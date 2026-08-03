@@ -59,9 +59,10 @@ export async function createArtifactBodySource({
   reference,
   artifactPort,
   subject,
+  readAccess = {},
   maxBytes
 }: Record<string, any> = {}) : Promise<any> {
-  const source: any = await artifactPort.openRead(String(reference || "").trim(), subject, "upstream-request");
+  const source: any = await artifactPort.openRead(String(reference || "").trim(), subject, "upstream-request", null, readAccess);
   if (Number(source.metadata.byteLength || 0) > Number(maxBytes || 0)) {
     throw payloadRepresentationError("request_body_too_large", "Artifact request body exceeds its published limit.", 413);
   }
@@ -79,6 +80,7 @@ export async function createMultipartBodyStream({
   fields,
   artifactPort,
   subject,
+  readAccess = {},
   maxBytes
 }: Record<string, any> = {}) : Promise<any> {
   const input: any = plainObject(fields);
@@ -103,7 +105,7 @@ export async function createMultipartBodyStream({
       throw payloadRepresentationError("payload_mapping_unsafe", `Required artifact argument ${declaration.argument} is missing.`);
     }
     for (const reference of references) {
-      const source: any = await artifactPort.openRead(reference, subject, "upstream-request");
+      const source: any = await artifactPort.openRead(reference, subject, "upstream-request", null, readAccess);
       parts.push(Object.freeze({
         header: filePartHeader(boundary, declaration.partName, source.metadata),
         byteLength: Number(source.metadata.byteLength || 0),

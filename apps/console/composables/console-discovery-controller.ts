@@ -6,7 +6,7 @@ import { emptyDiscovery } from "./console-defaults";
 
 type ConsoleDiscoveryControllerOptions = {
   applyRemoteConsoleDraftUpdate: (update: () => void) => void;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   isApplyingRemoteConsoleDrafts: () => boolean;
   refreshState: (options?: RefreshStateOptions) => Promise<unknown>;
@@ -63,7 +63,7 @@ export function createConsoleDiscoveryController(
     } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存服务发现配置失败。";
-      options.clearAllBusy();
+      options.clearBusy("discovery");
     }
   }
 

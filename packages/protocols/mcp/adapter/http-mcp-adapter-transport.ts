@@ -2,8 +2,7 @@ import { sendJson } from "#meshrix/http-utils";
 import {
   broadcastConfiguredMcpNotification,
   registerConfiguredMcpSseConnection,
-  acknowledgeConfiguredMcpCatalogConvergence,
-  disconnectConfiguredMcpGrantConnections
+  acknowledgeConfiguredMcpCatalogConvergence
 } from "./mcp-notification-bus.ts";
 import {
   MCP_PROXY_SESSION_HEADER_LOWER,
@@ -23,7 +22,11 @@ import { buildMeshrixMcpDiscovery, githubOneLineMcpInstallCommands, mcpAuthoriza
 import { broadcastMcpOperationReply, inferMcpTargetReceipt, projectMcpOperationPayload } from "./http-mcp-adapter-replies.ts";
 import { hasMcpAuthToken, isAllowedOrigin, normalizeMcpOperationEnvelope } from "./http-mcp-adapter-request-validation.ts";
 import { executeToolPayload, jsonRpcError, jsonRpcNotification, jsonRpcResult, mcpEnvelopePublic, mcpToolResult, parseRequestBody, publicMcpEnvelopeString, publicMcpEnvelopeValue } from "./http-mcp-adapter-response.ts";
-import { mcpAuthSessionFromGrant, delegatedChildOperationFromMcpCall } from "./http-mcp-adapter-session.ts";
+import {
+  delegatedChildOperationFromMcpCall,
+  mcpAuthSessionFromAuthorization,
+  mcpAuthorizationId
+} from "./http-mcp-adapter-session.ts";
 import { meshrixCategorizedTools, mcpCapabilityFamilies, mcpOutletForOperation, mcpOutletForTool, mcpOutletSummary, operationOutletMismatchError, publicMcpTool } from "./http-mcp-adapter-tools.ts";
 import { isUpstreamMcpToolName, listVisibleUpstreamMcpTools } from "./http-mcp-adapter-upstream.ts";
 import { executeUpstreamToolViaGatewayForward } from "./http-mcp-adapter-upstream-tools.ts";
@@ -93,7 +96,9 @@ async function meshrixMetaResult({
     return mcpToolResult({
       result: {
         ...runtime,
-        grant: toolSkillManagementProvider.visibleGrantSummary({ authorization }),
+        ...(authorization?.credentialKind === "scoped_api_key"
+          ? { authorization: toolSkillManagementProvider.visibleGrantSummary({ authorization }) }
+          : { grant: toolSkillManagementProvider.visibleGrantSummary({ authorization }) }),
         envelope: mcpEnvelopePublic(envelope),
         capabilityFamilies,
         outlets,
@@ -142,7 +147,7 @@ async function meshrixMetaResult({
         ...updateResult,
         message: `An update to Meshrix MCP server is available (${serverVersion}).`
       });
-      broadcastConfiguredMcpNotification(updatePayload, { grantId: authorization?.grant?.id || "" });
+      broadcastConfiguredMcpNotification(updatePayload, { grantId: mcpAuthorizationId(authorization) });
     }
     const instructionText: any = updateAvailable
       ? (autoUpdate
@@ -170,9 +175,10 @@ async function sendMcpSseVersionEvent(request?: any, response?: any, toolSkillMa
     }));
     return;
   }
-  const requestGrant: any = await toolSkillManagementProvider.authorizeRequest({
+  const requestGrant: any = await toolSkillManagementProvider.authorizeMcpClientRequest({
     request,
     requiredScopes: [],
+    recordUse: false,
     requestBody: Buffer.alloc(0),
     url: new URL(String(request?.url || "/mcp"), "http://127.0.0.1"),
     method: "GET"
@@ -198,8 +204,8 @@ async function sendMcpSseVersionEvent(request?: any, response?: any, toolSkillMa
   const registration: any = registerConfiguredMcpSseConnection({
     request,
     response,
-    grantId: requestGrant.grant?.id || "",
-    grant: requestGrant.grant,
+    grantId: mcpAuthorizationId(requestGrant),
+    grant: requestGrant.grant || null,
     privateOnly: true,
     partitionKeys: typeof toolSkillManagementProvider.audiencePartitionKeys === "function"
       ? toolSkillManagementProvider.audiencePartitionKeys({ authorization: requestGrant })
@@ -246,7 +252,7 @@ async function handleMcpMessage({
   const id: any = message?.id;
   const method: any = String(message?.method || "");
   const params: any = message?.params && typeof message.params === "object" ? message.params : {};
-  const authorizeMcpRequest: any = () : any => requestAuthorization || toolSkillManagementProvider.authorizeRequest({
+  const authorizeMcpRequest: any = () : any => requestAuthorization || toolSkillManagementProvider.authorizeMcpClientRequest({
     request,
     requiredScopes: [],
     requestBody,
@@ -272,7 +278,7 @@ async function handleMcpMessage({
       });
     }
     const result: any = acknowledgeConfiguredMcpCatalogConvergence({
-      grantId: authorization.grant?.id || "",
+      grantId: mcpAuthorizationId(authorization),
       proxySessionId: normalizeMcpProxySessionId(
         requestHeader(request, MCP_PROXY_SESSION_HEADER_LOWER)
       ),
@@ -492,7 +498,7 @@ async function handleMcpMessage({
       profileId: parsedCall.envelope.agentProfileId,
       agentProfileId: parsedCall.envelope.agentProfileId,
       subject: parsedCall.envelope.subject,
-      authSession: mcpAuthSessionFromGrant(authorization.grant || null),
+      authSession: mcpAuthSessionFromAuthorization(authorization),
       workspaceId: delegatedChildOperation?.delegatedWorkspaceId || parsedCall.envelope.workspaceId,
       intent: parsedCall.envelope.intent,
       idempotencyKey: parsedCall.envelope.idempotencyKey,
@@ -661,168 +667,6 @@ export async function handleMeshrixMcpHttpRequest({
     return true;
   }
 
-  if (url.pathname === "/api/mcp/local-grant/requests") {
-    if (method !== "POST") {
-      response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
-      response.end();
-      return true;
-    }
-    if (!toolSkillManagementProvider?.createLocalMcpGrantAuthorizationRequest) {
-      sendJson(response, 503, {
-        ok: false,
-        error: {
-          code: "tool_skill_management_unavailable",
-          message: "Tool/Skill management provider is unavailable."
-        }
-      });
-      return true;
-    }
-    try {
-      const result: any = await toolSkillManagementProvider.createLocalMcpGrantAuthorizationRequest({
-        request,
-        requestBody
-      });
-      sendJson(response, result.status, result.body);
-    } catch (error: any) {
-      logger?.warn?.("mcp.local_grant_authorization_request.failed", {
-        reasonCode: "local_grant_authorization_request_failed",
-        errorType: error?.name || "Error"
-      });
-      sendJson(response, 400, {
-        ok: false,
-        error: {
-          code: "local_grant_authorization_request_failed",
-          message: "MCP local installation authorization request could not be processed."
-        }
-      });
-    }
-    return true;
-  }
-
-  const localGrantConsumeMatch: any = url.pathname.match(/^\/api\/mcp\/local-grant\/requests\/([^/]+)\/consume$/u);
-  if (localGrantConsumeMatch) {
-    if (method !== "POST") {
-      response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
-      response.end();
-      return true;
-    }
-    if (!toolSkillManagementProvider?.consumeLocalMcpGrantAuthorizationRequest) {
-      sendJson(response, 503, {
-        ok: false,
-        error: {
-          code: "tool_skill_management_unavailable",
-          message: "Tool/Skill management provider is unavailable."
-        }
-      });
-      return true;
-    }
-    try {
-      const result: any = await toolSkillManagementProvider.consumeLocalMcpGrantAuthorizationRequest({
-        request,
-        requestId: decodeURIComponent(localGrantConsumeMatch[1]),
-        discoveryState
-      });
-      sendJson(response, result.status, result.body);
-    } catch (error: any) {
-      logger?.warn?.("mcp.local_grant_authorization_consume.failed", {
-        reasonCode: "local_grant_authorization_consume_failed",
-        errorType: error?.name || "Error"
-      });
-      sendJson(response, 400, {
-        ok: false,
-        error: {
-          code: "local_grant_authorization_consume_failed",
-          message: "MCP local installation authorization could not be consumed."
-        }
-      });
-    }
-    return true;
-  }
-
-  if (url.pathname === "/api/mcp/local-grant") {
-    if (method !== "POST") {
-      response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
-      response.end();
-      return true;
-    }
-    if (!toolSkillManagementProvider) {
-      sendJson(response, 503, {
-        ok: false,
-        error: {
-          code: "tool_skill_management_unavailable",
-          message: "Tool/Skill management provider is unavailable."
-        }
-      });
-      return true;
-    }
-    try {
-      const result: any = toolSkillManagementProvider.createLocalMcpGrant({
-        request,
-        requestBody,
-        discoveryState,
-        url
-      });
-      const awaitedResult: any = typeof result?.then === "function" ? await result : result;
-      sendJson(response, awaitedResult.status, awaitedResult.body);
-    } catch (error: any) {
-      logger?.warn?.("mcp.local_grant.failed", {
-        requestId: request?.__meshrixRequestId || "",
-        error: error?.message || "local grant failed"
-      });
-      sendJson(response, 400, {
-        ok: false,
-        error: {
-          code: "local_grant_failed",
-          message: "MCP local grant request could not be processed."
-        }
-      });
-    }
-    return true;
-  }
-
-  if (url.pathname === "/api/mcp/local-uninstall") {
-    if (method !== "POST") {
-      response.writeHead(405, { Allow: "POST", "Cache-Control": "no-store" });
-      response.end();
-      return true;
-    }
-    if (!toolSkillManagementProvider) {
-      sendJson(response, 503, {
-        ok: false,
-        error: {
-          code: "tool_skill_management_unavailable",
-          message: "Tool/Skill management provider is unavailable."
-        }
-      });
-      return true;
-    }
-    try {
-      const result: any = await toolSkillManagementProvider.markLocalMcpGrantUninstalled({
-        request,
-        requestBody,
-        url,
-        method
-      });
-      if (result?.status === 200 && result?.body?.ok === true && result.body.authorizedGrantId) {
-        disconnectConfiguredMcpGrantConnections(result.body.authorizedGrantId);
-      }
-      sendJson(response, result.status, result.body);
-    } catch (error: any) {
-      logger?.warn?.("mcp.local_uninstall.failed", {
-        requestId: request?.__meshrixRequestId || "",
-        error: error?.message || "local uninstall update failed"
-      });
-      sendJson(response, 400, {
-        ok: false,
-        error: {
-          code: "local_uninstall_failed",
-          message: "MCP local uninstall update could not be processed."
-        }
-      });
-    }
-    return true;
-  }
-
   if (url.pathname !== "/mcp") {
     return false;
   }
@@ -888,7 +732,7 @@ export async function handleMeshrixMcpHttpRequest({
   const messages: any = Array.isArray(payload) ? payload : [payload];
   const hasProtectedMessage: any = messages.some(isProtectedMcpMessage);
   const requestAuthorization: any = hasProtectedMessage
-    ? await toolSkillManagementProvider.authorizeRequest({
+    ? await toolSkillManagementProvider.authorizeMcpClientRequest({
         request,
         requiredScopes: [],
         recordUse: false,

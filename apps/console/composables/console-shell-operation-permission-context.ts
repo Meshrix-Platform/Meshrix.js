@@ -4,7 +4,7 @@ type ConsoleContext = ReturnType<typeof useConsole>;
 
 const operationPermissionShellKeys: any = [
   "activeOperationPermissionToolCount",
-  "busyKey",
+  "isBusy",
   "copyIssuedToolToken",
   "createGrant",
   "deleteGrant",

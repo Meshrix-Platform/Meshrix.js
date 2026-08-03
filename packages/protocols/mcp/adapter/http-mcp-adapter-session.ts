@@ -165,6 +165,30 @@ export function mcpSubjectFromGrant(grant: any = null) : any {
   };
 }
 
+export function mcpAuthorizationId(authorization: any = null) : any {
+  if (authorization?.credentialKind === "scoped_api_key") {
+    return String(authorization?.apiKeyAuthorization?.workloadPrincipalId || "");
+  }
+  return String(authorization?.grant?.id || "");
+}
+
+export function mcpSubjectFromAuthorization(authorization: any = null) : any {
+  const apiKeyAuthorization: any = authorization?.credentialKind === "scoped_api_key"
+    ? authorization.apiKeyAuthorization
+    : null;
+  if (!apiKeyAuthorization) return mcpSubjectFromGrant(authorization?.grant || null);
+  const policy: any = apiKeyAuthorization.policy || {};
+  return {
+    type: "scoped-api-key",
+    subjectId: String(apiKeyAuthorization.workloadPrincipalId || ""),
+    label: String(apiKeyAuthorization.workloadPrincipalId || ""),
+    tenantId: "local",
+    organizationNodeId: String(apiKeyAuthorization.organizationNodeId || ""),
+    scopes: normalizeGrantValues(policy.scopeIds || [], 512),
+    toolsets: normalizeGrantValues(policy.toolsetIds || [], 256)
+  };
+}
+
 export function mcpAuthSessionFromGrant(grant: any = null) : any {
   const subject: any = mcpSubjectFromGrant(grant);
   if (subject.type !== "tool-grant" || !subject.subjectId) {
@@ -180,6 +204,29 @@ export function mcpAuthSessionFromGrant(grant: any = null) : any {
       scopes: subject.scopes,
       toolsets: subject.toolsets,
       allowedWorkspaceIds: normalizeGrantValues(grant.allowedWorkspaceIds || grant.metadata?.allowedWorkspaceIds || [], 512)
+    }
+  };
+}
+
+export function mcpAuthSessionFromAuthorization(authorization: any = null) : any {
+  if (authorization?.credentialKind !== "scoped_api_key") {
+    return mcpAuthSessionFromGrant(authorization?.grant || null);
+  }
+  const subject: any = mcpSubjectFromAuthorization(authorization);
+  if (!subject.subjectId) return null;
+  const policy: any = authorization.apiKeyAuthorization?.policy || {};
+  return {
+    user: {
+      type: "scoped-api-key",
+      roleId: "scoped-api-key",
+      userId: subject.subjectId,
+      subjectId: subject.subjectId,
+      username: subject.label || subject.subjectId,
+      tenantId: subject.tenantId,
+      organizationNodeId: subject.organizationNodeId,
+      scopes: subject.scopes,
+      toolsets: subject.toolsets,
+      allowedWorkspaceIds: normalizeGrantValues(policy.resources?.workspaceIds || [], 512)
     }
   };
 }

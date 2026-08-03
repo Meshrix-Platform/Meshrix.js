@@ -22,7 +22,7 @@ async function mcpRequest(provider?: any, body?: any, headers: Record<string, an
 
 function provider(visibleTools: any = []) : any {
   return {
-    authorizeRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "fixture", subject: {} } })),
+    authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "fixture", subject: {} } })),
     listVisibleTools: vi.fn(() : any => visibleTools),
     visibleGrantSummary: vi.fn(() : any => ({ id: "fixture" })),
     executeTool: vi.fn()
@@ -40,7 +40,7 @@ const SAMPLE_OUTLET_DESCRIPTOR: Readonly<Record<string, any>> = Object.freeze({
 describe("enabled plugin MCP outlets", () : any => {
   it("authenticates one signed HTTP batch once before handling its messages", async () : Promise<any> => {
     const runtime: any = provider([]);
-    runtime.authorizeRequest
+    runtime.authorizeMcpClientRequest
       .mockResolvedValueOnce({ ok: true, grant: { id: "fixture", subject: {} } })
       .mockResolvedValue({ ok: false, status: 401, reasonCode: "process_identity_nonce_replay" });
 
@@ -52,8 +52,8 @@ describe("enabled plugin MCP outlets", () : any => {
     expect(response.statusCode).toBe(200);
     expect(payload).toHaveLength(2);
     expect(payload.every((entry?: any) : any => Array.isArray(entry.result?.tools))).toBe(true);
-    expect(runtime.authorizeRequest).toHaveBeenCalledTimes(1);
-    expect(runtime.authorizeRequest).toHaveBeenCalledWith(expect.objectContaining({ recordUse: false }));
+    expect(runtime.authorizeMcpClientRequest).toHaveBeenCalledTimes(1);
+    expect(runtime.authorizeMcpClientRequest).toHaveBeenCalledWith(expect.objectContaining({ recordUse: false }));
   });
 
   it("omits disabled plugin outlets from tools/list", async () : Promise<any> => {
@@ -107,7 +107,7 @@ describe("enabled plugin MCP outlets", () : any => {
       mcpOutlet: "meshrix.sample",
       mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR
     }]);
-    unauthorized.authorizeRequest.mockResolvedValue({
+    unauthorized.authorizeMcpClientRequest.mockResolvedValue({
       ok: false,
       status: 403,
       error: "Tag policy denied this grant.",
@@ -221,7 +221,7 @@ describe("enabled plugin MCP outlets", () : any => {
       mcpOutletDescriptor: SAMPLE_OUTLET_DESCRIPTOR
     };
     const runtime: any = provider([visibleTool]);
-    runtime.authorizeRequest.mockResolvedValue({
+    runtime.authorizeMcpClientRequest.mockResolvedValue({
       ok: true,
       grant: {
         id: "delegated-grant-1",

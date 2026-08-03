@@ -25,6 +25,41 @@ function cancelHandler(provider?: any) : any {
 }
 
 describe("upload workspace materialization controller", () : any => {
+  it("queries the bound upload store with the session id as its first argument", async () : Promise<any> => {
+    const getUploadSession: any = vi.fn(async () : Promise<any> => null);
+    const response: any = responseRecorder();
+    const handler: any = createUploadSessionHandlers({
+      checkpointUploadSessionStore: { getUploadSession },
+      protocolEventBus: null,
+      uploadWorkspaceMaterializationProvider: null
+    }).handleGetUploadSession;
+
+    await handler({
+      sessionId: "session-safe",
+      response,
+      authSession: {
+        user: {
+          userId: "principal-safe",
+          tenantId: "local",
+          organizationNodeId: "organization:secondary"
+        }
+      }
+    });
+
+    expect(getUploadSession).toHaveBeenCalledOnce();
+    expect(getUploadSession).toHaveBeenCalledWith(
+      "session-safe",
+      {
+        owner: expect.objectContaining({
+          subjectId: "principal-safe",
+          tenantId: "local",
+          organizationNodeId: "organization:secondary"
+        })
+      }
+    );
+    expect(response.statusCode).toBe(404);
+  });
+
   it("cancels an owned request through the materialization provider", async () : Promise<any> => {
     const cancelled: Record<string, any> = {
       requestRef: "materialization:opaque",

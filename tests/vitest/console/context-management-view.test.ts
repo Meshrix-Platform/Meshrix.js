@@ -41,7 +41,7 @@ function mountView(profiles: Record<string, unknown>[]) : any {
   const contextProfilesResponse: any = ref<Record<string, unknown>>({ profiles });
   const refreshContextCompiler: any = vi.fn(async () : Promise<any> => undefined);
   shellContextMock.current = {
-    busyKey: ref(""),
+    isBusy: () => false,
     contextBuildRecordRows: ref([]),
     contextEvaluationResult: ref(null),
     contextPreviewRequiredEvidence: ref(""),

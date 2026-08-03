@@ -7,7 +7,7 @@ import path from "node:path";
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import {
   createSignedMcpHeaders,
   createVerifierMcpProcessIdentity
@@ -122,52 +122,30 @@ async function api(method?: any, route?: any, body: any = undefined) : Promise<a
 }
 
 async function grantToken() : Promise<any> {
-  const verifierIdentity: any = createVerifierMcpProcessIdentity({
-    target: "codex",
-    label: "verify-http-boundary"
-  });
-  const response: any = await issueVerifierLocalMcpGrant({
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    grantRequest: {
+    access: {
       targets: ["codex"],
       label: "external-http-boundary",
       connectorVersion: "verify-operation-permission-external-http-boundary",
       agentProfileId: AGENT_PROFILE_ID,
       grantMode: "maintain",
-      toolsets: ["meshrix.gateway.read"],
-      processIdentity: verifierIdentity.request
+      toolsets: ["meshrix.gateway.read"]
     }
   });
-  assert.equal(response.status, 201, JSON.stringify(response.payload, null, 2));
-  assert.ok(response.payload.token);
-  assert.ok(response.payload.processIdentity?.clientIdentityPackage);
-  dynamicSecretNeedles.add(String(response.payload.token));
-  mcpIdentityByToken.set(response.payload.token, {
-    identity: verifierIdentity,
-    clientIdentityPackage: response.payload.processIdentity.clientIdentityPackage
-  });
-  return response.payload.token;
+  assert.ok(response.apiKey);
+  dynamicSecretNeedles.add(response.apiKey);
+  return response.apiKey;
 }
 
 async function toolRequest(route?: any, token?: any, body?: any) : Promise<any> {
   const bodyText: any = JSON.stringify(body);
-  const binding: any = mcpIdentityByToken.get(token);
-  const signedHeaders: any = binding
-    ? createSignedMcpHeaders({
-        token,
-        target: "codex",
-        privateKeyPem: binding.identity.keyPair.privateKeyPem,
-        clientIdentityPackage: binding.clientIdentityPackage,
-        method: "POST",
-        url: `${server.url}${route}`,
-        body: bodyText
-      })
-    : { "Content-Type": "application/json" };
   return fetchJson(route, {
     method: "POST",
     headers: {
-      ...signedHeaders,
-      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-Meshrix-Api-Key": token,
+      "X-Meshrix-MCP-Target": "codex",
       "X-Meshrix-Agent-Profile-Id": AGENT_PROFILE_ID
     },
     body: bodyText

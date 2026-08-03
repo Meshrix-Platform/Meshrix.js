@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
-  "routeCount": 592,
+  "routeCount": 604,
   "routes": [
     {
       "method": "GET",
@@ -66,6 +66,70 @@
       "operationId": "authorization.governance.summary",
       "feature": "auth",
       "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/authorization/organization-governance",
+      "operationId": "authorization.organization_governance.get",
+      "feature": "auth",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "authorization.organization_governance.get",
+      "operationId": "authorization.organization_governance.get",
+      "feature": "auth",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/authorization/organization-governance/import",
+      "operationId": "authorization.organization_governance.import",
+      "feature": "auth",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "authorization.organization_governance.import",
+      "operationId": "authorization.organization_governance.import",
+      "feature": "auth",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/authorization/organization-governance/preview",
+      "operationId": "authorization.organization_governance.preview",
+      "feature": "auth",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "authorization.organization_governance.preview",
+      "operationId": "authorization.organization_governance.preview",
+      "feature": "auth",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/authorization/organization-governance/publish",
+      "operationId": "authorization.organization_governance.publish",
+      "feature": "auth",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "authorization.organization_governance.publish",
+      "operationId": "authorization.organization_governance.publish",
+      "feature": "auth",
+      "risk": "repair_write",
       "public": false
     },
     {
@@ -2998,6 +3062,86 @@
     },
     {
       "method": "GET",
+      "path": "/api/operation-permission/v1/api-keys/issuer-scopes",
+      "operationId": "operation_permission.api_keys.issuer_scopes",
+      "feature": "operation_permission",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "operation_permission.api_keys.issuer_scopes",
+      "operationId": "operation_permission.api_keys.issuer_scopes",
+      "feature": "operation_permission",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/operation-permission/v1/api-keys",
+      "operationId": "operation_permission.api_keys.list",
+      "feature": "operation_permission",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "operation_permission.api_keys.list",
+      "operationId": "operation_permission.api_keys.list",
+      "feature": "operation_permission",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/operation-permission/v1/api-keys",
+      "operationId": "operation_permission.api_keys.create",
+      "feature": "operation_permission",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "operation_permission.api_keys.create",
+      "operationId": "operation_permission.api_keys.create",
+      "feature": "operation_permission",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/operation-permission/v1/api-keys/:keyId/rotate",
+      "operationId": "operation_permission.api_keys.rotate",
+      "feature": "operation_permission",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "operation_permission.api_keys.rotate",
+      "operationId": "operation_permission.api_keys.rotate",
+      "feature": "operation_permission",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/operation-permission/v1/api-keys/:keyId/revoke",
+      "operationId": "operation_permission.api_keys.revoke",
+      "feature": "operation_permission",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "operation_permission.api_keys.revoke",
+      "operationId": "operation_permission.api_keys.revoke",
+      "feature": "operation_permission",
+      "risk": "repair_write",
+      "public": false
+    },
+    {
+      "method": "GET",
       "path": "/api/operation-permission/v1/catalog",
       "operationId": "operation_permission.catalog",
       "feature": "operation_permission",
@@ -3408,54 +3552,6 @@
       "method": "RPC",
       "path": "operation_permission.pending_operations.resolve",
       "operationId": "operation_permission.pending_operations.resolve",
-      "feature": "operation_permission",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/mcp/authorization/request",
-      "operationId": "operation_permission.mcp.request_authorization",
-      "feature": "operation_permission",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "operation_permission.mcp.request_authorization",
-      "operationId": "operation_permission.mcp.request_authorization",
-      "feature": "operation_permission",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "GET",
-      "path": "/api/console/mcp/authorization/requests",
-      "operationId": "operation_permission.mcp.list_requests",
-      "feature": "operation_permission",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "operation_permission.mcp.list_requests",
-      "operationId": "operation_permission.mcp.list_requests",
-      "feature": "operation_permission",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/console/mcp/authorization/requests/:requestId/resolve",
-      "operationId": "operation_permission.mcp.resolve_request",
-      "feature": "operation_permission",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "operation_permission.mcp.resolve_request",
-      "operationId": "operation_permission.mcp.resolve_request",
       "feature": "operation_permission",
       "risk": "repair_write",
       "public": false

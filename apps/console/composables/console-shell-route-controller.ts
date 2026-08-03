@@ -50,6 +50,10 @@ function adminRouteTitle(adminView: string, messages: ConsoleShellRouteMessages)
       return messages.nav.strategyManagement;
     case "tagManagement":
       return messages.nav.tagManagement;
+    case "organizationGovernance":
+      return messages.nav.organizationGovernance;
+    case "apiKeyDistribution":
+      return messages.nav.apiKeyDistribution;
     case "versionRelease":
       return messages.nav.versionRelease;
     case "versionAssembly":

@@ -19,6 +19,7 @@ export function authSubjectFromSession(authSession: any = null) : any {
     username: String(user.username || "").trim(),
     roleId: String(user.roleId || user.role || "").trim(),
     tenantId: String(user.tenantId || "").trim(),
+    organizationNodeId: String(user.organizationNodeId || authSession?.organizationNodeId || "").trim(),
     scopes,
     allowedWorkspaceIds: arrayOfStrings(user.allowedWorkspaceIds || user.workspaceIds),
     allowedJobIds: arrayOfStrings(user.allowedJobIds || user.jobIds)
@@ -28,7 +29,6 @@ export function authSubjectFromSession(authSession: any = null) : any {
 export function canAccessAllJobs(subject: Record<string, any> = {}) : any {
   return (
     subject.roleId === "owner" ||
-    subject.roleId === "admin" ||
     subject.scopes?.includes?.("auth:admin") ||
     subject.scopes?.includes?.("jobs:admin")
   );
@@ -55,6 +55,41 @@ export function requestOwnerSubjectFromSession(authSession: any = null) : any {
     allowedJobIds: [],
     canAccessAll: false
   };
+}
+
+export function apiKeyUploadAuthSession(apiKeyAuthorization: any = null) : any {
+  const policy: any = apiKeyAuthorization?.policy;
+  const principalId: any = String(apiKeyAuthorization?.workloadPrincipalId || "").trim();
+  const organizationNodeId: any = String(apiKeyAuthorization?.organizationNodeId || "").trim();
+  if (
+    apiKeyAuthorization?.credentialKind !== "scoped_api_key" ||
+    !principalId ||
+    !organizationNodeId ||
+    !Number.isSafeInteger(apiKeyAuthorization?.lifecycleRevision) ||
+    !policy ||
+    typeof policy !== "object" ||
+    Array.isArray(policy)
+  ) {
+    return null;
+  }
+  const scopes: any = Object.freeze(arrayOfStrings(policy.scopeIds));
+  const allowedWorkspaceIds: any = Object.freeze(arrayOfStrings(policy.resources?.workspaceIds));
+  return Object.freeze({
+    credentialKind: "scoped_api_key",
+    apiKeyAuthorization,
+    organizationNodeId,
+    user: Object.freeze({
+      type: "scoped-api-key",
+      roleId: "scoped-api-key",
+      userId: principalId,
+      subjectId: principalId,
+      username: principalId,
+      organizationNodeId,
+      tenantId: "local",
+      scopes,
+      allowedWorkspaceIds
+    })
+  });
 }
 
 function jobOwnerIds(job: Record<string, any> = {}) : any {

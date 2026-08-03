@@ -5,10 +5,9 @@ import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-import { normalizeBaseUrl, option } from "./basic-utils.ts";
+import { containsMxak1Credential, normalizeBaseUrl, option } from "./basic-utils.ts";
 import { HTTP_TIMEOUT_MS, packageJson } from "./constants.ts";
-import { authHeaders } from "./discovery.ts";
-import { processIdentityHeaders } from "./process-identity-request.ts";
+import { authHeaders, optionsWithDiscoveredBaseUrl } from "./discovery.ts";
 import { resolveProxyCredentials } from "./proxy-command.ts";
 
 // Mirrors the 2 GiB artifact limit enforced by the gateway artifact download
@@ -26,21 +25,24 @@ function redactOutputPath(value?: any) : any {
   return text;
 }
 
-export function resolveArtifactUrl(options: Record<string, any> = {}, identity: any = null) : any {
+export function resolveArtifactUrl(options: Record<string, any> = {}) : any {
   const raw: any = String(option(options, "artifact", "")).trim();
   if (!raw) {
     throw new Error("Missing artifact. Pass --artifact <url-or-id> and --out <path>.");
   }
-  const storedBaseUrl: any = normalizeBaseUrl(identity?.baseUrl || "");
+  if (containsMxak1Credential(raw)) {
+    throw new Error("Raw API Keys are not accepted in artifact URLs.");
+  }
+  const configuredBaseUrl: any = normalizeBaseUrl(option(options, "resolved-url", option(options, "url", "")));
+  if (!configuredBaseUrl) {
+    throw new Error("Artifact fetch requires a signed Meshrix server origin.");
+  }
   let candidate: any = raw;
   if (!/^https?:\/\//iu.test(candidate)) {
     if (!ARTIFACT_ID_PATTERN.test(candidate)) {
       throw new Error("Artifact id is invalid.");
     }
-    if (!storedBaseUrl) {
-      throw new Error("A bare artifact id requires the stored credential server URL; pass the full artifact URL instead.");
-    }
-    candidate = `${storedBaseUrl}/api/gateway/v1/artifacts/${encodeURIComponent(candidate)}`;
+    candidate = `${configuredBaseUrl}/api/gateway/v1/artifacts/${encodeURIComponent(candidate)}`;
   }
   let parsed: any;
   try {
@@ -51,15 +53,15 @@ export function resolveArtifactUrl(options: Record<string, any> = {}, identity: 
   if (!ARTIFACT_ROUTE_PATTERN.test(parsed.pathname)) {
     throw new Error("Artifact URL must target /api/gateway/v1/artifacts/<id>.");
   }
-  if (storedBaseUrl) {
+  if (configuredBaseUrl) {
     let issuerOrigin: any;
     try {
-      issuerOrigin = new URL(storedBaseUrl).origin;
+      issuerOrigin = new URL(configuredBaseUrl).origin;
     } catch {
       issuerOrigin = "";
     }
     if (issuerOrigin && parsed.origin !== issuerOrigin) {
-      throw new Error("Artifact URL origin does not match the stored credential issuer.");
+      throw new Error("Artifact URL origin does not match the configured server.");
     }
   }
   let artifactId: any = "";
@@ -150,9 +152,10 @@ async function streamResponseToFile(response?: any, outputPath?: any) : Promise<
 }
 
 export async function fetchCommand(options: Record<string, any> = {}) : Promise<any> {
-  const { target, token, identity } = await resolveProxyCredentials(options);
-  const { url, artifactId } = resolveArtifactUrl(options, identity);
-  const outputPath: any = requiredOutputPath(options);
+  const { target, token } = await resolveProxyCredentials(options);
+  const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
+  const { url, artifactId } = resolveArtifactUrl(resolvedOptions);
+  const outputPath: any = requiredOutputPath(resolvedOptions);
   const controller: any = new AbortController();
   const timeout: any = setTimeout(() : any => {
     const error: Error & Record<string, any> = new Error(`HTTP request timed out after ${HTTP_TIMEOUT_MS} ms.`);
@@ -164,15 +167,7 @@ export async function fetchCommand(options: Record<string, any> = {}) : Promise<
       method: "GET",
       redirect: "error",
       signal: controller.signal,
-      headers: {
-        ...authHeaders(token, target),
-        ...processIdentityHeaders({
-          method: "GET",
-          url: new URL(url),
-          body: "",
-          identity
-        })
-      }
+      headers: authHeaders(token, target)
     });
     if (!response.ok) {
       const reason: any = await responseErrorReason(response);

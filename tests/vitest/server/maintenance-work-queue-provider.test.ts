@@ -352,7 +352,7 @@ describe("maintenance canonical work queue", () : any => {
     const admittedRun: any = maintenanceRun("maintenance_run_governed-1", {
       risk: "repair_write",
       approvedAt: "2026-01-01T00:00:00.000Z",
-      approvedBy: { userId: "opaque-user", username: "operator", roleId: "admin" }
+      approvedBy: { userId: "opaque-user", username: "maintainer", roleId: "maintainer" }
     });
     const enqueue: any = vi.fn(async (input?: any) : Promise<any> => ({
       accepted: true,

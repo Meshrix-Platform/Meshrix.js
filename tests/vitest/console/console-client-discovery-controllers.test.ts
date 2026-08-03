@@ -179,14 +179,14 @@ describe("console discovery controller behavior", () : any => {
     const error: any = ref("previous error");
     const refreshState: any = vi.fn(async () : Promise<any> => undefined);
     const setBusy: any = vi.fn();
-    const clearAllBusy: any = vi.fn();
+    const clearBusy: any = vi.fn();
     const controller: any = createConsoleDiscoveryController({
       applyRemoteConsoleDraftUpdate: (update?: any) : any => {
         applyingRemoteDrafts = true;
         update();
         applyingRemoteDrafts = false;
       },
-      clearAllBusy,
+      clearBusy,
       error,
       isApplyingRemoteConsoleDrafts: () : any => applyingRemoteDrafts,
       refreshState,
@@ -195,7 +195,7 @@ describe("console discovery controller behavior", () : any => {
     });
 
     return {
-      clearAllBusy,
+      clearBusy,
       controller,
       error,
       refreshState,
@@ -248,7 +248,7 @@ describe("console discovery controller behavior", () : any => {
     );
     expect(success.controller.discoveryDraftDirty.value).toBe(false);
     expect(success.refreshState).toHaveBeenCalledWith({ forceDrafts: false });
-    expect(success.clearAllBusy).not.toHaveBeenCalled();
+    expect(success.clearBusy).not.toHaveBeenCalled();
     expect(success.error.value).toBe("");
 
     discoveryClientMock.saveDiscoveryConfig.mockRejectedValue(new Error("save failed"));
@@ -256,7 +256,7 @@ describe("console discovery controller behavior", () : any => {
     await failure.controller.saveDiscovery();
 
     expect(failure.error.value).toBe("save failed");
-    expect(failure.clearAllBusy).toHaveBeenCalledTimes(1);
+    expect(failure.clearBusy).toHaveBeenCalledTimes(1);
     expect(failure.refreshState).not.toHaveBeenCalled();
   });
 });

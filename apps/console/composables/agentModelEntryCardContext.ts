@@ -3,7 +3,7 @@ import type { ServerConsoleShellContext } from "./serverConsoleShellContext";
 
 export type AgentModelEntryCardContext = Pick<
   ServerConsoleShellContext,
-  | "busyKey"
+  | "isBusy"
   | "duplicateModelEntry"
   | "exportAgentModelEntryConfig"
   | "intelligentModuleDefinitions"
@@ -34,7 +34,7 @@ export function createAgentModelEntryCardContext(
   shell: ServerConsoleShellContext,
 ): AgentModelEntryCardContext {
   return {
-    busyKey: shell.busyKey,
+    isBusy: shell.isBusy,
     duplicateModelEntry: shell.duplicateModelEntry,
     exportAgentModelEntryConfig: shell.exportAgentModelEntryConfig,
     intelligentModuleDefinitions: shell.intelligentModuleDefinitions,

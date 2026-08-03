@@ -108,8 +108,6 @@ export function mcpAuthorizationErrorData({ authorization = {}, listenUrl = "", 
     code: authorization.reasonCode || "authorization_denied",
     stableToolName: MCP_STABLE_TOOL_NAME,
     connector,
-    authorizationRequestEndpoint: discovery.installer.authorizationRequestEndpoint,
-    authorizationConsumeEndpointTemplate: discovery.installer.authorizationConsumeEndpointTemplate,
     priorityTargets: [...MCP_PRIORITY_INSTALL_TARGETS],
     supportedTargets: mcpPublicSupportedTargetDetails(),
     nextCommand,
@@ -219,7 +217,7 @@ function mcpClientTargetGuides({ baseUrl = "", vmBaseUrl = "", githubOneLineComm
       uninstall: `${githubOneLineMcpInstallCommand(MCP_BOOTSTRAP_UNINSTALL_SCRIPT)} -- --target ${client.target}`,
       doctor: `${githubOneLineCommand} -- doctor${urlArgs} --json`
     },
-    tokenInput: "device-authorization-or-stdin-or-env",
+    tokenInput: "api-key-stdin-or-env",
     configTemplate: mcpPublicTargetConfigTemplate(client.target, { baseUrl, vmBaseUrl })
   }));
 }
@@ -335,9 +333,7 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
       doctorCommand,
       discoverCommand,
       scanCommand,
-      tokenInput: "device-authorization-or-stdin-or-env",
-      authorizationRequestEndpoint: `${baseUrl}/api/mcp/local-grant/requests`,
-      authorizationConsumeEndpointTemplate: `${baseUrl}/api/mcp/local-grant/requests/<request-id>/consume`,
+      tokenInput: "api-key-stdin-or-env",
       nativeEntrypoint: MCP_BOOTSTRAP_INSTALL_SCRIPT,
       windowsEntrypoint: MCP_BOOTSTRAP_WINDOWS_INSTALL_SCRIPT,
       portable: {

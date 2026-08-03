@@ -10,6 +10,10 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
     "authorization.subject.resolve",
     "authorization.policy.evaluate",
     "authorization.governance.summary",
+    "authorization.organization_governance.get",
+    "authorization.organization_governance.import",
+    "authorization.organization_governance.preview",
+    "authorization.organization_governance.publish",
     "tag_management.tags.list",
     "tag_management.tags.get",
     "tag_management.tags.upsert",
@@ -110,6 +114,84 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
       protocolVersion: SECURITY_PERMISSIONS_PROTOCOL_VERSION,
       governance: securityPermissions.getGovernanceSummary()
     }));
+  }
+
+  if (id === "authorization.organization_governance.get") {
+    if (!securityPermissions?.getOrganizationGovernance ||
+        !securityPermissions?.listOrganizationGovernanceTemplates) {
+      return result(503, {
+        code: "organization_governance_unavailable",
+        error: "组织治理存储不可用。"
+      });
+    }
+    try {
+      const snapshot: any = securityPermissions.getOrganizationGovernance();
+      return result(200, protocolPayload({
+        snapshot,
+        templates: securityPermissions.listOrganizationGovernanceTemplates()
+      }));
+    } catch (error: any) {
+      return organizationGovernanceErrorResult(error);
+    }
+  }
+
+  if (id === "authorization.organization_governance.import") {
+    if (!securityPermissions?.importOrganizationGovernance) {
+      return result(503, {
+        code: "organization_governance_unavailable",
+        error: "组织治理存储不可用。"
+      });
+    }
+    try {
+      return result(200, protocolPayload({
+        draft: securityPermissions.importOrganizationGovernance(input)
+      }));
+    } catch (error: any) {
+      return organizationGovernanceErrorResult(error);
+    }
+  }
+
+  if (id === "authorization.organization_governance.preview") {
+    if (!securityPermissions?.previewOrganizationGovernance) {
+      return result(503, {
+        code: "organization_governance_unavailable",
+        error: "组织治理存储不可用。"
+      });
+    }
+    try {
+      const preview: any = securityPermissions.previewOrganizationGovernance(input);
+      return result(200, protocolPayload({ preview }));
+    } catch (error: any) {
+      return organizationGovernanceErrorResult(error);
+    }
+  }
+
+  if (id === "authorization.organization_governance.publish") {
+    if (!securityPermissions?.publishOrganizationGovernance) {
+      return result(503, {
+        code: "organization_governance_unavailable",
+        error: "组织治理存储不可用。"
+      });
+    }
+    let snapshot: any;
+    try {
+      snapshot = securityPermissions.publishOrganizationGovernance(input);
+    } catch (error: any) {
+      return organizationGovernanceErrorResult(error);
+    }
+    try {
+      await publishAuthorizationGovernanceUpdate({
+        context: { ...context, authSession: null },
+        operationId: id,
+        entityType: "organization-governance",
+        eventType: "published",
+        entity: { id: "organization-governance", revision: snapshot.revision }
+      });
+    } catch {
+      // The canonical aggregate is already committed. Optional refresh event
+      // failure must not turn that durable result into a blindly retryable error.
+    }
+    return result(200, protocolPayload({ snapshot }));
   }
 
   if (id === "tag_management.tags.list") {
@@ -431,4 +513,32 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
   }
 
   return null;
+}
+
+function organizationGovernanceErrorResult(error: any): any {
+  const code: any = String(error?.code || "organization_governance_unavailable");
+  if (code === "organization_governance_invalid") {
+    return result(400, {
+      code,
+      error: "组织治理架构无效。",
+      issues: Array.isArray(error?.issues) ? error.issues.slice(0, 64) : []
+    });
+  }
+  if (code === "organization_governance_revision_conflict") {
+    return result(409, {
+      code,
+      error: "组织治理架构已更新。",
+      currentRevision: Number(error?.currentRevision || 0)
+    });
+  }
+  if (code === "organization_governance_template_not_found") {
+    return result(404, { code, error: "组织治理模板不存在。" });
+  }
+  if (code === "organization_governance_collision") {
+    return result(409, { code, error: "组织治理模板与非模板管理的权限记录冲突。" });
+  }
+  return result(503, {
+    code: "organization_governance_unavailable",
+    error: "组织治理存储不可用。"
+  });
 }

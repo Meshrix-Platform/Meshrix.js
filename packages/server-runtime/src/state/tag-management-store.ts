@@ -741,6 +741,270 @@ function createTagManagementStoreFromDatabase({
     };
   }
 
+  function organizationGovernanceError(code?: any, message?: any, options: Record<string, any> = {}) : any {
+    const error: Error & Record<string, any> = new Error(message);
+    error.code = code;
+    error.statusCode = Number(options.statusCode || 409);
+    if (Number.isInteger(options.currentRevision)) error.currentRevision = options.currentRevision;
+    return error;
+  }
+
+  function getOrganizationGovernance() : any {
+    const metadata: any = db.prepare(
+      "SELECT * FROM organization_governance_snapshot WHERE singleton_id = 1"
+    ).get();
+    if (!metadata) {
+      throw organizationGovernanceError(
+        "organization_governance_unavailable",
+        "Organization governance snapshot is unavailable.",
+        { statusCode: 503 }
+      );
+    }
+    if (!Boolean(metadata.configured)) {
+      return {
+        protocolVersion: "v0.0.1:authorization:organization-governance-1",
+        schemaVersion: "v0.0.1:authorization:organization-template-1",
+        configured: false,
+        revision: 0,
+        templateKey: "",
+        templateName: "",
+        description: "",
+        organizationDepth: 0,
+        nodes: [],
+        tags: [],
+        roles: [],
+        publishedAt: ""
+      };
+    }
+    const nodes: any[] = db.prepare(
+      "SELECT * FROM organization_governance_nodes ORDER BY ordinal ASC"
+    ).all().map((row?: any) : any => ({
+      nodeId: row.node_id,
+      nodeType: row.node_type,
+      parentId: row.parent_id,
+      name: row.name,
+      ...(row.organization_level === null ? {} : { organizationLevel: Number(row.organization_level) })
+    }));
+    const tags: any[] = db.prepare(`
+      SELECT tag.* FROM organization_governance_template_ownership owner
+      JOIN tag_management_tags tag ON tag.tag_id = owner.entity_id
+      WHERE owner.entity_type = 'tag'
+      ORDER BY tag.tag_id ASC
+    `).all().map((row?: any) : any => {
+      const tag: any = tagFromRow(row);
+      return {
+        tagId: tag.tagId,
+        kind: tag.kind,
+        label: tag.label,
+        parentTagId: tag.parentTagId,
+        description: tag.description,
+        scopePrerequisites: tag.scopePrerequisites
+      };
+    });
+    const roles: any[] = db.prepare(`
+      SELECT projection.payload_json FROM organization_governance_template_ownership owner
+      JOIN tag_management_projections projection
+        ON projection.entity_type = 'authorization.role' AND projection.entity_id = owner.entity_id
+      WHERE owner.entity_type = 'role'
+      ORDER BY owner.entity_id ASC
+    `).all().map((row?: any) : any => {
+      const payload: any = parseJson(row.payload_json, {});
+      return {
+        roleId: payload.roleId,
+        name: payload.name,
+        scopeNodeId: payload.scopeNodeId,
+        scopeNodeType: payload.scopeNodeType,
+        managementActions: uniqueStrings(payload.managementActions),
+        businessResourceActions: [],
+        assignedSubjectIds: []
+      };
+    });
+    return {
+      protocolVersion: "v0.0.1:authorization:organization-governance-1",
+      schemaVersion: metadata.schema_version,
+      configured: true,
+      revision: Number(metadata.revision),
+      templateKey: metadata.template_key,
+      templateName: metadata.template_name,
+      description: metadata.description,
+      organizationDepth: Number(metadata.organization_depth),
+      nodes,
+      tags,
+      roles,
+      publishedAt: metadata.published_at
+    };
+  }
+
+  const publishOrganizationGovernanceTransaction: any = db.transaction(
+    (draft?: any, expectedRevision?: any, publishedAt?: any) : any => {
+      const current: any = getOrganizationGovernance();
+      if (current.revision !== expectedRevision) {
+        throw organizationGovernanceError(
+          "organization_governance_revision_conflict",
+          "Organization governance revision is stale.",
+          { currentRevision: current.revision }
+        );
+      }
+      const ownershipRows: any[] = db.prepare(
+        "SELECT entity_type, entity_id FROM organization_governance_template_ownership"
+      ).all();
+      const ownedTags: any = new Set<any>(ownershipRows.filter((row?: any) : any => row.entity_type === "tag")
+        .map((row?: any) : any => row.entity_id));
+      const ownedRoles: any = new Set<any>(ownershipRows.filter((row?: any) : any => row.entity_type === "role")
+        .map((row?: any) : any => row.entity_id));
+      for (const tag of draft.tags) {
+        if (getTag(tag.tagId) && !ownedTags.has(tag.tagId)) {
+          throw organizationGovernanceError(
+            "organization_governance_collision",
+            "Organization template tag collides with an unmanaged tag."
+          );
+        }
+      }
+      const draftTagsById: any = new Map<any, any>(
+        draft.tags.map((tag?: any) : any => [tag.tagId, tag])
+      );
+      for (const role of draft.roles) {
+        if ((getAuthorizationRole(role.roleId) || getTag(roleTagId(role.roleId))) && !ownedRoles.has(role.roleId)) {
+          throw organizationGovernanceError(
+            "organization_governance_collision",
+            "Organization template role collides with an unmanaged role."
+          );
+        }
+      }
+
+      const nextTagIds: any = new Set<any>(draft.tags.map((tag?: any) : any => tag.tagId));
+      const nextRoleIds: any = new Set<any>(draft.roles.map((role?: any) : any => role.roleId));
+      for (const tagId of ownedTags) {
+        if (nextTagIds.has(tagId)) continue;
+        const existing: any = getTag(tagId);
+        if (!existing) continue;
+        tagUpsert.run(
+          existing.tagId, existing.kind, existing.label, existing.description, existing.parentTagId,
+          0, existing.system ? 1 : 0, ARCHIVED_STATUS,
+          stringifyJson(existing.scopePrerequisites, []), stringifyJson(existing.metadata, {}),
+          existing.createdAt, publishedAt
+        );
+      }
+      for (const roleId of ownedRoles) {
+        if (nextRoleIds.has(roleId)) continue;
+        const existing: any = getAuthorizationRole(roleId);
+        if (!existing) continue;
+        const disabled: any = { ...existing, enabled: false, businessResourceActions: [], assignedSubjectIds: [] };
+        projectionUpsert.run(
+          roleTagId(roleId), "authorization.role", roleId, stringifyJson(disabled, {}), publishedAt
+        );
+        const roleTag: any = getTag(roleTagId(roleId));
+        if (roleTag) {
+          tagUpsert.run(
+            roleTag.tagId, roleTag.kind, roleTag.label, roleTag.description, roleTag.parentTagId,
+            0, roleTag.system ? 1 : 0, ARCHIVED_STATUS,
+            stringifyJson(roleTag.scopePrerequisites, []), stringifyJson(roleTag.metadata, {}),
+            roleTag.createdAt, publishedAt
+          );
+        }
+      }
+
+      db.prepare("DELETE FROM organization_governance_template_ownership").run();
+      db.prepare("DELETE FROM organization_governance_nodes").run();
+      const insertNode: any = db.prepare(`
+        INSERT INTO organization_governance_nodes (
+          ordinal, node_id, node_type, parent_id, name, organization_level
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      const insertOwnership: any = db.prepare(`
+        INSERT INTO organization_governance_template_ownership (entity_type, entity_id, template_key)
+        VALUES (?, ?, ?)
+      `);
+      for (const [index, node] of draft.nodes.entries()) {
+        insertNode.run(
+          index, node.nodeId, node.nodeType, node.parentId, node.name,
+          node.organizationLevel === undefined ? null : node.organizationLevel
+        );
+      }
+      for (const tag of draft.tags) {
+        const existing: any = getTag(tag.tagId);
+        tagUpsert.run(
+          tag.tagId, tag.kind, tag.label, tag.description, tag.parentTagId, 1, 0, ACTIVE_STATUS,
+          stringifyJson(tag.scopePrerequisites, []),
+          stringifyJson({ organizationTemplate: { templateKey: draft.templateKey, entityId: tag.tagId } }, {}),
+          existing?.createdAt || publishedAt, publishedAt
+        );
+        insertOwnership.run("tag", tag.tagId, draft.templateKey);
+      }
+      for (const role of draft.roles) {
+        const rolePayload: any = {
+          roleId: role.roleId,
+          name: role.name,
+          label: role.name,
+          description: "",
+          scopeNodeId: role.scopeNodeId,
+          scopeNodeType: role.scopeNodeType,
+          managementActions: role.managementActions,
+          businessResourceActions: [],
+          assignedSubjectIds: [],
+          resourcePolicies: [],
+          scopes: role.managementActions,
+          system: false,
+          enabled: true,
+          createdAt: publishedAt,
+          updatedAt: publishedAt
+        };
+        const tagId: any = roleTagId(role.roleId);
+        const existingTag: any = getTag(tagId);
+        const scopeTag: any = draftTagsById.get(role.scopeNodeId);
+        tagUpsert.run(
+          tagId, "role", role.name, "", scopeTag.parentTagId, 1, 0, ACTIVE_STATUS,
+          stringifyJson(role.managementActions, []),
+          stringifyJson({ organizationTemplate: { templateKey: draft.templateKey, entityId: role.roleId } }, {}),
+          existingTag?.createdAt || publishedAt, publishedAt
+        );
+        projectionUpsert.run(
+          tagId, "authorization.role", role.roleId, stringifyJson(rolePayload, {}), publishedAt
+        );
+        insertOwnership.run("role", role.roleId, draft.templateKey);
+      }
+      db.prepare(`
+        UPDATE organization_governance_snapshot SET
+          configured = 1,
+          revision = ?,
+          schema_version = ?,
+          template_key = ?,
+          template_name = ?,
+          description = ?,
+          organization_depth = ?,
+          published_at = ?
+        WHERE singleton_id = 1
+      `).run(
+        current.revision + 1, draft.schemaVersion, draft.templateKey, draft.templateName,
+        draft.description, draft.organizationDepth, publishedAt
+      );
+      db.prepare(`
+        INSERT INTO tag_management_events (
+          event_id, tag_id, entity_type, entity_id, event_type, payload_json, created_at
+        ) VALUES (?, '', 'organization-governance', 'organization-governance', 'published', ?, ?)
+      `).run(
+        randomId("tag_event"),
+        stringifyJson({ templateKey: draft.templateKey, revision: current.revision + 1 }, {}),
+        publishedAt
+      );
+      return getOrganizationGovernance();
+    }
+  );
+
+  function publishOrganizationGovernance(draft?: any, expectedRevision?: any) : any {
+    const snapshot: any = publishOrganizationGovernanceTransaction.immediate(
+      draft,
+      expectedRevision,
+      nowIso()
+    );
+    for (const handler of changeHandlers) {
+      try { handler(Object.freeze({ eventType: "organization-governance-published" })); } catch {
+        // Publication is already committed; subscribers reconcile independently.
+      }
+    }
+    return snapshot;
+  }
+
   return Object.freeze({
     protocolVersion: TAG_MANAGEMENT_PROTOCOL_VERSION,
     userDataPath: resolvedUserDataPath,
@@ -762,6 +1026,7 @@ function createTagManagementStoreFromDatabase({
     getAuthorizationDepartment,
     getAuthorizationAgentGroup,
     getAuthorizationRole,
+    getOrganizationGovernance,
     getAuthorizationTeam,
     getPolicyRevision,
     registerChangeHandler(handler?: any) : any {
@@ -785,6 +1050,7 @@ function createTagManagementStoreFromDatabase({
     rebuildProjections,
     restoreTag,
     seedToolProfiles,
+    publishOrganizationGovernance,
     upsertAuthorizationAgentBinding,
     upsertAuthorizationDepartment,
     upsertAuthorizationAgentGroup,

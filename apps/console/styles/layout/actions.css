@@ -16,6 +16,27 @@
     box-shadow var(--dur-fast) var(--ease-std);
 }
 
+/* Sibling actions sharing one horizontal row use one explicit control height,
+ * including component wrappers such as BrowseSelectButton. */
+.horizontal-action-group {
+  --horizontal-action-control-height: 40px;
+  align-items: stretch;
+}
+
+.horizontal-action-group > button,
+.horizontal-action-group > a,
+.horizontal-action-group > .browse-select-button,
+.horizontal-action-group > .browse-select-button > .el-button {
+  box-sizing: border-box;
+  height: var(--horizontal-action-control-height);
+  min-height: var(--horizontal-action-control-height);
+  max-height: var(--horizontal-action-control-height);
+}
+
+.horizontal-action-group > .browse-select-button > .el-button {
+  width: 100%;
+}
+
 .side-cta,
 .tool-button,
 .primary-action {

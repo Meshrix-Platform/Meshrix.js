@@ -19,7 +19,7 @@ type ModelLibraryProbeFailure = {
 };
 
 type ConsoleSettingsPersistenceControllerOptions = {
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   modelEntryStatusKey: (entry: AgentModelConfig) => string;
   mountDraft: Ref<Record<string, string>>;
@@ -61,7 +61,7 @@ export function createConsoleSettingsPersistenceController(
     } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存设置失败。";
-      options.clearAllBusy();
+      options.clearBusy("modules");
     }
   }
 
@@ -79,7 +79,7 @@ export function createConsoleSettingsPersistenceController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存挂载模块失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(busy);
     }
   }
 
@@ -93,7 +93,7 @@ export function createConsoleSettingsPersistenceController(
     } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "重载智能能力失败。";
-      options.clearAllBusy();
+      options.clearBusy("module-reload");
     }
   }
 
@@ -125,7 +125,7 @@ export function createConsoleSettingsPersistenceController(
     } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存基础设置失败。";
-      options.clearAllBusy();
+      options.clearBusy("settings");
     }
   }
 
@@ -155,7 +155,7 @@ export function createConsoleSettingsPersistenceController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "保存模型库配置失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("model-library-save");
     }
   }
 

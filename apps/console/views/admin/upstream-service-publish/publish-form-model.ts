@@ -16,10 +16,9 @@ export type PublishDescriptorForm = Omit<UpstreamServiceDescriptor, "serviceProt
   responseMaxBytes?: number | "";
   requestMediaTypes?: string;
   responseMediaTypes?: string;
-  referenceType?: TypedServiceReference["type"] | "";
-  referenceValue?: string;
-  referenceRevision?: number | "";
-  referenceUse?: string;
+  credentialMode?: "none" | "saved" | "";
+  credentialSelection?: string;
+  savedCredentialOptions?: TypedServiceReference[];
 };
 
 export type DescriptorObjectField =

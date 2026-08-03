@@ -4,6 +4,10 @@ This file records user-visible release changes.
 
 ## Unreleased
 
+- Upgraded the Pactium dependency to `0.7.0` and switched digest-ready
+  projection, data-directory preflight, CAS, and append-only event-log
+  authority to Pactium host-neutral helpers. Meshrix-local parallel exports
+  remain as Deprecated delegates until Meshrix 1.0.0.
 - Completed the one-pass migration of the core repository to the Meshrix
   naming and boundary authority; LicoMesh identifiers are retired across
   source, packages, workflows, and documentation.

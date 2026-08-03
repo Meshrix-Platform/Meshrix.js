@@ -81,8 +81,6 @@ import {
 } from "./context-compiler-client";
 import {
   getAuthorizationGovernance,
-  listMcpAuthorizationRequests,
-  resolveMcpAuthorizationRequest,
   revokeAuthorizationApproval,
   upsertAuthorizationGovernance,
 } from "./authorization-governance-client";
@@ -104,8 +102,6 @@ import {
 } from "./agent-gateway-client";
 
 export type { BridgeDownloadOptions, BridgeDownloadResult } from "@meshrix/ui-console/bridge-http";
-export type { McpAuthorizationRequest } from "./authorization-governance-client";
-
 const browserBridge: Bridge = {
   getAuthSession,
   loginAuth,
@@ -121,8 +117,6 @@ const browserBridge: Bridge = {
   getAuthorizationGovernance,
   upsertAuthorizationGovernance,
   revokeAuthorizationApproval,
-  listMcpAuthorizationRequests,
-  resolveMcpAuthorizationRequest,
   getSettings,
   saveSettings,
   probeModel,

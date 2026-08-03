@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
+import FeatureToggle from "../../FeatureToggle.vue";
 
 defineProps<{
   modelValue: boolean;
@@ -14,10 +14,11 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <BinaryCheckbox
+  <FeatureToggle
     class="agent-config-invocation-toggle"
     :model-value="modelValue"
     :label="label"
+    :aria-label="modelValue ? `关闭${label}` : `开启${label}`"
     :disabled="disabled"
     @update:model-value="emit('update:modelValue', $event)"
     @change="emit('change', $event)"
@@ -25,10 +26,13 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-:deep(.agent-config-invocation-toggle.binary-checkbox) {
+:deep(.agent-config-invocation-toggle.feature-toggle) {
   width: 100%;
   min-height: 48px;
   justify-content: flex-start;
   padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
 }
 </style>

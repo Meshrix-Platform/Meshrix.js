@@ -30,7 +30,8 @@ export function createStartQueuedJob(ctx?: any) : any {
     publishDeletedJobEvent,
     cloneJobForApi,
     resolveCurrentRuntimeOptions,
-    uploadSessionStore
+    uploadSessionStore,
+    storageProvider
   } = ctx;
 
   async function startQueuedJob(nextEntry?: any) : Promise<any> {
@@ -634,6 +635,7 @@ export function createStartQueuedJob(ctx?: any) : any {
       jobId: currentJob.id,
       runtimeOptions: resolveCurrentRuntimeOptions(),
       uploadSessionStore,
+      storageProvider,
       signal: executionController.signal,
       onProgress: reportProgress
     }).then(async (result?: any) : Promise<any> => {

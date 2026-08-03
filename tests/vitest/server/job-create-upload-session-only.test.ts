@@ -221,7 +221,6 @@ describe("jobs.create upload-session-only frozen acceptance", () : any => {
 
     expect(receiptLookup).toHaveBeenCalledTimes(1);
     expect(receiptLookup).toHaveBeenCalledWith(
-      "private-test-root",
       "session-safe",
       {
         owner: {
@@ -231,6 +230,7 @@ describe("jobs.create upload-session-only frozen acceptance", () : any => {
           username: "",
           roleId: "",
           tenantId: "",
+          organizationNodeId: "",
           scopes: [],
           allowedWorkspaceIds: [],
           allowedJobIds: [],

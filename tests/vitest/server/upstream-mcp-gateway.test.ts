@@ -378,7 +378,7 @@ describe("upstream MCP gateway bridge", () : any => {
       annotations: { readOnlyHint: true }
     });
     const provider: Record<string, any> = {
-      authorizeRequest: vi.fn(async () : Promise<any> => ({
+      authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({
         ok: true,
         grant: {
           id: "grant-1",
@@ -611,6 +611,46 @@ describe("upstream MCP gateway bridge", () : any => {
     }
   });
 
+  it("passes default MCP results through without implicit field redaction or reconstruction", async () : Promise<any> => {
+    const { registry, cleanup } = await createRegistryForServices([{
+      serviceId: "default-transparent-mcp",
+      serviceProtocol: "mcp",
+      label: "Default transparent MCP fixture",
+      mcp: {
+        transport: "stdio",
+        command: process.execPath,
+        args: ["-e", responsePolicyStdioMcpFixtureScript()],
+        toolNamePrefix: "default-transparent-mcp",
+        timeoutMs: 5000
+      },
+      operations: [{
+        operationKey: "tools/call",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    try {
+      const called: any = await registry.callMcpToolByPublicName(
+        "upstream.default-transparent-mcp.records.filtered",
+        { arguments: {} },
+        { scopes: ["gateway:read"] }
+      );
+      expect(called.response.structuredContent).toEqual({
+        ok: true,
+        token: "private-token-marker",
+        nested: { visible: "public-value", privateValue: "private-field-marker" },
+        omitted: "not-public"
+      });
+      expect(called.response.content).toEqual([{
+        type: "text",
+        text: JSON.stringify(called.response.structuredContent)
+      }]);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it("rejects opaque MCP text when response fields require filtering without a schema", async () : Promise<any> => {
     const privateMarker: any = "opaque-upstream-response-marker";
     const { registry, cleanup } = await createRegistryForServices([{
@@ -728,7 +768,7 @@ describe("upstream MCP gateway bridge", () : any => {
       annotations: { readOnlyHint: true }
     });
     const provider: Record<string, any> = {
-      authorizeRequest: vi.fn(async () : Promise<any> => ({
+      authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({
         ok: true,
         grant: {
           id: "grant-1",
@@ -819,7 +859,7 @@ describe("upstream MCP gateway bridge", () : any => {
   it("does not contact MCP services outside the grant capability partition", async () : Promise<any> => {
     const listMcpTools: any = vi.fn(async () : Promise<any> => ({ items: [], count: 0 }));
     const provider: Record<string, any> = {
-      authorizeRequest: vi.fn(async () : Promise<any> => ({
+      authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({
         ok: true,
         grant: {
           id: "grant-denied-service",
@@ -853,7 +893,7 @@ describe("upstream MCP gateway bridge", () : any => {
   it("does not discover credential-bound MCP services without the binding grant", async () : Promise<any> => {
     const listMcpTools: any = vi.fn(async () : Promise<any> => ({ items: [], count: 0 }));
     const provider: Record<string, any> = {
-      authorizeRequest: vi.fn(async () : Promise<any> => ({
+      authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({
         ok: true,
         grant: {
           id: "grant-without-binding",
@@ -940,7 +980,7 @@ describe("upstream MCP gateway bridge", () : any => {
       resourceContext: configured._meta.resourceContext
     };
     const provider: Record<string, any> = {
-      authorizeRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant })),
+      authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant })),
       listVisibleTools: vi.fn(() : any => [configuredCatalogTool]),
       visibleGrantSummary: vi.fn(() : any => ({ id: grant.id }))
     };
@@ -993,7 +1033,7 @@ describe("upstream MCP gateway bridge", () : any => {
       annotations: { readOnlyHint: false, destructiveHint: false }
     });
     const provider: Record<string, any> = {
-      authorizeRequest: vi.fn(async () : Promise<any> => ({
+      authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({
         ok: true,
         grant: {
           id: "grant-1",

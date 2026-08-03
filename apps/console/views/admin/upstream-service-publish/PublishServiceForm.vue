@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import JsonConfigFileEditor from "../../../components/JsonConfigFileEditor.vue";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../components/ConsoleInlineAlert.vue";
+import HelpTooltip from "../../../components/HelpTooltip.vue";
 import MeshrixTabs, { type MeshrixTab } from "../../../components/MeshrixTabs.vue";
 import { descriptorObjectFields, type PublishDescriptorForm } from "./publish-form-model";
 
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{
+  save: [];
   publish: [];
   disable: [];
   republish: [];
@@ -29,11 +31,12 @@ const form = props.form;
 
 const activeTab = ref("basic");
 const operationError = ref("");
-const referenceError = ref("");
+const credentialError = ref("");
+const savedCredentialOptions = computed(() => Array.isArray(form.savedCredentialOptions) ? form.savedCredentialOptions : []);
 const formTabs: MeshrixTab[] = [
-  { key: "basic", label: "Basic" },
-  { key: "operations", label: "Service operations" },
-  { key: "references", label: "References" },
+  { key: "basic", label: "Service information" },
+  { key: "operations", label: "Tool paths" },
+  { key: "credentials", label: "Access credentials" },
   { key: "advanced", label: "Advanced JSON" },
 ];
 
@@ -58,46 +61,64 @@ function addOperation() {
   const responseMaxBytes = Number(form.responseMaxBytes);
   const requestMediaTypes = String(form.requestMediaTypes || "").split(",").map((value: any) => value.trim()).filter(Boolean);
   const responseMediaTypes = String(form.responseMediaTypes || "").split(",").map((value: any) => value.trim()).filter(Boolean);
-  if (!operationKey || !method || !path || !form.requestRepresentationMode || !form.responseRepresentationMode) {
-    operationError.value = "Complete all required operation fields.";
+  const hasResponseConfiguration = Boolean(
+    form.responseRepresentationMode ||
+    (form.responseMaxBytes !== "" && form.responseMaxBytes !== undefined) ||
+    responseMediaTypes.length > 0
+  );
+  if (!operationKey || !method || !path || !form.requestRepresentationMode) {
+    operationError.value = "Complete all required tool path fields.";
     return;
   }
-  if (!Number.isSafeInteger(requestMaxBytes) || requestMaxBytes < 1 || !Number.isSafeInteger(responseMaxBytes) || responseMaxBytes < 1) {
-    operationError.value = "Request and response byte limits must be positive whole numbers.";
+  if (!Number.isSafeInteger(requestMaxBytes) || requestMaxBytes < 1) {
+    operationError.value = "Request byte limits must be positive whole numbers.";
     return;
   }
-  if (requestMediaTypes.length === 0 || responseMediaTypes.length === 0) {
-    operationError.value = "Add at least one request and response media type.";
+  if (requestMediaTypes.length === 0) {
+    operationError.value = "Add at least one request media type.";
+    return;
+  }
+  if (hasResponseConfiguration && (
+    !form.responseRepresentationMode ||
+    !Number.isSafeInteger(responseMaxBytes) ||
+    responseMaxBytes < 1 ||
+    responseMediaTypes.length === 0
+  )) {
+    operationError.value = "Complete all response fields, or leave the optional response configuration empty.";
     return;
   }
   if (
     form.serviceProtocol === "json-rpc" &&
-    (form.requestRepresentationMode !== "structured_json" || form.responseRepresentationMode !== "structured_json")
+    (form.requestRepresentationMode !== "structured_json" ||
+      form.responseRepresentationMode !== "structured_json")
   ) {
-    operationError.value = "JSON-RPC operations require Structured JSON for both request and response.";
+    operationError.value = "JSON-RPC tool paths require Structured JSON for both request and response.";
     return;
   }
   if (form.operations?.some((operation: any) => operation.operationKey === operationKey)) {
-    operationError.value = "Operation keys must be unique within a service.";
+    operationError.value = "Tool identifiers must be unique within a service.";
     return;
   }
+  const payloadTransport: any = {
+    request: {
+      mode: form.requestRepresentationMode,
+      maxBytes: requestMaxBytes,
+      mediaTypes: requestMediaTypes,
+    },
+    ...(hasResponseConfiguration ? {
+      response: {
+        mode: form.responseRepresentationMode,
+        maxBytes: responseMaxBytes,
+        mediaTypes: responseMediaTypes,
+      }
+    } : {})
+  };
   (form.operations ||= []).push({
     operationKey,
     method,
     path,
     ...(form.risk ? { risk: form.risk } : {}),
-    payloadTransport: {
-      request: {
-        mode: form.requestRepresentationMode,
-        maxBytes: requestMaxBytes,
-        mediaTypes: requestMediaTypes,
-      },
-      response: {
-        mode: form.responseRepresentationMode,
-        maxBytes: responseMaxBytes,
-        mediaTypes: responseMediaTypes,
-      },
-    },
+    payloadTransport,
   });
   form.operationKey = "";
   form.method = "";
@@ -115,31 +136,56 @@ function removeOperation(index: number) {
   form.operations?.splice(index, 1);
 }
 
-function addReference() {
-  referenceError.value = "";
-  const revision = Number(form.referenceRevision);
-  if (!form.referenceType || !form.referenceValue?.trim() || !form.referenceUse?.trim()) {
-    referenceError.value = "Complete all required reference fields.";
-    return;
-  }
-  if (!Number.isSafeInteger(revision) || revision < 1) {
-    referenceError.value = "Reference revision must be a positive whole number.";
-    return;
-  }
-  (form.references ||= []).push({
-    type: form.referenceType,
-    reference: form.referenceValue.trim(),
-    revision,
-    use: form.referenceUse.trim()
-  });
-  form.referenceType = "";
-  form.referenceValue = "";
-  form.referenceRevision = "";
-  form.referenceUse = "";
+function credentialOptionLabel(reference: Record<string, any>, index: number): string {
+  const type = String(reference.type || "Credential").trim();
+  const use = String(reference.use || "").trim();
+  const revision = Number(reference.revision);
+  const name = use || `${type} ${index + 1}`;
+  return Number.isSafeInteger(revision) && revision > 0 ? `${name} (revision ${revision})` : name;
 }
 
-function removeReference(index: number) {
-  form.references?.splice(index, 1);
+function sameCredentialReference(left: Record<string, any>, right: Record<string, any>): boolean {
+  return ["type", "reference", "revision", "use"].every((field: string) => String(left?.[field] ?? "") === String(right?.[field] ?? ""));
+}
+
+function applySavedCredential(index: number): boolean {
+  const selected = savedCredentialOptions.value[index];
+  if (!selected) {
+    credentialError.value = "Select a saved credential before publishing.";
+    form.references = [];
+    return false;
+  }
+  form.references = [{ ...selected }];
+  credentialError.value = "";
+  return true;
+}
+
+function updateCredentialMode() {
+  credentialError.value = "";
+  if (form.credentialMode !== "saved") {
+    form.credentialSelection = "";
+    form.references = [];
+    return;
+  }
+  if (!savedCredentialOptions.value.length) {
+    form.credentialSelection = "";
+    form.references = [];
+    credentialError.value = "No saved credentials are available. Save a credential in Meshrix before selecting it.";
+    return;
+  }
+  const currentIndex = savedCredentialOptions.value.findIndex((entry: any) =>
+    form.references?.some((reference: any) => sameCredentialReference(reference, entry))
+  );
+  form.credentialSelection = currentIndex >= 0 ? String(currentIndex) : "";
+  if (currentIndex >= 0) applySavedCredential(currentIndex);
+}
+
+function updateSelectedCredential() {
+  credentialError.value = "";
+  const index = Number(form.credentialSelection);
+  if (!Number.isSafeInteger(index) || index < 0 || !applySavedCredential(index)) {
+    form.credentialSelection = "";
+  }
 }
 </script>
 
@@ -147,51 +193,101 @@ function removeReference(index: number) {
   <section class="publish-form">
     <MeshrixTabs v-model="activeTab" :tabs="formTabs" size="small" aria-label="Service editor sections" />
 
-    <div v-if="activeTab === 'basic'" class="tab-content" role="tabpanel" aria-label="Basic service settings">
-      <label class="form-field">
-        <span>Service key *</span>
-        <input v-model="form.serviceKey" type="text" placeholder="my-service" :disabled="!!selectedServiceId" />
-      </label>
-      <label class="form-field">
-        <span>Label</span>
-        <input v-model="form.label" type="text" placeholder="My Service" />
-      </label>
-      <label class="form-field">
-        <span>Description</span>
-        <input v-model="form.description" type="text" placeholder="Service description" />
-      </label>
-      <label class="form-field">
-        <span>Protocol</span>
-        <select v-model="form.serviceProtocol">
+    <div v-if="activeTab === 'basic'" class="tab-content" role="tabpanel" aria-label="Service information settings">
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-protocol">Protocol</label>
+          <HelpTooltip
+            aria-label="Protocol help"
+            text="The communication protocol Meshrix uses to call the external service. Choose HTTP for HTTP or REST endpoints, or JSON-RPC for JSON-RPC methods."
+          />
+        </div>
+        <select id="upstream-service-protocol" v-model="form.serviceProtocol">
           <option value="">Select protocol</option>
           <option value="http">HTTP</option>
           <option value="json-rpc">JSON-RPC</option>
         </select>
-      </label>
-      <label class="form-field">
-        <span>Base URL *</span>
-        <input v-model="form.baseUrl" type="text" placeholder="http://127.0.0.1:8080" />
-      </label>
-      <label class="form-field">
-        <span>Visibility</span>
-        <input v-model="form.visibility" type="text" placeholder="Leave empty when not configured" />
-      </label>
-      <label class="form-field">
-        <span>Data class</span>
-        <input v-model="form.dataClass" type="text" placeholder="Leave empty when not configured" />
-      </label>
-      <label class="form-field">
-        <span>Tags</span>
-        <input :value="form.tags?.join(', ') || ''" type="text" placeholder="Comma-separated tags" @input="updateTags" />
-      </label>
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-url">Service URL *</label>
+          <HelpTooltip
+            aria-label="Service URL help"
+            text="The base address of the external service. Include http:// or https://, the host, and an explicit port. For example: https://api.example:443. Do not include credentials."
+            :max-width="420"
+          />
+        </div>
+        <input id="upstream-service-url" v-model="form.baseUrl" type="text" placeholder="http://127.0.0.1:8080" />
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-key">Service identifier *</label>
+          <HelpTooltip
+            aria-label="Service identifier help"
+            text="A unique, stable identifier used by Meshrix to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication."
+            :max-width="420"
+          />
+        </div>
+        <input id="upstream-service-key" v-model="form.serviceKey" type="text" placeholder="my-service" :disabled="!!selectedServiceId" />
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-name">Service name</label>
+          <HelpTooltip
+            aria-label="Service name help"
+            text="A human-readable name shown in Meshrix. It can differ from the service identifier and can be updated later."
+          />
+        </div>
+        <input id="upstream-service-name" v-model="form.label" type="text" placeholder="My Service" />
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-description">Service description</label>
+          <HelpTooltip
+            aria-label="Service description help"
+            text="A short explanation of what the external service provides, shown to operators when they review the service in Meshrix."
+          />
+        </div>
+        <input id="upstream-service-description" v-model="form.description" type="text" placeholder="Service description" />
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-visibility">Visibility</label>
+          <HelpTooltip
+            aria-label="Visibility help"
+            text="Optional visibility metadata for discovery and governance policies. Enter only a value defined by your organization; otherwise leave it empty."
+          />
+        </div>
+        <input id="upstream-service-visibility" v-model="form.visibility" type="text" placeholder="Leave empty when not configured" />
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-data-class">Data class</label>
+          <HelpTooltip
+            aria-label="Data class help"
+            text="Optional data-classification metadata used by governance policies. Enter only a classification defined by your organization; otherwise leave it empty."
+          />
+        </div>
+        <input id="upstream-service-data-class" v-model="form.dataClass" type="text" placeholder="Leave empty when not configured" />
+      </div>
+      <div class="form-field">
+        <div class="field-label-row">
+          <label for="upstream-service-tags">Tags</label>
+          <HelpTooltip
+            aria-label="Tags help"
+            text="Optional comma-separated governance tags used for filtering and policy matching. Use tags already defined by your organization; otherwise leave this empty."
+          />
+        </div>
+        <input id="upstream-service-tags" :value="form.tags?.join(', ') || ''" type="text" placeholder="Comma-separated tags" @input="updateTags" />
+      </div>
     </div>
 
-    <div v-if="activeTab === 'operations'" class="tab-content" role="tabpanel" aria-label="Service operations">
+    <div v-if="activeTab === 'operations'" class="tab-content" role="tabpanel" aria-label="Tool paths">
       <p class="form-help">Manual setup covers JSON and native stream payloads. Use service JSON import for artifact payload mappings.</p>
       <div class="operation-builder">
         <div class="field-grid">
           <label class="form-field">
-            <span>Operation key *</span>
+            <span>Tool identifier *</span>
             <input v-model="form.operationKey" type="text" placeholder="list-items" />
           </label>
           <label class="form-field">
@@ -241,9 +337,16 @@ function removeReference(index: number) {
             </label>
           </fieldset>
           <fieldset>
-            <legend>Response</legend>
+            <legend class="fieldset-label-row">
+              <span>Response (optional)</span>
+              <HelpTooltip
+                aria-label="Response help"
+                text="Leave empty to use governed native passthrough. Meshrix still enforces response size and transport boundaries."
+                :max-width="420"
+              />
+            </legend>
             <label class="form-field">
-              <span>Representation *</span>
+              <span>Representation</span>
               <select v-model="form.responseRepresentationMode">
                 <option value="">Select representation</option>
                 <option value="structured_json">Structured JSON</option>
@@ -251,75 +354,74 @@ function removeReference(index: number) {
               </select>
             </label>
             <label class="form-field">
-              <span>Maximum bytes *</span>
+              <span>Maximum bytes</span>
               <input v-model.number="form.responseMaxBytes" type="number" min="1" placeholder="1048576" />
             </label>
             <label class="form-field">
-              <span>Media types *</span>
+              <span>Media types</span>
               <input v-model="form.responseMediaTypes" type="text" placeholder="application/json" />
             </label>
           </fieldset>
         </div>
         <ConsoleInlineAlert v-if="operationError" tone="danger">{{ operationError }}</ConsoleInlineAlert>
         <div class="builder-actions">
-          <button type="button" class="table-action" @click="addOperation">Add operation</button>
+          <button type="button" class="table-action" @click="addOperation">Add tool path</button>
         </div>
       </div>
       <ul class="op-list">
         <li v-for="(op, i) in form.operations" :key="op.operationKey">
           <span class="operation-name"><strong>{{ op.operationKey }}</strong><span>{{ op.method }} {{ op.path }}</span></span>
           <small v-if="op.risk">{{ op.risk }}</small>
-          <small>{{ op.payloadTransport.request.mode }} → {{ op.payloadTransport.response.mode }}</small>
+          <small>{{ op.payloadTransport.request.mode }} → {{ op.payloadTransport.response?.mode || "governed passthrough" }}</small>
           <button type="button" class="inline-remove" @click="removeOperation(i)">Remove<span class="visually-hidden"> {{ op.operationKey }}</span></button>
         </li>
-        <ConsoleEmptyState v-if="!form.operations?.length" as="li" compact title="No operations defined." />
+        <ConsoleEmptyState v-if="!form.operations?.length" as="li" compact title="No tool paths defined." />
       </ul>
     </div>
 
-    <div v-if="activeTab === 'references'" class="tab-content" role="tabpanel" aria-label="Service references">
-      <p class="form-help">Reference URIs point to governed credentials. Do not paste secret values.</p>
-      <div class="reference-builder">
+    <div v-if="activeTab === 'credentials'" class="tab-content" role="tabpanel" aria-label="Access credentials">
+      <p class="form-help">Public services can use no authentication. For protected services, select a credential already saved in Meshrix; secret values and reference URIs are never entered here.</p>
+      <div class="credential-builder">
         <div class="field-grid">
-          <label class="form-field">
-            <span>Reference type *</span>
-            <select v-model="form.referenceType">
-              <option value="">Select type</option>
-              <option value="credential">Credential</option>
-              <option value="certificate">Certificate</option>
-              <option value="private-key">Private key</option>
-              <option value="trust-anchor">Trust anchor</option>
+          <div class="form-field">
+            <div class="field-label-row">
+              <label for="upstream-service-credential-mode">Access credential</label>
+              <HelpTooltip
+                aria-label="Access credential help"
+                text="Choose no authentication for a public service, or select a credential already saved in Meshrix. This form never accepts a credential URI or secret value."
+                :max-width="420"
+              />
+            </div>
+            <select id="upstream-service-credential-mode" v-model="form.credentialMode" @change="updateCredentialMode">
+              <option value="none">No authentication</option>
+              <option value="saved">Select saved credential</option>
+            </select>
+          </div>
+          <label v-if="form.credentialMode === 'saved'" class="form-field" for="upstream-service-saved-credential">
+            <span>Saved credential *</span>
+            <select
+              id="upstream-service-saved-credential"
+              v-model="form.credentialSelection"
+              :disabled="!savedCredentialOptions.length"
+              @change="updateSelectedCredential"
+            >
+              <option value="">{{ savedCredentialOptions.length ? "Select a saved credential" : "No saved credentials available" }}</option>
+              <option v-for="(credential, index) in savedCredentialOptions" :key="`${credential.type || 'credential'}:${index}`" :value="String(index)">
+                {{ credentialOptionLabel(credential, index) }}
+              </option>
             </select>
           </label>
-          <label class="form-field">
-            <span>Reference URI *</span>
-            <input v-model="form.referenceValue" type="text" placeholder="credential://vault/service" />
-          </label>
-          <label class="form-field">
-            <span>Reference revision *</span>
-            <input v-model.number="form.referenceRevision" type="number" min="1" placeholder="1" />
-          </label>
-          <label class="form-field">
-            <span>Reference use *</span>
-            <input v-model="form.referenceUse" type="text" placeholder="request-auth" />
-          </label>
         </div>
-        <ConsoleInlineAlert v-if="referenceError" tone="danger">{{ referenceError }}</ConsoleInlineAlert>
-        <div class="builder-actions">
-          <button type="button" class="table-action" @click="addReference">Add reference</button>
-        </div>
+        <ConsoleInlineAlert v-if="credentialError" tone="danger">{{ credentialError }}</ConsoleInlineAlert>
+        <p v-if="form.credentialMode === 'saved' && form.references?.length" class="credential-selection-summary">
+          Selected: {{ credentialOptionLabel(form.references[0], 0) }}
+        </p>
       </div>
-      <ul class="op-list">
-        <li v-for="(reference, i) in form.references" :key="`${reference.type}:${reference.reference}:${reference.revision}`">
-          <strong>{{ reference.type }}</strong> {{ reference.reference }} (r{{ reference.revision }})
-          <button type="button" class="inline-remove" @click="removeReference(i)">Remove<span class="visually-hidden"> {{ reference.reference }}</span></button>
-        </li>
-        <ConsoleEmptyState v-if="!form.references?.length" as="li" compact title="No references defined." />
-      </ul>
     </div>
 
     <div v-if="activeTab === 'advanced'" class="tab-content advanced-config-grid" role="tabpanel" aria-label="Advanced service JSON">
-      <section class="operation-descriptor-preview" aria-label="Imported operation descriptors">
-        <h3>Imported operation descriptors</h3>
+      <section class="operation-descriptor-preview" aria-label="Imported tool descriptors">
+        <h3>Imported tool descriptors</h3>
         <p class="form-help">Read-only payload mappings and byte envelopes loaded from the service descriptor.</p>
         <div v-if="form.operations?.length" class="operation-descriptor-summary">
           <article v-for="operation in form.operations" :key="operation.operationKey">
@@ -349,7 +451,8 @@ function removeReference(index: number) {
     </div>
 
     <div class="form-actions">
-      <button class="table-action primary" type="button" :disabled="loading || (!selectedServiceId && !form.serviceKey)" @click="emit('publish')">
+      <button class="table-action" type="button" :disabled="loading" @click="emit('save')">Save</button>
+      <button class="table-action primary" type="button" :disabled="loading || (!selectedServiceId && !form.serviceKey) || (form.credentialMode === 'saved' && !form.references?.length)" @click="emit('publish')">
         {{ selectedServiceId ? 'Update' : 'Publish' }}
       </button>
       <button v-if="selectedServiceId" class="table-action" type="button" :disabled="loading" @click="emit('disable')">Disable</button>
@@ -429,6 +532,12 @@ function removeReference(index: number) {
   gap: 0.25rem;
   font-size: 0.85rem;
 }
+.field-label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  width: fit-content;
+}
 .form-field input,
 .form-field select {
   padding: 0.4rem 0.5rem;
@@ -437,7 +546,7 @@ function removeReference(index: number) {
   font-size: 0.85rem;
 }
 .operation-builder,
-.reference-builder {
+.credential-builder {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -464,6 +573,9 @@ function removeReference(index: number) {
   background: var(--bg-surface);
 }
 .transport-grid legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
   padding: 0 0.3rem;
   font-size: 0.85rem;
   font-weight: 600;
@@ -471,6 +583,11 @@ function removeReference(index: number) {
 .builder-actions {
   display: flex;
   justify-content: flex-end;
+}
+.credential-selection-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }
 .op-list {
   list-style: none;
@@ -514,6 +631,7 @@ function removeReference(index: number) {
 }
 .form-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 0.5rem;
   margin-top: auto;
   padding-top: 0.75rem;

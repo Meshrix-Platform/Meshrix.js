@@ -346,6 +346,7 @@ export function rowToPendingOperation(row?: any, { includeOriginalInput = false 
   };
   if (includeOriginalInput) {
     pending.originalInput = parseJson(row.resume_input_json || row.original_input_json, {});
+    pending.credentialAuthorization = parseJson(row.credential_authorization_json, {});
   }
   return pending;
 }

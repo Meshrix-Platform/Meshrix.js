@@ -24,7 +24,7 @@ describe("approval side navigation", () : any => {
   it("loads the all-items projection before scrolling to a historical approval", async () : Promise<any> => {
     const selectApprovalFlowStatus: any = vi.fn(async () : Promise<any> => {});
     const target: any = document.createElement("div");
-    target.id = "approval-authorization:history-request";
+    target.id = "approval-pendingOperation:history-operation";
     target.scrollIntoView = vi.fn();
     document.body.append(target);
     vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback?: any) : any => {
@@ -34,20 +34,6 @@ describe("approval side navigation", () : any => {
     sideNavContextMock.current = {
       activeSideNavDirectory: ref("approval"),
       approvalFlowConsole: {
-        mcpAuthorizationRequests: ref([
-          {
-            requestId: "pending-request",
-            clientName: "Pending client",
-            status: "pending",
-            createdAt: "2026-01-01T00:00:00.000Z",
-          },
-          {
-            requestId: "history-request",
-            clientName: "History client",
-            status: "consumed",
-            consumedAt: "2026-01-01T00:02:00.000Z",
-          },
-        ]),
         operationPermissionPendingOperations: ref([
           {
             pendingOperationId: "history-operation",
@@ -58,7 +44,6 @@ describe("approval side navigation", () : any => {
             completedAt: "2026-01-01T00:01:00.000Z",
           },
         ]),
-        refreshMcpAuthorizationRequests: vi.fn(async () : Promise<any> => {}),
         refreshOperationPermissionPendingOperations: vi.fn(async () : Promise<any> => {}),
         selectApprovalFlowStatus,
       },
@@ -76,14 +61,13 @@ describe("approval side navigation", () : any => {
     };
     const wrapper: any = mount(ConsoleSideNavDirectory);
 
-    expect(wrapper.text()).toContain("已交付");
-    expect(wrapper.text()).not.toContain("consumed");
+    expect(wrapper.text()).toContain("已处理");
     expect(wrapper.text()).toContain("Convert document");
     expect(wrapper.text()).toContain("受限写入");
 
     const historyButton: any = wrapper
       .findAll("button.side-nav-directory-item-main")
-      .find((button?: any) : any => button.text().includes("History client"));
+      .find((button?: any) : any => button.text().includes("Convert document"));
     expect(historyButton).toBeDefined();
     await historyButton!.trigger("click");
     await flushPromises();

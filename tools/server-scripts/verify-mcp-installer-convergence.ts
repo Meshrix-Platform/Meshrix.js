@@ -36,7 +36,6 @@ const VERIFIED_DOWNLOAD_GUIDANCE_FILES: any[] = [
   "docs/architecture/MCP-NATIVE-INSTALLER.md",
   "packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.ts",
   "packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts",
-  "packages/capabilities/src/skills/tool-skill-management-provider-local-mcp.ts",
   "tools/server-scripts/lib/mcp-release-manifest.ts"
 ];
 
@@ -275,7 +274,7 @@ try {
     assert.match(shSource, /gateway-installer\/bin\/meshrix-mcp\.ts/u);
     assert.match(ps1Source, /gateway-installer\\bin\\meshrix-mcp\.ts/u);
     assert.match(shSource, /--token\|--token=\*/u);
-    assert.match(ps1Source, /Raw tokens are not accepted/u);
+    assert.match(ps1Source, /Raw API Keys are not accepted/u);
     assert.equal(/\beval\b/u.test(shSource), false);
     assert.equal(shSource.includes("/api/mcp/discovery"), false);
     assert.equal(ps1Source.includes("Invoke-RestMethod"), false);

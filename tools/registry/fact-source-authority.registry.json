@@ -419,28 +419,6 @@
       ]
     },
     {
-      "id": "mcp-process-identity-credential-store-evidence",
-      "factKey": "mcp-process-identity.credential-store-evidence",
-      "domain": "MCP process identity credential-store release evidence and platform backend readiness.",
-      "authorityPath": "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts",
-      "authorityRole": "credential-store-evidence-reducer",
-      "projectionPaths": [
-        "build/reports/mcp-process-identity-credential-store.json"
-      ],
-      "consumerPaths": [
-        "tools/server-scripts/verify-mcp-process-identity-credential-store.ts",
-        "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
-      ],
-      "verification": [
-        "npm run verify:mcp-process-identity-credential-store",
-        "npm run server:verify:script-registry"
-      ],
-      "nonAuthorityBoundaries": [
-        "File fallback or container-only proof cannot independently declare production credential-store readiness."
-      ]
-    },
-    {
       "id": "composition-source-package",
       "factKey": "composition.source-package",
       "domain": "Self-contained open source composition package root selection, copy plan, manifest hashing, and source package verification.",

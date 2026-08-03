@@ -190,7 +190,7 @@ export function useOperationPermissionViewConsole() : any {
 
   const { operationPermissionConsole } = useServerConsoleShellContext();
   const {
-    busyKey,
+    isBusy,
     copyIssuedToolToken,
     createGrant,
     deleteGrant,
@@ -246,7 +246,7 @@ export function useOperationPermissionViewConsole() : any {
     authorizationGovernanceLoading,
     authorizationGovernanceMetrics,
     authorizationGovernanceSaving,
-    busyKey,
+    isBusy,
     copyIssuedToolToken,
     createGrant,
     deleteGrant,

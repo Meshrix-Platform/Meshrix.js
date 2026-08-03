@@ -1,7 +1,22 @@
 import { getRuntimeLogger, summarizeForLog } from "@meshrix/foundation/observability/runtime-logger";
 import { traceContextFromRequest } from "@meshrix/foundation/observability/trace-context";
 import { canonicalHash } from "@meshrix/foundation/serialization/canonical-json";
-import { approvalAlreadySatisfiesPolicy, approvalLayers, nowIso, parseJsonObject, pendingResumeInput, policyRevisionSummary, randomId, sourceIpFromRequest, trustedApprovedPendingOperation } from "./runtime-common.ts";
+import {
+  approvalAlreadySatisfiesPolicy,
+  approvalLayers,
+  authorizationGrantId,
+  authorizationPolicy,
+  authorizationSubject,
+  authorizationSubjectId,
+  authorizationSubjectType,
+  nowIso,
+  parseJsonObject,
+  pendingResumeInput,
+  policyRevisionSummary,
+  randomId,
+  sourceIpFromRequest,
+  trustedApprovedPendingOperation
+} from "./runtime-common.ts";
 import { revalidateGrantForExecution } from "./revalidate-grant-for-execution.ts";
 import { denyInvalidInputExecution } from "./runtime-denials.ts";
 import { completeDryRunExecution } from "./runtime-dry-run.ts";
@@ -20,8 +35,134 @@ import {
 } from "./runtime-transport.ts";
 import { toolActorFromAuthorization } from "./runtime-tool-actor.ts";
 import { denyUnknownToolExecution } from "./runtime-unknown-tool.ts";
+import { apiKeyAuthorizationEvaluationInput } from "./api-key-distribution.ts";
 
 const RISK_RANK: Readonly<Record<string, any>> = Object.freeze({ read_only: 0, safe_write: 1, repair_write: 2, destructive: 3 });
+
+function protectedSinkApprovalRevision(approvedPendingOperation: any = null) : string {
+  return canonicalHash({
+    pendingOperationId: String(approvedPendingOperation?.pendingOperationId || "none"),
+    status: String(approvedPendingOperation?.status || "none"),
+    bindingDigest: String(approvedPendingOperation?.requiredApproval?.operationBinding?.bindingDigest || "none")
+  });
+}
+
+function apiKeyProtectedSinkAuthority({
+  authorization,
+  policySummary,
+  tool,
+  approvedPendingOperation = null
+}: Record<string, any>): any {
+  if (authorization?.credentialKind !== "scoped_api_key") return null;
+  const lifecycleRevision: any = Number(authorization.lifecycleRevision || 0);
+  const policyFingerprint: any = String(authorization.policyFingerprint || "");
+  const workloadPrincipalId: any = String(authorization.workloadPrincipalId || "");
+  const organizationNodeId: any = String(authorization.organizationNodeId || "");
+  const keyId: any = String(authorization.keyId || "");
+  if (!Number.isSafeInteger(lifecycleRevision) || lifecycleRevision < 1 || !policyFingerprint ||
+      !workloadPrincipalId || !organizationNodeId || !keyId) return null;
+  const subjectGeneration: any = canonicalHash({
+    kind: "scoped_api_key",
+    workloadPrincipalId,
+    organizationNodeId
+  });
+  return Object.freeze({
+    subject: Object.freeze({
+      generation: subjectGeneration,
+      subjectId: workloadPrincipalId,
+      tenantId: organizationNodeId,
+      type: "scoped-api-key"
+    }),
+    context: Object.freeze({
+      approvalRevision: protectedSinkApprovalRevision(approvedPendingOperation),
+      grantRevision: canonicalHash({ lifecycleRevision, policyFingerprint }),
+      policyRevision: canonicalHash({
+        policyFingerprint,
+        governance: policySummary?.governancePolicyRevision || null
+      }),
+      riskRevision: canonicalHash({
+        toolId: String(tool?.id || ""),
+        risk: String(tool?.risk || ""),
+        maximumRisk: String(authorization.policy?.maximumRisk || "")
+      }),
+      workloadGeneration: canonicalHash({ keyId, lifecycleRevision, subjectGeneration })
+    })
+  });
+}
+
+function toolGrantProtectedSinkAuthority({
+  authorization,
+  policySummary,
+  tool,
+  approvedPendingOperation = null
+}: Record<string, any>): any {
+  const grant: any = authorization?.grant;
+  const grantId: any = String(grant?.id || "");
+  const projectionFingerprint: any = String(grant?.projectionFingerprint || "");
+  if (!grantId || !projectionFingerprint) return null;
+  const subject: any = authorizationSubject(authorization);
+  const subjectId: any = String(subject.subjectId || grantId);
+  const tenantId: any = String(
+    subject.tenantId ||
+    grant.metadata?.organizationNodeId ||
+    grant.metadata?.tenantId ||
+    "local"
+  );
+  const subjectGeneration: any = canonicalHash({
+    kind: "tool_grant",
+    grantId,
+    projectionFingerprint
+  });
+  return Object.freeze({
+    subject: Object.freeze({
+      generation: subjectGeneration,
+      subjectId,
+      tenantId,
+      type: "tool-grant"
+    }),
+    context: Object.freeze({
+      approvalRevision: protectedSinkApprovalRevision(approvedPendingOperation),
+      grantRevision: canonicalHash({ grantId, projectionFingerprint }),
+      policyRevision: canonicalHash({
+        projectionFingerprint,
+        grantPolicyRevision: Number(policySummary?.grantPolicyRevision || 0),
+        governance: policySummary?.governancePolicyRevision || null
+      }),
+      riskRevision: canonicalHash({
+        toolId: String(tool?.id || ""),
+        risk: String(tool?.risk || ""),
+        requiresApproval: tool?.requiresApproval === true
+      }),
+      workloadGeneration: canonicalHash({
+        grantId,
+        subjectGeneration,
+        tokenFamilyId: String(grant.tokenFamilyId || "")
+      })
+    })
+  });
+}
+
+function protectedSinkAuthority({
+  authorization,
+  apiKeyAuthorization = null,
+  policySummary,
+  tool,
+  approvedPendingOperation = null
+}: Record<string, any>): any {
+  return apiKeyAuthorization
+    ? apiKeyProtectedSinkAuthority({
+        authorization: apiKeyAuthorization,
+        policySummary,
+        tool,
+        approvedPendingOperation
+      })
+    : toolGrantProtectedSinkAuthority({
+        authorization,
+        policySummary,
+        tool,
+        approvedPendingOperation
+      });
+}
 
 function toolWithDynamicCapability(tool: any = null, context: Record<string, any> = {}) : any {
   const descriptor: any = context?.dynamicCapability && typeof context.dynamicCapability === "object" && !Array.isArray(context.dynamicCapability)
@@ -62,6 +203,7 @@ export function createToolExecutionRuntime({
   controllers,
   operationAuditStore = null,
   operationConcurrencyScope = undefined,
+  apiKeyDistributionProvider = null,
   protocolEventBus = null,
   logger = getRuntimeLogger()
 }: Record<string, any>) : any {
@@ -104,6 +246,7 @@ export function createToolExecutionRuntime({
     requestMethod = "POST",
     signal = null,
     authorizedGrant = null,
+    apiKeyAuthorization = null,
     approvedPendingOperation = null
   }: Record<string, any> = {}) : Promise<any> {
     const trustedApproval: any = trustedApprovedPendingOperation(approvedPendingOperation);
@@ -161,7 +304,18 @@ export function createToolExecutionRuntime({
     });
     await publishEvent("tools.execution", { toolExecutionId, traceId, toolId: tool.id, status: "started" }, { type: "tools.execution.started" });
 
-    const authorization: any = authorizedGrant
+    const apiKeyEvaluation: any = apiKeyAuthorization
+      ? apiKeyAuthorizationEvaluationInput(apiKeyAuthorization)
+      : null;
+    const apiKeyRestriction: any = apiKeyEvaluation?.restriction || null;
+    const authorization: any = apiKeyAuthorization
+      ? {
+          ok: true,
+          restriction: apiKeyRestriction,
+          subject: apiKeyEvaluation.subject,
+          apiKeyAuthorization
+        }
+      : authorizedGrant
       ? await Promise.resolve(revalidateGrantForExecution({
           store,
           capturedGrant: authorizedGrant,
@@ -180,6 +334,10 @@ export function createToolExecutionRuntime({
           url: requestUrl,
           method: requestMethod
         });
+    const runtimeSubject: any = authorizationSubject(authorization);
+    const runtimeSubjectId: any = authorizationSubjectId(authorization);
+    const runtimeSubjectType: any = authorizationSubjectType(authorization);
+    const runtimeGrantId: any = authorizationGrantId(authorization);
     if (!authorization.ok) {
       const durationMs: any = Date.now() - startedAtMs;
       logTool("warn", "operation_permission.execute.denied", {
@@ -202,7 +360,7 @@ export function createToolExecutionRuntime({
           toolExecutionId,
           traceId,
           toolId: tool.id,
-          grantId: authorization.grant?.id || "",
+          grantId: runtimeGrantId,
           missingScopes: authorization.missingScopes || []
         });
       } else {
@@ -211,7 +369,7 @@ export function createToolExecutionRuntime({
           toolExecutionId,
           traceId,
           toolId: tool.id,
-          grantId: authorization.grant?.id || "",
+          grantId: runtimeGrantId,
           missingScopes: authorization.missingScopes || []
         });
       }
@@ -221,21 +379,8 @@ export function createToolExecutionRuntime({
         toolExecutionId,
         toolId: tool.id,
         operationId: tool.operationId,
-        grantId: authorization.grant?.id || "",
-        subject: authorization.grant
-          ? {
-              type: "tool-grant",
-              subjectId: authorization.grant.id,
-              username: authorization.grant.label || authorization.grant.id,
-              scopes: authorization.grant.scopes || [],
-              capabilities: authorization.grant.capabilities || []
-            }
-          : {
-              type: "anonymous",
-              subjectId: "",
-              scopes: [],
-              capabilities: []
-            },
+        grantId: runtimeGrantId,
+        subject: runtimeSubject,
         resource: {
           toolId: tool.id,
           operationId: tool.operationId,
@@ -251,9 +396,9 @@ export function createToolExecutionRuntime({
         toolId: tool.id,
         toolVersion: tool.version,
         toolsetIds: tool.toolsets,
-        subjectType: "grant",
-        subjectId: authorization.grant?.id || "",
-        grantId: authorization.grant?.id || "",
+        subjectType: runtimeSubjectType,
+        subjectId: runtimeSubjectId,
+        grantId: runtimeGrantId,
         agentId: context.agentId || "",
         profileId: context.profileId || "",
         operationId: tool.operationId,
@@ -272,7 +417,7 @@ export function createToolExecutionRuntime({
       store.appendMetric({
         traceId,
         toolId: tool.id,
-        grantId: authorization.grant?.id || "",
+        grantId: runtimeGrantId,
         profileId: context.profileId || "",
         status: "denied",
         risk: tool.risk,
@@ -302,6 +447,9 @@ export function createToolExecutionRuntime({
     const policy: any = await policyEngine.evaluate({
       tool,
       grant: authorization.grant,
+      restriction: authorization.restriction,
+      subject: authorization.subject,
+      credentialKind: apiKeyAuthorization ? "scoped_api_key" : "tool_grant",
       profile,
       input,
       request,
@@ -313,6 +461,13 @@ export function createToolExecutionRuntime({
 
     // Approval proof must come from resumePendingOperation's internal parameter, never caller context.
     const policySummary: any = policyRevisionSummary(policy);
+    const admissionProtectedSinkAuthority: any = protectedSinkAuthority({
+      authorization,
+      apiKeyAuthorization,
+      policySummary,
+      tool,
+      approvedPendingOperation: trustedApproval
+    });
     const approvalOperationBindingCore: Record<string, any> = {
       schemaVersion: "v0.0.1:operation-permission:approval-operation-binding-1",
       operationId: String(tool.operationId || ""),
@@ -340,7 +495,16 @@ export function createToolExecutionRuntime({
         grantPolicyRevision: policySummary.grantPolicyRevision,
         governancePolicyRevision: policySummary.governancePolicyRevision.revision
       },
-      grantProjectionFingerprint: String(authorization.grant?.projectionFingerprint || "")
+      credentialBinding: {
+        kind: apiKeyAuthorization ? "scoped_api_key" : "tool_grant",
+        id: apiKeyAuthorization ? String(apiKeyAuthorization.keyId || "") : runtimeGrantId,
+        policyFingerprint: String(
+          authorization.restriction?.policyFingerprint || authorization.grant?.projectionFingerprint || ""
+        )
+      },
+      grantProjectionFingerprint: String(
+        authorization.grant?.projectionFingerprint || authorization.restriction?.policyFingerprint || ""
+      )
     };
     const approvalOperationBinding: Record<string, any> = {
       ...approvalOperationBindingCore,
@@ -352,7 +516,7 @@ export function createToolExecutionRuntime({
         persistedBinding.schemaVersion === approvalOperationBinding.schemaVersion &&
         persistedBinding.operationId === approvalOperationBinding.operationId &&
         persistedBinding.bindingDigest === approvalOperationBinding.bindingDigest &&
-        trustedApproval.grantId === String(authorization.grant?.id || "") &&
+        trustedApproval.grantId === runtimeGrantId &&
         trustedApproval.operationId === String(tool.operationId || "") &&
         persistedBinding.resource?.workspaceId === approvalOperationBinding.resource.workspaceId &&
         persistedBinding.resource?.targetWorkspaceId === approvalOperationBinding.resource.targetWorkspaceId &&
@@ -372,9 +536,9 @@ export function createToolExecutionRuntime({
           toolId: tool.id,
           toolVersion: tool.version,
           toolsetIds: tool.toolsets,
-          subjectType: "grant",
-          subjectId: authorization.grant.id,
-          grantId: authorization.grant.id,
+          subjectType: runtimeSubjectType,
+          subjectId: runtimeSubjectId,
+          grantId: runtimeGrantId,
           agentId: context.agentId || "",
           profileId: context.profileId || "",
           operationId: tool.operationId,
@@ -394,7 +558,7 @@ export function createToolExecutionRuntime({
         store.appendMetric({
           traceId,
           toolId: tool.id,
-          grantId: authorization.grant.id,
+          grantId: runtimeGrantId,
           profileId: context.profileId || "",
           status: "denied",
           risk: tool.risk,
@@ -491,7 +655,7 @@ export function createToolExecutionRuntime({
         approvalScope: tool.approvalScope || operation.safety?.approvalScope || "",
         requiredApproval,
         approvalLayers,
-        grantId: authorization.grant.id,
+        grantId: runtimeGrantId,
         agentId: context.agentId || context.agentProfileId || "",
         profileId: context.profileId || context.agentProfileId || "",
         idempotencyKey: context.idempotencyKey || "",
@@ -499,6 +663,7 @@ export function createToolExecutionRuntime({
         riskReason: approvalReason,
         originalInput: input,
         resumeInput: pendingResumeInput(input, tool.operationId),
+        ...(apiKeyAuthorization ? { credentialAuthorization: apiKeyAuthorization } : {}),
         context,
         sourceIp: authorization.sourceIp || sourceIpFromRequest(request),
         userAgent: request?.headers?.["user-agent"] || "",
@@ -510,9 +675,9 @@ export function createToolExecutionRuntime({
         toolId: tool.id,
         toolVersion: tool.version,
         toolsetIds: tool.toolsets,
-        subjectType: "grant",
-        subjectId: authorization.grant.id,
-        grantId: authorization.grant.id,
+        subjectType: runtimeSubjectType,
+        subjectId: runtimeSubjectId,
+        grantId: runtimeGrantId,
         agentId: context.agentId || "",
         profileId: context.profileId || "",
         operationId: tool.operationId,
@@ -540,7 +705,7 @@ export function createToolExecutionRuntime({
       store.appendMetric({
         traceId,
         toolId: tool.id,
-        grantId: authorization.grant.id,
+        grantId: runtimeGrantId,
         profileId: context.profileId || "",
         status: "pending_approval",
         risk: tool.risk,
@@ -600,9 +765,9 @@ export function createToolExecutionRuntime({
         toolId: tool.id,
         toolVersion: tool.version,
         toolsetIds: tool.toolsets,
-        subjectType: "grant",
-        subjectId: authorization.grant.id,
-        grantId: authorization.grant.id,
+        subjectType: runtimeSubjectType,
+        subjectId: runtimeSubjectId,
+        grantId: runtimeGrantId,
         agentId: context.agentId || "",
         profileId: context.profileId || "",
         operationId: tool.operationId,
@@ -625,7 +790,7 @@ export function createToolExecutionRuntime({
       store.appendMetric({
         traceId,
         toolId: tool.id,
-        grantId: authorization.grant.id,
+        grantId: runtimeGrantId,
         profileId: context.profileId || "",
         status: "denied",
         risk: tool.risk,
@@ -690,18 +855,39 @@ export function createToolExecutionRuntime({
         return denyInvalidInput(schemaValidation);
       }
 
+    let apiKeyEffectLease: any = null;
     const revalidateAuthorization: any = async () : Promise<any> => {
-      let currentAuthorization: any = await store.authorizeRequest({
-        request,
-        requiredScopes: tool.requiredScopes,
-        tool,
-        context,
-        recordUse: false,
-        requestBody,
-        url: requestUrl,
-        method: requestMethod
-      });
-      if (!currentAuthorization.ok && authorizedGrant) {
+      let currentAuthorization: any;
+      if (apiKeyAuthorization) {
+        if (!apiKeyEffectLease) {
+          currentAuthorization = {
+            ok: false,
+            status: 409,
+            reasonCode: "api_key_effect_lease_required",
+            error: "API Key effect reservation is unavailable."
+          };
+        } else {
+          await apiKeyDistributionProvider.revalidateEffect(apiKeyEffectLease);
+          currentAuthorization = {
+            ok: true,
+            restriction: apiKeyRestriction,
+            subject: runtimeSubject,
+            apiKeyAuthorization
+          };
+        }
+      } else {
+        currentAuthorization = await store.authorizeRequest({
+          request,
+          requiredScopes: tool.requiredScopes,
+          tool,
+          context,
+          recordUse: false,
+          requestBody,
+          url: requestUrl,
+          method: requestMethod
+        });
+      }
+      if (!currentAuthorization.ok && authorizedGrant && !apiKeyAuthorization) {
         currentAuthorization = await Promise.resolve(revalidateGrantForExecution({
           store,
           capturedGrant: authorization.grant,
@@ -713,7 +899,7 @@ export function createToolExecutionRuntime({
       }
       if (
         !currentAuthorization.ok ||
-        currentAuthorization.grant?.id !== authorization.grant.id
+        authorizationSubjectId(currentAuthorization) !== runtimeSubjectId
       ) {
         return {
           ok: false,
@@ -726,6 +912,9 @@ export function createToolExecutionRuntime({
       const currentPolicy: any = await policyEngine.evaluate({
         tool,
         grant: currentAuthorization.grant,
+        restriction: currentAuthorization.restriction,
+        subject: currentAuthorization.subject,
+        credentialKind: apiKeyAuthorization ? "scoped_api_key" : "tool_grant",
         profile,
         input,
         request,
@@ -832,11 +1021,38 @@ export function createToolExecutionRuntime({
           authorizationDecision: currentPolicy
         };
       }
+      const effectiveAuthorizationDecision: any = Object.freeze({
+        ...currentPolicy,
+        allowed: true,
+        approvalSatisfied: Boolean(
+          currentApproval &&
+          (toolApprovalSatisfied || approvalSatisfiesPolicy)
+        )
+      });
       return {
         ok: true,
         grant: currentAuthorization.grant,
-        authorizationDecision: currentPolicy,
-        governancePolicyRevision: currentPolicy.governancePolicyRevision || null
+        restriction: currentAuthorization.restriction,
+        subject: authorizationSubject(currentAuthorization),
+        authorizationDecision: effectiveAuthorizationDecision,
+        governancePolicyRevision: currentPolicy.governancePolicyRevision || null,
+        ...(protectedSinkAuthority({
+          authorization: currentAuthorization,
+          apiKeyAuthorization,
+          policySummary: currentPolicySummary,
+          tool,
+          approvedPendingOperation: trustedApproval
+        })
+          ? {
+              protectedSinkAuthority: protectedSinkAuthority({
+                authorization: currentAuthorization,
+                apiKeyAuthorization,
+                policySummary: currentPolicySummary,
+                tool,
+                approvedPendingOperation: trustedApproval
+              })
+            }
+          : {})
       };
     };
 
@@ -844,6 +1060,11 @@ export function createToolExecutionRuntime({
     request.__meshrixToolRuntimeAuthorization = {
       ok: true,
       grant: authorization.grant,
+      restriction: authorization.restriction,
+      subject: runtimeSubject,
+      ...(admissionProtectedSinkAuthority
+        ? { protectedSinkAuthority: admissionProtectedSinkAuthority }
+        : {}),
       toolExecutionId,
       traceId,
       requiredScopes: tool.requiredScopes,
@@ -870,6 +1091,28 @@ export function createToolExecutionRuntime({
         : null
     };
     try {
+      if (apiKeyAuthorization && dryRun !== true) {
+        if (!apiKeyDistributionProvider?.reserveEffect) {
+          throw Object.assign(new Error("API Key effect reservation provider is unavailable."), {
+            code: "api_key_authority_unavailable",
+            statusCode: 503
+          });
+        }
+        apiKeyEffectLease = await apiKeyDistributionProvider.reserveEffect({
+          authorization: apiKeyAuthorization,
+          operation: {
+            id: tool.id,
+            toolId: tool.id,
+            serviceId: tool.serviceId || context?.dynamicCapability?.serviceId || "",
+            capabilityId: context?.dynamicCapability?.capabilityId || "",
+            toolsetIds: tool.toolsets || [],
+            scopeIds: tool.requiredScopes || [],
+            risk: tool.risk,
+            resourceContext: context.resourceContext || tool.resourceContext || {}
+          }
+        });
+        await apiKeyDistributionProvider.revalidateEffect(apiKeyEffectLease);
+      }
       const toolActor: any = toolActorFromAuthorization({
         authorization,
         trustedApproval,
@@ -924,9 +1167,9 @@ export function createToolExecutionRuntime({
           toolId: tool.id,
           toolVersion: tool.version,
           toolsetIds: tool.toolsets,
-          subjectType: "grant",
-          subjectId: authorization.grant.id,
-          grantId: authorization.grant.id,
+          subjectType: runtimeSubjectType,
+          subjectId: runtimeSubjectId,
+          grantId: runtimeGrantId,
           agentId: context.agentId || "",
           profileId: context.profileId || "",
           operationId: tool.operationId,
@@ -951,7 +1194,7 @@ export function createToolExecutionRuntime({
         store.appendMetric({
           traceId,
           toolId: tool.id,
-          grantId: authorization.grant.id,
+          grantId: runtimeGrantId,
           profileId: context.profileId || "",
           status: "failed",
           risk: tool.risk,
@@ -1019,9 +1262,9 @@ export function createToolExecutionRuntime({
         toolId: tool.id,
         toolVersion: tool.version,
         toolsetIds: tool.toolsets,
-        subjectType: "grant",
-        subjectId: authorization.grant.id,
-        grantId: authorization.grant.id,
+        subjectType: runtimeSubjectType,
+        subjectId: runtimeSubjectId,
+        grantId: runtimeGrantId,
         agentId: context.agentId || "",
         profileId: context.profileId || "",
         operationId: tool.operationId,
@@ -1045,7 +1288,7 @@ export function createToolExecutionRuntime({
       store.appendMetric({
         traceId,
         toolId: tool.id,
-        grantId: authorization.grant.id,
+        grantId: runtimeGrantId,
         profileId: context.profileId || "",
         status,
         risk: tool.risk,
@@ -1066,7 +1309,7 @@ export function createToolExecutionRuntime({
           toolId: tool.id,
           status,
           result: payload?.result !== undefined ? payload.result : payload,
-          grant: authorization.grant,
+          ...(authorization.grant ? { grant: authorization.grant } : {}),
           policy: policySummary
         }
       };
@@ -1077,11 +1320,20 @@ export function createToolExecutionRuntime({
         input, request, store, inputBytes, publishEvent, startedAt
       });
     } finally {
+      if (apiKeyEffectLease) {
+        await apiKeyDistributionProvider.releaseEffect(apiKeyEffectLease).catch(() : any => {});
+      }
       request.__meshrixToolRuntimeAuthorization = previousAuthorization;
     }
   }
 
-  const resumePendingOperation: any = createPendingOperationRuntime({ store, executeTool, publishEvent, securityPermissions });
+  const resumePendingOperation: any = createPendingOperationRuntime({
+    store,
+    executeTool,
+    publishEvent,
+    securityPermissions,
+    apiKeyDistributionProvider
+  });
 
   return { refreshOperations, executeTool, resumePendingOperation };
 }

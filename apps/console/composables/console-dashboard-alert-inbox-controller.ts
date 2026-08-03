@@ -1,7 +1,7 @@
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 import { monitorAlertSeverityLabel } from "./console-status-utils";
 import type { BackgroundProcessStatus, MonitorAlertState } from "../lib/types";
-import type { AdminView, AgentConfigurationAlert, DashboardAlert } from "../types/app";
+import type { AdminView, DashboardAlert } from "../types/app";
 
 export type MonitorAlertItem = NonNullable<MonitorAlertState["activeAlerts"]>[number];
 export type BackgroundProcessItem = NonNullable<BackgroundProcessStatus["processes"]>[number];
@@ -9,11 +9,9 @@ export type BackgroundProcessItem = NonNullable<BackgroundProcessStatus["process
 type DashboardAlertInboxControllerOptions = {
   acknowledgeMonitorAlert: (alertId: string) => Promise<void>;
   activeMonitorAlerts: ComputedRef<MonitorAlertItem[]>;
-  agentConfigurationAlerts: ComputedRef<AgentConfigurationAlert[]>;
   backgroundProcesses: ComputedRef<BackgroundProcessItem[]>;
   error: Ref<string>;
   openAdmin: (tab: AdminView) => void;
-  openAgentConfigurationAlert: (alertItem: AgentConfigurationAlert) => Promise<void>;
   refreshMonitorAlerts: (options?: { silent?: boolean }) => Promise<void>;
   recoverBackgroundSupervisor: () => Promise<void>;
 };
@@ -42,20 +40,7 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     }),
   );
 
-  const liveDashboardAlerts: any = computed<DashboardAlert[]>(() : any => [
-    ...dashboardMonitorAlerts.value,
-    ...options.agentConfigurationAlerts.value.map((alert?: any) : any => ({
-      alertId: alert.alertId,
-      category: "空配置报警",
-      title: alert.title,
-      detail: alert.detail,
-      status: alert.status,
-      tone: alert.tone,
-      actionLabel: "去配置",
-      source: "configuration" as const,
-      configAlert: alert,
-    })),
-  ]);
+  const liveDashboardAlerts: any = computed<DashboardAlert[]>(() : any => dashboardMonitorAlerts.value);
 
   function dashboardAlertInboxId(alertItem: DashboardAlert) : any {
     return `${alertItem.source}:${alertItem.alertId}`;
@@ -136,9 +121,6 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
   const dashboardPrimaryAlert: any = computed<DashboardAlert | null>(() : any => dashboardAlerts.value[0] || null);
   const dashboardPrimaryAlertInboxId: any = computed(() : any => dashboardPrimaryAlert.value ? dashboardAlertInboxId(dashboardPrimaryAlert.value) : "");
   const isNotPrimaryAlert: any = (alertItem: DashboardAlert) : any => dashboardAlertInboxId(alertItem) !== dashboardPrimaryAlertInboxId.value;
-  const dashboardConfigurationQueue: any = computed<DashboardAlert[]>(() : any =>
-    dashboardAlerts.value.filter((alertItem?: any) : any => alertItem.source === "configuration" && isNotPrimaryAlert(alertItem)),
-  );
   const dashboardMonitorQueue: any = computed<DashboardAlert[]>(() : any =>
     dashboardAlerts.value.filter((alertItem?: any) : any => alertItem.source === "monitor" && isNotPrimaryAlert(alertItem)),
   );
@@ -150,7 +132,6 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     danger: dashboardAlerts.value.filter((item?: any) : any => item.tone === "danger").length,
     warning: dashboardAlerts.value.filter((item?: any) : any => item.tone === "warning").length,
     recovered: dashboardAlerts.value.filter((item?: any) : any => item.tone === "success").length,
-    configuration: dashboardAlerts.value.filter((item?: any) : any => item.source === "configuration").length,
     monitor: dashboardAlerts.value.filter((item?: any) : any => item.source === "monitor").length,
   }));
 
@@ -167,10 +148,6 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
   });
 
   async function openDashboardAlert(alertItem: DashboardAlert) : Promise<any> {
-    if (alertItem.source === "configuration" && alertItem.configAlert) {
-      await options.openAgentConfigurationAlert(alertItem.configAlert);
-      return;
-    }
     if (alertItem.source === "monitor" && alertItem.actionKind === "recover-supervisor") {
       await options.recoverBackgroundSupervisor();
       if (!options.error.value) {
@@ -211,7 +188,6 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     dashboardAlertInboxId,
     dashboardAlertSummary,
     dashboardAlerts,
-    dashboardConfigurationQueue,
     dismissDashboardAlert,
     dismissedDashboardAlertIds,
     dashboardMonitorQueue,

@@ -32,7 +32,7 @@ Usage:
   npm run server:auth -- list-users
   npm run server:auth -- create-user --username USER --role viewer --generate-password
   npm run server:auth -- set-password --username USER --generate-password
-  npm run server:auth -- set-role --username USER --role operator
+  npm run server:auth -- set-role --username USER --role maintainer
   npm run server:auth -- set-tenant --username USER --tenant-id TENANT [--workspace-ids w1,w2]
   npm run server:auth -- enable --username USER
   npm run server:auth -- disable --username USER
@@ -42,7 +42,7 @@ Options:
   --username USER
   --user-id USER_ID
   --display-name NAME
-  --role owner|admin|operator|viewer
+  --role owner|maintainer|viewer
   --tenant-id TENANT
   --org-id ORG
   --team-ids TEAM_A,TEAM_B

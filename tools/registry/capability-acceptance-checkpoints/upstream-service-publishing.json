@@ -20,7 +20,7 @@
           {
             "acceptanceCommandId": "upstream-mcp-gateway",
             "report": "build/reports/upstream-mcp-gateway-e2e.json"
-          }
+}
         ]
       },
       {
@@ -32,8 +32,8 @@
             "report": "build/reports/upstream-gateway-e2e.json"
           },
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           }
         ]
       },
@@ -110,8 +110,8 @@
             "report": "build/reports/upstream-mcp-gateway-e2e.json"
           },
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "upstream-service-publishing",

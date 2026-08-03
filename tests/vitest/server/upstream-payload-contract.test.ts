@@ -5,8 +5,18 @@ import {
 } from "../../../packages/agents/src/upstream-gateway/payload-contract.ts";
 
 describe("upstream payload representation contract", () : any => {
-  it("requires explicit bounded request and response representations", () : any => {
+  it("requires an explicit bounded request representation and defaults response passthrough", () : any => {
     expect(() : any => compilePayloadTransport({})).toThrow("request representation mode is required");
+    expect(compilePayloadTransport({
+      payloadTransport: {
+        request: { mode: "opaque_stream", maxBytes: 1024, mediaTypes: ["application/octet-stream"] }
+      }
+    }).response).toEqual({
+      mode: "opaque_stream",
+      maxBytes: 8 * 1024 * 1024,
+      mediaTypes: ["*/*"],
+      allowRanges: false
+    });
     expect(() : any => compilePayloadTransport({
       payloadTransport: {
         request: { mode: "opaque_stream", maxBytes: 0, mediaTypes: ["application/octet-stream"] },

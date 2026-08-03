@@ -14,13 +14,13 @@
         "text": "Any policy-escalatable unauthorized use creates a pending approval before side effects.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",
             "report": "build/reports/operation-permission-tag-governed-e2e.json"
-          }
+}
         ]
       },
       {
@@ -55,7 +55,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete approval-governance",
-      "target": "packages/capabilities/src/operation-permission-core/runtime-handler-pending.ts, packages/capabilities/src/operation-permission-core/runtime-pending.ts, packages/agents/src/upstream-gateway/approval.ts, packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts, tools/server-scripts/verify-mcp-authorization-request-filters.ts"
+      "target": "packages/capabilities/src/operation-permission-core/runtime-handler-pending.ts, packages/capabilities/src/operation-permission-core/runtime-pending.ts, packages/agents/src/upstream-gateway/approval.ts, packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts, tools/server-scripts/verify-operation-permission-protocol-consistency.ts"
     },
     "next": [
       "cc4deab7-d0c4-4252-a281-801294d7e155"
@@ -78,8 +78,8 @@
         "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",

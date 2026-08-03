@@ -8,7 +8,7 @@ const props = defineProps<{
 }>();
 
 const {
-  busyKey,
+  isBusy,
   duplicateModelEntry,
   exportAgentModelEntryConfig,
   modelEntryBindingSummary,
@@ -20,8 +20,8 @@ const {
 } = useAgentModelEntryCardContext();
 
 const entryKey = computed(() => modelEntryStatusKey(props.entry));
-const probeBusy = computed(() => busyKey.value === `model-probe:${entryKey.value}`);
-const removeBusy = computed(() => busyKey.value === `model-remove:${entryKey.value}`);
+const probeBusy = computed(() => isBusy(`model-probe:${entryKey.value}`));
+const removeBusy = computed(() => isBusy(`model-remove:${entryKey.value}`));
 const probeResult = computed(() => modelProbeResults.value[entryKey.value]);
 const boundTitle = computed(() =>
   modelEntryIsBound(props.entry)

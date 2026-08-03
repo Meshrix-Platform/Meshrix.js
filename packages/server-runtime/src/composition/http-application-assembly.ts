@@ -9,6 +9,7 @@ import { createBatchDeletionCoordinator } from "../jobs/batch-deletion-coordinat
 import { resolveArchiveBatchIdentity } from "../jobs/archive-batch-id.ts";
 import { createWorkQueueObservationProjection } from "./queue-observation-projection.ts";
 import { createJobManager } from "../jobs/jobs/job-manager.ts";
+import { assertBoundUploadSessionStore } from "../state/upload-session-store.ts";
 import { createServerCompositionRoot, ensureConsoleOwner } from "./composition-root.ts";
 import {
   loadDiscoveryConfig,
@@ -27,6 +28,48 @@ import {
   createServerOperationPermissionPlatform,
   createServerToolSkillManagementProvider
 } from "./server-runtime-providers.ts";
+
+const API_KEY_AUDIENCE_MAX_RISK: Readonly<Record<string, string>> = Object.freeze({
+  low: "read_only",
+  medium: "safe_write",
+  high: "repair_write"
+});
+
+function apiKeyAudienceEvaluationInput(authorization: any): any {
+  const policy: any = authorization?.policy || {};
+  const resources: any = policy.resources || {};
+  const subjectId: any = String(authorization?.workloadPrincipalId || "");
+  if (authorization?.credentialKind !== "scoped_api_key" || !authorization?.keyId ||
+      !authorization?.policyFingerprint || !subjectId || !authorization?.organizationNodeId) {
+    throw Object.assign(new Error("API Key authorization context is unavailable."), {
+      code: "api_key_authority_unavailable",
+      statusCode: 503
+    });
+  }
+  const restriction: any = Object.freeze({
+    credentialKind: "scoped_api_key",
+    credentialId: String(authorization.keyId),
+    policyFingerprint: String(authorization.policyFingerprint),
+    toolsets: Object.freeze([...(policy.toolsetIds || [])]),
+    scopes: Object.freeze([...(policy.scopeIds || [])]),
+    capabilities: Object.freeze([...(policy.capabilityIds || [])]),
+    dynamicCapabilities: Object.freeze([...(policy.capabilityIds || [])]),
+    maxRisk: API_KEY_AUDIENCE_MAX_RISK[String(policy.maximumRisk || "")] || "read_only",
+    allowedServiceIds: Object.freeze([...(policy.serviceIds || [])]),
+    allowedSecretBindings: Object.freeze([...(resources.secretBindingIds || [])])
+  });
+  return Object.freeze({
+    restriction,
+    subject: Object.freeze({
+      type: "scoped-api-key",
+      subjectId,
+      organizationNodeId: String(authorization.organizationNodeId),
+      scopes: restriction.scopes,
+      capabilities: restriction.capabilities,
+      maxRisk: restriction.maxRisk
+    })
+  });
+}
 
 function writeInitialOwnerCredentials({ userDataPath, initialOwner, runtimeLogger }: Record<string, any>) : any {
   if (!initialOwner.created) return "";
@@ -260,6 +303,24 @@ export async function createHttpApplicationAssembly({
     normalizeSettings,
     getSettingsPath
   } = compositionRoot;
+  if (incomingJobManager) {
+    try {
+      assertBoundUploadSessionStore(
+        incomingJobManager.uploadSessionStore,
+        { userDataPath }
+      );
+      if (incomingJobManager.storageProvider !== storageProvider) {
+        const error: Error & Record<string, any> = new TypeError(
+          "Injected job manager requires this composition root's storage provider."
+        );
+        error.code = "upload_session_storage_provider_unavailable";
+        throw error;
+      }
+    } catch (error: any) {
+      await compositionRoot.close().catch(() : any => {});
+      throw error;
+    }
+  }
   runtimeLogger.info("features.resolved", {
     edition: featureRuntime.edition,
     activeFeatureCount: featureRuntime.activeFeatureIds.length,
@@ -305,6 +366,7 @@ export async function createHttpApplicationAssembly({
     operationProofSubstrate: registeredOperationProofSubstrate,
     storageProvider: registeredStorageProvider,
     uploadSessionStore,
+    uploadCustodyReadPort: uploadNoRunCustody.readPort,
     operationAuditStore,
     getListenUrl: () : any => listenUrl,
     getAgentWorkspace: () : any => agentWorkspaceRef
@@ -528,8 +590,22 @@ export async function createHttpApplicationAssembly({
     operationPermissionPlatform,
     userDataPath,
     securityPermissions,
-    evaluateToolAudience: (input?: any) : any =>
-      consoleOperationProviders.upstreamGatewayRegistry.evaluateProjectedOperationAudience(input),
+    evaluateToolAudience: (input?: any) : any => {
+      const apiKeyAuthorization: any = input?.apiKeyAuthorization ||
+        (input?.authorization?.credentialKind === "scoped_api_key"
+          ? input.authorization.apiKeyAuthorization
+          : null);
+      if (!apiKeyAuthorization) {
+        return consoleOperationProviders.upstreamGatewayRegistry.evaluateProjectedOperationAudience(input);
+      }
+      const evaluation: any = apiKeyAudienceEvaluationInput(apiKeyAuthorization);
+      return consoleOperationProviders.upstreamGatewayRegistry.evaluateProjectedOperationAudience({
+        ...input,
+        grant: null,
+        restriction: evaluation.restriction,
+        subject: evaluation.subject
+      });
+    },
     resolveAudiencePartitionKeys: (grantId?: any) : any =>
       consoleOperationProviders.getUpstreamManifestSnapshotCommitter()
         ?.getAudiencePartitionKeysForGrant(grantId) || [],

@@ -11,7 +11,7 @@ import {
 import {
   grantMetadata,
   localMcpGrantTargets,
-  mcpSubjectFromGrant,
+  mcpSubjectFromAuthorization,
   normalizeGrantValues
 } from "./http-mcp-adapter-session.ts";
 
@@ -51,7 +51,7 @@ function randomMcpId(prefix?: any) : any {
 }
 
 function normalizeMcpSubject(value?: any, authorization?: any) : any {
-  const authenticatedSubject: any = mcpSubjectFromGrant(authorization?.grant || null);
+  const authenticatedSubject: any = mcpSubjectFromAuthorization(authorization);
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return {
       ...authenticatedSubject,
@@ -89,6 +89,8 @@ export function normalizeMcpOperationEnvelope(input?: any, authorization?: any) 
   }
   const grant: any = authorization?.grant || null;
   const metadata: any = grantMetadata(grant);
+  const authenticatedSubject: any = mcpSubjectFromAuthorization(authorization);
+  const apiKeyWorkload: any = authorization?.credentialKind === "scoped_api_key";
   const operationInput: any = payload.input && typeof payload.input === "object" && !Array.isArray(payload.input)
     ? payload.input
     : {};
@@ -100,21 +102,25 @@ export function normalizeMcpOperationEnvelope(input?: any, authorization?: any) 
       ""
   ).trim();
   const agentProfileId: any = String(
-    payload.agentProfileId ||
-      payload.agent_profile_id ||
-      metadata.agentProfileId ||
-      metadata.agentProfile ||
-      ""
+    apiKeyWorkload
+      ? ""
+      : payload.agentProfileId ||
+        payload.agent_profile_id ||
+        metadata.agentProfileId ||
+        metadata.agentProfile ||
+        ""
   ).trim();
   const targets: any = localMcpGrantTargets(grant);
   const operatorId: any = String(
-    payload.operatorId ||
-      payload.operator_id ||
-      metadata.operatorId ||
-      metadata.operator ||
-      targets[0] ||
-      grant?.id ||
-      "mcp-agent"
+    apiKeyWorkload
+      ? authenticatedSubject.subjectId
+      : payload.operatorId ||
+        payload.operator_id ||
+        metadata.operatorId ||
+        metadata.operator ||
+        targets[0] ||
+        authenticatedSubject.subjectId ||
+        "mcp-agent"
   ).trim();
   const traceId: any = String(payload.traceId || payload.trace_id || requestTraceIdFromAuthorization(authorization) || randomMcpId("mcp_trace")).trim();
   const idempotencyKey: any = String(payload.idempotencyKey || payload.idempotency_key || randomMcpId("mcp_intent")).trim();

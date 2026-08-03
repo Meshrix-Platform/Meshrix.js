@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-01",
+  "updatedAt": "2026-08-02",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -749,19 +749,96 @@
       ]
     },
     {
-      "artifactId": "meshrix.authorization.tag-store-port",
+      "artifactId": "meshrix.authorization.organization-governance",
       "kind": "policy",
-      "description": "Governed version registry entry for meshrix.authorization.tag-store-port.",
-      "activeVersion": "v0.0.1:authorization:tag-store-port-0.4.0",
+      "description": "File-backed TOML organization-governance catalog and canonical tag-store aggregate with restricted-empty scoped roles.",
+      "activeVersion": "v0.0.1:authorization:organization-governance-1",
       "versions": [
         {
-          "version": "v0.0.1:authorization:tag-store-port-0.4.0",
-          "ref": "meshrix.authorization.tag-store-port@v0.0.1:authorization:tag-store-port-0.4.0",
+          "version": "v0.0.1:authorization:organization-governance-1",
+          "ref": "meshrix.authorization.organization-governance@v0.0.1:authorization:organization-governance-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Current canonical organization-governance contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-authorization-organization-governance-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/authorization/organization-model.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-authorization-organization-governance-1-template",
+              "kind": "other",
+              "uri": "packages/foundation/config/organization-governance/enterprise-group.toml"
+            },
+            {
+              "evidenceId": "v0-0-1-authorization-organization-governance-1-store",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/state/tag-management-store.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.authorization.organization-template",
+      "kind": "schema",
+      "description": "Governed schema for organization-governance template drafts shared by the canonical model, operation contracts, and console client.",
+      "activeVersion": "v0.0.1:authorization:organization-template-1",
+      "versions": [
+        {
+          "version": "v0.0.1:authorization:organization-template-1",
+          "ref": "meshrix.authorization.organization-template@v0.0.1:authorization:organization-template-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current canonical organization-governance template schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-authorization-organization-template-1-source-1",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/authorization/organization-model.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-authorization-organization-template-1-source-2",
+              "kind": "other",
+              "uri": "packages/contracts/src/operations/authorization-contribution-operation-definitions.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-authorization-organization-template-1-generated-1",
+              "kind": "other",
+              "uri": "packages/contracts/src/generated/operations.generated.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-authorization-organization-template-1-console-1",
+              "kind": "other",
+              "uri": "apps/console/lib/organization-governance-template-client.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.authorization.tag-store-port",
+      "kind": "policy",
+      "description": "Governed version registry entry for meshrix.authorization.tag-store-port.",
+      "activeVersion": "v0.0.1:authorization:tag-store-port-0.5.0",
+      "versions": [
+        {
+          "version": "v0.0.1:authorization:tag-store-port-0.4.0",
+          "ref": "meshrix.authorization.tag-store-port@v0.0.1:authorization:tag-store-port-0.4.0",
+          "lifecycle": "deprecated",
+          "compatibility": {
+            "newBindingsAllowed": false,
+            "historicalResolutionAllowed": true,
+            "notes": "Superseded by the atomic organization-governance aggregate port."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -769,6 +846,29 @@
               "evidenceId": "v0-0-1-authorization-tag-store-port-0-4-0-source-1",
               "kind": "other",
               "uri": "packages/foundation/src/security/authorization/tag-store.port.ts"
+            }
+          ]
+        },
+        {
+          "version": "v0.0.1:authorization:tag-store-port-0.5.0",
+          "ref": "meshrix.authorization.tag-store-port@v0.0.1:authorization:tag-store-port-0.5.0",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Adds revision-bound organization-governance aggregate read and atomic publication."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-authorization-tag-store-port-0-5-0-source-1",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/authorization/tag-store.port.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-authorization-tag-store-port-0-5-0-store-1",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/state/tag-management-store.ts"
             }
           ]
         }
@@ -2225,37 +2325,6 @@
               "evidenceId": "maintenance-agent-workload-authorization-source",
               "kind": "other",
               "uri": "packages/agents/src/maintenance/authorization.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.mcp.authorization-request-filters-report",
-      "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.mcp.authorization-request-filters-report.",
-      "activeVersion": "v0.0.1:mcp:authorization-request-filters-report-1",
-      "versions": [
-        {
-          "version": "v0.0.1:mcp:authorization-request-filters-report-1",
-          "ref": "meshrix.mcp.authorization-request-filters-report@v0.0.1:mcp:authorization-request-filters-report-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-mcp-authorization-request-filters-report-1-source-1",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-mcp-authorization-request-filters-report-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/verify-mcp-authorization-request-filters.ts"
             }
           ]
         }
@@ -4348,32 +4417,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.platform.organization-model",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.platform.organization-model.",
-      "activeVersion": "v0.0.1:platform:organization-model-1",
-      "versions": [
-        {
-          "version": "v0.0.1:platform:organization-model-1",
-          "ref": "meshrix.platform.organization-model@v0.0.1:platform:organization-model-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-platform-organization-model-1-source",
-              "kind": "other",
-              "uri": "packages/foundation/src/security/authorization/organization-model.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.platform.path-abstraction-audit-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.platform.path-abstraction-audit-report.",
@@ -5069,94 +5112,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.process-identity.mcp-client-proof-report",
-      "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.process-identity.mcp-client-proof-report.",
-      "activeVersion": "v0.0.1:process-identity:mcp-client-proof-report-1",
-      "versions": [
-        {
-          "version": "v0.0.1:process-identity:mcp-client-proof-report-1",
-          "ref": "meshrix.process-identity.mcp-client-proof-report@v0.0.1:process-identity:mcp-client-proof-report-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-client-proof-report-1-source-1",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-client-proof-report-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/verify-mcp-client-identity-proof.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.process-identity.mcp-credential",
-      "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.process-identity.mcp-credential.",
-      "activeVersion": "v0.0.1:process-identity:mcp-credential-1",
-      "versions": [
-        {
-          "version": "v0.0.1:process-identity:mcp-credential-1",
-          "ref": "meshrix.process-identity.mcp-credential@v0.0.1:process-identity:mcp-credential-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-credential-1-source-1",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/process-identity-store.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.process-identity.mcp-credential-store-report",
-      "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.process-identity.mcp-credential-store-report.",
-      "activeVersion": "v0.0.1:process-identity:mcp-credential-store-report-0.0.3",
-      "versions": [
-        {
-          "version": "v0.0.1:process-identity:mcp-credential-store-report-0.0.3",
-          "ref": "meshrix.process-identity.mcp-credential-store-report@v0.0.1:process-identity:mcp-credential-store-report-0.0.3",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-credential-store-report-0-0-3-source-1",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/mcp-process-identity-credential-store-evidence.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-credential-store-report-0-0-3-source-2",
-              "kind": "other",
-              "uri": "tools/server-scripts/lib/required-report-validator.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.process-identity.mcp-default-identity",
       "kind": "protocol",
       "description": "Governed version registry entry for meshrix.process-identity.mcp-default-identity.",
@@ -5174,11 +5129,6 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-process-identity-mcp-default-identity-1-source-1",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/cli/process-identity-request.ts"
-            },
-            {
               "evidenceId": "v0-0-1-process-identity-mcp-default-identity-1-source-2",
               "kind": "other",
               "uri": "tools/server-scripts/mcp-process-identity-test-helper.ts"
@@ -5187,11 +5137,6 @@
               "evidenceId": "v0-0-1-process-identity-mcp-default-identity-1-source-3",
               "kind": "other",
               "uri": "tools/server-scripts/stress-mcp-gateway.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-default-identity-1-source-4",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/verify-mcp-client-identity-proof.ts"
             },
             {
               "evidenceId": "v0-0-1-process-identity-mcp-default-identity-1-source-5",
@@ -5205,7 +5150,7 @@
     {
       "artifactId": "meshrix.process-identity.mcp-file",
       "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.process-identity.mcp-file.",
+      "description": "Generic neutral-peer process identity file contract.",
       "activeVersion": "v0.0.1:process-identity:mcp-file-1",
       "versions": [
         {
@@ -5215,81 +5160,14 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
+            "notes": "Current generic process identity contract; independent of downstream MCP credential issuance."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-process-identity-mcp-file-1-source-1",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/cli/interactive.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-file-1-source-2",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/process-identity-store.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-file-1-source-3",
+              "evidenceId": "v0-0-1-process-identity-mcp-file-1-neutral-peer-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/mcp-neutral-peer-identity-support.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.process-identity.mcp-self-test",
-      "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.process-identity.mcp-self-test.",
-      "activeVersion": "v0.0.1:process-identity:mcp-self-test-1",
-      "versions": [
-        {
-          "version": "v0.0.1:process-identity:mcp-self-test-1",
-          "ref": "meshrix.process-identity.mcp-self-test@v0.0.1:process-identity:mcp-self-test-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-self-test-1-source-1",
-              "kind": "other",
-              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-self-test-1-source-2",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/verify-mcp-process-identity-credential-store.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.process-identity.mcp-windows-dpapi-report",
-      "kind": "protocol",
-      "description": "Governed version registry entry for meshrix.process-identity.mcp-windows-dpapi-report.",
-      "activeVersion": "v0.0.1:process-identity:mcp-windows-dpapi-report-0.0.1",
-      "versions": [
-        {
-          "version": "v0.0.1:process-identity:mcp-windows-dpapi-report-0.0.1",
-          "ref": "meshrix.process-identity.mcp-windows-dpapi-report@v0.0.1:process-identity:mcp-windows-dpapi-report-0.0.1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-process-identity-mcp-windows-dpapi-report-0-0-1-source-1",
-              "kind": "verifier",
-              "uri": "tools/server-scripts/verify-mcp-windows-process-identity-credential-store.ts"
             }
           ]
         }

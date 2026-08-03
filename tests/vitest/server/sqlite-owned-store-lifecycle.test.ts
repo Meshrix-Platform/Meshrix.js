@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createSqliteWorkQueueStore } from "../../../packages/foundation/src/work-queue/sqlite-store.ts";
 import { createTagManagementStore } from "../../../packages/server-runtime/src/state/tag-management-store.ts";
 import { createSecurityAlertStore } from "../../../packages/foundation/src/security/security-alerts.ts";
-import { createOrganizationModelStore } from "../../../packages/foundation/src/security/authorization/organization-model.ts";
 
 const tempRoots: any[] = [];
 
@@ -27,8 +26,7 @@ describe("owned SQLite store lifecycle", () : any => {
     const stores: any[] = [
       createSqliteWorkQueueStore({ userDataPath: path.join(root, "work-queue") }),
       createTagManagementStore({ userDataPath: path.join(root, "tag-management") }),
-      createSecurityAlertStore({ userDataPath: path.join(root, "security-alerts") }),
-      createOrganizationModelStore({ rootPath: path.join(root, "organization-model") })
+      createSecurityAlertStore({ userDataPath: path.join(root, "security-alerts") })
     ];
 
     for (const store of stores) {
@@ -41,12 +39,11 @@ describe("owned SQLite store lifecycle", () : any => {
 
   it("never closes caller-owned injected databases", async () : Promise<any> => {
     const root: any = await tempRoot();
-    const databases: any = Array.from({ length: 4 }, () : any => new Database(":memory:"));
+    const databases: any = Array.from({ length: 3 }, () : any => new Database(":memory:"));
     const stores: any[] = [
       createSqliteWorkQueueStore({ db: databases[0] }),
       createTagManagementStore({ db: databases[1], rootPath: path.join(root, "unused-tag-root") }),
-      createSecurityAlertStore({ db: databases[2], userDataPath: path.join(root, "unused-alert-root") }),
-      createOrganizationModelStore({ db: databases[3], rootPath: path.join(root, "unused-org-root") })
+      createSecurityAlertStore({ db: databases[2], userDataPath: path.join(root, "unused-alert-root") })
     ];
 
     try {

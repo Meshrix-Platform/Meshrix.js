@@ -366,12 +366,7 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
     expect(shell.sideNavCollapsed.value).toBe(true);
     expect(shell.sideNavOpen.value).toBe(true);
 
-    const configurationAlert: any = shell.dashboardAlerts.value.find(
-      (alert?: any) : any => alert.source === "configuration",
-    );
-    expect(configurationAlert).toBeDefined();
-    await shell.openDashboardAlert(configurationAlert!);
-    expect(router.currentRoute.value.fullPath).toBe("/");
+    expect(shell.dashboardAlerts.value.every((alert?: any) : any => alert.source === "monitor")).toBe(true);
 
     await expect(shell.openAdmin("modules")).resolves.toBe(false);
     expect(router.currentRoute.value.fullPath).toBe("/");

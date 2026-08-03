@@ -13,7 +13,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
     callMcp,
     callMcpWithToolName,
     capabilitiesForToken,
-    createLocalGrant,
+    createVerifierApiKey,
     createdGrantIds,
     denialSummary,
     fixtureState,
@@ -31,7 +31,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
   let workspaceId: any = "";
 
   async function verifyMcpDiscoveryAuthorizationRefresh() : Promise<any> {
-    const grant: any = await createLocalGrant({
+    const grant: any = await createVerifierApiKey({
       label: "Operation Permission tag-governed E2E discovery verifier",
       grantMode: "read",
       maxRisk: "read_only",
@@ -304,7 +304,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
     assertMcpDenied(wrongOutlet, "wrong outlet gateway forward");
     assert.equal(fixtureState.echoCount, gatewayBefore);
 
-    const readOnlyGrant: any = await createLocalGrant({
+    const readOnlyGrant: any = await createVerifierApiKey({
       label: "Operation Permission tag-governed E2E bypass verifier",
       grantMode: "read",
       maxRisk: "read_only",

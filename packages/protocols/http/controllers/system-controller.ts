@@ -354,6 +354,7 @@ export function createSystemController({
       subjectId: grant.id || "",
       username: grant.label || grant.id || "tool-grant",
       roleId: "tool-grant",
+      tenantId: "local",
       scopes: Array.isArray(grant.scopes) ? grant.scopes : [],
       toolsets: Array.isArray(grant.toolsets) ? grant.toolsets : []
     };

@@ -5,15 +5,15 @@ import path from "node:path";
 import { upstreamOperationCapabilityId } from "../../../packages/agents/src/upstream-gateway/operation-capability.ts";
 
 import {
-  bindVerifierLocalMcpGrantIdentity,
-  createVerifierLocalMcpGrantIdentity,
+  bindVerifierApiKey,
+  createVerifierApiKeyAccess,
   verifierMcpRequestHeaders
-} from "./local-mcp-verifier-identity.ts";
+} from "./verifier-mcp-api-key.ts";
 import {
   OPERATION_PERMISSION_TAG_GOVERNED_E2E,
   TAG_GOVERNED_ENTITY_REFS
 } from "./operation-permission-tag-governed-e2e-constants.ts";
-import { issueVerifierLocalMcpGrant } from "./local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
 import {
   closeServer,
   createTagGovernedFixtureState,
@@ -132,16 +132,15 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     });
   }
 
-  async function createLocalGrant(input: Record<string, any> = {}) : Promise<any> {
-    const verifierIdentity: any = createVerifierLocalMcpGrantIdentity({
+  async function createVerifierApiKey(input: Record<string, any> = {}) : Promise<any> {
+    const verifierAccess: any = createVerifierApiKeyAccess({
       target: "codex",
       label: "verify-operation-permission-tag-governed-e2e"
     });
-    const response: any = await issueVerifierLocalMcpGrant({
+    const response: any = await issueVerifierMcpApiKey({
       server,
-      grantRequest: {
+      access: {
         targets: ["codex"],
-        label: "Operation Permission tag-governed E2E verifier",
         connectorVersion: "verify-operation-permission-tag-governed-e2e",
         agentProfileId: OPERATION_PERMISSION_TAG_GOVERNED_E2E.agentProfileId,
         grantMode: "maintain",
@@ -164,23 +163,22 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
           "meshrix.authorization.admin",
           "meshrix.console.read"
         ],
-        processIdentity: verifierIdentity.request,
+        label: verifierAccess.label,
         ...input
       }
     });
-    const token: any = String(response.payload.token || "");
-    const grantId: any = String(response.payload.grantId || response.payload.grant?.id || "");
-    assert.ok(token, "local grant did not return a token");
-    assert.ok(grantId, "local grant did not return a grant id");
-    trackSecret(token, grantId, response.payload.grant?.tokenPrefix, response.payload.tokenPrefix);
-    bindVerifierLocalMcpGrantIdentity({
+    const token: any = response.apiKey;
+    const keyId: any = response.record.keyId;
+    assert.ok(token, "API Key issuance did not return plaintext to the direct verifier caller");
+    assert.ok(keyId, "API Key issuance did not return a bounded record identifier");
+    trackSecret(token, keyId);
+    bindVerifierApiKey({
       identityByToken: mcpIdentityByToken,
       token,
-      identity: verifierIdentity.identity,
-      payload: response.payload
+      record: response.record
     });
-    createdGrantIds.push(grantId);
-    return { token, grantId, grant: response.payload.grant || {} };
+    createdGrantIds.push(keyId);
+    return { token, keyId, record: response.record };
   }
 
   function mcpPayload(jsonRpcPayload: Record<string, any> = {}) : any {
@@ -449,7 +447,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     callMcp,
     callMcpWithToolName,
     capabilitiesForToken,
-    createLocalGrant,
+    createVerifierApiKey,
     denialSummary,
     mcpPayload,
     openMcpSse,

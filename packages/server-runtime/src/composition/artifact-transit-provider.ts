@@ -87,6 +87,7 @@ async function readMetadata(metadataPath?: any) : Promise<any> {
 export async function createArtifactTransitProvider({
   userDataPath,
   uploadSessionStore,
+  uploadCustodyReadPort,
   workspaceFileStore = null,
   getListenUrl = () : any => "",
   now = () : any => Date.now()
@@ -94,6 +95,9 @@ export async function createArtifactTransitProvider({
   if (!String(userDataPath || "").trim()) throw new TypeError("Artifact transit requires userDataPath.");
   if (typeof uploadSessionStore?.resolveUploadSessionFiles !== "function") {
     throw new TypeError("Artifact transit requires the upload-session read port.");
+  }
+  if (typeof uploadCustodyReadPort?.open !== "function") {
+    throw new TypeError("Artifact transit requires the upload-custody read port.");
   }
   const root: any = path.join(userDataPath, "artifact-transit");
   const pendingRoot: any = path.join(root, ".pending");
@@ -171,7 +175,7 @@ export async function createArtifactTransitProvider({
       return workspaceMetadata(parsed, file, purpose);
     }
     if (parsed.kind === "upload") {
-      const files: any = await uploadSessionStore.resolveUploadSessionFiles(userDataPath, parsed.id, { owner: subject });
+      const files: any = await uploadSessionStore.resolveUploadSessionFiles(parsed.id, { owner: subject });
       const file: any = files[parsed.fileIndex] || null;
       if (!file) throw artifactError("artifact_not_found", "Upload artifact is unavailable.", 404);
       return Object.freeze({
@@ -213,7 +217,7 @@ export async function createArtifactTransitProvider({
     });
   }
 
-  async function openRead(reference?: any, subject?: any, purpose: any = "read", range: any = null) : Promise<any> {
+  async function openRead(reference?: any, subject?: any, purpose: any = "read", range: any = null, access: Record<string, any> = {}) : Promise<any> {
     const parsed: any = parseArtifactTransitReference(reference);
     const start: any = Number.isSafeInteger(range?.start) ? range.start : undefined;
     const end: any = Number.isSafeInteger(range?.end) ? range.end : undefined;
@@ -226,13 +230,27 @@ export async function createArtifactTransitProvider({
       });
     }
     const metadata: any = await resolve(reference, subject, purpose);
-    let sourcePath: any;
     if (parsed.kind === "upload") {
-      const files: any = await uploadSessionStore.resolveUploadSessionFiles(userDataPath, parsed.id, { owner: subject });
-      sourcePath = files[parsed.fileIndex]?.stagedPath || "";
-    } else {
-      sourcePath = contentPath(parsed.id);
+      const files: any = await uploadSessionStore.resolveUploadSessionFiles(parsed.id, { owner: subject });
+      const file: any = files[parsed.fileIndex] || null;
+      if (!file) throw artifactError("artifact_not_found", "Artifact is unavailable.", 404);
+      const opened: any = await uploadCustodyReadPort.open({
+        custodyRef: file.custodyRef,
+        contentDigest: file.contentDigest || file.sha256,
+        envelopeDigest: file.envelopeDigest,
+        byteCount: file.byteSize,
+        owner: subject,
+        resourceRef: file.resourceRef,
+        governedExecutionReceipt: access.governedExecutionReceipt || null,
+        maxBytes: file.byteSize,
+        signal: access.signal || null
+      });
+      return Object.freeze({
+        metadata,
+        open: () : any => opened.stream
+      });
     }
+    const sourcePath: any = contentPath(parsed.id);
     if (!sourcePath) throw artifactError("artifact_not_found", "Artifact is unavailable.", 404);
     return Object.freeze({
       metadata,

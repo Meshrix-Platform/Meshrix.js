@@ -77,7 +77,17 @@ onMounted(() => {
 
       <!-- List column -->
       <div class="ws-list">
-        <ConsoleEmptyState v-if="workspaces.length === 0" title="暂无工作空间" description="点击&quot;新建工作空间&quot;创建第一个工作空间。" />
+        <ConsoleEmptyState
+          v-if="workspaces.length === 0"
+          title="暂无工作空间"
+          description="创建第一个工作空间来存放资产、检查点和共享配置。"
+        >
+          <template #action>
+            <button class="tool-button" type="button" @click="panel = 'create'">
+              新建工作空间
+            </button>
+          </template>
+        </ConsoleEmptyState>
         <SplitToggleCard
           v-for="ws in workspaces"
           :key="ws.workspaceId"

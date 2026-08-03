@@ -40,7 +40,7 @@ export function usePageRefreshHandler(
     if (!detail || !predicate(detail)) {
       return;
     }
-    detail.addTask(handler(detail));
+    detail.addTask(Promise.resolve().then(() : PageRefreshTask => handler(detail)));
   };
 
   onMounted(() : any => {

@@ -16,7 +16,9 @@ export function useServerConsoleShell() : any {
   const publicConsoleContext: any = pickServerConsoleShellPublicContext(consoleContext);
   const {
     adminView,
-    busyKey,
+    isAnyBusy,
+    isBusy,
+    isBusyPrefix,
     consoleState,
     currentView,
     debugTab,
@@ -28,7 +30,6 @@ export function useServerConsoleShell() : any {
     refreshContextCompiler,
     refreshDashboardAlertsSnapshot,
     refreshMaintenanceAgent,
-    refreshMcpAuthorizationRequests,
     refreshMonitorAlerts,
     refreshState,
     refreshOperationPermission,
@@ -61,7 +62,10 @@ export function useServerConsoleShell() : any {
     toggleLanguage,
     tt,
   } = useConsoleShellPreferences({ isAuthenticated });
-  const workspacesConsole: any = useWorkspacesConsole({ autoload: false, globalBusyKey: busyKey });
+  const workspacesConsole: any = useWorkspacesConsole({
+    autoload: false,
+    globalBusy: { isAnyBusy, isBusy, isBusyPrefix },
+  });
 
   const route: any = useRoute();
   const {
@@ -92,7 +96,7 @@ export function useServerConsoleShell() : any {
     activeRouteAdminView,
     activeRouteDebugTab,
     activeRouteView,
-    busyKey,
+    isAnyBusy,
     hasFeature,
     msg,
     refreshAuthAdmin,
@@ -101,7 +105,6 @@ export function useServerConsoleShell() : any {
     refreshContextCompiler,
     refreshDashboardAlertsSnapshot,
     refreshMaintenanceAgent,
-    refreshMcpAuthorizationRequests,
     refreshMonitorAlerts,
     refreshOperationPermissionPendingOperations: approvalFlowConsole.refreshOperationPermissionPendingOperations,
     refreshState,

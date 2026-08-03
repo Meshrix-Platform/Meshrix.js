@@ -6,13 +6,15 @@ import { createConsoleTimeoutController } from "./console-timer-controller";
 
 export const REFRESH_STATE_DELAY_MS: any = 3000;
 
+/** Busy key owned by the console state refresh. */
+export const REFRESH_STATE_BUSY_KEY = "refresh";
+
 export type ConsoleRefreshStateControllerOptions = {
   applyConsoleState: (
     nextState: ServerConsoleState,
     options?: { forceSettings?: boolean; forceDrafts?: boolean },
   ) => void;
-  busyKey: Ref<string>;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   serverAvailable: Ref<boolean>;
   setBusy: (key: string) => void;
@@ -82,7 +84,7 @@ export function createConsoleRefreshStateController(options: ConsoleRefreshState
     const showBusy: any = !value.silent;
     const forceDrafts: any = value.forceDrafts === true;
     if (showBusy) {
-      options.setBusy(options.busyKey.value || "refresh");
+      options.setBusy(REFRESH_STATE_BUSY_KEY);
     }
     options.error.value = "";
 
@@ -99,7 +101,7 @@ export function createConsoleRefreshStateController(options: ConsoleRefreshState
         nextError instanceof Error ? nextError.message : "加载服务端控制台失败。";
     } finally {
       if (showBusy) {
-        options.clearAllBusy();
+        options.clearBusy(REFRESH_STATE_BUSY_KEY);
       }
     }
   }

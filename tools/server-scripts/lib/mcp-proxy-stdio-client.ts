@@ -242,7 +242,20 @@ export function createMcpProxyStdioClient({
   async function request(method?: any, params: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> {
     const response: any = await requestRaw(method, params, options);
     if (response?.error) {
-      throw requestError(`MCP proxy returned JSON-RPC error for ${method}: ${response.error.message || response.error.code || "unknown"}`);
+      const error: Error & Record<string, any> = requestError(
+        `MCP proxy returned JSON-RPC error for ${method}: ${response.error.message || response.error.code || "unknown"}`
+      );
+      const publicCode: any = String(response.error?.data?.code || "")
+        .replace(/[^a-z0-9_]+/giu, "_")
+        .slice(0, 80);
+      if (publicCode) error.code = publicCode;
+      const rpcCode: any = Number(response.error?.code);
+      if (Number.isInteger(rpcCode)) error.rpcCode = rpcCode;
+      const statusCode: any = Number(response.error?.data?.status || response.error?.data?.statusCode || 0);
+      if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode <= 599) {
+        error.statusCode = statusCode;
+      }
+      throw error;
     }
     return response;
   }

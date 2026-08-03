@@ -30,7 +30,7 @@ function makeMonitorAlert(overrides: Record<string, any> = {}): MonitorAlertItem
 }
 
 function createFixture(overrides: Record<string, any> = {}) : any {
-  const busyKey: any = ref("");
+  const isBusy: any = () => false;
   const backgroundProcesses: any = ref([
     {
       role: "daemon",
@@ -92,7 +92,7 @@ function createFixture(overrides: Record<string, any> = {}) : any {
       backgroundProcesses.value.filter((item?: any) : any => item.alive && !item.stale).length,
     ),
     backgroundSupervisorLabel: computed(() : any => (backgroundProcessStatus.value?.supervisor.alive ? "正常" : "守护进程离线")),
-    busyKey,
+    isBusy,
     canAdminMaintenanceAgent: ref(false),
     formatCompactDate: (value: string) : any => `compact:${value}`,
     activeMonitorAlerts,

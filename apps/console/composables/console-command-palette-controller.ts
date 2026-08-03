@@ -15,12 +15,14 @@ export type ConsoleNavMessages = {
 /** 导航分区（registry section）到本地化标签的解析；primary 返回空串表示无分区。 */
 export function resolveAdminSectionLabel(section: string, messages: ConsoleNavMessages): string {
   switch (section) {
-    case "agent":
-      return messages.nav.agents;
-    case "integration":
-      return messages.nav.integrations;
-    case "operationPermission":
-      return messages.nav.agentTools;
+    case "service":
+      return messages.nav.service;
+    case "tools":
+      return messages.nav.tools;
+    case "permission":
+      return messages.nav.permission;
+    case "model":
+      return messages.nav.model;
     case "system":
       return messages.nav.system;
     case "operations":
