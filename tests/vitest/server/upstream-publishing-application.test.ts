@@ -115,6 +115,18 @@ describe("upstream publishing application", () : any => {
     expect(JSON.stringify(audit[0])).not.toContain("vault/inventory");
   });
 
+  it("accepts an HTTP operation without an explicit response transport", async () : Promise<any> => {
+    const { application, store } = await harness();
+    const input: any = JSON.parse(command());
+    delete input.descriptor.operations[0].payloadTransport.response;
+
+    const result: any = await application.execute(JSON.stringify(input), subject());
+    const record: any = (await store.getCandidateSnapshot()).getService(result.serviceId);
+    expect(record.manifest.payload.descriptor.operations[0].payloadTransport).toEqual({
+      request: structuredJsonPayloadTransport().request
+    });
+  });
+
   it("projects publishing until the durable terminal snapshot and paired revision facts agree", async () : Promise<any> => {
     const store: any = createServiceManifestStore({ storageRoot: await temporaryRoot() });
     let publicationFacts: any = null;
@@ -383,7 +395,7 @@ describe("upstream publishing application", () : any => {
       approvalPolicy: { required: true, scope: "catalog:approve" },
       trafficPolicy: { perMinute: 30, burst: 5 },
       audience: {
-        organizations: ["org-a"], teams: ["team-a"], roles: ["operator"], directGrants: ["grant-a"]
+        organizations: ["org-a"], teams: ["team-a"], roles: ["maintainer"], directGrants: ["grant-a"]
       },
       tagPolicy: { requiredTags: ["catalog"] },
       circuitBreaker: { enabled: true, failureThreshold: 3 },

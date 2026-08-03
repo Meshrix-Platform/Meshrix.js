@@ -162,6 +162,571 @@
         }
       }
     },
+    "/api/authorization/organization-governance": {
+      "get": {
+        "operationId": "authorization.organization_governance.get",
+        "summary": "Protocol operation for authorization.organization_governance.get.",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/authorization/organization-governance/import": {
+      "post": {
+        "operationId": "authorization.organization_governance.import",
+        "summary": "Protocol operation for authorization.organization_governance.import.",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "templateKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 262144
+                  },
+                  "fileName": {
+                    "type": "string",
+                    "pattern": "^[^/\\\\]{1,200}\\.toml$"
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "templateKey"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "source",
+                      "fileName"
+                    ]
+                  }
+                ],
+                "required": []
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/authorization/organization-governance/preview": {
+      "post": {
+        "operationId": "authorization.organization_governance.preview",
+        "summary": "Protocol operation for authorization.organization_governance.preview.",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "schemaVersion",
+                  "templateKey",
+                  "templateName",
+                  "description",
+                  "organizationDepth",
+                  "nodes",
+                  "tags",
+                  "roles"
+                ],
+                "properties": {
+                  "schemaVersion": {
+                    "type": "string",
+                    "enum": [
+                      "v0.0.1:authorization:organization-template-1"
+                    ]
+                  },
+                  "templateKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "templateName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "organizationDepth": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 32
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "maxItems": 2048,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "nodeId",
+                        "nodeType",
+                        "parentId",
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "nodeId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "nodeType": {
+                          "type": "string",
+                          "enum": [
+                            "group",
+                            "organization",
+                            "department",
+                            "team"
+                          ]
+                        },
+                        "parentId": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "organizationLevel": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 32
+                        }
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "maxItems": 2048,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "tagId",
+                        "kind",
+                        "label",
+                        "parentTagId",
+                        "description",
+                        "scopePrerequisites"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "tagId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "organization",
+                            "group",
+                            "role",
+                            "custom"
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "parentTagId": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        },
+                        "scopePrerequisites": {
+                          "type": "array",
+                          "maxItems": 64,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "roles": {
+                    "type": "array",
+                    "maxItems": 2048,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "roleId",
+                        "name",
+                        "scopeNodeId",
+                        "scopeNodeType",
+                        "managementActions",
+                        "businessResourceActions",
+                        "assignedSubjectIds"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "roleId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "scopeNodeId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "scopeNodeType": {
+                          "type": "string",
+                          "enum": [
+                            "group",
+                            "organization",
+                            "department",
+                            "team"
+                          ]
+                        },
+                        "managementActions": {
+                          "type": "array",
+                          "maxItems": 64,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160
+                          }
+                        },
+                        "businessResourceActions": {
+                          "type": "array",
+                          "maxItems": 0
+                        },
+                        "assignedSubjectIds": {
+                          "type": "array",
+                          "maxItems": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/authorization/organization-governance/publish": {
+      "post": {
+        "operationId": "authorization.organization_governance.publish",
+        "summary": "Protocol operation for authorization.organization_governance.publish.",
+        "tags": [
+          "auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedRevision",
+                  "schemaVersion",
+                  "templateKey",
+                  "templateName",
+                  "description",
+                  "organizationDepth",
+                  "nodes",
+                  "tags",
+                  "roles"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "expectedRevision": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "schemaVersion": {
+                    "type": "string",
+                    "enum": [
+                      "v0.0.1:authorization:organization-template-1"
+                    ]
+                  },
+                  "templateKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "templateName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "organizationDepth": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 32
+                  },
+                  "nodes": {
+                    "type": "array",
+                    "maxItems": 2048,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "nodeId",
+                        "nodeType",
+                        "parentId",
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "nodeId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "nodeType": {
+                          "type": "string",
+                          "enum": [
+                            "group",
+                            "organization",
+                            "department",
+                            "team"
+                          ]
+                        },
+                        "parentId": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "organizationLevel": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 32
+                        }
+                      }
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "maxItems": 2048,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "tagId",
+                        "kind",
+                        "label",
+                        "parentTagId",
+                        "description",
+                        "scopePrerequisites"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "tagId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "organization",
+                            "group",
+                            "role",
+                            "custom"
+                          ]
+                        },
+                        "label": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "parentTagId": {
+                          "type": "string",
+                          "maxLength": 160
+                        },
+                        "description": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 1000
+                        },
+                        "scopePrerequisites": {
+                          "type": "array",
+                          "maxItems": 64,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "roles": {
+                    "type": "array",
+                    "maxItems": 2048,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "roleId",
+                        "name",
+                        "scopeNodeId",
+                        "scopeNodeType",
+                        "managementActions",
+                        "businessResourceActions",
+                        "assignedSubjectIds"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "roleId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "scopeNodeId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 160
+                        },
+                        "scopeNodeType": {
+                          "type": "string",
+                          "enum": [
+                            "group",
+                            "organization",
+                            "department",
+                            "team"
+                          ]
+                        },
+                        "managementActions": {
+                          "type": "array",
+                          "maxItems": 64,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 160
+                          }
+                        },
+                        "businessResourceActions": {
+                          "type": "array",
+                          "maxItems": 0
+                        },
+                        "assignedSubjectIds": {
+                          "type": "array",
+                          "maxItems": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/tag-management/v1/tags": {
       "get": {
         "operationId": "tag_management.tags.list",
@@ -9439,6 +10004,528 @@
         }
       }
     },
+    "/api/operation-permission/v1/api-keys/issuer-scopes": {
+      "get": {
+        "operationId": "operation_permission.api_keys.issuer_scopes",
+        "summary": "读取 API Key 签发范围",
+        "tags": [
+          "operation_permission"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/operation-permission/v1/api-keys": {
+      "get": {
+        "operationId": "operation_permission.api_keys.list",
+        "summary": "列出 API Key",
+        "tags": [
+          "operation_permission"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      },
+      "post": {
+        "operationId": "operation_permission.api_keys.create",
+        "summary": "创建 API Key",
+        "tags": [
+          "operation_permission"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "workloadDisplayName",
+                  "organizationNodeId",
+                  "expiresAt",
+                  "policy"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "workloadDisplayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "organizationNodeId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "policy": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "protocol",
+                      "serviceIds",
+                      "capabilityIds",
+                      "toolsetIds",
+                      "allowedTools",
+                      "deniedTools",
+                      "scopeIds",
+                      "maximumRisk",
+                      "audience",
+                      "resources",
+                      "processIdentity",
+                      "limits",
+                      "catalogFingerprint"
+                    ],
+                    "properties": {
+                      "protocol": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "serviceIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "maxItems": 256
+                      },
+                      "capabilityIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "maxItems": 256
+                      },
+                      "toolsetIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "maxItems": 256
+                      },
+                      "allowedTools": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "maxItems": 256
+                      },
+                      "deniedTools": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "maxItems": 256
+                      },
+                      "scopeIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 512
+                        },
+                        "maxItems": 256
+                      },
+                      "maximumRisk": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      },
+                      "audience": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "serverAudience",
+                          "targetIds",
+                          "connectorPackageIds"
+                        ],
+                        "properties": {
+                          "serverAudience": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "targetIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "connectorPackageIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          }
+                        }
+                      },
+                      "resources": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "mode",
+                          "workspaceIds",
+                          "dataClassifications",
+                          "egressClasses",
+                          "semanticFamilies",
+                          "capabilityDomains",
+                          "capabilityVerbs",
+                          "resourceKinds",
+                          "effectKinds",
+                          "secretBindingIds",
+                          "allowedOrigins",
+                          "allowedCidrs"
+                        ],
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "workspaceIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "dataClassifications": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "egressClasses": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "semanticFamilies": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "capabilityDomains": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "capabilityVerbs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "resourceKinds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "effectKinds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "secretBindingIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "allowedOrigins": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          },
+                          "allowedCidrs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          }
+                        }
+                      },
+                      "processIdentity": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 512
+                          },
+                          "allowedPublicKeyFingerprints": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 512
+                            },
+                            "maxItems": 256
+                          }
+                        },
+                        "required": [
+                          "mode"
+                        ]
+                      },
+                      "limits": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "maxUses",
+                          "requestsPerWindow",
+                          "windowSeconds",
+                          "maxConcurrentEffects"
+                        ],
+                        "properties": {
+                          "maxUses": {
+                            "type": "number"
+                          },
+                          "requestsPerWindow": {
+                            "type": "number"
+                          },
+                          "windowSeconds": {
+                            "type": "number"
+                          },
+                          "maxConcurrentEffects": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "catalogFingerprint": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/operation-permission/v1/api-keys/:keyId/rotate": {
+      "post": {
+        "operationId": "operation_permission.api_keys.rotate",
+        "summary": "轮换 API Key",
+        "tags": [
+          "operation_permission"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedLifecycleRevision",
+                  "keyId"
+                ],
+                "properties": {
+                  "keyId": {
+                    "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "expectedLifecycleRevision": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/operation-permission/v1/api-keys/:keyId/revoke": {
+      "post": {
+        "operationId": "operation_permission.api_keys.revoke",
+        "summary": "吊销 API Key",
+        "tags": [
+          "operation_permission"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedLifecycleRevision",
+                  "reasonCode",
+                  "keyId"
+                ],
+                "properties": {
+                  "keyId": {
+                    "type": "string"
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "expectedLifecycleRevision": {
+                    "type": "number"
+                  },
+                  "reasonCode": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/operation-permission/v1/catalog": {
       "get": {
         "operationId": "operation_permission.catalog",
@@ -10668,202 +11755,6 @@
                   "resumeInput": {
                     "type": "object",
                     "additionalProperties": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/mcp/authorization/request": {
-      "post": {
-        "operationId": "operation_permission.mcp.request_authorization",
-        "summary": "MCP 请求授权",
-        "tags": [
-          "operation_permission"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "claimTokenHash"
-                ],
-                "properties": {
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  },
-                  "claimTokenHash": {
-                    "type": "string",
-                    "pattern": "^[a-f0-9]{64}$"
-                  },
-                  "targets": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "connectorVersion": {
-                    "type": "string"
-                  },
-                  "agentProfileId": {
-                    "type": "string"
-                  },
-                  "processIdentity": {
-                    "type": "object"
-                  },
-                  "label": {
-                    "type": "string"
-                  },
-                  "grantMode": {
-                    "type": "string"
-                  },
-                  "toolsets": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "scopes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "maxRisk": {
-                    "type": "string"
-                  },
-                  "metadata": {
-                    "type": "object"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/console/mcp/authorization/requests": {
-      "get": {
-        "operationId": "operation_permission.mcp.list_requests",
-        "summary": "MCP 授权请求列表",
-        "tags": [
-          "operation_permission"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/console/mcp/authorization/requests/:requestId/resolve": {
-      "post": {
-        "operationId": "operation_permission.mcp.resolve_request",
-        "summary": "处理 MCP 授权请求",
-        "tags": [
-          "operation_permission"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "resolution"
-                ],
-                "properties": {
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  },
-                  "requestId": {
-                    "type": "string"
-                  },
-                  "resolution": {
-                    "type": "string",
-                    "enum": [
-                      "approved",
-                      "denied"
-                    ]
-                  },
-                  "reason": {
-                    "type": "string"
-                  },
-                  "clientName": {
-                    "type": "string"
-                  },
-                  "scopes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "toolsets": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "toolAllow": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
                   }
                 }
               }

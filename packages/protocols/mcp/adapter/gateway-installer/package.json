@@ -1,7 +1,7 @@
 {
   "name": "meshrix-mcp-connector",
   "version": "0.0.1",
-  "description": "Runtime MCP connector for Meshrix stdio proxy and process-identity protocol support.",
+  "description": "Runtime MCP connector for API-Key-authenticated Meshrix stdio proxy access.",
   "type": "module",
   "license": "GPL-3.0-or-later",
   "author": "Meshrix Maintainers",

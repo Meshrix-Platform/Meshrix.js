@@ -53,6 +53,10 @@ function projectTransition(transition?: any) : any {
     transition: toText(transition.transition),
     fromState: transition.fromState === null ? null : toText(transition.fromState),
     toState: toText(transition.toState),
+    leaseId: toText(transition.leaseId),
+    leaseSeq: Number(transition.leaseSeq || 0),
+    operationId: toText(transition.operationId),
+    reason: toText(transition.reason),
     createdAtMs: Number(transition.createdAtMs || 0),
     adoptedTimeMs: Number(transition.adoptedTimeMs || 0)
   });

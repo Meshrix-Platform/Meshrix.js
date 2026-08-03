@@ -2,7 +2,8 @@
 import { useWorkspacesViewContext } from "../../../composables/workspacesViewContext";
 
 const {
-  busyKey,
+  isBusy,
+  isBusyPrefix,
   createForm,
   createWorkspace,
   panel,
@@ -24,8 +25,8 @@ const {
       </label>
     </div>
     <div class="module-actions">
-      <button class="tool-button" type="button" :disabled="!createForm.title || !!busyKey" @click="createWorkspace">
-        {{ busyKey === 'ws:create' ? '创建中…' : '创建' }}
+      <button class="tool-button" type="button" :disabled="!createForm.title || isBusyPrefix('ws:')" @click="createWorkspace">
+        {{ isBusy('ws:create') ? '创建中…' : '创建' }}
       </button>
       <button class="tool-button tool-button-ghost" type="button" @click="panel = 'list'">取消</button>
     </div>

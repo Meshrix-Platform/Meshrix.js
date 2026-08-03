@@ -5,7 +5,10 @@ import { defineComponent, h } from "vue";
 
 import AgentModelOptionBar from "../../../apps/console/components/AgentModelOptionBar.vue";
 import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
+import ConsoleEmptyState from "../../../apps/console/components/ConsoleEmptyState.vue";
+import ConsoleInlineAlert from "../../../apps/console/components/ConsoleInlineAlert.vue";
 import DataTable from "../../../apps/console/components/DataTable.vue";
+import FeatureToggle from "../../../apps/console/components/FeatureToggle.vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
 import SegmentedToggle from "../../../apps/console/components/SegmentedToggle.vue";
 import SplitToggleCard from "../../../apps/console/components/SplitToggleCard.vue";
@@ -14,6 +17,7 @@ import {
   commonComponentReusePolicy,
   AgentModelOptionBar as RegisteredAgentModelOptionBar,
   BinaryCheckbox as RegisteredBinaryCheckbox,
+  FeatureToggle as RegisteredFeatureToggle,
   SegmentedToggle as RegisteredSegmentedToggle,
 } from "../../../apps/console/components/common";
 
@@ -38,6 +42,7 @@ const ElSelectStub: any = defineComponent({
     "disabled",
     "clearable",
     "size",
+    "emptyValues",
   ],
   emits: ["update:modelValue", "change"],
   setup(props: any, { emit, slots }: Record<string, any>) : any {
@@ -155,6 +160,24 @@ describe("console common components behavior", () : any => {
     expect(readonly.attributes("aria-readonly")).toBe("true");
   });
 
+  it("renders labeled FeatureToggle state and emits boolean changes", async () : Promise<any> => {
+    const wrapper: any = mount(FeatureToggle, {
+      props: {
+        modelValue: false,
+        label: "启用",
+        ariaLabel: "启用标签",
+      },
+    });
+
+    expect(wrapper.attributes("role")).toBe("switch");
+    expect(wrapper.attributes("aria-checked")).toBe("false");
+    expect(wrapper.attributes("aria-label")).toBe("启用标签");
+    expect(wrapper.find(".feature-toggle-label").text()).toBe("启用");
+    await wrapper.trigger("click");
+    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([true]);
+    expect(wrapper.emitted("change")?.[0]).toEqual([true]);
+  });
+
   it("renders SegmentedToggle grid state and emits selected values", async () : Promise<any> => {
     const wrapper: any = mount(SegmentedToggle, {
       props: {
@@ -214,6 +237,7 @@ describe("console common components behavior", () : any => {
     const select: any = wrapper.find("select");
     expect(select.attributes("data-placeholder")).toBe("请选择");
     expect(select.attributes("data-popper-class")).toBe("custom-popper");
+    expect(wrapper.findComponent({ name: "ElSelect" }).props("emptyValues")).toEqual([null, undefined]);
     expect(select.findAll("option").map((option?: any) : any => option.text())).toEqual(["Alpha", "Beta"]);
     expect(wrapper.findAll(".option-bar-option-swatch")).toHaveLength(3);
     expect(wrapper.findAll(".option-bar-option-icon").length).toBeGreaterThanOrEqual(2);
@@ -331,13 +355,89 @@ describe("console common components behavior", () : any => {
     expect(wrapper.emitted("toggle")).toHaveLength(3);
   });
 
+  it("omits the empty state action region when no next step is provided", () : any => {
+    const wrapper: any = mount(ConsoleEmptyState, {
+      props: { title: "暂无上游服务" },
+    });
+    expect(wrapper.find(".console-empty-state-title").text()).toBe("暂无上游服务");
+    expect(wrapper.find(".console-empty-state-actions").exists()).toBe(false);
+  });
+
+  it("renders a startable next step in the empty state action region", () : any => {
+    const wrapper: any = mount(ConsoleEmptyState, {
+      props: { title: "暂无上游服务", description: "发布一个上游服务后，这里会显示它的运行时快照。" },
+      slots: { action: "<a class=\"table-action\" href=\"#/admin/publish-upstream-service\">发布服务</a>" },
+    });
+    expect(wrapper.find(".console-empty-state-description").text()).toBe(
+      "发布一个上游服务后，这里会显示它的运行时快照。",
+    );
+    const actions: any = wrapper.find(".console-empty-state-actions");
+    expect(actions.exists()).toBe(true);
+    expect(actions.classes()).toContain("horizontal-action-group");
+    expect(actions.find("a.table-action").text()).toBe("发布服务");
+  });
+
+  it("keeps list semantics when the empty state renders as a list item", () : any => {
+    const wrapper: any = mount(ConsoleEmptyState, {
+      props: { title: "暂无操作", as: "li", compact: true },
+      slots: { action: "<button class=\"table-action\" type=\"button\">添加工具路径</button>" },
+    });
+    expect(wrapper.element.tagName).toBe("LI");
+    expect(wrapper.classes()).toContain("is-compact");
+    expect(wrapper.find(".console-empty-state-actions button").text()).toBe("添加工具路径");
+  });
+
+  it("renders inline alert text without an action region by default", () : any => {
+    const wrapper: any = mount(ConsoleInlineAlert, {
+      props: { tone: "danger" },
+      slots: { default: "策略能力加载失败。" },
+    });
+    expect(wrapper.attributes("role")).toBe("alert");
+    expect(wrapper.classes()).toContain("tone-danger");
+    expect(wrapper.find(".console-inline-alert-main").text()).toBe("策略能力加载失败。");
+    expect(wrapper.find(".console-inline-alert-actions").exists()).toBe(false);
+    expect(wrapper.find(".console-inline-alert-dismiss").exists()).toBe(false);
+  });
+
+  it("exposes recovery actions and dismissal through the inline alert action region", async () : Promise<any> => {
+    const wrapper: any = mount(ConsoleInlineAlert, {
+      props: { tone: "danger", title: "无法加载", dismissible: true },
+      slots: {
+        default: "策略能力加载失败。",
+        action: "<button class=\"table-action\" type=\"button\">重试</button>",
+      },
+    });
+    expect(wrapper.find(".console-inline-alert-title").text()).toBe("无法加载");
+    const actions: any = wrapper.find(".console-inline-alert-actions");
+    expect(actions.exists()).toBe(true);
+    // Sibling controls in one row must share the horizontal action-group contract.
+    expect(actions.classes()).toContain("horizontal-action-group");
+    expect(actions.find("button.table-action").text()).toBe("重试");
+
+    const dismiss: any = wrapper.find(".console-inline-alert-dismiss");
+    expect(dismiss.attributes("aria-label")).toBe("关闭提示");
+    await dismiss.trigger("click");
+    expect(wrapper.emitted("dismiss")).toHaveLength(1);
+  });
+
+  it("keeps status semantics for non-danger inline alert tones", () : any => {
+    const wrapper: any = mount(ConsoleInlineAlert, {
+      props: { tone: "success" },
+      slots: { default: "已发布" },
+    });
+    expect(wrapper.attributes("role")).toBe("status");
+    expect(wrapper.classes()).toContain("tone-success");
+  });
+
   it("exports common component registry entries and reuse policy", () : any => {
     expect(RegisteredAgentModelOptionBar).toBe(AgentModelOptionBar);
     expect(RegisteredBinaryCheckbox).toBe(BinaryCheckbox);
+    expect(RegisteredFeatureToggle).toBe(FeatureToggle);
     expect(RegisteredSegmentedToggle).toBe(SegmentedToggle);
     expect(commonComponentReusePolicy.length).toBeGreaterThan(0);
     expect(commonComponentRegistry.map((entry?: any) : any => entry.name)).toEqual(expect.arrayContaining([
       "BinaryCheckbox",
+      "FeatureToggle",
       "OptionBar",
       "AgentModelOptionBar",
       "SegmentedToggle",

@@ -15,7 +15,7 @@ const {
 
 const {
   activeOperationPermissionToolCount = computed(() => 0),
-  busyKey = ref(""),
+  isBusy = () => false,
   defaultAgentToolCount = computed(() => 0),
   internalOperationPermissionToolCount = computed(() => 0),
   policyPreviewGrantId = ref(""),
@@ -101,7 +101,7 @@ const isStatsView = computed(() => adminView.value === "toolStats");
       :grants="toolGrants"
       :tool-options="policyPreviewToolOptionBarOptions"
       :profile-options="policyPreviewProfileOptionBarOptions"
-      :busy-key="busyKey"
+      :policy-preview-busy="isBusy('tool-policy-preview')"
       :preview-result="policyPreviewResult"
       @preview="previewToolPolicy"
     />

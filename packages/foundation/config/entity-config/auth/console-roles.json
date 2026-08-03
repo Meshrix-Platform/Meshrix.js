@@ -9,36 +9,8 @@
       "scopes": ["$all"]
     },
     {
-      "roleId": "admin",
-      "label": "Admin",
-      "scopes": [
-        "console:read",
-        "gateway:read",
-        "workspace:read",
-        "storage:read",
-        "gateway:write",
-        "workspace:write",
-        "storage:write",
-        "gateway:maintain",
-        "workspace:maintain",
-        "gateway:admin",
-        "jobs:read",
-        "jobs:write",
-        "maintenance:read",
-        "maintenance:run",
-        "maintenance:approve",
-        "maintenance:admin",
-        "repo:read",
-        "repo:write",
-        "repo:review",
-        "repo:approve",
-        "repo:maintain",
-        "model:call"
-      ]
-    },
-    {
-      "roleId": "operator",
-      "label": "Operator",
+      "roleId": "maintainer",
+      "label": "Maintainer",
       "scopes": [
         "console:read",
         "gateway:read",

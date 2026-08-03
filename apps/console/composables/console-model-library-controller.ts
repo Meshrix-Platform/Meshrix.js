@@ -22,7 +22,7 @@ import {
 
 type ConsoleModelLibraryControllerOptions = {
   gatewayAssistantModelAlias: () => string;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   currentAgentModelOptionLabel: (value?: string) => string;
   error: Ref<string>;
   modelLibraryExpandedCards: Ref<Record<string, boolean>>;
@@ -213,7 +213,7 @@ export function createConsoleModelLibraryController(options: ConsoleModelLibrary
     probeModelLibraryBeforeSave,
     runModelEntryProbe,
   } = createConsoleModelProbeController({
-    clearAllBusy: options.clearAllBusy,
+    clearBusy: options.clearBusy,
     error: options.error,
     modelEntryConfigured,
     modelEntryStatusKey,
@@ -230,7 +230,7 @@ export function createConsoleModelLibraryController(options: ConsoleModelLibrary
     removeModelProvider,
     toggleModelLibraryCard,
   } = createConsoleModelRepositoryController({
-    clearAllBusy: options.clearAllBusy,
+    clearBusy: options.clearBusy,
     error: options.error,
     modelEntryBindingSummary,
     modelEntryIsBound,

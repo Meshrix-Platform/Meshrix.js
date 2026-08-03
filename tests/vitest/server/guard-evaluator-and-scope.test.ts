@@ -300,9 +300,16 @@ describe("Real Guard Predicates", () : any => {
     expect(result.ok).toBe(true);
   });
 
-  it("require_admin should accept with admin role", () : any => {
+  it("require_admin should reject a role name without explicit administration authority", () : any => {
     const result: any = evaluateGuard("require_admin", {
-      subjectPermissions: { roles: ["admin", "viewer"] }
+      subjectPermissions: { roles: ["maintainer", "viewer"] }
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("require_admin should retain the owner recovery role", () : any => {
+    const result: any = evaluateGuard("require_admin", {
+      subjectPermissions: { roles: ["owner"] }
     });
     expect(result.ok).toBe(true);
   });

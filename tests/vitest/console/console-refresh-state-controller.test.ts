@@ -21,24 +21,21 @@ function makeState(id: string) : any {
 }
 
 function createFixture() : any {
-  const busyKey: any = ref("");
   const error: any = ref("seed");
   const serverAvailable: any = ref(false);
   const applyConsoleState: any = vi.fn();
-  const clearAllBusy: any = vi.fn();
+  const clearBusy: any = vi.fn();
   const setBusy: any = vi.fn();
   const controller: any = createConsoleRefreshStateController({
     applyConsoleState,
-    busyKey,
-    clearAllBusy,
+    clearBusy,
     error,
     serverAvailable,
     setBusy,
   });
   return {
     applyConsoleState,
-    busyKey,
-    clearAllBusy,
+    clearBusy,
     controller,
     error,
     serverAvailable,
@@ -90,25 +87,25 @@ describe("console refresh state controller", () : any => {
   });
 
   it("performs a visible refresh and applies the server state", async () : Promise<any> => {
-    const { applyConsoleState, busyKey, clearAllBusy, controller, error, serverAvailable, setBusy } = createFixture();
-    busyKey.value = "manual-refresh";
+    const { applyConsoleState, clearBusy, controller, error, serverAvailable, setBusy } = createFixture();
     consoleStateClientMock.getServerConsoleState.mockResolvedValueOnce(makeState("runtime-1"));
 
     await controller.performRefreshState({ forceSettings: true });
 
-    expect(setBusy).toHaveBeenCalledWith("manual-refresh");
+    expect(setBusy).toHaveBeenCalledWith("refresh");
     expect(error.value).toBe("");
     expect(applyConsoleState).toHaveBeenCalledWith(makeState("runtime-1"), {
       forceSettings: true,
       forceDrafts: false,
     });
     expect(serverAvailable.value).toBe(true);
-    expect(clearAllBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledWith("refresh");
     expect(controller.lastRefreshStateStartedAt.value).toBe(Date.now());
   });
 
   it("marks the server unavailable and reports fallback errors", async () : Promise<any> => {
-    const { applyConsoleState, clearAllBusy, controller, error, serverAvailable, setBusy } = createFixture();
+    const { applyConsoleState, clearBusy, controller, error, serverAvailable, setBusy } = createFixture();
     consoleStateClientMock.getServerConsoleState.mockRejectedValueOnce("offline");
 
     await controller.performRefreshState();
@@ -117,18 +114,20 @@ describe("console refresh state controller", () : any => {
     expect(applyConsoleState).not.toHaveBeenCalled();
     expect(serverAvailable.value).toBe(false);
     expect(error.value).toBe("加载服务端控制台失败。");
-    expect(clearAllBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledWith("refresh");
 
     consoleStateClientMock.getServerConsoleState.mockRejectedValueOnce(new Error("server down"));
     await controller.performRefreshState({ silent: true });
 
     expect(error.value).toBe("server down");
     expect(setBusy).toHaveBeenCalledTimes(1);
-    expect(clearAllBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledWith("refresh");
   });
 
   it("coalesces rapid refreshes into one delayed refresh and merges silent flags", async () : Promise<any> => {
-    const { applyConsoleState, clearAllBusy, controller, setBusy } = createFixture();
+    const { applyConsoleState, clearBusy, controller, setBusy } = createFixture();
     consoleStateClientMock.getServerConsoleState
       .mockResolvedValueOnce(makeState("initial"))
       .mockResolvedValueOnce(makeState("coalesced"));
@@ -154,7 +153,8 @@ describe("console refresh state controller", () : any => {
 
     expect(consoleStateClientMock.getServerConsoleState).toHaveBeenCalledTimes(2);
     expect(setBusy).toHaveBeenCalledWith("refresh");
-    expect(clearAllBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledTimes(1);
+    expect(clearBusy).toHaveBeenCalledWith("refresh");
     expect(applyConsoleState).toHaveBeenLastCalledWith(makeState("coalesced"), {
       forceSettings: false,
       forceDrafts: false,

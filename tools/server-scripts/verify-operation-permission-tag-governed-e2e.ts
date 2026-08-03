@@ -43,7 +43,7 @@ const {
   callMcp,
   callMcpWithToolName,
   capabilitiesForToken,
-  createLocalGrant,
+  createVerifierApiKey,
   denialSummary,
   mcpPayload,
   openMcpSse,
@@ -69,7 +69,7 @@ const workflows: any = createOperationPermissionTagGovernedWorkflows({
   callMcp,
   callMcpWithToolName,
   capabilitiesForToken,
-  createLocalGrant,
+  createVerifierApiKey,
   createdGrantIds,
   denialSummary,
   fixtureState,
@@ -111,7 +111,7 @@ try {
     const rebuild: any = await rebuildTagProjections();
     assert.equal(Number(rebuild.count || 0) >= Object.keys(ENTITY_REFS).length, true);
     const gateway: any = await registerGatewayFixture();
-    const grant: any = await createLocalGrant();
+    const grant: any = await createVerifierApiKey();
     assert.equal(grant.grant?.toolsets?.includes("meshrix.gateway.read"), true);
     assert.equal(grant.grant?.toolsets?.includes("meshrix.gateway.write"), true);
     setPrimaryGrant(grant);

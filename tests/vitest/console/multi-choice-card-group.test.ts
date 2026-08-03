@@ -92,4 +92,55 @@ describe("MultiChoiceCardGroup behavior", () : any => {
     expect(wrapper.emitted("update:modelValue")).toBeUndefined();
     expect(wrapper.emitted("change")).toBeUndefined();
   });
+
+  it("renders a ConfigFoldCard with full-width divided list rows", async () : Promise<any> => {
+    const wrapper: any = mountGroup({
+      layout: "list",
+      modelValue: ["beta"],
+    }, {});
+    const foldCard: any = wrapper.find(".multi-choice-list-card");
+    const rows: any = wrapper.findAll(".multi-choice-list-row");
+    const items: any = wrapper.findAll(".multi-choice-list-item");
+
+    expect(wrapper.attributes("data-layout")).toBe("list");
+    expect(foldCard.exists()).toBe(true);
+    expect(foldCard.classes()).toContain("config-fold-card");
+    expect(foldCard.attributes("open")).toBeDefined();
+    expect(wrapper.find(".config-fold-title").text()).toBe("Feature choices");
+    expect(wrapper.find(".config-fold-subtitle").text()).toBe("Two selected");
+    expect(wrapper.findAll(".multi-choice-card-option")).toHaveLength(0);
+    expect(wrapper.findAll(".multi-choice-fold-card")).toHaveLength(0);
+    expect(wrapper.find(".multi-choice-list-select-all").exists()).toBe(false);
+    expect(rows).toHaveLength(3);
+    expect(items).toHaveLength(3);
+    expect(rows.map((row?: any) : any => row.attributes("data-active"))).toEqual(["false", "true", "false"]);
+    expect(wrapper.text()).toContain("Alpha");
+    expect(wrapper.text()).not.toContain("Alpha description");
+
+    await items[0].trigger("click");
+    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([["alpha", "beta"]]);
+  });
+
+  it("places a select-all row first in list layout", async () : Promise<any> => {
+    const wrapper: any = mountGroup({
+      layout: "list",
+      modelValue: [],
+      selectAllLabel: "全选",
+    }, {});
+    const rows: any = wrapper.findAll(".multi-choice-list-row");
+    const selectAll: any = wrapper.find(".multi-choice-list-select-all .multi-choice-list-item");
+
+    expect(rows[0].classes()).toContain("multi-choice-list-select-all");
+    expect(selectAll.text()).toBe("全选");
+    expect(rows).toHaveLength(4);
+
+    await selectAll.trigger("click");
+    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([["alpha", "beta"]]);
+
+    await wrapper.setProps({ modelValue: ["alpha", "beta"] });
+    expect(wrapper.find(".multi-choice-list-select-all").attributes("data-active")).toBe("true");
+
+    await selectAll.trigger("click");
+    expect(wrapper.emitted("update:modelValue")?.[1]).toEqual([[]]);
+  });
 });

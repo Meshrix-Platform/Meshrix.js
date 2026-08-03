@@ -12,9 +12,7 @@ type ControllerApprovalStatus =
   | "approved";
 
 type ConsoleApprovalFlowSelectionControllerOptions = {
-  mcpAuthorizationStatus: Ref<ControllerApprovalStatus>;
   operationPermissionPendingStatus: Ref<ControllerApprovalStatus>;
-  refreshMcpAuthorizationRequests: () => Promise<void>;
   refreshOperationPermissionPendingOperations: () => Promise<void>;
 };
 
@@ -33,12 +31,8 @@ export function createConsoleApprovalFlowSelectionController(
   async function selectApprovalFlowStatus(status: SharedApprovalFlowStatus) : Promise<any> {
     approvalFlowSelectedStatus.value = status;
     const apiStatus: any = approvalApiStatusForSharedStatus(status);
-    options.mcpAuthorizationStatus.value = apiStatus;
     options.operationPermissionPendingStatus.value = apiStatus;
-    await Promise.all([
-      options.refreshMcpAuthorizationRequests(),
-      options.refreshOperationPermissionPendingOperations(),
-    ]);
+    await options.refreshOperationPermissionPendingOperations();
   }
 
   return {

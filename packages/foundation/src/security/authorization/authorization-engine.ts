@@ -43,8 +43,7 @@ export {
 export { resolveAuthorizationSubject } from "./authorization-engine-support.ts";
 
 function subjectCanUseCapabilityWildcards(subject: Record<string, any> = {}) : any {
-  return subject.roleId === "admin" ||
-    subject.roleId === "owner" ||
+  return subject.roleId === "owner" ||
     subject.scopes?.includes("auth:admin");
 }
 
@@ -77,6 +76,7 @@ export function evaluateAuthorizationPolicy({
   operation = {},
   tool = null,
   grant = null,
+  restriction = null,
   profile = null,
   subject = null,
   actor = null,
@@ -93,6 +93,7 @@ export function evaluateAuthorizationPolicy({
   governanceStore = null,
   governanceRequired = false
 }: Record<string, any> = {}) : any {
+  const authorizationPolicy: any = grant || restriction;
   const resolvedSubject: any = resolveAuthorizationSubject({ subject, actor, authSession, grant });
   const resourceContext: any = resolveResourceContext({ operation, tool, input, context });
   const requiredScopes: any = requiredScopesFor(operation, tool);
@@ -105,14 +106,14 @@ export function evaluateAuthorizationPolicy({
     ? requiredCapabilities.filter((capability?: any) : any => !hasCapability(subjectCapabilitiesForDecision, capability))
     : [];
   const effectiveMissingScopes: any = capabilityMode ? [] : missingScopes;
-  const missingToolsets: any = toolsetMisses(grant, tool);
+  const missingToolsets: any = toolsetMisses(authorizationPolicy, tool);
   const risk: any = operationRisk(operation, tool);
   const evaluatedLayers: any = uniqueStrings([
     "authorization_subject",
     requiredCapabilities.length > 0 ? "operation_capability_policy" : "",
     "operation_scope_policy",
     tool ? "tool_catalog_policy" : "",
-    grant ? "grant_policy" : "",
+    grant ? "grant_policy" : restriction ? "credential_policy" : "",
     profile ? "agent_profile_policy" : "",
     resourceContext.tenantId ? "tenant_boundary_policy" : "",
     resourceContext.accountId || resourceContext.accountBoundaryRequired ? "account_boundary_policy" : "",
@@ -143,6 +144,7 @@ export function evaluateAuthorizationPolicy({
         operation,
         tool,
         grant,
+        restriction,
         profile,
         subject: resolvedSubject,
         input,
@@ -153,7 +155,7 @@ export function evaluateAuthorizationPolicy({
     : null;
   const abacDetails: any = abacDenyDetails({
     subject: resolvedSubject,
-    grant,
+    grant: authorizationPolicy,
     profile,
     resource: resourceContext
   });
@@ -179,20 +181,20 @@ export function evaluateAuthorizationPolicy({
     details = abacDetails;
   } else if (tool && tool.status !== "active") {
     details = effectDetails("deny", "tool_inactive", "Tool is inactive.");
-  } else if (grantRequired && !grant) {
-    details = effectDetails("deny", "missing_grant", "No grant was provided.");
-  } else if (grant?.expiresAt && Date.parse(grant.expiresAt) <= Date.now()) {
+  } else if (grantRequired && !authorizationPolicy) {
+    details = effectDetails("deny", "missing_credential", "No authorization credential was provided.");
+  } else if (authorizationPolicy?.expiresAt && Date.parse(authorizationPolicy.expiresAt) <= Date.now()) {
     details = effectDetails("deny", "grant_expired", "Grant is expired.");
-  } else if (Number(grant?.maxUses || 0) > 0 && Number(grant?.useCount || 0) >= Number(grant?.maxUses || 0)) {
+  } else if (Number(authorizationPolicy?.maxUses || 0) > 0 && Number(authorizationPolicy?.useCount || 0) >= Number(authorizationPolicy?.maxUses || 0)) {
     details = effectDetails("deny", "grant_max_uses", "Grant has exceeded its maximum use count.");
   } else if (
-    grant?.allowedOrigins?.length > 0 &&
-    (!requestOrigin(request) || !grant.allowedOrigins.map((item?: any) : any => String(item || "").replace(/\/+$/, "")).includes(requestOrigin(request)))
+    authorizationPolicy?.allowedOrigins?.length > 0 &&
+    (!requestOrigin(request) || !authorizationPolicy.allowedOrigins.map((item?: any) : any => String(item || "").replace(/\/+$/, "")).includes(requestOrigin(request)))
   ) {
     details = effectDetails("deny", "origin_not_allowed", "Request origin is not allowed by grant.");
   } else if (
-    grant?.allowedCidrs?.length > 0 &&
-    !grant.allowedCidrs.some((rule?: any) : any => ipMatchesRule(sourceIpFromRequest(request), rule))
+    authorizationPolicy?.allowedCidrs?.length > 0 &&
+    !authorizationPolicy.allowedCidrs.some((rule?: any) : any => ipMatchesRule(sourceIpFromRequest(request), rule))
   ) {
     details = effectDetails("deny", "cidr_not_allowed", "Request source address is not allowed by grant.");
   } else if (context?.grantRateLimited === true || context?.rateLimited === true) {
@@ -207,11 +209,11 @@ export function evaluateAuthorizationPolicy({
     details = effectDetails("deny", "missing_capabilities", "Credential is missing required capabilities.");
   } else if (effectiveMissingScopes.length > 0) {
     details = effectDetails("deny", "missing_scopes", "Subject is missing required scopes.");
-  } else if (!grantHasToolset(grant, tool)) {
+  } else if (!grantHasToolset(authorizationPolicy, tool)) {
     details = effectDetails("deny", "missing_toolsets", "Grant is missing a toolset that contains this tool.");
-  } else if (tool?.id && grant?.toolDeny?.includes(tool.id)) {
+  } else if (tool?.id && authorizationPolicy?.toolDeny?.includes(tool.id)) {
     details = effectDetails("deny", "tool_denied", "Grant denies this tool.");
-  } else if (tool?.id && grant?.toolAllow?.length > 0 && !grant.toolAllow.includes(tool.id)) {
+  } else if (tool?.id && authorizationPolicy?.toolAllow?.length > 0 && !authorizationPolicy.toolAllow.includes(tool.id)) {
     details = effectDetails("deny", "tool_not_allowed", "Tool is not in the grant allowlist.");
   } else if (tool?.id && profile?.toolDeny?.includes(tool.id)) {
     details = effectDetails("deny", "profile_tool_denied", "Agent profile denies this tool.");
@@ -219,9 +221,9 @@ export function evaluateAuthorizationPolicy({
     details = effectDetails("deny", "profile_tool_not_allowed", "Tool is not in the profile allowlist.");
   } else if (riskRank(risk) > riskRank(maxRiskAllowed(
     profile,
-    grant,
+    authorizationPolicy,
     resolvedSubject,
-    grantRequired || grant || tool ? "safe_write" : "destructive"
+    grantRequired || authorizationPolicy || tool ? "safe_write" : "destructive"
   ))) {
     details = effectDetails("deny", "risk_exceeds_policy", "Requested risk exceeds effective policy.");
   } else if (

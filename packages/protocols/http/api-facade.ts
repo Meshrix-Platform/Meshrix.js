@@ -26,10 +26,6 @@ function emptyAgentSettingsProjection() : any {
 function normalizeConsoleDomainServices(services: Record<string, any> = {}) : any {
   const source: any = services && typeof services === "object" ? services : {};
   return {
-    buildOperationPermissionClientConnectionRows:
-      typeof source.buildOperationPermissionClientConnectionRows === "function"
-        ? source.buildOperationPermissionClientConnectionRows
-        : () : any => [],
     buildAgentSettingsConsoleProjection:
       typeof source.buildAgentSettingsConsoleProjection === "function"
         ? source.buildAgentSettingsConsoleProjection
@@ -164,7 +160,6 @@ export async function buildConsoleState({
   request = null,
   maintenanceAgent = null,
   features = null,
-  toolSkillManagementProvider = null,
   consoleDomainServices = null
 }: Record<string, any>) : Promise<any> {
   const domainServices: any = normalizeConsoleDomainServices(consoleDomainServices);
@@ -182,9 +177,7 @@ export async function buildConsoleState({
     }),
     domainServices.buildConsoleClientConnections({
       clientRegistryService,
-      offlineAfterSeconds: publicDiscoveryState.offlineAfterSeconds,
-      toolSkillManagementProvider,
-      buildOperationPermissionClientConnectionRows: domainServices.buildOperationPermissionClientConnectionRows
+      offlineAfterSeconds: publicDiscoveryState.offlineAfterSeconds
     }),
     domainServices.buildMaintenanceAgentConsoleSummary({ maintenanceAgent })
   ]);

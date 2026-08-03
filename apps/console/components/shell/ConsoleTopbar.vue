@@ -193,7 +193,6 @@ onBeforeUnmount(() => {
           <circle cx="11" cy="11" r="7" />
           <path d="m21 21-4.35-4.35" />
         </svg>
-        <kbd class="topbar-palette-kbd" aria-hidden="true">⌘K</kbd>
       </button>
     </div>
 
@@ -271,17 +270,8 @@ onBeforeUnmount(() => {
 }
 
 .topbar-palette-trigger {
-  gap: var(--space-2);
-}
-
-.topbar-palette-kbd {
-  padding: 1px var(--space-1);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xs);
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: var(--text-2xs);
-  line-height: 1.4;
+  min-width: 148px;
+  justify-content: flex-start;
 }
 
 .topbar-breadcrumb {

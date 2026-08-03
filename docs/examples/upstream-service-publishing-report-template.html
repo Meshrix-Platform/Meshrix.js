@@ -15,9 +15,23 @@
     h1 { margin: .15em 0; font-size: clamp(2.3rem, 6vw, 4.8rem); line-height: 1; }
     h2, h3 { margin: .2em 0 .7em; }
     .eyebrow { color: #176547; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-    .status, .placeholder, .catalog { padding: 16px; border: 1px solid #bcc8bf; border-radius: 12px; background: white; }
+    .status, .placeholder, .catalog, .manual-step { padding: 16px; border: 1px solid #bcc8bf; border-radius: 12px; background: white; }
     .status { display: inline-block; color: #6044a8; font-weight: 800; }
     .catalog { margin-top: 16px; }
+    .manual-groups { display: grid; gap: 42px; }
+    .manual-group { padding: 0; border: 0; content-visibility: visible; }
+    .manual-group + .manual-group { padding-top: 42px; border-top: 1px solid #bcc8bf; }
+    .manual-group-header { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; padding: 0; border: 0; background: transparent; color: #17231d; }
+    .manual-group-header h3 { margin: 0; font-size: 1.8rem; line-height: 1.15; }
+    .manual-group-header p { margin: 7px 0 0; color: #657269; }
+    .manual-group-number { align-self: start; padding: 5px 9px; border: 1px solid #bcc8bf; border-radius: 999px; color: #176547; font-size: .75rem; font-weight: 800; }
+    .manual-index { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; margin-bottom: 24px; }
+    .manual-step { margin-top: 18px; }
+    .manual-instructions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .manual-instructions > div { padding: 12px; border: 1px solid #d9e0da; border-radius: 10px; }
+    .manual-instructions dt { color: #657269; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
+    .manual-instructions dd { margin: 4px 0 0; }
+    .appendix-section { padding: 0; border: 0; }
     .report-navigation { display: flex; gap: 8px; padding: 14px 20px; overflow-x: auto; background: white; border-bottom: 1px solid #d9e0da; }
     .report-navigation a { flex: 0 0 auto; color: #176547; font-size: .78rem; font-weight: 750; }
     .skip-link { position: fixed; top: 12px; left: 12px; z-index: 30; padding: 8px 12px; background: white; color: #17231d; transform: translateY(-180%); }
@@ -29,8 +43,8 @@
     .language-switch { position: fixed; top: 12px; right: 12px; display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: #17231dea; }
     button { padding: 7px 11px; border: 0; border-radius: 999px; background: transparent; color: white; cursor: pointer; }
     button[aria-pressed="true"] { background: white; color: #17231d; }
-    @media (max-width: 700px) { body { margin: 0; border: 0; } header, section { padding-inline: 20px; } }
-    @media print { body { margin: 0; border: 0; } .language-switch, .report-navigation, .skip-link { display: none; } section { break-inside: avoid; content-visibility: visible; contain-intrinsic-size: auto; } }
+    @media (max-width: 700px) { body { margin: 0; border: 0; } header, section { padding-inline: 20px; } .manual-index, .manual-instructions, .manual-group-header { grid-template-columns: 1fr; } }
+    @media print { body { margin: 0; border: 0; } .language-switch, .report-navigation, .skip-link { display: none; } section, .manual-step, .manual-group-header { break-inside: avoid; content-visibility: visible; contain-intrinsic-size: auto; } }
   </style>
 </head>
 <body data-report-template="upstream-service-publishing" data-report-portability="single-file">
@@ -40,82 +54,158 @@
     <button type="button" data-language="en" aria-pressed="true">English</button>
   </nav>
   <header>
-    <p><span data-en="Portable single-file structural template — not release evidence" data-zh="可携带的单文件结构模板——不是发布证据">Portable single-file structural template — not release evidence</span></p>
-    <h1><span data-en="Upstream Service Publishing" data-zh="上游服务发布">Upstream Service Publishing</span></h1>
+    <p><span data-en="Console operation manual" data-zh="管控台操作手册">Console operation manual</span></p>
+    <h1><span data-en="Publish an Upstream Service through Meshrix" data-zh="通过 Meshrix 发布上游服务">Publish an Upstream Service through Meshrix</span></h1>
+    <p><span data-en="Follow the verified Console journey from sign-in through downstream MCP invocation." data-zh="按照已验证的管控台路线，从登录开始完成下游 MCP 调用。">Follow the verified Console journey from sign-in through downstream MCP invocation.</span></p>
     <p class="status"><span data-en="Not executed" data-zh="未执行">Not executed</span></p>
-    <p><span data-en="Generated reports embed every verified image and downloadable attachment; no neighboring resource files are required." data-zh="生成的报告会内嵌每一张已验证图片及可下载附件，无需任何同目录资源文件。">Generated reports embed every verified image and downloadable attachment; no neighboring resource files are required.</span></p>
-    <p><span data-en="Live Console screenshots are captured at a 1440 × 1000 CSS viewport with 2× device scale, producing 2880 × 2000 PNG evidence." data-zh="实时管控台截图采用 1440 × 1000 CSS 视口及 2× 设备缩放，生成 2880 × 2000 PNG 证据。">Live Console screenshots are captured at a 1440 × 1000 CSS viewport with 2× device scale, producing 2880 × 2000 PNG evidence.</span></p>
   </header>
-  <nav class="report-navigation" aria-label="Report sections"><a href="#executive-summary"><span data-en="Executive summary" data-zh="执行摘要">Executive summary</span></a><a href="#safe-configuration"><span data-en="Exact safe configuration" data-zh="精确安全配置">Exact safe configuration</span></a><a href="#mcp-acceptance"><span data-en="MCP acceptance matrix" data-zh="MCP 验收矩阵">MCP acceptance matrix</span></a><a href="#live-console-evidence"><span data-en="Live Console evidence" data-zh="实时管控台证据">Live Console evidence</span></a><a href="#golden-path"><span data-en="Golden path" data-zh="黄金路径">Golden path</span></a><a href="#requirements"><span data-en="Requirements" data-zh="需求">Requirements</span></a><a href="#production-composition"><span data-en="Production composition" data-zh="生产组成">Production composition</span></a><a href="#revision-semantics"><span data-en="Revision semantics" data-zh="修订语义">Revision semantics</span></a><a href="#protocol-delivery"><span data-en="Protocol delivery" data-zh="协议交付">Protocol delivery</span></a><a href="#provenance"><span data-en="Provenance" data-zh="来源">Provenance</span></a></nav>
+  <nav class="report-navigation" aria-label="Report sections"><a href="#operation-guide"><span data-en="Operation guide" data-zh="操作手册">Operation guide</span></a><a href="#appendix"><span data-en="Appendix" data-zh="附录">Appendix</span></a></nav>
   <main id="report-content" tabindex="-1">
-  <section id="executive-summary" aria-labelledby="executive-summary-title" data-report-section="executive-summary">
-        <p class="eyebrow"><span data-en="Executive summary" data-zh="执行摘要">Executive summary</span></p>
-        <h2 id="executive-summary-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-        <article class="catalog" data-report-slot="candidate-scope">
-          <h3><span data-en="Candidate scope — not bound" data-zh="候选范围——未绑定">Candidate scope — not bound</span></h3>
-          <p><span data-en="Not executed; no candidate claim is present." data-zh="未执行；不存在候选声明。">Not executed; no candidate claim is present.</span></p>
-        </article>
-      </section>
-  <section id="safe-configuration" aria-labelledby="safe-configuration-title" data-report-section="safe-configuration">
-        <p class="eyebrow"><span data-en="Exact safe configuration" data-zh="精确安全配置">Exact safe configuration</span></p>
-        <h2 id="safe-configuration-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-        <article class="catalog" data-report-slot="upstream-publication-runtime-health">
-          <h3><span data-en="Publication and runtime health — required" data-zh="发布与运行时健康——必填">Publication and runtime health — required</span></h3>
-          <p><span data-en="Not executed; populate only from the bounded upstream-publish receipt." data-zh="未执行；只能从有界 upstream-publish 收据填充。">Not executed; populate only from the bounded upstream-publish receipt.</span></p>
-        </article>
-        <article class="catalog" data-report-slot="upstream-service-interface-catalog">
-          <h3><span data-en="Published upstream interfaces — required" data-zh="已发布上游接口——必填">Published upstream interfaces — required</span></h3>
-          <p><span data-en="Fill this catalog only from the digest-bound publication input." data-zh="此清单只能从摘要绑定的实际发布输入中填写。">Fill this catalog only from the digest-bound publication input.</span></p>
-          <div class="table-shell"><table><caption><span data-en="Published upstream interface catalog" data-zh="已发布上游接口清单">Published upstream interface catalog</span></caption><thead><tr><th><span data-en="Interface" data-zh="接口">Interface</span></th><th><span data-en="Method and path" data-zh="方法与路径">Method and path</span></th><th><span data-en="Request and upload" data-zh="请求与上传">Request and upload</span></th><th><span data-en="Response and download" data-zh="响应与下载">Response and download</span></th><th><span data-en="Gateway governance" data-zh="网关治理">Gateway governance</span></th></tr></thead>
-          <tbody><tr data-service-interface="required-placeholder"><td colspan="5"><span data-en="Required before generation: health route plus every published operation. Do not invent a download endpoint." data-zh="生成前必填：健康检查路径及每个已发布操作。不得虚构下载接口。">Required before generation: health route plus every published operation. Do not invent a download endpoint.</span></td></tr></tbody></table></div>
-        </article>
-      </section>
-  <section id="mcp-acceptance" aria-labelledby="mcp-acceptance-title" data-report-section="mcp-acceptance">
-        <p class="eyebrow"><span data-en="MCP acceptance matrix" data-zh="MCP 验收矩阵">MCP acceptance matrix</span></p>
-        <h2 id="mcp-acceptance-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-        <div class="table-shell" data-report-slot="client-lifecycle"><table><caption><span data-en="Client lifecycle — required" data-zh="客户端生命周期——必填">Client lifecycle — required</span></caption><thead><tr><th><span data-en="Client" data-zh="客户端">Client</span></th><th><span data-en="Discovery" data-zh="发现">Discovery</span></th><th><span data-en="Install" data-zh="安装">Install</span></th><th><span data-en="Upload" data-zh="上传">Upload</span></th><th>tools/list</th><th>full-access-debug</th><th>require-approval-debug</th><th><span data-en="Uninstall" data-zh="卸载">Uninstall</span></th><th><span data-en="Cleanup" data-zh="清理">Cleanup</span></th></tr></thead><tbody><tr><td colspan="9"><span data-en="Not executed" data-zh="未执行">Not executed</span></td></tr></tbody></table></div>
-      </section>
-  <section id="live-console-evidence" aria-labelledby="live-console-evidence-title" data-report-section="live-console-evidence">
-        <p class="eyebrow"><span data-en="Live Console evidence" data-zh="实时管控台证据">Live Console evidence</span></p>
-        <h2 id="live-console-evidence-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-        <ol class="catalog" data-report-slot="visual-evidence-index"><li><span data-en="Not executed; ten ordered Console evidence entries are required." data-zh="未执行；需要十条有序管控台证据索引。">Not executed; ten ordered Console evidence entries are required.</span></li></ol>
-      </section>
-  <section id="golden-path" aria-labelledby="golden-path-title" data-report-section="golden-path">
-        <p class="eyebrow"><span data-en="Golden path" data-zh="黄金路径">Golden path</span></p>
-        <h2 id="golden-path-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-      </section>
-  <section id="requirements" aria-labelledby="requirements-title" data-report-section="requirements">
-        <p class="eyebrow"><span data-en="Requirements" data-zh="需求">Requirements</span></p>
-        <h2 id="requirements-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-      </section>
-  <section id="production-composition" aria-labelledby="production-composition-title" data-report-section="production-composition">
-        <p class="eyebrow"><span data-en="Production composition" data-zh="生产组成">Production composition</span></p>
-        <h2 id="production-composition-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-      </section>
-  <section id="revision-semantics" aria-labelledby="revision-semantics-title" data-report-section="revision-semantics">
-        <p class="eyebrow"><span data-en="Revision semantics" data-zh="修订语义">Revision semantics</span></p>
-        <h2 id="revision-semantics-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-      </section>
-  <section id="protocol-delivery" aria-labelledby="protocol-delivery-title" data-report-section="protocol-delivery">
-        <p class="eyebrow"><span data-en="Protocol delivery" data-zh="协议交付">Protocol delivery</span></p>
-        <h2 id="protocol-delivery-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-      </section>
-  <section id="provenance" aria-labelledby="provenance-title" data-report-section="provenance">
-        <p class="eyebrow"><span data-en="Provenance" data-zh="来源">Provenance</span></p>
-        <h2 id="provenance-title"><span data-en="Not executed" data-zh="未执行">Not executed</span></h2>
-        <div class="placeholder"><span data-en="Populate from verified evidence when generating a release report." data-zh="生成发布报告时从已验证证据中填充。">Populate from verified evidence when generating a release report.</span></div>
-        <article class="catalog" data-report-slot="journey-timings"><h3><span data-en="Journey timings" data-zh="路线耗时">Journey timings</span></h3><p><span data-en="Not executed" data-zh="未执行">Not executed</span></p></article>
-        <article class="catalog" data-report-slot="cleanup-summary"><h3><span data-en="Cleanup summary" data-zh="清理摘要">Cleanup summary</span></h3><p><span data-en="Not executed" data-zh="未执行">Not executed</span></p></article>
-      </section>
+  <section id="operation-guide" aria-labelledby="operation-guide-title" data-report-section="operation-guide">
+    <p class="eyebrow"><span data-en="Operation guide" data-zh="操作手册">Operation guide</span></p>
+    <h2 id="operation-guide-title"><span data-en="Publish an upstream service from the Console" data-zh="从管控台发布上游服务">Publish an upstream service from the Console</span></h2>
+    <div class="manual-groups" data-report-slot="operation-guide-groups"><section class="manual-group" id="manual-group-organization-structure-configuration" data-manual-group="organization-structure-configuration" aria-labelledby="manual-group-organization-structure-configuration-title">
+      <header class="manual-group-header">
+        <span class="manual-group-number"><span data-en="Part 1" data-zh="第 1 组">Part 1</span></span>
+        <div><h3 id="manual-group-organization-structure-configuration-title"><span data-en="Organization structure configuration" data-zh="组织架构的配置">Organization structure configuration</span></h3><p><span data-en="Establish the administrator session and publish the organization hierarchy that scopes every later permission." data-zh="建立管理员会话并发布组织层级，为后续所有权限划定范围。">Establish the administrator session and publish the organization hierarchy that scopes every later permission.</span></p></div>
+      </header>
+      <ol class="manual-index manual-group-index" data-manual-group-index="organization-structure-configuration"><li value="1"><a href="#manual-step-console-authenticated"><span data-en="Step 1: Default Workbench" data-zh="第 1 步：默认工作台">Step 1: Default Workbench</span></a></li><li value="2"><a href="#manual-step-console-organization-permissions"><span data-en="Step 2: Organization and permission projection" data-zh="第 2 步：组织与权限投影">Step 2: Organization and permission projection</span></a></li></ol>
+      <div class="visual-grid manual-group-steps" data-manual-group-steps="organization-structure-configuration"><article class="manual-step" id="manual-step-console-authenticated" data-manual-step="console-authenticated">
+      <h3><span data-en="Step 1: Default Workbench" data-zh="第 1 步：默认工作台">Step 1: Default Workbench</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Sign in at /login and remain on the default Workbench (/)." data-zh="在 /login 登录并停留在默认工作台（/）。">Sign in at /login and remain on the default Workbench (/).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Submit the Console administrator sign-in form and confirm that the default Workbench opens with no credential field populated." data-zh="提交管控台管理员登录表单，确认默认工作台打开，且任何凭据输入框都没有残留内容。">Submit the Console administrator sign-in form and confirm that the default Workbench opens with no credential field populated.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="An authenticated Console session on the default operational Workbench." data-zh="生成位于默认运维工作台的已认证管控台会话。">An authenticated Console session on the default operational Workbench.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Establish the human administrator identity used by every subsequent governance action." data-zh="建立后续所有治理操作所依赖的人类管理员身份。">Establish the human administrator identity used by every subsequent governance action.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-authenticated"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-organization-permissions" data-manual-step="console-organization-permissions">
+      <h3><span data-en="Step 2: Organization and permission projection" data-zh="第 2 步：组织与权限投影">Step 2: Organization and permission projection</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Open Permissions → Organization Structure (/admin/organization-governance)." data-zh="进入“权限 → 组织架构”（/admin/organization-governance）。">Open Permissions → Organization Structure (/admin/organization-governance).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Choose the Group template, validate it, publish it, and inspect the hierarchy, template tags, and scoped administrator roles." data-zh="选择“集团”模板，完成验证与发布，并检查组织层级、模板标签和各级管理员角色。">Choose the Group template, validate it, publish it, and inspect the hierarchy, template tags, and scoped administrator roles.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="A published organization baseline with five hierarchy nodes, governed tags, and matching administrator-role projections." data-zh="生成已发布的组织治理基线，包含五个层级节点、受治理标签及对应管理员角色投影。">A published organization baseline with five hierarchy nodes, governed tags, and matching administrator-role projections.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Define which organizational scope can receive credentials, discover tools, and administer subordinate resources." data-zh="定义哪些组织范围可以获得密钥、发现工具并管理下级资源。">Define which organizational scope can receive credentials, discover tools, and administer subordinate resources.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-organization-permissions"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article></div>
+    </section><section class="manual-group" id="manual-group-upstream-service-registration-publishing" data-manual-group="upstream-service-registration-publishing" aria-labelledby="manual-group-upstream-service-registration-publishing-title">
+      <header class="manual-group-header">
+        <span class="manual-group-number"><span data-en="Part 2" data-zh="第 2 组">Part 2</span></span>
+        <div><h3 id="manual-group-upstream-service-registration-publishing-title"><span data-en="Upstream service registration and publishing" data-zh="上游服务的注册到发布">Upstream service registration and publishing</span></h3><p><span data-en="Register the service descriptor and operation mapping, then publish a healthy governed revision." data-zh="登记服务描述与操作映射，并发布一个健康且受治理的服务修订。">Register the service descriptor and operation mapping, then publish a healthy governed revision.</span></p></div>
+      </header>
+      <ol class="manual-index manual-group-index" data-manual-group-index="upstream-service-registration-publishing"><li value="3"><a href="#manual-step-console-upstream-basic-config"><span data-en="Step 3: Service subject" data-zh="第 3 步：服务主体">Step 3: Service subject</span></a></li><li value="4"><a href="#manual-step-console-upstream-operation-config"><span data-en="Step 4: Operation impact" data-zh="第 4 步：操作影响">Step 4: Operation impact</span></a></li><li value="5"><a href="#manual-step-console-upstream-published"><span data-en="Step 5: Published revision" data-zh="第 5 步：已发布修订">Step 5: Published revision</span></a></li></ol>
+      <div class="visual-grid manual-group-steps" data-manual-group-steps="upstream-service-registration-publishing"><article class="manual-step" id="manual-step-console-upstream-basic-config" data-manual-step="console-upstream-basic-config">
+      <h3><span data-en="Step 3: Service subject" data-zh="第 3 步：服务主体">Step 3: Service subject</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Open Services → Publish Service and the service information tab (/admin/publish-upstream-service)." data-zh="进入“服务 → 发布服务”，打开服务信息页签（/admin/publish-upstream-service）。">Open Services → Publish Service and the service information tab (/admin/publish-upstream-service).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Import the verified JSON descriptor and load it into the editor; review the service identity, protocol, target, and health route." data-zh="导入已验证的 JSON 描述文件并加载到编辑器，检查服务标识、协议、目标和健康检查路径。">Import the verified JSON descriptor and load it into the editor; review the service identity, protocol, target, and health route.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="A browser publishing draft bound to the exact downloadable JSON configuration." data-zh="生成与可下载真实 JSON 配置精确绑定的浏览器发布草稿。">A browser publishing draft bound to the exact downloadable JSON configuration.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Describe the upstream service through a closed, reviewable configuration before publishing it." data-zh="在发布前用封闭且可审查的配置描述上游服务。">Describe the upstream service through a closed, reviewable configuration before publishing it.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-upstream-basic-config"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-upstream-operation-config" data-manual-step="console-upstream-operation-config">
+      <h3><span data-en="Step 4: Operation impact" data-zh="第 4 步：操作影响">Step 4: Operation impact</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Stay in Services → Publish Service and open Advanced JSON." data-zh="停留在“服务 → 发布服务”，打开“高级 JSON”。">Stay in Services → Publish Service and open Advanced JSON.</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Review both conversion operations, especially the artifact_multipart request mapping and multipart maxBytes limit." data-zh="检查两个转换操作，重点确认 artifact_multipart 请求映射和 multipart maxBytes 上限。">Review both conversion operations, especially the artifact_multipart request mapping and multipart maxBytes limit.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="Two governed operation definitions for immediate and approval-required conversion over the same upstream route." data-zh="生成两个受治理的转换操作定义：一个立即执行，一个需要审批，二者指向同一上游路由。">Two governed operation definitions for immediate and approval-required conversion over the same upstream route.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Bind file transport, limits, risk, and approval behavior before the gateway can expose the operation." data-zh="在网关暴露操作前绑定文件传输、大小限制、风险和审批行为。">Bind file transport, limits, risk, and approval behavior before the gateway can expose the operation.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-upstream-operation-config"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-upstream-published" data-manual-step="console-upstream-published">
+      <h3><span data-en="Step 5: Published revision" data-zh="第 5 步：已发布修订">Step 5: Published revision</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Stay in Services → Publish Service (/admin/publish-upstream-service)." data-zh="停留在“服务 → 发布服务”（/admin/publish-upstream-service）。">Stay in Services → Publish Service (/admin/publish-upstream-service).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Select Publish and wait for the Console to report successful publication and runtime health." data-zh="点击“发布”，等待管控台显示发布成功和运行时健康检查通过。">Select Publish and wait for the Console to report successful publication and runtime health.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="A durable service revision loaded by the gateway with healthy upstream endpoints." data-zh="生成由网关加载的持久服务修订，并确认上游端点健康。">A durable service revision loaded by the gateway with healthy upstream endpoints.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Make the service executable only after the manifest, gateway snapshot, and permission catalog agree." data-zh="仅在清单、网关快照和权限目录一致后，才让服务具备可执行性。">Make the service executable only after the manifest, gateway snapshot, and permission catalog agree.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-upstream-published"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article></div>
+    </section><section class="manual-group" id="manual-group-tool-permission-configuration" data-manual-group="tool-permission-configuration" aria-labelledby="manual-group-tool-permission-configuration-title">
+      <header class="manual-group-header">
+        <span class="manual-group-number"><span data-en="Part 3" data-zh="第 3 组">Part 3</span></span>
+        <div><h3 id="manual-group-tool-permission-configuration-title"><span data-en="Tool permission configuration" data-zh="工具权限的配置">Tool permission configuration</span></h3><p><span data-en="Confirm the published tool surface and issue the least-privilege API Key that may use it." data-zh="确认已发布的工具能力面，并签发可使用该工具的最小权限 API Key。">Confirm the published tool surface and issue the least-privilege API Key that may use it.</span></p></div>
+      </header>
+      <ol class="manual-index manual-group-index" data-manual-group-index="tool-permission-configuration"><li value="6"><a href="#manual-step-console-published-tool"><span data-en="Step 6: Granted surface" data-zh="第 6 步：授权能力面">Step 6: Granted surface</span></a></li><li value="7"><a href="#manual-step-console-api-key-generated"><span data-en="Step 7: Issued API Key record" data-zh="第 7 步：已签发 API Key 记录">Step 7: Issued API Key record</span></a></li></ol>
+      <div class="visual-grid manual-group-steps" data-manual-group-steps="tool-permission-configuration"><article class="manual-step" id="manual-step-console-published-tool" data-manual-step="console-published-tool">
+      <h3><span data-en="Step 6: Granted surface" data-zh="第 6 步：授权能力面">Step 6: Granted surface</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Open Tools → Tool List (/admin/tool-list)." data-zh="进入“工具 → 工具列表”（/admin/tool-list）。">Open Tools → Tool List (/admin/tool-list).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Search for the published service and confirm that its operation appears in the governed tool catalog." data-zh="搜索刚发布的服务，确认对应操作已经出现在受治理工具目录中。">Search for the published service and confirm that its operation appears in the governed tool catalog.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="A discoverable MCP tool projection linked to the published service operation." data-zh="生成与已发布服务操作关联、可被发现的 MCP 工具投影。">A discoverable MCP tool projection linked to the published service operation.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Verify that publication reached the discovery surface without bypassing organization and permission policy." data-zh="验证发布结果已到达发现层，同时没有绕过组织与权限策略。">Verify that publication reached the discovery surface without bypassing organization and permission policy.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-published-tool"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-api-key-generated" data-manual-step="console-api-key-generated">
+      <h3><span data-en="Step 7: Issued API Key record" data-zh="第 7 步：已签发 API Key 记录">Step 7: Issued API Key record</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Open Permissions → Key Distribution (/admin/api-key-distribution)." data-zh="进入“权限 → 密钥分发”（/admin/api-key-distribution）。">Open Permissions → Key Distribution (/admin/api-key-distribution).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Create an organization-scoped workload key, copy it only during the one-time reveal, distribute it to the client, then dismiss the plaintext permanently." data-zh="创建限定组织范围的工作负载密钥，仅在一次性显示期间复制并分发给客户端，随后永久关闭明文。">Create an organization-scoped workload key, copy it only during the one-time reveal, distribute it to the client, then dismiss the plaintext permanently.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="A redacted distributed-key record bound to the Team scope, allowed tools, capabilities, limits, and expiry." data-zh="生成一条经过遮盖的已分发密钥记录，并绑定团队范围、允许工具、能力、使用限制和有效期。">A redacted distributed-key record bound to the Team scope, allowed tools, capabilities, limits, and expiry.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Give the MCP workload a verifiable non-forgeable identity with least-privilege authority and revocation control." data-zh="为 MCP 工作负载提供不可伪造、可验证的身份，并具备最小权限与撤销控制。">Give the MCP workload a verifiable non-forgeable identity with least-privilege authority and revocation control.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-api-key-generated"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article></div>
+    </section><section class="manual-group" id="manual-group-mcp-service-request" data-manual-group="mcp-service-request" aria-labelledby="manual-group-mcp-service-request-title">
+      <header class="manual-group-header">
+        <span class="manual-group-number"><span data-en="Part 4" data-zh="第 4 组">Part 4</span></span>
+        <div><h3 id="manual-group-mcp-service-request-title"><span data-en="MCP service request" data-zh="MCP 服务的请求">MCP service request</span></h3><p><span data-en="Configure the downstream agent, complete required approval, and verify the final MCP request audit." data-zh="配置下游智能体、完成必要审批，并核验最终 MCP 请求审计。">Configure the downstream agent, complete required approval, and verify the final MCP request audit.</span></p></div>
+      </header>
+      <ol class="manual-index manual-group-index" data-manual-group-index="mcp-service-request"><li value="8"><a href="#manual-step-console-downstream-agent-configured"><span data-en="Step 8: Downstream agent configuration" data-zh="第 8 步：下游代理配置">Step 8: Downstream agent configuration</span></a></li><li value="9"><a href="#manual-step-console-operation-approval-pending"><span data-en="Step 9: Execution decision" data-zh="第 9 步：执行决定">Step 9: Execution decision</span></a></li><li value="10"><a href="#manual-step-console-operation-approval-completed"><span data-en="Step 10: Execution outcome" data-zh="第 10 步：执行结果">Step 10: Execution outcome</span></a></li><li value="11"><a href="#manual-step-console-downstream-mcp-call"><span data-en="Step 11: Audit closure" data-zh="第 11 步：审计闭环">Step 11: Audit closure</span></a></li></ol>
+      <div class="visual-grid manual-group-steps" data-manual-group-steps="mcp-service-request"><article class="manual-step" id="manual-step-console-downstream-agent-configured" data-manual-step="console-downstream-agent-configured">
+      <h3><span data-en="Step 8: Downstream agent configuration" data-zh="第 8 步：下游代理配置">Step 8: Downstream agent configuration</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Remain in Permissions → Key Distribution (/admin/api-key-distribution)." data-zh="停留在“权限 → 密钥分发”（/admin/api-key-distribution）。">Remain in Permissions → Key Distribution (/admin/api-key-distribution).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Configure the real downstream connector through MESHRIX_MCP_TOKEN or token stdin, while the client stores only the environment-variable placeholder." data-zh="通过 MESHRIX_MCP_TOKEN 或标准输入密钥配置真实下游连接器，客户端仅保存环境变量占位符。">Configure the real downstream connector through MESHRIX_MCP_TOKEN or token stdin, while the client stores only the environment-variable placeholder.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="The installed connector uses the pre-issued organization-scoped API Key as its only ordinary MCP credential." data-zh="已安装连接器仅使用预签发的组织范围 API Key 作为普通 MCP 凭证。">The installed connector uses the pre-issued organization-scoped API Key as its only ordinary MCP credential.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Bind the real downstream configuration action to a privacy-safe operator-visible handoff." data-zh="将真实下游配置动作绑定到隐私安全、操作员可见的交付说明。">Bind the real downstream configuration action to a privacy-safe operator-visible handoff.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-downstream-agent-configured"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-operation-approval-pending" data-manual-step="console-operation-approval-pending">
+      <h3><span data-en="Step 9: Execution decision" data-zh="第 9 步：执行决定">Step 9: Execution decision</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Open Approval Flow and select pending operation decisions (/approval)." data-zh="进入“审批流”，查看待处理的操作审批（/approval）。">Open Approval Flow and select pending operation decisions (/approval).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Inspect each convert-require-approval-debug request and approve the current decision layer." data-zh="检查每个 convert-require-approval-debug 请求，并批准当前审批层。">Inspect each convert-require-approval-debug request and approve the current decision layer.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="One bounded execution permit for each approved conversion request; no upstream conversion has run yet." data-zh="为每个已批准转换请求生成一次有界执行许可；此时上游转换尚未执行。">One bounded execution permit for each approved conversion request; no upstream conversion has run yet.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Separate the authorization decision from the external side effect and prevent approval from becoming standing authority." data-zh="将授权决定与外部副作用分离，防止一次审批演变成长期权限。">Separate the authorization decision from the external side effect and prevent approval from becoming standing authority.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-operation-approval-pending"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-operation-approval-completed" data-manual-step="console-operation-approval-completed">
+      <h3><span data-en="Step 10: Execution outcome" data-zh="第 10 步：执行结果">Step 10: Execution outcome</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Remain in Approval Flow and switch to all operation records." data-zh="停留在“审批流”，切换到全部操作记录。">Remain in Approval Flow and switch to all operation records.</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Confirm that each approved conversion advanced to completed exactly once." data-zh="确认每个已批准转换都恰好执行一次并进入已完成状态。">Confirm that each approved conversion advanced to completed exactly once.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="Completed approval records correlated with one resumed conversion per request." data-zh="生成与每个请求单次恢复转换相关联的已完成审批记录。">Completed approval records correlated with one resumed conversion per request.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Prove that the approval was consumed once and could not replay or authorize unrelated work." data-zh="证明审批只被消费一次，不能重放，也不能授权无关操作。">Prove that the approval was consumed once and could not replay or authorize unrelated work.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-operation-approval-completed"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article><article class="manual-step" id="manual-step-console-downstream-mcp-call" data-manual-step="console-downstream-mcp-call">
+      <h3><span data-en="Step 11: Audit closure" data-zh="第 11 步：审计闭环">Step 11: Audit closure</span></h3>
+      <dl class="manual-instructions">
+        <div data-manual-field="location"><dt><span data-en="Where to go" data-zh="去哪里">Where to go</span></dt><dd><span data-en="Open Tools → Tool Statistics (/admin/tool-stats)." data-zh="进入“工具 → 工具统计”（/admin/tool-stats）。">Open Tools → Tool Statistics (/admin/tool-stats).</span></dd></div>
+        <div data-manual-field="action"><dt><span data-en="What to do" data-zh="操作什么">What to do</span></dt><dd><span data-en="Refresh the current page and inspect the recent-call audit for both conversion branches and the client matrix." data-zh="刷新当前页面，检查最近调用审计中的两个转换分支及客户端矩阵。">Refresh the current page and inspect the recent-call audit for both conversion branches and the client matrix.</span></dd></div>
+        <div data-manual-field="result"><dt><span data-en="What is produced" data-zh="生成什么">What is produced</span></dt><dd><span data-en="A closed audit trail from client request through authorization, upstream conversion, PDF artifact retrieval, and cleanup." data-zh="生成从客户端请求、授权、上游转换、PDF 制品获取到清理完成的闭环审计记录。">A closed audit trail from client request through authorization, upstream conversion, PDF artifact retrieval, and cleanup.</span></dd></div>
+        <div data-manual-field="purpose"><dt><span data-en="Why this matters" data-zh="这一步的作用">Why this matters</span></dt><dd><span data-en="Confirm the complete MCP-to-upstream path produced the expected artifact and remained traceable without exposing protected identities." data-zh="确认 MCP 到上游的完整链路产出预期制品，并在不暴露受保护身份的前提下保持可追溯。">Confirm the complete MCP-to-upstream path produced the expected artifact and remained traceable without exposing protected identities.</span></dd></div>
+      </dl>
+      <div class="placeholder" data-report-slot="manual-screenshot-console-downstream-mcp-call"><span data-en="Not executed; insert the verified Console screenshot for this exact step." data-zh="未执行；请在此插入这一步对应的已验证管控台截图。">Not executed; insert the verified Console screenshot for this exact step.</span></div>
+    </article></div>
+    </section></div>
+  </section>
+  <section id="appendix" aria-labelledby="appendix-title" data-report-section="appendix">
+    <p class="eyebrow"><span data-en="Appendix" data-zh="附录">Appendix</span></p>
+    <h2 id="appendix-title"><span data-en="Verification details and supporting records" data-zh="验证明细与支撑记录">Verification details and supporting records</span></h2>
+    <section class="appendix-section" data-appendix-section="executive-summary">
+    <article class="catalog" data-report-slot="candidate-scope"><h3><span data-en="Candidate scope — not bound" data-zh="候选范围——未绑定">Candidate scope — not bound</span></h3><p><span data-en="Not executed; no candidate claim is present." data-zh="未执行；不存在候选声明。">Not executed; no candidate claim is present.</span></p></article>
+  </section>
+  <section class="appendix-section" data-appendix-section="safe-configuration">
+    <article class="catalog" data-report-slot="upstream-publication-runtime-health"><h3><span data-en="Publication and runtime health — required" data-zh="发布与运行时健康——必填">Publication and runtime health — required</span></h3><p><span data-en="Not executed; populate only from the bounded upstream-publish receipt." data-zh="未执行；只能从有界 upstream-publish 收据填充。">Not executed; populate only from the bounded upstream-publish receipt.</span></p></article>
+    <article class="catalog" data-report-slot="upstream-service-interface-catalog"><h3><span data-en="Published upstream interfaces — required" data-zh="已发布上游接口——必填">Published upstream interfaces — required</span></h3><p><span data-en="Fill this catalog only from the digest-bound publication input." data-zh="此清单只能从摘要绑定的实际发布输入中填写。">Fill this catalog only from the digest-bound publication input.</span></p><div class="table-shell"><table><caption><span data-en="Published upstream interface catalog" data-zh="已发布上游接口清单">Published upstream interface catalog</span></caption><thead><tr><th><span data-en="Interface" data-zh="接口">Interface</span></th><th><span data-en="Method and path" data-zh="方法与路径">Method and path</span></th><th><span data-en="Request and upload" data-zh="请求与上传">Request and upload</span></th><th><span data-en="Response and download" data-zh="响应与下载">Response and download</span></th><th><span data-en="Gateway governance" data-zh="网关治理">Gateway governance</span></th></tr></thead><tbody><tr data-service-interface="required-placeholder"><td colspan="5"><span data-en="Required before generation: health route plus every published operation. Do not invent a download endpoint." data-zh="生成前必填：健康检查路径及每个已发布操作。不得虚构下载接口。">Required before generation: health route plus every published operation. Do not invent a download endpoint.</span></td></tr></tbody></table></div></article>
+  </section>
+  <section class="appendix-section" data-appendix-section="mcp-acceptance"><div class="table-shell" data-report-slot="client-lifecycle"><table><caption><span data-en="Client lifecycle — required" data-zh="客户端生命周期——必填">Client lifecycle — required</span></caption><thead><tr><th><span data-en="Client" data-zh="客户端">Client</span></th><th><span data-en="Discovery" data-zh="发现">Discovery</span></th><th><span data-en="Install" data-zh="安装">Install</span></th><th><span data-en="Upload" data-zh="上传">Upload</span></th><th>tools/list</th><th>full-access-debug</th><th>require-approval-debug</th><th><span data-en="Uninstall" data-zh="卸载">Uninstall</span></th><th><span data-en="Cleanup" data-zh="清理">Cleanup</span></th></tr></thead><tbody><tr><td colspan="9"><span data-en="Not executed" data-zh="未执行">Not executed</span></td></tr></tbody></table></div></section>
+  <section class="appendix-section" data-appendix-section="provenance"><article class="catalog" data-report-slot="journey-timings"><h3><span data-en="Journey timings" data-zh="路线耗时">Journey timings</span></h3><p><span data-en="Not executed" data-zh="未执行">Not executed</span></p></article><article class="catalog" data-report-slot="cleanup-summary"><h3><span data-en="Cleanup summary" data-zh="清理摘要">Cleanup summary</span></h3><p><span data-en="Not executed" data-zh="未执行">Not executed</span></p></article><article class="catalog"><p><span data-en="Generated reports are portable single files that embed verified images and downloadable attachments. Console screenshots use the governed capture contract." data-zh="生成的报告是可携带的单文件，会内嵌已验证图片和可下载附件；管控台截图遵循受治理的采集契约。">Generated reports are portable single files that embed verified images and downloadable attachments. Console screenshots use the governed capture contract.</span></p></article></section>
+  </section>
   </main>
   <script>
     (() => {

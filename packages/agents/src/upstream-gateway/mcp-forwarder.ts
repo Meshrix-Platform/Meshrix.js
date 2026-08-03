@@ -3,6 +3,7 @@ import {
   bodyMetadata,
   createResponseProjectionUnavailableError,
   responseFilteringConfigured,
+  responseSchemaConfigured,
   redactStructuredValue
 } from "./response-policy.ts";
 import {
@@ -80,6 +81,13 @@ function prepareFilterableMcpResult(result: Record<string, any> = {}, operation:
 
 function publicMcpResult(result: Record<string, any> = {}, operation: Record<string, any> = {}) : any {
   const source: any = prepareFilterableMcpResult(result, operation);
+  if (!responseFilteringConfigured(operation) && !responseSchemaConfigured(operation.responseSchema)) {
+    return {
+      result: source,
+      schemaValidated: false,
+      projectionValidated: false
+    };
+  }
   const target: any = mcpPolicyTarget(source);
   const policy: any = applyStructuredResponsePolicy(target.value, operation);
   const publicFieldsConfigured: any = asArray(operation.publicResponseFields).length > 0;

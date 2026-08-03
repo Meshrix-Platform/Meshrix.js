@@ -108,6 +108,7 @@ export function createSecurityPermissionsProvider({
   authorizationEngine = null,
   authorizationStore = null,
   authorizationGovernanceStore = null,
+  organizationGovernanceService = null,
   tagManagementStore = null,
   userDataPath = "",
   processIdentity = null
@@ -121,6 +122,7 @@ export function createSecurityPermissionsProvider({
     authorizationGovernanceStore ||
     consoleAuth?.authorizationGovernanceStore ||
     null;
+  const resolvedOrganizationGovernanceService: any = organizationGovernanceService || null;
   // Tag store is injected by composition root via server-runtime adapter.
   // No default factory is used — missing store = fail-closed.
   const resolvedTagManagementStore: any =
@@ -594,7 +596,8 @@ export function createSecurityPermissionsProvider({
           userPolicies: [],
           agentBindings: [],
           agentGroups: [],
-          approvals: []
+          approvals: [],
+          apiKeyRecoveryAssignments: []
         };
       }
       return {
@@ -605,8 +608,54 @@ export function createSecurityPermissionsProvider({
         userPolicies: resolvedAuthorizationGovernanceStore.listUserPolicies?.() || [],
         agentBindings: resolvedAuthorizationGovernanceStore.listAgentBindings?.() || [],
         agentGroups: resolvedAuthorizationGovernanceStore.listAgentGroups?.() || [],
-        approvals: resolvedAuthorizationGovernanceStore.listApprovals?.({ includeRevoked: true }) || []
+        approvals: resolvedAuthorizationGovernanceStore.listApprovals?.({ includeRevoked: true }) || [],
+        apiKeyRecoveryAssignments: resolvedAuthorizationGovernanceStore.listApiKeyRecoveryAssignments?.() || []
       };
+    },
+    getOrganizationGovernance() : any {
+      if (!resolvedOrganizationGovernanceService?.getOrganizationGovernance) {
+        throw Object.assign(
+          new Error("Organization governance store is unavailable."),
+          { code: "organization_governance_unavailable", statusCode: 503 }
+        );
+      }
+      return resolvedOrganizationGovernanceService.getOrganizationGovernance();
+    },
+    listOrganizationGovernanceTemplates() : any {
+      if (!resolvedOrganizationGovernanceService?.listOrganizationGovernanceTemplates) {
+        throw Object.assign(
+          new Error("Organization governance store is unavailable."),
+          { code: "organization_governance_unavailable", statusCode: 503 }
+        );
+      }
+      return resolvedOrganizationGovernanceService.listOrganizationGovernanceTemplates();
+    },
+    importOrganizationGovernance(input: Record<string, any> = {}) : any {
+      if (!resolvedOrganizationGovernanceService?.importOrganizationGovernance) {
+        throw Object.assign(
+          new Error("Organization governance store is unavailable."),
+          { code: "organization_governance_unavailable", statusCode: 503 }
+        );
+      }
+      return resolvedOrganizationGovernanceService.importOrganizationGovernance(input);
+    },
+    previewOrganizationGovernance(input: Record<string, any> = {}) : any {
+      if (!resolvedOrganizationGovernanceService?.previewOrganizationGovernance) {
+        throw Object.assign(
+          new Error("Organization governance store is unavailable."),
+          { code: "organization_governance_unavailable", statusCode: 503 }
+        );
+      }
+      return resolvedOrganizationGovernanceService.previewOrganizationGovernance(input);
+    },
+    publishOrganizationGovernance(input: Record<string, any> = {}) : any {
+      if (!resolvedOrganizationGovernanceService?.publishOrganizationGovernance) {
+        throw Object.assign(
+          new Error("Organization governance store is unavailable."),
+          { code: "organization_governance_unavailable", statusCode: 503 }
+        );
+      }
+      return resolvedOrganizationGovernanceService.publishOrganizationGovernance(input);
     },
     listGovernanceRoles(input: Record<string, any> = {}) : any {
       return resolvedAuthorizationGovernanceStore?.listRoles?.(input) || [];

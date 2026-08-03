@@ -20,7 +20,7 @@
           {
             "acceptanceCommandId": "operation-permission-protocol-consistency",
             "report": "build/reports/operation-permission-protocol-consistency.json"
-          }
+}
         ]
       },
       {
@@ -46,8 +46,8 @@
             "report": "build/reports/upstream-mcp-gateway-e2e.json"
           },
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           }
         ]
       },
@@ -80,8 +80,8 @@
         "text": "Only policy-required approvals suspend upstream MCP execution; non-escalatable denies stay hard-denied.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",
@@ -128,8 +128,8 @@
             "report": "build/reports/upstream-gateway-e2e.json"
           },
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",

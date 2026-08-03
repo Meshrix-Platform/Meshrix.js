@@ -46,12 +46,22 @@ export async function runSplitJob(userDataPath?: any, payload?: any, options: Re
   const testJobDelayMs: any = getTestJobDelayMs(options.runtimeOptions || {});
   const signal: any = options.signal || null;
   throwIfAborted(signal);
+  const storageProvider: any = options.storageProvider;
+  const uploadSessionStore: any = options.uploadSessionStore;
+  if (
+    !storageProvider ||
+    typeof storageProvider.commitUploadConsumptionReceipt !== "function"
+  ) {
+    const error: Error & Record<string, any> = new TypeError(
+      "Job execution requires an already-composed storage provider."
+    );
+    error.code = "upload_session_storage_provider_unavailable";
+    throw error;
+  }
   const runtime: any = await createServerRuntime({
     userDataPath,
     runtimeOptions: options.runtimeOptions || {}
   });
-  const { storageProvider } = runtime;
-  const uploadSessionStore: any = options.uploadSessionStore;
 
   try {
     throwIfAborted(signal);

@@ -1,6 +1,6 @@
 import { pipeline } from "node:stream/promises";
 import { contentDispositionHeader, sendJson } from "../http-utils.ts";
-import { mcpSubjectFromGrant } from "../../mcp/adapter/http-mcp-adapter-session.ts";
+import { mcpSubjectFromAuthorization, mcpSubjectFromGrant } from "../../mcp/adapter/http-mcp-adapter-session.ts";
 
 const TRANSIT_ROUTE: any = /^\/api\/gateway\/v1\/transit\/([^/]+)\/([^/]+)$/u;
 const ARTIFACT_ROUTE: any = /^\/api\/gateway\/v1\/artifacts\/([^/]+)$/u;
@@ -65,6 +65,24 @@ async function authorizeTransit({
       url,
       method
     });
+    if (toolAuthorization?.ok === true && toolAuthorization.credentialKind === "scoped_api_key") {
+      const operationAuthorization: any = await toolSkillManagementProvider.authorizeApiKeyOperation?.({
+        authorization: toolAuthorization.apiKeyAuthorization,
+        operation: {
+          toolId: "meshrix.gateway.artifacts.get",
+          scopeIds: operation.requiredScopes || [],
+          risk: "read_only"
+        }
+      });
+      if (operationAuthorization?.ok === true) {
+        return { ok: true, subject: mcpSubjectFromAuthorization(toolAuthorization) };
+      }
+      return {
+        ok: false,
+        status: Number(operationAuthorization?.status || 403),
+        error: "API Key is not authorized to download this artifact."
+      };
+    }
     if (toolAuthorization?.ok === true && toolAuthorization.grant) {
       return { ok: true, subject: mcpSubjectFromGrant(toolAuthorization.grant) };
     }

@@ -47,6 +47,36 @@ This is a maintenance and Functional Release Gate rule. An execution surface tha
 does not yet present the same permit to its final sink remains non-converged
 even when it performs an earlier authorization check.
 
+## Scoped API Key Distribution
+
+Operation Permission owns console-issued `mxak1` API Keys as a credential
+lifecycle distinct from generic Grants. Possession authenticates the immutable
+workload principal recorded by Meshrix; client-supplied names, organization
+nodes, roles, scopes, or agent-profile claims never add authority. The resolved
+principal and closed restriction enter the same canonical Operation Permission
+evaluator without creating or persisting a synthetic Grant.
+
+An issuer may create keys only for an explicitly assigned organization scope or
+one of its descendants. The server derives eligible nodes from current role
+assignments and canonical lineage; empty, stale, peer, ancestor, or malformed
+multi-root authority fails closed. `owner` remains the explicit recovery
+authority.
+
+The control-plane surface is `/api/operation-permission/v1/api-keys`, with
+`/issuer-scopes` for the server-filtered scope catalog and revision-bound create,
+list, rotate, and revoke operations. Create and rotate return the high-entropy
+plaintext exactly once. Storage and list responses retain only redacted identity,
+policy, lineage, lifecycle, expiry, usage, rate, and concurrency metadata.
+Rotation preserves policy and accumulated use; revocation is terminal.
+
+Runtime selects one indexed public key id, compares its irreversible keyed
+verifier in constant time, reserves use atomically, and revalidates immediately
+before the protected effect. Expiry, exhaustion, lineage or policy change,
+rotation, and revocation therefore fence queued work. `X-Meshrix-Api-Key`
+accepts only strict `mxak1` credentials. Generic Grants continue to use
+`Authorization: Bearer` or `x-meshrix-tool-token`; the retired API-key-to-Grant
+header alias is not accepted.
+
 ## Tag Policy
 
 Tags are a universal governance abstraction for roles, skills, operations, documents, agents, upstream services, workspaces, and organizations. Deny tags take precedence over allow tags.
@@ -114,6 +144,7 @@ node tools/server-scripts/verify-operation-permission-tag-governance-audit.ts
 node tools/server-scripts/verify-operation-permission-universal-tag-policy.ts
 node tools/server-scripts/verify-operation-permission-domain-model.ts
 node tools/server-scripts/verify-operation-permission-external-http-boundary.ts
+npx vitest run tests/vitest/server/api-key-distribution.test.ts tests/vitest/server/mcp-api-key-authentication.test.ts
 npx vitest run tests/vitest/server/operation-permission-grant-security.test.ts tests/vitest/server/delegated-mcp-parent-authority.test.ts
 npm run verify:operation-permission-tag-governed-e2e
 npm test -- --suite domains.manifest

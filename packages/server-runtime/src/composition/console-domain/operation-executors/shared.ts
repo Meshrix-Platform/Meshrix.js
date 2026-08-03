@@ -213,6 +213,8 @@ export function subjectFromAuthSession(authSession: any = null) : any {
     subjectId: user.userId || user.subjectId || user.username || "",
     username: user.username || "",
     roleId: user.roleId || "",
+    tenantId: user.tenantId || "",
+    organizationNodeId: user.organizationNodeId || authSession?.organizationNodeId || "",
     scopes,
     allowedWorkspaceIds: Array.isArray(user.allowedWorkspaceIds) ? [...user.allowedWorkspaceIds] : [],
     dynamicCapabilities: Array.isArray(user.dynamicCapabilities) ? [...user.dynamicCapabilities] : [],
@@ -276,7 +278,6 @@ export function workspaceAccessOptions(authSession: any = null) : any {
   const roleId: any = String(user.roleId || user.role || "").trim();
   const canAccessAll: any = (
     roleId === "owner" ||
-    roleId === "admin" ||
     scopes.includes("auth:admin") ||
     scopes.includes("workspace:admin")
   );
@@ -371,9 +372,11 @@ export async function authorizeToolSkillScopes({ provider, request, scopes }: Re
 }
 
 export function errorPayload(error?: any, fallbackMessage?: any, extra: Record<string, any> = {}) : any {
+  const code: any = String(error?.code || error?.reasonCode || "").trim();
   return {
     ok: false,
     error: error instanceof Error ? error.message : fallbackMessage,
+    ...(code ? { code } : {}),
     ...extra
   };
 }

@@ -54,3 +54,12 @@ export function writeBrowserLocalStorageItem(key: string, value: string) : any {
   storage.setItem(key, value);
   return true;
 }
+
+export function removeBrowserLocalStorageItem(key: string) : any {
+  const storage: any = browserWindow()?.localStorage;
+  if (!storage) {
+    return false;
+  }
+  storage.removeItem(key);
+  return true;
+}

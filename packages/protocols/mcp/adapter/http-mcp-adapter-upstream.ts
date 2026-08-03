@@ -146,6 +146,69 @@ function grantCanDiscoverUpstreamMcpService(service: Record<string, any> = {}, g
   );
 }
 
+function apiKeyRestrictionFromAuthorization(authorization: any = null) : any {
+  return authorization?.credentialKind === "scoped_api_key" &&
+    authorization?.restriction &&
+    typeof authorization.restriction === "object" &&
+    !Array.isArray(authorization.restriction)
+    ? authorization.restriction
+    : null;
+}
+
+function restrictionCapabilities(restriction: any = null) : Set<any> {
+  return new Set<any>(normalizeGrantValues([
+    ...(Array.isArray(restriction?.capabilities) ? restriction.capabilities : []),
+    ...(Array.isArray(restriction?.dynamicCapabilities) ? restriction.dynamicCapabilities : [])
+  ], 512));
+}
+
+function restrictionCanDiscoverUpstreamMcpService(service: Record<string, any> = {}, restriction: any = null) : any {
+  if (!restriction) return false;
+  const serviceId: any = String(service.serviceId || "").trim();
+  if (!serviceId || String(service.serviceProtocol || "") !== "mcp") return false;
+  const allowedServiceIds: any = new Set<any>(normalizeGrantValues(restriction.allowedServiceIds || [], 512));
+  if (allowedServiceIds.size > 0 && !allowedServiceIds.has(serviceId)) return false;
+  const capabilities: any = restrictionCapabilities(restriction);
+  const normalizedServiceId: any = serviceId.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "service";
+  const serviceCapabilityPrefix: any = `cap:upstream:${normalizedServiceId}:`;
+  if (![...capabilities].some((capability?: any) : any => capability.startsWith(serviceCapabilityPrefix))) return false;
+  const scopes: any = new Set<any>(normalizeGrantValues(restriction.scopes || [], 512));
+  if (!scopes.has("gateway:read") && !scopes.has("gateway:write") && !scopes.has("gateway:admin")) return false;
+  const allowedSecretBindings: any = new Set<any>(normalizeGrantValues(restriction.allowedSecretBindings || [], 512));
+  return normalizeGrantValues(service.credentialBindingIds || [], 128).every((bindingId?: any) : any =>
+    allowedSecretBindings.has(bindingId) || [...capabilities].some((capability?: any) : any =>
+      capability.startsWith(serviceCapabilityPrefix) && capability.endsWith(`:${bindingId}`)
+    )
+  );
+}
+
+function restrictionCanSeeUpstreamMcpTool(tool: Record<string, any> = {}, restriction: any = null) : any {
+  if (!tool || !restriction || !isUpstreamMcpToolName(tool.name)) return false;
+  const meta: any = upstreamMcpToolMeta(tool);
+  const toolName: any = String(tool.name || "").trim();
+  const deniedTools: any = new Set<any>(normalizeGrantValues(restriction.toolDeny || [], 512));
+  if (deniedTools.has(toolName)) return false;
+  const allowedTools: any = new Set<any>(normalizeGrantValues(restriction.toolAllow || [], 512));
+  if (allowedTools.size > 0 && !allowedTools.has(toolName)) return false;
+  const capabilities: any = restrictionCapabilities(restriction);
+  const requiredCapabilities: any = normalizeGrantValues(meta.requiredCapabilities || meta.capabilityId || [], 128);
+  if (requiredCapabilities.length === 0 || requiredCapabilities.some((capability?: any) : any => !capabilities.has(capability))) return false;
+  const dynamicCapability: any = meta.dynamicCapability && typeof meta.dynamicCapability === "object" && !Array.isArray(meta.dynamicCapability)
+    ? meta.dynamicCapability
+    : {};
+  const allowedSecretBindings: any = new Set<any>(normalizeGrantValues(restriction.allowedSecretBindings || [], 512));
+  if (normalizeGrantValues(dynamicCapability.credentialBindingIds || [], 128)
+    .some((bindingId?: any) : any => !allowedSecretBindings.has(bindingId))) return false;
+  const scopes: any = new Set<any>(normalizeGrantValues(restriction.scopes || [], 512));
+  if (normalizeGrantValues(meta.requiredScopes || [], 128).some((scope?: any) : any => !scopes.has(scope))) return false;
+  const toolRisk: any = normalizeMcpRisk(meta.risk || tool.risk || "read_only");
+  if (MCP_RISK_RANK[toolRisk] > MCP_RISK_RANK[normalizeMcpRisk(restriction.maxRisk)]) return false;
+  const allowedToolsets: any = new Set<any>(normalizeGrantValues(restriction.toolsets || [], 256));
+  const toolsets: any = normalizeGrantValues(meta.toolsets || [], 256);
+  if (allowedToolsets.size > 0 && !toolsets.some((toolset?: any) : any => allowedToolsets.has(toolset))) return false;
+  return true;
+}
+
 export async function listVisibleUpstreamMcpTools({
   upstreamGatewayRegistry = null,
   operationPermissionTools = [],
@@ -156,9 +219,12 @@ export async function listVisibleUpstreamMcpTools({
     .filter((tool?: any) : any => tool?.upstreamProjectedOperation === true)
     .map(publicProjectedUpstreamTool);
   const grant: any = authorization?.grant || null;
+  const restriction: any = apiKeyRestrictionFromAuthorization(authorization);
+  const subject: any = restriction ? authorization?.subject || null : null;
   const allowedServiceIds: any = new Set<any>(normalizeGrantValues([
     ...(Array.isArray(grant?.allowedServiceIds) ? grant.allowedServiceIds : []),
-    ...(Array.isArray(grant?.metadata?.allowedServiceIds) ? grant.metadata.allowedServiceIds : [])
+    ...(Array.isArray(grant?.metadata?.allowedServiceIds) ? grant.metadata.allowedServiceIds : []),
+    ...(Array.isArray(restriction?.allowedServiceIds) ? restriction.allowedServiceIds : [])
   ], 512));
   const listedServices: any = typeof upstreamGatewayRegistry?.listServices === "function"
     ? upstreamGatewayRegistry.listServices().items || []
@@ -166,7 +232,9 @@ export async function listVisibleUpstreamMcpTools({
   let listedItems: any[] = [];
   if (listedServices && typeof upstreamGatewayRegistry?.listMcpTools === "function") {
     const candidateServiceIds: any = listedServices
-      .filter((service?: any) : any => grantCanDiscoverUpstreamMcpService(service, grant))
+      .filter((service?: any) : any => restriction
+        ? restrictionCanDiscoverUpstreamMcpService(service, restriction)
+        : grantCanDiscoverUpstreamMcpService(service, grant))
       .map((service?: any) : any => String(service.serviceId || "").trim())
       .filter(Boolean)
       .filter((serviceId?: any) : any => allowedServiceIds.size === 0 || allowedServiceIds.has(serviceId));
@@ -179,10 +247,14 @@ export async function listVisibleUpstreamMcpTools({
   }
   const discoveredMcp: any = listedItems
     .filter((tool?: any) : any => tool?._meta?.upstreamMcp === true)
-    .filter((tool?: any) : any => grantCanSeeUpstreamMcpTool(tool, grant))
+    .filter((tool?: any) : any => restriction
+      ? restrictionCanSeeUpstreamMcpTool(tool, restriction)
+      : grantCanSeeUpstreamMcpTool(tool, grant))
     .filter((tool?: any) : any => typeof upstreamGatewayRegistry?.evaluateDiscoveredMcpToolAudience !== "function" ||
       upstreamGatewayRegistry.evaluateDiscoveredMcpToolAudience({
         grant,
+        restriction,
+        subject,
         tool,
         purpose: "discovery"
       })?.allowed === true);

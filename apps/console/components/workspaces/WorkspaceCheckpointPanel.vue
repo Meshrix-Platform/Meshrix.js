@@ -4,17 +4,16 @@ import ConsoleEmptyState from "../ConsoleEmptyState.vue";
 import { useWorkspacesViewContext } from "../../composables/workspacesViewContext";
 
 const {
-  busyKey,
+  isBusy,
+  isBusyPrefix,
   checkpointNodeBasePath,
   checkpointNodeFileCount,
   formatCompactDate,
   loadWorkspaceCheckpointTree,
-  loadWorkspaceCheckpoints,
   previewWorkspaceCheckpointRestore,
   restoreWorkspaceCheckpoint,
   selectedCheckpointNodeId,
   selectedCheckpointTreeId,
-  selectedId,
   workspaceCheckpointError,
   workspaceCheckpointNodes,
   workspaceCheckpointPreview,
@@ -31,9 +30,6 @@ const {
           <strong>{{ workspaceCheckpointTrees.length }} 个文件 checkpoint tree</strong>
           <span>来源：workspace_files 快照；用于管理员手动预览和回退本机共享文件夹。</span>
         </div>
-        <button class="table-action" type="button" :disabled="!!busyKey" @click="selectedId && loadWorkspaceCheckpoints(selectedId)">
-          刷新回退点
-        </button>
       </div>
 
       <p v-if="workspaceCheckpointError" class="checkpoint-error">{{ workspaceCheckpointError }}</p>
@@ -46,7 +42,7 @@ const {
             type="button"
             class="checkpoint-tree-item"
             :class="{ selected: selectedCheckpointTreeId === tree.treeId }"
-            :disabled="!!busyKey"
+            :disabled="isBusyPrefix('ws:')"
             @click="loadWorkspaceCheckpointTree(tree.treeId)"
           >
             <strong>{{ tree.treeId.slice(0, 18) }}</strong>
@@ -72,11 +68,11 @@ const {
                 <small>{{ formatCompactDate(node.updatedAt || node.createdAt || '') }}</small>
               </div>
               <div class="checkpoint-node-actions">
-                <button class="table-action" type="button" :disabled="!!busyKey" @click="previewWorkspaceCheckpointRestore(node.nodeId)">
-                  {{ busyKey === 'ws:checkpoint-preview' && selectedCheckpointNodeId === node.nodeId ? '预览中…' : '预览' }}
+                <button class="table-action" type="button" :disabled="isBusyPrefix('ws:')" @click="previewWorkspaceCheckpointRestore(node.nodeId)">
+                  {{ isBusy('ws:checkpoint-preview') && selectedCheckpointNodeId === node.nodeId ? '预览中…' : '预览' }}
                 </button>
-                <button class="table-action danger-link" type="button" :disabled="!!busyKey" @click="restoreWorkspaceCheckpoint(node.nodeId)">
-                  {{ busyKey === 'ws:checkpoint-restore' && selectedCheckpointNodeId === node.nodeId ? '回退中…' : '回退到此处' }}
+                <button class="table-action danger-link" type="button" :disabled="isBusyPrefix('ws:')" @click="restoreWorkspaceCheckpoint(node.nodeId)">
+                  {{ isBusy('ws:checkpoint-restore') && selectedCheckpointNodeId === node.nodeId ? '回退中…' : '回退到此处' }}
                 </button>
               </div>
             </article>

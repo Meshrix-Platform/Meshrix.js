@@ -10,7 +10,7 @@ import { formatMachineDate } from "./console-format-utils";
 import { asRecord } from "./console-model-utils";
 
 type ConsoleContextCompilerControllerOptions = {
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   selectedContextProfileId: () => string;
   setBusy: (key: string) => void;
@@ -293,7 +293,7 @@ export function createConsoleContextCompilerController(
       }
     } finally {
       if (showBusy) {
-        options.clearAllBusy();
+        options.clearBusy("context:refresh");
       }
     }
   }
@@ -325,7 +325,7 @@ export function createConsoleContextCompilerController(
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "上下文预览失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("context:preview");
     }
   }
 
@@ -354,7 +354,7 @@ export function createConsoleContextCompilerController(
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "上下文 replay 评估失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("context:evaluation");
     }
   }
 

@@ -211,7 +211,7 @@ export function pluginWorkspaceAuthority(call: Record<string, any> = {}) : any {
   ));
   const scopes: any = boundedCallStrings([...(user.scopes || []), ...(grant.scopes || [])], 512);
   const roleId: any = String(user.roleId || user.role || "").trim();
-  const canAccessAll: any = roleId === "owner" || roleId === "admin" ||
+  const canAccessAll: any = roleId === "owner" ||
     scopes.includes("auth:admin") || scopes.includes("workspace:admin");
   return {
     workspaceRef,

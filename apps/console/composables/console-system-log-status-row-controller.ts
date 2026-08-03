@@ -6,11 +6,7 @@ import type {
   SplitJob,
   OperationPermissionAuditItem,
 } from "../lib/types";
-import type {
-  AgentConfigurationAlert,
-  SystemLogRow,
-  WorkQueueRow,
-} from "../types/app";
+import type { SystemLogRow, WorkQueueRow } from "../types/app";
 import { jobStatusLabels } from "./console-defaults";
 import { jobStatusTone, jsonPreview } from "./console-format-utils";
 import { asRecord } from "./console-model-utils";
@@ -33,7 +29,6 @@ import { toolRiskLabel } from "./console-tool-display-utils";
 
 export type ConsoleSystemStatusLogRowOptions = {
   activeMonitorAlerts: ReadonlyValue<MonitorAlertItem[]>;
-  agentConfigurationAlerts: ReadonlyValue<AgentConfigurationAlert[]>;
   authAudit: ReadonlyValue<ConsoleAuditItem[]>;
   backgroundProcesses: ReadonlyValue<BackgroundProcessItem[]>;
   backgroundProcessStatus: ReadonlyValue<BackgroundProcessStatus | null>;
@@ -135,22 +130,6 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     };
   });
 
-  const configAlertRows: any = options.agentConfigurationAlerts.value.map((alert?: any): SystemLogRow => ({
-    logId: `config-alert:${alert.alertId}`,
-    kindLabel: "配置报警",
-    displayId: shortId(alert.alertId),
-    target: `${alert.category} / ${alert.title}`,
-    status: alert.status,
-    statusLabel: alert.status,
-    tone: alert.tone,
-    stage: alert.targetId || "",
-    occurredAt: "",
-    createdAt: "",
-    progressPercent: alert.tone === "danger" ? 0 : 20,
-    detail: alert.detail,
-    error: alert.tone === "danger" ? alert.detail : "",
-  }));
-
   const toolAuditRows: any = options.operationPermissionAuditItems.value.map((item?: any): SystemLogRow => ({
     logId: `tool-audit:${item.toolExecutionId}`,
     kindLabel: "调用记录",
@@ -215,7 +194,6 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     ...taskRows,
     ...processRows,
     ...alertRows,
-    ...configAlertRows,
     ...toolAuditRows,
     ...authAuditRows,
   ];

@@ -55,11 +55,9 @@ vi.mock("#meshrix/product-api", async () : Promise<any> => {
   };
 });
 
-import {
-  createJobManager,
-} from "../../../packages/server-runtime/src/jobs/jobs/job-manager.ts";
 import { createJobProjectionStore } from "../../../packages/server-runtime/src/jobs/jobs/job-projection-store.ts";
 import { serverToken } from "#meshrix/product-api";
+import { createTestJobManager } from "./job-manager-test-harness.ts";
 
 async function withTempUserData(callback?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-manager-final-extra-"));
@@ -146,7 +144,7 @@ describe("job manager behavior", () : any => {
         checkpointId
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false
       });
@@ -229,7 +227,7 @@ describe("job manager behavior", () : any => {
         checkpointId: queuedCheckpoint
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false,
         protocolEventBus
@@ -322,7 +320,7 @@ describe("job manager behavior", () : any => {
         sourceType: "upload"
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false,
         protocolEventBus
@@ -375,7 +373,7 @@ describe("job manager behavior", () : any => {
         checkpointId
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: true
       });
@@ -404,7 +402,7 @@ describe("job manager behavior", () : any => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
       executionShouldThrow.value = true;
       const protocolEventBus: any = createEventBusSpy();
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: true,
         protocolEventBus
@@ -435,7 +433,7 @@ describe("job manager behavior", () : any => {
 
   it("会在关闭后拒绝再创建新任务", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false
       });
@@ -477,7 +475,7 @@ describe("job manager behavior", () : any => {
         }
       });
 
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false
       });
@@ -492,14 +490,14 @@ describe("job manager behavior", () : any => {
 
   it("会将 worker 并发数裁剪到边界值", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
-      const lowManager: any = createJobManager({
+      const lowManager: any = createTestJobManager({
         userDataPath,
         processingEnabled: true,
         runtimeOptions: {
           workerConcurrency: "0"
         }
       });
-      const highManager: any = createJobManager({
+      const highManager: any = createTestJobManager({
         userDataPath,
         processingEnabled: true,
         runtimeOptions: {

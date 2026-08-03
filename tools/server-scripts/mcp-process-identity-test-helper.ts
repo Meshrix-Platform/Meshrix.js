@@ -64,7 +64,7 @@ export function createSignedMcpHeaders({
 }: Record<string, any> = {}) : any {
   return {
     "Content-Type": "application/json",
-    "X-Meshrix-Api-Key": token,
+    Authorization: `Bearer ${token}`,
     "X-Meshrix-MCP-Target": target,
     ...createProcessIdentityRequestHeaders({
       privateKeyPem,

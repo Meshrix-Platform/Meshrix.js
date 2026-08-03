@@ -1,12 +1,16 @@
 <script setup lang="ts">
-defineProps<{
+withDefaults(defineProps<{
   title: string;
   subtitle?: string;
-}>();
+  open?: boolean;
+}>(), {
+  subtitle: "",
+  open: undefined,
+});
 </script>
 
 <template>
-  <details class="config-fold-card">
+  <details class="config-fold-card" :open="open || undefined">
     <summary class="config-fold-summary">
       <slot name="summary">
         <span class="config-fold-title">{{ title }}</span>

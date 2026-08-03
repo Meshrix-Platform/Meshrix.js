@@ -68,7 +68,11 @@ declare `mcpOutlet` and do not contribute to the categorized outlet summary.
 
 ### Upstream Payload Transit
 
-Published operations choose one explicit request and response representation.
+Published operations choose one explicit request representation; HTTP operations
+may omit the response representation when they want governed native passthrough.
+Meshrix then applies the bounded opaque-stream response default, including the
+response size limit and transport-header allowlist. JSON-RPC operations still
+declare a structured response representation.
 The native HTTP surface
 `POST /api/gateway/v1/transit/:serviceId/:operationKey` is reserved for
 `opaque_stream → opaque_stream` and preserves backpressure and content-coded

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { usePageRefreshHandler } from '@meshrix/ui-console/page-refresh';
 import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
 import { jobStatusLabels } from '../../composables/console-defaults';
 import { formatCompactDate, jobStatusTone } from '../../composables/console-format-utils';
@@ -15,7 +16,7 @@ import StatusPill from '../../components/StatusPill.vue';
 import ConsoleEmptyState from '../../components/ConsoleEmptyState.vue';
 import ConsoleInlineAlert from '../../components/ConsoleInlineAlert.vue';
 const {
-  busyKey,
+  isBusy,
   consoleState,
   cancelJob,
   deleteJob,
@@ -61,6 +62,11 @@ async function runWorkQueueAction(action: 'pause' | 'resume' | 'drain') {
 onMounted(() => {
   void refreshWorkQueue();
 });
+
+usePageRefreshHandler(
+  (detail: any) => detail.viewId === 'admin' && detail.adminView === 'jobs',
+  refreshWorkQueue,
+);
 </script>
 
 <template>
@@ -94,9 +100,6 @@ onMounted(() => {
       <ConsoleInlineAlert v-if="workQueueError" tone="danger">{{ workQueueError }}</ConsoleInlineAlert>
       <div class="queue-toolbar">
         <div class="queue-action-row">
-          <button class="table-action" type="button" :disabled="Boolean(workQueueBusy)" @click="refreshWorkQueue">
-            刷新
-          </button>
           <button class="table-action" type="button" :disabled="Boolean(workQueueBusy) || !workQueueEnabled" @click="runWorkQueueAction('pause')">
             {{ workQueueBusy === 'pause' ? '暂停中' : '暂停' }}
           </button>
@@ -208,7 +211,8 @@ onMounted(() => {
                 v-if="['queued', 'running'].includes(item.status)"
                 class="table-action"
                 type="button"
-                :disabled="busyKey === `job:${item.id}`"
+                :disabled="isBusy(`job:${item.id}`)"
+                :aria-busy="isBusy(`job:${item.id}`)"
                 @click="cancelJob(item.id)"
               >
                 取消
@@ -216,10 +220,11 @@ onMounted(() => {
               <button
                 class="table-action"
                 type="button"
-                :disabled="busyKey === `job:${item.id}`"
+                :disabled="isBusy(`job:${item.id}`)"
+                :aria-busy="isBusy(`job:${item.id}`)"
                 @click="deleteJob(item.id)"
               >
-                {{ busyKey === `job:${item.id}` ? "处理中" : "删除" }}
+                {{ isBusy(`job:${item.id}`) ? "处理中" : "删除" }}
               </button>
             </td>
           </tr>

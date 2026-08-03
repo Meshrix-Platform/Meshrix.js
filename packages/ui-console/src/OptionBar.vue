@@ -28,6 +28,8 @@ const props = withDefaults(defineProps<{
   disabled?: boolean;
   clearable?: boolean;
   size?: string;
+  /** Values treated as "no selection" by Element Plus. Exclude "" so empty-string options can show their label. */
+  emptyValues?: Array<string | number | boolean | null | undefined>;
 }>(), {
   label: "",
   placeholder: "",
@@ -41,6 +43,7 @@ const props = withDefaults(defineProps<{
   disabled: false,
   clearable: false,
   size: "default",
+  emptyValues: () => [null, undefined],
 });
 
 const emit = defineEmits<{
@@ -88,6 +91,7 @@ function changeValue(value: OptionBarModelValue) {
       :disabled="disabled"
       :clearable="clearable"
       :size="size"
+      :empty-values="emptyValues"
       @update:model-value="updateValue"
       @change="changeValue"
     >

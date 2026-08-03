@@ -1,39 +1,19 @@
-import { createSignedMcpHeaders } from "../mcp-process-identity-test-helper.ts";
-
 export function createProtocolConsistencyTokenHeaders({
-  identityByToken,
-  serverUrl,
   agentProfileId
 }: Record<string, any> = {}) : any {
-  const absoluteUrl: any = (routeOrUrl?: any) : any => String(routeOrUrl).startsWith("http")
-    ? String(routeOrUrl)
-    : `${serverUrl()}${routeOrUrl}`;
-
   return function tokenHeaders(token?: any, {
-    method = "POST",
-    route = "/",
-    body = "",
     extraHeaders = {}
   }: Record<string, any> = {}) : any {
-    const binding: any = identityByToken.get(token);
-    const baseHeaders: any = binding
-      ? createSignedMcpHeaders({
-          token,
-          target: "codex",
-          privateKeyPem: binding.identity.keyPair.privateKeyPem,
-          clientIdentityPackage: binding.clientIdentityPackage,
-          method,
-          url: absoluteUrl(route),
-          body
-        })
-      : {
-          "Content-Type": "application/json",
-          "X-Meshrix-Api-Key": token,
-          "X-Meshrix-MCP-Target": "codex"
-        };
+    const credential: any = String(token || "");
+    const credentialHeaders: any = credential.startsWith("mxak1.")
+      ? { "X-Meshrix-Api-Key": credential }
+      : credential
+        ? { Authorization: `Bearer ${credential}` }
+        : {};
     return {
-      ...baseHeaders,
-      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...credentialHeaders,
+      "X-Meshrix-MCP-Target": "codex",
       "X-Meshrix-Agent-Profile-Id": agentProfileId,
       ...extraHeaders
     };

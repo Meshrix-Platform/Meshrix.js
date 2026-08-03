@@ -162,7 +162,13 @@ function approverCanApprovePending({ requiredApproval = {}, approvalLayers = [],
   return { ok: true };
 }
 
-export function createPendingOperationRuntime({ store, executeTool, publishEvent, securityPermissions = null }: Record<string, any>) : any {
+export function createPendingOperationRuntime({
+  store,
+  executeTool,
+  publishEvent,
+  securityPermissions = null,
+  apiKeyDistributionProvider = null
+}: Record<string, any>) : any {
   async function resumePendingOperation({
     pendingOperationId,
     resolution = "approved",
@@ -408,16 +414,59 @@ export function createPendingOperationRuntime({ store, executeTool, publishEvent
         };
       }
     }
-    const grant: any = typeof store.getGrant === "function"
-      ? await Promise.resolve(store.getGrant(pending.grantId))
+    const apiKeySnapshot: any = pending.credentialAuthorization?.credentialKind === "scoped_api_key"
+      ? pending.credentialAuthorization
       : null;
-    if (
+    let apiKeyAuthorization: any = null;
+    let grant: any = null;
+    if (apiKeySnapshot) {
+      try {
+        if (typeof apiKeyDistributionProvider?.revalidateAuthorization !== "function") {
+          const unavailable: Error & Record<string, any> = new Error("API Key lifecycle authority is unavailable.");
+          unavailable.code = "api_key_authority_unavailable";
+          unavailable.statusCode = 503;
+          throw unavailable;
+        }
+        apiKeyAuthorization = await Promise.resolve(
+          apiKeyDistributionProvider.revalidateAuthorization(apiKeySnapshot)
+        );
+      } catch (error: any) {
+        const errorCode: any = String(error?.code || "api_key_authority_unavailable");
+        const statusCode: any = Math.max(400, Math.min(Number(error?.statusCode || 503), 599));
+        const failed: any = store.resolvePendingOperation({
+          pendingOperationId: pending.pendingOperationId,
+          resolution: "failed",
+          resolvedBy,
+          reason,
+          errorCode,
+          resultSummary: { type: "approval_resume_failed", reason: "api_key_unavailable" }
+        });
+        return {
+          ok: false,
+          status: statusCode,
+          payload: {
+            schemaVersion: "v0.0.1:schema:definition-1",
+            status: "failed",
+            pendingOperation: failed,
+            error: {
+              code: errorCode,
+              message: "Original API Key authorization is no longer current."
+            }
+          }
+        };
+      }
+    } else {
+      grant = typeof store.getGrant === "function"
+        ? await Promise.resolve(store.getGrant(pending.grantId))
+        : null;
+    }
+    if (!apiKeySnapshot && (
       !grant ||
       !grant.projectionFingerprint ||
       grant.policyIntegrity?.valid === false ||
       grant.enabled === false ||
       grant.revokedAt
-    ) {
+    )) {
       const failed: any = store.resolvePendingOperation({
         pendingOperationId: pending.pendingOperationId,
         resolution: "failed",
@@ -533,6 +582,7 @@ export function createPendingOperationRuntime({ store, executeTool, publishEvent
           pendingOperationApproved: true
         },
         authorizedGrant: grant,
+        apiKeyAuthorization,
         approvedPendingOperation: approvedWithActorBinding
       });
     } finally {
@@ -558,7 +608,12 @@ export function createPendingOperationRuntime({ store, executeTool, publishEvent
       resolution: finalStatus,
       resolvedBy,
       reason,
-      errorCode: result.ok ? "" : result.payload?.error?.code || "pending_operation_resume_failed",
+      errorCode: result.ok
+        ? ""
+        : result.payload?.error?.code ||
+          result.payload?.code ||
+          result.payload?.result?.code ||
+          "pending_operation_resume_failed",
       resumedToolExecutionId: result.payload?.toolExecutionId || "",
       resultSummary: {
         ...resultSummaryFromPayload(result.payload || {}),

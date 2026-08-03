@@ -25,7 +25,7 @@ const moduleDetailItems = computed(() => [
 ]);
 
 const {
-  busyKey,
+  isBusy,
   canBrowseServerPaths,
   disableMountModule,
   enableMountModule,
@@ -75,7 +75,7 @@ const {
           :model-value="item.externalEnabled"
           :aria-label="item.externalEnabled ? `关闭${item.label}` : `开启${item.label}`"
           :disabled="
-            busyKey === `mount:${item.name}` ||
+            isBusy(`mount:${item.name}`) ||
             (!item.externalEnabled &&
               !String(mountDraft[item.name] || '').trim())
           "

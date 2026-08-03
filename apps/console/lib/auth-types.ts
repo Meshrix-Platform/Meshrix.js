@@ -1,5 +1,5 @@
 export type ConsoleRole = {
-  roleId: "owner" | "admin" | "operator" | "viewer" | string;
+  roleId: "owner" | "maintainer" | "viewer" | string;
   label: string;
   scopes: string[];
 };

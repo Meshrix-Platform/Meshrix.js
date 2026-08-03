@@ -31,6 +31,30 @@
       "risk": "read_only"
     },
     {
+      "id": "cap:api:authorization.organization_governance.get",
+      "operationId": "authorization.organization_governance.get",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:authorization.organization_governance.import",
+      "operationId": "authorization.organization_governance.import",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:authorization.organization_governance.preview",
+      "operationId": "authorization.organization_governance.preview",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:authorization.organization_governance.publish",
+      "operationId": "authorization.organization_governance.publish",
+      "kind": "api",
+      "risk": "repair_write"
+    },
+    {
       "id": "cap:api:tag_management.tags.list",
       "operationId": "tag_management.tags.list",
       "kind": "api",
@@ -1129,6 +1153,36 @@
       "risk": "repair_write"
     },
     {
+      "id": "cap:api:operation_permission.api_keys.issuer_scopes",
+      "operationId": "operation_permission.api_keys.issuer_scopes",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:operation_permission.api_keys.list",
+      "operationId": "operation_permission.api_keys.list",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:operation_permission.api_keys.create",
+      "operationId": "operation_permission.api_keys.create",
+      "kind": "api",
+      "risk": "repair_write"
+    },
+    {
+      "id": "cap:api:operation_permission.api_keys.rotate",
+      "operationId": "operation_permission.api_keys.rotate",
+      "kind": "api",
+      "risk": "repair_write"
+    },
+    {
+      "id": "cap:api:operation_permission.api_keys.revoke",
+      "operationId": "operation_permission.api_keys.revoke",
+      "kind": "api",
+      "risk": "repair_write"
+    },
+    {
       "id": "cap:api:operation_permission.catalog",
       "operationId": "operation_permission.catalog",
       "kind": "api",
@@ -1281,24 +1335,6 @@
     {
       "id": "cap:api:operation_permission.pending_operations.resolve",
       "operationId": "operation_permission.pending_operations.resolve",
-      "kind": "api",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:operation_permission.mcp.request_authorization",
-      "operationId": "operation_permission.mcp.request_authorization",
-      "kind": "api",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:api:operation_permission.mcp.list_requests",
-      "operationId": "operation_permission.mcp.list_requests",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:operation_permission.mcp.resolve_request",
-      "operationId": "operation_permission.mcp.resolve_request",
       "kind": "api",
       "risk": "repair_write"
     },
@@ -2787,24 +2823,6 @@
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:meshrix.operationPermission.mcp.requestAuthorization:execute",
-      "toolId": "meshrix.operationPermission.mcp.requestAuthorization",
-      "kind": "tool",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:tool:meshrix.operationPermission.mcp.listRequests:execute",
-      "toolId": "meshrix.operationPermission.mcp.listRequests",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:meshrix.operationPermission.mcp.resolveRequest:execute",
-      "toolId": "meshrix.operationPermission.mcp.resolveRequest",
-      "kind": "tool",
-      "risk": "repair_write"
-    },
-    {
       "id": "cap:tool:meshrix.storageSummary:execute",
       "toolId": "meshrix.storageSummary",
       "kind": "tool",
@@ -3091,6 +3109,24 @@
       "toolId": "meshrix.agentMemory.sessionMemory.clear",
       "kind": "tool",
       "risk": "repair_write"
+    },
+    {
+      "id": "cap:tool:uploads.create_session:execute",
+      "toolId": "uploads.create_session",
+      "kind": "tool",
+      "risk": "safe_write"
+    },
+    {
+      "id": "cap:tool:uploads.get_session:execute",
+      "toolId": "uploads.get_session",
+      "kind": "tool",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:tool:uploads.upload_chunk:execute",
+      "toolId": "uploads.upload_chunk",
+      "kind": "tool",
+      "risk": "safe_write"
     },
     {
       "id": "cap:tool:meshrix.jobs.uploadWorkspaceMaterialize:execute",

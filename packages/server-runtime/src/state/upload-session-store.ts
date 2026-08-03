@@ -52,13 +52,7 @@ import {
   withSessionRoot
 } from "./upload-session-support.ts";
 
-const UPLOAD_SESSION_STORE_BINDINGS: any = Symbol.for(
-  "meshrix.upload-session-store.bindings"
-);
-const uploadSessionStoreBindings: WeakMap<object, string> =
-  (globalThis as Record<PropertyKey, any>)[UPLOAD_SESSION_STORE_BINDINGS] ||
-  ((globalThis as Record<PropertyKey, any>)[UPLOAD_SESSION_STORE_BINDINGS] =
-    new WeakMap<object, string>());
+const uploadSessionStoreBindings: WeakMap<object, string> = new WeakMap();
 
 function uploadSessionStoreBindingError() : any {
   return Object.assign(
@@ -67,9 +61,9 @@ function uploadSessionStoreBindingError() : any {
   );
 }
 
-export function assertUploadSessionStoreBinding(
+export function assertBoundUploadSessionStore(
   store?: any,
-  userDataPath?: any
+  { userDataPath }: Record<string, any> = {}
 ) : any {
   const expectedRoot: any = path.resolve(String(userDataPath || ""));
   if (
@@ -98,6 +92,16 @@ function requireCustodyDescribe(custodyDescribe?: any) : any {
   return custodyDescribe;
 }
 
+function freezeUploadDescriptorValue(value?: any) : any {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) {
+    return value;
+  }
+  for (const nested of Object.values(value)) {
+    freezeUploadDescriptorValue(nested);
+  }
+  return Object.freeze(value);
+}
+
 function syncAdmissionStatus(userDataPath?: any, sessionId?: any, admission?: any, status?: any) : any {
   if (admission?.status !== status) {
     updateUploadSessionAdmissionStatus(userDataPath, sessionId, status);
@@ -116,7 +120,7 @@ function validateUploadSessionFiles(files?: any) : any {
     const digest: any = normalizeSha256(file.sha256, `files[${index}].sha256`);
     const byteSize: any = normalizeByteSize(file.byteSize);
     if (byteSize === 0 && digest !== EMPTY_FILE_SHA256) {
-      throw new Error(`files[${index}].sha256 与零字节文件不匹配。`);
+      throw uploadAdmissionError("upload_sha256_zero_byte_mismatch", 400, `files[${index}].sha256 与零字节文件不匹配。`);
     }
   }
   return declaration;
@@ -168,7 +172,7 @@ export async function createOrResumeUploadSession({
       message: "上传会话缺少客户端 checkpointId。",
       checkpointPresent: false
     });
-    throw new Error("upload session 缺少 checkpointId。");
+    throw uploadAdmissionError("upload_checkpoint_id_required", 400, "upload session 缺少 checkpointId。");
   }
 
   const manifestDigest: any = normalizeSha256(manifest?.manifestDigest, "manifestDigest");
@@ -317,7 +321,7 @@ export async function createOrResumeUploadSession({
         existingManifestDigest: existing.manifestDigest,
         existingInputDigest: existing.inputDigest
       });
-      throw new Error("同一 checkpoint 的上传会话摘要不一致，拒绝覆盖。");
+      throw uploadAdmissionError("upload_session_digest_conflict", 409, "同一 checkpoint 的上传会话摘要不一致，拒绝覆盖。");
     }
     const existingArchiveBatchId: any = existing.archiveBatchId
       ? resolveArchiveBatchIdentity({
@@ -338,7 +342,7 @@ export async function createOrResumeUploadSession({
         archiveBatchId: archiveBatch.archiveBatchId,
         existingArchiveBatchId
       });
-      throw new Error("同一 checkpoint 的归档批次不一致，拒绝覆盖。");
+      throw uploadAdmissionError("upload_session_batch_conflict", 409, "同一 checkpoint 的归档批次不一致，拒绝覆盖。");
     }
 
     await emitTrace(trace, {
@@ -417,7 +421,7 @@ export async function createOrResumeUploadSession({
       const sha256: any = normalizeSha256(file.sha256, `files[${index}].sha256`);
       const byteSize: any = normalizeByteSize(file.byteSize);
       if (byteSize === 0 && sha256 !== EMPTY_FILE_SHA256) {
-        throw new Error(`files[${index}].sha256 与零字节文件不匹配。`);
+        throw uploadAdmissionError("upload_sha256_zero_byte_mismatch", 400, `files[${index}].sha256 与零字节文件不匹配。`);
       }
       const sourceRelativePathHash: any = hashClientString(sourceRelativePath, "upload.relative_path");
       const sourceNameHash: any = hashClientString(
@@ -568,6 +572,12 @@ async function getUploadSessionLocked(
   if (!meta) {
     return null;
   }
+  // Reject cross-tenant, cross-organization, or cross-principal reads before
+  // touching encrypted custody state. An unauthorized caller must observe the
+  // session as absent and must not be able to trigger reconciliation work.
+  if (!uploadSessionOwnerAccess(meta, owner).ok) {
+    return null;
+  }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
   if (!admission) {
@@ -575,7 +585,7 @@ async function getUploadSessionLocked(
     return null;
   }
   syncAdmissionStatus(userDataPath, sessionId, admission, meta.status);
-  return uploadSessionOwnerAccess(meta, owner).ok ? buildPublicSession(meta) : null;
+  return buildPublicSession(meta);
 }
 
 export async function getUploadSession(userDataPath?: any, sessionId?: any, options: Record<string, any> = {}) : Promise<any> {
@@ -871,7 +881,7 @@ async function resolveUploadSessionFilesLocked(
   const owner: any = normalizeUploadSessionOwner(options.owner);
   let meta: any = await loadSessionMeta(userDataPath, sessionId);
   if (!meta) {
-    throw new Error(`上传会话不存在：${sessionId}`);
+    throw uploadAdmissionError("upload_session_not_found", 404, `上传会话不存在：${sessionId}`);
   }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
@@ -883,10 +893,10 @@ async function resolveUploadSessionFilesLocked(
   assertUploadSessionOwnerAccess(meta, owner);
 
   if (meta.status !== "complete") {
-    throw new Error(`上传会话尚未完成：${sessionId}`);
+    throw uploadAdmissionError("upload_session_incomplete", 409, `上传会话尚未完成：${sessionId}`);
   }
 
-  return meta.files.map((file?: any) : any => ({
+  return Object.freeze(meta.files.map((file?: any) : any => Object.freeze({
     name: file.name,
     relativePath: file.relativePath,
     sourceNameHash: file.sourceNameHash || "",
@@ -899,16 +909,17 @@ async function resolveUploadSessionFilesLocked(
     syncBatchId: file.syncBatchId || meta.syncBatchId || "",
     contentHash: file.contentHash || meta.contentHash || file.sha256 || "",
     capturedAt: file.capturedAt || meta.capturedAt || "",
-    sourceMetadata: file.sourceMetadata || {},
+    sourceMetadata: freezeUploadDescriptorValue(file.sourceMetadata || {}),
     archiveBatchId: meta.archiveBatchId || "",
     mediaType: file.mediaType,
     sha256: file.sha256,
     byteSize: file.byteSize,
     custodyRef: file.custodyRef,
+    resourceRef: `upload-resource:${meta.sessionId}:${file.index}`,
     contentDigest: file.contentDigest || file.sha256,
     envelopeDigest: file.envelopeDigest,
     custodyState: file.custodyState
-  }));
+  })));
 }
 
 export async function resolveUploadSessionFiles(userDataPath?: any, sessionId?: any, options: Record<string, any> = {}) : Promise<any> {
@@ -932,7 +943,7 @@ async function buildCheckpointReceiptFromUploadSessionLocked(
   const owner: any = normalizeUploadSessionOwner(options.owner);
   let meta: any = await loadSessionMeta(userDataPath, sessionId);
   if (!meta) {
-    throw new Error(`上传会话不存在：${sessionId}`);
+    throw uploadAdmissionError("upload_session_not_found", 404, `上传会话不存在：${sessionId}`);
   }
   meta = await reconcileSessionMeta(userDataPath, meta, { custodyDescribe });
   const admission: any = readUploadSessionAdmission(userDataPath, sessionId);
@@ -944,7 +955,7 @@ async function buildCheckpointReceiptFromUploadSessionLocked(
   assertUploadSessionOwnerAccess(meta, owner);
 
   if (meta.status !== "complete") {
-    throw new Error(`上传会话尚未完成：${sessionId}`);
+    throw uploadAdmissionError("upload_session_incomplete", 409, `上传会话尚未完成：${sessionId}`);
   }
 
   const archiveBatch: any = resolveArchiveBatchIdentity({

@@ -79,7 +79,6 @@ export const opsProductionPhrasePairs: ConsolePhrasePair[] = [
   ["智能巡检 Worker", "Inspection Agent Worker"],
   ["智能体 Worker", "Agent Worker"],
   ["系统巡检", "System Inspection"],
-  ["空配置报警", "Empty Configuration Alert"],
   ["查看报警", "View Alert"],
   ["未配置智能体", "No Agent Configured"],
   ["去配置", "Configure"],

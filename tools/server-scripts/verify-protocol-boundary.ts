@@ -60,7 +60,7 @@ const APPROVED_PROTOCOL_PORTS: readonly any[] = Object.freeze([
   "configureMcpNotificationBus",
   "registerConfiguredMcpSseConnection",
   "broadcastConfiguredMcpNotification",
-  "toolSkillManagementProvider.authorizeRequest",
+  "toolSkillManagementProvider.authorizeMcpClientRequest",
   "toolSkillManagementProvider.listVisibleTools"
 ]);
 
@@ -204,7 +204,7 @@ async function main() : Promise<any> {
     const transport: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-transport.ts");
     const tools: any = await readText("packages/protocols/mcp/adapter/http-mcp-adapter-tools.ts");
     for (const required of [
-      "toolSkillManagementProvider.authorizeRequest",
+      "toolSkillManagementProvider.authorizeMcpClientRequest",
       "toolSkillManagementProvider?.listVisibleTools",
       "listVisibleTools({ authorization })"
     ]) {

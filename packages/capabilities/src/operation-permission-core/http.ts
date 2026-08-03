@@ -182,7 +182,89 @@ export function createOperationPermissionHttpRouter({
       return true;
     }
 
+    async function completeOneTimeApiKey(status?: any, payload: Record<string, any> = {}) : Promise<any> {
+      logRouter("info", "operation_permission.api_key.one_time_response", {
+        requestId: request?.__meshrixRequestId || "",
+        method: normalizedMethod,
+        route: url.pathname,
+        status,
+        durationMs: Date.now() - startedAt,
+        keyId: payload.record?.keyId || "",
+        lifecycleRevision: payload.record?.lifecycleRevision || 0
+      });
+      response.setHeader?.("cache-control", "no-store");
+      response.setHeader?.("pragma", "no-cache");
+      sendJson(response, status, payload);
+      return true;
+    }
+
     try {
+    if (normalizedMethod === "GET" && suffix === "/api-keys/issuer-scopes") {
+      const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"]);
+      if (!authorization) return true;
+      const scopes: any = await platform.apiKeyDistributionProvider.getIssuerScopes({
+        subjectId: resolvedByFromAuthorization(authorization)
+      });
+      const requestHost: any = String(request?.headers?.host || request?.headers?.[":authority"] || "")
+        .split(",")[0]
+        .trim();
+      return complete(200, {
+        schemaVersion: "v0.0.1:schema:definition-1",
+        ...scopes,
+        ...(requestHost ? { serverAudience: requestHost } : {})
+      });
+    }
+
+    if (normalizedMethod === "GET" && suffix === "/api-keys") {
+      const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"]);
+      if (!authorization) return true;
+      const page: any = await platform.apiKeyDistributionProvider.list({
+        subjectId: resolvedByFromAuthorization(authorization),
+        ...(url.searchParams.get("status") ? { status: url.searchParams.get("status") } : {}),
+        ...(url.searchParams.get("organizationNodeId") ? { organizationNodeId: url.searchParams.get("organizationNodeId") } : {}),
+        ...(url.searchParams.get("cursor") ? { cursor: url.searchParams.get("cursor") } : {}),
+        ...(url.searchParams.get("limit") ? { limit: Number(url.searchParams.get("limit")) } : {})
+      });
+      return complete(200, { schemaVersion: "v0.0.1:schema:definition-1", ...page });
+    }
+
+    if (normalizedMethod === "POST" && suffix === "/api-keys") {
+      const payload: any = parseJsonBody(requestBody);
+      const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"], payload);
+      if (!authorization) return true;
+      const result: any = await platform.apiKeyDistributionProvider.create({
+        ...payload,
+        subjectId: resolvedByFromAuthorization(authorization)
+      });
+      return completeOneTimeApiKey(201, { schemaVersion: "v0.0.1:schema:definition-1", ...result });
+    }
+
+    const apiKeyRotateMatch: any = suffix.match(/^\/api-keys\/([^/]+)\/rotate$/);
+    if (normalizedMethod === "POST" && apiKeyRotateMatch) {
+      const payload: any = parseJsonBody(requestBody);
+      const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"], payload);
+      if (!authorization) return true;
+      const result: any = await platform.apiKeyDistributionProvider.rotate({
+        ...payload,
+        keyId: decodeURIComponent(apiKeyRotateMatch[1]),
+        subjectId: resolvedByFromAuthorization(authorization)
+      });
+      return completeOneTimeApiKey(200, { schemaVersion: "v0.0.1:schema:definition-1", ...result });
+    }
+
+    const apiKeyRevokeMatch: any = suffix.match(/^\/api-keys\/([^/]+)\/revoke$/);
+    if (normalizedMethod === "POST" && apiKeyRevokeMatch) {
+      const payload: any = parseJsonBody(requestBody);
+      const authorization: any = await requireConsole(request, response, normalizedMethod, url, ["console:read"], payload);
+      if (!authorization) return true;
+      const record: any = await platform.apiKeyDistributionProvider.revoke({
+        ...payload,
+        keyId: decodeURIComponent(apiKeyRevokeMatch[1]),
+        subjectId: resolvedByFromAuthorization(authorization)
+      });
+      return complete(200, { schemaVersion: "v0.0.1:schema:definition-1", record });
+    }
+
     if (normalizedMethod === "GET" && suffix === "/catalog") {
       if (!(await requireConsole(request, response, normalizedMethod, url, ["console:read"]))) {
         return true;
@@ -583,6 +665,15 @@ export function createOperationPermissionHttpRouter({
       }
     });
     } catch (error: any) {
+      if (String(error?.code || "").startsWith("api_key_")) {
+        return complete(Number(error.statusCode || 500), {
+          schemaVersion: "v0.0.1:schema:definition-1",
+          error: {
+            code: String(error.code),
+            message: String(error.message || "API Key operation failed.")
+          }
+        });
+      }
       logRouter("error", "operation_permission.http.failed", {
         requestId: request?.__meshrixRequestId || "",
         method: normalizedMethod,

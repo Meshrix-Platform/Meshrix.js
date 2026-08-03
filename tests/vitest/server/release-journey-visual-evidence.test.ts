@@ -31,24 +31,26 @@ describe("release journey visual evidence contract", () : any => {
     });
     expect(RELEASE_JOURNEY_VISUAL_CHECKPOINTS.map(([id]: any[]) : any => id)).toEqual([
       "console-authenticated",
+      "console-organization-permissions",
       "console-upstream-basic-config",
       "console-upstream-operation-config",
       "console-upstream-published",
       "console-published-tool",
-      "console-token-authorization-pending",
-      "console-token-authorization-consumed",
+      "console-api-key-generated",
+      "console-downstream-agent-configured",
       "console-operation-approval-pending",
       "console-operation-approval-completed",
       "console-downstream-mcp-call"
     ]);
     expect(RELEASE_JOURNEY_VISUAL_CHECKPOINTS.map(([, , route]: any[]) : any => route)).toEqual([
-      "/admin/publish-upstream-service",
+      "/",
+      "/admin/organization-governance",
       "/admin/publish-upstream-service",
       "/admin/publish-upstream-service",
       "/admin/publish-upstream-service",
       "/admin/tool-list",
-      "/approval",
-      "/approval",
+      "/admin/api-key-distribution",
+      "/admin/api-key-distribution",
       "/approval",
       "/approval",
       "/admin/tool-stats"
@@ -69,9 +71,7 @@ describe("release journey visual evidence contract", () : any => {
     expect(Object.isFrozen(RELEASE_JOURNEY_APPROVAL_UI)).toBe(true);
     expect(RELEASE_JOURNEY_APPROVAL_UI).toEqual({
       card: '[data-testid="approval-request-card"], [data-approval-kind], .approval-request-card',
-      authorizationCard: '[data-approval-kind="authorization"]',
       operationCard: '[data-approval-kind="pendingOperation"]',
-      mcpApprove: '[data-action="mcp-approve"]',
       operationApprove: '[data-action="operation-approve"]',
       protected: "[data-protected]",
       technicalDetails: 'details[data-section="technical-details"]',
@@ -143,8 +143,37 @@ describe("release journey visual evidence contract", () : any => {
     expect(source).toContain("Approve Request");
     expect(source).toContain("通过当前审批层");
     expect(source).toContain("resetApprovalEvidenceScroll");
-    expect(source).toContain('element.scrollTo({ top: 0, left: 0, behavior: "instant" })');
+    expect(source).toContain('element.scrollTo({ top: 220, left: 0, behavior: "instant" })');
     expect(source).toContain("element.scrollLeft = 0");
     expect(source).not.toContain("批准并仅执行一次|Approve and Execute Once)$/");
+  });
+
+  it("requires privacy-safe screenshots for organization governance and one-time API key issuance", async () : Promise<any> => {
+    const source: any = await import("node:fs/promises").then((fs?: any) : any =>
+      fs.readFile(new URL(
+        "../../../tools/server-scripts/lib/release-journey-visual-evidence.ts",
+        import.meta.url
+      ), "utf8")
+    );
+    expect(source).toContain("provisionApiKeyWorkload");
+    expect(source).toContain("/admin/organization-governance");
+    expect(source).toContain("/admin/api-key-distribution");
+    expect(source).toContain("[data-one-time-secret]");
+    expect(source).toContain('/^(集团|Group)$/u');
+    expect(source).toContain('/管理员|administrator/iu');
+    expect(source).toContain("getTimezoneOffset()");
+    expect(source).toContain('capture("console-organization-permissions")');
+    expect(source).toContain('element.scrollTo({ top: 0, left: 0, behavior: "instant" })');
+    expect(source).toContain("Edit from Published Version");
+    expect(source).not.toContain("document.documentElement.style.zoom");
+    expect(source).toContain('capture("console-api-key-generated"');
+    expect(source.lastIndexOf('waitFor({ state: "detached"')).toBeLessThan(
+      source.indexOf('capture("console-api-key-generated"')
+    );
+    expect(source).not.toContain('"meshrix.discovery",\n      "meshrix.gateway",');
+    expect(source).toContain("captureDownstreamAgentConfigured");
+    expect(source).toContain('data-testid="api-key-distribution-workspace"');
+    expect(source).not.toContain("console-token-authorization");
+    expect(RELEASE_JOURNEY_VISUAL_CHECKPOINTS).toHaveLength(11);
   });
 });

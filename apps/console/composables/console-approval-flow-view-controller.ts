@@ -4,7 +4,6 @@ import {
   confirmConsoleAction,
   notifyConsoleAction,
 } from "./console-browser-effects";
-import type { McpAuthorizationRequest } from "../lib/authorization-governance-client";
 import type { OperationPermissionPendingOperation } from "../lib/operation-permission-client";
 import {
   currentConsoleLocale,
@@ -44,15 +43,10 @@ type ApprovalFlowCardBase = {
   auditAvailable: boolean;
 };
 
-export type ApprovalFlowCard =
-  | (ApprovalFlowCardBase & {
-      kind: "authorization";
-      request: McpAuthorizationRequest;
-    })
-  | (ApprovalFlowCardBase & {
-      kind: "pendingOperation";
-      pendingOperation: OperationPermissionPendingOperation;
-    });
+export type ApprovalFlowCard = ApprovalFlowCardBase & {
+  kind: "pendingOperation";
+  pendingOperation: OperationPermissionPendingOperation;
+};
 
 function approvalStatusItem(
   label: string,
@@ -93,114 +87,6 @@ function operationRequester(
     );
   }
   return requester || approvalText(locale, "已授权调用方", "Authorized caller");
-}
-
-function safeRequestReference(requestId: string, locale: ConsoleLocale) : any {
-  const normalized: any = String(requestId || "").trim();
-  if (!normalized || isRedactedPublicValue(normalized)) {
-    return approvalText(locale, "不可用", "Unavailable");
-  }
-  if (normalized.length <= 18) return normalized;
-  return `${normalized.slice(0, 10)}…${normalized.slice(-6)}`;
-}
-
-function mcpDecisionStatus(
-  request: McpAuthorizationRequest,
-  locale: ConsoleLocale,
-) : any {
-  const status: any = request.status;
-  const label: any = approvalText(locale, "审批决定", "Approval Decision");
-  if (status === "pending") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "待决定", "Pending Decision"),
-      "warning",
-    );
-  }
-  if (
-    ["approved", "issuing", "consumed"].includes(status) ||
-    (["expired", "failed"].includes(status) && Boolean(request.resolvedAt))
-  ) {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "已批准", "Approved"),
-      "success",
-    );
-  }
-  if (status === "rejected") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "已拒绝", "Rejected"),
-      "danger",
-    );
-  }
-  if (status === "expired") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "已过期", "Expired"),
-      "neutral",
-    );
-  }
-  return approvalStatusItem(
-    label,
-    approvalText(locale, "处理失败", "Processing Failed"),
-    "danger",
-  );
-}
-
-function mcpDeliveryStatus(
-  request: McpAuthorizationRequest,
-  locale: ConsoleLocale,
-) : any {
-  const status: any = request.status;
-  const label: any = approvalText(locale, "授权交付", "Authorization Delivery");
-  if (status === "pending") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "等待审批", "Awaiting Approval"),
-      "neutral",
-    );
-  }
-  if (status === "approved") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "等待签发", "Awaiting Issuance"),
-      "warning",
-    );
-  }
-  if (status === "issuing") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "签发中", "Issuing"),
-      "warning",
-    );
-  }
-  if (status === "consumed") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "已交付", "Delivered"),
-      "success",
-    );
-  }
-  if (status === "failed") {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "交付失败", "Delivery Failed"),
-      "danger",
-    );
-  }
-  if (status === "expired" && request.resolvedAt) {
-    return approvalStatusItem(
-      label,
-      approvalText(locale, "交付已过期", "Delivery Expired"),
-      "danger",
-    );
-  }
-  return approvalStatusItem(
-    label,
-    approvalText(locale, "未交付", "Not Delivered"),
-    "neutral",
-  );
 }
 
 function operationDecisionStatus(
@@ -433,75 +319,6 @@ export function operationApprovalTitle(
   );
 }
 
-function mcpAuthorizationSummary(
-  request: McpAuthorizationRequest,
-  isLocalInstall: boolean,
-  locale: ConsoleLocale,
-) : any {
-  if (request.status === "pending") {
-    return isLocalInstall
-      ? approvalText(
-          locale,
-          "批准后，此客户端可在所列目标安装连接器并获得明确列出的权限。",
-          "After approval, this client can install the connector on the listed targets with only the listed permissions.",
-        )
-      : approvalText(
-          locale,
-          "批准后，此客户端可访问明确列出的工具与权限域。",
-          "After approval, this client can access only the listed tools and scopes.",
-        );
-  }
-  if (request.status === "consumed") {
-    return approvalText(
-      locale,
-      "审批已通过，授权材料已交付；这不代表任何工具已经执行。",
-      "Approval passed and authorization was delivered; this does not mean that any tool was executed.",
-    );
-  }
-  if (request.status === "approved" || request.status === "issuing") {
-    return approvalText(
-      locale,
-      "审批已通过，授权交付仍在进行；尚未产生工具执行结果。",
-      "Approval passed and authorization delivery is still in progress; no tool execution result exists yet.",
-    );
-  }
-  if (
-    (request.status === "failed" || request.status === "expired") &&
-    request.resolvedAt
-  ) {
-    return request.status === "failed"
-      ? approvalText(
-          locale,
-          "审批已通过，但授权交付失败；不会据此推断工具已经执行。",
-          "Approval passed, but authorization delivery failed; no tool execution is inferred.",
-        )
-      : approvalText(
-          locale,
-          "审批已通过，但授权在交付前过期；未产生工具执行结果。",
-          "Approval passed, but authorization expired before delivery; no tool execution result was produced.",
-        );
-  }
-  if (request.status === "rejected") {
-    return approvalText(
-      locale,
-      "请求已拒绝，未交付授权。",
-      "The request was rejected and no authorization was delivered.",
-    );
-  }
-  if (request.status === "expired") {
-    return approvalText(
-      locale,
-      "请求在作出决定前过期，未交付授权。",
-      "The request expired before a decision and no authorization was delivered.",
-    );
-  }
-  return approvalText(
-    locale,
-    "请求处理失败，未交付授权。",
-    "Request processing failed and no authorization was delivered.",
-  );
-}
-
 function operationApprovalSummary(
   operation: OperationPermissionPendingOperation,
   locale: ConsoleLocale,
@@ -628,195 +445,16 @@ function operationNextStep(
 }
 
 function timestampOfCard(card: ApprovalFlowCard) : any {
-  const timestamps: any = (
-    card.kind === "authorization"
-      ? [
-          card.request.consumedAt,
-          card.request.issuingAt,
-          card.request.resolvedAt,
-          card.request.createdAt,
-        ]
-      : [
-          card.pendingOperation.completedAt,
-          card.pendingOperation.resolvedAt,
-          card.pendingOperation.createdAt,
-        ]
-  ).filter(Boolean);
+  const timestamps: any = [
+    card.pendingOperation.completedAt,
+    card.pendingOperation.resolvedAt,
+    card.pendingOperation.createdAt,
+  ].filter(Boolean);
   return (
     timestamps
       .map((timestamp?: any) : any => Date.parse(String(timestamp)))
       .find((timestamp?: any) : any => Number.isFinite(timestamp)) || 0
   );
-}
-
-function mcpAuthorizationTechnicalDetails(
-  request: McpAuthorizationRequest,
-  locale: ConsoleLocale,
-): ApprovalFlowFact[] {
-  return [
-    {
-      label: approvalText(locale, "请求 ID", "Request ID"),
-      value: request.requestId,
-      protected: true,
-    },
-    ...(request.reason
-      ? [
-          {
-            label: approvalText(
-              locale,
-              "客户端说明",
-              "Client-provided Reason",
-            ),
-            value: request.reason,
-          },
-        ]
-      : []),
-    {
-      label: approvalText(locale, "工具集 ID", "Toolset IDs"),
-      value: joinValues(request.toolsets, locale),
-    },
-    {
-      label: approvalText(locale, "工具 ID", "Tool IDs"),
-      value: joinValues(request.requestedTools, locale),
-    },
-    {
-      label: approvalText(locale, "权限域 ID", "Scope IDs"),
-      value: joinValues(request.requestedScopes, locale),
-    },
-    ...(request.processKeyFingerprints || []).map((entry?: any) : any => ({
-      label: `${approvalText(locale, "进程密钥指纹", "Process Key Fingerprint")} · ${entry.target}`,
-      value: entry.fingerprint,
-      protected: true,
-    })),
-    ...(request.createdAt
-      ? [
-          {
-            label: approvalText(locale, "请求时间", "Requested At"),
-            value: displayDeadline(request.createdAt, locale),
-          },
-        ]
-      : []),
-    ...(request.resolvedAt
-      ? [
-          {
-            label: approvalText(locale, "决定时间", "Decided At"),
-            value: displayDeadline(request.resolvedAt, locale),
-          },
-        ]
-      : []),
-    ...(request.consumedAt
-      ? [
-          {
-            label: approvalText(locale, "交付时间", "Delivered At"),
-            value: displayDeadline(request.consumedAt, locale),
-          },
-        ]
-      : []),
-    ...(request.errorCode
-      ? [
-          {
-            label: approvalText(locale, "错误代码", "Error Code"),
-            value: request.errorCode,
-          },
-        ]
-      : []),
-  ];
-}
-
-export function mcpAuthorizationApprovalCard(
-  request: McpAuthorizationRequest,
-  locale: any = approvalLocale(),
-): ApprovalFlowCard {
-  const isLocalInstall: any = request.requestKind === "local_mcp_install";
-  const decisionStatus: any = mcpDecisionStatus(request, locale);
-  const executionStatus: any = mcpDeliveryStatus(request, locale);
-  const target: any = request.targets?.length
-    ? request.targets.join(", ")
-    : request.clientName || approvalText(locale, "未声明", "Not Declared");
-  const requestedToolCount: any = request.requestedTools?.length || 0;
-  const requestedScopeCount: any = request.requestedScopes?.length || 0;
-  const summary: any = mcpAuthorizationSummary(request, isLocalInstall, locale);
-  const cardTone: any =
-    request.maxRisk === "destructive"
-      ? "danger"
-      : approvalTone(decisionStatus, executionStatus);
-  return {
-    key: `authorization:${request.requestId}`,
-    kind: "authorization",
-    tone: cardTone,
-    label: isLocalInstall
-      ? approvalText(
-          locale,
-          "MCP 本机安装授权",
-          "Local MCP Installation Authorization",
-        )
-      : approvalText(locale, "MCP 客户端授权", "MCP Client Authorization"),
-    title:
-      request.clientName ||
-      approvalText(locale, "未标识的 MCP 客户端", "Unidentified MCP client"),
-    summary,
-    meta: [decisionStatus.value, executionStatus.value],
-    decisionStatus,
-    executionStatus,
-    facts: [
-      {
-        label: approvalText(
-          locale,
-          "客户端自报名称",
-          "Self-reported client name",
-        ),
-        value:
-          request.clientName ||
-          approvalText(
-            locale,
-            "未标识的 MCP 客户端",
-            "Unidentified MCP client",
-          ),
-      },
-      {
-        label: approvalText(locale, "动作", "Action"),
-        value: isLocalInstall
-          ? approvalText(
-              locale,
-              "安装 MCP 连接器并授予权限",
-              "Install the MCP connector and grant permissions",
-            )
-          : approvalText(locale, "授予 MCP 工具访问", "Grant MCP tool access"),
-      },
-      { label: approvalText(locale, "对象", "Target"), value: target },
-      {
-        label: approvalText(locale, "影响", "Impact"),
-        value:
-          locale === "en"
-            ? `${requestedToolCount} ${requestedToolCount === 1 ? "tool" : "tools"} · ${requestedScopeCount} ${requestedScopeCount === 1 ? "scope" : "scopes"}`
-            : `${requestedToolCount} 个工具 · ${requestedScopeCount} 个权限域`,
-      },
-      {
-        label: approvalText(locale, "风险", "Risk"),
-        value: riskLabel(request.maxRisk, locale),
-      },
-      {
-        label: approvalText(locale, "有效期", "Valid Until"),
-        value: displayDeadline(request.expiresAt, locale),
-      },
-      {
-        label: approvalText(locale, "核对依据", "Verification Evidence"),
-        value: isLocalInstall
-          ? locale === "en"
-            ? `Code ${request.verificationCode || "not provided"} · ${request.processKeyFingerprints?.length || 0} process key fingerprints`
-            : `核对码 ${request.verificationCode || "未提供"} · ${request.processKeyFingerprints?.length || 0} 个进程密钥指纹`
-          : approvalText(
-              locale,
-              "未提供本机安装证明",
-              "No local installation evidence provided",
-            ),
-        protected: Boolean(request.verificationCode),
-      },
-    ],
-    technicalDetails: mcpAuthorizationTechnicalDetails(request, locale),
-    auditAvailable: false,
-    request,
-  };
 }
 
 function operationTechnicalDetails(
@@ -1063,18 +701,10 @@ export function approvalFlowCardMatchesStatus(
   status: ApprovalFlowStatus,
 ) : any {
   if (status === "all") return true;
-  const record: any =
-    card.kind === "authorization" ? card.request : card.pendingOperation;
+  const record: any = card.pendingOperation;
   const recordStatus: any = String(record.status || "");
   if (status === "pending" || status === "rejected") {
     return recordStatus === status;
-  }
-  if (card.kind === "authorization") {
-    return (
-      ["approved", "issuing", "consumed"].includes(recordStatus) ||
-      (["expired", "failed"].includes(recordStatus) &&
-        Boolean(card.request.resolvedAt))
-    );
   }
   if (["approved", "completed"].includes(recordStatus)) return true;
   if (
@@ -1098,105 +728,6 @@ type ApprovalDecisionCopy = {
   toastMessage: string;
   toastTitle: string;
 };
-
-export function mcpAuthorizationDecisionCopy(
-  request: McpAuthorizationRequest,
-  resolution: "approved" | "rejected",
-  locale: any = approvalLocale(),
-): ApprovalDecisionCopy {
-  const isLocalInstall: any = request.requestKind === "local_mcp_install";
-  const clientName: any =
-    request.clientName ||
-    approvalText(locale, "未标识的 MCP 客户端", "Unidentified MCP client");
-  const target: any =
-    request.targets?.join(", ") ||
-    approvalText(locale, "未声明", "Not Declared");
-  const toolCount: any = request.requestedTools?.length || 0;
-  const scopeCount: any = request.requestedScopes?.length || 0;
-  const verificationReference: any = request.verificationCode
-    ? request.verificationCode
-    : safeRequestReference(request.requestId, locale);
-  const facts: any =
-    locale === "en"
-      ? [
-          `Self-reported client name: ${clientName}`,
-          `Target: ${target}`,
-          `Tools: ${toolCount}`,
-          `Scopes: ${scopeCount}`,
-          `${request.verificationCode ? "Verification code" : "Request reference"}: ${verificationReference}`,
-          `Risk: ${riskLabel(request.maxRisk, locale)}`,
-          `Valid until: ${displayDeadline(request.expiresAt, locale)}`,
-        ].join("\n")
-      : [
-          `客户端自报名称：${clientName}`,
-          `目标：${target}`,
-          `工具：${toolCount} 个`,
-          `权限域：${scopeCount} 个`,
-          `${request.verificationCode ? "核对码" : "请求短句柄"}：${verificationReference}`,
-          `风险：${riskLabel(request.maxRisk, locale)}`,
-          `有效期：${displayDeadline(request.expiresAt, locale)}`,
-        ].join("\n");
-  if (resolution === "rejected") {
-    return {
-      confirmLabel: approvalText(locale, "拒绝请求", "Reject Request"),
-      message: `${facts}\n\n${approvalText(locale, "拒绝这一次授权请求？", "Reject this authorization request?")}`,
-      tone: "danger",
-      title: approvalText(
-        locale,
-        "拒绝 MCP 授权请求",
-        "Reject MCP Authorization Request",
-      ),
-      toastMessage: approvalText(
-        locale,
-        "MCP 授权请求已拒绝。",
-        "The MCP authorization request was rejected.",
-      ),
-      toastTitle: approvalText(locale, "审批已完成", "Approval Completed"),
-    };
-  }
-  return {
-    confirmLabel: isLocalInstall
-      ? approvalText(locale, "批准本次安装", "Approve This Installation")
-      : approvalText(locale, "批准本次授权", "Approve This Authorization"),
-    message: `${facts}\n\n${
-      isLocalInstall
-        ? approvalText(
-            locale,
-            "批准后将为这一次安装请求签发所列权限。",
-            "Approval will issue only the listed permissions for this installation request.",
-          )
-        : approvalText(
-            locale,
-            "批准后将为这一次授权请求签发所列权限。",
-            "Approval will issue only the listed permissions for this authorization request.",
-          )
-    }`,
-    tone: request.maxRisk === "destructive" ? "danger" : "neutral",
-    title: isLocalInstall
-      ? approvalText(
-          locale,
-          "确认本次 MCP 安装",
-          "Confirm This MCP Installation",
-        )
-      : approvalText(
-          locale,
-          "确认本次 MCP 授权",
-          "Confirm This MCP Authorization",
-        ),
-    toastMessage: isLocalInstall
-      ? approvalText(
-          locale,
-          "本次 MCP 安装授权已批准。",
-          "This MCP installation authorization was approved.",
-        )
-      : approvalText(
-          locale,
-          "本次 MCP 授权已批准。",
-          "This MCP authorization was approved.",
-        ),
-    toastTitle: approvalText(locale, "审批已完成", "Approval Completed"),
-  };
-}
 
 export function operationPermissionDecisionCopy(
   operation: OperationPermissionPendingOperation,
@@ -1303,10 +834,8 @@ export function useApprovalFlowViewController() : any {
   const { approvalFlowConsole } = useServerConsoleShellContext();
   const {
     approvalFlowSelectedStatus,
-    busyKey,
-    mcpAuthorizationRequests,
+    isBusy,
     operationPermissionPendingOperations,
-    resolveMcpAuthorizationRequest,
     resolveOperationPermissionPendingOperation,
     selectApprovalFlowStatus,
   } = approvalFlowConsole;
@@ -1325,14 +854,9 @@ export function useApprovalFlowViewController() : any {
   ] satisfies Array<{ value: ApprovalFlowStatus; label: string }>;
 
   const allApprovalFlowCards: any = computed<ApprovalFlowCard[]>(() : any =>
-    [
-      ...mcpAuthorizationRequests.value.map((request?: any) : any =>
-        mcpAuthorizationApprovalCard(request),
-      ),
-      ...operationPermissionPendingOperations.value.map((operation?: any) : any =>
-        operationPermissionApprovalCard(operation),
-      ),
-    ].sort((left?: any, right?: any) : any => timestampOfCard(right) - timestampOfCard(left)),
+    operationPermissionPendingOperations.value
+      .map((operation?: any) : any => operationPermissionApprovalCard(operation))
+      .sort((left?: any, right?: any) : any => timestampOfCard(right) - timestampOfCard(left)),
   );
   const approvalFlowCards: any = computed(() : any =>
     allApprovalFlowCards.value.filter((card?: any) : any =>
@@ -1345,10 +869,7 @@ export function useApprovalFlowViewController() : any {
     new Map<string, ActiveApprovalResolution>(),
   );
   const approvalFlowLoading: any = computed(() : any =>
-    [
-      "mcp-authorization-requests:refresh",
-      "operation-permission-pending:refresh",
-    ].includes(busyKey.value),
+    isBusy("operation-permission-pending:refresh"),
   );
 
   async function runApprovalDecision(
@@ -1371,83 +892,13 @@ export function useApprovalFlowViewController() : any {
     );
   }
 
-  function authorizationBusy(request: McpAuthorizationRequest) : any {
-    const key: any = `authorization:${request.requestId}`;
-    return (
-      actionGuard.isBusy(key) ||
-      busyKey.value ===
-        `mcp-authorization-requests:resolve:${request.requestId}`
-    );
-  }
-
-  function authorizationResolution(request: McpAuthorizationRequest) : any {
-    return (
-      activeResolutionByKey.get(`authorization:${request.requestId}`) || ""
-    );
-  }
-
-  function approveAuthorization(request: McpAuthorizationRequest) : any {
-    return runApprovalDecision(
-      `authorization:${request.requestId}`,
-      "approved",
-      async () : Promise<any> => {
-        const copy: any = mcpAuthorizationDecisionCopy(request, "approved");
-        const confirmed: any = await confirmConsoleAction(copy.message, {
-          title: copy.title,
-          confirmLabel: copy.confirmLabel,
-          tone: copy.tone,
-        });
-        if (!confirmed) return false;
-        const succeeded: any = await resolveMcpAuthorizationRequest(
-          request.requestId,
-          "approved",
-        );
-        if (succeeded) {
-          notifyConsoleAction(copy.toastMessage, {
-            tone: "success",
-            title: copy.toastTitle,
-          });
-        }
-        return succeeded;
-      },
-    );
-  }
-
-  function rejectAuthorization(request: McpAuthorizationRequest) : any {
-    return runApprovalDecision(
-      `authorization:${request.requestId}`,
-      "rejected",
-      async () : Promise<any> => {
-        const copy: any = mcpAuthorizationDecisionCopy(request, "rejected");
-        const confirmed: any = await confirmConsoleAction(copy.message, {
-          title: copy.title,
-          tone: copy.tone,
-          confirmLabel: copy.confirmLabel,
-        });
-        if (!confirmed) return false;
-        const succeeded: any = await resolveMcpAuthorizationRequest(
-          request.requestId,
-          "rejected",
-        );
-        if (succeeded) {
-          notifyConsoleAction(copy.toastMessage, {
-            tone: "success",
-            title: copy.toastTitle,
-          });
-        }
-        return succeeded;
-      },
-    );
-  }
-
   function pendingOperationBusy(
     operation: OperationPermissionPendingOperation,
   ) : any {
     const key: any = `pendingOperation:${operation.pendingOperationId}`;
     return (
       actionGuard.isBusy(key) ||
-      busyKey.value ===
-        `operation-permission-pending:resolve:${operation.pendingOperationId}`
+      isBusy(`operation-permission-pending:resolve:${operation.pendingOperationId}`)
     );
   }
 
@@ -1528,14 +979,10 @@ export function useApprovalFlowViewController() : any {
     approvalFlowLoading,
     approvalFlowStatus,
     approvalFlowStatusOptionBarOptions,
-    approveAuthorization,
     approvePendingOperation,
-    authorizationBusy,
-    authorizationResolution,
     pendingOperationBusy,
     pendingOperationResolution,
     refreshApprovalFlow,
-    rejectAuthorization,
     rejectPendingOperation,
   };
 }

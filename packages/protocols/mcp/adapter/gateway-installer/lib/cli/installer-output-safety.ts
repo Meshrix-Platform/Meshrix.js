@@ -1,14 +1,6 @@
 import { DEFAULT_TOKEN_ENV } from "./constants.ts";
 import { option } from "./basic-utils.ts";
 
-export function redactToken(value?: any) : any {
-  const text: any = String(value || "");
-  if (text.length <= 12) {
-    return "***";
-  }
-  return `${text.slice(0, 8)}...${text.slice(-4)}`;
-}
-
 export function redactSensitiveText(value?: any, secrets: any = []) : any {
   let text: any = String(value || "");
   const uniqueSecrets: any = new Set<any>(
@@ -18,11 +10,10 @@ export function redactSensitiveText(value?: any, secrets: any = []) : any {
     text = text.split(secret).join("<redacted-token>");
   }
   return text
+    .replace(/mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/gu, "<redacted-api-key>")
     .replace(/(^|[\s"'=:(])((?:\/(?:Users|home|root|private|var|tmp|opt|usr|Volumes)\/)[^\s"',)\]}]+)/g, "$1<local-path>")
     .replace(/(^|[\s"'=:(])([A-Za-z]:[\\/][^\s"',)\]}]+)/g, "$1<local-path>")
-    .replace(/\b(Authorization\s*:\s*Bearer\s+)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/\b(X-Meshrix-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
-    .replace(/\b(x-meshrix-tool-token\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/(^|[\s"'=:(])(--token(?:=|\s+))[^\s"',;)\]}]+/gi, "$1$2<redacted-token>")
     .replace(/\b(token|access_token|refresh_token|api_key|apiKey|secret|password)=([^\s"',;)\]}]+)/gi, "$1=<redacted-secret>");
 }

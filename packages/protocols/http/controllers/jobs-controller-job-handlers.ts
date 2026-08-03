@@ -31,7 +31,6 @@ function shouldForwardRequest(discoveryState: Record<string, any> = {}) : any {
 }
 
 export function createJobHandlers({
-  userDataPath,
   checkpointUploadSessionStore,
   jobWorkflow,
   deletionCoordinator,
@@ -60,7 +59,6 @@ export function createJobHandlers({
       if (admission.kind === "upload-session") {
         checkpointReceipt =
           await checkpointUploadSessionStore.buildCheckpointReceiptFromUploadSession(
-            userDataPath,
             admission.uploadSessionId,
             { owner: ownerSubject }
           );

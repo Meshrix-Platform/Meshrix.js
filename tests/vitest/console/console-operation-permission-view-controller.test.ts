@@ -72,7 +72,7 @@ function makeGovernance(overrides: Partial<GovernanceSummary> = {}): GovernanceS
 }
 
 function createOperationPermissionShell() : any {
-  const busyKey: any = ref("");
+  const isBusy: any = () => false;
   const issuedToolToken: any = ref("issued-token");
   const newGrantLabel: any = ref("默认智能体");
   const newGrantScopes: any = ref(["scope.read"]);
@@ -159,7 +159,7 @@ function createOperationPermissionShell() : any {
   const previewToolPolicy: any = vi.fn();
 
   return {
-    busyKey,
+    isBusy,
     copyIssuedToolToken,
     createGrant,
     deleteGrant,

@@ -54,7 +54,6 @@ function publicMaterializationSubmission(result: Record<string, any> = {}) : any
 }
 
 export function createUploadSessionHandlers({
-  userDataPath,
   checkpointUploadSessionStore,
   protocolEventBus,
   uploadWorkspaceMaterializationProvider
@@ -111,7 +110,6 @@ export function createUploadSessionHandlers({
       });
       try {
         const session: any = await checkpointUploadSessionStore.createOrResumeUploadSession({
-          userDataPath,
           checkpoint: payload?.checkpoint || {},
           manifest: payload?.manifest || {},
           files: Array.isArray(payload?.files) ? payload.files : [],
@@ -150,6 +148,15 @@ export function createUploadSessionHandlers({
           },
           errorCode: String(error?.code || "upload_session_create_failed")
         });
+        if (statusCode < 500) {
+          // 客户端输入导致的失败发生在任何受保护副作用之前：直接以该状态码
+          // 响应并返回，避免被分发层的“效果存疑”包装改写成 503。
+          sendJson(response, statusCode, {
+            code: String(error?.code || "upload_session_create_failed"),
+            error: String(error?.message || "请求处理失败。")
+          });
+          return;
+        }
         throw error;
       }
     },
@@ -169,24 +176,24 @@ export function createUploadSessionHandlers({
         stage: "request_received",
         message: "收到上传会话查询请求。"
       });
-      const session: any = await checkpointUploadSessionStore.getUploadSession(userDataPath, sessionId, {
+      const session: any = await checkpointUploadSessionStore.getUploadSession(sessionId, {
         owner: ownerSubject
       });
       if (!session) {
-        await trace({
+        sendJson(response, 404, {
+          error: "上传会话不存在。"
+        });
+        void trace({
           functionName: "handleGetUploadSession",
           stage: "not_found",
-          level: "warning",
+          level: "warn",
           message: "上传会话查询未命中。",
           http: {
             method: "GET",
             path: `/api/upload-sessions/${sessionId}`,
             status: 404
           }
-        });
-        sendJson(response, 404, {
-          error: "上传会话不存在。"
-        });
+        }).catch(() : any => null);
         return;
       }
 
@@ -229,7 +236,6 @@ export function createUploadSessionHandlers({
         }
       });
       const appendResult: any = await checkpointUploadSessionStore.appendUploadSessionChunk({
-        userDataPath,
         sessionId,
         fileIndex,
         offset,

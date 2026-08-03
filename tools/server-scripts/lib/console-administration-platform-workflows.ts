@@ -43,7 +43,7 @@ export const CONSOLE_ADMINISTRATION_PLATFORM_WORKFLOWS: readonly any[] = Object.
       "approval.operation-permission-pending.review",
       "approval.refresh"
     ],
-    executorFeatureIds: ["operation-permission-authorization", "operation-permission-passthrough"],
+    executorFeatureIds: ["operation-permission-passthrough"],
     operationIds: [
       "operation_permission.catalog",
       "operation_permission.grants",
@@ -54,8 +54,6 @@ export const CONSOLE_ADMINISTRATION_PLATFORM_WORKFLOWS: readonly any[] = Object.
       "operation_permission.policy_preview",
       "operation_permission.audit",
       "operation_permission.metrics_summary",
-      "operation_permission.mcp.list_requests",
-      "operation_permission.mcp.resolve_request",
       "operation_permission.pending_operations.list",
       "operation_permission.pending_operations.resolve"
     ],

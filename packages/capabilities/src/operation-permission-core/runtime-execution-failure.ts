@@ -1,5 +1,11 @@
 import { summarizeError } from "@meshrix/foundation/observability/runtime-logger";
-import { nowIso, sourceIpFromRequest } from "./runtime-common.ts";
+import {
+  authorizationGrantId,
+  authorizationSubjectId,
+  authorizationSubjectType,
+  nowIso,
+  sourceIpFromRequest
+} from "./runtime-common.ts";
 
 export async function completeToolExecutionFailure({
   error,
@@ -41,9 +47,9 @@ export async function completeToolExecutionFailure({
     toolId: tool.id,
     toolVersion: tool.version,
     toolsetIds: tool.toolsets,
-    subjectType: "grant",
-    subjectId: authorization.grant.id,
-    grantId: authorization.grant.id,
+    subjectType: authorizationSubjectType(authorization),
+    subjectId: authorizationSubjectId(authorization),
+    grantId: authorizationGrantId(authorization),
     agentId: context.agentId || "",
     profileId: context.profileId || "",
     operationId: tool.operationId,
@@ -67,7 +73,7 @@ export async function completeToolExecutionFailure({
   store.appendMetric({
     traceId,
     toolId: tool.id,
-    grantId: authorization.grant.id,
+    grantId: authorizationGrantId(authorization),
     profileId: context.profileId || "",
     status: "failed",
     risk: tool.risk,

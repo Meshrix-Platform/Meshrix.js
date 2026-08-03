@@ -12,13 +12,9 @@ const {
   approvalFlowCards,
   approvalFlowLoading,
   approvalFlowStatus,
-  approveAuthorization,
   approvePendingOperation,
-  authorizationBusy,
-  authorizationResolution,
   pendingOperationBusy,
   pendingOperationResolution,
-  rejectAuthorization,
   rejectPendingOperation,
 } = useApprovalFlowViewContext();
 const approvalCardList = ref<HTMLElement | null>(null);
@@ -69,45 +65,10 @@ function statusGroupLabel(card: ApprovalFlowCard) {
 }
 
 function actionGroupLabel(card: ApprovalFlowCard) {
-  if (card.kind === "authorization") {
-    return card.request.requestKind === "local_mcp_install"
-      ? approvalListText(
-          "MCP 本机安装授权操作",
-          "Local MCP installation authorization actions",
-        )
-      : approvalListText(
-          "MCP 客户端授权操作",
-          "MCP client authorization actions",
-        );
-  }
   return approvalListText(
     "Operation Permission 审批操作",
     "Operation Permission approval actions",
   );
-}
-
-function authorizationApprovalLabel(
-  card: Extract<ApprovalFlowCard, { kind: "authorization" }>,
-) {
-  if (authorizationBusy(card.request)) {
-    return authorizationResolution(card.request) === "rejected"
-      ? approvalListText("正在拒绝…", "Rejecting…")
-      : approvalListText("正在批准…", "Approving…");
-  }
-  return card.request.requestKind === "local_mcp_install"
-    ? approvalListText("批准本次安装", "Approve This Installation")
-    : approvalListText("批准本次授权", "Approve This Authorization");
-}
-
-function authorizationRejectLabel(
-  card: Extract<ApprovalFlowCard, { kind: "authorization" }>,
-) {
-  if (!authorizationBusy(card.request)) {
-    return approvalListText("拒绝请求", "Reject Request");
-  }
-  return authorizationResolution(card.request) === "approved"
-    ? approvalListText("正在批准…", "Approving…")
-    : approvalListText("正在拒绝…", "Rejecting…");
 }
 
 function operationApprovalLabel(
@@ -259,42 +220,7 @@ async function runCardAction(
         </RouterLink>
 
         <div
-          v-if="
-            card.kind === 'authorization' && card.request.status === 'pending'
-          "
-          class="approval-request-card-actions"
-          role="group"
-          :aria-label="actionGroupLabel(card)"
-        >
-          <button
-            class="configuration-alert-action approval-request-primary-action"
-            type="button"
-            data-action="mcp-approve"
-            :disabled="authorizationBusy(card.request)"
-            @click="
-              runCardAction(card, () => approveAuthorization(card.request))
-            "
-          >
-            {{ authorizationApprovalLabel(card) }}
-          </button>
-          <button
-            class="configuration-alert-action danger-action"
-            type="button"
-            data-action="mcp-reject"
-            :disabled="authorizationBusy(card.request)"
-            @click="
-              runCardAction(card, () => rejectAuthorization(card.request))
-            "
-          >
-            {{ authorizationRejectLabel(card) }}
-          </button>
-        </div>
-
-        <div
-          v-else-if="
-            card.kind === 'pendingOperation' &&
-            card.pendingOperation.status === 'pending'
-          "
+          v-if="card.pendingOperation.status === 'pending'"
           class="approval-request-card-actions"
           role="group"
           :aria-label="actionGroupLabel(card)"

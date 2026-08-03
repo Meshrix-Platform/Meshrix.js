@@ -53,15 +53,20 @@
   .topbar { padding: 0 var(--space-3); }
   .view-content { padding: var(--space-3); }
 
-  /* Mobile topbar: drop the keyboard shortcut hint (no ⌘K on touch),
-     collapse the service address to its status dot, and drop the breadcrumb
+  /* Mobile topbar: collapse the service address to its status dot and drop
+     the breadcrumb
      section chip so the page title stays visible on narrow screens. */
-  .topbar-palette-kbd { display: none; }
   .topbar-breadcrumb-section,
   .topbar-breadcrumb-separator { display: none; }
   .topbar-status .service-url-badge { max-width: none; }
   .topbar-status .service-url-text,
   .topbar-status .service-url-chevron { display: none; }
+  .topbar-palette-trigger {
+    width: 40px;
+    min-width: 40px;
+    padding-inline: 0;
+    justify-content: center;
+  }
 
   /* Touch targets: raise primary controls toward the 44px guideline */
   .view-content .tool-button,

@@ -134,18 +134,12 @@ export async function buildConsoleJobsSummary({
 
 export async function buildConsoleClientConnections({
   clientRegistryService = null,
-  offlineAfterSeconds = 0,
-  toolSkillManagementProvider = null,
-  buildOperationPermissionClientConnectionRows = null
+  offlineAfterSeconds = 0
 }: Record<string, any> = {}) : Promise<any> {
   const clientRegistrations: any = await Promise.resolve(clientRegistryRegistrations(clientRegistryService, {
     offlineAfterSeconds
   }));
-  const additionalConnectionRows: any =
-    typeof buildOperationPermissionClientConnectionRows === "function"
-      ? await buildOperationPermissionClientConnectionRows(toolSkillManagementProvider, { offlineAfterSeconds })
-      : [];
-  return buildClientConnectionList(clientRegistrations, additionalConnectionRows);
+  return buildClientConnectionList(clientRegistrations, []);
 }
 
 export async function buildMaintenanceAgentConsoleSummary({ maintenanceAgent = null }: Record<string, any> = {}) : Promise<any> {

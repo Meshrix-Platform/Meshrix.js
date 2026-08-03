@@ -22,6 +22,7 @@ export const RELEASE_JOURNEY_STEPS: readonly any[] = Object.freeze([
   "upstream-publish",
   "adapter-seed",
   "client-discovery",
+  "api-key-workload",
   "connector-install-matrix",
   "binary-upload-matrix",
   "mcp-acceptance-matrix",
@@ -48,7 +49,30 @@ export function createRedaction({ repoRoot = "", extraNeedles = [] }: Record<str
   function assertNoLeak(serialized: any = "") : any {
     for (const needle of secretNeedles) {
       if (needle && serialized.includes(needle)) {
-        throw new Error("Release journey verifier attempted to write a secret into its report.");
+        let location: any = "unknown";
+        try {
+          const parsed: any = JSON.parse(serialized);
+          const visit: any = (value?: any, pathLabel: any = "$report") : any => {
+            if (typeof value === "string" && value.includes(needle)) return pathLabel;
+            if (Array.isArray(value)) {
+              for (let index: any = 0; index < value.length; index += 1) {
+                const found: any = visit(value[index], `${pathLabel}[${index}]`);
+                if (found) return found;
+              }
+            } else if (value && typeof value === "object") {
+              for (const [key, child] of Object.entries(value)) {
+                const found: any = visit(child, `${pathLabel}.${key}`);
+                if (found) return found;
+              }
+            }
+            return "";
+          };
+          location = visit(parsed) || location;
+        } catch {
+          // The report is serialized by this module; keep the fail-closed result
+          // even if a future caller supplies malformed JSON.
+        }
+        throw new Error(`Release journey verifier attempted to write a secret into its report at ${location}.`);
       }
     }
     if (

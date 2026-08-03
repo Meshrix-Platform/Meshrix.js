@@ -5,10 +5,7 @@ import {
   runWithTraceContext,
   setTraceContextOnRequest
 } from "#meshrix/foundation/observability/trace-context";
-import {
-  handleMeshrixMcpHttpRequest,
-  MCP_LOCAL_AUTHORIZATION_MAX_BODY_BYTES
-} from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
+import { handleMeshrixMcpHttpRequest } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
 import { inputFromRequest } from "#meshrix/server-runtime/composition/dispatch-operation";
 import {
   createRequestBodyAdmissionController,
@@ -20,6 +17,7 @@ import {
   summarizeError
 } from "#meshrix/runtime-logger";
 import { UPLOAD_SESSION_MAX_CHUNK_BYTES } from "#meshrix/server-runtime/state/upload-session-admission";
+import { apiKeyUploadAuthSession } from "../../../packages/protocols/http/controllers/jobs-controller-access.ts";
 import {
   handleUpstreamPayloadTransitRequest,
   isUpstreamPayloadTransitRoute
@@ -95,10 +93,102 @@ function requestBodyLimitForRoute(method?: any, pathname?: any) : any {
   ) {
     return UPLOAD_SESSION_MAX_CHUNK_BYTES;
   }
-  if (pathname === "/api/mcp/local-grant/requests") {
-    return MCP_LOCAL_AUTHORIZATION_MAX_BODY_BYTES;
-  }
   return undefined;
+}
+
+export function apiKeyUploadOperation(method: any = "GET", pathname: any = "") : any {
+  if (method === "POST" && pathname === "/api/upload-sessions") {
+    return Object.freeze({ id: "uploads.create_session", requiredScopes: Object.freeze(["uploads:write"]) });
+  }
+  if (method === "GET" && /^\/api\/upload-sessions\/[^/]+$/u.test(pathname)) {
+    return Object.freeze({ id: "uploads.get_session", requiredScopes: Object.freeze(["uploads:write"]) });
+  }
+  if (method === "PUT" && /^\/api\/upload-sessions\/[^/]+\/files\/[^/]+$/u.test(pathname)) {
+    return Object.freeze({ id: "uploads.upload_chunk", requiredScopes: Object.freeze(["uploads:write"]) });
+  }
+  return null;
+}
+
+function apiKeyUploadAuthorizationValid(authorization: any, operation: any) : any {
+  const context: any = authorization?.apiKeyAuthorization;
+  const scopes: any[] = Array.isArray(context?.policy?.scopeIds) ? context.policy.scopeIds : [];
+  const allowedTools: any[] = Array.isArray(context?.policy?.allowedTools) ? context.policy.allowedTools : [];
+  return authorization?.handled === true &&
+    authorization?.ok === true &&
+    context?.credentialKind === "scoped_api_key" &&
+    operation.requiredScopes.every((scope?: any) : any => scopes.includes(scope)) &&
+    allowedTools.includes(operation.id);
+}
+
+export async function authorizeApiKeyUpload({
+  request,
+  requestBody,
+  url,
+  method,
+  operation,
+  toolSkillManagementProvider
+}: Record<string, any>) : Promise<any> {
+  const authorization: any = await toolSkillManagementProvider.authorizeRequest({
+    request,
+    requiredScopes: operation.requiredScopes,
+    recordUse: false,
+    requestBody,
+    url,
+    method
+  });
+  if (authorization?.handled !== true) return null;
+  if (!apiKeyUploadAuthorizationValid(authorization, operation)) {
+    return Object.freeze({
+      ok: false,
+      status: authorization?.ok === true ? 403 : Number(authorization?.status || 401),
+      reasonCode: authorization?.ok === true ? "api_key_operation_denied" : String(authorization?.reasonCode || "api_key_invalid"),
+      error: authorization?.ok === true ? "API key does not authorize this upload operation." : String(authorization?.error || "API key authorization failed.")
+    });
+  }
+  const authSession: any = apiKeyUploadAuthSession(authorization.apiKeyAuthorization);
+  if (!authSession) {
+    return Object.freeze({ ok: false, status: 503, reasonCode: "api_key_authority_unavailable", error: "API key authorization context is unavailable." });
+  }
+  const initial: any = authorization.apiKeyAuthorization;
+  const actor: any = authSession.user;
+  return Object.freeze({
+    ok: true,
+    status: 200,
+    reasonCode: "api_key_upload_authorized",
+    credentialKind: "scoped_api_key",
+    apiKeyAuthorization: initial,
+    actor,
+    authSession,
+    revalidateAuthorization: async () : Promise<any> => {
+      const current: any = await toolSkillManagementProvider.revalidateApiKeyAuthorization?.(initial);
+      const next: any = current?.apiKeyAuthorization;
+      if (current?.ok !== true ||
+        next?.keyId !== initial.keyId ||
+        next?.workloadPrincipalId !== initial.workloadPrincipalId ||
+        next?.organizationNodeId !== initial.organizationNodeId ||
+        next?.lifecycleRevision !== initial.lifecycleRevision ||
+        next?.policyFingerprint !== initial.policyFingerprint) {
+        return Object.freeze({
+          ok: false,
+          status: Number(current?.status || 403),
+          reasonCode: String(current?.reasonCode || "api_key_revision_stale"),
+          error: "API key authorization changed before the upload effect."
+        });
+      }
+      return Object.freeze({ ok: true, actor, authSession });
+    }
+  });
+}
+
+function controllersForApiKeyUpload(controllers: any, authorization: any) : any {
+  if (!authorization?.ok || !controllers?.system) return controllers;
+  return Object.freeze({
+    ...controllers,
+    system: Object.freeze({
+      ...controllers.system,
+      verifyConsoleOrToolSkillExternalAuth: async () : Promise<any> => authorization
+    })
+  });
 }
 
 function isRoutineProbeNoise({ method, route, statusCode, completionStatus }: Record<string, any>) : any {
@@ -435,6 +525,27 @@ export function createHttpServerRequestHandler({
                 });
           requestBodyBytes = requestBody.length;
 
+          const uploadOperation: any = apiKeyUploadOperation(method, url.pathname);
+          const apiKeyUploadAuthorization: any = uploadOperation
+            ? await authorizeApiKeyUpload({
+                request,
+                requestBody,
+                url,
+                method,
+                operation: uploadOperation,
+                toolSkillManagementProvider
+              })
+            : null;
+          if (apiKeyUploadAuthorization?.ok === false) {
+            sendJson(response, apiKeyUploadAuthorization.status || 403, {
+              error: {
+                code: apiKeyUploadAuthorization.reasonCode,
+                message: apiKeyUploadAuthorization.error
+              }
+            });
+            return;
+          }
+
           if (await handlePluginConsoleAssetRequest({
             request,
             response,
@@ -528,7 +639,7 @@ export function createHttpServerRequestHandler({
 
           const handled: any = await registeredCoreProvider.dispatchRegisteredHttpOperation({
             operations: requestOperations,
-            controllers,
+            controllers: controllersForApiKeyUpload(controllers, apiKeyUploadAuthorization),
             method,
             url,
             request,

@@ -47,10 +47,13 @@ async function refreshDescription() {
   try {
     description.value = await loadStrategyDescription();
     if (!previewCapabilities.value.includes(selectedCapability.value)) selectedCapability.value = "";
-  } catch {
+  } catch (nextError: unknown) {
     description.value = null;
     selectedCapability.value = "";
-    descriptionError.value = "策略能力加载失败。";
+    descriptionError.value =
+      nextError instanceof Error && nextError.message
+        ? nextError.message
+        : "策略能力加载失败。";
   } finally {
     descriptionLoading.value = false;
   }
@@ -92,11 +95,21 @@ usePageRefreshHandler(
           <h3>可执行策略能力</h3>
           <p>{{ description?.protocolVersion || "尚无服务端能力描述" }}</p>
         </div>
-        <button class="table-action" type="button" :disabled="descriptionLoading" @click="refreshDescription">
-          {{ descriptionLoading ? "加载中" : "刷新" }}
-        </button>
       </div>
-      <ConsoleInlineAlert v-if="descriptionError" tone="danger">{{ descriptionError }}</ConsoleInlineAlert>
+      <ConsoleInlineAlert v-if="descriptionError" tone="danger">
+        {{ descriptionError }}
+        <template #action>
+          <button
+            class="table-action"
+            type="button"
+            :disabled="descriptionLoading"
+            :aria-busy="descriptionLoading"
+            @click="refreshDescription"
+          >
+            {{ descriptionLoading ? "重试中" : "重试" }}
+          </button>
+        </template>
+      </ConsoleInlineAlert>
       <ConsoleEmptyState
         v-else-if="!descriptionLoading && !description?.capabilities.length"
         compact

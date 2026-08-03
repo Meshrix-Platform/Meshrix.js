@@ -14,9 +14,9 @@
         "text": "Native installer proves credential-store-first custody on supported OS targets.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-process-identity-credential-store",
-            "report": "build/reports/mcp-process-identity-credential-store.json"
-          }
+            "acceptanceCommandId": "mcp-installer-convergence",
+            "report": "build/reports/mcp-installer-convergence.json"
+}
         ]
       },
       {
@@ -24,8 +24,8 @@
         "text": "Private-file fallback is accepted only for CI/controlled verification with explicit evidence.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-process-identity-credential-store",
-            "report": "build/reports/mcp-process-identity-credential-store.json"
+            "acceptanceCommandId": "mcp-installer-convergence",
+            "report": "build/reports/mcp-installer-convergence.json"
           }
         ]
       },
@@ -51,7 +51,7 @@
     "commit": {
       "repository": ".git",
       "message": "feat: complete mcp-native-installer-process-identity",
-      "target": "docs/architecture/MCP-NATIVE-INSTALLER.md, docs/functionality/SECURITY-AUTHORIZATION.md, packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh, packages/protocols/mcp/adapter/gateway-installer/package.json, packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts, tools/server-scripts/verify-mcp-process-identity-credential-store.ts"
+      "target": "docs/architecture/MCP-NATIVE-INSTALLER.md, docs/functionality/SECURITY-AUTHORIZATION.md, packages/protocols/mcp/adapter/native-installer/meshrix-mcp-install.sh, packages/protocols/mcp/adapter/gateway-installer/package.json, packages/protocols/mcp/adapter/gateway-installer/lib/cli/commands.ts, tools/server-scripts/verify-mcp-installer-convergence.ts"
     },
     "next": [
       "4ae4859b-963a-4340-996d-9e0ef62583f9"
@@ -74,8 +74,8 @@
         "text": "All capability-specific verification commands declared by the implementation checkpoint pass and produce their declared reports.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-process-identity-credential-store",
-            "report": "build/reports/mcp-process-identity-credential-store.json"
+            "acceptanceCommandId": "mcp-installer-convergence",
+            "report": "build/reports/mcp-installer-convergence.json"
           },
           {
             "acceptanceCommandId": "mcp-installer-convergence",

@@ -104,12 +104,12 @@ describe("runtime logger behavior", () : any => {
       user: {
         userId: "user-1",
         username: "Alice Walker",
-        roleId: "operator"
+        roleId: "maintainer"
       }
     });
     expect(actorSummary).toMatchObject({
       type: "console-user",
-      roleId: "operator"
+      roleId: "maintainer"
     });
     expect(actorSummary.userId).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
     expect(actorSummary.username).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
@@ -131,7 +131,7 @@ describe("runtime logger behavior", () : any => {
       actor: {
         userId: "user-1",
         username: "Alice Walker",
-        roleId: "operator"
+        roleId: "maintainer"
       },
       workspace: path.join(userDataPath, "workspace"),
       payload: {
@@ -503,12 +503,12 @@ describe("runtime logger behavior", () : any => {
       user: {
         userId: "user-123",
         username: "Alice Walker",
-        roleId: "operator"
+        roleId: "maintainer"
       }
     });
     expect(actorSummary).toMatchObject({
       type: "console-user",
-      roleId: "operator"
+      roleId: "maintainer"
     });
     expect(actorSummary.userId).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);
     expect(actorSummary.username).toMatch(/^hmac-sha256:[0-9a-f]{64}$/);

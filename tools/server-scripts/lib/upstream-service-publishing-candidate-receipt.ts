@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS } from "./release-journey-visual-contract.ts";
 
 export const UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_RECEIPT_SCHEMA: any =
   "v0.0.1:report:upstream-service-publishing-candidate-1";
@@ -13,25 +14,13 @@ const BASIC_CONFIG_PATH: any =
   "build/reports/upstream-service-publishing/upstream-service-basic-config.json";
 const SCREENSHOT_ROOT: any =
   "build/reports/upstream-service-publishing/screenshots/";
-const SCREENSHOT_IDS: readonly any[] = Object.freeze([
-  "console-authenticated",
-  "console-upstream-basic-config",
-  "console-upstream-operation-config",
-  "console-upstream-published",
-  "console-published-tool",
-  "console-token-authorization-pending",
-  "console-token-authorization-consumed",
-  "console-operation-approval-pending",
-  "console-operation-approval-completed",
-  "console-downstream-mcp-call"
-]);
 export const UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_ARTIFACT_PATHS: any =
   Object.freeze([
     CORE_REPORT_PATH,
     JOURNEY_REPORT_PATH,
     BASIC_CONFIG_PATH,
     HTML_REPORT_PATH,
-    ...SCREENSHOT_IDS.map((id?: any) : any => `${SCREENSHOT_ROOT}${id}.png`)
+    ...RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS.map((id?: any) : any => `${SCREENSHOT_ROOT}${id}.png`)
   ].sort());
 const SHA_PATTERN: any = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u;
 const DIGEST_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
@@ -51,6 +40,20 @@ function fail(code?: any, message?: any) : any {
   const error: Error & Record<string, any> = new Error(message);
   error.code = code;
   throw error;
+}
+
+export function candidateSourceLookupFailure(args: any[] = []) : Error & Record<string, any> {
+  const tagLookup: any = args[0] === "rev-parse" &&
+    /^refs\/tags\/[^\s]+\^\{commit\}$/u.test(String(args[1] || ""));
+  const error: Error & Record<string, any> = new Error(
+    tagLookup
+      ? "The release candidate tag is unavailable."
+      : "The release candidate source identity is unavailable."
+  );
+  error.code = tagLookup
+    ? "upstream_service_publishing_candidate_tag_unavailable"
+    : "upstream_service_publishing_candidate_source_unavailable";
+  return error;
 }
 
 function sha256(bytes?: any) : any {
@@ -186,7 +189,7 @@ export function createUpstreamServicePublishingCandidateReceipt({
 
   const journeyReport: any = parseJsonArtifact(artifacts, JOURNEY_REPORT_PATH);
   const coreReport: any = parseJsonArtifact(artifacts, CORE_REPORT_PATH);
-  const expectedScreenshotPaths: any = SCREENSHOT_IDS.map(
+  const expectedScreenshotPaths: any = RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS.map(
     (id?: any) : any => `${SCREENSHOT_ROOT}${id}.png`
   );
   const expectedPaths: any = UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_ARTIFACT_PATHS;
@@ -208,7 +211,7 @@ export function createUpstreamServicePublishingCandidateReceipt({
     || journeyReport?.failure !== null && journeyReport?.failure !== undefined
     || journeyReport?.cleanup?.performed !== true
     || !Array.isArray(journeyReport?.visualEvidence)
-    || journeyReport.visualEvidence.length !== SCREENSHOT_IDS.length
+    || journeyReport.visualEvidence.length !== RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS.length
     || journeyReport?.candidate?.releaseTag !== releaseTag
     || journeyReport?.candidate?.sourceCommit !== sourceCommit
     || journeyReport?.candidate?.sourceTree !== sourceTree
@@ -220,7 +223,7 @@ export function createUpstreamServicePublishingCandidateReceipt({
     );
   }
 
-  for (const [index, id] of SCREENSHOT_IDS.entries()) {
+  for (const [index, id] of RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS.entries()) {
     const evidence: any = journeyReport.visualEvidence[index];
     const artifactPath: any = expectedScreenshotPaths[index];
     const bytes: any = asBuffer(artifacts.get(artifactPath));

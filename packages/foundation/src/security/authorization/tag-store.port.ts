@@ -46,7 +46,7 @@
  * @layer foundation/security
  */
 
-export const TAG_STORE_PORT_VERSION: any = "v0.0.1:authorization:tag-store-port-0.4.0";
+export const TAG_STORE_PORT_VERSION: any = "v0.0.1:authorization:tag-store-port-0.5.0";
 
 /**
  * @typedef {object} TagStoreProviderDiagnostic
@@ -88,6 +88,8 @@ export const TAG_STORE_PORT_VERSION: any = "v0.0.1:authorization:tag-store-port-
  * @property {(agentId: string) => object | null} getAuthorizationAgentBinding
  * @property {() => Array<object>} listAuthorizationAgentBindings
  * @property {(projectionKind: string, id: string) => boolean} hasProjection
+ * @property {() => object} getOrganizationGovernance
+ * @property {(draft: object, expectedRevision: number) => object} publishOrganizationGovernance
  * @property {() => void} close
  */
 
@@ -158,7 +160,7 @@ export function validateTagStoreProvider(store?: any) : any {
     "upsertAuthorizationDepartment", "getAuthorizationDepartment", "listAuthorizationDepartments",
     "upsertAuthorizationAgentGroup", "getAuthorizationAgentGroup", "listAuthorizationAgentGroups",
     "upsertAuthorizationAgentBinding", "getAuthorizationAgentBinding", "listAuthorizationAgentBindings",
-    "hasProjection",
+    "hasProjection", "getOrganizationGovernance", "publishOrganizationGovernance",
   ];
   const missing: any = required.filter((method?: any) : any => typeof store?.[method] !== "function");
   return { valid: missing.length === 0, missing };
@@ -223,6 +225,8 @@ export function createNoopTagStoreProvider() : any {
     getAuthorizationAgentBinding: failClosed("getAuthorizationAgentBinding"),
     listAuthorizationAgentBindings: failClosed("listAuthorizationAgentBindings"),
     hasProjection: failClosed("hasProjection"),
+    getOrganizationGovernance: failClosed("getOrganizationGovernance"),
+    publishOrganizationGovernance: failClosed("publishOrganizationGovernance"),
     close: () : any => {}
   };
 }

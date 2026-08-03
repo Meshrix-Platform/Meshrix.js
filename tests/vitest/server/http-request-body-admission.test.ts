@@ -6,8 +6,7 @@ const handleMeshrixMcpHttpRequestMock: any = vi.hoisted(() : any => vi.fn(async 
 
 vi.mock("#meshrix/protocols/mcp/adapter/http-mcp-adapter", () : any => ({
   configureMcpNotificationBus: vi.fn(),
-  handleMeshrixMcpHttpRequest: handleMeshrixMcpHttpRequestMock,
-  MCP_LOCAL_AUTHORIZATION_MAX_BODY_BYTES: 128 * 1024
+  handleMeshrixMcpHttpRequest: handleMeshrixMcpHttpRequestMock
 }));
 
 import {
@@ -121,25 +120,6 @@ beforeEach(() : any => {
 });
 
 describe("HTTP request body admission", () : any => {
-  it("applies a narrow body limit before unauthenticated MCP device requests reach the provider", async () : Promise<any> => {
-    const dispatchRegisteredHttpOperation: any = vi.fn();
-    const handler: any = createHandler({
-      requestBodyAdmissionController: createRequestBodyAdmissionController(),
-      dispatchRegisteredHttpOperation
-    });
-    const request: any = attachHttpRequestMetadata(Readable.from([]), {
-      path: "/api/mcp/local-grant/requests",
-      contentLength: 128 * 1024 + 1
-    });
-    const response: any = new CapturedResponse();
-
-    await handler(request, response);
-
-    expect(response.statusCode).toBe(413);
-    expect(handleMeshrixMcpHttpRequestMock).not.toHaveBeenCalled();
-    expect(dispatchRegisteredHttpOperation).not.toHaveBeenCalled();
-  });
-
   it("rejects an oversized upload chunk before allocating or dispatching its request body", async () : Promise<any> => {
     const dispatchRegisteredHttpOperation: any = vi.fn();
     const handler: any = createHandler({

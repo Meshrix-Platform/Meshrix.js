@@ -9,7 +9,6 @@ import {
   resolveEffectiveConsoleLocale,
 } from "../../../i18n/console";
 import type { HistorySessionPanelItem } from "../../../types/app";
-import type { McpAuthorizationRequest } from "../../../lib/authorization-governance-client";
 import type { OperationPermissionPendingOperation } from "../../../lib/operation-permission-client";
 import type { WsWorkspace } from "../../../types/workspaces";
 
@@ -60,6 +59,9 @@ const directoryToggleLabel = computed(() =>
     ? directoryText("收起索引栏", "Collapse Index")
     : directoryText("展开索引栏", "Expand Index"),
 );
+const directoryResizeLabel = computed(() =>
+  directoryText("拖拽调整索引栏宽度", "Drag to resize index panel"),
+);
 
 const workspaceItems = computed<DirectoryItem[]>(() =>
   workspacesConsole.workspaces.value.map((workspace: WsWorkspace) => ({
@@ -87,10 +89,7 @@ watch(
   activeSideNavDirectory,
   (directory: any) => {
     if (directory === "approval") {
-      void Promise.all([
-        approvalFlowConsole.refreshMcpAuthorizationRequests(),
-        approvalFlowConsole.refreshOperationPermissionPendingOperations(),
-      ]);
+      void approvalFlowConsole.refreshOperationPermissionPendingOperations();
     }
     if (directory === "workspaces") {
       void workspacesConsole.load();
@@ -99,11 +98,9 @@ watch(
   { immediate: true },
 );
 
-function authorizationStatusLabel(status: unknown) {
+function operationApprovalStatusLabel(status: unknown) {
   if (status === "pending") return directoryText("待决定", "Pending");
   if (status === "approved") return directoryText("已批准", "Approved");
-  if (status === "issuing") return directoryText("交付中", "Issuing");
-  if (status === "consumed") return directoryText("已交付", "Delivered");
   if (status === "rejected") return directoryText("已拒绝", "Rejected");
   if (status === "completed") return directoryText("已处理", "Processed");
   if (status === "expired") return directoryText("已过期", "Expired");
@@ -121,26 +118,14 @@ function approvalRiskLabel(risk: unknown) {
 }
 
 function approvalItems() {
-  const authorizationItems = approvalFlowConsole.mcpAuthorizationRequests.value.map((request: McpAuthorizationRequest) => ({
-    id: `authorization:${request.requestId}`,
-    title: request.clientName || request.requestId,
-    badges: [
-      { label: "MCP", tone: "info" },
-      { label: authorizationStatusLabel(request.status), tone: statusTone(request.status) },
-      timeBadge(recordTimestamp(request)),
-    ].filter(Boolean) as DirectoryBadge[],
-    statusKey: String(request.status || ""),
-    approvalFilter: request.status === "pending" ? "pending" as const : "all" as const,
-    anchorId: `approval-authorization:${request.requestId}`,
-  }));
-  const pendingOperationItems = approvalFlowConsole.operationPermissionPendingOperations.value.map((
+  return approvalFlowConsole.operationPermissionPendingOperations.value.map((
     operation: OperationPermissionPendingOperation,
   ) => ({
     id: `pending-operation:${operation.pendingOperationId}`,
     title: operationApprovalTitle(operation),
     badges: [
       { label: "OP", tone: "info" },
-      { label: authorizationStatusLabel(operation.status), tone: statusTone(operation.status) },
+      { label: operationApprovalStatusLabel(operation.status), tone: statusTone(operation.status) },
       operation.risk ? { label: approvalRiskLabel(operation.risk), tone: "neutral" } : null,
       timeBadge(recordTimestamp(operation)),
     ].filter(Boolean) as DirectoryBadge[],
@@ -148,7 +133,6 @@ function approvalItems() {
     approvalFilter: operation.status === "pending" ? "pending" as const : "all" as const,
     anchorId: `approval-pendingOperation:${operation.pendingOperationId}`,
   }));
-  return [...authorizationItems, ...pendingOperationItems];
 }
 
 async function scrollToAnchor(anchorId?: string) {
@@ -378,7 +362,7 @@ onBeforeUnmount(stopDirectoryResize);
       :aria-valuemin="sideNavDirectoryMinWidth"
       :aria-valuenow="sideNavDirectoryWidth"
       tabindex="0"
-      title="拖拽调整索引栏宽度"
+      :title="directoryResizeLabel"
       @pointerdown="startDirectoryResize"
       @keydown="handleResizeKeydown"
     ></div>

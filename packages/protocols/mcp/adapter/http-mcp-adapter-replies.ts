@@ -5,6 +5,7 @@ import {
   mcpEnvelopePublic,
   publicMcpEnvelopeValue
 } from "./http-mcp-adapter-response.ts";
+import { mcpAuthorizationId } from "./http-mcp-adapter-session.ts";
 
 function firstString(values: any = []) : any {
   for (const value of values) {
@@ -253,7 +254,7 @@ export function broadcastAudienceCatalogInvalidation({
 }
 
 export function broadcastMcpOperationReply({ envelope, operation, status, target, exchange = null, payload = {}, error = null, authorization = null, workspaceDirectory = null }: Record<string, any>) : any {
-  const grantId: any = authorization?.grant?.id || "";
+  const grantId: any = mcpAuthorizationId(authorization);
   const message: any = status === "completed"
     ? `已完成 ${operation} 任务`
     : `${operation} 任务执行失败`;

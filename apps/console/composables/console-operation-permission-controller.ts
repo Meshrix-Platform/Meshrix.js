@@ -18,7 +18,7 @@ import type { OptionBarOption } from "../types/app";
 import { createConsoleToolGrantsController } from "./console-tool-grants-controller";
 
 type ConsoleOperationPermissionControllerOptions = {
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   setBusy: (key: string) => void;
 };
@@ -252,7 +252,7 @@ export function createConsoleOperationPermissionController(
         nextError instanceof Error ? nextError.message : "刷新智能体工具失败。";
     } finally {
       if (showBusy) {
-        options.clearAllBusy();
+        options.clearBusy("operation-permission");
       }
     }
   }
@@ -278,7 +278,7 @@ export function createConsoleOperationPermissionController(
     toolGrants,
     updateGrant,
   } = createConsoleToolGrantsController({
-    clearAllBusy: options.clearAllBusy,
+    clearBusy: options.clearBusy,
     error: options.error,
     refreshOperationPermission,
     setBusy: options.setBusy,
@@ -311,7 +311,7 @@ export function createConsoleOperationPermissionController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "工具策略预览失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("tool-policy-preview");
     }
   }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AgentModelOptionBar from "../../components/AgentModelOptionBar.vue";
-import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
+import FeatureToggle from "../../components/FeatureToggle.vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
 import StatusPill from "../../components/StatusPill.vue";
 import "./agent-assignment/agent-assignment.css";
@@ -190,9 +190,10 @@ const {
             </div>
           </div>
           <div class="module-assignment-controls">
-            <BinaryCheckbox
+            <FeatureToggle
               :model-value="moduleNeedsIntelligence(moduleDefinition.id)"
               label="启用智能体"
+              :aria-label="moduleNeedsIntelligence(moduleDefinition.id) ? `停用${moduleDefinition.label}智能体` : `启用${moduleDefinition.label}智能体`"
               @update:model-value="updateModuleEnabled(moduleDefinition.id, Boolean($event))"
             />
             <OptionBar

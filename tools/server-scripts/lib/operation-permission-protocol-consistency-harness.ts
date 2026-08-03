@@ -4,14 +4,8 @@ import os from "node:os";
 import path from "node:path";
 
 import { seedVerifierUpstreamServices, verifierOpaqueServiceId } from "./upstream-gateway-verifier-publication.ts";
-import {
-  createProtocolConsistencyTokenHeaders,
-  parseMcpSseBlock
-} from "./operation-permission-protocol-consistency-helpers.ts";
-import {
-  createVerifierMcpProcessIdentity
-} from "../mcp-process-identity-test-helper.ts";
-import { issueVerifierLocalMcpGrant } from "./local-mcp-device-authorization.ts";
+import { createProtocolConsistencyTokenHeaders } from "./operation-permission-protocol-consistency-helpers.ts";
+import { issueVerifierMcpApiKey } from "./verifier-mcp-api-key.ts";
 
 export const OPERATION_PERMISSION_PROTOCOL_CONSISTENCY: Readonly<Record<string, any>> = Object.freeze({
   reportPath: "build/reports/operation-permission-protocol-consistency.json",
@@ -72,7 +66,6 @@ export const OPERATION_PERMISSION_PROTOCOL_CONSISTENCY: Readonly<Record<string, 
 export async function createOperationPermissionProtocolConsistencyHarness() : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-operation-permission-protocol-"));
   const dynamicSecretNeedles: any = new Set<any>([userDataPath, os.homedir()].filter(Boolean));
-  const mcpIdentityByToken: any = new Map<any, any>();
   const report: Record<string, any> = {
     schemaVersion: "v0.0.1:operation-permission:protocol-consistency-report-1",
     verifier: "tools/server-scripts/verify-operation-permission-protocol-consistency.ts",
@@ -80,8 +73,8 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     algorithm: {
       registration: "Compare the generated operation registry, protocol definitions, and generated capability artifact with the required tag_management.* and Operation Permission operation set.",
       parity: "Start a real local HTTP server and exercise the same Operation Permission runtime through HTTP, JSON-RPC console passthrough, and MCP tools/call.",
-      discoveryRefresh: "Open a real MCP SSE stream, update a live grant and a live tag governance policy, then require notifications/tools/list_changed and refreshed meshrix.capabilities.list output.",
-      destructiveChecks: "Insufficient grant, stale policy approval, revoked grant, per-grant rate limit, malformed authorization surface, and unauthorized discovery are checked without mocks or synthetic stores."
+      discoveryRefresh: "Keep a real scoped API Key policy immutable while refreshing meshrix.capabilities.list after an unrelated tag governance update.",
+      destructiveChecks: "Insufficient credential scope, stale Operation Permission Grant approval, governed API Key approval, revocation, rate limiting, malformed authorization, and unauthorized discovery are checked without mocks or synthetic stores."
     },
     tests: [],
     destructiveTests: [],
@@ -91,8 +84,6 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
   let server: any = null;
   let fixtureUrl: any = "";
   const tokenHeaders: any = createProtocolConsistencyTokenHeaders({
-    identityByToken: mcpIdentityByToken,
-    serverUrl: () : any => server.url,
     agentProfileId: OPERATION_PERMISSION_PROTOCOL_CONSISTENCY.agentProfileId
   });
 
@@ -250,46 +241,38 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     });
   }
 
-  async function localMcpGrant(input: Record<string, any> = {}) : Promise<any> {
-    const verifierIdentity: any = createVerifierMcpProcessIdentity({
-      target: "codex",
-      label: "verify-operation-permission-protocol"
-    });
-    const response: any = await issueVerifierLocalMcpGrant({
+  async function verifierApiKey(input: Record<string, any> = {}) : Promise<any> {
+    const response: any = await issueVerifierMcpApiKey({
       server,
-      grantRequest: {
+      access: {
         targets: ["codex"],
+        label: "Operation Permission protocol verifier",
         connectorVersion: "verify-operation-permission-protocol-consistency",
         agentProfileId: OPERATION_PERMISSION_PROTOCOL_CONSISTENCY.agentProfileId,
-        processIdentity: verifierIdentity.request,
         ...input
       }
     });
-    const token: any = String(response.payload.token || "");
-    const grantId: any = String(response.payload.grant?.id || "");
-    assert.ok(token, "local MCP grant did not return a token");
-    assert.ok(grantId, "local MCP grant did not return a grant id");
-    assert.ok(response.payload.processIdentity?.clientIdentityPackage, "local MCP grant did not return a process identity package");
-    trackSecret(token, grantId, response.payload.grant?.tokenPrefix, response.payload.tokenPrefix);
-    mcpIdentityByToken.set(token, {
-      identity: verifierIdentity,
-      clientIdentityPackage: response.payload.processIdentity.clientIdentityPackage
-    });
-    return { token, grantId, grant: response.payload.grant };
+    assert.ok(response.apiKey, "API Key issuance did not return plaintext to the direct verifier caller");
+    assert.ok(response.record.keyId, "API Key issuance did not return a bounded record identifier");
+    trackSecret(response.apiKey, response.record.keyId);
+    return { token: response.apiKey, keyId: response.record.keyId, record: response.record };
   }
 
-  async function consoleGrant(input: Record<string, any> = {}) : Promise<any> {
+  async function issueConsoleOperationGrant(input: Record<string, any> = {}) : Promise<any> {
     const response: any = await fetchJson("/api/operation-permission/v1/grants", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-meshrix-safety-confirm": "true" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-meshrix-safety-confirm": "true"
+      },
       body: JSON.stringify(input),
       allowSecretPayload: true,
       expectedStatuses: [201]
     });
     const token: any = String(response.payload.token || "");
     const grantId: any = String(response.payload.grant?.id || "");
-    assert.ok(token, "grant create did not return a token");
-    assert.ok(grantId, "grant create did not return a grant id");
+    assert.ok(token, "Operation Permission Grant creation did not return a token");
+    assert.ok(grantId, "Operation Permission Grant creation did not return a Grant identifier");
     trackSecret(token, grantId, response.payload.grant?.tokenPrefix);
     return { token, grantId, grant: response.payload.grant };
   }
@@ -334,7 +317,7 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     operation?: any,
     input: Record<string, any> = {},
     id: any = 1,
-    expectedStatuses: any = [200, 202, 400, 401, 403, 429]
+    expectedStatuses: any = [200, 202, 400, 401, 403, 410, 429]
   ) : Promise<any> {
     const body: any = JSON.stringify({
       jsonrpc: "2.0",
@@ -420,8 +403,8 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     if (text.includes("rate_limited") || text.includes("rate limited")) {
       return "rate_limited";
     }
-    if (text.includes("grant_revoked") || text.includes("invalid_token") || text.includes("grant_disabled")) {
-      return "revoked_grant";
+    if (text.includes("api_key_inactive") || text.includes("grant_revoked") || text.includes("invalid_token") || text.includes("grant_disabled")) {
+      return "revoked_credential";
     }
     if (payload.error || status === "denied" || text.includes("missing_scopes") || text.includes("missing_capabilities") || text.includes("policy_denied")) {
       return "deny";
@@ -433,10 +416,10 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     return collectStrings(payload).some((entry?: any) : any => entry === "stale" || entry.includes("grantPolicyState\":\"stale"));
   }
 
-  async function callAllChannels({ token, toolId, mcpToolName, operation, input, idBase = 100 }: Record<string, any>) : Promise<any> {
+  async function callAllChannels({ token, mcpToken = token, toolId, mcpToolName, operation, input, idBase = 100 }: Record<string, any>) : Promise<any> {
     const httpResult: any = await operationHttp(token, toolId, input);
     const rpcResult: any = await operationRpc(token, toolId, input, idBase + 1);
-    const mcpResult: any = await callMcp(token, mcpToolName, operation, input, idBase + 2);
+    const mcpResult: any = await callMcp(mcpToken, mcpToolName, operation, input, idBase + 2);
     const payloads: Record<string, any> = {
       http: publicPayload("http", httpResult),
       rpc: publicPayload("rpc", rpcResult),
@@ -458,75 +441,6 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     const payload: any = await callMcp(token, "meshrix.discovery", "meshrix.capabilities.list", {}, id);
     assert.equal(payload.error, undefined, JSON.stringify(safeEvidence(payload.error || {})));
     return mcpPayload(payload);
-  }
-
-  async function openMcpSse(token?: any) : Promise<any> {
-    const controller: any = new AbortController();
-    const events: any[] = [];
-    let buffer: any = "";
-    const route: any = "/mcp?capability=upstream.catalog.list_changed";
-    const stream: any = fetch(`${server.url}${route}`, {
-      method: "GET",
-      headers: tokenHeaders(token, {
-        method: "GET",
-        route,
-        body: "",
-        extraHeaders: {
-          "X-Meshrix-Mcp-Proxy-Session": "protocolconsistency01"
-        }
-      }),
-      signal: controller.signal
-    }).then(async (response?: any) : Promise<any> => {
-      assert.equal(response.status, 200, "MCP SSE stream did not open");
-      const reader: any = response.body.getReader();
-      const decoder: any = new TextDecoder();
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
-        }
-        buffer += decoder.decode(value, { stream: true });
-        let boundary: any = buffer.indexOf("\n\n");
-        while (boundary >= 0) {
-          const block: any = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          const parsed: any = parseMcpSseBlock(block);
-          if (parsed) {
-            events.push(parsed);
-          }
-          boundary = buffer.indexOf("\n\n");
-        }
-      }
-    }).catch((error?: any) : any => {
-      if (error?.name !== "AbortError") {
-        throw error;
-      }
-    });
-
-    async function waitForReasonCode(reasonCode?: any, timeoutMs: any = 5000) : Promise<any> {
-      const deadline: any = Date.now() + timeoutMs;
-      while (Date.now() < deadline) {
-        const found: any = events.find((event?: any) : any =>
-          event?.method === "notifications/tools/list_changed" &&
-            String(event?.params?.change?.reasonCode || "") === reasonCode
-        );
-        if (found) {
-          return found;
-        }
-        await new Promise((resolve?: any) : any => setTimeout(resolve, 50));
-      }
-      throw new Error(`Timed out waiting for MCP list_changed reason ${reasonCode}`);
-    }
-
-    await new Promise((resolve?: any) : any => setTimeout(resolve, 150));
-    return {
-      events,
-      waitForReasonCode,
-      close: async () : Promise<any> => {
-        controller.abort();
-        await stream;
-      }
-    };
   }
 
   async function cleanup({ fixture = null, restoreCapabilityKernelEnv = null }: Record<string, any> = {}) : Promise<any> {
@@ -563,8 +477,8 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
       }
     },
     api,
-    localMcpGrant,
-    consoleGrant,
+    verifierApiKey,
+    issueConsoleOperationGrant,
     operationHttp,
     operationRpc,
     callMcp,
@@ -575,7 +489,6 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     callAllChannels,
     assertSameDecision,
     capabilities,
-    openMcpSse,
     cleanup
   };
 }

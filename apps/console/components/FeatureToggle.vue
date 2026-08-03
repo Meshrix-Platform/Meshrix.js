@@ -5,11 +5,13 @@ const props = withDefaults(defineProps<{
   modelValue: boolean;
   onLabel?: string;
   offLabel?: string;
+  label?: string;
   ariaLabel?: string;
   disabled?: boolean;
 }>(), {
   onLabel: "已开启",
   offLabel: "已关闭",
+  label: "",
   ariaLabel: "",
   disabled: false,
 });
@@ -46,6 +48,7 @@ function toggle() {
     <span class="feature-toggle-track" aria-hidden="true">
       <span class="feature-toggle-knob" />
     </span>
+    <span v-if="label" class="feature-toggle-label">{{ label }}</span>
   </button>
 </template>
 
@@ -53,6 +56,7 @@ function toggle() {
 .feature-toggle {
   display: inline-flex;
   align-items: center;
+  gap: var(--space-2);
   padding: 0;
   border: 0;
   background: transparent;
@@ -99,5 +103,17 @@ function toggle() {
 
 .feature-toggle[data-enabled="true"] .feature-toggle-knob {
   transform: translateX(18px);
+}
+
+.feature-toggle-label {
+  color: var(--text-secondary);
+  font-size: var(--text-md);
+  font-weight: var(--font-medium);
+  line-height: var(--leading-tight);
+  white-space: nowrap;
+}
+
+.feature-toggle[data-enabled="true"] .feature-toggle-label {
+  color: var(--text-primary);
 }
 </style>

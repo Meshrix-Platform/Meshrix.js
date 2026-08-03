@@ -2,9 +2,10 @@ import {
   saveSettings
 } from "#meshrix/product-api";
 import {
-  assertUploadSessionStoreBinding
+  assertBoundUploadSessionStore
 } from "../state/upload-session-store.ts";
 import { resolveArchiveBatchIdentity } from "./archive-batch-id.ts";
+
 
 const DIRECT_TEXT_MAX_BYTES: any = 1024 * 1024;
 const CANONICAL_OBJECT_MAX_BYTES: any = 512 * 1024 * 1024;
@@ -19,6 +20,27 @@ const CANONICAL_OBJECT_FIELDS: any = new Set<any>([
 ]);
 const OPAQUE_OBJECT_ID_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const SHA256_PATTERN: any = /^[a-f0-9]{64}$/;
+const UPLOAD_CONSUMPTION_RECEIPT_ID_PATTERN: any =
+  /^upload_consumption_receipt_[a-f0-9]{32}$/u;
+const UPLOAD_SOURCE_METADATA_FORBIDDEN_KEYS: ReadonlySet<string> = new Set([
+  "absolutepath",
+  "buffer",
+  "bytes",
+  "ciphertextbytes",
+  "ciphertextbytesize",
+  "custodyref",
+  "envelopedigest",
+  "filepath",
+  "hostpath",
+  "key",
+  "objectid",
+  "rawobjectid",
+  "sourcepath",
+  "stagedpath",
+  "storagepath",
+  "storagerelativepath",
+  "stream"
+]);
 
 function firstText(...values: any[]) : any {
   for (const value of values) {
@@ -70,6 +92,37 @@ function isPlainObject(value?: any) : any {
   }
   const prototype: any = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function sanitizeUploadSourceMetadataValue(value?: any, depth: any = 0) : any {
+  if (depth > 8) return null;
+  if (value === null || typeof value === "boolean" || typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return Buffer.byteLength(value, "utf8") <= 4096 ? value : "";
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, 256).map((item?: any) : any =>
+      sanitizeUploadSourceMetadataValue(item, depth + 1)
+    );
+  }
+  if (!isPlainObject(value)) return null;
+  const sanitized: Record<string, any> = {};
+  for (const [key, item] of (Object.entries(value) as [string, any][])) {
+    if (UPLOAD_SOURCE_METADATA_FORBIDDEN_KEYS.has(key.toLowerCase())) continue;
+    sanitized[key] = sanitizeUploadSourceMetadataValue(item, depth + 1);
+  }
+  return sanitized;
+}
+
+function sanitizeUploadSourceMetadata(value?: any) : any {
+  if (!isPlainObject(value)) return {};
+  const sanitized: any = sanitizeUploadSourceMetadataValue(value);
+  const serialized: any = JSON.stringify(sanitized);
+  return Buffer.byteLength(serialized, "utf8") <= 64 * 1024
+    ? sanitized
+    : {};
 }
 
 function normalizeStorageRelativePath(value?: any) : any {
@@ -367,10 +420,9 @@ function canonicalObjectPipelineSource(source?: any, defaults: Record<string, an
 }
 
 function persistedUploadSource(file: Record<string, any> = {}, receipt?: any, index: any = 0, defaults: Record<string, any> = {}) : any {
+  const logicalObject: any = receipt.objects[index];
   const originalFileName: any = firstText(file.originalFileName, file.name, `upload-${index + 1}`);
-  const sourceMetadata: any = file.sourceMetadata && typeof file.sourceMetadata === "object" && !Array.isArray(file.sourceMetadata)
-    ? file.sourceMetadata
-    : {};
+  const sourceMetadata: any = sanitizeUploadSourceMetadata(file.sourceMetadata);
   return {
     id: `${receipt.receiptId}:${index}`,
     name: firstText(file.name, originalFileName),
@@ -378,8 +430,8 @@ function persistedUploadSource(file: Record<string, any> = {}, receipt?: any, in
     kind: "upload-consumption-receipt-object",
     uploadConsumptionReceiptId: receipt.receiptId,
     receiptObjectIndex: index,
-    contentSha256: file.contentDigest,
-    contentByteSize: file.byteSize,
+    contentSha256: logicalObject.sha256,
+    contentByteSize: logicalObject.byteSize,
     sourceCreatedAt: "",
     sourceUpdatedAt: "",
     sourceCollectedAt: firstText(file.capturedAt, defaults.generatedAt),
@@ -388,10 +440,39 @@ function persistedUploadSource(file: Record<string, any> = {}, receipt?: any, in
     providerId: firstText(file.providerId, defaults.providerId),
     externalId: firstText(file.externalId, defaults.externalId),
     syncBatchId: firstText(file.syncBatchId, defaults.syncBatchId),
-    contentHash: firstText(file.contentHash, file.contentDigest),
+    contentHash: firstText(file.contentHash, logicalObject.sha256),
     capturedAt: firstText(file.capturedAt, defaults.capturedAt, defaults.generatedAt),
     sourceMetadata
   };
+}
+
+function validateUploadConsumptionReceipt(
+  receipt?: any,
+  payload?: any,
+  uploadSessionFiles: any[] = []
+) : any {
+  if (
+    !receipt ||
+    !UPLOAD_CONSUMPTION_RECEIPT_ID_PATTERN.test(String(receipt.receiptId || "")) ||
+    receipt.sessionId !== payload.uploadSessionId ||
+    !Array.isArray(receipt.objects) ||
+    receipt.objects.length !== uploadSessionFiles.length ||
+    receipt.objects.some((logicalObject?: any, index?: any) : any =>
+      Object.keys(logicalObject || {}).sort().join(",") !==
+        "byteSize,objectId,sha256" ||
+      !OPAQUE_OBJECT_ID_PATTERN.test(String(logicalObject?.objectId || "")) ||
+      logicalObject?.sha256 !== uploadSessionFiles[index]?.contentDigest ||
+      Number(logicalObject?.byteSize) !== Number(uploadSessionFiles[index]?.byteSize) ||
+      !Number.isSafeInteger(Number(logicalObject?.byteSize)) ||
+      Number(logicalObject?.byteSize) < 0
+    )
+  ) {
+    throw adoptionError(
+      "upload_session_adoption_receipt_invalid",
+      "Upload session adoption returned an invalid durable receipt."
+    );
+  }
+  return receipt;
 }
 
 function adoptionError(code?: any, message?: any, cause: any = null) : any {
@@ -408,12 +489,27 @@ function validateUploadAdoptionBinding(payload?: any, files?: any) : any {
   const expectedFiles: any = Array.isArray(receipt?.files)
     ? receipt.files
     : [];
+  const owner: any = uploadSessionOwnerFromPayload(payload);
   if (
+    !Array.isArray(files) ||
+    files.length === 0 ||
+    !Object.isFrozen(files) ||
+    files.some((file?: any) : any => !Object.isFrozen(file)) ||
     !receipt ||
     expectedFiles.length !== files.length ||
     Number(receipt.fileCount) !== files.length ||
+    firstText(receipt.archiveBatchId) !== firstText(files[0]?.archiveBatchId) ||
+    firstText(receipt.ownerSubjectId) !== owner.subjectId ||
+    firstText(receipt.ownerUserId) !== owner.userId ||
+    firstText(receipt.ownerUsername) !== owner.username ||
+    firstText(receipt.ownerRoleId) !== owner.roleId ||
+    firstText(receipt.ownerTenantId) !== owner.tenantId ||
     expectedFiles.some((expected?: any, index?: any) : any =>
+      firstText(files[index]?.archiveBatchId) !== firstText(receipt.archiveBatchId) ||
+      firstText(expected?.name) !== firstText(files[index]?.name) ||
+      firstText(expected?.relativePath) !== firstText(files[index]?.relativePath) ||
       expected?.sha256 !== files[index]?.contentDigest ||
+      files[index]?.sha256 !== files[index]?.contentDigest ||
       Number(expected?.byteSize) !== Number(files[index]?.byteSize)
     )
   ) {
@@ -426,7 +522,9 @@ function validateUploadAdoptionBinding(payload?: any, files?: any) : any {
     file?.custodyState !== "sealed_no_run" ||
     !file?.custodyRef ||
     !SHA256_PATTERN.test(String(file?.contentDigest || "")) ||
-    !SHA256_PATTERN.test(String(file?.envelopeDigest || ""))
+    !SHA256_PATTERN.test(String(file?.envelopeDigest || "")) ||
+    !Number.isSafeInteger(Number(file?.byteSize)) ||
+    Number(file?.byteSize) < 0
   )) {
     throw adoptionError(
       "upload_session_adoption_not_sealed",
@@ -447,7 +545,7 @@ async function resolveBoundUploadSessionFiles(
     );
     return validateUploadAdoptionBinding(payload, files);
   } catch (error: any) {
-    if (error?.code) throw error;
+    if (error?.code && error.code !== "upload_session_incomplete") throw error;
     const message: any = String(error?.message || "");
     if (message.includes("尚未完成")) {
       throw adoptionError(
@@ -487,18 +585,22 @@ async function persistUploadSessionSources({
     error.code = "upload_session_storage_provider_unavailable";
     throw error;
   }
-  const receipt: any = await storageProvider.commitUploadConsumptionReceipt({
-    sessionId: payload.uploadSessionId,
-    owner: uploadSessionOwnerFromPayload(payload),
-    custodyDescriptors: uploadSessionFiles.map((file?: any, index?: any) : any => ({
-      resourceRef: `upload-resource:${payload.uploadSessionId}:${index}`,
-      custodyRef: file.custodyRef,
-      custodyState: file.custodyState,
-      contentDigest: file.contentDigest,
-      envelopeDigest: file.envelopeDigest,
-      byteSize: file.byteSize
-    }))
-  });
+  const receipt: any = validateUploadConsumptionReceipt(
+    await storageProvider.commitUploadConsumptionReceipt({
+      sessionId: payload.uploadSessionId,
+      owner: uploadSessionOwnerFromPayload(payload),
+      custodyDescriptors: uploadSessionFiles.map((file?: any, index?: any) : any => ({
+        resourceRef: `upload-resource:${payload.uploadSessionId}:${index}`,
+        custodyRef: file.custodyRef,
+        custodyState: file.custodyState,
+        contentDigest: file.contentDigest,
+        envelopeDigest: file.envelopeDigest,
+        byteSize: file.byteSize
+      }))
+    }),
+    payload,
+    uploadSessionFiles
+  );
   const defaults: any = sourceDefaults(payload, generatedAt);
   return {
     receipt,
@@ -547,7 +649,7 @@ function collectIncomingSources({
   const storedWithoutTextCount: any = persistedUploadSources.filter((source?: any) : any => !sourceText(source)).length;
   if (storedWithoutTextCount > 0) {
     warnings.push(
-      `${storedWithoutTextCount} uploaded file(s) were stored as canonical objects without normalized text; upstream processing may submit normalized text separately.`
+      `${storedWithoutTextCount} uploaded file(s) were adopted as sealed custody references without normalized text; upstream processing may submit normalized text separately.`
     );
   }
   if (sources.length === 0) {
@@ -568,8 +670,19 @@ export function createJobPipeline({
   signal = null
 }: Record<string, any>) : any {
   const boundUploadSessionStore: any = payload?.uploadSessionId
-    ? assertUploadSessionStoreBinding(uploadSessionStore, userDataPath)
+    ? assertBoundUploadSessionStore(uploadSessionStore, { userDataPath })
     : null;
+  if (
+    payload?.uploadSessionId &&
+    (!storageProvider ||
+      typeof storageProvider.commitUploadConsumptionReceipt !== "function")
+  ) {
+    const error: Error & Record<string, any> = new Error(
+      "Upload session persistence requires the canonical storage provider."
+    );
+    error.code = "upload_session_storage_provider_unavailable";
+    throw error;
+  }
   const archiveBatchIdentity: any = resolveArchiveBatchIdentity({
     archiveBatchId:
       payload?.checkpointReceipt?.archiveBatchId ||
@@ -615,6 +728,15 @@ export function createJobPipeline({
         );
       }
       throwIfAborted(context.signal);
+      const persistedUpload: any = await persistUploadSessionSources({
+        payload,
+        uploadSessionFiles: context.uploadSessionFiles,
+        storageProvider,
+        jobId,
+        archiveBatchId,
+        generatedAt
+      });
+      throwIfAborted(context.signal);
       context.reportProgress({
         progressPercent: 8,
         stage: "保存配置"
@@ -625,14 +747,6 @@ export function createJobPipeline({
       context.reportProgress({
         progressPercent: 26,
         stage: "接收上游文本"
-      });
-      const persistedUpload: any = await persistUploadSessionSources({
-        payload,
-        uploadSessionFiles: context.uploadSessionFiles,
-        storageProvider,
-        jobId,
-        archiveBatchId,
-        generatedAt
       });
       const persistedUploadSources: any = persistedUpload.sources;
       throwIfAborted(context.signal);

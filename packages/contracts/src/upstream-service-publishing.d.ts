@@ -86,7 +86,7 @@ export interface UpstreamPayloadTransport {
       maxParts: number;
     };
   };
-  response: {
+  response?: {
     mode: UpstreamResponseRepresentationMode;
     maxBytes: number;
     mediaTypes: string[];

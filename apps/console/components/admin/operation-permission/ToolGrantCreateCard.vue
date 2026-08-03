@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useOperationPermissionViewContext } from "../../../composables/operationPermissionViewContext";
-import { toolRiskLabel } from "../../../composables/console-tool-display-utils";
+import { toolRiskLabel, toolsetLabel } from "../../../composables/console-tool-display-utils";
 import ScopeSelector from "../../ScopeSelector.vue";
 
 const {
-  busyKey,
+  isBusy,
   copyIssuedToolToken,
   createGrant,
   issuedToolToken,
@@ -43,8 +43,8 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
         <input v-model="newGrantLabel" autocomplete="off" placeholder="例如：Codex 本地维护令牌" />
       </label>
 
-      <button class="tool-button" type="submit" :disabled="busyKey === 'grant:create'">
-        {{ busyKey === "grant:create" ? "创建中" : "创建授权" }}
+      <button class="tool-button" type="submit" :disabled="isBusy('grant:create')">
+        {{ isBusy("grant:create") ? "创建中" : "创建授权" }}
       </button>
 
       <section class="permission-token-config-section">
@@ -75,7 +75,7 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
             type="button"
             @click="toggleNewGrantToolset(toolset.id)"
           >
-            <strong>{{ toolset.label }}</strong>
+            <strong>{{ toolsetLabel(toolset.id, operationPermissionToolsets) }}</strong>
             <span>{{ toolRiskLabel(toolset.maxRisk) }}</span>
           </button>
         </div>

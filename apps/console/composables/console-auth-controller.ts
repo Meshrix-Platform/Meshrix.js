@@ -26,7 +26,7 @@ type RefreshState = (options?: { silent?: boolean; forceDrafts?: boolean }) => P
 export type ConsoleAuthControllerOptions = {
   consoleState: Ref<ServerConsoleState | null>;
   error: Ref<string>;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   refreshState: RefreshState;
   resetServerEventCursor: () => void;
   setBusy: (key: string) => void;
@@ -113,7 +113,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
       options.error.value = nextError instanceof Error ? nextError.message : "登录失败。";
     } finally {
       consoleBootstrapping.value = false;
-      options.clearAllBusy();
+      options.clearBusy("auth:login");
     }
   }
 
@@ -131,7 +131,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
       options.error.value = nextError instanceof Error ? nextError.message : "退出失败。";
     } finally {
       consoleBootstrapping.value = false;
-      options.clearAllBusy();
+      options.clearBusy("auth:logout");
     }
   }
 
@@ -170,7 +170,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "更新用户失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`auth:user:${user.userId}`);
     }
   }
 
@@ -202,7 +202,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "保存 OIDC 失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("auth:oidc");
     }
   }
 
@@ -215,7 +215,7 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "撤销会话失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`auth:session:${sessionId}`);
     }
   }
 

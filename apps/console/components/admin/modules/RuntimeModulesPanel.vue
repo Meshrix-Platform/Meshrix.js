@@ -3,7 +3,7 @@ import RuntimeModuleGroup from "./RuntimeModuleGroup.vue";
 import { useModulesViewContext } from "../../../composables/modulesViewContext";
 
 const {
-  busyKey,
+  isBusy,
   consoleState,
   enabledMountCount,
   externalGateway,
@@ -88,18 +88,20 @@ const externalGatewayPublicBaseUrlDraft = externalGateway.publicBaseUrlDraft;
             <button
               class="tool-button tool-button-ghost"
               type="button"
-              :disabled="busyKey === 'module-reload'"
+              :disabled="isBusy('module-reload')"
+              :aria-busy="isBusy('module-reload')"
               @click="reloadModules()"
             >
-              {{ busyKey === "module-reload" ? "重载中" : "重载模块" }}
+              {{ isBusy("module-reload") ? "重载中" : "重载模块" }}
             </button>
             <button
               class="tool-button"
               type="button"
-              :disabled="busyKey === 'mounts'"
+              :disabled="isBusy('mounts')"
+              :aria-busy="isBusy('mounts')"
               @click="saveMountModules()"
             >
-              {{ busyKey === "mounts" ? "保存中" : "保存配置" }}
+              {{ isBusy("mounts") ? "保存中" : "保存配置" }}
             </button>
           </div>
         </div>

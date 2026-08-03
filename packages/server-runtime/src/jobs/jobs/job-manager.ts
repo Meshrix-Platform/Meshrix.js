@@ -11,6 +11,21 @@ import { loadJobPayload } from "./job-manager-persistence.ts";
 import { createJobProjectionStore } from "./job-projection-store.ts";
 import { reconcileJobProjectionArtifacts } from "./job-projection-recovery.ts";
 import { normalizeWorkerConcurrency } from "./job-manager-validation.ts";
+import { assertBoundUploadSessionStore } from "../../state/upload-session-store.ts";
+
+function requireUploadConsumptionStorageProvider(storageProvider?: any) : any {
+  if (
+    !storageProvider ||
+    typeof storageProvider.commitUploadConsumptionReceipt !== "function"
+  ) {
+    const error: Error & Record<string, any> = new TypeError(
+      "Job processing requires the canonical upload-consumption storage provider."
+    );
+    error.code = "upload_session_storage_provider_unavailable";
+    throw error;
+  }
+  return storageProvider;
+}
 
 export function createJobManager({
   userDataPath,
@@ -22,6 +37,12 @@ export function createJobManager({
   processingEnabled = process.env.MESHRIX_IMPORT_WORKER_EXTERNAL !== "1",
   logger = getRuntimeLogger()
 }: Record<string, any>) : any {
+  const boundUploadSessionStore: any = processingEnabled
+    ? assertBoundUploadSessionStore(uploadSessionStore, { userDataPath })
+    : uploadSessionStore;
+  const boundStorageProvider: any = processingEnabled
+    ? requireUploadConsumptionStorageProvider(storageProvider)
+    : storageProvider;
   const jobs: any = new Map<any, any>();
   const checkpointJobs: any = new Map<any, any>();
   const activeManifestJobs: any = new Map<any, any>();
@@ -106,8 +127,8 @@ export function createJobManager({
     runtimeOptions,
     getRuntimeOptions,
     protocolEventBus,
-    storageProvider,
-    uploadSessionStore,
+    storageProvider: boundStorageProvider,
+    uploadSessionStore: boundUploadSessionStore,
     processingEnabled,
     logger,
     jobs,
@@ -146,5 +167,16 @@ export function createJobManager({
     await ctx.replayUploadCleanupJournal();
   })();
 
-  return createJobManagerApi(ctx);
+  const api: any = createJobManagerApi(ctx);
+  Object.defineProperties(api, {
+    storageProvider: {
+      enumerable: false,
+      value: boundStorageProvider
+    },
+    uploadSessionStore: {
+      enumerable: false,
+      value: boundUploadSessionStore
+    }
+  });
+  return api;
 }

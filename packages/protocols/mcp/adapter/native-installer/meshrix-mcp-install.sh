@@ -31,8 +31,11 @@ validate_arguments() {
       continue
     fi
     case "$argument" in
+      *mxak1.*)
+        fail "Raw API Keys are not accepted in process arguments. Use --token-stdin or an exported API Key environment variable."
+        ;;
       --token|--token=*)
-        fail "Raw tokens are not accepted in process arguments. Use --token-stdin or an exported token environment variable."
+        fail "Raw API Keys are not accepted in process arguments. Use --token-stdin or an exported API Key environment variable."
         ;;
       --token-env)
         expect_env_name=1

@@ -51,7 +51,7 @@ export function opaqueAudiencePartitionKey({
   return digest(`${text(serverIdentity)}\0${grant}\0${text(audienceDigest)}`);
 }
 
-function grantEntityRefs(grant: Record<string, any> = {}) : any {
+function grantEntityRefs(grant: Record<string, any> = {}, subject: Record<string, any> = {}) : any {
   const metadata: any = plainObject(grant.metadata);
   const explicit: any = Array.isArray(grant.entityRefs)
     ? grant.entityRefs
@@ -65,9 +65,11 @@ function grantEntityRefs(grant: Record<string, any> = {}) : any {
     })).filter((entry?: any) : any => entry.entityType && entry.entityId);
   }
   const refs: any[] = [];
-  const subjectId: any = text(grant.subjectId || metadata.subjectId);
+  const subjectId: any = text(subject.subjectId || grant.subjectId || metadata.subjectId);
   if (subjectId) refs.push({ entityType: "subject", entityId: subjectId });
-  const organizationId: any = text(grant.organizationId || metadata.organizationId);
+  const organizationId: any = text(
+    subject.organizationNodeId || subject.organizationId || grant.organizationId || metadata.organizationId
+  );
   if (organizationId) refs.push({ entityType: "organization", entityId: organizationId });
   const teamId: any = text(grant.teamId || metadata.teamId);
   if (teamId) refs.push({ entityType: "team", entityId: teamId });
@@ -129,13 +131,16 @@ function grantMaxRisk(grant: Record<string, any> = {}) : any {
  */
 export function evaluateAudienceDecision({
   grant = null,
+  restriction = null,
+  subject = null,
   operation = null,
   service = null,
   tagStore = null,
   purpose = "discovery"
 }: Record<string, any> = {}) : any {
   const mode: any = purpose === "execution" ? "execution" : "discovery";
-  if (!grant || grant.revoked === true || grant.status === "revoked") {
+  const authorizationPolicy: any = grant || restriction;
+  if (!authorizationPolicy || authorizationPolicy.revoked === true || authorizationPolicy.status === "revoked") {
     return Object.freeze({
       allowed: false,
       reasonCode: "audience_grant_unavailable",
@@ -161,7 +166,7 @@ export function evaluateAudienceDecision({
   }
 
   const serviceId: any = text(service.serviceId || operation._meta?.serviceId);
-  const allowedServices: any = grantAllowedServiceIds(grant);
+  const allowedServices: any = grantAllowedServiceIds(authorizationPolicy);
   if (allowedServices.size > 0 && serviceId && !allowedServices.has(serviceId)) {
     return Object.freeze({
       allowed: false,
@@ -173,7 +178,7 @@ export function evaluateAudienceDecision({
 
   const capability: any = plainObject(operation._meta?.dynamicCapability || operation.dynamicCapability);
   const capabilityId: any = text(capability.capabilityId || operation._meta?.capabilityId);
-  const capabilities: any = grantCapabilitySet(grant);
+  const capabilities: any = grantCapabilitySet(authorizationPolicy);
   if (capabilityId && (capabilities.size === 0 || !capabilities.has(capabilityId))) {
     return Object.freeze({
       allowed: false,
@@ -184,7 +189,7 @@ export function evaluateAudienceDecision({
   }
 
   const requiredScopes: any = uniqueStrings(operation.requiredScopes || capability.requiredScopes || []);
-  const scopes: any = grantScopeSet(grant);
+  const scopes: any = grantScopeSet(authorizationPolicy);
   if (requiredScopes.some((scope?: any) : any => !scopes.has(scope))) {
     return Object.freeze({
       allowed: false,
@@ -195,7 +200,7 @@ export function evaluateAudienceDecision({
   }
 
   const toolsets: any = uniqueStrings(operation.toolsets || capability.toolsets || []);
-  const grantToolsets: any = grantToolsetSet(grant);
+  const grantToolsets: any = grantToolsetSet(authorizationPolicy);
   if (grantToolsets.size > 0 && toolsets.length > 0 && !toolsets.some((toolset?: any) : any => grantToolsets.has(toolset))) {
     return Object.freeze({
       allowed: false,
@@ -206,7 +211,7 @@ export function evaluateAudienceDecision({
   }
 
   const risk: any = text(capability.risk || operation.safety?.risk || operation._meta?.risk || "read_only");
-  if (riskRank(risk) > riskRank(grantMaxRisk(grant))) {
+  if (riskRank(risk) > riskRank(grantMaxRisk(authorizationPolicy))) {
     return Object.freeze({
       allowed: false,
       reasonCode: "audience_risk_exceeded",
@@ -216,7 +221,7 @@ export function evaluateAudienceDecision({
   }
 
   const credentialBindingIds: any = uniqueStrings(capability.credentialBindingIds || []);
-  const allowedBindings: any = grantAllowedSecretBindings(grant);
+  const allowedBindings: any = grantAllowedSecretBindings(authorizationPolicy);
   if (credentialBindingIds.some((bindingId?: any) : any =>
     !allowedBindings.has(bindingId) &&
     !(capabilityId && capabilities.has(`${capabilityId}:${bindingId}`))
@@ -231,7 +236,7 @@ export function evaluateAudienceDecision({
 
   const tagPolicy: any = plainObject(service.tagPolicy);
   if (hasUniversalTagPolicyRules(tagPolicy)) {
-    const entityRefs: any = grantEntityRefs(grant);
+    const entityRefs: any = grantEntityRefs(authorizationPolicy, subject || {});
     if (entityRefs.length === 0 && uniqueStrings(tagPolicy.entityRefs || tagPolicy.entities).length === 0) {
       return Object.freeze({
         allowed: false,
@@ -277,12 +282,14 @@ export function evaluateAudienceDecision({
  */
 export function evaluateAudienceParity({
   grant = null,
+  restriction = null,
+  subject = null,
   operation = null,
   service = null,
   tagStore = null
 }: Record<string, any> = {}) : any {
-  const discovery: any = evaluateAudienceDecision({ grant, operation, service, tagStore, purpose: "discovery" });
-  const execution: any = evaluateAudienceDecision({ grant, operation, service, tagStore, purpose: "execution" });
+  const discovery: any = evaluateAudienceDecision({ grant, restriction, subject, operation, service, tagStore, purpose: "discovery" });
+  const execution: any = evaluateAudienceDecision({ grant, restriction, subject, operation, service, tagStore, purpose: "execution" });
   return Object.freeze({
     identical: discovery.allowed === execution.allowed && discovery.reasonCode === execution.reasonCode,
     discovery,

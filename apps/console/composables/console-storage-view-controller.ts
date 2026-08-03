@@ -3,7 +3,7 @@ import { useServerConsoleShellContext } from "./serverConsoleShellContext";
 
 export function useStorageViewConsole() : any {
   const {
-    busyKey,
+    isBusy,
     consoleState,
     currentUser,
     enabledMountCount,
@@ -18,7 +18,7 @@ export function useStorageViewConsole() : any {
   );
 
   return {
-    busyKey,
+    isBusy,
     consoleState,
     currentUser,
     enabledMountCount,

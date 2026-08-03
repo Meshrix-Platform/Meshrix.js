@@ -58,11 +58,13 @@ import {
 } from "./lib/release-journey-adapter.ts";
 import {
   createMatrixTargetEnvironment,
-  startConnectorInstall,
+  installMatrixTargetWithApiKey,
   uninstallMatrixTarget
 } from "./lib/release-journey-client-matrix.ts";
 import {
   diagnoseArtifactGet,
+  probeApiKeyUploadRequest,
+  runMcpDeniedCall,
   runMcpApprovalRequest,
   runConnectorBinaryUpload,
   runConnectorFetch,
@@ -111,21 +113,22 @@ const releaseDefinitionPath: any = path.join(
 );
 const execFileAsync: any = promisify(execFile);
 
-const GRANT_TOOLSETS: any = "meshrix.gateway.write,meshrix.storage.read,meshrix.storage.write,meshrix.uploads.write";
-const GRANT_SCOPES: any = "gateway:read,gateway:write,storage:read,storage:write,uploads:write";
-const GRANT_MAX_RISK: any = "safe_write";
+const API_KEY_TOOLSETS: any = "meshrix.gateway.write,meshrix.storage.read,meshrix.storage.write,meshrix.uploads.write";
+const API_KEY_SCOPES: any = "gateway:read,gateway:write,storage:read,storage:write,uploads:write";
+const API_KEY_MAX_RISK: any = "safe_write";
 const APPROVAL_OPERATION_KEY: any = "convert-require-approval-debug";
 const IMMEDIATE_OPERATION_KEY: any = "convert-full-access-debug";
 
 const STEP_TIMEOUTS_MS: Readonly<Record<string, any>> = Object.freeze({
   preflight: 60_000,
   "stack-build-up": 30 * 60_000,
-  "admin-bootstrap": 60_000,
+  "admin-bootstrap": 180_000,
   "upstream-publish": 120_000,
   "adapter-seed": 10 * 60_000,
   "client-discovery": 5 * 60_000,
   "connector-install-matrix": 10 * 60_000,
   "binary-upload-matrix": 5 * 60_000,
+  "api-key-workload": 10 * 60_000,
   "mcp-acceptance-matrix": 10 * 60_000,
   "approval-branch": 5 * 60_000,
   "artifact-fetch": 120_000,
@@ -362,6 +365,8 @@ async function main() : Promise<any> {
 
   let publishReceipt: any = null;
   let journeyResult: any = null;
+  let provisionedApiKey: any = null;
+  let apiKeyBoundaryReceipt: any = null;
   let detectedClients: any[] = [];
   const uploadsByTarget: any = new Map<any, any>();
   const matrixJourneys: any = new Map<any, any>();
@@ -415,9 +420,9 @@ async function main() : Promise<any> {
             catalogScanComplete: false
           },
           targetCatalog: [],
-          toolsets: GRANT_TOOLSETS.split(","),
-          scopes: GRANT_SCOPES.split(","),
-          maxRisk: GRANT_MAX_RISK,
+          toolsets: API_KEY_TOOLSETS.split(","),
+          scopes: API_KEY_SCOPES.split(","),
+          maxRisk: API_KEY_MAX_RISK,
           operations: {
             requireApproval: APPROVAL_OPERATION_KEY,
             fullAccess: IMMEDIATE_OPERATION_KEY,
@@ -474,7 +479,27 @@ async function main() : Promise<any> {
       addNeedle(password);
       const session: any = await consoleClient.login({ username: "owner", password });
       await visualRecorder.login({ username: "owner", password });
-      return { consoleUser: session.username, roleId: session.roleId };
+      const organization: any = await visualRecorder.configureOrganizationGovernance();
+      runDocker(["restart", RELEASE_JOURNEY_SERVER_CONTAINER], {
+        env: composeEnv({ hostPort, converterImage: options.imageName }),
+        redact
+      });
+      await waitForHttpOk(`${baseUrl}/api/healthz`, { timeoutMs: 120_000 });
+      const reloadedSession: any = await consoleClient.login({ username: "owner", password });
+      if (!reloadedSession.runtimeAdministrationAuthorized) {
+        throw Object.assign(
+          new Error("Organization governance publication removed the Console owner administration scope."),
+          { code: "release_journey_owner_runtime_scope_lost" }
+        );
+      }
+      await visualRecorder.ensureAuthenticated({ username: "owner", password });
+      return {
+        consoleUser: session.username,
+        roleId: session.roleId,
+        organization,
+        runtimeAdministrationAuthorized: true,
+        apiKeyRecoveryAuthorityReloaded: true
+      };
     });
 
     publishReceipt = await recordStep("upstream-publish", async () : Promise<any> => {
@@ -556,43 +581,97 @@ async function main() : Promise<any> {
       };
     });
 
-    await recordStep("connector-install-matrix", async () : Promise<any> => {
-      const upstreamCapabilities: any[] = [
-        `cap:upstream:${publishReceipt.serviceId}:${APPROVAL_OPERATION_KEY}`,
-        `cap:upstream:${publishReceipt.serviceId}:${IMMEDIATE_OPERATION_KEY}`
-      ];
-      const sessions: any = detectedClients.map((client?: any) : any => startConnectorInstall({
-        connectorScript,
-        target: client.target,
-        clientCommand: client.command,
-        baseUrl,
-        adapterCacheRoot,
-        toolsets: GRANT_TOOLSETS,
-        scopes: GRANT_SCOPES,
-        maxRisk: GRANT_MAX_RISK,
-        upstreamCapabilities,
-        allowedService: publishReceipt.serviceId,
-        env: targetEnvs.get(client.target),
-        consoleClient,
-        redact
-      }));
-      const pending: any = await Promise.all(sessions.map((session?: any) : any => session.pending));
-      for (const entry of pending) addNeedle(entry.requestId);
-      await visualRecorder.approvePendingAuthorizations({
-        clientNames: pending.map((entry?: any) : any => entry.label)
+    await recordStep("api-key-workload", async () : Promise<any> => {
+      const connectorTarget: any = detectedClients[0]?.target;
+      if (!connectorTarget) {
+        throw Object.assign(new Error("The API Key workload requires one detected downstream connector."), {
+          code: "release_journey_api_key_connector_unavailable"
+        });
+      }
+      provisionedApiKey = await visualRecorder.provisionApiKeyWorkload({
+        serviceId: publishReceipt.serviceId,
+        targetIds: detectedClients.map((client?: any) : any => client.target),
+        operationKey: IMMEDIATE_OPERATION_KEY,
+        allowedTools: [
+          "uploads.create_session",
+          "uploads.get_session",
+          "uploads.upload_chunk",
+          "meshrix.gateway.artifacts.get",
+          `upstream.${publishReceipt.serviceId}.${IMMEDIATE_OPERATION_KEY}`,
+          `upstream.${publishReceipt.serviceId}.${APPROVAL_OPERATION_KEY}`
+        ],
+        capabilityIds: [
+          `cap:upstream:${publishReceipt.serviceId}:${IMMEDIATE_OPERATION_KEY}`,
+          `cap:upstream:${publishReceipt.serviceId}:${APPROVAL_OPERATION_KEY}`
+        ]
       });
+      addNeedle(provisionedApiKey.apiKey);
+      const missingCredential: any = await probeApiKeyUploadRequest({
+        baseUrl,
+        target: connectorTarget,
+        env: {
+          ...targetEnvs.get(connectorTarget),
+          MESHRIX_MCP_TOKEN: ""
+        }
+      });
+      if (missingCredential.status !== 0 || !/missing.*credential/iu.test(missingCredential.code)) {
+        throw Object.assign(new Error("A connector without credentials was not denied before discovery or use."), {
+          code: "release_journey_api_key_missing_credential_not_denied"
+        });
+      }
+      for (const client of detectedClients) {
+        targetEnvs.set(client.target, Object.freeze({
+          ...targetEnvs.get(client.target),
+          MESHRIX_MCP_TOKEN: provisionedApiKey.apiKey
+        }));
+      }
+      const ambiguous: any = await probeApiKeyUploadRequest({
+        baseUrl,
+        target: connectorTarget,
+        env: targetEnvs.get(connectorTarget),
+        ambiguousCredential: true
+      });
+      if (ambiguous.status !== 400 || ambiguous.code !== "mcp_credential_ambiguous") {
+        throw Object.assign(new Error("Ambiguous API key credentials were not rejected before upload admission."), {
+          code: "release_journey_api_key_ambiguous_not_denied"
+        });
+      }
+
+      return {
+        organization: provisionedApiKey.organization,
+        credential: {
+          kind: "scoped_api_key",
+          plaintextArtifactWritten: false,
+          childTransfer: "environment-only",
+          grantSynthesized: false
+        },
+        connectorTargets: detectedClients.length,
+        missingCredentialDeniedBeforeUse: true,
+        ambiguousCredential: ambiguous.status
+      };
+    });
+
+    await recordStep("connector-install-matrix", async () : Promise<any> => {
       const installed: any[] = [];
-      for (const session of sessions) {
-        const result: any = await session.complete();
+      for (const client of detectedClients) {
+        const result: any = await installMatrixTargetWithApiKey({
+          connectorScript,
+          target: client.target,
+          clientCommand: client.command,
+          baseUrl,
+          adapterCacheRoot,
+          env: targetEnvs.get(client.target),
+          redact
+        });
         installedTargets.push(result.target);
         installed.push(result);
       }
-      await visualRecorder.captureCompletedAuthorizations({
-        clientNames: installed.map((entry?: any) : any => entry.label)
-      });
+      await visualRecorder.captureDownstreamAgentConfigured({ installedCount: installed.length });
       return {
         requiredCount: detectedClients.length,
         passedCount: installed.length,
+        credentialSource: "pre-issued-api-key",
+        deviceAuthorizationStarted: false,
         targets: installed
       };
     });
@@ -612,9 +691,74 @@ async function main() : Promise<any> {
         uploadsByTarget.set(client.target, upload);
         rows.push({ target: client.target, status: "passed", ...upload.receipt });
       }
+      const connectorTarget: any = detectedClients[0].target;
+      const apiUpload: any = uploadsByTarget.get(connectorTarget);
+      const siblingProvisioned: any = await visualRecorder.provisionApiKeyWorkload({
+        serviceId: publishReceipt.serviceId,
+        targetIds: [connectorTarget],
+        operationKey: IMMEDIATE_OPERATION_KEY,
+        organizationNodeId: "organization:secondary",
+        workloadName: "Release journey sibling isolation probe",
+        allowedTools: ["uploads.get_session"],
+        toolsetIds: [],
+        capabilityIds: [],
+        permissionScopeIds: ["uploads:write"],
+        maxUses: 4,
+        requestsPerWindow: 4
+      });
+      addNeedle(siblingProvisioned.apiKey);
+      if (
+        provisionedApiKey.record.organizationNodeId !== "group:team"
+        || siblingProvisioned.record.organizationNodeId !== "organization:secondary"
+        || siblingProvisioned.record.organizationNodeId === provisionedApiKey.record.organizationNodeId
+      ) {
+        throw Object.assign(new Error("Sibling API key credentials were not bound to distinct organization branches."), {
+          code: "release_journey_api_key_sibling_scope_invalid"
+        });
+      }
+      const siblingApiKeyEnv: any = Object.freeze({
+        ...targetEnvs.get(connectorTarget),
+        MESHRIX_MCP_TOKEN: siblingProvisioned.apiKey
+      });
+      const primarySessionId: any = String(apiUpload.reference).split(":")[1] || "";
+      const siblingOrganization: any = await probeApiKeyUploadRequest({
+        baseUrl,
+        target: connectorTarget,
+        env: siblingApiKeyEnv,
+        method: "GET",
+        pathname: `/api/upload-sessions/${encodeURIComponent(primarySessionId)}`
+      });
+      if (![403, 404].includes(siblingOrganization.status)) {
+        const denialCode: any = String(siblingOrganization.code || "unknown").replace(/[^a-z0-9_]+/giu, "_").slice(0, 80);
+        throw Object.assign(new Error("A sibling-organization API key accessed the primary organization session."), {
+          code: `release_journey_api_key_sibling_organization_not_denied_http_${siblingOrganization.status}_${denialCode}`
+        });
+      }
+      const siblingRevoked: any = await consoleClient.api(
+        `/api/operation-permission/v1/api-keys/${encodeURIComponent(siblingProvisioned.record.keyId)}/revoke`,
+        {
+          method: "POST",
+          body: {
+            expectedLifecycleRevision: siblingProvisioned.record.lifecycleRevision,
+            reasonCode: "isolation_probe_complete"
+          },
+          safetyConfirm: true
+        }
+      );
+      if (!siblingRevoked.ok || siblingRevoked.payload?.record?.status !== "revoked") {
+        throw Object.assign(new Error("Sibling isolation API key revocation did not complete."), {
+          code: "release_journey_api_key_sibling_revoke_failed"
+        });
+      }
+      apiKeyBoundaryReceipt = {
+        siblingOrganizationCredential: siblingOrganization.status,
+        siblingOrganizationDistinct: true
+      };
       return {
         requiredCount: detectedClients.length,
         passedCount: rows.length,
+        credentialKind: "scoped_api_key",
+        siblingOrganizationDenial: apiKeyBoundaryReceipt,
         targets: rows
       };
     });
@@ -632,6 +776,8 @@ async function main() : Promise<any> {
           fixtureFileName: RELEASE_JOURNEY_FIXTURE_FILENAME,
           artifactReference: upload.reference,
           operationKey: IMMEDIATE_OPERATION_KEY,
+          expectedCoreTools: ["meshrix.discovery"],
+          expectedOperationKeys: [APPROVAL_OPERATION_KEY, IMMEDIATE_OPERATION_KEY],
           env: targetEnvs.get(client.target),
           redact
         });
@@ -672,10 +818,34 @@ async function main() : Promise<any> {
           approvalTool: approval.tool
         });
       }
+      const disallowedTool: any = "system.health";
+      const effectsBeforeDenial: any = await listOperationAudit(consoleClient, {
+        toolId: disallowedTool,
+        status: "ok"
+      });
+      const disallowed: any = await runMcpDeniedCall({
+        connectorScript,
+        target: detectedClients[0].target,
+        baseUrl,
+        toolName: disallowedTool,
+        artifactReference: uploadsByTarget.get(detectedClients[0].target).reference,
+        env: targetEnvs.get(detectedClients[0].target)
+      });
+      const effectsAfterDenial: any = await listOperationAudit(consoleClient, {
+        toolId: disallowedTool,
+        status: "ok"
+      });
+      if (!disallowed.denied || effectsAfterDenial.length !== effectsBeforeDenial.length) {
+        throw Object.assign(new Error("A disallowed API Key operation reached the effect path."), {
+          code: "release_journey_api_key_disallowed_effect_observed"
+        });
+      }
       report.clientAcceptanceMatrix = rows;
       return {
         requiredCount: detectedClients.length,
         passedCount: rows.length,
+        credentialKind: "scoped_api_key",
+        disallowedOperationDeniedBeforeEffects: true,
         targets: rows
       };
     });
@@ -785,8 +955,49 @@ async function main() : Promise<any> {
         error.code = "release_journey_fetch_size_mismatch";
         throw error;
       }
+      const revoked: any = await consoleClient.api(
+        `/api/operation-permission/v1/api-keys/${encodeURIComponent(provisionedApiKey.record.keyId)}/revoke`,
+        {
+          method: "POST",
+          body: {
+            expectedLifecycleRevision: provisionedApiKey.record.lifecycleRevision,
+            reasonCode: "administrator_revoked"
+          },
+          safetyConfirm: true
+        }
+      );
+      if (!revoked.ok || revoked.payload?.record?.status !== "revoked") {
+        throw Object.assign(new Error("API Key revocation did not complete."), {
+          code: "release_journey_api_key_revoke_failed"
+        });
+      }
+      const revokedUpload: any = await probeApiKeyUploadRequest({
+        baseUrl,
+        target: journeyResult.target,
+        env: targetEnvs.get(journeyResult.target)
+      });
+      if (![401, 403, 410, 429].includes(revokedUpload.status)) {
+        throw Object.assign(new Error("Revoked API Key still admitted a new upload request."), {
+          code: "release_journey_api_key_revoked_upload_admitted"
+        });
+      }
+      const revokedMcp: any = await runMcpDeniedCall({
+        connectorScript,
+        target: journeyResult.target,
+        baseUrl,
+        toolName: `upstream.${publishReceipt.serviceId}.${IMMEDIATE_OPERATION_KEY}`,
+        artifactReference: uploadsByTarget.get(journeyResult.target).reference,
+        env: targetEnvs.get(journeyResult.target)
+      });
       const { bytes, ...rest } = result;
-      return { ...rest, followedResourceLinkUrl: true };
+      return {
+        ...rest,
+        followedResourceLinkUrl: true,
+        credentialKind: "scoped_api_key",
+        siblingOrganizationDenial: apiKeyBoundaryReceipt,
+        revokedUpload: revokedUpload.status,
+        revokedMcp: revokedMcp.denied === true
+      };
     });
 
     await recordStep("pdf-verify", async () : Promise<any> => {

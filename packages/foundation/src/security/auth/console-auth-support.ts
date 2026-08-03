@@ -86,7 +86,7 @@ for (const role of CONFIGURED_CONSOLE_ROLE_CONFIG.roles) {
     }
   }
 }
-for (const requiredRoleId of ["owner", "admin", "operator", "viewer"]) {
+for (const requiredRoleId of ["owner", "maintainer", "viewer"]) {
   if (!configuredRoleIds.has(requiredRoleId)) {
     throw new Error(`Console role configuration is missing required role: ${requiredRoleId}`);
   }
@@ -517,4 +517,39 @@ export function ensureSchema(db?: any) : any {
       ON console_deferred_protected_sink_authorities(expires_at);
     CREATE INDEX IF NOT EXISTS idx_console_audit_created ON console_audit_log(created_at);
   `);
+
+  const migrationVersion: any = Number(db.pragma("user_version", { simple: true }) || 0);
+  if (migrationVersion < 1) {
+    db.transaction(() : any => {
+      db.prepare(`
+        UPDATE console_users
+        SET role_id = 'maintainer'
+        WHERE role_id IN ('admin', 'operator')
+      `).run();
+      const oidcRows: any[] = db.prepare(`
+        SELECT config_id, role_mapping_json
+        FROM console_oidc_config
+      `).all();
+      const updateOidcRoleMapping: any = db.prepare(`
+        UPDATE console_oidc_config
+        SET role_mapping_json = ?
+        WHERE config_id = ?
+      `);
+      for (const row of oidcRows) {
+        const mapping: any = parseJson(row.role_mapping_json, {});
+        if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) continue;
+        let changed: any = false;
+        const migrated: Record<string, any> = {};
+        for (const [claim, roleId] of Object.entries(mapping)) {
+          const normalizedRoleId: any = ["admin", "operator"].includes(String(roleId || ""))
+            ? "maintainer"
+            : roleId;
+          migrated[claim] = normalizedRoleId;
+          changed ||= normalizedRoleId !== roleId;
+        }
+        if (changed) updateOidcRoleMapping.run(stringifyJson(migrated, {}), row.config_id);
+      }
+      db.pragma("user_version = 1");
+    })();
+  }
 }

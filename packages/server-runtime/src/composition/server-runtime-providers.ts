@@ -197,6 +197,7 @@ export async function createServerConsoleOperationProviders({
   operationProofSubstrate,
   storageProvider,
   uploadSessionStore,
+  uploadCustodyReadPort,
   operationAuditStore,
   getListenUrl = () : any => "",
   getAgentWorkspace = () : any => null
@@ -207,14 +208,10 @@ export async function createServerConsoleOperationProviders({
     if (typeof uploadSessionStore?.resolveUploadSessionFiles !== "function") {
       throw new TypeError("Server operation providers require the bound upload session store.");
     }
-    const uploadSessionReadPort: Readonly<Record<string, any>> = Object.freeze({
-      resolveUploadSessionFiles(_userDataPath?: any, sessionId?: any, options: Record<string, any> = {}) : any {
-        return uploadSessionStore.resolveUploadSessionFiles(sessionId, options);
-      }
-    });
     const artifactTransitPort: any = await createArtifactTransitProvider({
       userDataPath,
-      uploadSessionStore: uploadSessionReadPort,
+      uploadSessionStore,
+      uploadCustodyReadPort,
       workspaceFileStore: createWorkspaceArtifactFileStore({ getAgentWorkspace }),
       getListenUrl
     });

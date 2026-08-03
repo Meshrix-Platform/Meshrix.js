@@ -2,7 +2,6 @@ import { createUpstreamFixtureTransitReadiness } from "./upstream-fixture-transi
 import { createUpstreamMcpGatewayReadiness } from "./upstream-mcp-gateway-evidence.ts";
 import { createUpstreamServicePublishingReadiness } from "./upstream-service-publishing-evidence.ts";
 import { createDownstreamAgentToolLoopReadiness } from "./downstream-agent-tool-loop-evidence.ts";
-import { createMcpProcessIdentityCredentialStoreReadiness } from "./mcp-process-identity-credential-store-evidence.ts";
 import { createMcpProxyTransportReadiness } from "./mcp-proxy-transport-evidence.ts";
 import { createStorageProductionRestoreReadiness } from "./storage-production-restore-evidence.ts";
 import { PRODUCTION_READINESS_GATES_READINESS_SOURCE, PRODUCTION_READINESS_GATES_REPORT_PATH } from "./production-readiness-gates-evidence.ts";
@@ -834,9 +833,6 @@ export function createReleaseEvidenceReadiness(relativePath?: any, report: Recor
       break;
     case REQUIRED_REPORT_REDUCERS.DOWNSTREAM_AGENT_TOOL_LOOP:
       readiness = createDownstreamAgentToolLoopReadiness(record);
-      break;
-    case REQUIRED_REPORT_REDUCERS.MCP_PROCESS_IDENTITY_CREDENTIAL_STORE:
-      readiness = createMcpProcessIdentityCredentialStoreReadiness(record, options);
       break;
     case REQUIRED_REPORT_REDUCERS.MCP_PROXY_TRANSPORT:
       readiness = createMcpProxyTransportReadiness(record);

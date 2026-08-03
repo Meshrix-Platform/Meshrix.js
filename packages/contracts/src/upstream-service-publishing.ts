@@ -147,7 +147,7 @@ export interface UpstreamPayloadTransport {
     maxBytes?: number;
     mediaTypes?: string[];
   };
-  response: {
+  response?: {
     mode: UpstreamResponseRepresentationMode;
     maxBytes?: number;
     mediaTypes?: string[];
@@ -229,20 +229,28 @@ function unknownFields(value?: any, fields?: any) : any {
   return Object.keys(value).filter((key?: any) : any => !fields.has(key));
 }
 
-function validatePortablePayloadTransport(value?: any, operationIndex?: any) : any {
+function validatePortablePayloadTransport(value?: any, operationIndex?: any, serviceProtocol?: any) : any {
   if (!isPlainObject(value)) {
     throw new Error(`descriptor.operations[${operationIndex}].payloadTransport must be an object.`);
   }
   const unknown: any = unknownFields(value, PAYLOAD_TRANSPORT_FIELDS);
   if (unknown.length) throw new Error(`Unknown payloadTransport field(s): ${unknown.join(", ")}.`);
-  if (!isPlainObject(value.request) || !isPlainObject(value.response)) {
-    throw new Error(`descriptor.operations[${operationIndex}].payloadTransport requires request and response objects.`);
+  if (!isPlainObject(value.request)) {
+    throw new Error(`descriptor.operations[${operationIndex}].payloadTransport requires a request object.`);
+  }
+  if (value.response !== undefined && !isPlainObject(value.response)) {
+    throw new Error(`descriptor.operations[${operationIndex}].payloadTransport.response must be an object.`);
+  }
+  if (serviceProtocol === "json-rpc" && value.response === undefined) {
+    throw new Error(`descriptor.operations[${operationIndex}] JSON-RPC requires a response representation.`);
   }
   if (!isUpstreamRequestRepresentationMode(value.request.mode) ||
-      !isUpstreamResponseRepresentationMode(value.response.mode)) {
+      (value.response !== undefined && !isUpstreamResponseRepresentationMode(value.response.mode))) {
     throw new Error(`descriptor.operations[${operationIndex}] has an invalid representation mode.`);
   }
-  for (const [direction, policy] of [["request", value.request], ["response", value.response]]) {
+  const policies: any[] = [["request", value.request]];
+  if (value.response !== undefined) policies.push(["response", value.response]);
+  for (const [direction, policy] of policies) {
     if (!Number.isSafeInteger(Number(policy.maxBytes)) || Number(policy.maxBytes) < 1) {
       throw new Error(`descriptor.operations[${operationIndex}].payloadTransport.${direction}.maxBytes is invalid.`);
     }
@@ -302,7 +310,7 @@ function validatePortableDescriptor(descriptor?: any) : any {
     if (unsupportedOperationFields.length) {
       throw new Error(`Unknown descriptor.operations[${index}] field(s): ${unsupportedOperationFields.join(", ")}.`);
     }
-    validatePortablePayloadTransport(operation.payloadTransport, index);
+    validatePortablePayloadTransport(operation.payloadTransport, index, descriptor.serviceProtocol);
   });
 }
 

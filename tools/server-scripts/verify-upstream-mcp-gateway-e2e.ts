@@ -36,7 +36,7 @@ import {
   seedVerifierUpstreamServices,
   verifierOpaqueServiceId
 } from "./lib/upstream-gateway-verifier-publication.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -164,20 +164,10 @@ async function api(method?: any, route?: any, body: any = undefined) : Promise<a
 }
 
 async function mcp(token?: any, body?: any) : Promise<any> {
-  const grantIdentityBinding: any = mcpIdentityByToken.get(token);
-  assert.ok(grantIdentityBinding, "MCP token must have a verifier process identity binding");
   const bodyText: any = JSON.stringify(body);
   return fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: createSignedMcpHeaders({
-      token,
-      target: "opencode",
-      body: bodyText,
-      nonce: `verify-upstream-mcp-${body.id || Date.now()}`,
-      url: new URL("/mcp", server.url),
-      privateKeyPem: grantIdentityBinding.identity.keyPair.privateKeyPem,
-      clientIdentityPackage: grantIdentityBinding.clientIdentityPackage
-    }),
+    headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "opencode" },
     body: bodyText
   });
 }
@@ -347,13 +337,9 @@ try {
 
   let token: any = "";
   await test("create local agent grant with upstream MCP visibility", async () : Promise<any> => {
-    const identity: any = createVerifierMcpProcessIdentity({
-      target: "opencode",
-      label: "verify-upstream-mcp-agent-grant"
-    });
-    const localGrant: any = await issueVerifierLocalMcpGrant({
+    const issuedApiKey: any = await issueVerifierMcpApiKey({
       server,
-      grantRequest: {
+      access: {
         targets: ["opencode"],
         label: "verify-upstream-mcp-agent-grant",
         connectorVersion: "verify-upstream-mcp",
@@ -366,21 +352,14 @@ try {
             risk: "read_only"
           }, { upstreamToolName }).capabilityId
         ),
-        allowedServiceIds: [SERVICE_ID],
-        processIdentity: identity.request
+        allowedServiceIds: [SERVICE_ID]
       }
     });
-    assert.equal(localGrant.status, 201, JSON.stringify(localGrant.payload, null, 2));
-    assert.ok(localGrant.payload.token);
-    assert.ok(localGrant.payload.processIdentity?.clientIdentityPackage);
-    token = localGrant.payload.token;
+    assert.ok(issuedApiKey.apiKey);
+    token = issuedApiKey.apiKey;
     redactionNeedles.add(token);
-    mcpIdentityByToken.set(token, {
-      identity,
-      clientIdentityPackage: localGrant.payload.processIdentity.clientIdentityPackage
-    });
     return {
-      targetCount: localGrant.payload.targets?.length || 0,
+      targetCount: 1,
       hasToken: true
     };
   });
@@ -475,13 +454,9 @@ try {
   });
 
   await test("approval-required upstream MCP call resumes exactly once with credential binding", async () : Promise<any> => {
-    const identity: any = createVerifierMcpProcessIdentity({
-      target: "opencode",
-      label: "verify-upstream-mcp-approval-grant"
-    });
-    const localGrant: any = await issueVerifierLocalMcpGrant({
+    const issuedApiKey: any = await issueVerifierMcpApiKey({
       server,
-      grantRequest: {
+      access: {
         targets: ["opencode"],
         label: "verify-upstream-mcp-approval-grant",
         connectorVersion: "verify-upstream-mcp",
@@ -491,27 +466,14 @@ try {
         scopes: APPROVAL_SCOPES,
         dynamicCapabilities: [approvalCapability.capabilityId],
         allowedServiceIds: [APPROVAL_SERVICE_ID],
-        allowedSecretBindings: approvalCapability.credentialBindingIds,
-        processIdentity: identity.request
+        allowedSecretBindings: approvalCapability.credentialBindingIds
       }
     });
-    assert.equal(localGrant.status, 201, JSON.stringify(localGrant.payload, null, 2));
-    assert.ok(localGrant.payload.token);
-    assert.ok(localGrant.payload.grant?.id);
-    assert.ok(localGrant.payload.processIdentity?.clientIdentityPackage);
-    assert.deepEqual(
-      localGrant.payload.grant.allowedSecretBindings,
-      approvalCapability.credentialBindingIds,
-      "approval grant must retain the exact upstream credential binding"
-    );
-    approvalToken = localGrant.payload.token;
-    approvalGrantId = localGrant.payload.grant.id;
+    assert.ok(issuedApiKey.apiKey);
+    approvalToken = issuedApiKey.apiKey;
+    approvalGrantId = issuedApiKey.record.keyId;
     redactionNeedles.add(approvalToken);
     redactionNeedles.add(approvalGrantId);
-    mcpIdentityByToken.set(approvalToken, {
-      identity,
-      clientIdentityPackage: localGrant.payload.processIdentity.clientIdentityPackage
-    });
 
     approvalFixtureService.fixture.reset();
     const beforeHits: any = approvalFixtureHitCount();

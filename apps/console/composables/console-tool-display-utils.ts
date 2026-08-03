@@ -1,4 +1,5 @@
 import type { OperationPermissionScope, OperationPermissionToolset } from "../lib/types";
+import { operationPermissionToolsetName } from "../i18n/operation-permission-toolsets";
 import { maintenanceAgentRiskLabel } from "./console-status-utils";
 
 export function scopeLabel(scopeId: string, scopes: readonly OperationPermissionScope[] = []) : any {
@@ -20,5 +21,6 @@ export function toolStatusLabel(status: string) : any {
 }
 
 export function toolsetLabel(toolsetId: string, toolsets: readonly OperationPermissionToolset[] = []) : any {
-  return toolsets.find((toolset?: any) : any => toolset.id === toolsetId)?.label || toolsetId;
+  const fallback = toolsets.find((toolset?: any) : any => toolset.id === toolsetId)?.label || toolsetId;
+  return operationPermissionToolsetName(toolsetId, fallback);
 }

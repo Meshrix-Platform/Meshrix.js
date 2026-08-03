@@ -182,16 +182,16 @@ export function commandFailureGuidance({ command = "", message = "", options = {
       ...installGuidanceMetadata({ includeUrl: true, baseUrl: fallbackBaseUrl, tokenEnv })
     };
   }
-  if (lower.includes("missing token")) {
+  if (lower.includes("missing api key")) {
     const target: any = String(option(options, "target", "codex")) || "codex";
     const urlArgs: any = baseUrl ? ` --url ${shellQuote(baseUrl)}` : "";
     const tokenEnvArgs: any = tokenEnv && tokenEnv !== DEFAULT_TOKEN_ENV ? ` --token-env ${shellQuote(tokenEnv)}` : "";
     return {
-      errorCode: "MISSING_TOKEN",
+      errorCode: "MISSING_API_KEY",
       nextCommand: shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
       repairCommands: [
         shellCommandForInstall({ target, includeToken: true, includeUrl: Boolean(baseUrl), baseUrl, tokenEnv }),
-        `${tokenEnv}=your-token meshrix-mcp ${command || "install"} --target ${target}${urlArgs}${tokenEnvArgs} --json`
+        `${tokenEnv}=your-api-key meshrix-mcp ${command || "install"} --target ${target}${urlArgs}${tokenEnvArgs} --json`
       ],
       ...installGuidanceMetadata({ includeUrl: Boolean(baseUrl), baseUrl, tokenEnv })
     };

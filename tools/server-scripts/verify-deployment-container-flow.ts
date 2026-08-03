@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import net from "node:net";
@@ -12,11 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { loadDeploymentIndex } from "./deployment-index.ts";
 import { createServerSourcePackage } from "./package-server-source.ts";
-import {
-  bindVerifierLocalMcpGrantIdentity,
-  createVerifierLocalMcpGrantIdentity,
-  verifierMcpRequestHeaders
-} from "./lib/local-mcp-verifier-identity.ts";
+import { verifierMcpRequestHeaders } from "./lib/verifier-mcp-api-key.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const engineIndex: any = process.argv.indexOf("--engine");
@@ -77,7 +73,6 @@ let baseUrl: any = "";
 let hostPort: any = 0;
 let deploymentRoot: any = repoRoot;
 let sourcePackageTempRoot: any = "";
-const mcpIdentityByToken: any = new Map<any, any>();
 
 function trackSecret(...values: any[]) : any {
   for (const value of values) {
@@ -450,32 +445,7 @@ async function fetchJson(route?: any, options: Record<string, any> = {}) : Promi
   return { status: response.status, ok: response.ok, payload };
 }
 
-async function createContainerHostDeviceGrant() : Promise<any> {
-  const verifierIdentity: any = createVerifierLocalMcpGrantIdentity({
-    target: "codex",
-    label: "verify-deployment-container-flow"
-  });
-  const grantRequest: Record<string, any> = {
-    targets: ["codex"],
-    label: "container deployment verifier",
-    connectorVersion: "verify-deployment-container-flow",
-    grantMode: "maintain",
-    toolsets: TOOLSETS,
-    processIdentity: verifierIdentity.request
-  };
-  const claimToken: any = randomBytes(32).toString("base64url");
-  const claimTokenHash: any = createHash("sha256").update(claimToken, "utf8").digest("hex");
-  trackSecret(claimToken);
-  const created: any = await fetchJson("/api/mcp/local-grant/requests", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...grantRequest, claimTokenHash })
-  });
-  assert.equal(created.status, 202, JSON.stringify(safeEvidence(created.payload)));
-  assert.ok(created.payload.requestId, "device authorization did not return a request id");
-  assert.match(String(created.payload.verificationCode || ""), /^[A-F0-9]{4}-[A-F0-9]{4}$/u);
-  const authorizationRequestId: any = String(created.payload.requestId);
-  assert.match(authorizationRequestId, /^mcp_auth_req_[a-z0-9_]+$/u);
+async function createContainerHostApiKey() : Promise<any> {
   const script: any = `
 import fs from "node:fs/promises";
 const content = await fs.readFile("/app/data/auth/initial-credentials.txt", "utf8");
@@ -487,17 +457,43 @@ const login = await fetch("http://127.0.0.1:7228/api/auth/login", {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ username, password })
 });
-const loginPayload = await login.json().catch(() => ({}));
-if (login.status !== 200) {
-  console.log(JSON.stringify({ status: login.status, payload: loginPayload }));
-  process.exit(0);
-}
+const loginPayload = await login.json();
 const cookie = (typeof login.headers.getSetCookie === "function"
   ? login.headers.getSetCookie()
   : String(login.headers.get("set-cookie") || "").split(/,(?=\\s*meshrix_)/).filter(Boolean))
-  .map((item) => item.split(";")[0])
-  .join("; ");
-const response = await fetch("http://127.0.0.1:7228/api/console/mcp/authorization/requests/${authorizationRequestId}/resolve", {
+  .map((item) => item.split(";")[0]).join("; ");
+const commonHeaders = { "Cookie": cookie };
+const organizationResponse = await fetch("http://127.0.0.1:7228/api/authorization/organization-governance", { headers: commonHeaders });
+const organization = await organizationResponse.json();
+if (organization.snapshot?.configured !== true) {
+  const mutationHeaders = {
+    "Content-Type": "application/json",
+    "Cookie": cookie,
+    "x-meshrix-csrf": loginPayload.csrfToken || "",
+    "x-meshrix-safety-confirm": "true"
+  };
+  const importedResponse = await fetch("http://127.0.0.1:7228/api/authorization/organization-governance/import", {
+    method: "POST",
+    headers: mutationHeaders,
+    body: JSON.stringify({ templateKey: "enterprise-group" })
+  });
+  const imported = await importedResponse.json();
+  const publishedResponse = await fetch("http://127.0.0.1:7228/api/authorization/organization-governance/publish", {
+    method: "POST",
+    headers: mutationHeaders,
+    body: JSON.stringify({ ...imported.draft, expectedRevision: Number(organization.snapshot?.revision || 0) })
+  });
+  if (publishedResponse.status !== 200) throw new Error("organization_publication_failed");
+}
+const scopesResponse = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/api-keys/issuer-scopes", { headers: commonHeaders });
+const catalogResponse = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/catalog", { headers: commonHeaders });
+const scopes = await scopesResponse.json();
+const catalog = await catalogResponse.json();
+const selectedToolsets = new Set(${JSON.stringify(TOOLSETS)});
+const allowedTools = (catalog.tools || [])
+  .filter((tool) => (tool.toolsets || []).some((toolset) => selectedToolsets.has(toolset)))
+  .map((tool) => tool.id);
+const response = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/api-keys", {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -505,69 +501,47 @@ const response = await fetch("http://127.0.0.1:7228/api/console/mcp/authorizatio
     "x-meshrix-csrf": loginPayload.csrfToken || "",
     "x-meshrix-safety-confirm": "true"
   },
-  body: JSON.stringify({ resolution: "approved" })
+  body: JSON.stringify({
+    workloadDisplayName: "Container deployment verifier",
+    organizationNodeId: scopes.eligibleNodes?.[0]?.nodeId || "",
+    expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+    policy: {
+      protocol: "mcp",
+      serviceIds: [],
+      capabilityIds: [],
+      toolsetIds: [...selectedToolsets],
+      allowedTools,
+      deniedTools: [],
+      scopeIds: [],
+      maximumRisk: "high",
+      audience: { serverAudience: "127.0.0.1:7228", targetIds: ["codex"], connectorPackageIds: [] },
+      resources: {
+        mode: "restricted", workspaceIds: [], dataClassifications: [], egressClasses: [],
+        semanticFamilies: [], capabilityDomains: [], capabilityVerbs: [], resourceKinds: [],
+        effectKinds: [], secretBindingIds: [], allowedOrigins: ["http://127.0.0.1:7228"], allowedCidrs: []
+      },
+      processIdentity: { mode: "optional" },
+      limits: { maxUses: 64, requestsPerWindow: 64, windowSeconds: 3600, maxConcurrentEffects: 4 },
+      catalogFingerprint: scopes.catalogFingerprint
+    }
+  })
 });
 const payload = await response.json().catch(() => ({}));
 console.log(JSON.stringify({ status: response.status, payload }));
 `;
   const result: any = runRaw(CONTAINER_ENGINE, ["exec", containerName, "node", "--input-type=module", "-e", script]);
-  const approval: any = JSON.parse(result.stdout);
-  assert.equal(approval.status, 200, JSON.stringify(safeEvidence(approval.payload)));
-  assert.equal(approval.payload?.ok, true, JSON.stringify(safeEvidence(approval.payload)));
-  const response: any = await fetchJson(
-    `/api/mcp/local-grant/requests/${encodeURIComponent(authorizationRequestId)}/consume`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-meshrix-authorization-claim": claimToken
-      },
-      body: "{}"
-    }
-  );
-  assert.equal(response.status, 201, JSON.stringify(safeEvidence(response.payload)));
-  assert.ok(response.payload.token, "local MCP grant did not return a token");
-  trackSecret(response.payload.token, response.payload.grant?.id, response.payload.grant?.tokenPrefix);
-  assertNoLeak(safeEvidence(response.payload), "local MCP grant payload");
-  bindVerifierLocalMcpGrantIdentity({
-    identityByToken: mcpIdentityByToken,
-    token: response.payload.token,
-    identity: verifierIdentity.identity,
-    payload: response.payload
-  });
-  return response.payload.token;
+  const issued: any = JSON.parse(result.stdout);
+  assert.equal(issued.status, 201, JSON.stringify(safeEvidence(issued.payload)));
+  assert.ok(issued.payload.apiKey, "container API Key issuance did not return plaintext to the direct verifier caller");
+  assert.ok(issued.payload.record?.keyId, "container API Key issuance did not return a bounded record identifier");
+  trackSecret(issued.payload.apiKey, issued.payload.record.keyId);
+  return issued.payload.apiKey;
 }
 
-async function assertHostLocalGrantDenied() : Promise<any> {
-  const verifierIdentity: any = createVerifierLocalMcpGrantIdentity({
-    target: "codex",
-    label: "verify-deployment-container-flow-host-denied"
-  });
-  const response: any = await fetchJson("/api/mcp/local-grant", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      targets: ["codex"],
-      label: "host denied container verifier",
-      connectorVersion: "verify-deployment-container-flow",
-      grantMode: "maintain",
-      toolsets: TOOLSETS,
-      processIdentity: verifierIdentity.request
-    })
-  });
-  assert.equal(response.status, 403, JSON.stringify(safeEvidence(response.payload)));
-  assert.equal(response.payload.error?.code, "local_pairing_required");
-  return true;
-}
-
-function mcpHeaders(token: any = "", { body = "" }: Record<string, any> = {}) : any {
+function mcpHeaders(token: any = "") : any {
   return verifierMcpRequestHeaders({
-    identityByToken: mcpIdentityByToken,
     token,
-    target: "codex",
-    method: "POST",
-    url: `${baseUrl}/mcp`,
-    body
+    target: "codex"
   });
 }
 
@@ -575,7 +549,7 @@ async function mcp(method?: any, params: Record<string, any> = {}, { token = "",
   const body: any = JSON.stringify({ jsonrpc: "2.0", id, method, params });
   const response: any = await fetchJson("/mcp", {
     method: "POST",
-    headers: mcpHeaders(token, { body }),
+    headers: mcpHeaders(token),
     body
   });
   assert.equal(response.status, 200, JSON.stringify(safeEvidence(response.payload)));
@@ -841,8 +815,8 @@ try {
     };
   });
 
-  await test("container serves the Core MCP baseline through host device authorization", async () : Promise<any> => {
-    const token: any = await createContainerHostDeviceGrant();
+  await test("container serves the Core MCP baseline through a Console-issued API Key", async () : Promise<any> => {
+    const token: any = await createContainerHostApiKey();
     const toolsList: any = await mcp("tools/list", {}, { token, id: 2 });
     const tools: any = toolsList.result?.tools || [];
     const toolNames: any = new Set<any>(tools.map((tool?: any) : any => tool.name));
@@ -903,12 +877,11 @@ try {
       containerHealthy: true,
       healthcheckMs: containerHealth.waitedMs,
       publicReadinessMs: readiness.waitedMs,
-      persistedCredentialIdentity: true
+      apiKeyPlaintextPersisted: false
     };
   });
 
   await destructiveTest("malformed and unauthenticated MCP requests are rejected while container remains healthy", async () : Promise<any> => {
-    const hostGrantDenied: any = await assertHostLocalGrantDenied();
     const malformed: any = await fetch(`${baseUrl}/mcp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -927,7 +900,6 @@ try {
     });
     assert.equal(discovery.status, 200);
     return {
-      hostLocalGrantDenied: hostGrantDenied,
       malformedStatusRejected: malformed.status >= 400,
       unauthenticatedDenied: true,
       discoveryStillHealthy: true

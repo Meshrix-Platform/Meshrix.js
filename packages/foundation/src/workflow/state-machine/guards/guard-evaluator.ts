@@ -106,7 +106,7 @@ function evaluateGuardPredicate(guardId?: any, guardDef?: any, context?: any) : 
     case "require_admin": {
       const sp: any = context.subjectPermissions || {};
       const roles: any = Array.isArray(sp.roles) ? sp.roles : [];
-      if (sp.admin === true || roles.includes("admin") || roles.includes("owner")) {
+      if (sp.admin === true || roles.includes("owner")) {
         return { ok: true, guardId, reason: "admin_authorized" };
       }
       return {

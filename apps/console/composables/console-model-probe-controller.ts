@@ -11,7 +11,7 @@ type ReadonlyRef<T> = {
 };
 
 type ConsoleModelProbeControllerOptions = {
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   modelEntryConfigured: (entry: AgentModelConfig) => boolean;
   modelEntryStatusKey: (entry: AgentModelConfig) => string;
@@ -71,7 +71,7 @@ export function createConsoleModelProbeController(
       };
       options.error.value = message;
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`model-probe:${key}`);
     }
   }
 

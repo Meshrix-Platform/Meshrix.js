@@ -13,7 +13,7 @@ type WorkspaceCheckpointControllerOptions = {
   selectedId: Ref<string>;
   localError: Ref<string>;
   setBusy: (key: string) => void;
-  clearBusy: () => void;
+  clearBusy: (key: string) => void;
   confirmAction: ConsoleConfirmAction;
   reloadWorkspaceChain: () => Promise<void>;
 };
@@ -99,7 +99,7 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
         reason: "console workspace file rollback preview",
       });
     } catch (e: unknown) { workspaceCheckpointError.value = errorMessage(e); }
-    finally { options.clearBusy(); }
+    finally { options.clearBusy("ws:checkpoint-preview"); }
   }
 
   async function restoreWorkspaceCheckpoint(nodeId: any = selectedCheckpointNodeId.value) : Promise<any> {
@@ -124,7 +124,7 @@ export function useWorkspaceCheckpointController(options: WorkspaceCheckpointCon
       workspaceCheckpointPreview.value = restored;
       selectedCheckpointNodeId.value = nodeId;
     } catch (e: unknown) { workspaceCheckpointError.value = errorMessage(e); }
-    finally { options.clearBusy(); }
+    finally { options.clearBusy("ws:checkpoint-restore"); }
   }
 
   function checkpointNodeFileCount(node: WsCheckpointNode) : any {

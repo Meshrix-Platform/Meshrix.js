@@ -12,7 +12,7 @@ import {
 } from "./console-browser-effects";
 
 type ConsoleToolGrantsControllerOptions = {
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   error: Ref<string>;
   refreshOperationPermission: (options?: { silent?: boolean }) => Promise<void>;
   setBusy: (key: string) => void;
@@ -92,7 +92,7 @@ export function createConsoleToolGrantsController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "创建工具授权失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy("grant:create");
     }
   }
 
@@ -114,7 +114,7 @@ export function createConsoleToolGrantsController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "更新工具授权失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`grant:${grant.id}`);
     }
   }
 
@@ -172,7 +172,7 @@ export function createConsoleToolGrantsController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "轮换工具令牌失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`grant:${grant.id}`);
     }
   }
 
@@ -191,7 +191,7 @@ export function createConsoleToolGrantsController(
       options.error.value =
         nextError instanceof Error ? nextError.message : "撤销工具授权失败。";
     } finally {
-      options.clearAllBusy();
+      options.clearBusy(`grant:${grant.id}`);
     }
   }
 

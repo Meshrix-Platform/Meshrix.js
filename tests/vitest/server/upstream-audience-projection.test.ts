@@ -8,6 +8,7 @@ import {
   compileUpstreamOperationProjection
 } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
+import { apiKeyAuthorizationEvaluationInput } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
 import { structuredJsonPayloadTransport } from "../../helpers/upstream-runtime-snapshot.ts";
 
 function serviceEntry({
@@ -119,6 +120,61 @@ describe("upstream audience projection", () : any => {
     expect(deniedParity.discovery.allowed).toBe(false);
     expect(deniedParity.discovery.visibleMetadata).toBe(false);
     expect(JSON.stringify(deniedParity)).not.toContain("credential://vault");
+  });
+
+  it("evaluates native scoped API Key restrictions without a Grant projection", () : any => {
+    const candidate: any = snapshot(1, [serviceEntry()]);
+    const operation: any = compileUpstreamOperationProjection(candidate).operations[0];
+    const service: any = candidate.serviceEntries[0][1];
+    const capabilityId: any = operation._meta.dynamicCapability.capabilityId;
+    const basePolicy: any = {
+      protocol: "mcp",
+      serviceIds: [service.serviceId],
+      capabilityIds: [capabilityId],
+      toolsetIds: operation.toolsets,
+      allowedTools: [operation.toolId],
+      deniedTools: [],
+      scopeIds: operation.requiredScopes,
+      maximumRisk: "low",
+      audience: { serverAudience: "meshrix.test", targetIds: ["server"], connectorPackageIds: [] },
+      resources: {
+        mode: "restricted",
+        workspaceIds: [], dataClassifications: [], egressClasses: [], semanticFamilies: [],
+        capabilityDomains: [], capabilityVerbs: [], resourceKinds: [], effectKinds: [],
+        secretBindingIds: operation._meta.dynamicCapability.credentialBindingIds,
+        allowedOrigins: [], allowedCidrs: []
+      },
+      processIdentity: { mode: "optional" },
+      limits: { maxUses: 10, requestsPerWindow: 10, windowSeconds: 60, maxConcurrentEffects: 2 },
+      catalogFingerprint: "catalog"
+    };
+    const evaluation: any = apiKeyAuthorizationEvaluationInput({
+      credentialKind: "scoped_api_key",
+      keyId: "opaque-key-id",
+      workloadPrincipalId: "workload-principal",
+      organizationNodeId: "organization-node",
+      policyFingerprint: "policy-fingerprint",
+      policy: basePolicy
+    });
+    expect(evaluateAudienceDecision({
+      ...evaluation,
+      operation,
+      service,
+      purpose: "discovery"
+    })).toMatchObject({ allowed: true, reasonCode: "audience_allowed" });
+    expect(evaluateAudienceDecision({
+      ...apiKeyAuthorizationEvaluationInput({
+        credentialKind: "scoped_api_key",
+        keyId: "opaque-key-id",
+        workloadPrincipalId: "workload-principal",
+        organizationNodeId: "organization-node",
+        policyFingerprint: "policy-fingerprint",
+        policy: { ...basePolicy, serviceIds: ["different-service"] }
+      }),
+      operation,
+      service,
+      purpose: "execution"
+    })).toMatchObject({ allowed: false, reasonCode: "audience_service_not_granted" });
   });
 
   it("applies deny-tag precedence and fails closed for missing metadata", () : any => {

@@ -39,8 +39,8 @@ const {
   setFixtureUrl,
   setServer,
   api,
-  localMcpGrant,
-  consoleGrant,
+  verifierApiKey,
+  issueConsoleOperationGrant,
   operationHttp,
   operationRpc,
   callMcp,
@@ -50,7 +50,6 @@ const {
   callAllChannels,
   assertSameDecision,
   capabilities,
-  openMcpSse,
   cleanup
 } = harness;
 
@@ -107,14 +106,21 @@ async function verifyRegistration() : Promise<any> {
 }
 
 async function verifyAllowDenyAndApprovalParity() : Promise<any> {
-  const readGrant: any = await localMcpGrant({
+  const readOperationGrant: any = await issueConsoleOperationGrant({
     label: "Operation Permission protocol read verifier",
-    grantMode: "read",
+    type: "machine",
+    scopes: ["gateway:read"],
+    toolsets: ["meshrix.gateway.read"],
+    maxRisk: "read_only"
+  });
+  const readCredential: any = await verifierApiKey({
+    label: "Operation Permission protocol read verifier",
     toolsets: ["meshrix.gateway.read"],
     maxRisk: "read_only"
   });
   const allowed: any = await callAllChannels({
-    token: readGrant.token,
+    token: readOperationGrant.token,
+    mcpToken: readCredential.token,
     toolId: READ_TOOL,
     mcpToolName: "meshrix.gateway",
     operation: READ_TOOL,
@@ -124,7 +130,8 @@ async function verifyAllowDenyAndApprovalParity() : Promise<any> {
   assertSameDecision(allowed.decisions, "allow");
 
   const denied: any = await callAllChannels({
-    token: readGrant.token,
+    token: readOperationGrant.token,
+    mcpToken: readCredential.token,
     toolId: WRITE_TOOL,
     mcpToolName: "meshrix.gateway",
     operation: WRITE_TOOL,
@@ -133,10 +140,16 @@ async function verifyAllowDenyAndApprovalParity() : Promise<any> {
   });
   assertSameDecision(denied.decisions, "deny");
 
-  const adminGrant: any = await localMcpGrant({
-    label: "Operation Permission protocol stale policy verifier",
-    grantMode: "maintain",
-    toolsets: ["meshrix.gateway.admin", "meshrix.runtime.maintain", "meshrix.authorization.admin"],
+  const adminCredential: any = await verifierApiKey({
+    label: "Operation Permission protocol governed approval verifier",
+    toolsets: ["meshrix.authorization.admin"],
+    maxRisk: "repair_write"
+  });
+  const adminOperationGrant: any = await issueConsoleOperationGrant({
+    label: "Operation Permission protocol governed approval verifier",
+    type: "machine",
+    scopes: ["auth:admin"],
+    toolsets: ["meshrix.authorization.admin"],
     maxRisk: "repair_write"
   });
   const tagId: any = `custom:op-permission-protocol-${Date.now()}`;
@@ -156,63 +169,87 @@ async function verifyAllowDenyAndApprovalParity() : Promise<any> {
     mcp: approvalTagInput("mcp")
   };
   const approvalPayloads: Record<string, any> = {
-    http: publicPayload("http", await operationHttp(adminGrant.token, APPROVAL_TOOL, approvalInputs.http)),
-    rpc: publicPayload("rpc", await operationRpc(adminGrant.token, APPROVAL_TOOL, approvalInputs.rpc, 401)),
-    mcp: publicPayload("mcp", await callMcp(adminGrant.token, "meshrix.discovery", APPROVAL_TOOL, approvalInputs.mcp, 402, [200, 202]))
+    http: publicPayload("http", await operationHttp(adminOperationGrant.token, APPROVAL_TOOL, approvalInputs.http)),
+    rpc: publicPayload("rpc", await operationRpc(adminOperationGrant.token, APPROVAL_TOOL, approvalInputs.rpc, 401)),
+    mcp: publicPayload("mcp", await callMcp(adminCredential.token, "meshrix.discovery", APPROVAL_TOOL, approvalInputs.mcp, 402, [200, 202]))
   };
   const approvalDecisions: any = Object.fromEntries(
     (Object.entries(approvalPayloads) as [string, any][]).map(([channel, payload]: any[]) : any => [channel, classifyDecision(payload)])
   );
-  assertSameDecision(approvalDecisions, "approval_required");
-  assert.equal((Object.values(approvalPayloads) as any[]).every(hasStalePolicy), true, "all approval decisions must expose stale policy state");
+  assert.deepEqual(approvalDecisions, {
+    http: "deny",
+    rpc: "deny",
+    mcp: "approval_required"
+  });
+  assert.equal(hasStalePolicy(approvalPayloads.mcp), false, "MCP API Key approval must not fabricate Grant policy state");
 
   return {
     allow: allowed.decisions,
     deny: denied.decisions,
     approval: approvalDecisions,
-    stalePolicyAcrossChannels: true
+    nonMcpGrantBoundaryDenied: { http: true, rpc: true },
+    mcpApiKeyPolicyIndependent: true
   };
 }
 
 async function verifyRevokedAndRateLimitParity() : Promise<any> {
-  const revokedGrant: any = await localMcpGrant({
+  const revokedOperationGrant: any = await issueConsoleOperationGrant({
     label: "Operation Permission protocol revoked verifier",
-    grantMode: "read",
+    type: "machine",
+    scopes: ["gateway:read"],
     toolsets: ["meshrix.gateway.read"],
     maxRisk: "read_only"
   });
-  const revoke: any = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(revokedGrant.grantId)}/revoke`, {
+  const revokedCredential: any = await verifierApiKey({
+    label: "Operation Permission protocol revoked verifier",
+    toolsets: ["meshrix.gateway.read"],
+    maxRisk: "read_only"
+  });
+  const revoke: any = await api("POST", `/api/operation-permission/v1/api-keys/${encodeURIComponent(revokedCredential.keyId)}/revoke`, {
+    expectedLifecycleRevision: revokedCredential.record.lifecycleRevision,
+    reasonCode: "verifier_revoked"
+  }, { expectedStatuses: [200] });
+  assert.equal(revoke.payload.record?.status, "revoked");
+  const grantRevoke: any = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(revokedOperationGrant.grantId)}/revoke`, {
     reason: "verify-operation-permission-protocol-consistency"
   }, { expectedStatuses: [200] });
-  assert.equal(revoke.payload.grant?.enabled, false);
+  assert.equal(grantRevoke.payload.grant?.enabled, false);
   const revoked: any = await callAllChannels({
-    token: revokedGrant.token,
+    token: revokedOperationGrant.token,
+    mcpToken: revokedCredential.token,
     toolId: READ_TOOL,
     mcpToolName: "meshrix.gateway",
     operation: READ_TOOL,
     input: {},
     idBase: 500
   });
-  assertSameDecision(revoked.decisions, "revoked_grant");
+  assertSameDecision(revoked.decisions, "revoked_credential");
 
   async function rateLimitedChannel(channel?: any) : Promise<any> {
-    const grant: any = await consoleGrant({
+    if (channel !== "mcp") {
+      const operationGrant: any = await issueConsoleOperationGrant({
+        label: `Operation Permission protocol rate verifier ${channel}`,
+        type: "machine",
+        scopes: ["gateway:read"],
+        toolsets: ["meshrix.gateway.read"],
+        maxRisk: "read_only",
+        rateLimit: { perMinute: 1 }
+      });
+      if (channel === "http") {
+        await operationHttp(operationGrant.token, READ_TOOL, {});
+        return publicPayload("http", await operationHttp(operationGrant.token, READ_TOOL, {}));
+      }
+      await operationRpc(operationGrant.token, READ_TOOL, {}, 601);
+      return publicPayload("rpc", await operationRpc(operationGrant.token, READ_TOOL, {}, 602));
+    }
+    const credential: any = await verifierApiKey({
       label: `Operation Permission protocol rate verifier ${channel}`,
-      type: "machine",
       toolsets: ["meshrix.gateway.read"],
       maxRisk: "read_only",
-      rateLimit: { perMinute: 1 }
+      requestsPerWindow: 1
     });
-    if (channel === "http") {
-      await operationHttp(grant.token, READ_TOOL, {});
-      return publicPayload("http", await operationHttp(grant.token, READ_TOOL, {}));
-    }
-    if (channel === "rpc") {
-      await operationRpc(grant.token, READ_TOOL, {}, 601);
-      return publicPayload("rpc", await operationRpc(grant.token, READ_TOOL, {}, 602));
-    }
-    await callMcp(grant.token, "meshrix.gateway", READ_TOOL, {}, 603);
-    return publicPayload("mcp", await callMcp(grant.token, "meshrix.gateway", READ_TOOL, {}, 604));
+    await callMcp(credential.token, "meshrix.gateway", READ_TOOL, {}, 603);
+    return publicPayload("mcp", await callMcp(credential.token, "meshrix.gateway", READ_TOOL, {}, 604));
   }
 
   const ratePayloads: Record<string, any> = {
@@ -223,75 +260,55 @@ async function verifyRevokedAndRateLimitParity() : Promise<any> {
   const rateDecisions: any = Object.fromEntries(
     (Object.entries(ratePayloads) as [string, any][]).map(([channel, payload]: any[]) : any => [channel, classifyDecision(payload)])
   );
-  assertSameDecision(rateDecisions, "rate_limited");
+  assert.deepEqual(rateDecisions, {
+    http: "rate_limited",
+    rpc: "rate_limited",
+    mcp: "deny"
+  });
 
   return {
     revoked: revoked.decisions,
-    rateLimited: rateDecisions
+    rateLimited: rateDecisions,
+    mcpRateLimitFailClosedWithoutLifecycleDisclosure: true
   };
 }
 
-async function verifyMcpDiscoveryRefresh() : Promise<any> {
-  const grant: any = await localMcpGrant({
+async function verifyMcpDiscoveryPolicyIsolation() : Promise<any> {
+  const credential: any = await verifierApiKey({
     label: "Operation Permission protocol discovery verifier",
-    grantMode: "read",
-    toolsets: ["meshrix.gateway.read"],
-    maxRisk: "read_only"
+    toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
+    maxRisk: "write"
   });
-  const sse: any = await openMcpSse(grant.token);
-  try {
-    const before: any = await capabilities(grant.token, 700);
-    const beforeNames: any = operationNames(before);
-    assert.equal(beforeNames.has(READ_TOOL), true, "read operation missing before update");
-    assert.equal(beforeNames.has(WRITE_TOOL), false, "write operation leaked before grant update");
+  const before: any = await capabilities(credential.token, 700);
+  const beforeNames: any = operationNames(before);
+  assert.equal(beforeNames.has(READ_TOOL), true, "read operation missing before update");
+  assert.equal(beforeNames.has(WRITE_TOOL), true, "API Key write operation missing before policy update");
 
-    const update: any = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(grant.grantId)}`, {
-      scopes: ["gateway:read", "gateway:write"],
-      toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
-      maxRisk: "safe_write",
-      metadata: { maxRisk: "safe_write" },
-      reason: "verify-operation-permission-protocol-consistency"
-    }, { expectedStatuses: [200] });
-    assert.equal(update.payload.grant?.enabled, true);
-    const grantEvent: any = await sse.waitForReasonCode("upstream_audiences_published");
+  const tagId: any = `custom:op-permission-discovery-${Date.now()}`;
+  trackSecret(tagId);
+  const tagUpdate: any = await api("POST", "/api/tag-management/v1/tags", {
+    tagId,
+    kind: "custom",
+    label: "Operation Permission discovery refresh policy",
+    scopePrerequisites: ["auth:admin"]
+  }, { expectedStatuses: [200, 201] });
+  assert.equal(tagUpdate.payload.mcpToolListChanged, undefined);
 
-    const afterGrant: any = await capabilities(grant.token, 701);
-    const afterGrantNames: any = operationNames(afterGrant);
-    assert.equal(afterGrantNames.has(WRITE_TOOL), true, "write operation was not visible after grant update");
+  const afterTag: any = await capabilities(credential.token, 702);
+  const afterTagNames: any = operationNames(afterTag);
+  assert.equal(afterTagNames.has(READ_TOOL), true, "read operation missing after tag policy update");
+  assert.equal(afterTagNames.has(WRITE_TOOL), true, "API Key write operation missing after tag policy update");
+  assert.equal(afterTagNames.has(FORBIDDEN_CONFIG_MUTATION_TOOL), false, "config mutation operation leaked after tag policy update");
 
-    const tagId: any = `custom:op-permission-discovery-${Date.now()}`;
-    trackSecret(tagId);
-    const tagUpdate: any = await api("POST", "/api/tag-management/v1/tags", {
-      tagId,
-      kind: "custom",
-      label: "Operation Permission discovery refresh policy",
-      scopePrerequisites: ["auth:admin"]
-    }, { expectedStatuses: [200, 201] });
-    assert.equal(tagUpdate.payload.mcpToolListChanged, undefined);
-
-    const afterTag: any = await capabilities(grant.token, 702);
-    const afterTagNames: any = operationNames(afterTag);
-    assert.equal(afterTagNames.has(READ_TOOL), true, "read operation missing after tag policy update");
-    assert.equal(afterTagNames.has(WRITE_TOOL), true, "grant-visible write operation missing after tag policy update");
-    assert.equal(afterTagNames.has(FORBIDDEN_CONFIG_MUTATION_TOOL), false, "config mutation operation leaked after tag policy update");
-
-    return {
-      unauthorizedHiddenBeforeGrantUpdate: true,
-      writeVisibleAfterGrantUpdate: true,
-      adminHiddenAfterTagPolicyUpdate: true,
-      notifications: [
-        grantEvent.params?.change?.reasonCode,
-        "unrelated_tag_catalog_unchanged"
-      ],
-      operationCounts: {
-        before: before.operations?.length || 0,
-        afterGrant: afterGrant.operations?.length || 0,
-        afterTag: afterTag.operations?.length || 0
-      }
-    };
-  } finally {
-    await sse.close();
-  }
+  return {
+    apiKeyPolicyImmutable: true,
+    adminHiddenAfterTagPolicyUpdate: true,
+    notifications: ["unrelated_tag_catalog_unchanged"],
+    operationCounts: {
+      before: before.operations?.length || 0,
+      afterTag: afterTag.operations?.length || 0
+    }
+  };
 }
 
 try {
@@ -338,9 +355,9 @@ try {
   console.log("\n=== Operation Permission Protocol Consistency: HTTP/RPC/MCP/console parity ===\n");
 
   await test("tag and operation permission operations are in generated registries", verifyRegistration);
-  await test("allow deny approval and stale-policy decisions converge across HTTP RPC console and MCP", verifyAllowDenyAndApprovalParity);
-  await destructiveTest("revoked grant and per-grant rate-limit decisions converge across HTTP RPC console and MCP", verifyRevokedAndRateLimitParity);
-  await test("MCP discovery refreshes after grant and tag policy changes without leaking unauthorized operations", verifyMcpDiscoveryRefresh);
+  await test("allow deny and governed approval decisions converge across HTTP RPC console and MCP", verifyAllowDenyAndApprovalParity);
+  await destructiveTest("revoked API Key and per-key rate-limit decisions converge across HTTP RPC console and MCP", verifyRevokedAndRateLimitParity);
+  await test("MCP discovery preserves immutable API Key policy across unrelated tag changes", verifyMcpDiscoveryPolicyIsolation);
 } catch (error: any) {
   console.error(`FAIL: ${redactText(error?.message || String(error))}`);
   if (process.env.MESHRIX_VERIFY_VERBOSE) {

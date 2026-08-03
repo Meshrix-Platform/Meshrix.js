@@ -26,6 +26,13 @@ export async function emitTrace(trace?: any, event: Record<string, any> = {}) : 
   });
 }
 
+export function uploadSessionInputError(code?: any, message?: any) : Error & Record<string, any> {
+  const error: Error & Record<string, any> = new Error(message);
+  error.code = code;
+  error.statusCode = 400;
+  return error;
+}
+
 export function normalizeRelativePath(value?: any) : any {
   return String(value || "")
     .replace(/\\/g, "/")
@@ -36,12 +43,12 @@ export function normalizeRelativePath(value?: any) : any {
 export function validateRelativePath(value?: any) : any {
   const normalized: any = normalizeRelativePath(value);
   if (!normalized) {
-    throw new Error("上传文件缺少相对路径。");
+    throw uploadSessionInputError("upload_path_required", "上传文件缺少相对路径。");
   }
 
   const segments: any = normalized.split("/");
   if (segments.some((segment?: any) : any => !segment || segment === "." || segment === "..")) {
-    throw new Error("上传路径不安全，已拒绝。");
+    throw uploadSessionInputError("upload_path_unsafe", "上传路径不安全，已拒绝。");
   }
 
   return normalized;
@@ -50,7 +57,7 @@ export function validateRelativePath(value?: any) : any {
 export function normalizeSha256(value?: any, fieldName?: any) : any {
   const normalized: any = String(value || "").trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(normalized)) {
-    throw new Error(`${fieldName} 必须是 sha256 hex。`);
+    throw uploadSessionInputError("upload_sha256_invalid", `${fieldName} 必须是 sha256 hex。`);
   }
   return normalized;
 }
@@ -66,7 +73,7 @@ export function normalizeOptionalSha256(value?: any, fieldName?: any) : any {
 export function normalizeByteSize(value?: any) : any {
   const byteSize: any = Number(value || 0);
   if (!Number.isSafeInteger(byteSize) || byteSize < 0) {
-    throw new Error("上传文件大小无效。");
+    throw uploadSessionInputError("upload_byte_size_invalid", "上传文件大小无效。");
   }
   return byteSize;
 }
@@ -74,7 +81,7 @@ export function normalizeByteSize(value?: any) : any {
 export function normalizeFileIndex(value?: any) : any {
   const fileIndex: any = Number(value);
   if (!Number.isSafeInteger(fileIndex) || fileIndex < 0) {
-    throw new Error("上传文件索引无效。");
+    throw uploadSessionInputError("upload_file_index_invalid", "上传文件索引无效。");
   }
   return fileIndex;
 }

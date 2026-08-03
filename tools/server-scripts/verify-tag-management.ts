@@ -130,7 +130,7 @@ try {
   const restored: any = tagStoreAgain.restoreTag(child.tagId);
   assert.equal(restored.status, "active");
   assert.equal(restored.enabled, true);
-  assert.throws(() : any => tagStoreAgain.archiveTag("role:admin"), /System tags cannot be archived/);
+  assert.throws(() : any => tagStoreAgain.archiveTag("role:maintainer"), /System tags cannot be archived/);
 
   const revisionAfterCrud: any = tagStoreAgain.getPolicyRevision().revision;
   assert.equal(revisionAfterCrud > baseRevision, true);

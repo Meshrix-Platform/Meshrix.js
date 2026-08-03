@@ -3,7 +3,8 @@ import OptionBar from "@meshrix/ui-console/option-bar";
 import { useWorkspacesViewContext } from "../../../composables/workspacesViewContext";
 
 const {
-  busyKey,
+  isBusy,
+  isBusyPrefix,
   panel,
   selected,
   shareForm,
@@ -36,8 +37,8 @@ const {
       <em v-if="selected.accessibleWorkspaceIds.length === 0">（无）</em>
     </p>
     <div class="module-actions">
-      <button class="tool-button" type="button" :disabled="!shareForm.targetWorkspaceId || !!busyKey" @click="shareOrUnshare">
-        {{ busyKey === 'ws:share' ? '处理中…' : (shareForm.action === 'share' ? '授权' : '撤销') }}
+      <button class="tool-button" type="button" :disabled="!shareForm.targetWorkspaceId || isBusyPrefix('ws:')" @click="shareOrUnshare">
+        {{ isBusy('ws:share') ? '处理中…' : (shareForm.action === 'share' ? '授权' : '撤销') }}
       </button>
       <button class="tool-button tool-button-ghost" type="button" @click="panel = 'list'">取消</button>
     </div>

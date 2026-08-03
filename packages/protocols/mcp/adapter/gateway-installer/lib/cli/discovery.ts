@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 
 import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
-import { loadProcessIdentity } from "../process-identity-store.ts";
 import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,
@@ -13,14 +12,13 @@ import {
   MCP_STABLE_TOOL_NAME,
   packageJson
 } from "./constants.ts";
-import { mcpTargetHeaders, normalizeBaseUrl, normalizeTarget, option } from "./basic-utils.ts";
+import { containsMxak1Credential, MXAK1_CREDENTIAL_PATTERN, mcpTargetHeaders, normalizeBaseUrl, normalizeTarget, option } from "./basic-utils.ts";
 import {
   discoveryRegistryPath,
   readJson
 } from "./device-discovery-registry.ts";
-import { readStdin, run, uniqueValues } from "./connector-process.ts";
+import { assertSafeEnvName, readStdin, run, uniqueValues } from "./connector-process.ts";
 import { fetchJson } from "./http-json-client.ts";
-import { processIdentityHeaders } from "./process-identity-request.ts";
 
 export async function readLaunchctlEnv(name?: any) : Promise<any> {
   if (process.platform !== "darwin") {
@@ -31,7 +29,11 @@ export async function readLaunchctlEnv(name?: any) : Promise<any> {
 }
 
 export function explicitBaseUrl(options: Record<string, any> = {}) : any {
-  return normalizeBaseUrl(option(options, "url", process.env.MESHRIX_MCP_BASE_URL || ""));
+  const value: any = option(options, "url", process.env.MESHRIX_MCP_BASE_URL || "");
+  if (containsMxak1Credential(value)) {
+    throw new Error("Raw API Keys are not accepted in URLs. Use --token-stdin or --token-env.");
+  }
+  return normalizeBaseUrl(value);
 }
 
 export function baseUrlFromEndpoint(value?: any) : any {
@@ -262,19 +264,32 @@ export async function publishLaunchctlEnv(env?: any) : Promise<any> {
   return false;
 }
 
-export async function resolveToken(options?: any, { required = false }: Record<string, any> = {}) : Promise<any> {
-  if (options["token-stdin"]) {
-    return (await readStdin()).trim();
-  }
-  const tokenEnv: any = String(option(options, "token-env", DEFAULT_TOKEN_ENV));
+export async function resolveApiKey(options: Record<string, any> = {}, { required = false }: Record<string, any> = {}) : Promise<any> {
+  const tokenEnv: any = assertSafeEnvName(String(option(options, "token-env", DEFAULT_TOKEN_ENV)));
   const envToken: any = String(process.env[tokenEnv] || "").trim();
-  if (envToken) {
-    return envToken;
+  const stdinRequested: any = options["token-stdin"] === true;
+  if (Object.hasOwn(process.env, tokenEnv)) {
+    delete process.env[tokenEnv];
   }
-  if (required) {
-    throw new Error(`Missing token. Provide --token-stdin or ${tokenEnv}.`);
+  if (stdinRequested && envToken) {
+    throw new Error(`Ambiguous API Key input. Use either --token-stdin or ${tokenEnv}, not both.`);
   }
-  return "";
+  const credential: any = stdinRequested ? (await readStdin()).trim() : envToken;
+  if (!credential) {
+    if (required) throw new Error(`Missing API Key. Provide --token-stdin or ${tokenEnv}.`);
+    return "";
+  }
+  if (!MXAK1_CREDENTIAL_PATTERN.test(credential)) {
+    throw new Error("Invalid API Key. A strict mxak1 credential is required from protected stdin or the configured environment variable.");
+  }
+  return credential;
+}
+
+export function discardConfiguredApiKeyEnvironment(options: Record<string, any> = {}) : any {
+  const tokenEnv: any = assertSafeEnvName(String(option(options, "token-env", DEFAULT_TOKEN_ENV)));
+  if (Object.hasOwn(process.env, tokenEnv)) {
+    delete process.env[tokenEnv];
+  }
 }
 
 export async function ensureService(baseUrl?: any) : Promise<any> {
@@ -299,25 +314,15 @@ export async function ensureService(baseUrl?: any) : Promise<any> {
 }
 
 export function authHeaders(token?: any, target: any = "") : any {
+  const credential: any = String(token || "").trim();
+  if (!MXAK1_CREDENTIAL_PATTERN.test(credential)) {
+    throw new Error("Invalid API Key. A strict mxak1 credential is required.");
+  }
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-    "X-Meshrix-Api-Key": token,
+    "X-Meshrix-Api-Key": credential,
+    "X-Meshrix-Connector-Package-Id": "meshrix-mcp-connector",
     ...mcpTargetHeaders(target)
-  };
-}
-
-export async function signedAuthHeaders({ baseUrl, token, target = "", method = "POST", body = "", url = "" }: Record<string, any> = {}) : Promise<any> {
-  const requestUrl: any = String(url || `${baseUrl}/mcp`);
-  const identity: any = await loadProcessIdentity(target);
-  return {
-    ...authHeaders(token, target),
-    ...processIdentityHeaders({
-      method,
-      url: new URL(requestUrl),
-      body,
-      identity
-    })
   };
 }
 
@@ -325,7 +330,7 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
   const toolsListBody: any = JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
   const toolsList: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
-    headers: await signedAuthHeaders({ baseUrl, token, target, method: "POST", body: toolsListBody }),
+    headers: authHeaders(token, target),
     body: toolsListBody
   });
   const healthBody: any = JSON.stringify({
@@ -344,7 +349,7 @@ export async function verifyMcpTools({ baseUrl, token, target = "" }: Record<str
   });
   const health: any = await fetchJson(`${baseUrl}/mcp`, {
     method: "POST",
-    headers: await signedAuthHeaders({ baseUrl, token, target, method: "POST", body: healthBody }),
+    headers: authHeaders(token, target),
     body: healthBody
   });
   const tools: any = toolsList.payload?.result?.tools || [];

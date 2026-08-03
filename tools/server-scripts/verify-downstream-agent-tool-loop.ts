@@ -41,14 +41,10 @@ import {
   upstreamFixtureGrantBindings,
   upstreamFixtureScenarioToolNames
 } from "./lib/upstream-fixture-grant.ts";
-import { createVerifierLocalMcpGrantIdentity } from "./lib/local-mcp-verifier-identity.ts";
 import { provisionVerifierLocalSecretKey } from "./lib/local-secret-verifier-key.ts";
-import {
-  installerProcessEnv,
-  saveInstallerProcessIdentity
-} from "./lib/mcp-neutral-peer-identity-support.ts";
+import { installerProcessEnv } from "./lib/mcp-neutral-peer-identity-support.ts";
 import { createMcpProxyStdioClient } from "./lib/mcp-proxy-stdio-client.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import {
   WINDOWS_LOCAL_PATH_PATTERN,
   redactReportText
@@ -196,7 +192,7 @@ async function requestJson(route?: any, options: Record<string, any> = {}) : Pro
   };
 }
 
-async function createLocalGrant({ target, scenario, extraToolNames = [] }: Record<string, any>) : Promise<any> {
+async function createVerifierApiKey({ target, scenario, extraToolNames = [] }: Record<string, any>) : Promise<any> {
   const grantBindings: any = upstreamFixtureGrantBindings({
     secretRef: MCP_SECRET_REF,
     toolNames: [...new Set<any>([
@@ -204,13 +200,9 @@ async function createLocalGrant({ target, scenario, extraToolNames = [] }: Recor
       ...extraToolNames
     ])]
   });
-  const verifierIdentity: any = createVerifierLocalMcpGrantIdentity({
-    target,
-    label: `verify-downstream-agent-${target}`
-  });
-  const response: any = await issueVerifierLocalMcpGrant({
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    grantRequest: {
+    access: {
       targets: [target],
       label: `verify-downstream-agent-${target}`,
       connectorVersion: "verify-downstream-agent-tool-loop",
@@ -218,29 +210,17 @@ async function createLocalGrant({ target, scenario, extraToolNames = [] }: Recor
       dynamicCapabilities: [...grantBindings.dynamicCapabilities],
       allowedServiceIds: [...grantBindings.allowedServiceIds],
       allowedSecretBindings: [...grantBindings.allowedSecretBindings],
-      processIdentity: verifierIdentity.request
+      maxRisk: "repair_write"
     }
   });
-  assert.equal(response.status, 201, JSON.stringify(safeEvidence(response.payload)));
-  assert.equal(response.payload.ok, true);
-  assert.ok(response.payload.token, "local grant did not return a token");
+  assert.ok(response.apiKey, "API Key issuance did not return plaintext to the direct verifier caller");
   trackRedaction(
-    response.payload.token,
-    response.payload.tokenPrefix,
-    response.payload.grant?.tokenPrefix,
-    response.payload.grant?.id
+    response.apiKey,
+    response.record.keyId
   );
-  await saveInstallerProcessIdentity({
-    installerHome,
-    target,
-    serverUrl: server.url,
-    identity: verifierIdentity.identity,
-    payload: response.payload,
-    trackRedaction
-  });
   return {
-    token: response.payload.token,
-    grantIdHash: stableDownstreamAgentRefHash(response.payload.grant?.id || "")
+    token: response.apiKey,
+    keyIdHash: stableDownstreamAgentRefHash(response.record.keyId)
   };
 }
 
@@ -516,7 +496,7 @@ async function runCancellationPropagationScenario({ client }: Record<string, any
 async function runProxyClientTarget({ target, scenario }: Record<string, any>) : Promise<any> {
   const tokenEnv: any = `MESHRIX_VERIFY_DOWNSTREAM_AGENT_${target.replace(/[^A-Za-z0-9]/gu, "_").toUpperCase()}_${randomBytes(4).toString("hex").toUpperCase()}`;
   const cancellationTarget: any = target === DOWNSTREAM_AGENT_CANCELLATION_TARGET;
-  const grant: any = await createLocalGrant({
+  const grant: any = await createVerifierApiKey({
     target,
     scenario,
     extraToolNames: cancellationTarget ? CANCELLATION_UPSTREAM_TOOL_NAMES : []

@@ -19,10 +19,21 @@ beforeEach(() : any => {
 });
 
 describe("job runner and background worker wrappers", () : any => {
+  it("rejects a missing composed storage provider before opening a per-job runtime", async () : Promise<any> => {
+    await expect(
+      runSplitJob("/data", { inputText: "direct text" }, { jobId: "job-missing-storage" })
+    ).rejects.toMatchObject({
+      code: "upload_session_storage_provider_unavailable"
+    });
+    expect(createServerRuntimeMock).not.toHaveBeenCalled();
+    expect(createJobPipelineMock).not.toHaveBeenCalled();
+  });
+
   it("runs split jobs through the pipeline and closes runtime on success", async () : Promise<any> => {
     const storageProvider: Record<string, any> = {
       protocolVersion: "fixture-storage",
-      putObjectsFromFiles: vi.fn()
+      putObjectsFromFiles: vi.fn(),
+      commitUploadConsumptionReceipt: vi.fn()
     };
     const runtime: Record<string, any> = {
       storageProvider,
@@ -50,6 +61,7 @@ describe("job runner and background worker wrappers", () : any => {
     await expect(runSplitJob("/data", payload, {
       jobId: "job-1",
       runtimeOptions: { featureFlags: { test: true } },
+      storageProvider,
       onProgress
     })).resolves.toEqual({ ok: true, input: context });
 
@@ -77,7 +89,8 @@ describe("job runner and background worker wrappers", () : any => {
     const runtime: Record<string, any> = {
       storageProvider: {
         protocolVersion: "fixture-storage",
-        putObjectsFromFiles: vi.fn()
+        putObjectsFromFiles: vi.fn(),
+        commitUploadConsumptionReceipt: vi.fn()
       },
       close: vi.fn(async () : Promise<any> => undefined)
     };
@@ -97,7 +110,8 @@ describe("job runner and background worker wrappers", () : any => {
       }
     }, {
       jobId: "job-error",
-      batchId: "batch-fallback"
+      batchId: "batch-fallback",
+      storageProvider: runtime.storageProvider
     })).rejects.toThrow("pipeline failed");
 
     expect(runtime.close).toHaveBeenCalledOnce();
@@ -107,7 +121,8 @@ describe("job runner and background worker wrappers", () : any => {
     const runtime: Record<string, any> = {
       storageProvider: {
         protocolVersion: "fixture-storage",
-        putObjectsFromFiles: vi.fn()
+        putObjectsFromFiles: vi.fn(),
+        commitUploadConsumptionReceipt: vi.fn()
       },
       close: vi.fn(async () : Promise<any> => undefined)
     };
@@ -116,6 +131,7 @@ describe("job runner and background worker wrappers", () : any => {
     const execution: any = runSplitJob("/data", { settings: {} }, {
       jobId: "job-cancelled",
       runtimeOptions: { testHooks: { jobDelayMs: 10_000 } },
+      storageProvider: runtime.storageProvider,
       signal: controller.signal
     });
 

@@ -1,4 +1,10 @@
-import { nowIso, sourceIpFromRequest } from "./runtime-common.ts";
+import {
+  authorizationGrantId,
+  authorizationSubjectId,
+  authorizationSubjectType,
+  nowIso,
+  sourceIpFromRequest
+} from "./runtime-common.ts";
 import { jsonByteLength } from "./runtime-result-summary.ts";
 
 export async function completeDryRunExecution({
@@ -36,9 +42,9 @@ export async function completeDryRunExecution({
     toolId: tool.id,
     toolVersion: tool.version,
     toolsetIds: tool.toolsets,
-    subjectType: "grant",
-    subjectId: authorization.grant.id,
-    grantId: authorization.grant.id,
+    subjectType: authorizationSubjectType(authorization),
+    subjectId: authorizationSubjectId(authorization),
+    grantId: authorizationGrantId(authorization),
     agentId: context.agentId || "",
     profileId: context.profileId || "",
     operationId: tool.operationId,
@@ -57,7 +63,7 @@ export async function completeDryRunExecution({
   store.appendMetric({
     traceId,
     toolId: tool.id,
-    grantId: authorization.grant.id,
+    grantId: authorizationGrantId(authorization),
     profileId: context.profileId || "",
     status: "ok",
     risk: tool.risk,
@@ -84,7 +90,7 @@ export async function completeDryRunExecution({
       toolId: tool.id,
       status: "ok",
       result,
-      grant: authorization.grant,
+      ...(authorization.grant ? { grant: authorization.grant } : {}),
       policy: policySummary
     }
   };

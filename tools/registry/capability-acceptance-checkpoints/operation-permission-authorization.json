@@ -24,7 +24,7 @@
           {
             "acceptanceCommandId": "operation-permission-protocol-consistency",
             "report": "build/reports/operation-permission-protocol-consistency.json"
-          }
+}
         ]
       },
       {
@@ -81,8 +81,8 @@
         "text": "Escalatable denies are the only denied results that create approval requests.",
         "evidence": [
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           },
           {
             "acceptanceCommandId": "operation-permission-tag-governed-e2e",
@@ -144,8 +144,8 @@
             "report": "build/reports/plugin-runtime.json"
           },
           {
-            "acceptanceCommandId": "mcp-authorization-request-filters",
-            "report": "build/reports/mcp-authorization-request-filters.json"
+            "acceptanceCommandId": "operation-permission-protocol-consistency",
+            "report": "build/reports/operation-permission-protocol-consistency.json"
           }
         ]
       },

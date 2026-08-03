@@ -3,6 +3,9 @@ import { mount } from "@vue/test-utils";
 import { computed, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ToolsView from "../../../apps/console/views/admin/ToolsView.vue";
+import { createConsoleBusyController } from "../../../apps/console/composables/console-busy-controller";
+
+let toolsViewBusy: any = createConsoleBusyController();
 
 const shellContextMock: any = vi.hoisted(() : any => ({
   current: null as unknown,
@@ -91,7 +94,7 @@ function makeOperationPermissionConsole(overrides: Record<string, unknown> = {})
     defaultAgentToolCount: computed(() : any =>
       operationPermissionTools.value.filter((tool?: any) : any => tool.toolsets.includes("toolset.repo")).length,
     ),
-    busyKey: ref(""),
+    isBusy: toolsViewBusy.isBusy,
     internalOperationPermissionToolCount: computed(() : any =>
       operationPermissionTools.value.filter((tool?: any) : any => tool.status === "internal").length,
     ),
@@ -169,6 +172,8 @@ function mountToolsView(adminViewValue: any = "toolList", operationPermissionOve
 
 beforeEach(() : any => {
   shellContextMock.current = null;
+  // Fresh busy state per test so one test's in-flight key cannot leak into another.
+  toolsViewBusy = createConsoleBusyController();
 });
 
 describe("ToolsView behavior", () : any => {
@@ -199,7 +204,7 @@ describe("ToolsView behavior", () : any => {
     await governanceHarness.wrapper.find("button.tool-button").trigger("click");
     expect(governanceHarness.operationPermissionConsole.previewToolPolicy).toHaveBeenCalledTimes(1);
 
-    governanceHarness.operationPermissionConsole.busyKey.value = "tool-policy-preview";
+    toolsViewBusy.setBusy("tool-policy-preview");
     await governanceHarness.wrapper.vm.$nextTick();
     expect(governanceHarness.wrapper.find("button.tool-button").attributes("disabled")).toBeDefined();
     expect(governanceHarness.wrapper.find("button.tool-button").text()).toBe("评估中");

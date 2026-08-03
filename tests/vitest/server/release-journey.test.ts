@@ -16,12 +16,22 @@ import {
   stepReceipt
 } from "../../../tools/server-scripts/lib/release-journey-report.ts";
 import {
+  releaseJourneyUploadCheckpointId,
   safePublicToolSegment,
   uploadBinaryFixtureThroughConnector
 } from "../../../tools/server-scripts/lib/release-journey-mcp.ts";
 import {
   discoverReleaseJourneyClients
 } from "../../../tools/server-scripts/lib/release-journey-adapter.ts";
+import {
+  apiKeyUploadAuthSession,
+  authSubjectFromSession
+} from "../../../packages/protocols/http/controllers/jobs-controller-access.ts";
+import { uploadSessionOwnerAccess } from "../../../packages/server-runtime/src/state/upload-session-owner.ts";
+import {
+  apiKeyUploadOperation,
+  authorizeApiKeyUpload
+} from "../../../apps/server/runtime/http-server-routes.ts";
 
 const FIXTURE_TEXT: any = "格式转换服务中文验收样例\n第一段：Meshrix 格式转换服务将 UTF-8 纯文本文档转换为 DOCX 或 PDF。";
 
@@ -105,6 +115,18 @@ describe("release-journey-mcp safePublicToolSegment", () : any => {
   });
 });
 
+describe("release-journey upload checkpoint identity", () : any => {
+  it("isolates deterministic upload sessions by connector target", () : any => {
+    const fixtureDigest: any = "f".repeat(64);
+    const first: any = releaseJourneyUploadCheckpointId("codex", fixtureDigest);
+    const repeated: any = releaseJourneyUploadCheckpointId("codex", fixtureDigest);
+    const sibling: any = releaseJourneyUploadCheckpointId("claude-code", fixtureDigest);
+    expect(first).toBe(repeated);
+    expect(first).not.toBe(sibling);
+    expect(first).toMatch(/^release-journey-[a-f0-9]{16}-[a-f0-9]{16}$/u);
+  });
+});
+
 describe("release-journey native upload", () : any => {
   it("uses an upload session and raw octet-stream bytes without Base64", async () : Promise<any> => {
     const fixtureBytes: any = Buffer.from("native upload fixture", "utf8");
@@ -150,6 +172,199 @@ describe("release-journey native upload", () : any => {
     expect(result.receipt.processIdentityBound).toBe(true);
     expect(protectedValues).toEqual(["synthetic-token", "upload_session_synthetic"]);
   });
+
+  it("uses a scoped API key without fabricating process identity headers", async () : Promise<any> => {
+    const fixtureBytes: any = Buffer.from("api key upload fixture", "utf8");
+    const calls: any[] = [];
+    const result: any = await uploadBinaryFixtureThroughConnector({
+      baseUrl: "http://127.0.0.1:8080",
+      fixtureBytes,
+      fixtureFileName: "fixture.txt",
+      resolveCredentials: async () : Promise<any> => ({
+        token: `mxak1.${"a".repeat(22)}.${"b".repeat(43)}`,
+        identity: null
+      }),
+      buildIdentityHeaders: () : any => ({}),
+      fetchImpl: async (url?: any, options?: any) : Promise<any> => {
+        calls.push({ url: String(url), options });
+        if (new URL(url).pathname === "/api/upload-sessions") {
+          return {
+            ok: true,
+            status: 200,
+            text: async () : Promise<any> => JSON.stringify({ sessionId: "upload_session_api_key" })
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () : Promise<any> => JSON.stringify({
+            status: "complete",
+            files: [{ receivedBytes: fixtureBytes.length }]
+          })
+        };
+      }
+    });
+
+    expect(calls).toHaveLength(2);
+    expect(calls.every((call?: any) : any => !call.options.headers["x-meshrix-signature"])).toBe(true);
+    expect(result.receipt.processIdentityBound).toBe(false);
+    expect(result.receipt.workloadIdentityBound).toBe(true);
+  });
+});
+
+describe("release-journey API key upload owner", () : any => {
+  it("uses two rendered-console credentials for the sibling organization journey", async () : Promise<any> => {
+    const source: any = await import("node:fs/promises").then((fs?: any) : any =>
+      fs.readFile(new URL(
+        "../../../tools/server-scripts/verify-release-journey.ts",
+        import.meta.url
+      ), "utf8")
+    );
+    expect(source).toContain('organizationNodeId: "organization:secondary"');
+    expect(source).toContain('allowedTools: ["uploads.get_session"]');
+    expect(source).toContain("siblingProvisioned.apiKey");
+    expect(source).toContain("siblingOrganizationCredential");
+    expect(source).toContain("installMatrixTargetWithApiKey");
+    expect(source).toContain("missingCredentialDeniedBeforeUse");
+    expect(source).toContain('credentialSource: "pre-issued-api-key"');
+    expect(source).not.toContain("startConnectorInstall");
+    expect(source).not.toContain("approvePendingAuthorizations");
+    expect(source).not.toContain("x-meshrix-organization-node-id");
+  });
+
+  it("binds one frozen workload principal and never accepts caller identity claims", () : any => {
+    const authorization: any = Object.freeze({
+      credentialKind: "scoped_api_key",
+      keyId: "key-id-hidden",
+      workloadPrincipalId: "workload-generated-principal",
+      organizationNodeId: "group:team",
+      lifecycleRevision: 1,
+      policyFingerprint: "policy-fingerprint",
+      policy: Object.freeze({
+        scopeIds: Object.freeze(["uploads:write"]),
+        resources: Object.freeze({ workspaceIds: Object.freeze(["workspace-a"]) })
+      })
+    });
+    const session: any = apiKeyUploadAuthSession(authorization);
+    expect(session).toMatchObject({
+      credentialKind: "scoped_api_key",
+      apiKeyAuthorization: authorization,
+      user: {
+        type: "scoped-api-key",
+        subjectId: "workload-generated-principal",
+        organizationNodeId: "group:team",
+        tenantId: "local",
+        scopes: ["uploads:write"],
+        allowedWorkspaceIds: ["workspace-a"]
+      }
+    });
+    expect(Object.isFrozen(session)).toBe(true);
+    expect(Object.isFrozen(session.user)).toBe(true);
+    expect(apiKeyUploadAuthSession({ ...authorization, credentialKind: "tool-grant" })).toBeNull();
+  });
+
+  it("denies an actual sibling-organization credential before principal ownership comparison", () : any => {
+    const primary: any = apiKeyUploadAuthSession({
+      credentialKind: "scoped_api_key",
+      workloadPrincipalId: "primary-workload",
+      organizationNodeId: "group:team",
+      lifecycleRevision: 1,
+      policy: { scopeIds: ["uploads:write"], resources: { workspaceIds: [] } }
+    });
+    const sibling: any = apiKeyUploadAuthSession({
+      credentialKind: "scoped_api_key",
+      workloadPrincipalId: "sibling-workload",
+      organizationNodeId: "organization:secondary",
+      lifecycleRevision: 1,
+      policy: { scopeIds: ["uploads:write"], resources: { workspaceIds: [] } }
+    });
+    const primaryOwner: any = authSubjectFromSession(primary);
+    const siblingOwner: any = authSubjectFromSession(sibling);
+    expect(primaryOwner.organizationNodeId).toBe("group:team");
+    expect(siblingOwner.organizationNodeId).toBe("organization:secondary");
+    expect(uploadSessionOwnerAccess({
+      ownerSubjectId: primaryOwner.subjectId,
+      ownerUserId: primaryOwner.userId,
+      ownerOrganizationNodeId: primaryOwner.organizationNodeId
+    }, siblingOwner)).toMatchObject({
+      ok: false,
+      reasonCode: "upload_session_organization_mismatch"
+    });
+  });
+
+  it("requires the exact upload operation and revalidates the immutable lifecycle", async () : Promise<any> => {
+    const operation: any = apiKeyUploadOperation("POST", "/api/upload-sessions");
+    const context: any = Object.freeze({
+      credentialKind: "scoped_api_key",
+      keyId: "key-id-hidden",
+      workloadPrincipalId: "workload-generated-principal",
+      organizationNodeId: "group:team",
+      lifecycleRevision: 3,
+      policyFingerprint: "policy-fingerprint",
+      policy: Object.freeze({
+        scopeIds: Object.freeze(["uploads:write"]),
+        allowedTools: Object.freeze(["uploads.create_session"]),
+        resources: Object.freeze({ workspaceIds: Object.freeze([]) })
+      })
+    });
+    let current: any = { handled: true, ok: true, apiKeyAuthorization: context };
+    const authorization: any = await authorizeApiKeyUpload({
+      request: { headers: {} },
+      requestBody: Buffer.from("{}"),
+      url: new URL("http://server.invalid/api/upload-sessions"),
+      method: "POST",
+      operation,
+      toolSkillManagementProvider: {
+        authorizeRequest: async () : Promise<any> => current,
+        revalidateApiKeyAuthorization: async () : Promise<any> => current.ok === true
+          ? { ok: true, apiKeyAuthorization: current.apiKeyAuthorization }
+          : current
+      }
+    });
+    expect(authorization).toMatchObject({ ok: true, credentialKind: "scoped_api_key" });
+    expect(Object.isFrozen(authorization.authSession)).toBe(true);
+    expect(await authorization.revalidateAuthorization()).toMatchObject({ ok: true });
+    current = { handled: true, ok: false, status: 410, reasonCode: "api_key_revoked" };
+    expect(await authorization.revalidateAuthorization()).toMatchObject({
+      ok: false,
+      status: 410,
+      reasonCode: "api_key_revoked"
+    });
+  });
+
+  it("denies a scoped key that omits the upload operation before controller effects", async () : Promise<any> => {
+    const result: any = await authorizeApiKeyUpload({
+      request: { headers: {} },
+      requestBody: Buffer.from("{}"),
+      url: new URL("http://server.invalid/api/upload-sessions"),
+      method: "POST",
+      operation: apiKeyUploadOperation("POST", "/api/upload-sessions"),
+      toolSkillManagementProvider: {
+        authorizeRequest: async () : Promise<any> => ({
+          handled: true,
+          ok: true,
+          apiKeyAuthorization: {
+            credentialKind: "scoped_api_key",
+            keyId: "key-id-hidden",
+            workloadPrincipalId: "workload-generated-principal",
+            organizationNodeId: "group:team",
+            lifecycleRevision: 1,
+            policyFingerprint: "policy-fingerprint",
+            policy: {
+              scopeIds: ["uploads:write"],
+              allowedTools: ["upstream.service.convert"],
+              resources: { workspaceIds: [] }
+            }
+          }
+        })
+      }
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      status: 403,
+      reasonCode: "api_key_operation_denied"
+    });
+  });
 });
 
 describe("release-journey-report", () : any => {
@@ -193,7 +408,7 @@ describe("release-journey-report", () : any => {
     expect(finalized.generatedAt).toBeTruthy();
     expect(finalized.timing).toEqual({
       totalDurationMs: 240_000,
-      stepDurationMs: 12_000,
+      stepDurationMs: 13_000,
       cleanupDurationMs: 1_200
     });
     expect(finalized.cleanup.details.reduce(

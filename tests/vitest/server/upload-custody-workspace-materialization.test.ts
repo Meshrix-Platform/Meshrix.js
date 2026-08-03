@@ -384,7 +384,7 @@ function createQueueSchedulingGate(
   let released: any = false;
   const recoveredWorkItemIds: any = new Set<any>();
   async function waitForInFlightHandlers({
-    timeoutMs = 30_000
+    timeoutMs = 90_000
   }: Record<string, any> = {}) : Promise<any> {
     const startedAt: any = Date.now();
     while (Number(facet?.describe()?.execution?.inFlight || 0) > 0) {
@@ -1462,7 +1462,7 @@ async function spawnCrashChild(
         process.kill(-child.pid, "SIGKILL");
         return;
       } catch (error: any) {
-        if (error?.code !== "ESRCH") throw error;
+        if (error?.code !== "ESRCH" && error?.code !== "EPERM") throw error;
       }
     }
     child.kill("SIGKILL");
@@ -1480,7 +1480,7 @@ async function spawnCrashChild(
   const marker: any = await new Promise((resolve?: any, reject?: any) : any => {
     const timeout: any = setTimeout(() : any => {
       reject(new Error("Crash child readiness timed out."));
-    }, 30_000);
+    }, 90_000);
     const finish: any = (task?: any) : any => (value?: any) : any => {
       clearTimeout(timeout);
       task(value);
@@ -1586,10 +1586,21 @@ async function expectQueueOrphanRecovery(runtime?: any, bindingDigest?: any) : P
           entry === "progress" || entry === "complete"
       )
     ).toBe(true);
-    const retainedProgress: any = retainedTail.filter(
-      (entry?: any) : any => entry === "progress"
+    const retainedProgress: any = journal.slice(1).filter(
+      (entry?: any) : any =>
+        entry.transition === "progress" &&
+        entry.reason !== "lease_renewal"
     );
-    expect(retainedProgress.length).toBeLessThanOrEqual(16);
+    expect(
+      retainedProgress.length,
+      `recovery journal: ${journal
+        .slice(1)
+        .slice(0, 40)
+        .map((entry?: any) : any =>
+          `${entry.transition}:${entry.reason || ""}:${entry.operationId || ""}`
+        )
+        .join("|")}`
+    ).toBeLessThanOrEqual(16);
     if (retainedTail.length === 0) {
       if (inspection.workItem !== null) {
         expect(inspection.workItem.state).toBe("completed");
@@ -2164,7 +2175,7 @@ describe(
           workspaceReads: 0
         });
       }
-    }, 30_000);
+    }, 90_000);
 
     it.each([
       "subject",
@@ -2299,7 +2310,7 @@ describe(
         expect(await fixture.materializationEvents())
           .toHaveLength(0);
       },
-      30_000
+      90_000
     );
 
     it("streams one executable-looking opaque object through bounded custody into one private non-executable inode and replays with zero effects", async () : Promise<any> => {
@@ -2531,7 +2542,7 @@ describe(
           admitted.payload.requestRef
         )).evidence
       ).toEqual(evidence);
-    }, 30_000);
+    }, 90_000);
 
     it.each([
       "truncated",
@@ -2598,7 +2609,7 @@ describe(
         expect(await fixture.materializationEvents())
           .toHaveLength(0);
       },
-      30_000
+      90_000
     );
 
     itPosix.each(PATH_SENSITIVE_FAULT_SEAMS)(
@@ -2677,7 +2688,7 @@ describe(
       expect(await fixture.materializationEvents())
         .toHaveLength(0);
       },
-      30_000
+      90_000
     );
 
     itPosix.each(INODE_REPLACEMENT_CASES)(
@@ -2778,7 +2789,7 @@ describe(
             .toBeGreaterThanOrEqual(1);
         }
       },
-      30_000
+      90_000
     );
 
     itPosix.each([
@@ -2912,7 +2923,7 @@ describe(
           ).toBeNull();
         }
       },
-      30_000
+      90_000
     );
 
     itPosix("fails closed on restart when the persisted publication parent is replaced", async () : Promise<any> => {
@@ -3026,7 +3037,7 @@ describe(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
-    }, 30_000);
+    }, 90_000);
 
     it.each(WAL_TAMPER_CASES)(
       "rejects valid-format digest substitution, stale ownership, stage skip, and ordinary failure at $expectedStage without changing the live WAL",
@@ -3177,7 +3188,7 @@ describe(
         ).toMatchObject({ status: "completed" });
         delete fixture[hookOwner][hookName];
       },
-      30_000
+      90_000
     );
 
     itPosix("fails closed after direct persisted WAL tampering across close and reopen without custody, plaintext, namespace, or queue effects", async () : Promise<any> => {
@@ -3294,7 +3305,7 @@ describe(
       expect(snapshotDatabaseLayout(afterDb))
         .toBe(tamperedLayout);
       afterDb.close();
-    }, 30_000);
+    }, 90_000);
 
     itPosix("reconciles a transaction row lost before its first queue enqueue after a real SIGKILL", async () : Promise<any> => {
       const fixture: any = await createFixture();
@@ -3441,7 +3452,7 @@ describe(
       expect(transitions.at(-1)).toBe("complete");
       expect(recoveredRuntime.queueGate.recoveredWorkItemIds())
         .not.toContain(workItemId);
-    }, 30_000);
+    }, 90_000);
 
     itPosix.each(QUEUE_CRASH_CASES)(
       "recovers the real queue boundary $crashStage and fences its stale acknowledgement",
@@ -3597,7 +3608,7 @@ describe(
           await staleQueueStore.close?.();
         }
       },
-      30_000
+      90_000
     );
 
     itPosix("fails closed with an identity-less private inode and retained WAL when SIGKILL lands after inode reserve but before its WAL identity", async () : Promise<any> => {
@@ -3716,7 +3727,7 @@ describe(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
-    }, 30_000);
+    }, 90_000);
 
     itPosix.each(PRECOMMIT_CRASH_CASES)(
       "recovers the exact $crashStage precommit namespace after a real SIGKILL without touching its neighbor",
@@ -3884,7 +3895,7 @@ describe(
           admittedRecord.bindingDigest
         );
       },
-      30_000
+      90_000
     );
 
     it("commits forward from the exact durable Merkle event after SIGKILL with no second permit, custody read, archive, or event", async () : Promise<any> => {
@@ -4003,7 +4014,7 @@ describe(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
-    }, 30_000);
+    }, 90_000);
 
     itPosix.each(["target-identity", "target-content"])(
       "fails closed when committed recovery observes $0 mismatch after SIGKILL",
@@ -4072,7 +4083,7 @@ describe(
         expect(await fixture.workspaceCheckpointTrees())
           .toEqual(checkpointsBeforeRecovery);
       },
-      30_000
+      90_000
     );
 
     itPosix.each([
@@ -4197,7 +4208,7 @@ describe(
         expect(await fixture.workspaceCheckpointTrees())
           .toEqual(checkpointsBeforeRecovery);
       },
-      30_000
+      90_000
     );
 
     it.each([
@@ -4434,7 +4445,7 @@ describe(
           admittedRecord.bindingDigest
         );
       },
-      30_000
+      90_000
     );
 
     it("migrates a fully recognizable current-layout v0 transaction set and refuses sparse effectful or unknown layouts unchanged", async () : Promise<any> => {

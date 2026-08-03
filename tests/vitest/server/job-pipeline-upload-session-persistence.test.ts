@@ -144,6 +144,8 @@ function pipelineFor({ checkpointReceipt, userDataPath, storageProvider, uploadS
       ownerSubjectId: OWNER.subjectId,
       ownerUserId: OWNER.userId,
       ownerUsername: OWNER.username,
+      ownerRoleId: OWNER.roleId,
+      ownerTenantId: OWNER.tenantId,
       settings: {}
     },
     runtime: {},

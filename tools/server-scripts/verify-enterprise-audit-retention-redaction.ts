@@ -28,7 +28,7 @@ const SOURCE_FILES: readonly any[] = Object.freeze([
 ]);
 const CAPABILITY_OPERATIONS: readonly any[] = Object.freeze([
   ["operation-permission", "operation_permission.execute"],
-  ["mcp", "operation_permission.mcp.request_authorization"],
+  ["mcp", "operation_permission.execute"],
   ["gateway", "gateway.forward"],
   ["workspace", "workspace.file.write"],
   ["external-services", "external_services.list"],
@@ -78,7 +78,7 @@ async function main() : Promise<any> {
         tenantId: "tenant-a",
         operationId,
         transport: capability === "mcp" ? "mcp" : "http",
-        actor: { userId: "user-a", roleId: "admin", tenantId: "tenant-a" },
+        actor: { userId: "user-a", roleId: "maintainer", tenantId: "tenant-a" },
         risk: operationId.includes("restore") || operationId.includes("publish") ? "repair_write" : "safe_write",
         readOnly: false,
         status: capability === "gateway" ? "denied" : "ok",
@@ -107,7 +107,7 @@ async function main() : Promise<any> {
       traceId,
       operationId: "auth.audit.retention.set",
       transport: "http",
-      actor: { userId: "auditor", roleId: "admin" },
+      actor: { userId: "auditor", roleId: "maintainer" },
       risk: "safe_write",
       status: "ok",
       input: { retentionDays: 1, updatedBy: { authorization: bearerFixture } }
@@ -179,7 +179,7 @@ async function main() : Promise<any> {
       traceId,
       operationId: "auth.audit.prune",
       transport: "http",
-      actor: { userId: "auditor", roleId: "admin" },
+      actor: { userId: "auditor", roleId: "maintainer" },
       risk: "safe_write",
       status: "ok",
       input: prune

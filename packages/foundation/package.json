@@ -38,11 +38,22 @@
     "@meshrix/contracts": "0.0.1",
     "better-sqlite3": "^12.9.0",
     "p-limit": "^7.3.0",
-    "pactium": "0.5.0",
+    "pactium": "0.7.0",
     "pg": "^8.21.0",
+    "smol-toml": "^1.7.1",
     "undici": "^8.8.0"
   },
   "exports": {
+    "./security/authorization/api-key-issuer-authority": {
+      "types": "./dist/security/authorization/api-key-issuer-authority.d.ts",
+      "source": "./src/security/authorization/api-key-issuer-authority.ts",
+      "default": "./dist/security/authorization/api-key-issuer-authority.js"
+    },
+    "./security/authorization/api-key-verifier-key-provider": {
+      "types": "./dist/security/authorization/api-key-verifier-key-provider.d.ts",
+      "source": "./src/security/authorization/api-key-verifier-key-provider.ts",
+      "default": "./dist/security/authorization/api-key-verifier-key-provider.js"
+    },
     "./*": {
       "types": "./dist/*.d.ts",
       "source": "./src/*.ts",

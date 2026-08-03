@@ -11,11 +11,12 @@ import * as workspacesClient from "../lib/workspaces-client";
 type WorkspaceSessionControllerOptions = {
   sessions: Ref<WsSession[]>;
   selectedId: Ref<string>;
-  busyKey: ComputedRef<string>;
+  /** Scoped to the workspace namespace so unrelated work never disables this list. */
+  isBusyPrefix: (prefix: string) => boolean;
   localError: Ref<string>;
   formatCompactDate: (value: string) => string;
   setBusy: (key: string) => void;
-  clearBusy: () => void;
+  clearBusy: (key: string) => void;
   reloadWorkspaceList: () => Promise<void>;
 };
 
@@ -48,7 +49,7 @@ export function useWorkspaceSessionController(options: WorkspaceSessionControlle
 	      ].filter(Boolean).join("，"),
       preview: session.lastEvent?.summary || session.objective || "暂无会话事件",
       active: selectedSessionId.value === session.sessionId,
-      disabled: !!options.busyKey.value,
+      disabled: options.isBusyPrefix("ws:"),
       actionLabel: "分叉",
       actionAriaLabel: `从 ${session.title || session.sessionId} 分叉`,
     })),
@@ -67,7 +68,7 @@ export function useWorkspaceSessionController(options: WorkspaceSessionControlle
         options.selectedId.value = context.workspaceId;
       }
     } catch (e: unknown) { options.localError.value = errorMessage(e); }
-    finally { options.clearBusy(); }
+    finally { options.clearBusy("ws:session"); }
   }
 
   async function forkSession(id: string) : Promise<any> {
@@ -81,7 +82,7 @@ export function useWorkspaceSessionController(options: WorkspaceSessionControlle
         await selectSession(result.session.sessionId);
       }
     } catch (e: unknown) { options.localError.value = errorMessage(e); }
-    finally { options.clearBusy(); }
+    finally { options.clearBusy("ws:fork"); }
   }
 
   return {

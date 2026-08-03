@@ -1,24 +1,29 @@
 import { createJobManager } from "../../jobs/jobs/job-manager.ts";
-import { createProtocolEventRuntime } from "../../events/protocol-event-runtime.ts";
-import { createProtocolEventBus } from "#meshrix/protocols/pubsub/event-bus";
 import { createQueuedJobWorkflowProvider } from "../queued-job-workflow-provider.ts";
-import { createQueueApplicationPort } from "../queue-application-port.ts";
+import { createServerCompositionRoot } from "../composition-root.ts";
+import { getRuntimeLogger } from "#meshrix/product-api";
 
 export async function createImportWorkerRuntime({ userDataPath }: Record<string, any>) : Promise<any> {
-  const protocolEventRuntime: any = await createProtocolEventRuntime({
+  const compositionRoot: any = await createServerCompositionRoot({
     userDataPath,
-    createEventBus: createProtocolEventBus
+    runtimeLogger: getRuntimeLogger()
   });
-  const { protocolEventBus } = protocolEventRuntime;
-  const jobManager: any = createJobManager({
-    userDataPath,
-    processingEnabled: true,
-    protocolEventBus
-  });
+  const {
+    protocolEventBus,
+    queueApplicationPort,
+    storageProvider,
+    uploadSessionStore
+  } = compositionRoot;
+  let jobManager: any;
   let jobWorkflowProvider: any;
-  let queueApplicationPort: any;
   try {
-    queueApplicationPort = await createQueueApplicationPort({ userDataPath });
+    jobManager = createJobManager({
+      userDataPath,
+      processingEnabled: true,
+      protocolEventBus,
+      storageProvider,
+      uploadSessionStore
+    });
     jobWorkflowProvider = await createQueuedJobWorkflowProvider({
       jobManager,
       queueApplicationPort,
@@ -26,9 +31,10 @@ export async function createImportWorkerRuntime({ userDataPath }: Record<string,
     });
     queueApplicationPort.start();
   } catch (error: any) {
-    await queueApplicationPort?.close?.().catch(() : any => {});
-    await jobManager.close().catch(() : any => {});
-    await protocolEventRuntime.close().catch(() : any => {});
+    await queueApplicationPort?.stop?.().catch(() : any => {});
+    await jobWorkflowProvider?.close?.().catch(() : any => {});
+    await jobManager?.close?.().catch(() : any => {});
+    await compositionRoot.close().catch(() : any => {});
     throw error;
   }
 
@@ -47,9 +53,8 @@ export async function createImportWorkerRuntime({ userDataPath }: Record<string,
     async close() : Promise<any> {
       await queueApplicationPort.stop();
       await jobWorkflowProvider.close();
-      await queueApplicationPort.close();
       await jobManager.close();
-      await protocolEventRuntime.close();
+      await compositionRoot.close();
     }
   };
 }

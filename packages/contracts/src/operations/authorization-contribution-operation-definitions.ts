@@ -8,6 +8,59 @@ import {
   workspaceAssetOperation
 } from "./protocol-operation-builders.ts";
 
+const ORGANIZATION_NODE_SCHEMA: any = {
+  type: "object",
+  required: ["nodeId", "nodeType", "parentId", "name"],
+  additionalProperties: false,
+  properties: {
+    nodeId: { type: "string", minLength: 1, maxLength: 160 },
+    nodeType: { type: "string", enum: ["group", "organization", "department", "team"] },
+    parentId: { type: "string", maxLength: 160 },
+    name: { type: "string", minLength: 1, maxLength: 200 },
+    organizationLevel: { type: "integer", minimum: 1, maximum: 32 }
+  }
+};
+const ORGANIZATION_TAG_SCHEMA: any = {
+  type: "object",
+  required: ["tagId", "kind", "label", "parentTagId", "description", "scopePrerequisites"],
+  additionalProperties: false,
+  properties: {
+    tagId: { type: "string", minLength: 1, maxLength: 160 },
+    kind: { type: "string", enum: ["organization", "group", "role", "custom"] },
+    label: { type: "string", minLength: 1, maxLength: 200 },
+    parentTagId: { type: "string", maxLength: 160 },
+    description: { type: "string", minLength: 1, maxLength: 1000 },
+    scopePrerequisites: { type: "array", maxItems: 64, items: { type: "string", maxLength: 160 } }
+  }
+};
+const ORGANIZATION_ROLE_SCHEMA: any = {
+  type: "object",
+  required: ["roleId", "name", "scopeNodeId", "scopeNodeType", "managementActions", "businessResourceActions", "assignedSubjectIds"],
+  additionalProperties: false,
+  properties: {
+    roleId: { type: "string", minLength: 1, maxLength: 160 },
+    name: { type: "string", minLength: 1, maxLength: 200 },
+    scopeNodeId: { type: "string", minLength: 1, maxLength: 160 },
+    scopeNodeType: { type: "string", enum: ["group", "organization", "department", "team"] },
+    managementActions: { type: "array", maxItems: 64, items: { type: "string", maxLength: 160 } },
+    businessResourceActions: { type: "array", maxItems: 0 },
+    assignedSubjectIds: { type: "array", maxItems: 0 }
+  }
+};
+const ORGANIZATION_DRAFT_PROPERTIES: any = {
+  schemaVersion: { type: "string", enum: ["v0.0.1:authorization:organization-template-1"] },
+  templateKey: { type: "string", minLength: 1, maxLength: 160 },
+  templateName: { type: "string", minLength: 1, maxLength: 200 },
+  description: { type: "string", minLength: 1, maxLength: 1000 },
+  organizationDepth: { type: "integer", minimum: 0, maximum: 32 },
+  nodes: { type: "array", maxItems: 2048, items: ORGANIZATION_NODE_SCHEMA },
+  tags: { type: "array", maxItems: 2048, items: ORGANIZATION_TAG_SCHEMA },
+  roles: { type: "array", maxItems: 2048, items: ORGANIZATION_ROLE_SCHEMA }
+};
+const ORGANIZATION_DRAFT_REQUIRED: any = [
+  "schemaVersion", "templateKey", "templateName", "description", "organizationDepth", "nodes", "tags", "roles"
+];
+
 export const AUTHORIZATION_CONTRIBUTION_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
 protocolOperation({
     id: "readiness.baseline.status",
@@ -62,6 +115,82 @@ protocolOperation({
     path: "/api/authorization/governance",
     scopes: ["auth:admin"]
   }),
+protocolOperation({
+    id: "authorization.organization_governance.get",
+    feature: "auth",
+    label: "读取组织治理架构",
+    targetMethod: "handleAuthorizationOrganizationGovernanceGet",
+    method: "GET",
+    path: "/api/authorization/organization-governance",
+    scopes: ["auth:admin"],
+    readOnly: true,
+    aspects: ["security-authorization", "organization-governance"]
+  }),
+{
+  ...protocolOperation({
+    id: "authorization.organization_governance.import",
+    feature: "auth",
+    label: "导入组织治理模板",
+    targetMethod: "handleAuthorizationOrganizationGovernanceImport",
+    method: "POST",
+    path: "/api/authorization/organization-governance/import",
+    scopes: ["auth:admin"],
+    readOnly: true,
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        templateKey: { type: "string", minLength: 1, maxLength: 160 },
+        source: { type: "string", minLength: 1, maxLength: 262144 },
+        fileName: { type: "string", pattern: "^[^/\\\\]{1,200}\\.toml$" }
+      },
+      oneOf: [
+        { required: ["templateKey"] },
+        { required: ["source", "fileName"] }
+      ]
+    },
+    aspects: ["security-authorization", "organization-governance"]
+  }),
+  audit: { recordInput: false, metadataOnly: true },
+  log: { recordInput: false, redaction: "strict" }
+},
+{
+  ...protocolOperation({
+    id: "authorization.organization_governance.preview",
+    feature: "auth",
+    label: "验证组织治理架构",
+    targetMethod: "handleAuthorizationOrganizationGovernancePreview",
+    method: "POST",
+    path: "/api/authorization/organization-governance/preview",
+    scopes: ["auth:admin"],
+    readOnly: true,
+    inputSchema: schema(ORGANIZATION_DRAFT_REQUIRED, ORGANIZATION_DRAFT_PROPERTIES),
+    aspects: ["security-authorization", "organization-governance"]
+  }),
+  audit: { recordInput: false, metadataOnly: true },
+  log: { recordInput: false, redaction: "strict" }
+},
+{
+  ...protocolOperation({
+    id: "authorization.organization_governance.publish",
+    feature: "auth",
+    label: "发布组织治理架构",
+    targetMethod: "handleAuthorizationOrganizationGovernancePublish",
+    method: "POST",
+    path: "/api/authorization/organization-governance/publish",
+    scopes: ["auth:admin"],
+    risk: "repair_write",
+    requiresConfirmation: true,
+    approvalScope: "auth:admin",
+    inputSchema: schema(["expectedRevision", ...ORGANIZATION_DRAFT_REQUIRED], {
+      expectedRevision: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+      ...ORGANIZATION_DRAFT_PROPERTIES
+    }),
+    aspects: ["security-authorization", "organization-governance"]
+  }),
+  audit: { recordInput: false, metadataOnly: true },
+  log: { recordInput: false, redaction: "strict" }
+},
 protocolOperation({
     id: "tag_management.tags.list",
     feature: "tag_management",

@@ -14,11 +14,10 @@ import {
 } from "../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
-import { bindVerifierLocalMcpGrantIdentity, createVerifierLocalMcpGrantIdentity } from "./lib/local-mcp-verifier-identity.ts";
-import { installerProcessEnv, saveInstallerProcessIdentity } from "./lib/mcp-neutral-peer-identity-support.ts";
+import { installerProcessEnv } from "./lib/mcp-neutral-peer-identity-support.ts";
 import { assertExpectedOutlets, outletNames } from "./lib/mcp-neutral-peer-protocol-support.ts";
 import { createMcpProxyStdioClient } from "./lib/mcp-proxy-stdio-client.ts";
-import { issueVerifierLocalMcpGrant } from "./lib/local-mcp-device-authorization.ts";
+import { issueVerifierMcpApiKey } from "./lib/verifier-mcp-api-key.ts";
 import {
   MCP_PROXY_TRANSPORT_REPORT_PATH,
   MCP_PROXY_TRANSPORT_SCHEMA_VERSION,
@@ -119,51 +118,30 @@ async function requestJson(route?: any, options: Record<string, any> = {}) : Pro
   };
 }
 
-async function createLocalGrant(target?: any) : Promise<any> {
-  const verifierIdentity: any = createVerifierLocalMcpGrantIdentity({
-    target,
-    label: `verify-mcp-proxy-transport-${target}`
-  });
-  const response: any = await issueVerifierLocalMcpGrant({
+async function createVerifierApiKey(target?: any) : Promise<any> {
+  const response: any = await issueVerifierMcpApiKey({
     server,
-    grantRequest: {
+    access: {
       targets: [target],
       label: `verify-mcp-proxy-transport-${target}`,
       connectorVersion: "verify-mcp-proxy-transport",
-      processIdentity: verifierIdentity.request
+      toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
+      maxRisk: "repair_write"
     }
   });
-  assert.equal(response.status, 201, JSON.stringify(safeEvidence(response.payload)));
-  assert.equal(response.payload.ok, true);
-  assert.ok(response.payload.token, "local grant did not return a token");
+  assert.ok(response.apiKey, "API Key issuance did not return plaintext to the direct verifier caller");
   trackRedaction(
-    response.payload.token,
-    response.payload.tokenPrefix,
-    response.payload.grant?.tokenPrefix,
-    response.payload.grant?.id
+    response.apiKey,
+    response.record.keyId
   );
-  bindVerifierLocalMcpGrantIdentity({
-    identityByToken,
-    token: response.payload.token,
-    identity: verifierIdentity.identity,
-    payload: response.payload
-  });
-  await saveInstallerProcessIdentity({
-    installerHome,
-    target,
-    serverUrl: server.url,
-    identity: verifierIdentity.identity,
-    payload: response.payload,
-    trackRedaction
-  });
   return {
-    grantId: response.payload.grant?.id || "",
-    token: response.payload.token
+    keyId: response.record.keyId,
+    token: response.apiKey
   };
 }
 
 async function verifyTargetProxyTransport(target?: any) : Promise<any> {
-  const grant: any = await createLocalGrant(target);
+  const grant: any = await createVerifierApiKey(target);
   const env: Record<string, any> = {
     ...installerProcessEnv(installerHome),
     MESHRIX_MCP_TOKEN: grant.token

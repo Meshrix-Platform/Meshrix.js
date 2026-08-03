@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
+import { computed } from "vue";
+import FeatureToggle from "../../../components/FeatureToggle.vue";
 import type { TagManagementTag } from "../../../lib/tag-management-client";
+import {
+  isEnterpriseTemplateTag,
+  tagManagementKindName,
+  tagManagementTagName,
+  tagManagementText,
+} from "../../../i18n/tag-management";
 
 type TagEditor = {
   tagId: string;
@@ -13,7 +20,7 @@ type TagEditor = {
   metadataText: string;
 };
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   selectedTag?: TagManagementTag | null;
   saving?: boolean;
   editor?: TagEditor;
@@ -39,13 +46,22 @@ const emit = defineEmits<{
   archive: [];
   restore: [];
 }>();
+
+const templateManaged = computed(() => Boolean(
+  props.selectedTag && (
+    props.selectedTag.metadata?.organizationTemplate || isEnterpriseTemplateTag(props.selectedTag.tagId)
+  ),
+));
+const displayedLabel = computed(() => props.selectedTag
+  ? tagManagementTagName(props.selectedTag.tagId, props.selectedTag.label)
+  : props.editor.label);
 </script>
 
 <template>
   <section class="surface-card tag-editor-card">
     <div class="section-header">
       <div>
-        <h3>{{ selectedTag ? selectedTag.label : "新建 Tag" }}</h3>
+        <h3>{{ selectedTag ? tagManagementTagName(selectedTag.tagId, selectedTag.label) : tagManagementText("新建标签", "New Tag") }}</h3>
         <p>{{ selectedTag?.tagId || "custom:*" }}</p>
       </div>
       <div class="tag-management-actions">
@@ -56,7 +72,7 @@ const emit = defineEmits<{
           :disabled="saving"
           @click="emit('restore')"
         >
-          恢复
+          {{ tagManagementText("恢复", "Restore") }}
         </button>
         <button
           v-else-if="selectedTag"
@@ -65,72 +81,80 @@ const emit = defineEmits<{
           :disabled="saving || selectedTag.system"
           @click="emit('archive')"
         >
-          归档
+          {{ tagManagementText("归档", "Archive") }}
         </button>
         <button class="tool-button" type="button" :disabled="saving" @click="emit('save')">
-          {{ saving ? "保存中" : "保存" }}
+          {{ saving ? tagManagementText("保存中", "Saving") : tagManagementText("保存", "Save") }}
         </button>
       </div>
     </div>
 
     <div class="tag-editor-grid">
       <label>
-        <span>tagId</span>
+        <span>{{ tagManagementText("标签标识", "Tag ID") }}</span>
         <input v-model="editor.tagId" type="text" placeholder="custom:example" />
       </label>
       <label>
-        <span>kind</span>
+        <span>{{ tagManagementText("类型", "Type") }}</span>
         <select v-model="editor.kind">
-          <option value="role">role</option>
-          <option value="group">group</option>
-          <option value="organization">organization</option>
-          <option value="character">character</option>
-          <option value="custom">custom</option>
+          <option value="role">{{ tagManagementKindName("role") }}</option>
+          <option value="group">{{ tagManagementKindName("group") }}</option>
+          <option value="organization">{{ tagManagementKindName("organization") }}</option>
+          <option value="character">{{ tagManagementKindName("character") }}</option>
+          <option value="custom">{{ tagManagementKindName("custom") }}</option>
         </select>
       </label>
       <label>
-        <span>label</span>
-        <input v-model="editor.label" type="text" />
+        <span>{{ tagManagementText("名称", "Name") }}</span>
+        <input v-if="templateManaged" :value="displayedLabel" type="text" readonly />
+        <input v-else v-model="editor.label" type="text" />
+        <small v-if="templateManaged" class="tag-editor-field-note">
+          {{ tagManagementText("名称由集团模板管理，并随界面语言显示。", "This name is managed by the Group template and follows the interface language.") }}
+        </small>
       </label>
       <label>
-        <span>parentTagId</span>
+        <span>{{ tagManagementText("上级标签", "Parent Tag") }}</span>
         <select v-model="editor.parentTagId">
-          <option value="">无父级</option>
+          <option value="">{{ tagManagementText("无上级", "No Parent") }}</option>
           <option v-for="option in parentTagOptions" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
       </label>
       <label class="tag-editor-wide">
-        <span>description</span>
+        <span>{{ tagManagementText("说明", "Description") }}</span>
         <input v-model="editor.description" type="text" />
       </label>
-      <BinaryCheckbox v-model="editor.enabled" label="enabled" />
+      <FeatureToggle
+        v-model="editor.enabled"
+        :label="tagManagementText('启用', 'Enabled')"
+        :aria-label="editor.enabled ? tagManagementText('停用标签', 'Disable Tag') : tagManagementText('启用标签', 'Enable Tag')"
+      />
       <label class="tag-editor-wide">
-        <span>scopePrerequisites</span>
+        <span>{{ tagManagementText("权限前置条件", "Scope Prerequisites") }}</span>
         <textarea v-model="editor.scopePrerequisitesText" rows="3" spellcheck="false" />
       </label>
       <label class="tag-editor-wide">
-        <span>metadata</span>
+        <span>{{ tagManagementText("附加信息", "Metadata") }}</span>
         <textarea v-model="editor.metadataText" rows="8" spellcheck="false" />
       </label>
     </div>
 
     <dl v-if="selectedTag" class="tag-detail-meta">
       <div>
-        <dt>system</dt>
-        <dd><span class="tag-state">{{ selectedTag.system ? "system" : "custom" }}</span></dd>
+        <dt>{{ tagManagementText("来源", "Source") }}</dt>
+        <dd><span class="tag-state">{{ templateManaged ? tagManagementText("集团模板", "Group Template") : selectedTag.system ? tagManagementText("系统", "System") : tagManagementText("自定义", "Custom") }}</span></dd>
       </div>
       <div>
-        <dt>status</dt>
-        <dd><span class="tag-state" :class="{ archived: selectedTag.status === 'archived' }">{{ selectedTag.status }}</span></dd>
+        <dt>{{ tagManagementText("状态", "Status") }}</dt>
+        <dd><span class="tag-state" :class="{ archived: selectedTag.status === 'archived' }">{{ selectedTag.status === "archived" ? tagManagementText("归档", "Archived") : tagManagementText("启用", "Active") }}</span></dd>
       </div>
       <div>
-        <dt>createdAt</dt>
+        <dt>{{ tagManagementText("创建时间", "Created At") }}</dt>
         <dd>{{ selectedTag.createdAt }}</dd>
       </div>
       <div>
-        <dt>updatedAt</dt>
+        <dt>{{ tagManagementText("更新时间", "Updated At") }}</dt>
         <dd>{{ selectedTag.updatedAt }}</dd>
       </div>
     </dl>
@@ -164,6 +188,12 @@ const emit = defineEmits<{
 .tag-editor-grid span {
   color: var(--text-muted);
   font-size: var(--text-xs);
+}
+
+.tag-editor-field-note {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
 }
 
 .tag-editor-grid select,

@@ -10,6 +10,13 @@ import { createToolExecutionRuntime } from "./runtime.ts";
 import { createOperationPermissionHttpRouter } from "./http.ts";
 import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
 import { createSecurityPermissionsProvider } from "@meshrix/foundation/security/security-permissions-provider";
+import { createApiKeyVerifierKeyProvider } from "@meshrix/foundation/security/authorization/api-key-verifier-key-provider";
+import {
+  createApiKeyDistributionProvider,
+  registerApiKeyOwnerRecoveryAssignmentSync
+} from "./api-key-distribution.ts";
+
+export * from "./api-key-distribution.ts";
 
 export {
   OPERATION_PERMISSION_SCOPES,
@@ -31,6 +38,9 @@ export function createOperationPermissionPlatform({
   featureRuntime = null,
   changeHandlers = [],
   proofSubstrate = null,
+  apiKeyVerifierKeyProvider = null,
+  apiKeyClock = undefined,
+  apiKeyRandomBytes = undefined,
   logger = getRuntimeLogger()
 }: Record<string, any>) : any {
   const registeredChangeHandlers: any = new Set<any>(
@@ -99,6 +109,7 @@ export function createOperationPermissionPlatform({
     profiles: tagManagementProfiles
   });
   let store: any = null;
+  let unregisterApiKeyOwnerRecoveryAssignmentSync: any = null;
   try {
     store = createOperationPermissionStore({
       userDataPath,
@@ -109,10 +120,21 @@ export function createOperationPermissionPlatform({
       proofSubstrate
     });
     const authorizationStore: any = effectiveSecurityPermissions?.authorizationStore || null;
+    unregisterApiKeyOwnerRecoveryAssignmentSync = registerApiKeyOwnerRecoveryAssignmentSync({
+      securityPermissions: effectiveSecurityPermissions
+    });
     const policyEngine: any = createToolPolicyEngine({
       registry,
       store,
       securityPermissions: effectiveSecurityPermissions
+    });
+    const apiKeyDistributionProvider: any = createApiKeyDistributionProvider({
+      store,
+      registry,
+      securityPermissions: effectiveSecurityPermissions,
+      verifierKeyProvider: apiKeyVerifierKeyProvider || createApiKeyVerifierKeyProvider({ userDataPath }),
+      ...(apiKeyClock ? { now: apiKeyClock } : {}),
+      ...(apiKeyRandomBytes ? { randomBytes: apiKeyRandomBytes } : {})
     });
     const runtime: any = createToolExecutionRuntime({
       registry,
@@ -125,6 +147,7 @@ export function createOperationPermissionPlatform({
       controllers,
       operationAuditStore,
       operationConcurrencyScope,
+      apiKeyDistributionProvider,
       protocolEventBus,
       logger
     });
@@ -134,6 +157,7 @@ export function createOperationPermissionPlatform({
         store,
         policyEngine,
         runtime,
+        apiKeyDistributionProvider,
         authorizationStore,
         securityPermissions: effectiveSecurityPermissions,
         catalog: () : any => registry.getCatalog()
@@ -198,6 +222,7 @@ export function createOperationPermissionPlatform({
       store,
       policyEngine,
       runtime,
+      apiKeyDistributionProvider,
       router,
       securityPermissions: effectiveSecurityPermissions,
       authorizationStore,
@@ -301,10 +326,17 @@ export function createOperationPermissionPlatform({
         return applyOperationLayers({ nextBaseOperations: normalizedOperations });
       },
       close() : any {
+        unregisterApiKeyOwnerRecoveryAssignmentSync?.();
+        unregisterApiKeyOwnerRecoveryAssignmentSync = null;
         store.close();
       }
     };
   } catch (error: any) {
+    try {
+      unregisterApiKeyOwnerRecoveryAssignmentSync?.();
+    } catch {
+      // Preserve the platform construction failure after unwinding the change subscription.
+    }
     try {
       store?.close?.();
     } catch {

@@ -99,14 +99,9 @@ function makeMaintenanceRun() : any {
 }
 
 function createFixture(overrides: Record<string, unknown> = {}) : any {
-  const busyKey: any = ref("");
   const error: any = ref("");
-  const clearAllBusy: any = vi.fn(() : any => {
-    busyKey.value = "";
-  });
-  const setBusy: any = vi.fn((value: string) : any => {
-    busyKey.value = value;
-  });
+  const clearBusy: any = vi.fn();
+  const setBusy: any = vi.fn();
 
   const allMaintenanceAgentRuns: any = overrides.allMaintenanceAgentRuns ?? ref([makeMaintenanceRun() as any]);
   const canAdminMaintenanceAgent: any = overrides.canAdminMaintenanceAgent ?? ref(true);
@@ -143,7 +138,7 @@ function createFixture(overrides: Record<string, unknown> = {}) : any {
     allMaintenanceAgentRuns,
     canAdminMaintenanceAgent,
     canReadMaintenanceAgent,
-    clearAllBusy,
+    clearBusy,
     consoleState,
     error,
     setBusy,
@@ -157,11 +152,10 @@ function createFixture(overrides: Record<string, unknown> = {}) : any {
     allMaintenanceAgentRuns,
     canAdminMaintenanceAgent,
     canReadMaintenanceAgent,
-    clearAllBusy,
+    clearBusy,
     consoleState,
     controller,
     error,
-    busyKey,
     setBusy,
     monitorAlertState: overrides.monitorAlertState ?? (controller.monitorAlertState as any),
   };
@@ -203,7 +197,7 @@ describe("console ops monitor controller", () : any => {
   });
 
   it("刷新后台进程与监控报警时区分静默和可见分支，并正确清理忙状态", async () : Promise<any> => {
-    const { controller, clearAllBusy, setBusy, error } = createFixture();
+    const { controller, clearBusy, setBusy, error } = createFixture();
     const backgroundStatus: any = makeBackgroundProcessStatus({
       processes: [
         {
@@ -257,10 +251,10 @@ describe("console ops monitor controller", () : any => {
 
     await controller.refreshBackgroundProcesses({ silent: true });
     expect(setBusy).not.toHaveBeenCalled();
-    expect(clearAllBusy).not.toHaveBeenCalled();
+    expect(clearBusy).not.toHaveBeenCalled();
 
     await controller.refreshMonitorAlerts({ silent: true });
-    expect(clearAllBusy).not.toHaveBeenCalled();
+    expect(clearBusy).not.toHaveBeenCalled();
 
     expect(controller.backgroundSupervisorLabel.value).toBe("正常");
     expect(controller.backgroundRunningCount.value).toBe(1);
@@ -270,7 +264,7 @@ describe("console ops monitor controller", () : any => {
     await controller.refreshMonitorAlerts();
     expect(setBusy).toHaveBeenNthCalledWith(1, "background-processes:refresh");
     expect(setBusy).toHaveBeenNthCalledWith(2, "monitor-alerts:refresh");
-    expect(clearAllBusy).toHaveBeenCalledTimes(2);
+    expect(clearBusy).toHaveBeenCalledTimes(2);
     expect(error.value).toBe("");
   });
 

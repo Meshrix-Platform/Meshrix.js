@@ -32,7 +32,7 @@ export function useModulesViewConsole() : any {
   });
   onMounted(() : any => void refreshExternalGateway());
   const {
-    busyKey,
+    isBusy,
     canBrowseServerPaths,
     consoleState,
     disableMountModule,
@@ -47,7 +47,7 @@ export function useModulesViewConsole() : any {
   } = useServerConsoleShellContext();
 
   return {
-    busyKey,
+    isBusy,
     canBrowseServerPaths,
     consoleState,
     disableMountModule,

@@ -7,7 +7,7 @@ import { useOpsMonitorViewContext } from "../../../composables/opsMonitorViewCon
 
 const {
   acknowledgeMonitorAlert = async () => undefined,
-  busyKey = ref(""),
+  isBusy = () => false,
   canAdminMaintenanceAgent = ref(false),
   formatCompactDate = (value: unknown) => String(value || ""),
   monitorAlertConfigText = ref(""),
@@ -82,10 +82,11 @@ function monitorAlertStateStatusLabel(status: unknown) {
             v-if="alert.ackRequired && !alert.acknowledgedAt"
             class="tool-button tool-button-ghost"
             type="button"
-            :disabled="busyKey === `monitor-alert:ack:${alert.alertId}`"
+            :disabled="isBusy(`monitor-alert:ack:${alert.alertId}`)"
+            :aria-busy="isBusy(`monitor-alert:ack:${alert.alertId}`)"
             @click="acknowledgeMonitorAlert(alert.alertId)"
           >
-            {{ busyKey === `monitor-alert:ack:${alert.alertId}` ? "确认中" : "确认关闭" }}
+            {{ isBusy(`monitor-alert:ack:${alert.alertId}`) ? "确认中" : "确认关闭" }}
           </button>
         </span>
       </div>
@@ -130,10 +131,11 @@ function monitorAlertStateStatusLabel(status: unknown) {
               v-if="alert.ackRequired && !alert.acknowledgedAt"
               class="tool-button tool-button-ghost"
               type="button"
-              :disabled="busyKey === `monitor-alert:ack:${alert.alertId}`"
+              :disabled="isBusy(`monitor-alert:ack:${alert.alertId}`)"
+              :aria-busy="isBusy(`monitor-alert:ack:${alert.alertId}`)"
               @click="acknowledgeMonitorAlert(alert.alertId)"
             >
-              {{ busyKey === `monitor-alert:ack:${alert.alertId}` ? "确认中" : "确认关闭" }}
+              {{ isBusy(`monitor-alert:ack:${alert.alertId}`) ? "确认中" : "确认关闭" }}
             </button>
           </span>
         </div>
@@ -152,10 +154,11 @@ function monitorAlertStateStatusLabel(status: unknown) {
           <button
             class="primary-action"
             type="button"
-            :disabled="!canAdminMaintenanceAgent || busyKey === 'monitor-alerts:save'"
+            :disabled="!canAdminMaintenanceAgent || isBusy('monitor-alerts:save')"
+            :aria-busy="isBusy('monitor-alerts:save')"
             @click="saveMonitorAlertConfig"
           >
-            {{ busyKey === "monitor-alerts:save" ? "保存中" : "保存报警配置" }}
+            {{ isBusy("monitor-alerts:save") ? "保存中" : "保存报警配置" }}
           </button>
         </div>
       </div>

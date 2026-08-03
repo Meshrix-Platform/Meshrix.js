@@ -16,7 +16,6 @@ vi.mock("better-sqlite3", () : any => ({ default: DatabaseMock }));
 import { createSqliteWorkQueueStore } from "../../../packages/foundation/src/work-queue/sqlite-store.ts";
 import { createTagManagementStore } from "../../../packages/server-runtime/src/state/tag-management-store.ts";
 import { createSecurityAlertStore } from "../../../packages/foundation/src/security/security-alerts.ts";
-import { createOrganizationModelStore } from "../../../packages/foundation/src/security/authorization/organization-model.ts";
 
 function tempRoot() : any {
   const root: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-owned-sqlite-failure-"));
@@ -81,6 +80,8 @@ describe("owned SQLite constructor failure cleanup", () : any => {
     const failure: any = new Error("tag statement setup failed");
     const database: Record<string, any> = {
       exec: vi.fn(),
+      pragma: vi.fn(() : any => 0),
+      transaction: vi.fn((work?: any) : any => work),
       prepare: vi.fn(() : any => {
         throw failure;
       }),
@@ -107,36 +108,10 @@ describe("owned SQLite constructor failure cleanup", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("closes the owned organization-model database when root seeding fails", () : any => {
-    const failure: any = new Error("organization root seed failed");
-    const upsertStatement: Record<string, any> = {
-      run: vi.fn(() : any => {
-        throw failure;
-      })
-    };
-    const queryStatement: Record<string, any> = { get: vi.fn(() : any => null) };
-    const database: Record<string, any> = {
-      exec: vi.fn(),
-      prepare: vi.fn()
-        .mockReturnValueOnce(upsertStatement)
-        .mockReturnValueOnce(queryStatement),
-      close: vi.fn(() : any => {
-        throw new Error("organization cleanup failed");
-      })
-    };
-    databases.push(database);
-
-    const thrown: any = captureFailure(() : any => createOrganizationModelStore({ rootPath: tempRoot() }));
-
-    expect(thrown).toBe(failure);
-    expect(database.close).toHaveBeenCalledOnce();
-  });
-
   it.each([
     ["work queue", (db?: any, root?: any) : any => createSqliteWorkQueueStore({ db, userDataPath: root })],
     ["tag management", (db?: any, root?: any) : any => createTagManagementStore({ db, userDataPath: root })],
-    ["security alerts", (db?: any, root?: any) : any => createSecurityAlertStore({ db, userDataPath: root })],
-    ["organization model", (db?: any, root?: any) : any => createOrganizationModelStore({ db, rootPath: root })]
+    ["security alerts", (db?: any, root?: any) : any => createSecurityAlertStore({ db, userDataPath: root })]
   ])("does not close an injected %s database when construction fails", (_label?: any, createStore?: any) : any => {
     const failure: any = new Error("injected schema failed");
     const database: any = schemaFailureDatabase(failure);

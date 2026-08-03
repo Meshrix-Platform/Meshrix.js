@@ -45,6 +45,13 @@ Use private vulnerability reporting in the repository host, or contact the maint
 
 ## Security Requirements
 
+The canonical implementation and review boundary is
+[Mandatory attack-resistance boundary](docs/functionality/SECURITY-AUTHORIZATION.md#mandatory-attack-resistance-boundary).
+Every changed external or indirectly attacker-influenced path must trace its
+input to each protected sink and public observation, apply every relevant
+attack class, and provide negative evidence with zero protected side effects.
+An unknown or untested path is not accepted as secure.
+
 - Every state-changing operation must pass subject resolution, Operation Permission, tag policy, risk policy, and approval when required.
 - Raw secrets, bearer tokens, cookies, private keys, upstream request secrets, and grant tokens must not appear in source, documentation, logs, reports, or test fixtures.
 - Public responses must not expose server absolute paths, machine identity, local user names, raw prompt contents, or private runtime state.

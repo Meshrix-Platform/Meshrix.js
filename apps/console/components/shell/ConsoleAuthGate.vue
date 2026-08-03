@@ -3,7 +3,7 @@ import { useServerConsoleShellContext } from "../../composables/serverConsoleShe
 
 const {
   consoleBootstrapping,
-  busyKey,
+  isBusy,
   languageMode,
   loginForm,
   msg,
@@ -55,7 +55,7 @@ const {
       <div class="section-header">
         <div>
           <h3>{{ tt(consoleBootstrapping ? '正在连接…' : '控制台登录') }}</h3>
-          <p>{{ tt(consoleBootstrapping ? '正在确认登录状态，请稍候。' : '首次启动时服务端会自动创建 owner 并生成初始密码；账号创建和密码修改仅允许通过服务端命令行执行。') }}</p>
+          <p v-if="consoleBootstrapping">{{ tt('正在确认登录状态，请稍候。') }}</p>
         </div>
       </div>
 
@@ -68,8 +68,8 @@ const {
           <span>{{ tt('密码') }}</span>
           <input v-model="loginForm.password" type="password" autocomplete="current-password" :placeholder="tt('请输入密码')" :disabled="consoleBootstrapping" />
         </label>
-        <button class="primary-action" type="submit" :disabled="consoleBootstrapping || busyKey === 'auth:login'">
-          {{ tt(busyKey === "auth:login" ? "登录中" : "登录") }}
+        <button class="primary-action" type="submit" :disabled="consoleBootstrapping || isBusy('auth:login')">
+          {{ tt(isBusy("auth:login") ? "登录中" : "登录") }}
         </button>
       </form>
     </article>

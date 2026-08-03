@@ -28,9 +28,7 @@ const MCP_OPERATIONS: readonly any[] = Object.freeze([
   "operation_permission.metrics_health",
   "operation_permission.metrics_export",
   "operation_permission.pending_operations.list",
-  "operation_permission.pending_operations.resolve",
-  "operation_permission.mcp.list_requests",
-  "operation_permission.mcp.resolve_request"
+  "operation_permission.pending_operations.resolve"
 ]);
 
 const GATEWAY_SOURCE_FILES: readonly any[] = Object.freeze([

@@ -166,6 +166,11 @@ describe("server runtime provider construction unwind", () : any => {
       acknowledgePublished: vi.fn()
     })
   });
+  const uploadCustodyReadPort: Readonly<Record<string, any>> = Object.freeze({
+    open: vi.fn(async () : Promise<any> => {
+      throw new Error("unexpected upload custody access in provider construction fixture");
+    })
+  });
 
   it("awaits every earlier console-provider closer in reverse order and preserves the construction error", async () : Promise<any> => {
     const closeOrder: any[] = [];
@@ -185,7 +190,8 @@ describe("server runtime provider construction unwind", () : any => {
       securityPermissions: {},
       operationProofSubstrate: {},
       storageProvider,
-      uploadSessionStore
+      uploadSessionStore,
+      uploadCustodyReadPort
     }).catch((error?: any) : any => error);
 
     expect(failure).toBe(constructionFailure);
@@ -207,7 +213,8 @@ describe("server runtime provider construction unwind", () : any => {
       securityPermissions: {},
       operationProofSubstrate: {},
       storageProvider,
-      uploadSessionStore
+      uploadSessionStore,
+      uploadCustodyReadPort
     });
 
     const firstClose: any = providers.close();
@@ -235,7 +242,8 @@ describe("server runtime provider construction unwind", () : any => {
       securityPermissions: {},
       operationProofSubstrate: {},
       storageProvider,
-      uploadSessionStore
+      uploadSessionStore,
+      uploadCustodyReadPort
     });
 
     expect(observer.start).toHaveBeenCalledOnce();
@@ -257,7 +265,8 @@ describe("server runtime provider construction unwind", () : any => {
       securityPermissions: {},
       operationProofSubstrate: {},
       storageProvider,
-      uploadSessionStore
+      uploadSessionStore,
+      uploadCustodyReadPort
     })).rejects.toMatchObject({ code: "upstream_manifest_bootstrap_unavailable" });
 
     expect(observer.start).toHaveBeenCalledOnce();

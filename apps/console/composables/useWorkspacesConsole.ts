@@ -11,6 +11,12 @@ import { useWorkspaceAssetController } from './console-workspace-asset-controlle
 import { useWorkspaceCheckpointController } from './console-workspace-checkpoint-controller';
 import { formatCompactDate } from './console-format-utils';
 import {
+  createConsoleBusyController,
+  mergeConsoleBusyReaders,
+  type ConsoleBusyController,
+  type ConsoleBusyReader,
+} from './console-busy-controller';
+import {
   useWorkspaceManagementController,
   type WorkspacePanel,
 } from './console-workspace-management-controller';
@@ -19,13 +25,17 @@ import { useWorkspaceSessionController } from './console-workspace-session-contr
 
 type WorkspacesConsoleOptions = {
   autoload?: boolean;
-  globalBusyKey?: Ref<string>;
+  /** Busy state owned by the surrounding shell, reflected alongside local work. */
+  globalBusy?: ConsoleBusyReader;
 };
 
 export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : any {
-  const globalBusyKey: any = options.globalBusyKey ?? ref('');
-  const localBusyKey: any = ref('');
-  const busyKey: any = computed(() : any => localBusyKey.value || globalBusyKey.value);
+  const localBusy: ConsoleBusyController = createConsoleBusyController();
+  const busy: ConsoleBusyReader = options.globalBusy
+    ? mergeConsoleBusyReaders(localBusy, options.globalBusy)
+    : localBusy;
+  const setBusy: (key: string) => void = localBusy.setBusy;
+  const clearBusy: (key: string) => void = localBusy.clearBusy;
 
   const workspaces: any        = ref<WsWorkspace[]>([]);
   const sessions: any          = ref<WsSession[]>([]);
@@ -129,7 +139,7 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : a
   } = useWorkspaceSessionController({
     sessions,
     selectedId,
-    busyKey,
+    isBusyPrefix: busy.isBusyPrefix,
     localError,
     formatCompactDate,
     setBusy,
@@ -148,7 +158,7 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : a
       workspaces.value = workspaceData.workspaces ?? [];
       sessions.value = sessionData.sessions ?? [];
     } catch (e: unknown) { localError.value = errorMessage(e); }
-    finally { clearBusy(); }
+    finally { clearBusy('ws:load'); }
   }
 
   async function loadChain(id: string) : Promise<any> {
@@ -199,10 +209,6 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : a
     panel.value = await prepareWorkspaceAssetsPanel();
   }
 
-  // busyKey helpers (work on the existing string-compat ref)
-  function setBusy(k: string)  : any { localBusyKey.value = k; }
-  function clearBusy()         : any { localBusyKey.value = ''; }
-
   async function copyToClipboard(event: MouseEvent, text: string) : Promise<any> {
     if (!text) return;
     try {
@@ -216,9 +222,13 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : a
   usePageRefreshHandler(
     (detail?: any) : any => detail.viewId === 'workspaces',
     async () : Promise<any> => {
+      const activePanel: WorkspacePanel = panel.value;
       await load();
       if (selectedId.value) {
         await loadChain(selectedId.value);
+        if (activePanel === 'assets') {
+          await refreshWorkspaceAssets();
+        }
       }
     },
   );
@@ -228,7 +238,9 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : a
   }
 
   return {
-    busyKey,
+    isAnyBusy: busy.isAnyBusy,
+    isBusy: busy.isBusy,
+    isBusyPrefix: busy.isBusyPrefix,
     formatCompactDate,
     workspaces,
     sessions,

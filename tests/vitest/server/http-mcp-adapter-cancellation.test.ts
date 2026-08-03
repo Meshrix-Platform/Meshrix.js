@@ -63,7 +63,7 @@ function createFixtureProvider() : any {
     readOnly: false
   };
   const provider: Record<string, any> = {
-    authorizeRequest: vi.fn(async ({ request }: Record<string, any>) : Promise<any> => {
+    authorizeMcpClientRequest: vi.fn(async ({ request }: Record<string, any>) : Promise<any> => {
       const token: any = String(request?.headers?.authorization || "").replace(/^Bearer\s+/iu, "");
       if (!new Set<any>(["fixture-a", "fixture-b"]).has(token)) {
         return { ok: false, status: 401, error: "Unauthorized fixture request." };
@@ -305,7 +305,7 @@ describe("HTTP MCP request cancellation correlation", () : any => {
     });
     expect(completedCancellation.statusCode).toBe(202);
     expect(registry.snapshot().inFlight).toBe(0);
-    expect(fixture.provider.authorizeRequest.mock.calls.every(
+    expect(fixture.provider.authorizeMcpClientRequest.mock.calls.every(
       ([input]: any[]) : any => input.recordUse === false
     )).toBe(true);
   });

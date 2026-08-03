@@ -63,6 +63,65 @@ const grantMutationInput: any = closedObject({
   allowedSecretBindings: Object.freeze({ type: "array", items: stringValue }),
   reason: stringValue
 });
+const stringArray: Readonly<Record<string, any>> = Object.freeze({ type: "array", items: stringValue, maxItems: 256 });
+const apiKeyPolicyInput: any = closedObject({
+  protocol: stringValue,
+  serviceIds: stringArray,
+  capabilityIds: stringArray,
+  toolsetIds: stringArray,
+  allowedTools: stringArray,
+  deniedTools: stringArray,
+  scopeIds: stringArray,
+  maximumRisk: stringValue,
+  audience: closedObject({
+    serverAudience: stringValue,
+    targetIds: stringArray,
+    connectorPackageIds: stringArray
+  }, ["serverAudience", "targetIds", "connectorPackageIds"]),
+  resources: closedObject({
+    mode: stringValue,
+    workspaceIds: stringArray,
+    dataClassifications: stringArray,
+    egressClasses: stringArray,
+    semanticFamilies: stringArray,
+    capabilityDomains: stringArray,
+    capabilityVerbs: stringArray,
+    resourceKinds: stringArray,
+    effectKinds: stringArray,
+    secretBindingIds: stringArray,
+    allowedOrigins: stringArray,
+    allowedCidrs: stringArray
+  }, [
+    "mode", "workspaceIds", "dataClassifications", "egressClasses", "semanticFamilies",
+    "capabilityDomains", "capabilityVerbs", "resourceKinds", "effectKinds", "secretBindingIds",
+    "allowedOrigins", "allowedCidrs"
+  ]),
+  processIdentity: Object.freeze({ type: "object", additionalProperties: false, properties: {
+    mode: stringValue,
+    allowedPublicKeyFingerprints: stringArray
+  }, required: ["mode"] }),
+  limits: closedObject({
+    maxUses: numberValue,
+    requestsPerWindow: numberValue,
+    windowSeconds: numberValue,
+    maxConcurrentEffects: numberValue
+  }, ["maxUses", "requestsPerWindow", "windowSeconds", "maxConcurrentEffects"]),
+  catalogFingerprint: stringValue
+}, [
+  "protocol", "serviceIds", "capabilityIds", "toolsetIds", "allowedTools", "deniedTools",
+  "scopeIds", "maximumRisk", "audience", "resources", "processIdentity", "limits", "catalogFingerprint"
+]);
+const apiKeyCreateInput: any = closedObject({
+  workloadDisplayName: stringValue,
+  organizationNodeId: stringValue,
+  expiresAt: stringValue,
+  policy: apiKeyPolicyInput
+}, ["workloadDisplayName", "organizationNodeId", "expiresAt", "policy"]);
+const apiKeyRevisionInput: any = closedObject({ expectedLifecycleRevision: numberValue }, ["expectedLifecycleRevision"]);
+const apiKeyRevokeInput: any = closedObject({
+  expectedLifecycleRevision: numberValue,
+  reasonCode: stringValue
+}, ["expectedLifecycleRevision", "reasonCode"]);
 
 export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
 
@@ -347,6 +406,75 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       safety: { risk: "repair_write" },
       concurrencyGroup: "agent_management.model_library",
       aspects: ["agent-management", "model-library"]
+    },
+{
+      id: "operation_permission.api_keys.issuer_scopes",
+      feature: "operation_permission",
+      label: "读取 API Key 签发范围",
+      target: { controller: "system", method: "handleOperationPermissionPassthrough" },
+      http: { method: "GET", path: "/api/operation-permission/v1/api-keys/issuer-scopes", localInForwardMode: true },
+      rpc: { method: "operation_permission.api_keys.issuer_scopes", syntheticPath: "/api/operation-permission/v1/api-keys/issuer-scopes" },
+      requiredScopes: ["console:read"],
+      inputSchema: closedObject(),
+      readOnly: true,
+      concurrencySafe: true,
+      safety: { risk: "read_only", requiresConfirmation: false }
+    },
+{
+      id: "operation_permission.api_keys.list",
+      feature: "operation_permission",
+      label: "列出 API Key",
+      target: { controller: "system", method: "handleOperationPermissionPassthrough" },
+      http: {
+        method: "GET",
+        path: "/api/operation-permission/v1/api-keys",
+        localInForwardMode: true,
+        query: [
+          { name: "status", aliases: ["status"] },
+          { name: "organizationNodeId", aliases: ["organizationNodeId", "organization-node-id"] },
+          { name: "cursor", aliases: ["cursor"] },
+          { name: "limit", aliases: ["limit"] }
+        ],
+        coerce: { limit: "number" }
+      },
+      rpc: { method: "operation_permission.api_keys.list", syntheticPath: "/api/operation-permission/v1/api-keys" },
+      requiredScopes: ["console:read"],
+      readOnly: true,
+      concurrencySafe: true,
+      safety: { risk: "read_only", requiresConfirmation: false }
+    },
+{
+      id: "operation_permission.api_keys.create",
+      feature: "operation_permission",
+      label: "创建 API Key",
+      target: { controller: "system", method: "handleOperationPermissionPassthrough" },
+      http: { method: "POST", path: "/api/operation-permission/v1/api-keys", localInForwardMode: true },
+      rpc: { method: "operation_permission.api_keys.create", syntheticPath: "/api/operation-permission/v1/api-keys", body: "params" },
+      requiredScopes: ["console:read"],
+      inputSchema: apiKeyCreateInput,
+      safety: { risk: "repair_write" }
+    },
+{
+      id: "operation_permission.api_keys.rotate",
+      feature: "operation_permission",
+      label: "轮换 API Key",
+      target: { controller: "system", method: "handleOperationPermissionPassthrough" },
+      http: { method: "POST", path: "/api/operation-permission/v1/api-keys/:keyId/rotate", localInForwardMode: true },
+      rpc: { method: "operation_permission.api_keys.rotate", syntheticPath: "/api/operation-permission/v1/api-keys/:keyId/rotate", params: [{ name: "keyId", aliases: ["keyId", "key-id", "id"], required: true }], body: "params" },
+      requiredScopes: ["console:read"],
+      inputSchema: apiKeyRevisionInput,
+      safety: { risk: "repair_write" }
+    },
+{
+      id: "operation_permission.api_keys.revoke",
+      feature: "operation_permission",
+      label: "吊销 API Key",
+      target: { controller: "system", method: "handleOperationPermissionPassthrough" },
+      http: { method: "POST", path: "/api/operation-permission/v1/api-keys/:keyId/revoke", localInForwardMode: true },
+      rpc: { method: "operation_permission.api_keys.revoke", syntheticPath: "/api/operation-permission/v1/api-keys/:keyId/revoke", params: [{ name: "keyId", aliases: ["keyId", "key-id", "id"], required: true }], body: "params" },
+      requiredScopes: ["console:read"],
+      inputSchema: apiKeyRevokeInput,
+      safety: { risk: "repair_write" }
     },
 {
       id: "operation_permission.catalog",

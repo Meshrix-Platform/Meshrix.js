@@ -440,6 +440,39 @@ describe("upstream gateway SSRF boundary", () : any => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("passes default structured HTTP response fields through without implicit redaction", async () : Promise<any> => {
+    vi.stubGlobal("fetch", vi.fn(async () : Promise<any> => new Response(JSON.stringify({
+      token: "upstream-token-marker",
+      credential: "upstream-credential-marker",
+      nested: { secret: "upstream-secret-marker" }
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" }
+    })));
+    const registry: any = await createRegistry([{
+      serviceId: "default-transparent-response",
+      baseUrl: "http://192.0.2.1:8080",
+      operations: [{
+        operationKey: "read",
+        method: "GET",
+        path: "/transparent",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"]
+      }]
+    }]);
+
+    const forwarded: any = await registry.forward({
+      serviceId: "default-transparent-response",
+      operationKey: "read"
+    }, subject);
+
+    expect(forwarded.response.json).toEqual({
+      token: "upstream-token-marker",
+      credential: "upstream-credential-marker",
+      nested: { secret: "upstream-secret-marker" }
+    });
+  });
+
   it("keeps caller routing fields rejected while configured operation paths still work", async () : Promise<any> => {
     const fixture: any = await startFixtureServer();
     const registry: any = await createRegistry([

@@ -106,6 +106,8 @@ export type OperationPermissionTool = {
   maxResultBytes: number;
   status: string;
   tags: string[];
+  serviceId?: string;
+  capabilityId?: string;
 };
 
 export type OperationPermissionCatalog = {

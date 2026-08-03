@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_ARTIFACT_PATHS,
   UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_REPORT_PATH,
+  candidateSourceLookupFailure,
   createUpstreamServicePublishingCandidateReceipt
 } from "./lib/upstream-service-publishing-candidate-receipt.ts";
 import { currentSourceTreeDigest } from "./lib/source-tree-digest.ts";
@@ -21,12 +22,16 @@ const CORE_REPORT_PATH: any =
   "build/reports/upstream-service-publishing.json";
 
 async function gitValue(args?: any) : Promise<any> {
-  const result: any = await execFileAsync("git", args, {
-    cwd: ROOT,
-    encoding: "utf8",
-    maxBuffer: 1024 * 1024
-  });
-  return result.stdout.trim();
+  try {
+    const result: any = await execFileAsync("git", args, {
+      cwd: ROOT,
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024
+    });
+    return result.stdout.trim();
+  } catch {
+    throw candidateSourceLookupFailure(args);
+  }
 }
 
 async function main() : Promise<any> {

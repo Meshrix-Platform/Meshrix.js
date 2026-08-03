@@ -13,9 +13,9 @@ async function runOperation(operationId?: any, { input = {}, context = {} }: Rec
 }
 
 function createAuthProvider(overrides: Record<string, any> = {}) : any {
-  const user: Record<string, any> = { userId: "u-1", username: "alice", roleId: "admin", enabled: true };
+  const user: Record<string, any> = { userId: "u-1", username: "alice", roleId: "maintainer", enabled: true };
   const roles: any[] = [
-    { roleId: "admin", name: "Admin" },
+    { roleId: "maintainer", name: "Maintainer" },
     { roleId: "viewer", name: "Viewer" }
   ];
   return {
@@ -131,7 +131,7 @@ function createProtocolEventBus() : any {
 describe("console domain auth and authorization facade coverage", () : any => {
   it("covers auth session, login, user, oidc, audit, trace, and session branches", async () : Promise<any> => {
     const request: Record<string, any> = { headers: { "user-agent": "vitest" } };
-    const authSession: Record<string, any> = { user: { userId: "u-1", username: "alice", roleId: "admin" } };
+    const authSession: Record<string, any> = { user: { userId: "u-1", username: "alice", roleId: "maintainer" } };
     const authProvider: any = createAuthProvider();
     const auditStore: any = createAuditStore();
     const context: Record<string, any> = {
@@ -158,7 +158,7 @@ describe("console domain auth and authorization facade coverage", () : any => {
       payload: {
         ok: true,
         csrfToken: "csrf-1",
-        roles: expect.arrayContaining([expect.objectContaining({ roleId: "admin" })])
+        roles: expect.arrayContaining([expect.objectContaining({ roleId: "maintainer" })])
       }
     });
     expect(authProvider.audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -200,8 +200,8 @@ describe("console domain auth and authorization facade coverage", () : any => {
 
     await expect(runOperation("auth.roles.get", { input: { id: "missing" }, context }))
       .resolves.toMatchObject({ status: 404 });
-    await expect(runOperation("auth.roles.get", { input: { roleId: "admin" }, context }))
-      .resolves.toMatchObject({ status: 200, payload: { role: { roleId: "admin" } } });
+    await expect(runOperation("auth.roles.get", { input: { roleId: "maintainer" }, context }))
+      .resolves.toMatchObject({ status: 200, payload: { role: { roleId: "maintainer" } } });
     await expect(runOperation("auth.oidc.get", { context }))
       .resolves.toMatchObject({ status: 200, payload: { oidc: { enabled: false } } });
     await expect(runOperation("auth.oidc.set", {
@@ -490,48 +490,4 @@ describe("console domain auth and authorization facade coverage", () : any => {
     }));
   });
 
-  it("covers operation permission MCP request branches and rejects removed legacy grant branches", async () : Promise<any> => {
-    const provider: Record<string, any> = {
-      createMcpAuthorizationRequest: vi.fn((input?: any) : any => ({ requestId: input.requestId || "request-1" })),
-      listMcpAuthorizationRequests: vi.fn(() : any => [{ requestId: "request-1" }]),
-      resolveMcpAuthorizationRequest: vi.fn(async (input?: any) : Promise<any> =>
-        input.requestId === "missing" ? { success: false } : { success: true, grantId: "grant-1" }
-      )
-    };
-    const context: Record<string, any> = {
-      toolSkillManagementProvider: provider,
-      request: { id: "request-context" },
-      authSession: { user: { username: "owner" } }
-    };
-
-    await expect(runOperation("authorization.grants.create", { context: {} }))
-      .resolves.toMatchObject({ status: 501 });
-    await expect(runOperation("authorization.grants.revoke", {
-      input: { grantId: "grant-1" },
-      context
-    })).resolves.toMatchObject({ status: 501 });
-    await expect(runOperation("operation_permission.mcp.request_authorization", {
-      input: { requestId: "request-2" },
-      context
-    })).resolves.toMatchObject({ status: 200, payload: { requestId: "request-2" } });
-    await expect(runOperation("operation_permission.mcp.list_requests", { context }))
-      .resolves.toMatchObject({ status: 200, payload: { requests: [{ requestId: "request-1" }] } });
-    await expect(runOperation("operation_permission.mcp.resolve_request", {
-      input: { requestId: "missing" },
-      context
-    })).resolves.toMatchObject({ status: 404 });
-    await expect(runOperation("operation_permission.mcp.resolve_request", {
-      input: { requestId: "request-1" },
-      context
-    })).resolves.toMatchObject({ status: 200, payload: { ok: true, grantId: "grant-1" } });
-
-    expect(provider.createMcpAuthorizationRequest).toHaveBeenCalledWith(
-      { requestId: "request-2" },
-      { request: context.request }
-    );
-    expect(provider.resolveMcpAuthorizationRequest).toHaveBeenLastCalledWith(
-      { requestId: "request-1" },
-      { authSession: context.authSession }
-    );
-  });
 });

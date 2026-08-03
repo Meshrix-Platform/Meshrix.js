@@ -80,8 +80,7 @@ function credentialFor(label?: any) : any {
 
 const PLUGIN_FEATURE_SCOPE_GRANTS: Readonly<Record<string, any>> = Object.freeze({
   "sample-feature": Object.freeze({
-    admin: ["sample_plugin:read", "sample_plugin:write", "sample_plugin:admin"],
-    operator: ["sample_plugin:read", "sample_plugin:write"],
+    maintainer: ["sample_plugin:read", "sample_plugin:write"],
     viewer: ["sample_plugin:read"]
   })
 });
@@ -94,12 +93,7 @@ describe("console auth boundary behavior", () : any => {
     }
 
     const activeRoles: any = createConsoleRoleCatalog({ activeFeatureIds: ["sample-feature"], featureScopeGrants: PLUGIN_FEATURE_SCOPE_GRANTS });
-    expect(activeRoles.admin.scopes).toEqual(expect.arrayContaining([
-      "sample_plugin:read",
-      "sample_plugin:write",
-      "sample_plugin:admin"
-    ]));
-    expect(activeRoles.operator.scopes).toEqual(expect.arrayContaining([
+    expect(activeRoles.maintainer.scopes).toEqual(expect.arrayContaining([
       "sample_plugin:read",
       "sample_plugin:write"
     ]));
@@ -284,7 +278,7 @@ describe("console auth boundary behavior", () : any => {
       const operator: any = await auth.createUser({
         username: "session.operator",
         password: credentialFor("session-operator"),
-        roleId: "operator"
+        roleId: "maintainer"
       });
       const inactiveLogin: any = await auth.login({
         username: operator.username,
@@ -357,7 +351,7 @@ describe("console auth boundary behavior", () : any => {
         username: "concurrent.operator",
         displayName: "Concurrent Operator",
         password: credentialFor("concurrent-old"),
-        roleId: "operator"
+        roleId: "maintainer"
       });
       const loginResult: any = await auth.login({
         username: user.username,
@@ -447,7 +441,7 @@ describe("console auth boundary behavior", () : any => {
         username: "Operator.User",
         displayName: "Operator",
         password: credentialFor("operator"),
-        roleId: "operator",
+        roleId: "maintainer",
         tenantId: "tenant:one",
         teamIds: "alpha,beta,alpha",
         allowedWorkspaceIds: ["ws-1", "ws-2", "ws-1"],
@@ -457,7 +451,7 @@ describe("console auth boundary behavior", () : any => {
       });
       expect(user).toMatchObject({
         username: "operator.user",
-        roleId: "operator",
+        roleId: "maintainer",
         tenantId: "tenant:one",
         teamIds: ["alpha", "beta"],
         allowedWorkspaceIds: ["ws-1", "ws-2"],

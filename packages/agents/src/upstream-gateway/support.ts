@@ -743,7 +743,11 @@ export function responseBodyForPublic(contentType?: any, buffer?: any, sensitive
     normalizeResponseBodyFields(publicResponseFields).length > 0;
   if (/json/i.test(contentType)) {
     try {
-      const redacted: any = redactStructuredValue(JSON.parse(textBody), sensitiveBodyFields);
+      const parsed: any = JSON.parse(textBody);
+      if (!filteringConfigured) {
+        return { json: parsed };
+      }
+      const redacted: any = redactStructuredValue(parsed, sensitiveBodyFields);
       return { json: filterStructuredValue(redacted, publicResponseFields) };
     } catch {
       if (filteringConfigured) {

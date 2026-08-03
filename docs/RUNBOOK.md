@@ -676,12 +676,12 @@ Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
 the optional Real-Machine Verification Workflows and cannot block publication.
 
-Meshrix `0.0.1` has an exact registry dependency on `pactium@0.5.0`. Publish
+Meshrix `0.0.1` has an exact registry dependency on `pactium@0.7.0`. Publish
 that Pactium version first and confirm registry visibility before creating the
 Meshrix tag:
 
 ```bash
-npm view pactium@0.5.0 version --registry=https://registry.npmjs.org/
+npm view pactium@0.7.0 version --registry=https://registry.npmjs.org/
 ```
 
 The Meshrix clean-install and container gates intentionally fail while that

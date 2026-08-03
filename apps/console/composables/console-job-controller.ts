@@ -7,7 +7,7 @@ import { parseTime } from "./console-format-utils";
 type ConsoleJobControllerOptions = {
   consoleState: Ref<ServerConsoleState | null>;
   error: Ref<string>;
-  clearAllBusy: () => void;
+  clearBusy: (key: string) => void;
   confirmAction: ConsoleConfirmAction;
   refreshState: () => Promise<unknown>;
   setBusy: (key: string) => void;
@@ -77,7 +77,7 @@ export function createConsoleJobController(options: ConsoleJobControllerOptions)
     } catch (nextError: any) {
       options.error.value =
         nextError instanceof Error ? nextError.message : "删除任务失败。";
-      options.clearAllBusy();
+      options.clearBusy(`job:${jobId}`);
     }
   }
 
@@ -90,7 +90,7 @@ export function createConsoleJobController(options: ConsoleJobControllerOptions)
       await options.refreshState();
     } catch (nextError: any) {
       options.error.value = nextError instanceof Error ? nextError.message : "取消任务失败。";
-      options.clearAllBusy();
+      options.clearBusy(`job:${jobId}`);
     }
   }
 

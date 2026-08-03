@@ -41,6 +41,12 @@ const UPLOAD_RECEIPT_ID_PATTERN: any =
   /^upload_consumption_receipt_[a-f0-9]{32}$/u;
 const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
 
+export type UploadConsumptionLogicalObject = Readonly<{
+  objectId: string;
+  sha256: string;
+  byteSize: number;
+}>;
+
 function nowIso() : any {
   return new Date().toISOString();
 }
@@ -129,7 +135,7 @@ function normalizeReceiptInput(input: Record<string, any> = {}) : any {
     );
   }
   const seenObjectIds: any = new Set<any>();
-  const objects: any = custodyDescriptors.map((descriptor?: any, index?: any) : any => {
+  const objects: UploadConsumptionLogicalObject[] = custodyDescriptors.map((descriptor?: any, index?: any) : any => {
     const expectedKeys: any = [
       "byteSize",
       "contentDigest",
@@ -162,7 +168,7 @@ function normalizeReceiptInput(input: Record<string, any> = {}) : any {
       );
     }
     seenObjectIds.add(objectId);
-    return { objectId, sha256, byteSize };
+    return Object.freeze({ objectId, sha256, byteSize });
   });
   const ownerKey: any = hashClientString(
     JSON.stringify(owner),
@@ -192,13 +198,19 @@ function custodyObjectRow(db?: any, custodyRef?: any) : any {
     SELECT staging.custody_ref,
            staging.expected_content_digest,
            staging.expected_byte_size,
+           staging.owner_binding_digest,
+           staging.resource_binding_digest,
            staging.sealed_envelope_digest,
            staging.sealed_object_id,
            artifacts.state AS artifact_state,
+           artifacts.content_digest AS artifact_content_digest,
+           artifacts.envelope_digest AS artifact_envelope_digest,
+           artifacts.owner_subject_ref,
+           artifacts.tenant_ref,
+           artifacts.workspace_ref,
            artifacts.plaintext_bytes,
            artifacts.ciphertext_bytes,
            objects.object_id,
-           objects.storage_rel_path,
            objects.sha256,
            objects.byte_size
     FROM upload_no_run_custody_staging AS staging
@@ -213,12 +225,28 @@ function custodyObjectRow(db?: any, custodyRef?: any) : any {
   `).get(custodyRef) || null;
 }
 
-async function verifyCustodyDescriptorObject({
+function receiptOwnerBindingDigest(owner?: any) : any {
+  return createHash("sha256")
+    .update(canonicalJson({
+      subjectId: owner.subjectId,
+      tenantId: owner.tenantId,
+      userId: owner.userId
+    }), "utf8")
+    .digest("hex");
+}
+
+function receiptResourceBindingDigest(resourceRef?: any) : any {
+  return createHash("sha256")
+    .update(String(resourceRef || "").trim(), "utf8")
+    .digest("hex");
+}
+
+function verifyCustodyDescriptorObject({
   descriptor,
   logicalObject,
-  storageKernel,
-  userDataPath
-}: Record<string, any>) : Promise<any> {
+  owner,
+  storageKernel
+}: Record<string, any>) : any {
   const row: any = custodyObjectRow(
     storageKernel?.db,
     descriptor.custodyRef
@@ -229,7 +257,14 @@ async function verifyCustodyDescriptorObject({
     row.sealed_object_id !== logicalObject.objectId ||
     row.expected_content_digest !== logicalObject.sha256 ||
     Number(row.expected_byte_size) !== logicalObject.byteSize ||
+    row.owner_binding_digest !== receiptOwnerBindingDigest(owner) ||
+    row.resource_binding_digest !== receiptResourceBindingDigest(descriptor.resourceRef) ||
     row.sealed_envelope_digest !== descriptor.envelopeDigest ||
+    row.artifact_content_digest !== logicalObject.sha256 ||
+    row.artifact_envelope_digest !== descriptor.envelopeDigest ||
+    row.owner_subject_ref !== row.owner_binding_digest ||
+    row.tenant_ref !== row.resource_binding_digest ||
+    row.workspace_ref !== row.resource_binding_digest ||
     row.sha256 !== descriptor.envelopeDigest ||
     Number(row.plaintext_bytes) !== logicalObject.byteSize ||
     Number(row.ciphertext_bytes) !== Number(row.byte_size)
@@ -239,12 +274,6 @@ async function verifyCustodyDescriptorObject({
       "Upload custody descriptor does not match canonical storage."
     );
   }
-  await verifyStoredObjectIntegrity({
-    userDataPath,
-    storageRelativePath: row.storage_rel_path,
-    expectedSha256: descriptor.envelopeDigest,
-    expectedByteSize: Number(row.byte_size)
-  });
 }
 
 function uploadConsumptionReceiptFromRow(row?: any) : any {
@@ -565,6 +594,15 @@ export function createStorageProvider({
         );
       }
       const normalized: any = normalizeReceiptInput(input);
+      const normalizedOwner: any = normalizeReceiptOwner(input.owner);
+      for (const [index, descriptor] of normalized.custodyDescriptors.entries()) {
+        verifyCustodyDescriptorObject({
+          descriptor,
+          logicalObject: normalized.objects[index],
+          owner: normalizedOwner,
+          storageKernel
+        });
+      }
       const persisted: any = uploadConsumptionReceiptFromRow(
         uploadConsumptionReceiptRowBySession(
           storageKernel.db,
@@ -582,15 +620,6 @@ export function createStorageProvider({
       }
 
       try {
-        for (const [index, descriptor] of normalized.custodyDescriptors.entries()) {
-          await verifyCustodyDescriptorObject({
-            descriptor,
-            logicalObject: normalized.objects[index],
-            storageKernel,
-            userDataPath
-          });
-        }
-
         const commit: any = storageKernel.db.transaction(() : any => {
           const concurrent: any = uploadConsumptionReceiptFromRow(
             uploadConsumptionReceiptRowBySession(

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { createUpstreamGatewayRegistry } from "../../../packages/agents/src/upstream-gateway/index.ts";
 import { createAgentWorkspace } from "../../../packages/agents/src/agent-workspace/index.ts";
@@ -47,22 +48,33 @@ describe("owner-bound upstream artifact transit", () : any => {
     const artifactPort: any = await createArtifactTransitProvider({
       userDataPath: root,
       uploadSessionStore: {
-        async resolveUploadSessionFiles(_root: any, sessionId: any, { owner }: Record<string, any>) : Promise<any> {
+        async resolveUploadSessionFiles(sessionId: any, { owner }: Record<string, any>) : Promise<any> {
           expect(sessionId).toBe("session01");
           expect(owner.subjectId).toBe("owner");
           return [{
-            stagedPath: uploadPath,
             originalFileName: "alice.txt",
             mediaType: "text/plain",
             byteSize: uploadBytes.byteLength,
-            sha256: "a".repeat(64)
+            sha256: "a".repeat(64),
+            contentDigest: "a".repeat(64),
+            envelopeDigest: "b".repeat(64),
+            custodyRef: "custody:test",
+            resourceRef: "upload-resource:session01:0"
           }];
+        }
+      },
+      uploadCustodyReadPort: {
+        async open() : Promise<any> {
+          return { stream: Readable.from([uploadBytes]) };
         }
       },
       getListenUrl: () : any => "http://gateway.invalid"
     });
     cleanup.push(() : any => artifactPort.close());
-    const registry: any = createUpstreamGatewayRegistry({ artifactTransitPort: artifactPort });
+    const registry: any = createUpstreamGatewayRegistry({
+      artifactTransitPort: artifactPort,
+      claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ test: true })
+    });
     cleanup.push(() : any => registry.close());
     installUpstreamRuntimeServices(registry, [{
       serviceId: "format-convert",
@@ -144,6 +156,11 @@ describe("owner-bound workspace artifact transit", () : any => {
           throw new Error("Upload sessions are unavailable in this fixture.");
         }
       },
+      uploadCustodyReadPort: {
+        async open() : Promise<any> {
+          throw new Error("Upload custody is unavailable in this fixture.");
+        }
+      },
       workspaceFileStore: createWorkspaceArtifactFileStore({ getAgentWorkspace: () : any => agentWorkspace }),
       getListenUrl: () : any => "http://gateway.invalid"
     });
@@ -206,7 +223,10 @@ describe("owner-bound workspace artifact transit", () : any => {
   async function setupWorkspaceGateway() : Promise<any> {
     const fixture: any = await setupWorkspaceTransit();
     const { observed, peer } = await setupMultipartPeer();
-    const registry: any = createUpstreamGatewayRegistry({ artifactTransitPort: fixture.artifactPort });
+    const registry: any = createUpstreamGatewayRegistry({
+      artifactTransitPort: fixture.artifactPort,
+      claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ test: true })
+    });
     cleanup.push(() : any => registry.close());
     installFormatConvertService(registry, peer.address().port);
     return { ...fixture, observed, registry };

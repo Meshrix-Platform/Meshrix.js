@@ -14,6 +14,7 @@ import { assertPactiumFreshDataDir } from "#meshrix/foundation/checkpoint/tree/p
 import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
 import { registerOperationProofSubstratePlatformServices } from "#meshrix/foundation/proof/proof-substrate/register";
 import { createConsoleAuth } from "#meshrix/foundation/security/auth/console-auth";
+import { createOrganizationGovernanceService } from "@meshrix/foundation/security/authorization/organization-model";
 import { createOperationAuditStore } from "#meshrix/foundation/security/operation-audit";
 import { createProcessIdentityService } from "#meshrix/foundation/security/process-identity/index";
 import { registerSecurityPlatformServices } from "#meshrix/foundation/security/register";
@@ -390,13 +391,21 @@ export async function createServerCompositionRoot({
   });
   consoleAuthRef = consoleAuth;
   resourceClosers.push(() : any => consoleAuth.close());
+  const organizationGovernanceService: any = createOrganizationGovernanceService({
+    tagManagementStore: registeredSecurityProvider
+  });
   const processIdentity: any = createProcessIdentityService({ dataDir: userDataPath });
   pluginOwnerProcessIdentityAuthority.bind(processIdentity);
   resourceClosers.push(() : any => processIdentity.close());
   if (!pluginHostPorts.pluginOwnerProcessIdentityAuthority) {
     resourceClosers.push(() : any => pluginOwnerProcessIdentityAuthority.close());
   }
-  const securityPermissions: any = createSecurityPermissionsProvider({ consoleAuth, processIdentity });
+  const securityPermissions: any = createSecurityPermissionsProvider({
+    consoleAuth,
+    organizationGovernanceService,
+    tagManagementStore: registeredSecurityProvider,
+    processIdentity
+  });
   const externalGatewayManagement: any = await createPersistentExternalGatewayManagementProvider({ userDataPath });
   setModuleManagementSettingsDeps({ loadSettings, saveSettings });
   const moduleManagement: any = createModuleManagementProvider({

@@ -2,7 +2,7 @@
 import { useStorageViewContext } from "../../../composables/storageViewContext";
 
 const {
-  busyKey,
+  isBusy,
   currentUser,
   logoutConsole,
 } = useStorageViewContext();
@@ -29,7 +29,8 @@ const {
       <button
         class="tool-button tool-button-ghost"
         type="button"
-        :disabled="busyKey === 'auth:logout'"
+        :disabled="isBusy('auth:logout')"
+        :aria-busy="isBusy('auth:logout')"
         @click="logoutConsole"
       >
         退出登录

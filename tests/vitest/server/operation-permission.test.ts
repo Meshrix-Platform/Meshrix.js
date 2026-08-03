@@ -52,11 +52,6 @@ import {
   createOperationPermissionStore,
   getOperationPermissionDatabasePath
 } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
-import {
-  hashLocalMcpAuthorizationClaim,
-  openLocalMcpAuthorizationReplay,
-  sealLocalMcpAuthorizationReplay
-} from "../../../packages/capabilities/src/skills/tool-skill-management-provider-local-mcp.ts";
 
 function createResponse() : any {
   return {
@@ -84,6 +79,40 @@ function createRequest({ headers = {}, id = "req-1" }: Record<string, any> = {})
 
 function createUrl(pathname?: any) : any {
   return new URL(pathname, "http://127.0.0.1");
+}
+
+function scopedApiKeyAuthorization(): any {
+  return {
+    credentialKind: "scoped_api_key",
+    keyId: "A".repeat(22),
+    workloadPrincipalId: "workload-release-journey",
+    organizationNodeId: "organization-release-journey",
+    lifecycleRevision: 7,
+    policyFingerprint: "sha256:release-journey-policy",
+    policy: {
+      protocol: "mcp",
+      serviceIds: [],
+      capabilityIds: [],
+      toolsetIds: ["toolset-1"],
+      allowedTools: ["tool.alpha"],
+      deniedTools: [],
+      scopeIds: ["tool:run"],
+      maximumRisk: "low",
+      resources: {
+        workspaceIds: [],
+        dataClassifications: [],
+        egressClasses: [],
+        secretBindingIds: [],
+        allowedOrigins: [],
+        allowedCidrs: [],
+        semanticFamilies: [],
+        capabilityDomains: [],
+        capabilityVerbs: [],
+        resourceKinds: [],
+        effectKinds: []
+      }
+    }
+  };
 }
 
 function createRuntimeFixture(overrides: Record<string, any> = {}) : any {
@@ -350,6 +379,11 @@ function operationBindingForTest(resource: Record<string, any> = {}, operationId
         policyDigest: String(resource.policyDigest || "")
       },
       policyRevision: { grantPolicyRevision: 1, governancePolicyRevision: 1 },
+      credentialBinding: {
+        kind: "tool_grant",
+        id: "grant-1",
+        policyFingerprint: "sha256:fixture-grant-projection"
+      },
       grantProjectionFingerprint: "sha256:fixture-grant-projection"
   };
   return {
@@ -388,7 +422,7 @@ function createEligibleApprover(overrides: Record<string, any> = {}) : any {
   return {
     userId: "console-user-1",
     username: "Console User",
-    roleId: "admin",
+    roleId: "maintainer",
     scopes: ["runtime:admin"],
     teamIds: ["team-code"],
     departmentIds: ["department-platform"],
@@ -403,252 +437,6 @@ beforeEach(() : any => {
   summarizeForLogMock.mockClear();
   getRuntimeLoggerMock.mockClear();
   traceContextFromRequestMock.mockClear();
-});
-
-describe("native MCP device authorization store", () : any => {
-  it("keeps claim material private and atomically consumes one approved request", async () : Promise<any> => {
-    await withTempUserDataPath(async (userDataPath?: any) : Promise<any> => {
-      const store: any = createOperationPermissionStore({
-        userDataPath,
-        capabilityKeyProvider: {},
-        capabilityBindingGuard: false
-      });
-      try {
-        const claimToken: any = "store_retry_claim_abcdefghijklmnopqrstuvwxyz";
-        const claimTokenHash: any = hashLocalMcpAuthorizationClaim(claimToken);
-        const created: any = store.createMcpAuthorizationRequest({
-          request: { socket: { remoteAddress: "127.0.0.1" }, headers: {} },
-          clientName: "Local MCP client",
-          requestKind: "local_mcp_install",
-          requestPayload: {
-            body: { targets: ["codex"], processIdentities: { codex: { processPublicKeyPem: "public-key" } } },
-            summary: {
-              targets: ["codex"],
-              toolsets: ["meshrix.runtime.read"],
-              maxRisk: "read_only",
-              processKeyFingerprints: [{ target: "codex", fingerprint: "sha256:fingerprint" }]
-            }
-          },
-          claimTokenHash,
-          expiresAt: new Date(Date.now() + 60_000).toISOString()
-        });
-        const publicRequest: any = store.listMcpAuthorizationRequests({ status: "pending" })[0];
-
-        expect(publicRequest).toMatchObject({
-          requestId: created.requestId,
-          requestKind: "local_mcp_install",
-          targets: ["codex"],
-          maxRisk: "read_only"
-        });
-        expect(publicRequest).not.toHaveProperty("requestPayload");
-        expect(JSON.stringify(publicRequest)).not.toContain("public-key");
-        expect(JSON.stringify(publicRequest)).not.toContain(claimTokenHash);
-
-        expect(store.resolveMcpAuthorizationRequest({
-          requestId: created.requestId,
-          resolution: "approved",
-          resolvedBy: "owner"
-        })).toBe(true);
-        expect(store.resolveMcpAuthorizationRequest({
-          requestId: created.requestId,
-          resolution: "approved",
-          resolvedBy: "other"
-        })).toBe(false);
-        expect(store.claimMcpAuthorizationRequest({
-          requestId: created.requestId,
-          claimTokenHash: "b".repeat(64)
-        })).toMatchObject({ claimed: false, status: "not_found" });
-
-        const claimed: any = store.claimMcpAuthorizationRequest({
-          requestId: created.requestId,
-          claimTokenHash
-        });
-        expect(claimed).toMatchObject({
-          claimed: true,
-          status: "issuing",
-          request: {
-            resolvedBy: "owner",
-            requestPayload: { body: { targets: ["codex"] } }
-          }
-        });
-        expect(store.claimMcpAuthorizationRequest({
-          requestId: created.requestId,
-          claimTokenHash
-        })).toMatchObject({ claimed: false, status: "issuing" });
-        const replayResponse: Record<string, any> = {
-          status: 201,
-          body: {
-            authorizationRequestId: created.requestId,
-            token: "sensitive-retry-token"
-          }
-        };
-        const replayEnvelope: any = sealLocalMcpAuthorizationReplay({
-          claimToken,
-          requestId: created.requestId,
-          response: replayResponse
-        });
-        const replayExpiresAt: any = new Date(Date.now() + 60_000).toISOString();
-        expect(store.completeMcpAuthorizationRequest({
-          requestId: created.requestId,
-          status: "consumed",
-          grantIds: ["grant-1"],
-          replayEnvelope,
-          replayExpiresAt
-        })).toBe(true);
-        expect(store.completeMcpAuthorizationRequest({
-          requestId: created.requestId,
-          status: "consumed",
-          grantIds: ["grant-2"],
-          replayEnvelope,
-          replayExpiresAt
-        })).toBe(false);
-        expect(store.getMcpAuthorizationRequest(created.requestId)).toMatchObject({
-          status: "consumed",
-          grantId: "grant-1",
-          grantIds: ["grant-1"]
-        });
-        expect(store.getMcpAuthorizationRequest(created.requestId)).not.toHaveProperty("replayEnvelope");
-        const replayClaim: any = store.claimMcpAuthorizationRequest({
-          requestId: created.requestId,
-          claimTokenHash
-        });
-        expect(replayClaim).toMatchObject({
-          claimed: false,
-          replayable: true,
-          status: "consumed"
-        });
-        expect(openLocalMcpAuthorizationReplay({
-          claimToken,
-          requestId: created.requestId,
-          envelope: replayClaim.request.replayEnvelope
-        })).toEqual(replayResponse);
-        const storedReplay: any = store.db.prepare(`
-          SELECT replay_envelope_json
-          FROM mcp_authorization_requests
-          WHERE request_id = ?
-        `).get(created.requestId).replay_envelope_json;
-        expect(storedReplay).not.toContain("sensitive-retry-token");
-        store.db.prepare(`
-          UPDATE mcp_authorization_requests
-          SET replay_expires_at = ?
-          WHERE request_id = ?
-        `).run(new Date(Date.now() - 1_000).toISOString(), created.requestId);
-        expect(store.claimMcpAuthorizationRequest({
-          requestId: created.requestId,
-          claimTokenHash
-        })).toMatchObject({ claimed: false, status: "consumed" });
-        expect(store.db.prepare(`
-          SELECT replay_envelope_json
-          FROM mcp_authorization_requests
-          WHERE request_id = ?
-        `).get(created.requestId).replay_envelope_json).toBe("");
-      } finally {
-        store.close();
-      }
-    });
-  });
-
-  it("expires pending requests, recovers stale issue leases, and bounds active requests per source", async () : Promise<any> => {
-    await withTempUserDataPath(async (userDataPath?: any) : Promise<any> => {
-      const store: any = createOperationPermissionStore({
-        userDataPath,
-        capabilityKeyProvider: {},
-        capabilityBindingGuard: false
-      });
-      const request: Record<string, any> = { socket: { remoteAddress: "127.0.0.1" }, headers: {} };
-      try {
-        const expired: any = store.createMcpAuthorizationRequest({
-          request,
-          requestKind: "local_mcp_install",
-          requestPayload: { summary: {} },
-          claimTokenHash: "c".repeat(64),
-          expiresAt: new Date(Date.now() - 1_000).toISOString()
-        });
-        expect(store.getMcpAuthorizationRequest(expired.requestId).status).toBe("expired");
-
-        const leased: any = store.createMcpAuthorizationRequest({
-          request,
-          requestKind: "local_mcp_install",
-          requestPayload: { summary: {} },
-          claimTokenHash: "d".repeat(64),
-          expiresAt: new Date(Date.now() + 60_000).toISOString()
-        });
-        expect(store.resolveMcpAuthorizationRequest({
-          requestId: leased.requestId,
-          resolution: "approved"
-        })).toBe(true);
-        expect(store.claimMcpAuthorizationRequest({
-          requestId: leased.requestId,
-          claimTokenHash: "d".repeat(64)
-        }).claimed).toBe(true);
-        store.db.prepare("UPDATE mcp_authorization_requests SET issuing_at = ? WHERE request_id = ?")
-          .run(new Date(Date.now() - 16 * 60 * 1000).toISOString(), leased.requestId);
-        expect(store.getMcpAuthorizationRequest(leased.requestId)).toMatchObject({
-          status: "failed",
-          errorCode: "authorization_issue_interrupted"
-        });
-
-        for (let index: any = 0; index < 16; index += 1) {
-          store.createMcpAuthorizationRequest({
-            request,
-            requestKind: "local_mcp_install",
-            requestPayload: { summary: {} },
-            claimTokenHash: String(index).padStart(64, "0"),
-            expiresAt: new Date(Date.now() + 60_000).toISOString()
-          });
-        }
-        expect(() : any => store.createMcpAuthorizationRequest({
-          request,
-          requestKind: "local_mcp_install",
-          requestPayload: { summary: {} },
-          claimTokenHash: "e".repeat(64),
-          expiresAt: new Date(Date.now() + 60_000).toISOString()
-        })).toThrow("local_mcp_authorization_capacity_exceeded");
-      } finally {
-        store.close();
-      }
-    });
-  });
-
-  it("bounds native MCP authorization payload bytes before row quotas can exhaust storage", async () : Promise<any> => {
-    await withTempUserDataPath(async (userDataPath?: any) : Promise<any> => {
-      const store: any = createOperationPermissionStore({
-        userDataPath,
-        capabilityKeyProvider: {},
-        capabilityBindingGuard: false
-      });
-      const request: Record<string, any> = { socket: { remoteAddress: "127.0.0.1" }, headers: {} };
-      try {
-        expect(() : any => store.createMcpAuthorizationRequest({
-          request,
-          requestKind: "local_mcp_install",
-          requestPayload: { padding: "x".repeat(70 * 1024) },
-          claimTokenHash: "a".repeat(64),
-          expiresAt: new Date(Date.now() + 60_000).toISOString()
-        })).toThrow("local_mcp_authorization_payload_too_large");
-
-        for (let index: any = 0; index < 8; index += 1) {
-          store.createMcpAuthorizationRequest({
-            request,
-            requestKind: "local_mcp_install",
-            requestPayload: { padding: "x".repeat(60 * 1024) },
-            claimTokenHash: String(index).padStart(64, "b"),
-            expiresAt: new Date(Date.now() + 60_000).toISOString()
-          });
-        }
-        expect(() : any => store.createMcpAuthorizationRequest({
-          request,
-          requestKind: "local_mcp_install",
-          requestPayload: { padding: "x".repeat(60 * 1024) },
-          claimTokenHash: "c".repeat(64),
-          expiresAt: new Date(Date.now() + 60_000).toISOString()
-        })).toThrow("local_mcp_authorization_capacity_exceeded");
-        expect(store.listMcpAuthorizationRequests({ status: "pending" })).toHaveLength(8);
-      } finally {
-        store.close();
-      }
-    });
-  });
 });
 
 describe("operation-permission runtime (behavior)", () : any => {
@@ -1360,6 +1148,114 @@ describe("operation-permission runtime (behavior)", () : any => {
     }));
   });
 
+  it("resumes an API Key pending approval only after lifecycle revalidation", async () : Promise<any> => {
+    const authorization: any = scopedApiKeyAuthorization();
+    let pendingRecord: any = null;
+    const apiKeyDistributionProvider: Record<string, any> = {
+      revalidateAuthorization: vi.fn(() : any => authorization),
+      reserveEffect: vi.fn(async () : Promise<any> => ({ leaseId: "lease-api-key" })),
+      revalidateEffect: vi.fn(async () : Promise<any> => authorization),
+      releaseEffect: vi.fn(async () : Promise<any> => undefined)
+    };
+    const fixture: any = createRuntimeFixture({
+      tool: { requiresApproval: true },
+      runtime: { apiKeyDistributionProvider }
+    });
+    fixture.store.createPendingOperation.mockImplementation((entry?: any) : any => {
+      pendingRecord = {
+        ...entry,
+        pendingOperationId: "pending-api-key-current",
+        status: "pending",
+        expiresAt: "2099-01-01T00:00:00.000Z"
+      };
+      return pendingRecord;
+    });
+    fixture.store.getPendingOperation.mockImplementation(() : any => pendingRecord);
+    fixture.store.resolvePendingOperation.mockImplementation(({ resolution, resumedToolExecutionId }: Record<string, any>) : any => ({
+      ...pendingRecord,
+      status: resolution,
+      resumedToolExecutionId: resumedToolExecutionId || "",
+      resolvedAt: "2026-08-03T00:00:00.000Z"
+    }));
+
+    const pending: any = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest(),
+      apiKeyAuthorization: authorization
+    });
+    expect(pending).toMatchObject({ ok: true, status: 202, payload: { status: "pending_approval" } });
+    expect(pendingRecord.credentialAuthorization).toEqual(authorization);
+    expect(pendingRecord.credentialAuthorization).not.toHaveProperty("credential");
+    expect(pendingRecord.credentialAuthorization).not.toHaveProperty("credentialFingerprint");
+    expect(pendingRecord.credentialAuthorization).not.toHaveProperty("processIdentity");
+
+    const resumed: any = await fixture.runtime.resumePendingOperation({
+      pendingOperationId: pendingRecord.pendingOperationId,
+      request: createRequest(),
+      resolvedBy: "console-user-1",
+      reason: "approved"
+    });
+
+    expect(resumed).toMatchObject({ ok: true, status: 200 });
+    expect(apiKeyDistributionProvider.revalidateAuthorization).toHaveBeenCalledWith(authorization);
+    expect(fixture.store.getGrant).not.toHaveBeenCalled();
+    expect(apiKeyDistributionProvider.reserveEffect).toHaveBeenCalled();
+  });
+
+  it("fails a pending API Key approval closed when its lifecycle revision is stale", async () : Promise<any> => {
+    const authorization: any = scopedApiKeyAuthorization();
+    const stale: Error & Record<string, any> = new Error("API Key lifecycle changed.");
+    stale.code = "api_key_revision_stale";
+    stale.statusCode = 409;
+    const fixture: any = createRuntimeFixture({
+      runtime: {
+        apiKeyDistributionProvider: {
+          revalidateAuthorization: vi.fn(() : never => { throw stale; })
+        }
+      }
+    });
+    const pendingRecord: Record<string, any> = {
+      pendingOperationId: "pending-api-key-stale",
+      status: "pending",
+      traceId: "trace-request",
+      toolId: fixture.tool.id,
+      grantId: "",
+      profileId: "",
+      context: {},
+      originalInput: { name: "alpha" },
+      risk: "low",
+      operationId: fixture.operation.id,
+      credentialAuthorization: authorization,
+      requiredApproval: { operationBinding: operationBindingForTest() }
+    };
+    fixture.store.getPendingOperation.mockReturnValue(pendingRecord);
+    fixture.store.resolvePendingOperation.mockImplementation(({ resolution, errorCode = "" }: Record<string, any>) : any => ({
+      ...pendingRecord,
+      status: resolution,
+      errorCode
+    }));
+
+    const resumed: any = await fixture.runtime.resumePendingOperation({
+      pendingOperationId: pendingRecord.pendingOperationId,
+      request: createRequest(),
+      resolvedBy: "console-user-1",
+      reason: "approved"
+    });
+
+    expect(resumed).toMatchObject({
+      ok: false,
+      status: 409,
+      payload: { status: "failed", error: { code: "api_key_revision_stale" } }
+    });
+    expect(fixture.store.getGrant).not.toHaveBeenCalled();
+    expect(dispatchOperationMock).not.toHaveBeenCalled();
+    expect(fixture.store.resolvePendingOperation).toHaveBeenCalledWith(expect.objectContaining({
+      resolution: "failed",
+      errorCode: "api_key_revision_stale"
+    }));
+  });
+
   it("rejects an approved pending operation when policy revision changed before resume", async () : Promise<any> => {
     let pendingRecord: any = null;
     const policyDecision: any = (revision?: any) : any => ({
@@ -2027,7 +1923,7 @@ describe("operation-permission http router (behavior)", () : any => {
           user: {
             userId: "console-user-1",
             username: "Console User",
-            roleId: "admin"
+            roleId: "maintainer"
           }
         }
       }))
@@ -2094,12 +1990,19 @@ describe("operation-permission store boundaries (behavior)", () : any => {
       });
       try {
         const requiredApproval: any = createGovernanceRequiredApproval({ approvalLayers: ["team"] });
+        const apiKeyAuthorization: any = {
+          ...scopedApiKeyAuthorization(),
+          credential: "must-not-persist",
+          credentialFingerprint: "must-not-persist",
+          processIdentity: { executablePath: "must-not-persist" }
+        };
         const pending: any = store.createPendingOperation({
           pendingOperationId: "pending-required-source",
           toolId: "tool.alpha",
           operationId: "operation.alpha",
           requiredApproval,
           approvalLayers: ["department"],
+          credentialAuthorization: apiKeyAuthorization,
           originalInput: { token: "secret" }
         });
         const projectionOnly: any = store.createPendingOperation({
@@ -2117,6 +2020,11 @@ describe("operation-permission store boundaries (behavior)", () : any => {
         expect(loaded.requiredApproval.approvalLayers).toEqual(["team"]);
         expect(loaded.requiredApproval.operationBinding).toEqual(requiredApproval.operationBinding);
         expect(loaded.redactedInput.token).toBe("<redacted>");
+        expect(pending).not.toHaveProperty("credentialAuthorization");
+        expect(loaded.credentialAuthorization).toEqual(scopedApiKeyAuthorization());
+        expect(loaded.credentialAuthorization).not.toHaveProperty("credential");
+        expect(loaded.credentialAuthorization).not.toHaveProperty("credentialFingerprint");
+        expect(loaded.credentialAuthorization).not.toHaveProperty("processIdentity");
         expect(projectionOnly.approvalLayers).toEqual([]);
         expect(loadedProjectionOnly.requiredApproval.approvalLayers).toEqual([]);
         const approved: any = store.resolvePendingOperation({
@@ -2160,10 +2068,6 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           pendingOperationId: "missing",
           resolution: "not-a-valid-state"
         })).toThrow("Invalid pending operation resolution status.");
-        expect(() : any => store.resolveMcpAuthorizationRequest({
-          requestId: "missing",
-          resolution: "not-a-valid-state"
-        })).toThrow("Invalid resolution status");
       } finally {
         store.close();
       }

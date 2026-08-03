@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { createJobManager } from "../../../packages/server-runtime/src/jobs/jobs/job-manager.ts";
+import { createTestJobManager } from "./job-manager-test-harness.ts";
 
 const tempRoots: any[] = [];
 
@@ -20,7 +20,7 @@ afterEach(async () : Promise<any> => {
 describe("job manager queue authority boundary", () : any => {
   it("leaves work-queue observation and recovery to the workflow provider", async () : Promise<any> => {
     await withTempUserData(async (userDataPath?: any) : Promise<any> => {
-      const manager: any = createJobManager({
+      const manager: any = createTestJobManager({
         userDataPath,
         processingEnabled: false,
         logger: { info() : any {}, warn() : any {}, error() : any {}, debug() : any {} }

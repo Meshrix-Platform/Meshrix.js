@@ -831,6 +831,11 @@ export async function dispatchOperation({
 	          skipAuthorization: true
 	        }
 	      });
+	      if (admissionTargetSelector) {
+	        admissionProtectedSinkAuthority = protectedSinkAuthorityFacts(
+	          request?.__meshrixToolRuntimeAuthorization || {}
+	        );
+	      }
 	    } else if (operation.externalAuth !== true && operation.public !== true && ["http", "rpc"].includes(transport)) {
 	      const error: any = "Operation authorizer is not registered for this transport.";
 	      appendRiskGate({
@@ -1194,6 +1199,11 @@ export async function dispatchOperation({
                         sinkBinding: binding
                       });
                     } catch {
+                      logOperation(logger, "warn", operationEventName(transport, "denied"), {
+                        operationId: operation.id,
+                        phase: "final-protected-sink",
+                        reasonCode: "final_authorization_revalidation_failed"
+                      });
                       return Object.freeze({
                         allowed: false,
                         revoked: false
@@ -1205,6 +1215,15 @@ export async function dispatchOperation({
                       finalAuthorization.authorizationDecision?.allowed === false ||
                       revoked
                     ) {
+                      logOperation(logger, "warn", operationEventName(transport, "denied"), {
+                        operationId: operation.id,
+                        phase: "final-protected-sink",
+                        reasonCode: String(
+                          finalAuthorization?.reasonCode ||
+                          finalAuthorization?.authorizationDecision?.reasonCode ||
+                          (revoked ? "final_authority_revoked" : "final_authority_denied")
+                        ).replace(/[^a-z0-9_]+/giu, "_").slice(0, 96)
+                      });
                       return Object.freeze({
                         allowed: false,
                         revoked
@@ -1220,6 +1239,11 @@ export async function dispatchOperation({
                       authEnabled
                     });
                     if (!currentSafety.ok) {
+                      logOperation(logger, "warn", operationEventName(transport, "denied"), {
+                        operationId: operation.id,
+                        phase: "final-protected-sink",
+                        reasonCode: "final_operation_safety_denied"
+                      });
                       return Object.freeze({
                         allowed: false,
                         revoked: false

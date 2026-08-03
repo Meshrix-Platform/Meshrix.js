@@ -75,7 +75,7 @@ describe("MCP SSE admission", () : any => {
     request.headers = {};
     request.socket = { remoteAddress: "127.0.0.1" };
     const response: any = responseFixture();
-    const authorizeRequest: any = vi.fn();
+    const authorizeMcpClientRequest: any = vi.fn();
 
     await handleMeshrixMcpHttpRequest({
       request,
@@ -83,11 +83,11 @@ describe("MCP SSE admission", () : any => {
       requestBody: Buffer.alloc(0),
       method: "GET",
       url: new URL("http://127.0.0.1/mcp"),
-      toolSkillManagementProvider: { authorizeRequest }
+      toolSkillManagementProvider: { authorizeMcpClientRequest }
     });
 
     expect(response.statusCode).toBe(401);
-    expect(authorizeRequest).not.toHaveBeenCalled();
+    expect(authorizeMcpClientRequest).not.toHaveBeenCalled();
     expect(JSON.parse(response.chunks.join(""))?.error?.data?.code)
       .toBe("mcp_sse_authentication_required");
   });
@@ -112,7 +112,7 @@ describe("MCP SSE admission", () : any => {
       method: "GET",
       url: new URL("http://127.0.0.1/mcp?capability=upstream.catalog.list_changed"),
       toolSkillManagementProvider: {
-        authorizeRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-stream" } })),
+        authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-stream" } })),
         audiencePartitionKeys
       }
     });
@@ -167,7 +167,7 @@ describe("MCP SSE admission", () : any => {
       }
     };
     const requestBody: any = Buffer.from(JSON.stringify(message));
-    const authorizeRequest: any = vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-stream" } }));
+    const authorizeMcpClientRequest: any = vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-stream" } }));
 
     await handleMeshrixMcpHttpRequest({
       request,
@@ -175,10 +175,10 @@ describe("MCP SSE admission", () : any => {
       requestBody,
       method: "POST",
       url: new URL("http://127.0.0.1/mcp"),
-      toolSkillManagementProvider: { authorizeRequest }
+      toolSkillManagementProvider: { authorizeMcpClientRequest }
     });
 
-    expect(authorizeRequest).toHaveBeenCalledOnce();
+    expect(authorizeMcpClientRequest).toHaveBeenCalledOnce();
     expect(acknowledgeCatalogConvergence).toHaveBeenCalledWith({
       grantId: "grant-stream",
       proxySessionId: "abcdefghijklmnopqrstuvwx",

@@ -9,7 +9,6 @@ const {
   activeRouteAdminView,
   activeRouteView,
   canAccessAdminView,
-  hasFeature,
   msg,
   openAdmin,
 } = useConsoleSideNavContext();
@@ -17,13 +16,7 @@ const showSystemSection = computed(() =>
   canAccessAdminView("storage") ||
   canAccessAdminView("modules") ||
   canAccessAdminView("strategyManagement") ||
-  canAccessAdminView("tagManagement") ||
   canAccessAdminView("logs")
-);
-const showOperationsSection = computed(() =>
-  canAccessAdminView("jobs") ||
-  canAccessAdminView("opsMonitor") ||
-  canAccessAdminView("maintenanceAgent")
 );
 </script>
 
@@ -54,7 +47,6 @@ const showOperationsSection = computed(() =>
       subtle
       @activate="openAdmin('strategyManagement')"
     />
-    <ConsoleSideNavLink v-if="hasFeature('tag-management') && canAccessAdminView('tagManagement')" :active="activeRouteView === 'admin' && activeRouteAdminView === 'tagManagement'" :label="msg.nav.tagManagement" href="#/admin/tag-management" subtle @activate="openAdmin('tagManagement')" />
     <ConsoleSideNavLink
       v-if="canAccessAdminView('logs')"
       :active="activeRouteView === 'admin' && activeRouteAdminView === 'logs'"
@@ -62,33 +54,6 @@ const showOperationsSection = computed(() =>
       href="#/admin/logs"
       subtle
       @activate="openAdmin('logs')"
-    />
-  </section>
-  <section v-if="showOperationsSection" class="side-nav-section" :aria-label="msg.nav.operations">
-    <p class="side-nav-section-title">{{ msg.nav.operations }}</p>
-    <ConsoleSideNavLink
-      v-if="canAccessAdminView('jobs')"
-      :active="activeRouteView === 'admin' && activeRouteAdminView === 'jobs'"
-      :label="msg.nav.jobs"
-      href="#/admin/jobs"
-      subtle
-      @activate="openAdmin('jobs')"
-    />
-    <ConsoleSideNavLink
-      v-if="canAccessAdminView('opsMonitor')"
-      :active="activeRouteView === 'admin' && activeRouteAdminView === 'opsMonitor'"
-      :label="msg.nav.opsMonitor"
-      href="#/admin/ops-monitor"
-      subtle
-      @activate="openAdmin('opsMonitor')"
-    />
-    <ConsoleSideNavLink
-      v-if="hasFeature('maintenance-agent-runbooks') && canAccessAdminView('maintenanceAgent')"
-      :active="activeRouteView === 'admin' && activeRouteAdminView === 'maintenanceAgent'"
-      :label="msg.nav.maintenanceAgent"
-      href="#/admin/maintenance-agent"
-      subtle
-      @activate="openAdmin('maintenanceAgent')"
     />
   </section>
 </template>

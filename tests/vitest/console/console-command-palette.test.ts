@@ -15,9 +15,10 @@ import {
 
 const nav: Record<string, any> = {
   nav: {
-    agents: "智能体",
-    integrations: "集成",
-    agentTools: "操作权限",
+    service: "服务",
+    tools: "工具",
+    permission: "权限",
+    model: "模型",
     system: "系统",
     operations: "运维",
     version: "版本",
@@ -85,7 +86,10 @@ describe("console command palette controller", () : any => {
   });
 
   it("resolves admin section and view labels with the storage fallback", () : any => {
-    expect(resolveAdminSectionLabel("agent", nav)).toBe("智能体");
+    expect(resolveAdminSectionLabel("service", nav)).toBe("服务");
+    expect(resolveAdminSectionLabel("tools", nav)).toBe("工具");
+    expect(resolveAdminSectionLabel("permission", nav)).toBe("权限");
+    expect(resolveAdminSectionLabel("model", nav)).toBe("模型");
     expect(resolveAdminSectionLabel("operations", nav)).toBe("运维");
     expect(resolveAdminSectionLabel("primary", nav)).toBe("");
 

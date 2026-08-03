@@ -2,17 +2,13 @@ import { MCP_SERVER_NAME, packageJson } from "./constants.ts";
 import { option, parseTargets, targetInstallMode } from "./basic-utils.ts";
 import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
 import { writeDeviceUninstall } from "./device-config.ts";
-import { explicitBaseUrl, registryBaseUrls } from "./discovery.ts";
+import { discardConfiguredApiKeyEnvironment, explicitBaseUrl, registryBaseUrls } from "./discovery.ts";
 import {
   discoveryRegistryPath,
   readJson
 } from "./device-discovery-registry.ts";
 import { redactSensitiveText, sensitiveOptionValues } from "./installer-output-safety.ts";
-import {
-  chooseUninstallCandidates,
-  finalizeRevokedLocalMcpCredential,
-  notifyLocalMcpUninstall,
-} from "./interactive.ts";
+import { chooseUninstallCandidates } from "./interactive.ts";
 import { canUseUninstallTui, installerOptions } from "./installer-options.ts";
 import { resolveClientAdapterForTarget, scanInstallTargets } from "./scan-candidates.ts";
 
@@ -67,61 +63,6 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
       };
     }
   }
-  const successfulTargets: any = targets.filter((target?: any) : any => uninstalled[target]?.ok !== false);
-  let serverUninstall: any = null;
-  if (successfulTargets.length > 0) {
-    try {
-      serverUninstall = await notifyLocalMcpUninstall(mergedOptions, { targets: successfulTargets });
-      for (const target of successfulTargets) {
-        const targetResult: any = serverUninstall.perTarget?.[target];
-        if (targetResult?.ok === true) {
-          const finalized: any = await finalizeRevokedLocalMcpCredential(target);
-          if (finalized.ok) {
-            uninstalled[target] = {
-              ...uninstalled[target],
-              serverDeviceRemoved: true,
-              localProcessIdentityRemoved: true
-            };
-          } else {
-            uninstalled[target] = {
-              ...uninstalled[target],
-              ok: false,
-              status: "failed",
-              serverDeviceRemoved: true,
-              localProcessIdentityRemoved: false,
-              credentialRetainedForRecovery: true,
-              error: finalized.error || "The revoked MCP credential could not be removed from local secure storage."
-            };
-          }
-          continue;
-        }
-        const reason: any = targetResult?.error || "The server-side MCP device removal was not confirmed.";
-        uninstalled[target] = {
-          ...uninstalled[target],
-          ok: false,
-          status: "failed",
-          serverDeviceRemoved: false,
-          localProcessIdentityRemoved: false,
-          error: redactSensitiveText(reason, sensitiveOptionValues(mergedOptions))
-        };
-      }
-    } catch (error: any) {
-      serverUninstall = {
-        ok: false,
-        error: redactSensitiveText(error?.message || String(error), sensitiveOptionValues(mergedOptions))
-      };
-      for (const target of successfulTargets) {
-        uninstalled[target] = {
-          ...uninstalled[target],
-          ok: false,
-          status: "failed",
-          serverDeviceRemoved: false,
-          localProcessIdentityRemoved: false,
-          error: redactSensitiveText(error?.message || String(error), sensitiveOptionValues(mergedOptions))
-        };
-      }
-    }
-  }
   const discoveryManifest: any = settings.baseUrl
     ? await writeDeviceUninstall({
         baseUrl: settings.baseUrl,
@@ -137,7 +78,6 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
     targets,
     baseUrl: settings.baseUrl,
     discoveryManifest,
-    serverUninstall,
     uninstalled
   };
 }
@@ -260,6 +200,7 @@ export async function uninstallTuiCommand(options?: any) : Promise<any> {
 }
 
 export async function uninstallCommand(options?: any) : Promise<any> {
+  discardConfiguredApiKeyEnvironment(options);
   const resolvedOptions: any = await optionsWithStoredBaseUrl(options);
   if (canUseUninstallTui(options)) {
     return uninstallTuiCommand(resolvedOptions);

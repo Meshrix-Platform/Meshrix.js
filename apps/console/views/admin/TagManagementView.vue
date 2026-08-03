@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
+import { computed } from "vue";
+import OptionBar from "@meshrix/ui-console/option-bar";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
 import {
+  tagManagementArchiveOptions,
   tagManagementKindOptions,
   tagManagementStatusOptions,
   useTagManagementConsole,
@@ -10,6 +12,10 @@ import TagAuditList from "./tag-management/TagAuditList.vue";
 import TagEditorForm from "./tag-management/TagEditorForm.vue";
 import TagProjectionCard from "./tag-management/TagProjectionCard.vue";
 import TagTreePanel from "./tag-management/TagTreePanel.vue";
+import {
+  tagManagementKindName,
+  tagManagementText,
+} from "../../i18n/tag-management";
 
 const {
   archiveSelectedTag,
@@ -18,11 +24,9 @@ const {
   error,
   includeArchived,
   kindFilter,
-  loading,
   parentTagOptions,
   projections,
   rebuildProjections,
-  refreshTagManagement,
   restoreSelectedTag,
   saveEditor,
   saving,
@@ -37,67 +41,53 @@ const {
   tagStats,
   treeRows,
 } = useTagManagementConsole();
+
+const localizedKindOptions = computed(() => tagManagementKindOptions.map((option?: any) : any => ({
+  ...option,
+  label: option.value ? tagManagementKindName(option.value) : tagManagementText("全部类型", "All Types"),
+})));
+const localizedStatusOptions = computed(() => tagManagementStatusOptions.map((option?: any) : any => ({
+  ...option,
+  label: option.value === "active"
+    ? tagManagementText("启用", "Active")
+    : option.value === "archived"
+      ? tagManagementText("归档", "Archived")
+      : tagManagementText("全部状态", "All Statuses"),
+})));
+const localizedArchiveOptions = computed(() => tagManagementArchiveOptions.map((option?: any) : any => ({
+  ...option,
+  label: option.value
+    ? tagManagementText("包含归档标签", "Include Archived Tags")
+    : tagManagementText("仅显示当前标签", "Current Tags Only"),
+})));
 </script>
 
 <template>
   <section class="tag-management-layout">
-    <div class="section-header tag-management-title">
-      <div>
-        <h3>标签管理</h3>
-        <p>维护标签与角色的定义、层级、投影与审计。</p>
+    <section class="surface-card tag-management-control-panel">
+      <div class="section-header">
+        <div>
+          <h3>{{ tagManagementText("标签管理", "Tag Management") }}</h3>
+          <p>{{ tagManagementText("维护标签与角色的定义、层级、投影与审计。", "Manage tag and role definitions, hierarchy, projections, and audit history.") }}</p>
+        </div>
+        <div class="section-tags">
+          <span>{{ tagManagementText("全部", "Total") }} {{ tagStats.total }}</span>
+          <span>{{ tagManagementText("启用", "Active") }} {{ tagStats.active }}</span>
+          <span>{{ tagManagementText("归档", "Archived") }} {{ tagStats.archived }}</span>
+          <span>{{ tagManagementText("投影", "Projections") }} {{ tagStats.projections }}</span>
+          <span>{{ tagManagementText("审计", "Audit") }} {{ tagStats.audit }}</span>
+        </div>
       </div>
-    </div>
-    <header class="tag-management-header">
-      <div class="tag-management-filters">
-        <label>
-          <span>类型</span>
-          <select v-model="kindFilter">
-            <option v-for="option in tagManagementKindOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-        <label>
-          <span>状态</span>
-          <select v-model="statusFilter">
-            <option v-for="option in tagManagementStatusOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-        <BinaryCheckbox v-model="includeArchived" label="包含归档" />
+      <div class="filter-control-grid tag-management-filters">
+        <OptionBar v-model="kindFilter" :label="tagManagementText('类型', 'Type')" :options="localizedKindOptions" />
+        <OptionBar v-model="statusFilter" :label="tagManagementText('状态', 'Status')" :options="localizedStatusOptions" />
+        <OptionBar v-model="includeArchived" :label="tagManagementText('显示范围', 'Visibility')" :options="localizedArchiveOptions" />
       </div>
-      <div class="tag-management-actions">
-        <button class="table-action" type="button" :disabled="loading" @click="refreshTagManagement(true)">
-          {{ loading ? "刷新中" : "刷新" }}
-        </button>
+      <div class="source-actions tag-management-actions">
         <button class="table-action" type="button" :disabled="saving" @click="rebuildProjections">
-          重建投影
+          {{ tagManagementText("重建投影", "Rebuild Projections") }}
         </button>
-        <button class="tool-button" type="button" @click="startNewTag">新建 Tag</button>
-      </div>
-    </header>
-
-    <section class="surface-card tag-management-summary">
-      <div>
-        <span>全部</span>
-        <strong>{{ tagStats.total }}</strong>
-      </div>
-      <div>
-        <span>启用</span>
-        <strong>{{ tagStats.active }}</strong>
-      </div>
-      <div>
-        <span>归档</span>
-        <strong>{{ tagStats.archived }}</strong>
-      </div>
-      <div>
-        <span>投影</span>
-        <strong>{{ tagStats.projections }}</strong>
-      </div>
-      <div>
-        <span>审计</span>
-        <strong>{{ tagStats.audit }}</strong>
+        <button class="tool-button" type="button" @click="startNewTag">{{ tagManagementText("新建标签", "New Tag") }}</button>
       </div>
     </section>
 
@@ -137,82 +127,9 @@ const {
   gap: var(--space-4);
 }
 
-.tag-management-title {
-  margin-bottom: 0;
-}
-
-.tag-management-header,
-.tag-management-filters,
 .tag-management-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.tag-management-header {
-  justify-content: space-between;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.tag-management-filters {
-  flex-wrap: wrap;
-}
-
-.tag-management-filters label {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.tag-management-filters span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.tag-management-filters select {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  font: inherit;
-  min-height: 34px;
-  padding: 0 var(--space-2);
-}
-
-.tag-management-check {
-  flex-direction: row !important;
-  align-items: center;
-  min-height: 34px;
-}
-
-.tag-management-check input {
-  width: auto;
-}
-
-.tag-management-summary {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.tag-management-summary > div {
-  min-width: 0;
-}
-
-.tag-management-summary span {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-}
-
-.tag-management-summary strong {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--text-primary);
-  font-size: var(--text-xl);
+  justify-content: flex-end;
+  margin-top: var(--space-3);
 }
 
 .tag-management-grid {
@@ -230,14 +147,9 @@ const {
 }
 
 @media (max-width: 900px) {
-  .tag-management-header,
   .tag-management-actions {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .tag-management-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .tag-management-grid {

@@ -1,0 +1,299 @@
+.organization-governance-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.organization-governance-page-header,
+.organization-governance-card-header,
+.organization-governance-unconfigured,
+.organization-governance-published,
+.organization-governance-action-card,
+.organization-governance-actions,
+.organization-governance-title-with-help,
+.organization-governance-field-label {
+  display: flex;
+  align-items: center;
+}
+
+.organization-governance-page-header,
+.organization-governance-card-header,
+.organization-governance-unconfigured,
+.organization-governance-published,
+.organization-governance-action-card {
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.organization-governance-page-header {
+  margin-bottom: 0;
+}
+
+.organization-governance-page-header h2,
+.organization-governance-card-header h3,
+.organization-governance-action-card strong,
+.organization-governance-state-card strong,
+.organization-governance-security-note strong {
+  color: var(--text-primary);
+}
+
+.organization-governance-page-header p,
+.organization-governance-card-header p,
+.organization-governance-action-card p,
+.organization-governance-unconfigured p,
+.organization-governance-published p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+}
+
+.organization-governance-state-card,
+.organization-governance-editor,
+.organization-governance-roles,
+.organization-governance-action-card {
+  min-width: 0;
+}
+
+.organization-governance-state-card,
+.organization-governance-editor,
+.organization-governance-roles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.organization-governance-state-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.organization-governance-state-summary > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+
+.organization-governance-state-summary span,
+.organization-governance-depth-field small,
+.organization-governance-node-type small,
+.organization-governance-role-list span,
+.organization-governance-empty-copy {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.organization-governance-state-summary strong {
+  overflow-wrap: anywhere;
+}
+
+.organization-governance-unconfigured,
+.organization-governance-published {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.organization-governance-local-badge,
+.organization-governance-projection-state {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-pill);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.organization-governance-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+.organization-governance-depth-field {
+  display: grid;
+  width: min(320px, 100%);
+  gap: var(--space-2);
+}
+
+.organization-governance-field-label,
+.organization-governance-title-with-help {
+  width: fit-content;
+  gap: var(--space-2);
+}
+
+.organization-governance-depth-field input,
+.organization-governance-node-row input {
+  width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: inherit;
+}
+
+.organization-governance-depth-field input:focus-visible,
+.organization-governance-node-row input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.organization-governance-hierarchy {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.organization-governance-node-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.42fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-left: min(calc(var(--node-depth) * 22px), 45%);
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--bg-subtle);
+}
+
+.organization-governance-node-type {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-weight: var(--font-semibold);
+}
+
+.organization-governance-node-row.is-person-placeholder {
+  min-height: 46px;
+  border-left-style: dashed;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.organization-governance-security-note {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.organization-governance-role-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.organization-governance-role-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.organization-governance-role-list li > div {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.organization-governance-empty-copy {
+  margin: 0;
+}
+
+.organization-governance-action-card {
+  align-items: flex-end;
+}
+
+.organization-governance-actions {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.organization-governance-danger-action {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.organization-governance-danger-action:hover:not(:disabled) {
+  color: #fff;
+  background: color-mix(in srgb, var(--danger) 88%, #000 12%);
+  border-color: color-mix(in srgb, var(--danger) 88%, #000 12%);
+}
+
+.organization-governance-danger-action:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.organization-governance-danger-action:disabled {
+  color: color-mix(in srgb, #fff 62%, var(--danger) 38%);
+  background: color-mix(in srgb, var(--danger) 42%, var(--bg-surface) 58%);
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border-subtle) 58%);
+}
+
+@media (max-width: 900px) {
+  .organization-governance-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .organization-governance-state-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .organization-governance-page-header,
+  .organization-governance-card-header,
+  .organization-governance-unconfigured,
+  .organization-governance-published,
+  .organization-governance-action-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .organization-governance-state-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .organization-governance-node-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    margin-left: min(calc(var(--node-depth) * 10px), 28%);
+  }
+
+  .organization-governance-actions {
+    width: 100%;
+  }
+
+  .organization-governance-actions button {
+    flex: 1 1 120px;
+  }
+
+  .organization-governance-actions > .browse-select-button {
+    flex: 1 1 120px;
+  }
+}

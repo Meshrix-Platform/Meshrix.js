@@ -61,7 +61,7 @@
         "security.http-resource-admission",
         "governance.operation-permission-protocol-consistency",
         "governance.authorization-coverage",
-        "downstream-mcp.authorization-request-filters",
+        "downstream-mcp.installer-convergence",
         "agents.model-provider-runtime"
       ],
       "timeoutMs": 1800000
@@ -93,13 +93,10 @@
         "downstream-client.aspect",
         "security-alert.lifecycle",
         "downstream-mcp.completeness-audit",
-        "downstream-mcp.authorization-request-filters",
         "downstream-mcp.external-http-boundary",
         "downstream-mcp.installer-convergence",
         "downstream-mcp.release-target-scope",
         "downstream-mcp.release-portable-assembly",
-        "downstream-mcp.client-identity-proof",
-        "downstream-mcp.process-identity-credential-store",
         "downstream-mcp.proxy-transport",
         "container.deployment-flow",
         "storage.backup-restore",
@@ -526,7 +523,6 @@
         "tests/vitest/server/operation-permission-grant-security.test.ts",
         "tests/vitest/server/delegated-mcp-parent-authority.test.ts",
         "tests/vitest/server/process-identity-nonce-capacity.test.ts",
-        "tests/vitest/server/mcp-installer-device-authorization.test.ts",
         "tests/vitest/server/local-secret-crash-consistency.test.ts",
         "tests/vitest/server/plugin-mcp-outlet-visibility.test.ts",
         "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts",
@@ -1330,25 +1326,6 @@
       ]
     },
     {
-      "id": "downstream-mcp.authorization-request-filters",
-      "label": "Downstream MCP authorization request filter verifier",
-      "owner": "platform",
-      "package": "protocols",
-      "level": "integration",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-mcp-authorization-request-filters.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "standard",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": [
-        "build/reports/mcp-authorization-request-filters.json"
-      ]
-    },
-    {
       "id": "downstream-mcp.external-http-boundary",
       "label": "Operation Permission external HTTP grant-token boundary verifier",
       "owner": "platform",
@@ -1650,44 +1627,6 @@
       "coverageContribution": true,
       "artifacts": [
         "build/reports/npm-package-installability.json"
-      ]
-    },
-    {
-      "id": "downstream-mcp.client-identity-proof",
-      "label": "Downstream MCP client process identity proof verifier",
-      "owner": "platform",
-      "package": "protocols",
-      "level": "security",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-mcp-client-identity-proof.ts"
-      ],
-      "sideEffects": "build-output",
-      "timeoutClass": "fast",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": [
-        "build/reports/mcp-client-identity-proof.json"
-      ]
-    },
-    {
-      "id": "downstream-mcp.process-identity-credential-store",
-      "label": "Downstream MCP process identity credential store verifier",
-      "owner": "platform",
-      "package": "protocols",
-      "level": "security",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-mcp-process-identity-credential-store.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "standard",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": [
-        "build/reports/mcp-process-identity-credential-store.json"
       ]
     },
     {

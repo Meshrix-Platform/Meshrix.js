@@ -15,7 +15,7 @@ import {
 import type { DashboardAlert } from "../types/app";
 
 const {
-  busyKey,
+  isBusy,
   consoleState,
   dashboardAlertInboxId,
   dashboardAlerts,
@@ -73,14 +73,14 @@ type DashboardTodoItem =
       card: ApprovalFlowCard;
     };
 
-function alertSourceLabel(alertItem: DashboardAlert) {
-  return alertItem.source === "configuration" ? "配置待办" : "运维待办";
+function alertSourceLabel() {
+  return "运维待办";
 }
 
 function alertTodoMeta(alertItem: DashboardAlert) {
   return [
     alertItem.status,
-    alertSourceLabel(alertItem),
+    alertSourceLabel(),
     alertItem.live === false ? "待确认" : "",
   ].filter(Boolean);
 }
@@ -155,11 +155,11 @@ function alertBusyKey(alertItem: DashboardAlert) {
 }
 
 function isAlertBusy(alertItem: DashboardAlert) {
-  return busyKey.value === alertBusyKey(alertItem);
+  return isBusy(alertBusyKey(alertItem));
 }
 
 function isDismissBusy(alertItem: DashboardAlert) {
-  return busyKey.value === `monitor-alert:ack:${alertItem.alertId}`;
+  return isBusy(`monitor-alert:ack:${alertItem.alertId}`);
 }
 
 function dashboardAlertActionLabel(alertItem: DashboardAlert) {
@@ -168,11 +168,7 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
   }
   return (
     alertItem.actionLabel ||
-    (alertItem.source === "configuration"
-      ? "处理配置"
-      : alertItem.tone === "success"
-        ? "确认恢复"
-        : "查看巡检")
+    (alertItem.tone === "success" ? "确认恢复" : "查看巡检")
   );
 }
 </script>
@@ -246,7 +242,7 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
       </div>
       <div v-else class="configuration-alert-empty dashboard-todo-empty">
         <strong>没有待办事项</strong>
-        <span>当前角色没有需要处理的告警、配置或审批事项。</span>
+        <span>当前角色没有需要处理的告警或审批事项。</span>
       </div>
     </article>
 
@@ -316,8 +312,7 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
 </template>
 
 <style scoped>
-/* Dismissing an alert is a neutral acknowledgement, not a destructive action —
-   keep it visually secondary to the primary "去配置" action. */
+/* Dismissing an alert is a neutral acknowledgement, not a destructive action. */
 .dashboard-todo-dismiss {
   color: var(--text-secondary);
 }

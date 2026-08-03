@@ -184,16 +184,6 @@ describe("user configuration truth", () : any => {
     }
   });
 
-  it("does not infer an MCP online/offline threshold", async () : Promise<any> => {
-    const { mcpGrantConnectionState } = await import(
-      "../../../packages/capabilities/src/skills/tool-skill-management-provider-local-mcp.ts"
-    );
-    expect(mcpGrantConnectionState({ lastUsedAt: new Date().toISOString() })).toMatchObject({
-      state: "unknown",
-      alignmentState: "unknown",
-    });
-  });
-
   it("keeps sandbox provider executables outside persisted user configuration", async () : Promise<any> => {
     const { normalizeSettings } = await import(
       "../../../packages/server-runtime/src/composition/platform-core/settings-normalizers.ts"

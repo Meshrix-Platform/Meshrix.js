@@ -14,7 +14,7 @@ export type WorkspacePanel =
   | "localDir";
 
 export type WorkspaceManagementControllerOptions = {
-  clearBusy: () => void;
+  clearBusy: (key: string) => void;
   confirmAction: ConsoleConfirmAction;
   load: () => Promise<void>;
   loadChain: (id: string) => Promise<void>;
@@ -48,7 +48,7 @@ export function useWorkspaceManagementController(
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:create");
     }
   }
 
@@ -80,7 +80,7 @@ export function useWorkspaceManagementController(
       options.localError.value = errorMessage(e);
     } finally {
       if (operationStarted) {
-        options.clearBusy();
+        options.clearBusy("ws:delete");
       }
       deletePending = false;
     }
@@ -98,7 +98,7 @@ export function useWorkspaceManagementController(
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:parent");
     }
   }
 
@@ -118,7 +118,7 @@ export function useWorkspaceManagementController(
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:profile");
     }
   }
 
@@ -138,7 +138,7 @@ export function useWorkspaceManagementController(
     } catch (e: unknown) {
       options.localError.value = errorMessage(e);
     } finally {
-      options.clearBusy();
+      options.clearBusy("ws:share");
     }
   }
 

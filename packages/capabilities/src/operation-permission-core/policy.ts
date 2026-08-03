@@ -41,6 +41,9 @@ export function createToolPolicyEngine({
   async function evaluateLocal({
     tool,
     grant = null,
+    restriction = null,
+    subject = null,
+    credentialKind = "",
     profile = null,
     input = {},
     request = null,
@@ -52,7 +55,7 @@ export function createToolPolicyEngine({
     const evaluatedLayers: any = [
       "platform_default",
       "server_policy",
-      grant ? "grant_policy" : "",
+      grant ? "grant_policy" : restriction ? "credential_policy" : "",
       profile ? "agent_profile_policy" : "",
       "session_task_policy",
       "runtime_safety_policy"
@@ -61,6 +64,9 @@ export function createToolPolicyEngine({
       ? securityPermissions.evaluatePolicy({
           tool,
           grant,
+          restriction,
+          subject,
+          credentialKind,
           profile,
           input,
           request,
@@ -93,6 +99,9 @@ export function createToolPolicyEngine({
       traceId,
       toolId: tool?.id || "",
       grantId: grant?.id || "",
+      credentialId: restriction?.credentialId || "",
+      credentialKind: credentialKind || restriction?.credentialKind || "",
+      credentialPolicyFingerprint: restriction?.policyFingerprint || "",
       missingScopes: uniqueStrings(authorizationDecision.missingScopes || []),
       missingToolsets: authorizationDecision.effect === "deny"
         ? uniqueStrings(authorizationDecision.missingToolsets || [])

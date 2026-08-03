@@ -1,4 +1,10 @@
-import { nowIso, sourceIpFromRequest } from "./runtime-common.ts";
+import {
+  authorizationGrantId,
+  authorizationSubjectId,
+  authorizationSubjectType,
+  nowIso,
+  sourceIpFromRequest
+} from "./runtime-common.ts";
 
 export async function denyInvalidInputExecution({
   schemaValidation,
@@ -36,9 +42,9 @@ export async function denyInvalidInputExecution({
     toolId: tool.id,
     toolVersion: tool.version,
     toolsetIds: tool.toolsets,
-    subjectType: "grant",
-    subjectId: authorization.grant.id,
-    grantId: authorization.grant.id,
+    subjectType: authorizationSubjectType(authorization),
+    subjectId: authorizationSubjectId(authorization),
+    grantId: authorizationGrantId(authorization),
     agentId: context.agentId || "",
     profileId: context.profileId || "",
     operationId: tool.operationId,
@@ -62,7 +68,7 @@ export async function denyInvalidInputExecution({
   store.appendMetric({
     traceId,
     toolId: tool.id,
-    grantId: authorization.grant.id,
+    grantId: authorizationGrantId(authorization),
     profileId: context.profileId || "",
     status: "denied",
     risk: tool.risk,

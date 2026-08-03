@@ -3,25 +3,16 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import {
+  UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_ARTIFACT_PATHS,
   UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_RECEIPT_SCHEMA,
+  candidateSourceLookupFailure,
   createUpstreamServicePublishingCandidateReceipt
 } from "../../../tools/server-scripts/lib/upstream-service-publishing-candidate-receipt.ts";
+import { RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS } from "../../../tools/server-scripts/lib/release-journey-visual-contract.ts";
 
 const SOURCE_COMMIT: any = "a".repeat(40);
 const SOURCE_TREE: any = "b".repeat(40);
 const RELEASE_TAG: any = "v0.0.1";
-const SCREENSHOT_IDS: readonly any[] = Object.freeze([
-  "console-authenticated",
-  "console-upstream-basic-config",
-  "console-upstream-operation-config",
-  "console-upstream-published",
-  "console-published-tool",
-  "console-token-authorization-pending",
-  "console-token-authorization-consumed",
-  "console-operation-approval-pending",
-  "console-operation-approval-completed",
-  "console-downstream-mcp-call"
-]);
 const CORE_REPORT_PATH: any = "build/reports/upstream-service-publishing.json";
 const JOURNEY_REPORT_PATH: any = "build/reports/release-journey.json";
 const HTML_REPORT_PATH: any = "build/reports/upstream-service-publishing.html";
@@ -48,7 +39,7 @@ function candidateFixture() : any {
     }
   }, null, 2)}\n`;
   const releaseDefinitionSha256: any = sha256(releaseDefinitionText);
-  const screenshotArtifacts: any = SCREENSHOT_IDS.map((id?: any, index?: any) : any =>
+  const screenshotArtifacts: any = RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS.map((id?: any, index?: any) : any =>
     artifact(
       `build/reports/upstream-service-publishing/screenshots/${id}.png`,
       Buffer.from(`synthetic-png-${index}`)
@@ -73,7 +64,7 @@ function candidateFixture() : any {
       details: [{ id: "compose-down", status: "passed", durationMs: 800 }]
     },
     visualEvidence: screenshotArtifacts.map(([path, bytes]: any[], index?: any) : any => ({
-      id: SCREENSHOT_IDS[index],
+      id: RELEASE_JOURNEY_VISUAL_CHECKPOINT_IDS[index],
       file: path,
       byteLength: bytes.byteLength,
       sha256: sha256(bytes).slice("sha256:".length)
@@ -129,6 +120,19 @@ function expectCandidateFailure(input?: any, expectedCode?: any) : any {
 }
 
 describe("upstream service publishing candidate receipt", () : any => {
+  it("normalizes a missing release tag without redisclosing git output", () : any => {
+    const error: any = candidateSourceLookupFailure([
+      "rev-parse",
+      "refs/tags/v0.0.1^{commit}"
+    ]);
+
+    expect(error).toMatchObject({
+      code: "upstream_service_publishing_candidate_tag_unavailable",
+      message: "The release candidate tag is unavailable."
+    });
+    expect(JSON.stringify(error)).not.toContain("128");
+  });
+
   it("binds one immutable release candidate to every complete report artifact", () : any => {
     const input: any = candidateFixture();
     const receipt: any = createUpstreamServicePublishingCandidateReceipt(input);
@@ -149,7 +153,7 @@ describe("upstream service publishing candidate receipt", () : any => {
       }
     });
     expect(receipt.artifacts.map((entry?: any) : any => entry.path)).toEqual(expectedPaths);
-    expect(receipt.artifacts).toHaveLength(14);
+    expect(receipt.artifacts).toHaveLength(UPSTREAM_SERVICE_PUBLISHING_CANDIDATE_ARTIFACT_PATHS.length);
     for (const binding of receipt.artifacts) {
       const bytes: any = input.artifacts.get(binding.path);
       expect(binding).toEqual({
