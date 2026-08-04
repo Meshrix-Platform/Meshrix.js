@@ -6,12 +6,11 @@ import {
   formatDate,
   formatDuration,
   formatMachineDate,
-  jobStatusTone,
   jsonPreview,
   parseFilterDate,
   parseTime,
   safeDownloadName,
-} from "../../../apps/console/composables/console-format-utils";
+} from "@meshrix/ui-console/console-format-utils";
 
 describe("console-format-utils", () : any => {
   it("formats filter boundaries consistently", () : any => {
@@ -56,11 +55,6 @@ describe("console-format-utils", () : any => {
     expect(formatDuration("2026-06-04T00:00:00Z", "2026-06-04T00:00:30Z")).toBe("30s");
     expect(formatDuration("2026-06-04T00:00:00Z", "2026-06-04T00:02:00Z")).toBe("2m 0s");
     expect(formatDuration("2026-06-04T00:00:00Z", "2026-06-04T01:10:00Z")).toBe("1h 10m");
-  });
-
-  it("returns passthrough job status tone", () : any => {
-    expect(jobStatusTone("running")).toBe("running");
-    expect(jobStatusTone("queued")).toBe("queued");
   });
 
   it("keeps compact date fallback behavior", () : any => {

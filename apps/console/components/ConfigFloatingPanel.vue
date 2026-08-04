@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import StatusPill from "./StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
+
+import { currentConsoleLocale, localizeConsoleText } from "../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const props = withDefaults(defineProps<{
   ariaLabel?: string;
@@ -88,7 +93,7 @@ onBeforeUnmount(removeDocumentListeners);
               <StatusPill
                 v-if="statusLabel"
                 :tone="statusTone"
-                :label="statusLabel"
+                :label="localizeStatusPillLabel(statusLabel)"
               />
               <button
                 v-if="showVerify"

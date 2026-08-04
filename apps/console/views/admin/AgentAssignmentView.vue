@@ -2,9 +2,14 @@
 import AgentModelOptionBar from "../../components/AgentModelOptionBar.vue";
 import FeatureToggle from "../../components/FeatureToggle.vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
-import StatusPill from "../../components/StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import "./agent-assignment/agent-assignment.css";
 import { useAgentAssignmentView } from "./agent-assignment/useAgentAssignmentView";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
   agentAssignmentSaving,
@@ -98,7 +103,7 @@ const {
             <div class="agent-assignment-title-row">
               <h4>{{ assignment.title }}</h4>
               <StatusPill
-                :label="selectedOptionStatus(assignment.options, assignment.value).label"
+                :label="localizeStatusPillLabel(selectedOptionStatus(assignment.options, assignment.value).label)"
                 :tone="selectedOptionStatus(assignment.options, assignment.value).tone"
               />
             </div>
@@ -180,7 +185,7 @@ const {
             <p>{{ moduleDefinition.description }}</p>
             <div class="agent-assignment-card-tags" aria-label="模块标签">
               <StatusPill
-                :label="moduleStatus(moduleDefinition.id).label"
+                :label="localizeStatusPillLabel(moduleStatus(moduleDefinition.id).label)"
                 :tone="moduleStatus(moduleDefinition.id).tone"
               />
               <span class="agent-assignment-card-tag">{{ moduleRequirementLabel(moduleDefinition.alertRequired) }}</span>

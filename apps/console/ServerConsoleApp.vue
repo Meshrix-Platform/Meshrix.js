@@ -3,6 +3,7 @@ import { computed, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ConsoleCommandPalette from "./components/shell/ConsoleCommandPalette.vue";
 import ConsoleConfirmDialog from "./components/ConsoleConfirmDialog.vue";
+import ConsoleSkeleton from "./components/ConsoleSkeleton.vue";
 import ConsoleToastHost from "./components/ConsoleToastHost.vue";
 import ConsoleDrawer from "./components/shell/ConsoleDrawer.vue";
 import ConsoleSideNav from "./components/shell/ConsoleSideNav.vue";
@@ -10,7 +11,7 @@ import ConsoleSideNavDirectory from "./components/shell/side-nav/ConsoleSideNavD
 import ConsoleTopbar from "./components/shell/ConsoleTopbar.vue";
 import ServerPathPickerDialog from "./components/shell/ServerPathPickerDialog.vue";
 import { createConsoleSideNavContext, provideConsoleSideNavContext } from "./composables/consoleSideNavContext";
-import { provideServerConsoleShell } from "./composables/serverConsoleShellContext";
+import { provideServerConsoleShell } from "@meshrix/ui-console/server-console-shell-context";
 import { useServerConsoleShell } from "./composables/useServerConsoleShell";
 import { currentConsoleLocale, localizeConsoleText, resolveEffectiveConsoleLocale } from "./i18n/console";
 
@@ -49,6 +50,9 @@ const isLoginRoute = computed(() => route.path === "/login");
 const isPublicRoute = computed(() => !!route.meta?.public);
 const showPageDirectory = computed(() => isAuthenticated.value && !!activeSideNavDirectory.value && !isLoginRoute.value);
 const canRenderPrivateRoute = computed(() => isAuthenticated.value && canAccessRouteMeta(route.meta));
+// Authenticated cold boot: the route view renders nothing until consoleState
+// lands, so show a skeleton to keep loading distinguishable from broken.
+const showColdBootSkeleton = computed(() => isAuthenticated.value && !isLoginRoute.value && !isPublicRoute.value && !canRenderPrivateRoute.value);
 
 function normalizeLoginRedirect(value: unknown) {
   const redirect = Array.isArray(value) ? value[0] : value;
@@ -127,6 +131,12 @@ watch(
           <div v-if="error" class="status-strip danger">
             <strong>{{ localizedErrorTitle }}</strong>
             <span>{{ localizedError }}</span>
+          </div>
+
+          <div v-if="showColdBootSkeleton" class="sk-block" role="status">
+            <span class="visually-hidden">{{ shellMessages?.skeleton?.loading }}</span>
+            <ConsoleSkeleton variant="title" />
+            <ConsoleSkeleton variant="text" :lines="4" />
           </div>
 
           <RouterView v-if="isLoginRoute || canRenderPrivateRoute" v-slot="{ Component }">

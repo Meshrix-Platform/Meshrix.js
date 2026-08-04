@@ -1,5 +1,5 @@
 import { inject, provide, type InjectionKey } from "vue";
-import type { ServerConsoleShellContext } from "./serverConsoleShellContext";
+import type { ServerConsoleShellContext } from "./useServerConsoleShell";
 
 export type AgentModelEntryCardContext = Pick<
   ServerConsoleShellContext,

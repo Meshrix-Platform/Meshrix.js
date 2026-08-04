@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ConfigFoldCard from "../../../components/ConfigFoldCard.vue";
-import { formatCompactDate } from "../../../composables/console-format-utils";
+import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 
 export interface ContextBuildRecordRow {
   recordId: string;

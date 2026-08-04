@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
-import { useServerConsoleShellContext } from "../composables/serverConsoleShellContext";
-import StatusPill from "../components/StatusPill.vue";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import DashboardPluginCard from "../components/dashboard/DashboardPluginCard.vue";
 import {
   useApprovalFlowViewController,
@@ -10,6 +10,7 @@ import {
 } from "../composables/console-approval-flow-view-controller";
 import {
   currentConsoleLocale,
+  localizeConsoleText,
   resolveEffectiveConsoleLocale,
 } from "../i18n/console";
 import type { DashboardAlert } from "../types/app";
@@ -28,6 +29,9 @@ const { approvalFlowCards } = approvalFlow;
 const dashboardLocale = computed(() =>
   resolveEffectiveConsoleLocale(currentConsoleLocale.value),
 );
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const clientTotalCount = computed(
   () => consoleState.value?.clients?.summary?.totalCount || 0,
@@ -183,7 +187,7 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
         </div>
         <StatusPill
           :tone="dashboardTodoItems.length ? 'warning' : 'success'"
-          :label="dashboardTodoStatusLabel"
+          :label="localizeStatusPillLabel(dashboardTodoStatusLabel)"
         />
       </div>
       <div v-if="dashboardTodoItems.length" class="dashboard-todo-list">
@@ -267,7 +271,7 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
           <StatusPill
             :tone="clientOnlineCount > 0 ? 'success' : 'neutral'"
             :label="
-              clientTotalCount > 0 ? `${clientOnlineCount} 在线` : '无客户端'
+              localizeStatusPillLabel(clientTotalCount > 0 ? `${clientOnlineCount} 在线` : '无客户端')
             "
             :show-dot="false"
           />
@@ -285,9 +289,11 @@ function dashboardAlertActionLabel(alertItem: DashboardAlert) {
                 : 'neutral'
             "
             :label="
-              (consoleState?.jobs?.summary?.runningCount || 0) > 0
-                ? `${consoleState?.jobs?.summary?.runningCount || 0} 运行中`
-                : '空闲'
+              localizeStatusPillLabel(
+                (consoleState?.jobs?.summary?.runningCount || 0) > 0
+                  ? `${consoleState?.jobs?.summary?.runningCount || 0} 运行中`
+                  : '空闲'
+              )
             "
             :show-dot="false"
           />

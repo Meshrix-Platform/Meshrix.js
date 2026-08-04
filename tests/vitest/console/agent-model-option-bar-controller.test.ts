@@ -14,7 +14,7 @@ import {
 
 const navigateBrowserHashRouteMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../apps/console/lib/browser-window", () : any => ({
+vi.mock("@meshrix/ui-console/browser-window", () : any => ({
   navigateBrowserHashRoute: navigateBrowserHashRouteMock,
 }));
 

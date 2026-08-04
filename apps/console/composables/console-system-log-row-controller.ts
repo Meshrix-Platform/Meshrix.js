@@ -13,7 +13,7 @@ import {
   genericStatusTone,
   stateProgressPercent,
 } from "./console-system-log-row-utils";
-import { parseTime } from "./console-format-utils";
+import { parseTime } from "@meshrix/ui-console/console-format-utils";
 
 type ConsoleSystemLogRowControllerOptions = ConsoleBaseServerLogRowOptions &
   ConsoleSystemStatusLogRowOptions;

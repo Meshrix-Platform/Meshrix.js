@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import {
   elapsedText,
   statusLabel,
   type ProductionHealthGate,
 } from "../../../lib/production-health";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const props = defineProps<{
   gates: ProductionHealthGate[];
@@ -41,7 +46,7 @@ const failedGates = computed(() => props.gates.filter((gate: any) => gate.status
 	          <small>{{ gate.blockerLevel || "未分级" }}</small>
         </span>
         <span>
-          <StatusPill :tone="gate.tone" :label="statusLabel(gate.status)" />
+          <StatusPill :tone="gate.tone" :label="localizeStatusPillLabel(statusLabel(gate.status))" />
         </span>
         <span>
           <strong>{{ gate.owner || "未声明" }}</strong>

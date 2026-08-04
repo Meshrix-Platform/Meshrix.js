@@ -15,7 +15,7 @@ import {
   readBrowserLocalStorageItem,
   removeBrowserLocalStorageItem,
   writeBrowserLocalStorageItem,
-} from "../../lib/browser-window";
+} from "@meshrix/ui-console/browser-window";
 import {
   createUpstreamService,
   replaceUpstreamService,

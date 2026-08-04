@@ -6,6 +6,9 @@ import type {
 } from "../lib/types";
 import type { CloudProvider } from "../types/app";
 import { modelAgentUid } from "./console-model-utils";
+import { requestDestructiveConfirm } from "./console-destructive-operation-registry";
+import { pushConsoleToast } from "./console-toast-controller";
+import { consoleMessages, currentConsoleLocale } from "../i18n/console";
 
 type ReadonlyRef<T> = {
   readonly value: T;
@@ -77,11 +80,25 @@ export function createConsoleModelRepositoryController(
     };
   }
 
+  // Reports a rollback after a failed save: the draft snapshots were restored
+  // but the user was never told. Kept info-toned — it is transient feedback;
+  // the persistent failure detail stays in options.error.
+  function surfaceRollback() : any {
+    pushConsoleToast({
+      tone: "info",
+      message: consoleMessages[currentConsoleLocale.value].toast.rollbackRestored,
+    });
+  }
+
   async function removeModelProvider(provider: CloudProvider | AgentModelConfig) : Promise<any> {
     const entry: any = typeof provider === "string" ? null : provider;
     const removeKey: any = entry ? options.modelEntryStatusKey(entry) : String(provider);
     if (entry && options.modelEntryIsBound(entry)) {
       options.error.value = `智能体已绑定到 ${options.modelEntryBindingSummary(entry)}，请先解除引用后再删除。`;
+      return;
+    }
+    const resource: any = entry ? String(entry.label || entry.alias || entry.provider || removeKey) : String(provider);
+    if (!(await requestDestructiveConfirm("model-repository.provider.remove", { resource }))) {
       return;
     }
     const previousModels: any[] = [...options.visibleModelEntries.value];
@@ -105,6 +122,7 @@ export function createConsoleModelRepositoryController(
       options.settingsDraft.value.modelLibraryEntries = previousEntries;
       options.error.value =
         nextError instanceof Error ? nextError.message : "移除模型配置失败。";
+      surfaceRollback();
     } finally {
       options.clearBusy(`model-remove:${removeKey}`);
     }

@@ -8,7 +8,7 @@ import type {
 } from "../lib/types";
 import type { SystemLogRow, WorkQueueRow } from "../types/app";
 import { jobStatusLabels } from "./console-defaults";
-import { jobStatusTone, jsonPreview } from "./console-format-utils";
+import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
 import { asRecord } from "./console-model-utils";
 import {
   backgroundProcessLabel,
@@ -72,7 +72,7 @@ export function buildSystemStatusLogRows(options: ConsoleSystemStatusLogRowOptio
     target: compactLogDetail([job.id, job.queueId ? `队列 ${job.queueId}` : ""]),
     status: job.status,
     statusLabel: (jobStatusLabels as Record<string, string>)[job.status] || job.status,
-    tone: jobStatusTone(job.status),
+    tone: job.status,
     stage: job.stage || job.status,
     occurredAt: job.updatedAt || job.finishedAt || job.startedAt || job.createdAt || "",
     createdAt: job.createdAt || job.startedAt || "",

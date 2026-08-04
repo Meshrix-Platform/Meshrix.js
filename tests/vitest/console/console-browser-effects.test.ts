@@ -32,7 +32,7 @@ import {
 
 const triggerBrowserDownloadMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../apps/console/lib/browser-downloads", () : any => ({
+vi.mock("@meshrix/ui-console/browser-downloads", () : any => ({
   triggerBrowserDownload: triggerBrowserDownloadMock,
 }));
 

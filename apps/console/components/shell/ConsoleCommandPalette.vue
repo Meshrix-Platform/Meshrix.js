@@ -12,7 +12,7 @@ import {
   useConsoleCommandPalette,
   type ConsoleCommandPaletteItem,
 } from "../../composables/console-command-palette-controller";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 
 defineOptions({ name: "ConsoleCommandPalette" });
 

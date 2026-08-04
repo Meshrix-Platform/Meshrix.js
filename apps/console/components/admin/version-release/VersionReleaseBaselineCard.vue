@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import ConsoleDescriptionList from "../../ConsoleDescriptionList.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { statusTone } from "../../../lib/production-health";
 import type { ReadinessBaselineStatus } from "../../../lib/version-release";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const props = defineProps<{
   baseline: ReadinessBaselineStatus | null;
@@ -37,7 +42,7 @@ const baselineMetaItems = computed(() => [
     <div class="version-release-baseline-summary">
       <div class="version-release-baseline-status">
         <span>基线状态</span>
-        <StatusPill :tone="statusTone(baseline?.status === 'operational' ? 'pass' : 'missing')" :label="baseline?.status || '未读取'" />
+        <StatusPill :tone="statusTone(baseline?.status === 'operational' ? 'pass' : 'missing')" :label="localizeStatusPillLabel(baseline?.status || '未读取')" />
       </div>
       <ConsoleDescriptionList :items="baselineProtocolItems" :columns="2" />
     </div>

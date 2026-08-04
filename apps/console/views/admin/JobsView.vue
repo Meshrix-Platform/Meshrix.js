@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { usePageRefreshHandler } from '@meshrix/ui-console/page-refresh';
-import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
+import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
 import { jobStatusLabels } from '../../composables/console-defaults';
-import { formatCompactDate, jobStatusTone } from '../../composables/console-format-utils';
+import { formatCompactDate } from '@meshrix/ui-console/console-format-utils';
 import { jobElapsed } from '../../composables/console-job-display-utils';
 import { queueLifecycleLabel } from '../../composables/console-status-utils';
 import {
@@ -12,9 +12,14 @@ import {
   pauseWorkQueue,
   resumeWorkQueue,
 } from '../../lib/jobs-client';
-import StatusPill from '../../components/StatusPill.vue';
+import StatusPill from '@meshrix/ui-console/status-pill';
 import ConsoleEmptyState from '../../components/ConsoleEmptyState.vue';
 import ConsoleInlineAlert from '../../components/ConsoleInlineAlert.vue';
+import { currentConsoleLocale, localizeConsoleText } from '../../i18n/console';
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
+
 const {
   isBusy,
   consoleState,
@@ -139,7 +144,7 @@ usePageRefreshHandler(
             <strong>{{ row.sourceLabel }}</strong>
             <small>{{ row.kind }} · {{ row.ownerId || "无 owner" }}</small>
           </span>
-          <StatusPill :tone="row.tone" :label="queueLifecycleLabel(row.lifecycleStatus || row.status)" />
+          <StatusPill :tone="row.tone" :label="localizeStatusPillLabel(queueLifecycleLabel(row.lifecycleStatus || row.status))" />
           <span>
             <strong>{{ formatCompactDate(row.lastHeartbeatAt || row.updatedAt || row.startedAt) }}</strong>
             <small>{{ row.updatedAt ? `更新 ${formatCompactDate(row.updatedAt)}` : "无更新时间" }}</small>
@@ -189,7 +194,7 @@ usePageRefreshHandler(
               <span class="url-badge">{{ item.queueId || "未登记" }}</span>
             </td>
             <td>
-              <StatusPill :tone="jobStatusTone(item.status)" :label="(jobStatusLabels as Record<string, string>)[item.status]" />
+              <StatusPill :tone="item.status" :label="localizeStatusPillLabel((jobStatusLabels as Record<string, string>)[item.status])" />
             </td>
             <td class="progress-cell">
               <div class="progress-track">

@@ -14,7 +14,7 @@
  * Imports the pure data module (admin-route-registry.ts) directly —
  * no regex parsing of TypeScript source.
  *
- * Part of server:verify:frontend-typecheck companion.
+ * Run via: npm run verify:console-route-registry.
  */
 
 import assert from "node:assert/strict";

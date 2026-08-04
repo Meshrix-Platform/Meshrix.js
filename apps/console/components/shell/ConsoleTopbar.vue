@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ADMIN_ROUTE_REGISTRY } from "../../router/admin-route-registry.ts";
 import { openConsoleCommandPalette, resolveAdminSectionLabel } from "../../composables/console-command-palette-controller";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import {
   SERVER_ADDRESS_STORAGE_EVENT,
   normalizeServerAddressUrl,

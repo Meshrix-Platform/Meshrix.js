@@ -6,7 +6,7 @@ import {
   runContextEvaluation,
 } from "../lib/context-compiler-client";
 import { downloadTextFile } from "./console-browser-effects";
-import { formatMachineDate } from "./console-format-utils";
+import { formatMachineDate } from "@meshrix/ui-console/console-format-utils";
 import { asRecord } from "./console-model-utils";
 
 type ConsoleContextCompilerControllerOptions = {

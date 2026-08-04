@@ -1,8 +1,9 @@
-import { computed, ref, watch, type ComputedRef } from "vue";
+import { computed, onMounted, reactive, ref, watch, type ComputedRef, type Ref } from "vue";
 import type { OptionBarOption, SystemLogRow } from "../types/app";
 import { downloadTextFile } from "./console-browser-effects";
 import { systemLogPaginationConfig } from "./console-defaults";
-import { formatMachineDate, parseTime } from "./console-format-utils";
+import { formatMachineDate, parseTime } from "@meshrix/ui-console/console-format-utils";
+import { useConsoleUrlState } from "./use-console-url-state";
 
 type SystemLogFilters = {
   fuzzy: string;
@@ -52,13 +53,17 @@ function dateBoundary(value: string, endOfDay: any = false) : any {
 export function createConsoleSystemLogController(
   options: ConsoleSystemLogControllerOptions,
 ) : any {
-  const systemLogFilters: any = ref<SystemLogFilters>({
-    fuzzy: "",
-    kind: "all",
-    status: "all",
-    from: "",
-    to: "",
-  });
+  // Each filter leaf is owned by the URL (log.* query keys); the reactive
+  // wrapper keeps the existing `.value.<field>` read path and v-model writes.
+  const systemLogFilters: any = ref<SystemLogFilters>(
+    reactive({
+      fuzzy: useConsoleUrlState("log.fuzzy", ""),
+      kind: useConsoleUrlState("log.kind", "all"),
+      status: useConsoleUrlState("log.status", "all"),
+      from: useConsoleUrlState("log.from", ""),
+      to: useConsoleUrlState("log.to", ""),
+    }),
+  );
   const systemLogColumnWidths: any = ref({
     kind: 88,
     target: 160,
@@ -69,8 +74,31 @@ export function createConsoleSystemLogController(
     detail: 210,
     error: 146,
   });
-  const systemLogCurrentPage: any = ref(1);
-  const systemLogPageSize: any = ref(systemLogPaginationConfig.defaultPageSize);
+  const systemLogPageParam: Ref<string> = useConsoleUrlState("log.page", "1");
+  const systemLogCurrentPage: any = computed<number>({
+    get: (): number => {
+      const parsed: number = Number(systemLogPageParam.value);
+      return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+    },
+    set: (next: number): void => {
+      systemLogPageParam.value = String(next);
+    },
+  });
+  const systemLogPageSizeParam: Ref<string> = useConsoleUrlState(
+    "log.pageSize",
+    String(systemLogPaginationConfig.defaultPageSize),
+  );
+  const systemLogPageSize: any = computed<number>({
+    get: (): number => {
+      const parsed: number = Number(systemLogPageSizeParam.value);
+      return Number.isSafeInteger(parsed) && parsed >= 1
+        ? parsed
+        : systemLogPaginationConfig.defaultPageSize;
+    },
+    set: (next: number): void => {
+      systemLogPageSizeParam.value = String(next);
+    },
+  });
   const systemLogTableShellRef: any = ref<HTMLElement | null>(null);
   const systemLogScrollTop: any = ref(0);
 
@@ -215,14 +243,19 @@ export function createConsoleSystemLogController(
     );
   }
 
-  watch(
-    [systemLogFilters, systemLogPageSize],
-    () : any => {
-      systemLogCurrentPage.value = 1;
-      scrollSystemLogTableToTop();
-    },
-    { deep: true },
-  );
+  // Registered inside onMounted so the URL-hydrated filter/page values (read
+  // on mount by useConsoleUrlState) form the watch baseline; only later
+  // filter/pageSize changes reset paging and scroll back to the top.
+  onMounted((): void => {
+    watch(
+      [systemLogFilters, systemLogPageSize],
+      () : any => {
+        systemLogCurrentPage.value = 1;
+        scrollSystemLogTableToTop();
+      },
+      { deep: true },
+    );
+  });
   watch(systemLogPageCount, (pageCount?: any) : any => {
     systemLogCurrentPage.value = Math.min(systemLogCurrentPage.value, pageCount);
   });

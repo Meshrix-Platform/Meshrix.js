@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import ConfigFoldCard from "../ConfigFoldCard.vue";
-import { useWorkspacesViewContext } from "../../composables/workspacesViewContext";
+import { useWorkspacesViewContext } from "@meshrix/ui-console/workspaces-view-context";
 
 const { chainData } = useWorkspacesViewContext();
 </script>

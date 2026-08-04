@@ -126,6 +126,44 @@ export const consoleMessages: any = {
       saveDiscovery: "保存服务端地址",
       resizeHandle: "拖拽调整控制台选项宽度",
     },
+    destructive: {
+      confirmTitle: "确认操作",
+      confirmLabel: "确认执行",
+      cancelLabel: "取消",
+      consequence: {
+        authSessionRevoke: "即将撤销会话 {resource}，该会话会立即失效，对应用户必须重新登录。",
+        modelRepositoryProviderRemove: "即将移除模型配置 {resource}，设置会立即保存。",
+        maintenanceAgentScheduleRemove: "即将移除巡检计划 {resource}，保存配置后生效；保存前可通过撤销恢复。",
+        serviceDiscoveryAddressRemove: "即将删除服务端地址 {resource}，删除会立即保存到本浏览器。",
+        publishServiceDisable: "即将停用线上服务 {resource}，其已发布操作会立即停止对外提供。",
+        publishServiceRepublish: "即将重新发布服务 {resource}，线上已发布定义会被立即替换。",
+        publishServiceRemove: "即将删除已发布服务 {resource}，其目录条目与网关发布会立即移除。",
+      },
+    },
+    formField: {
+      required: "必填",
+    },
+    overlay: {
+      drawerTitle: "控制台选项",
+      pathPickerLoading: "正在读取目录，请稍候。",
+    },
+    secretReveal: {
+      storedConfirm: "我已将此密钥妥善保存",
+      navigationReminder: "密钥明文仍显示在页面上。离开本页前，请确认已妥善保存，或选择放弃。",
+      discard: "放弃且不再保存",
+      discardConsequence: "放弃后明文立即清除，且永远无法再次查看。",
+      discarded: "已放弃该密钥明文；它无法再次查看。",
+    },
+    skeleton: {
+      loading: "内容加载中",
+    },
+    toast: {
+      undo: "撤销",
+      actionFailed: "操作失败",
+      rollbackRestored: "更改未保存，已恢复之前的状态。",
+      toolPathRemoved: "已移除工具路径。",
+      scheduleRemoved: "已移除巡检计划，保存配置后生效。",
+    },
   },
   en: {
     appTitle: "Meshrix Server Console",
@@ -253,6 +291,44 @@ export const consoleMessages: any = {
       saving: "Saving",
       saveDiscovery: "Save Server URL",
       resizeHandle: "Resize console settings panel",
+    },
+    destructive: {
+      confirmTitle: "Confirm action",
+      confirmLabel: "Confirm",
+      cancelLabel: "Cancel",
+      consequence: {
+        authSessionRevoke: "Revoking session {resource} signs it out immediately; that user must sign in again.",
+        modelRepositoryProviderRemove: "Removing model entry {resource} saves the settings immediately.",
+        maintenanceAgentScheduleRemove: "Schedule {resource} is removed from the draft and takes effect when the config is saved; undo restores it before saving.",
+        serviceDiscoveryAddressRemove: "Deleting server address {resource} is saved to this browser immediately.",
+        publishServiceDisable: "Disabling live service {resource} stops its published operations immediately.",
+        publishServiceRepublish: "Republishing {resource} replaces the live published definition immediately.",
+        publishServiceRemove: "Removing published service {resource} deletes its catalog entry and gateway publication immediately.",
+      },
+    },
+    formField: {
+      required: "Required",
+    },
+    overlay: {
+      drawerTitle: "Console Settings",
+      pathPickerLoading: "Loading directory, please wait.",
+    },
+    secretReveal: {
+      storedConfirm: "I have stored this key safely",
+      navigationReminder: "The plaintext key is still on screen. Confirm you stored it safely, or discard it, before leaving this page.",
+      discard: "Discard without storing",
+      discardConsequence: "Discarding clears the plaintext immediately; it can never be shown again.",
+      discarded: "The plaintext key was discarded; it cannot be viewed again.",
+    },
+    skeleton: {
+      loading: "Loading content",
+    },
+    toast: {
+      undo: "Undo",
+      actionFailed: "Action failed",
+      rollbackRestored: "The change was not saved; the previous state was restored.",
+      toolPathRemoved: "Tool path removed.",
+      scheduleRemoved: "Schedule removed; it takes effect when the config is saved.",
     },
   },
 } as const;

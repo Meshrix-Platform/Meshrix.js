@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { browseServerPath } from "../lib/runtime-info-client";
 import type { ServerPathBrowseEntry } from "../lib/types";
 import type { PathPickerMode, PathPickerState } from "../types/app";
-import { formatBytes, formatCompactDate } from "./console-format-utils";
+import { formatBytes, formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 
 export function createConsolePathPickerController() : any {
   const pathPicker: any = ref<PathPickerState>({

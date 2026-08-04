@@ -1,7 +1,7 @@
 import {
   readBrowserLocalStorageItem,
   writeBrowserLocalStorageItem,
-} from "./browser-window";
+} from "@meshrix/ui-console/browser-window";
 
 export type BrowserStorageLike = Pick<Storage, "getItem" | "setItem">;
 

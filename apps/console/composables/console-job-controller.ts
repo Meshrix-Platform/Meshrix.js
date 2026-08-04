@@ -2,7 +2,7 @@ import { computed, type Ref } from "vue";
 import { cancelJob as cancelJobRequest, deleteJob as deleteJobRequest } from "../lib/jobs-client";
 import type { ServerConsoleState, SplitJob, SplitJobListResponse } from "../lib/types";
 import type { ConsoleConfirmAction } from "./console-confirm-controller";
-import { parseTime } from "./console-format-utils";
+import { parseTime } from "@meshrix/ui-console/console-format-utils";
 
 type ConsoleJobControllerOptions = {
   consoleState: Ref<ServerConsoleState | null>;

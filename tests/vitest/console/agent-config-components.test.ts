@@ -10,7 +10,7 @@ import { createConsoleBusyController } from "../../../apps/console/composables/c
 const shellContext: any = vi.hoisted(() : any => ({} as any));
 const modelEntryContext: any = vi.hoisted(() : any => ({} as any));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: () : any => shellContext,
 }));
 

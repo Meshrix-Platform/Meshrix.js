@@ -1,5 +1,5 @@
-import { formatCompactDate } from "./console-format-utils";
-import { useServerConsoleShellContext } from "./serverConsoleShellContext";
+import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import {
   maintenanceAgentRiskLabel,
   maintenanceAgentStatusLabel,

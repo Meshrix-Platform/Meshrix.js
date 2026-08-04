@@ -9,7 +9,7 @@ import {
 } from './console-browser-effects';
 import { useWorkspaceAssetController } from './console-workspace-asset-controller';
 import { useWorkspaceCheckpointController } from './console-workspace-checkpoint-controller';
-import { formatCompactDate } from './console-format-utils';
+import { formatCompactDate } from '@meshrix/ui-console/console-format-utils';
 import {
   createConsoleBusyController,
   mergeConsoleBusyReaders,
@@ -307,3 +307,5 @@ export function useWorkspacesConsole(options: WorkspacesConsoleOptions = {}) : a
     copyToClipboard,
   };
 }
+
+export type WorkspacesViewContext = ReturnType<typeof useWorkspacesConsole>;

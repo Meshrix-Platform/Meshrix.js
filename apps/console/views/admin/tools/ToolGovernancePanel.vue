@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { jsonPreview } from "../../../composables/console-format-utils";
+import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
 import type {
   OperationPermissionGrant,
   OperationPermissionProfile,

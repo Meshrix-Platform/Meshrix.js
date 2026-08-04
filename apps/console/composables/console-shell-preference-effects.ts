@@ -6,7 +6,7 @@ import {
 import {
   readBrowserLocalStorageItem,
   writeBrowserLocalStorageItem,
-} from "../lib/browser-window";
+} from "@meshrix/ui-console/browser-window";
 import {
   APPEARANCE_PRESET_CATALOG_CHANGED_EVENT,
   builtInAppearancePresetConfigs,

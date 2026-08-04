@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { triggerBrowserDownload } from "../../../apps/console/lib/browser-downloads";
+import { triggerBrowserDownload } from "@meshrix/ui-console/browser-downloads";
 
 const objectUrl: any = "blob:meshrix-download";
 let originalCreateObjectURL: typeof URL.createObjectURL | undefined;

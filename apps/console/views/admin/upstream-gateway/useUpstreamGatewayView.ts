@@ -1,5 +1,6 @@
 import { computed, onMounted, ref } from "vue";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
+import { useConsoleUrlState } from "../../../composables/use-console-url-state";
 import {
   getUpstreamGatewayMetrics,
   listUpstreamGatewayAudit,
@@ -14,7 +15,7 @@ export function useUpstreamGatewayView() : any {
   const error: any = ref("");
   const status: any = ref("");
   const services: any = ref<UpstreamGatewayService[]>([]);
-  const selectedServiceId: any = ref("");
+  const selectedServiceId: any = useConsoleUrlState("gateway.service", "");
   const audit: any = ref<UpstreamGatewayAuditItem[]>([]);
   const metrics: any = ref<UpstreamGatewayMetrics>({});
 

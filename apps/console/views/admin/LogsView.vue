@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
-import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
-import { formatMachineDate } from '../../composables/console-format-utils';
+import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { formatMachineDate } from '@meshrix/ui-console/console-format-utils';
 import DataTable from '../../components/DataTable.vue';
 import OptionBar from "@meshrix/ui-console/option-bar";
-import StatusPill from '../../components/StatusPill.vue';
+import StatusPill from '@meshrix/ui-console/status-pill';
+
+import { currentConsoleLocale, localizeConsoleText } from "../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 /* Narrow viewports keep the high-signal columns; low-priority columns are
    hidden instead of being clipped mid-character. */
@@ -134,7 +139,7 @@ function handleHeaderDragend(newWidth: number, oldWidth: number, column: any) {
                 <el-table-column prop="status" label="状态" :min-width="systemLogColumnWidths.status">
                   <template #default="{ row }">
                     <span class="system-log-status">
-                      <StatusPill :tone="row.tone" :label="systemLogDisplayStatusLabel(row)" />
+                      <StatusPill :tone="row.tone" :label="localizeStatusPillLabel(systemLogDisplayStatusLabel(row))" />
                     </span>
                   </template>
                 </el-table-column>

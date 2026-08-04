@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useOperationPermissionViewContext } from "../../../composables/operationPermissionViewContext";
-import { jsonPreview } from "../../../composables/console-format-utils";
+import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
 import OptionBar from "@meshrix/ui-console/option-bar";
 
 const {

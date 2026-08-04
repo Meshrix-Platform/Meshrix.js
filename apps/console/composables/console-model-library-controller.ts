@@ -7,7 +7,7 @@ import type {
 import type { CloudProvider } from "../types/app";
 import { downloadTextFile } from "./console-browser-effects";
 import { modelLibraryProviderDefinitions } from "./console-defaults";
-import { formatMachineDate, safeDownloadName } from "./console-format-utils";
+import { formatMachineDate, safeDownloadName } from "@meshrix/ui-console/console-format-utils";
 import { createConsoleModelEntryBindingController } from "./console-model-entry-binding-controller";
 import { createConsoleModelModuleAssignmentController } from "./console-model-module-assignment-controller";
 import { createConsoleModelProbeController } from "./console-model-probe-controller";

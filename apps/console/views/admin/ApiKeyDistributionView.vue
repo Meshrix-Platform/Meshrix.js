@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeRouteLeave } from "vue-router";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import BrowseSelectButton from "../../components/BrowseSelectButton.vue";
 import ConsoleDescriptionList from "../../components/ConsoleDescriptionList.vue";
@@ -8,7 +9,7 @@ import FeatureToggle from "../../components/FeatureToggle.vue";
 import JsonConfigFileEditor from "../../components/JsonConfigFileEditor.vue";
 import MultiChoiceCardGroup from "../../components/MultiChoiceCardGroup.vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
-import StatusPill from "../../components/StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { useConsoleApiKeyDistributionController } from "../../composables/console-api-key-distribution-controller";
 import { apiKeyDistributionText, apiKeyStatusText } from "../../i18n/api-key-distribution";
 import {
@@ -18,6 +19,11 @@ import {
 } from "../../i18n/organization-governance";
 import type { ApiKeyRecord } from "../../lib/api-key-distribution-client";
 import "../../styles/views/api-key-distribution.css";
+
+import { consoleMessages, currentConsoleLocale, localizeConsoleText } from "../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 defineOptions({ name: "ApiKeyDistributionView" });
 
@@ -30,8 +36,32 @@ const {
 } = useConsoleApiKeyDistributionController();
 
 const t = apiKeyDistributionText;
+const msg = computed(() => consoleMessages[currentConsoleLocale.value]);
 const revealCopyButton = ref<HTMLButtonElement | null>(null);
 let revealReturnFocus: HTMLElement | null = null;
+
+// Reveal state machine: revealed -> acknowledged -> dismissed. The
+// acknowledgement is a deliberate click, never a timer.
+const revealAcknowledged = ref(false);
+const revealNavigationReminder = ref(false);
+
+// Any change to the reveal resets the acknowledgement. The watch never reads
+// the plaintext value, which stays in the controller's ephemeral ref only.
+watch(oneTimeSecret, () => {
+  revealAcknowledged.value = false;
+  revealNavigationReminder.value = false;
+});
+
+// Leaving while an unacknowledged reveal is open stays on the page and
+// surfaces an inline reminder (never a native dialog). Acknowledging or
+// discarding releases the guard.
+onBeforeRouteLeave(() => {
+  if (oneTimeSecret.value && !revealAcknowledged.value) {
+    revealNavigationReminder.value = true;
+    return false;
+  }
+  return true;
+});
 
 const levelOptions = computed(() =>
   [...nodes.value].sort((left, right) => {
@@ -106,9 +136,21 @@ async function rotateAndFocusReveal(event: MouseEvent, record: ApiKeyRecord): Pr
 }
 
 async function dismissSecretAndRestoreFocus(): Promise<void> {
+  // Dismissal is gated on the explicit storage acknowledgement.
+  if (!revealAcknowledged.value) return;
   const returnTarget = revealReturnFocus;
   revealReturnFocus = null;
   dismissSecret(true);
+  await nextTick();
+  if (returnTarget?.isConnected) returnTarget.focus();
+}
+
+async function discardSecretAndRestoreFocus(): Promise<void> {
+  const returnTarget = revealReturnFocus;
+  revealReturnFocus = null;
+  // Discard without storing clears the plaintext and releases the route guard.
+  dismissSecret();
+  status.value = msg.value.secretReveal.discarded;
   await nextTick();
   if (returnTarget?.isConnected) returnTarget.focus();
 }
@@ -175,12 +217,27 @@ usePageRefreshHandler(
           <p v-else>{{ t("单独窃取密钥不足以通过进程校验；若密钥与受信任进程签名材料同时泄露，攻击者仍可在权限范围内冒用该身份。", "The key alone cannot pass process verification. If both the key and trusted process-signing material are stolen, an attacker can still impersonate the identity within its permissions.") }}</p>
         </div>
         <output class="api-key-secret" data-one-time-secret>{{ oneTimeSecret }}</output>
+        <label data-testid="api-key-reveal-confirm">
+          <input v-model="revealAcknowledged" type="checkbox" />
+          <span>{{ msg.secretReveal.storedConfirm }}</span>
+        </label>
+        <p>{{ msg.secretReveal.discardConsequence }}</p>
+        <ConsoleInlineAlert
+          v-if="revealNavigationReminder && !revealAcknowledged"
+          tone="danger"
+          data-testid="api-key-reveal-navigation-reminder"
+        >
+          {{ msg.secretReveal.navigationReminder }}
+        </ConsoleInlineAlert>
         <div class="horizontal-action-group api-key-reveal-actions">
-          <button ref="revealCopyButton" class="primary-action" type="button" @click="copySecret">
+          <button ref="revealCopyButton" class="primary-action" type="button" data-testid="api-key-reveal-copy" @click="copySecret">
             {{ copied ? t("已复制", "Copied") : t("复制密钥", "Copy Key") }}
           </button>
-          <button class="table-action" type="button" @click="dismissSecretAndRestoreFocus">
+          <button class="table-action" type="button" data-testid="api-key-reveal-dismiss" :disabled="!revealAcknowledged" @click="dismissSecretAndRestoreFocus">
             {{ t("关闭且不再显示", "Dismiss Permanently") }}
+          </button>
+          <button class="table-action api-key-danger-action" type="button" data-testid="api-key-reveal-discard" @click="discardSecretAndRestoreFocus">
+            {{ msg.secretReveal.discard }}
           </button>
         </div>
       </section>
@@ -343,7 +400,7 @@ usePageRefreshHandler(
         <article v-for="record in records" :key="record.keyId" class="api-key-record" :data-status="record.status">
           <div class="api-key-record-heading">
             <div><h4>{{ record.workloadDisplayName }}</h4><p>{{ organizationName(record) }}</p></div>
-            <StatusPill :label="apiKeyStatusText(record.status)" :tone="record.status === 'active' ? 'success' : record.status === 'revoked' ? 'danger' : 'warning'" />
+            <StatusPill :label="localizeStatusPillLabel(apiKeyStatusText(record.status))" :tone="record.status === 'active' ? 'success' : record.status === 'revoked' ? 'danger' : 'warning'" />
           </div>
           <dl class="api-key-metadata">
             <div><dt>{{ t("记录的工作负载身份", "Recorded Workload Identity") }}</dt><dd>{{ record.workloadPrincipalId }}</dd></div>

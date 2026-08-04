@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { useOpsMonitorViewContext } from "../../../composables/opsMonitorViewContext";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
   backgroundProcessLabel,
@@ -45,8 +50,8 @@ const {
           <strong>{{ processItem.label }}</strong>
           <small>{{ processItem.role }}</small>
         </span>
-        <StatusPill tone="info" :label="processTypeLabel(processItem.processType)" />
-        <StatusPill :tone="backgroundProcessTone(processItem.status)" :label="backgroundProcessLabel(processItem.status)" />
+        <StatusPill tone="info" :label="localizeStatusPillLabel(processTypeLabel(processItem.processType))" />
+        <StatusPill :tone="backgroundProcessTone(processItem.status)" :label="localizeStatusPillLabel(backgroundProcessLabel(processItem.status))" />
         <span>
           <strong>{{ processItem.pid || "-" }}</strong>
         </span>

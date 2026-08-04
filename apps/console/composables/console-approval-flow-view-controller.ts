@@ -1,5 +1,5 @@
 import { computed, onMounted, reactive } from "vue";
-import { formatMachineDate } from "./console-format-utils";
+import { formatMachineDate } from "@meshrix/ui-console/console-format-utils";
 import {
   confirmConsoleAction,
   notifyConsoleAction,
@@ -10,7 +10,7 @@ import {
   resolveEffectiveConsoleLocale,
   type ConsoleLocale,
 } from "../i18n/console";
-import { useServerConsoleShellContext } from "./serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 
 export type ApprovalFlowStatus = "pending" | "resolved" | "rejected" | "all";
 

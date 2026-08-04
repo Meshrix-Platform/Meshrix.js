@@ -1,5 +1,5 @@
 import { computed } from "vue";
-import { navigateBrowserHashRoute } from "../lib/browser-window";
+import { navigateBrowserHashRoute } from "@meshrix/ui-console/browser-window";
 
 export type AgentOptionValue = string | number | boolean;
 

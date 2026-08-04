@@ -2,8 +2,8 @@
 import OptionBar from "@meshrix/ui-console/option-bar";
 import FeatureToggle from "../FeatureToggle.vue";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
-import { formatCompactDate } from "../../composables/console-format-utils";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 
 const {
   authAudit,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
-import { jsonPreview } from '../../composables/console-format-utils';
+import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { jsonPreview } from '@meshrix/ui-console/console-format-utils';
 import { confirmConsoleAction, notifyConsoleAction } from '../../composables/console-browser-effects';
 import {
   buildContextProfileFromForm,

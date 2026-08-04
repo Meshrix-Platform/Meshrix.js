@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, type Ref } from "vue";
 import JsonConfigFileEditor from "../../../components/JsonConfigFileEditor.vue";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../components/ConsoleInlineAlert.vue";
 import HelpTooltip from "../../../components/HelpTooltip.vue";
 import MeshrixTabs, { type MeshrixTab } from "../../../components/MeshrixTabs.vue";
+import { useConsoleUrlState } from "../../../composables/use-console-url-state";
+import { pushConsoleToast } from "../../../composables/console-toast-controller";
+import { consoleMessages, currentConsoleLocale } from "../../../i18n/console";
 import { descriptorObjectFields, type PublishDescriptorForm } from "./publish-form-model";
 
 defineOptions({ name: "PublishServiceForm" });
@@ -29,7 +32,7 @@ const emit = defineEmits<{
 // The descriptor draft is owned by the parent view; this panel edits it in place.
 const form = props.form;
 
-const activeTab = ref("basic");
+const activeTab: Ref<string> = useConsoleUrlState("publish.tab", "basic");
 const operationError = ref("");
 const credentialError = ref("");
 const savedCredentialOptions = computed(() => Array.isArray(form.savedCredentialOptions) ? form.savedCredentialOptions : []);
@@ -133,7 +136,22 @@ function addOperation() {
 }
 
 function removeOperation(index: number) {
+  // Local draft mutation only — nothing persists until the parent view saves
+  // the descriptor, so undo restores the row in place (§5 H14 of the group
+  // Architecture; N14 preserves this when rewriting the form).
+  const removed: any = form.operations?.[index];
   form.operations?.splice(index, 1);
+  if (removed) {
+    pushConsoleToast({
+      message: consoleMessages[currentConsoleLocale.value].toast.toolPathRemoved,
+      action: {
+        label: consoleMessages[currentConsoleLocale.value].toast.undo,
+        run: (): void => {
+          form.operations?.splice(index, 0, removed);
+        },
+      },
+    });
+  }
 }
 
 function credentialOptionLabel(reference: Record<string, any>, index: number): string {

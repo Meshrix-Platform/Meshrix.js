@@ -2151,6 +2151,64 @@
       ]
     },
     {
+      "id": "console.admin-browser-visual",
+      "label": "Console admin browser visual verifier",
+      "owner": "console",
+      "package": "console",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-console-admin-browser-visual.ts"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/console-admin-browser-visual.json",
+        "build/reports/console-admin-browser-visual/screenshots"
+      ]
+    },
+    {
+      "id": "console.design-tokens",
+      "label": "Console design-token gate verifier",
+      "owner": "console",
+      "package": "console",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-console-design-tokens.ts"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/console-design-tokens.json"
+      ]
+    },
+    {
+      "id": "console.component-reuse",
+      "label": "Console component-reuse gate verifier",
+      "owner": "console",
+      "package": "console",
+      "level": "architecture",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-console-component-reuse.ts"
+      ],
+      "sideEffects": "build-output",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": [
+        "build/reports/console-component-reuse.json"
+      ]
+    },
+    {
       "id": "governance.production-health-console",
       "label": "Production health operation and console wiring verifier",
       "owner": "platform",

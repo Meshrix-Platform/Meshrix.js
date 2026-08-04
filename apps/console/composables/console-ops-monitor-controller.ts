@@ -13,7 +13,7 @@ import type {
   ServerConsoleState,
 } from "../lib/types";
 import type { WorkQueueRow } from "../types/app";
-import { jsonPreview } from "./console-format-utils";
+import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
 import {
   maintenanceAgentRiskLabel,
   queueLifecycleTone,

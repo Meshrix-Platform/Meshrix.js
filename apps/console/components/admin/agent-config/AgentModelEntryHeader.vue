@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { AgentModelConfig } from "../../../lib/types";
 import { useAgentModelEntryCardContext } from "../../../composables/agentModelEntryCardContext";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 defineProps<{
   entry: AgentModelConfig;
@@ -42,12 +47,12 @@ const {
         <StatusPill
           v-if="modelEntryIsBound(entry)"
           tone="info"
-          label="已绑定"
+          :label="localizeStatusPillLabel('已绑定')"
         />
         <StatusPill
           v-if="modelEntryProbeResult(entry)"
           :tone="modelEntryProbeStatusTone(entry)"
-          :label="modelEntryProbeStatusLabel(entry)"
+          :label="localizeStatusPillLabel(modelEntryProbeStatusLabel(entry))"
         />
       </div>
     </div>

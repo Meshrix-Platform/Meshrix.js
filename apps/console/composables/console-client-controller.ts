@@ -8,7 +8,7 @@ import {
   clientStatusLabel,
 } from "@meshrix/ui-console/console-client-display-utils";
 import { alignmentStateLabels } from "./console-defaults";
-import { formatMachineDate, parseTime } from "./console-format-utils";
+import { formatMachineDate, parseTime } from "@meshrix/ui-console/console-format-utils";
 
 type ConsoleClientControllerOptions = {
   consoleState: Ref<ServerConsoleState | null>;

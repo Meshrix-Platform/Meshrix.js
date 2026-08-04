@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Setting } from "@element-plus/icons-vue";
-import { computed, nextTick, onBeforeUnmount, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import ConsoleEmptyState from "./ConsoleEmptyState.vue";
+import { createConsoleOverlayController } from "../composables/console-overlay-controller";
 
 type ConfigListSummaryBubbleEntry = {
   configured?: boolean;
@@ -127,7 +128,27 @@ function toggleBubble() {
   openBubble();
 }
 
-onBeforeUnmount(closeBubble);
+// One Escape/trap/restore path for the popover (the template no longer wires
+// its own Escape handler); restore lands back on the trigger button.
+const bubbleOverlay = createConsoleOverlayController({
+  root: popoverRef,
+  open: visible,
+  invoker: triggerRef,
+  onClose: closeBubble,
+  initialFocus: "first",
+});
+watch(visible, (isVisible: boolean) : void => {
+  if (isVisible) {
+    void bubbleOverlay.activate();
+  } else {
+    bubbleOverlay.deactivate();
+  }
+});
+
+onBeforeUnmount(() : void => {
+  bubbleOverlay.deactivate();
+  closeBubble();
+});
 </script>
 
 <template>
@@ -154,8 +175,9 @@ onBeforeUnmount(closeBubble);
       :class="`is-${placement}`"
       :style="popoverStyle"
       role="dialog"
+      aria-modal="true"
       :aria-label="accessibleLabel"
-      @keydown.esc="closeBubble"
+      tabindex="-1"
     >
       <header class="config-list-summary-header">
         <div>

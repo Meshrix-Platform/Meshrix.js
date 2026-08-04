@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import ConsoleInlineAlert from "../../../components/ConsoleInlineAlert.vue";
 import ConfigFoldCard from "../../../components/ConfigFoldCard.vue";
-import { triggerBrowserDownload } from "../../../lib/browser-downloads";
+import { triggerBrowserDownload } from "@meshrix/ui-console/browser-downloads";
 import {
   PORTABLE_UPSTREAM_SERVICE_KIND,
   PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION,

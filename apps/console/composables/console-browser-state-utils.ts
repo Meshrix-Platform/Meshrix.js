@@ -1,4 +1,4 @@
-import { browserWindow } from "../lib/browser-window";
+import { browserWindow } from "@meshrix/ui-console/browser-window";
 
 export const CLEAR_LOCAL_STATE_PARAM: any = "clearLocalState";
 

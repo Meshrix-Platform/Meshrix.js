@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { computed, nextTick, ref } from "vue";
+import { computed, defineComponent, h, nextTick, ref } from "vue";
+import { createMemoryHistory, createRouter } from "vue-router";
 import { createConsoleSystemLogController } from "../../../apps/console/composables/console-system-log-controller";
 import type { SystemLogRow } from "../../../apps/console/types/app";
 
@@ -11,6 +13,28 @@ const browserEffectsMock: any = vi.hoisted(() : any => ({
 vi.mock("../../../apps/console/composables/console-browser-effects", () : any => ({
   downloadTextFile: browserEffectsMock.downloadTextFile,
 }));
+
+// The controller's filters/pagination are URL-backed (useConsoleUrlState), so
+// it must be created inside a mounted component under an installed router.
+function createRoutedController(sourceRows: any) : any {
+  const router: any = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: "/", component: defineComponent({ setup: () : any => () : any => h("div") }) }],
+  });
+  let controller: any = null;
+  mount(
+    defineComponent({
+      setup: () : any => {
+        controller = createConsoleSystemLogController({
+          serverLogRows: computed(() : any => sourceRows.value),
+        });
+        return () : any => h("div");
+      },
+    }),
+    { global: { plugins: [router] } },
+  );
+  return controller;
+}
 
 function row(
   id: string,
@@ -47,9 +71,7 @@ describe("console system log controller", () : any => {
       row("beta", "监控报警", "failed", "2026-07-09T12:00:00.000Z"),
       row("gamma", "服务端任务", "failed", "2026-07-08T12:00:00.000Z"),
     ]);
-    const controller: any = createConsoleSystemLogController({
-      serverLogRows: computed(() : any => sourceRows.value),
-    });
+    const controller: any = createRoutedController(sourceRows);
 
     controller.systemLogPageSize.value = 1;
     await nextTick();
@@ -95,9 +117,7 @@ describe("console system log controller", () : any => {
       row("alpha", "服务端任务", "running", "2026-07-10T12:00:00.000Z"),
       row("beta", "监控报警", "failed", "2026-07-09T12:00:00.000Z", 'comma, and "quote"'),
     ]);
-    const controller: any = createConsoleSystemLogController({
-      serverLogRows: computed(() : any => sourceRows.value),
-    });
+    const controller: any = createRoutedController(sourceRows);
     controller.systemLogFilters.value.fuzzy = "beta";
 
     controller.exportSystemLogRows();
