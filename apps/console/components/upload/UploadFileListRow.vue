@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import BridgeDownloadButton from "../BridgeDownloadButton.vue";
 import SegmentedProgressBar from "../SegmentedProgressBar.vue";
-import StatusPill from "../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { currentConsoleLocale, localizeConsoleText, resolveEffectiveConsoleLocale } from "../../i18n/console";
 import {
   uploadFileListIcons,

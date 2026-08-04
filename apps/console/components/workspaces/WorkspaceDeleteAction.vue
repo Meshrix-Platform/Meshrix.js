@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useWorkspacesViewContext } from "../../composables/workspacesViewContext";
+import { useWorkspacesViewContext } from "@meshrix/ui-console/workspaces-view-context";
 
 const { isBusy, deleteWorkspace } = useWorkspacesViewContext();
 </script>

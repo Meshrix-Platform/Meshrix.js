@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ConfigFoldCard from "../ConfigFoldCard.vue";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
-import { useWorkspacesViewContext } from "../../composables/workspacesViewContext";
+import { useWorkspacesViewContext } from "@meshrix/ui-console/workspaces-view-context";
 
 const {
   isBusy,

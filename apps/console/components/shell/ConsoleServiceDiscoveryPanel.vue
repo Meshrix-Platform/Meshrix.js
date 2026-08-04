@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import {
   normalizeServerAddressUrl,
   probeServerAddressUrl,
@@ -8,6 +8,7 @@ import {
   uniqueServerAddressStrings,
   writeStoredServerAddresses,
 } from "../../lib/console-server-addresses";
+import { requestDestructiveConfirm } from "../../composables/console-destructive-operation-registry";
 import ConsoleServerAddressRow from "./service-discovery/ConsoleServerAddressRow.vue";
 import ConsoleServiceDiscoverySaveBar from "./service-discovery/ConsoleServiceDiscoverySaveBar.vue";
 import ConsoleServiceIdentityFields from "./service-discovery/ConsoleServiceIdentityFields.vue";
@@ -108,8 +109,20 @@ function addServerAddressRow() {
   persistServerAddressRows();
 }
 
-function removeServerAddressRow(row: ServerAddressRow) {
+async function removeServerAddressRow(row: ServerAddressRow) {
   if (serverAddressRows.value.length <= 1) {
+    return;
+  }
+
+  if (!(await requestDestructiveConfirm("service-discovery.address.remove", {
+    resource: row.url.trim() || row.id,
+  }))) {
+    return;
+  }
+
+  // Re-validate after the confirm: hydration may have rebuilt the row list
+  // while the dialog was open.
+  if (serverAddressRows.value.length <= 1 || !serverAddressRows.value.some((item: any) => item.id === row.id)) {
     return;
   }
 

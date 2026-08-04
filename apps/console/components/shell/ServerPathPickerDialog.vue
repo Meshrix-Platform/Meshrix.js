@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from "vue";
 import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { createConsoleOverlayController } from "../../composables/console-overlay-controller";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { consoleMessages, currentConsoleLocale } from "../../i18n/console";
 
 const {
   closeServerPathPicker,
@@ -13,11 +16,32 @@ const {
   refreshServerPathBrowser,
   selectServerPath,
 } = useServerConsoleShellContext();
+
+const msg: ComputedRef<any> = computed(() : any => consoleMessages[currentConsoleLocale.value]);
+
+const pickerOpen: ComputedRef<boolean> = computed(() : boolean => Boolean(pathPicker.open));
+const dialogRef = ref<HTMLElement | null>(null);
+
+// Escape / focus trap / autofocus on open / restore to the pre-open element.
+const pickerOverlay = createConsoleOverlayController({
+  root: dialogRef,
+  open: pickerOpen,
+  onClose: () : any => closeServerPathPicker(),
+  initialFocus: "first",
+});
+watch(pickerOpen, (isOpen: boolean) : void => {
+  if (isOpen) {
+    void pickerOverlay.activate();
+  } else {
+    pickerOverlay.deactivate();
+  }
+});
+onBeforeUnmount(() : void => pickerOverlay.deactivate());
 </script>
 
 <template>
   <div v-if="pathPicker.open" class="path-picker-backdrop" @click.self="closeServerPathPicker">
-    <section class="path-picker-dialog" role="dialog" aria-modal="true" :aria-label="pathPicker.title">
+    <section ref="dialogRef" class="path-picker-dialog" role="dialog" aria-modal="true" :aria-label="pathPicker.title" tabindex="-1">
       <div class="path-picker-header">
         <div>
           <h3>{{ pathPicker.title }}</h3>
@@ -112,12 +136,7 @@ const {
           title="没有可显示的项目"
           description="可以切换根目录、上一级目录，或显示隐藏项。"
         />
-        <ConsoleEmptyState
-          v-if="pathPicker.loading"
-          compact
-          title="正在读取目录"
-          description="请稍候。"
-        />
+        <p v-if="pathPicker.loading" class="module-note" role="status">{{ msg.overlay.pathPickerLoading }}</p>
       </div>
 
       <div class="path-picker-footer">

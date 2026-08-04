@@ -16,8 +16,11 @@ import type {
   ServerConsoleState,
 } from "../lib/types";
 import type { OptionBarOption } from "../types/app";
-import { jsonPreview } from "./console-format-utils";
+import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
 import { asRecord } from "./console-model-utils";
+import { requestDestructiveConfirm } from "./console-destructive-operation-registry";
+import { pushConsoleToast } from "./console-toast-controller";
+import { consoleMessages, currentConsoleLocale } from "../i18n/console";
 
 type MaintenanceAgentState = NonNullable<ServerConsoleState["maintenanceAgent"]>;
 
@@ -226,10 +229,38 @@ export function createConsoleMaintenanceAgentController(
     });
   }
 
-  function removeMaintenanceAgentSchedule(scheduleId: string) : any {
+  async function removeMaintenanceAgentSchedule(scheduleId: string) : Promise<any> {
     const config: any = maintenanceAgentConfig.value;
     if (!config) return;
-    config.schedules = config.schedules.filter((schedule?: any) : any => schedule.id !== scheduleId);
+    const requested: any = config.schedules.find((schedule?: any) : any => schedule.id === scheduleId);
+    if (!requested) return;
+    if (!(await requestDestructiveConfirm("maintenance-agent.schedule.remove", {
+      resource: String(requested.label || scheduleId),
+    }))) {
+      return;
+    }
+    // Re-resolve the row: the draft may have refreshed while the confirm was open.
+    const draft: any = maintenanceAgentConfig.value;
+    if (!draft) return;
+    // Local pre-save mutation — persistence requires the explicit
+    // saveMaintenanceAgentConfig() call, so undo restores the row into the
+    // draft only and is never offered on the server effect (§5 H14; N10
+    // preserves this toast when adding the confirm).
+    const index: any = draft.schedules.findIndex((schedule?: any) : any => schedule.id === scheduleId);
+    if (index < 0) return;
+    const [removed]: any = draft.schedules.splice(index, 1);
+    pushConsoleToast({
+      message: consoleMessages[currentConsoleLocale.value].toast.scheduleRemoved,
+      action: {
+        label: consoleMessages[currentConsoleLocale.value].toast.undo,
+        run: (): void => {
+          const draft: any = maintenanceAgentConfig.value;
+          if (draft && !draft.schedules.some((schedule?: any) : any => schedule.id === removed.id)) {
+            draft.schedules.splice(Math.min(index, draft.schedules.length), 0, removed);
+          }
+        },
+      },
+    });
   }
 
   async function chatMaintenanceAgent() : Promise<any> {

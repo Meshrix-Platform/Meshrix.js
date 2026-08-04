@@ -1,5 +1,5 @@
 import { computed, inject, onBeforeUnmount, provide, ref, watch, type ComputedRef, type InjectionKey, type Ref } from "vue";
-import type { ServerConsoleShellContext } from "./serverConsoleShellContext";
+import type { ServerConsoleShellContext } from "./useServerConsoleShell";
 import type { AppView } from "../types/app";
 
 const consoleSideNavContextKeys: any = [

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCompactDate } from "../../../composables/console-format-utils";
+import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 import type { OperationPermissionAuditItem } from "../../../lib/operation-permission-client";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
 

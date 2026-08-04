@@ -20,6 +20,7 @@ import type {
 import type {
   ServerConsoleState,
 } from "../lib/types";
+import { requestDestructiveConfirm } from "./console-destructive-operation-registry";
 
 type RefreshState = (options?: { silent?: boolean; forceDrafts?: boolean }) => Promise<unknown>;
 
@@ -207,6 +208,9 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
   }
 
   async function revokeConsoleSession(sessionId: string) : Promise<any> {
+    if (!(await requestDestructiveConfirm("auth.session.revoke", { resource: sessionId }))) {
+      return;
+    }
     options.setBusy(`auth:session:${sessionId}`);
     options.error.value = "";
     try {

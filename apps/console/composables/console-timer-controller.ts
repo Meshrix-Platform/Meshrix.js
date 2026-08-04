@@ -1,5 +1,5 @@
 import { ref, type Ref } from "vue";
-import { browserWindow } from "../lib/browser-window";
+import { browserWindow } from "@meshrix/ui-console/browser-window";
 
 type TimerCallback = () => void;
 

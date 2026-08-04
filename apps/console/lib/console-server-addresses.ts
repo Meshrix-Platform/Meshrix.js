@@ -3,7 +3,7 @@ import {
   readBrowserJsonStorage,
   writeBrowserJsonStorage,
 } from "./browser-storage";
-import { browserWindow } from "./browser-window";
+import { browserWindow } from "@meshrix/ui-console/browser-window";
 
 export type StoredServerAddresses = {
   activeUrl: string;

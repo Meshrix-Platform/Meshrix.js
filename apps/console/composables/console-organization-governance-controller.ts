@@ -12,7 +12,7 @@ import {
   type OrganizationGovernanceTemplateDraft,
   type OrganizationTemplateSummary,
 } from "../lib/organization-governance-template-client";
-import { browserWindow } from "../lib/browser-window";
+import { browserWindow } from "@meshrix/ui-console/browser-window";
 import {
   organizationGovernanceTemplateName,
   organizationGovernanceText,

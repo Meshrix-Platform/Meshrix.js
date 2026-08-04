@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, watch } from "vue";
 import "./ConsoleSideNavDirectory.css";
 import { operationApprovalTitle } from "../../../composables/console-approval-flow-view-controller";
-import { formatCompactDate } from "../../../composables/console-format-utils";
+import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 import { useConsoleSideNavContext } from "../../../composables/consoleSideNavContext";
 import {
   currentConsoleLocale,

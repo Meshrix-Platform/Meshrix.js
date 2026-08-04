@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { useMaintenanceAgentViewContext } from "../../../composables/maintenanceAgentViewContext";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
   approveMaintenanceAgentRun,
@@ -45,7 +50,7 @@ const {
         </button>
         <StatusPill
           :tone="maintenanceAgentStatusTone(run.status)"
-          :label="`${maintenanceAgentStatusLabel(run.status)} / ${maintenanceAgentRiskLabel(run.risk)}`"
+          :label="localizeStatusPillLabel(`${maintenanceAgentStatusLabel(run.status)} / ${maintenanceAgentRiskLabel(run.risk)}`)"
         />
         <span class="table-actions-inline">
           <button

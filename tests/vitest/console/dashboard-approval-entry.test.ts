@@ -8,7 +8,7 @@ import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
 const shellContextMock: any = vi.hoisted(() : any => ({ current: null as any }));
 const approvalFlowMock: any = vi.hoisted(() : any => ({ current: null as any }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: () : any => shellContextMock.current,
 }));
 

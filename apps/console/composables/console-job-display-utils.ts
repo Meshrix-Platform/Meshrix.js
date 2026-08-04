@@ -1,6 +1,6 @@
 import type { SplitJob, SplitJobStatus } from "../lib/types";
 import { jobStatusLabels } from "./console-defaults";
-import { formatDuration } from "./console-format-utils";
+import { formatDuration } from "@meshrix/ui-console/console-format-utils";
 
 export function jobElapsed(item: SplitJob) : any {
   return formatDuration(

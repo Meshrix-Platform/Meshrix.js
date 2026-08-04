@@ -21,7 +21,7 @@ const browserWindowMock: any = vi.hoisted(() : any => ({
   writeBrowserLocalStorageItem: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/lib/browser-window", () : any => ({
+vi.mock("@meshrix/ui-console/browser-window", () : any => ({
   readBrowserLocalStorageItem: browserWindowMock.readBrowserLocalStorageItem,
   writeBrowserLocalStorageItem: browserWindowMock.writeBrowserLocalStorageItem,
 }));

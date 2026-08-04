@@ -194,3 +194,5 @@ export function useServerConsoleShell() : any {
     localizedViewTitle,
   };
 }
+
+export type ServerConsoleShellContext = ReturnType<typeof useServerConsoleShell>;

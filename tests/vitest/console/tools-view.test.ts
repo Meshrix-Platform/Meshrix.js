@@ -11,7 +11,7 @@ const shellContextMock: any = vi.hoisted(() : any => ({
   current: null as unknown,
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: () : any => shellContextMock.current,
 }));
 

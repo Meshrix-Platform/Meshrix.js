@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import SplitToggleCard from "../../components/SplitToggleCard.vue";
-import StatusPill from "../../components/StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import "./version-assembly/version-assembly.css";
 import { useVersionAssemblyView } from "./version-assembly/useVersionAssemblyView";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
   architectureItems,
@@ -54,7 +59,7 @@ const {
         </div>
         <StatusPill
           :tone="loading ? 'info' : loadError ? 'warning' : 'success'"
-          :label="loading ? '同步中' : loadError ? '部分读取' : '已同步'"
+          :label="localizeStatusPillLabel(loading ? '同步中' : loadError ? '部分读取' : '已同步')"
         />
       </div>
       <div class="detail-metrics version-assembly-metrics">
@@ -93,7 +98,7 @@ const {
         </div>
         <StatusPill
           tone="info"
-          :label="`${architectureLayerGroups.length} 层 / ${architectureItems.length} 个组件`"
+          :label="localizeStatusPillLabel(`${architectureLayerGroups.length} 层 / ${architectureItems.length} 个组件`)"
         />
       </div>
 
@@ -200,7 +205,7 @@ const {
           <h3>运行态校验</h3>
           <p>只读证据：用于核对当前实例发现，不参与版本装配选择。</p>
         </div>
-        <StatusPill tone="info" :label="`${runtimeEvidenceCount} 项发现`" />
+        <StatusPill tone="info" :label="localizeStatusPillLabel(`${runtimeEvidenceCount} 项发现`)" />
         <span class="version-assembly-evidence-chevron" aria-hidden="true">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M3 5L7 9L11 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />

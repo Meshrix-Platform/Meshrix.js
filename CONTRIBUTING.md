@@ -29,6 +29,43 @@ The default local server URL is `http://127.0.0.1:7228`.
 - Add or update tests for behavior changes.
 - Render sibling buttons or button-like controls placed in the same horizontal action group at one shared explicit height. Different button implementations, wrappers, variants, or labels must not produce uneven controls on the same visual row; use the shared horizontal action-group contract instead of page-specific height exceptions.
 
+### Console UX Copy (i18n)
+
+Every user-facing string added by the console UX closure plan — retry labels, field errors, empty-state CTAs, remediation copy, journey links, and confirmation bodies — MUST use the keyed dictionary `consoleMessages` in `apps/console/i18n/console-messages.ts`. Add each new leaf entry under BOTH the `zh-CN` and the `en` locale block, and consume it in views as `consoleMessages[currentConsoleLocale.value].<group>.<key>`, with `currentConsoleLocale` imported from `apps/console/i18n/console-locale-state.ts` (both symbols are re-exported from `apps/console/i18n/console.ts`; reuse the view's existing `msg`/`locale` composition when present). Converting existing views to the keyed dictionary is out of scope.
+
+Forbidden for plan-added copy — reviewers reject these on sight:
+
+- Extending the runtime DOM localizer `apps/console/i18n/console-dom-localizer.ts`.
+- New Chinese-literal `tt(zh, en)` pairs.
+- New per-module `t(zh, en)` maps.
+- New dynamic pattern matchers (`apps/console/i18n/console-dynamic-patterns.ts`, `apps/console/i18n/console-text-localizer.ts` fallbacks).
+
+Example — the existing `nav.dashboard` entry shows the required shape in `apps/console/i18n/console-messages.ts`:
+
+```ts
+export const consoleMessages: any = {
+  "zh-CN": {
+    nav: {
+      dashboard: "工作台",
+    },
+  },
+  en: {
+    nav: {
+      dashboard: "Workbench",
+    },
+  },
+};
+```
+
+```ts
+import { consoleMessages, currentConsoleLocale } from "../i18n/console";
+
+const msg = computed(() => consoleMessages[currentConsoleLocale.value]);
+// template: {{ msg.nav.dashboard }}
+```
+
+The dictionary is one shared file edited by many plan Nodes in parallel: each copy-bearing Node owns exactly one new top-level group and inserts it in alphabetical order among plan-added groups within each locale block, so parallel appends merge cleanly. The frozen Node-to-group namespace table is published in [apps/console/i18n/README.md](apps/console/i18n/README.md) (identical to `docs/plans/console-ux-closure/Architecture.md` §5 H3).
+
 ## Documentation Rules
 
 - Write technical facts, not intent narratives.

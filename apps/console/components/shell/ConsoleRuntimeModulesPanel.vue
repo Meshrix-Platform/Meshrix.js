@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import BrowseSelectButton from "../BrowseSelectButton.vue";
 import ConsoleDescriptionList from "../ConsoleDescriptionList.vue";
-import StatusPill from "../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import {
   currentModulePathPlaceholder,
   moduleAvailabilityLabel,
@@ -9,7 +9,12 @@ import {
   moduleStatusText,
   type RuntimeModuleRow,
 } from "../../composables/console-runtime-module-display-utils";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
   isBusy,
@@ -83,7 +88,7 @@ function moduleDetailItems(item: RuntimeModuleRow) {
           <strong>{{ item.label }}</strong>
           <StatusPill
             :enabled="item.externalEnabled"
-            :label="moduleAvailabilityLabel(item)"
+            :label="localizeStatusPillLabel(moduleAvailabilityLabel(item))"
           />
         </div>
         <p class="mount-config-description">{{ item.description }}</p>

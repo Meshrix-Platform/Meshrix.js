@@ -1,6 +1,6 @@
 import { nextTick, type Ref } from "vue";
-import { triggerBrowserDownload } from "../lib/browser-downloads";
-import { browserWindow } from "../lib/browser-window";
+import { triggerBrowserDownload } from "@meshrix/ui-console/browser-downloads";
+import { browserWindow } from "@meshrix/ui-console/browser-window";
 import {
   hasConsoleConfirmHost,
   requestConsoleConfirm,

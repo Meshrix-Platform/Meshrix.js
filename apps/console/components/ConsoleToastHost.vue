@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { dismissConsoleToast, useConsoleToasts, type ConsoleToastTone } from "../composables/console-toast-controller";
+import {
+  dismissConsoleToast,
+  pushConsoleToast,
+  useConsoleToasts,
+  type ConsoleToast,
+  type ConsoleToastTone,
+} from "../composables/console-toast-controller";
+import { consoleMessages, currentConsoleLocale } from "../i18n/console";
 
 const { toasts } = useConsoleToasts();
 
@@ -11,6 +18,26 @@ const TONE_LABELS: Record<string, string> = {
 
 function toastRole(tone: ConsoleToastTone) {
   return tone === "danger" ? "alert" : "status";
+}
+
+// Invokes the toast action and dismisses the toast on success; a throwing
+// action keeps its toast open and surfaces the failure as a danger toast
+// instead of throwing through the renderer.
+function runToastAction(toast: ConsoleToast) {
+  if (!toast.action) {
+    return;
+  }
+  try {
+    toast.action.run();
+  } catch (nextError: unknown) {
+    pushConsoleToast({
+      tone: "danger",
+      title: consoleMessages[currentConsoleLocale.value].toast.actionFailed,
+      message: nextError instanceof Error ? nextError.message : String(nextError ?? ""),
+    });
+    return;
+  }
+  dismissConsoleToast(toast.id);
 }
 </script>
 
@@ -29,6 +56,14 @@ function toastRole(tone: ConsoleToastTone) {
           <strong v-if="toast.title" class="console-toast-title">{{ toast.title }}</strong>
           <span class="console-toast-message">{{ toast.message }}</span>
         </span>
+        <button
+          v-if="toast.action"
+          class="console-toast-action"
+          type="button"
+          @click="runToastAction(toast)"
+        >
+          {{ toast.action.label }}
+        </button>
         <button
           class="console-toast-close"
           type="button"
@@ -102,6 +137,32 @@ function toastRole(tone: ConsoleToastTone) {
   line-height: var(--leading-normal);
   white-space: pre-line;
   word-break: break-word;
+}
+
+.console-toast-action {
+  flex: none;
+  align-self: center;
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--brand);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-snug);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-std),
+    color var(--dur-fast) var(--ease-std);
+}
+
+.console-toast-action:hover {
+  background: var(--bg-subtle);
+}
+
+.console-toast-action:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
 }
 
 .console-toast-close {

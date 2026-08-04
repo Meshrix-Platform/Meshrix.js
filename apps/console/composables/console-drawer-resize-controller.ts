@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { readBrowserJsonStorage, writeBrowserJsonStorage } from "../lib/browser-storage";
-import { browserWindow } from "../lib/browser-window";
+import { browserWindow } from "@meshrix/ui-console/browser-window";
 import { createConsolePointerDragController } from "./console-pointer-drag-controller";
 
 const DRAWER_WIDTH_STORAGE_KEY: any = "v0.0.1:frontend:console-config-drawer-width-1";

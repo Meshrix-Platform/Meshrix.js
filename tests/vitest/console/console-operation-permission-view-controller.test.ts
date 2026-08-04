@@ -18,7 +18,7 @@ vi.mock("../../../apps/console/lib/authorization-governance-client", () : any =>
   upsertAuthorizationGovernance: authorizationGovernanceClientMock.upsertAuthorizationGovernance,
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: shellContextMock.useServerConsoleShellContext,
 }));
 

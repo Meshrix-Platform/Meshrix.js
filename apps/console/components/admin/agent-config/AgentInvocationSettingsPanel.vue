@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useServerConsoleShellContext } from "../../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import JsonConfigFileEditor from "../../JsonConfigFileEditor.vue";
 import AgentConfigInvocationToggle from "./AgentConfigInvocationToggle.vue";
 

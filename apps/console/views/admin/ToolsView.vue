@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useServerConsoleShellContext } from '../../composables/serverConsoleShellContext';
+import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
 import ToolAuditCard from './tools/ToolAuditCard.vue';
 import ToolCatalogDetailPane from './tools/ToolCatalogDetailPane.vue';
 import ToolCatalogIndexPane from './tools/ToolCatalogIndexPane.vue';

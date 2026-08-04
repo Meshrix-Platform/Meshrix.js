@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, type Ref } from "vue";
 import MeshrixTabs, { type MeshrixTab } from "../../components/MeshrixTabs.vue";
 import AuthorizationGovernanceCard from "../../components/admin/AuthorizationGovernanceCard.vue";
 import GrantToolRulePanel from "../../components/admin/operation-permission/GrantToolRulePanel.vue";
@@ -8,12 +8,13 @@ import ToolGrantListCard from "../../components/admin/operation-permission/ToolG
 import ToolPolicyPreviewPanel from "../../components/admin/operation-permission/ToolPolicyPreviewPanel.vue";
 import { provideOperationPermissionView } from "../../composables/operationPermissionViewContext";
 import { useOperationPermissionViewConsole } from "../../composables/console-operation-permission-view-controller";
+import { useConsoleUrlState } from "../../composables/use-console-url-state";
 import { currentConsoleLocale, localizeConsoleText, resolveEffectiveConsoleLocale } from "../../i18n/console";
 
 const operationPermissionView = useOperationPermissionViewConsole();
 provideOperationPermissionView(operationPermissionView);
 
-const activeSection = ref("tokens");
+const activeSection: Ref<string> = useConsoleUrlState("op.section", "tokens");
 
 const locale = computed(() => resolveEffectiveConsoleLocale(currentConsoleLocale.value));
 const sectionTabs = computed<MeshrixTab[]>(() => [

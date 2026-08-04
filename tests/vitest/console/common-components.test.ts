@@ -23,7 +23,7 @@ import {
 
 const navigateBrowserHashRouteMock: any = vi.hoisted(() : any => vi.fn());
 
-vi.mock("../../../apps/console/lib/browser-window", () : any => ({
+vi.mock("@meshrix/ui-console/browser-window", () : any => ({
   navigateBrowserHashRoute: navigateBrowserHashRouteMock,
 }));
 
@@ -444,6 +444,7 @@ describe("console common components behavior", () : any => {
     ]));
     expect(commonComponentRegistry.every((entry?: any) : any => [
       "apps/console/components/",
+      "apps/console/composables/",
       "packages/ui-console/src/",
     ].some((root?: any) : any => entry.file.startsWith(root)))).toBe(true);
   });

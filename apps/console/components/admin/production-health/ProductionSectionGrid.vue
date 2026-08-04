@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { statusLabel } from "../../../lib/production-health";
 import type { ProductionHealthSection } from "../../../lib/types";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 defineProps<{
   sections: ProductionHealthSection[];
@@ -20,7 +25,7 @@ defineProps<{
           <h3>{{ section.label }}</h3>
           <p>{{ section.description }}</p>
         </div>
-        <StatusPill :tone="section.tone" :label="statusLabel(section.status)" />
+        <StatusPill :tone="section.tone" :label="localizeStatusPillLabel(statusLabel(section.status))" />
       </div>
       <div class="production-section-score">
         <strong>{{ section.passed }} / {{ section.total }}</strong>

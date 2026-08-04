@@ -1,5 +1,5 @@
 import { onMounted, ref } from "vue";
-import { useServerConsoleShellContext } from "./serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import { createConsoleExternalGatewayController, type ExternalGatewayState } from "./console-external-gateway-controller";
 import { applyExternalGateway, getExternalGatewayState, switchExternalGatewayDirect } from "../lib/external-gateway-client";
 

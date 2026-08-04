@@ -4,9 +4,9 @@ import {
   upsertAuthorizationGovernance,
   type AuthorizationGovernanceKind,
 } from '../lib/authorization-governance-client';
-import { formatCompactDate } from './console-format-utils';
+import { formatCompactDate } from '@meshrix/ui-console/console-format-utils';
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
-import { useServerConsoleShellContext } from './serverConsoleShellContext';
+import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
 
 type GovernanceItem = Record<string, unknown>;
 

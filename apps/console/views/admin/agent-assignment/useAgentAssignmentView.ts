@@ -4,7 +4,7 @@ import type { AgentOption } from "../../../composables/agentModelOptionBarContro
 import type { AgentSelectorUiOption } from "../../../composables/console-agent-selector-controller";
 import type { IntelligentModuleDefinition } from "../../../composables/console-defaults";
 import type { ModuleModelAssignmentSelectOption } from "../../../composables/console-option-bar-controller";
-import { useServerConsoleShellContext } from "../../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import type { AgentModelConfig, ModelProbeResponse } from "../../../lib/types";
 import type { OptionBarOption } from "../../../types/app";
 

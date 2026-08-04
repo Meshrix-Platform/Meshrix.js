@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import StatusPill from '../components/StatusPill.vue';
+import StatusPill from '@meshrix/ui-console/status-pill';
 import ConsoleEmptyState from '../components/ConsoleEmptyState.vue';
 import SplitToggleCard from '../components/SplitToggleCard.vue';
 import WorkspaceDetailPanel from '../components/workspaces/WorkspaceDetailPanel.vue';
-import { provideWorkspacesView } from '../composables/workspacesViewContext';
-import { useServerConsoleShellContext } from '../composables/serverConsoleShellContext';
+import { provideWorkspacesView } from '@meshrix/ui-console/workspaces-view-context';
+import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
 import {
   workspaceContextContract,
   workspaceContextSignature,
 } from '../lib/workspaces-client';
 import { canAccessPluginConsoleEntry, type PluginConsoleEntry } from '../router/plugin-console-routes';
+
+import { currentConsoleLocale, localizeConsoleText } from '../i18n/console';
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const shell = useServerConsoleShellContext();
 const { workspacesConsole: workspacesView } = shell;
@@ -111,7 +116,7 @@ onMounted(() => {
                   <p v-if="ws.objective" class="module-note">{{ ws.objective }}</p>
                 </div>
                 <div class="workspace-status-row">
-                  <StatusPill :tone="statusTone(ws.status)" :label="ws.status" />
+                  <StatusPill :tone="statusTone(ws.status)" :label="localizeStatusPillLabel(ws.status)" />
                 </div>
               </div>
 

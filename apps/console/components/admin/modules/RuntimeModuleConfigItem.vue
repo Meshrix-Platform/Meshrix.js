@@ -3,7 +3,7 @@ import { computed } from "vue";
 import BrowseSelectButton from "../../BrowseSelectButton.vue";
 import ConsoleDescriptionList from "../../ConsoleDescriptionList.vue";
 import FeatureToggle from "../../FeatureToggle.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import {
   currentModulePathPlaceholder,
   moduleAvailabilityLabel,
@@ -13,6 +13,11 @@ import {
   type RuntimeModuleRow,
 } from "../../../composables/console-runtime-module-display-utils";
 import { useModulesViewContext } from "../../../composables/modulesViewContext";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const props = defineProps<{
   item: RuntimeModuleRow;
@@ -43,7 +48,7 @@ const {
       <strong>{{ item.label }}</strong>
       <StatusPill
         :tone="moduleAvailabilityTone(item)"
-        :label="moduleAvailabilityLabel(item)"
+        :label="localizeStatusPillLabel(moduleAvailabilityLabel(item))"
       />
     </div>
     <p class="mount-config-description">{{ item.description }}</p>

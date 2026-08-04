@@ -8,7 +8,7 @@ const shellContextMock: any = vi.hoisted(() : any => ({
   useServerConsoleShellContext: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: shellContextMock.useServerConsoleShellContext,
 }));
 

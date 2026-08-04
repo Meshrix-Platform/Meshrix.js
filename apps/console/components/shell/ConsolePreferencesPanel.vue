@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import type { OptionBarModelValue, OptionBarValue } from "../../types/app";
 
 const {

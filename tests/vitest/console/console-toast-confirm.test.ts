@@ -36,7 +36,9 @@ describe("console toast controller", () : any => {
     const { toasts } = useConsoleToasts();
 
     pushConsoleToast({ message: "已保存", tone: "success" });
-    pushConsoleToast({ message: "保存失败", tone: "danger" });
+    // Explicit timeout: the danger default is now pinned open (timeoutMs 0),
+    // so this test opts into the timed path it verifies.
+    pushConsoleToast({ message: "保存失败", tone: "danger", timeoutMs: 6500 });
 
     expect(toasts.map((toast?: any) : any => toast.message)).toEqual(["已保存", "保存失败"]);
 

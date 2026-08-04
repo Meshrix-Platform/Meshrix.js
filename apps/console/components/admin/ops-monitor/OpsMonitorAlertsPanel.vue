@@ -2,8 +2,13 @@
 import { ref } from "vue";
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
 import ConfigFoldCard from "../../ConfigFoldCard.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import { useOpsMonitorViewContext } from "../../../composables/opsMonitorViewContext";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
   acknowledgeMonitorAlert = async () => undefined,
@@ -62,7 +67,7 @@ function monitorAlertStateStatusLabel(status: unknown) {
         <StatusPill
           class="monitor-alert-severity-pill"
           :tone="monitorAlertSeverityTone(alert.severity)"
-          :label="monitorAlertSeverityLabel(alert.severity)"
+          :label="localizeStatusPillLabel(monitorAlertSeverityLabel(alert.severity))"
         />
         <div class="monitor-alert-detail">
           <strong>{{ alert.title }}</strong>
@@ -111,7 +116,7 @@ function monitorAlertStateStatusLabel(status: unknown) {
           <StatusPill
             class="monitor-alert-severity-pill"
             :tone="monitorAlertSeverityTone(alert.severity)"
-            :label="monitorAlertSeverityLabel(alert.severity)"
+            :label="localizeStatusPillLabel(monitorAlertSeverityLabel(alert.severity))"
           />
           <div class="monitor-alert-detail">
             <strong>{{ alert.title }}</strong>

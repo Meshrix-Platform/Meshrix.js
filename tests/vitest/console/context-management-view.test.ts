@@ -11,7 +11,7 @@ const contextCompilerClientMock: any = vi.hoisted(() : any => ({
   saveContextProfiles: vi.fn(),
 }));
 
-vi.mock("../../../apps/console/composables/serverConsoleShellContext", () : any => ({
+vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: () : any => shellContextMock.current,
 }));
 vi.mock("../../../apps/console/lib/context-compiler-client", async (importOriginal?: any) : Promise<any> => ({

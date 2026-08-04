@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import {
   formatDateTime,
   statusLabel,
   statusTone,
   type ProductionHealthResponse,
 } from "../../../lib/production-health";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 defineProps<{
   actions: ProductionHealthResponse["actions"];
@@ -27,7 +32,7 @@ defineProps<{
       </div>
       <div v-if="history.length" class="production-history-list">
         <div v-for="item in history" :key="item.runId">
-          <StatusPill :tone="statusTone(item.status)" :label="statusLabel(item.status)" />
+          <StatusPill :tone="statusTone(item.status)" :label="localizeStatusPillLabel(statusLabel(item.status))" />
           <strong>{{ item.runId }}</strong>
           <span>{{ formatDateTime(item.generatedAt) }}</span>
         </div>

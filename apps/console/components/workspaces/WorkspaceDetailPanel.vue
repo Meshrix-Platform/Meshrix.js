@@ -7,8 +7,8 @@ import WorkspaceParentPanel from "./detail/WorkspaceParentPanel.vue";
 import WorkspaceProfilePanel from "./detail/WorkspaceProfilePanel.vue";
 import WorkspaceSharePanel from "./detail/WorkspaceSharePanel.vue";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
-import { useWorkspacesViewContext } from "../../composables/workspacesViewContext";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useWorkspacesViewContext } from "@meshrix/ui-console/workspaces-view-context";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import {
   canAccessPluginConsoleEntry,
   resolveAccessiblePluginConsoleComponent,

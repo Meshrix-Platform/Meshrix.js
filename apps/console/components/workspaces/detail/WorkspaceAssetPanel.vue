@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import OptionBar from "@meshrix/ui-console/option-bar";
-import { useWorkspacesViewContext } from "../../../composables/workspacesViewContext";
+import { useWorkspacesViewContext } from "@meshrix/ui-console/workspaces-view-context";
 import ConsoleEmptyState from "../../ConsoleEmptyState.vue";
 
 const {

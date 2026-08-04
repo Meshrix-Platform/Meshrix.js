@@ -23,8 +23,16 @@ vi.mock("../../../apps/console/lib/upstream-service-publish-client", async (impo
 }));
 vi.mock("vue-router", () : any => ({
   useRoute: () : any => route,
+  useRouter: () : any => ({
+    replace: (location: any) : any => {
+      if (location?.query) {
+        route.query = { ...location.query };
+      }
+      return Promise.resolve();
+    },
+  }),
 }));
-vi.mock("../../../apps/console/lib/browser-downloads", () : any => ({
+vi.mock("@meshrix/ui-console/browser-downloads", () : any => ({
   triggerBrowserDownload,
 }));
 vi.mock("@meshrix/ui-console/page-refresh", async (importOriginal?: any) : Promise<any> => ({
@@ -100,6 +108,10 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
 
     const restored: any = mount(UpstreamServicePublishView);
     await flushPromises();
+    // REQ-008: the previously active tab is restored from the URL; switch back
+    // to the basic tab for the restored-field assertions.
+    const restoredBasicTab: any = restored.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Service information");
+    await restoredBasicTab.trigger("click");
     expect((restored.find('#upstream-service-key').element as HTMLInputElement).value).toBe("inventory-draft");
     expect((restored.find('#upstream-service-url').element as HTMLInputElement).value).toBe("https://service.invalid:443");
     expect(restored.text()).toContain("Draft restored from this browser.");

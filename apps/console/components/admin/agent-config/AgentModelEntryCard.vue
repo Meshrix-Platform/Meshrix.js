@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AgentModelConfig } from "../../../lib/types";
-import { useServerConsoleShellContext } from "../../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import {
   createAgentModelEntryCardContext,
   provideAgentModelEntryCardContext,

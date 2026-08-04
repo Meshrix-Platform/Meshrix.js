@@ -9,6 +9,7 @@ import ConsoleConfirmDialog from "./ConsoleConfirmDialog.vue";
 import ConsoleDescriptionList from "./ConsoleDescriptionList.vue";
 import ConsoleEmptyState from "./ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "./ConsoleInlineAlert.vue";
+import ConsoleSkeleton from "./ConsoleSkeleton.vue";
 import ConsoleToastHost from "./ConsoleToastHost.vue";
 import DataTable from "./DataTable.vue";
 import FeatureToggle from "./FeatureToggle.vue";
@@ -23,11 +24,11 @@ import ScopeSelector from "./ScopeSelector.vue";
 import SegmentedProgressBar from "./SegmentedProgressBar.vue";
 import SegmentedToggle from "./SegmentedToggle.vue";
 import SplitToggleCard from "./SplitToggleCard.vue";
-import StatusPill from "./StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import UploadFileListCard from "./UploadFileListCard.vue";
 import WorkspaceFileTree from "./WorkspaceFileTree.vue";
 
-export { AgentModelOptionBar, BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
+export { AgentModelOptionBar, BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleSkeleton, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
 
 export type CommonComponentRegistration = {
   name: string;
@@ -74,7 +75,7 @@ export const commonComponentRegistry: CommonComponentRegistration[] = [
   },
   {
     name: "StatusPill",
-    file: "apps/console/components/StatusPill.vue",
+    file: "packages/ui-console/src/StatusPill.vue",
     category: "result",
     description: "状态展示的标准圆点胶囊。",
     usageRule: "页面需要展示运行状态、配置状态、风险等级或启用状态时使用；只传入 label/tone/enabled，不在功能页面手写状态胶囊。",
@@ -115,6 +116,20 @@ export const commonComponentRegistry: CommonComponentRegistration[] = [
     usageRule: "页面需要展示或编辑 JSON/配置文件内容时使用；必须传入稳定 fileKey 和保存回调，不在功能页面手写 textarea/pre 保存按钮。",
   },
   {
+    name: "ConsoleFormField",
+    file: "apps/console/components/ConsoleFormField.vue",
+    category: "config",
+    description: "表单字段的标准外壳，统一标签、必填标记、帮助文本和错误提示的 label/for/id/aria 接线。",
+    usageRule: "任何表单输入项都必须使用；默认 slot 放入唯一控件并以 v-slot/v-bind 接收 id 与 aria 属性，错误与帮助文案由调用方传入，不在功能页面手写 label+input 包装。",
+  },
+  {
+    name: "ConsoleFormValidation",
+    file: "apps/console/composables/console-form-validation.ts",
+    category: "config",
+    description: "逐字段表单错误状态存储，按字段名键控，配合 ConsoleFormField 展示错误。",
+    usageRule: "每个表单实例创建一个；规则校验失败时用 setFieldError 写入逐字段错误，提交前读取 hasErrors，不在页面内散落错误布尔值。",
+  },
+  {
     name: "HistorySessionPanel",
     file: "apps/console/components/HistorySessionPanel.vue",
     category: "history",
@@ -143,11 +158,18 @@ export const commonComponentRegistry: CommonComponentRegistration[] = [
     usageRule: "页面需要按步骤展示进度时使用；功能页面只传步骤数据，不重新手写分段条 DOM 或颜色状态。",
   },
   {
+    name: "ConsoleSkeleton",
+    file: "apps/console/components/ConsoleSkeleton.vue",
+    category: "progress",
+    description: "加载占位的标准骨架组件，统一映射既有 skeleton 工具类。",
+    usageRule: "加载占位统一使用 ConsoleSkeleton；不手写 skeleton 标记。",
+  },
+  {
     name: "ConsoleToastHost",
     file: "apps/console/components/ConsoleToastHost.vue",
     category: "feedback",
     description: "全局瞬时反馈通知宿主，统一 info/success/danger 三档语气、自动消退和堆叠动效。",
-    usageRule: "操作成功、失败或需要轻量提醒时通过 pushConsoleToast/notifyConsoleAction 触发；页面不得手写悬浮通知或使用浏览器 alert。",
+    usageRule: "操作成功、失败或需要轻量提醒时通过 pushConsoleToast/notifyConsoleAction 触发；页面不得手写悬浮通知或使用浏览器 alert。可逆的本地草稿操作通过 action（label + run）提供撤销入口，danger 通知默认常驻不自动消退；不得在服务端治理效果上提供撤销。",
   },
   {
     name: "ConsoleConfirmDialog",

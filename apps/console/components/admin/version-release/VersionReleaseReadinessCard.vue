@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import ConsoleDescriptionList from "../../ConsoleDescriptionList.vue";
-import StatusPill from "../../StatusPill.vue";
+import StatusPill from "@meshrix/ui-console/status-pill";
 import {
   formatDateTime,
   statusLabel,
   statusTone,
 } from "../../../lib/production-health";
 import type { ProductionHealthResponse } from "../../../lib/version-release";
+
+import { currentConsoleLocale, localizeConsoleText } from "../../../i18n/console";
+
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const props = defineProps<{
   health: ProductionHealthResponse | null;
@@ -54,7 +59,7 @@ const readinessMetaItems = computed(() => [
         <h3>发布声明门禁</h3>
         <p>绑定最新生产准入报告、工作区清洁度和可声明的发布口径。</p>
       </div>
-      <StatusPill :tone="claimTone" :label="claimLabel" />
+      <StatusPill :tone="claimTone" :label="localizeStatusPillLabel(claimLabel)" />
     </div>
 
     <div v-if="healthError" class="status-strip danger">

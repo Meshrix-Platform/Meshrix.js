@@ -1,8 +1,17 @@
 // @vitest-environment jsdom
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
-import StatusPill from "../../../apps/console/components/StatusPill.vue";
-import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
+import StatusPill from "@meshrix/ui-console/status-pill";
+import {
+  currentConsoleLocale,
+  localizeConsoleText,
+  setConsoleLocaleState,
+} from "../../../apps/console/i18n/console";
+
+// The canonical pill renders the label it receives; call sites localize labels
+// before passing them in (this mirrors the helper used by StatusPill consumers).
+const localizeStatusPillLabel = (value: any) : any =>
+  localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 afterEach(() : any => {
   setConsoleLocaleState("zh-CN");
@@ -23,7 +32,7 @@ describe("StatusPill behavior", () : any => {
     expect(wrapper.attributes("aria-label")).toBe("Custom status");
     expect(wrapper.attributes("data-enabled")).toBeUndefined();
     expect(wrapper.find(".standard-status-pill-dot").exists()).toBe(false);
-    expect(wrapper.find(".standard-status-pill-label").text()).toBe("运行中");
+    expect(wrapper.find(".standard-status-pill-label").text()).toBe("Running");
   });
 
   it("derives success and neutral tones from enabled state", () : any => {
@@ -55,11 +64,11 @@ describe("StatusPill behavior", () : any => {
     expect(neutral.attributes("data-enabled")).toBeUndefined();
   });
 
-  it("localizes display and accessible labels from the console locale", async () : Promise<any> => {
+  it("renders call-site localized display and accessible labels", () : any => {
     setConsoleLocaleState("en");
     const wrapper: any = mount(StatusPill, {
       props: {
-        label: "运行中",
+        label: localizeStatusPillLabel("运行中"),
         tone: "completed",
       },
     });
@@ -69,16 +78,26 @@ describe("StatusPill behavior", () : any => {
     expect(wrapper.attributes("aria-label")).toBe("Running");
   });
 
-  it("localizes cleared approval status labels", () : any => {
+  it("localizes cleared approval status labels at the call site", () : any => {
     setConsoleLocaleState("en");
     const wrapper: any = mount(StatusPill, {
       props: {
-        label: "已清空",
+        label: localizeStatusPillLabel("已清空"),
         tone: "success",
       },
     });
 
     expect(wrapper.find(".standard-status-pill-label").text()).toBe("Cleared");
     expect(wrapper.attributes("aria-label")).toBe("Cleared");
+  });
+
+  it("localizes english labels back to chinese at the call site", () : any => {
+    const wrapper: any = mount(StatusPill, {
+      props: {
+        label: localizeStatusPillLabel("Running"),
+      },
+    });
+
+    expect(wrapper.find(".standard-status-pill-label").text()).toBe("运行中");
   });
 });

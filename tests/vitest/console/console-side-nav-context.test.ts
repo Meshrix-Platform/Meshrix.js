@@ -6,7 +6,7 @@ import {
   createConsoleSideNavContext,
   type ConsoleSideNavContext,
 } from "../../../apps/console/composables/consoleSideNavContext";
-import type { ServerConsoleShellContext } from "../../../apps/console/composables/serverConsoleShellContext";
+import type { ServerConsoleShellContext } from "../../../apps/console/composables/useServerConsoleShell";
 import type { AppView } from "../../../apps/console/types/app";
 
 const mounted: VueWrapper[] = [];

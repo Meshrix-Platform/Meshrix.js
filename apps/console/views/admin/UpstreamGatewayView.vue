@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
 import { useUpstreamGatewayView } from "./upstream-gateway/useUpstreamGatewayView";
-import { useServerConsoleShellContext } from "../../composables/serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import ConsoleEmptyState from "../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
 

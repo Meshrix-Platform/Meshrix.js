@@ -1,5 +1,5 @@
 import { computed } from "vue";
-import { useServerConsoleShellContext } from "./serverConsoleShellContext";
+import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 
 export function useStorageViewConsole() : any {
   const {
