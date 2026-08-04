@@ -169,6 +169,7 @@
     "tools/registry/source-layout-manifest.ts",
     "tools/server-scripts/start-server.ts",
     "tools/scripts/start-all.sh",
+    "tools/scripts/restart-all.sh",
     "tools/scripts/restart-dev.sh",
     "docs/README.md",
     "docs/architecture/ARCHITECTURE.md",
