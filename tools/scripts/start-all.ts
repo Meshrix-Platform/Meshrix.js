@@ -14,6 +14,10 @@ function usage() : any {
   console.log(`Usage:
   node tools/scripts/start-all.ts [options]
 
+Startup is idempotent: a service that already responds on its port is left
+running and is not relaunched. Use tools/scripts/restart-all.ts to stop all
+services and start them again.
+
 Options:
   --port <n>        Server port (default: 7228)
   --data-dir <path> Data directory (default: ServerConfig.getDataDir())
@@ -21,7 +25,6 @@ Options:
   --dev             Start server API + Vite dev server
   --skip-mcp-register  Skip local MCP Hub registration
   --no-open         Do not open a browser
-  --skip-clean      Skip pre-start cleanup
   --help            Show help`);
 }
 
@@ -33,8 +36,7 @@ function parseArgs(argv?: any) : any {
     profile: "default",
     mode: "console",
     openBrowser: true,
-    registerMcp: true,
-    skipClean: false
+    registerMcp: true
   };
   for (let index: any = 0; index < argv.length; index += 1) {
     const arg: any = argv[index];
@@ -46,8 +48,6 @@ function parseArgs(argv?: any) : any {
       options.mode = "dev";
     } else if (arg === "--no-open") {
       options.openBrowser = false;
-    } else if (arg === "--skip-clean") {
-      options.skipClean = true;
     } else if (arg === "--skip-mcp-register") {
       options.registerMcp = false;
     } else if (arg === "--port" && next) {
@@ -138,6 +138,24 @@ async function waitForExit(children?: any) : Promise<any> {
   return false;
 }
 
+async function probeUrl(url?: any) : Promise<any> {
+  try {
+    const response: any = await fetch(url);
+    await response.arrayBuffer().catch(() : any => undefined);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function probeBackend(port?: any) : Promise<any> {
+  const endpoints: any[] = ["/api/auth/session", "/api/discovery/config", "/api/discovery"];
+  for (const endpoint of endpoints) {
+    if (await probeUrl(`http://127.0.0.1:${port}${endpoint}`)) return true;
+  }
+  return false;
+}
+
 async function waitForServer(port?: any, serverChild?: any) : Promise<any> {
   const endpoints: any[] = ["/api/auth/session", "/api/discovery/config", "/api/discovery"];
   for (let attempt: any = 0; attempt < 40; attempt += 1) {
@@ -187,27 +205,27 @@ async function cleanup(children?: any) : Promise<any> {
 async function main() : Promise<any> {
   const options: any = parseArgs(process.argv.slice(2));
   const dataDir: any = resolveDataDir(options.dataDir);
-  if (!options.skipClean) {
-    const cleanArgs: any[] = [
-      path.join(projectRoot, "tools", "scripts", "clean-existing-service.ts"),
-      "--port", options.port,
-      "--data-dir", dataDir,
-      "--launch-label", `dev.meshrix.server.${options.port}`,
-      "--launch-label", "dev.meshrix.background-supervisor",
-      "--launch-label", "dev.meshrix.system-inspection",
-      "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", `dev.meshrix.server.${options.port}.plist`),
-      "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.meshrix.background-supervisor.plist"),
-      "--launch-plist", path.join(process.env.HOME || "", "Library", "LaunchAgents", "dev.meshrix.system-inspection.plist")
-    ];
-    if (options.mode === "dev") cleanArgs.push("--vite-port", options.vitePort);
-    const clean: any = runSync(process.execPath, cleanArgs, { inherit: true });
-    if (clean.status !== 0) throw new Error("pre-start cleanup failed");
-  }
 
   if (!existsSync(path.join(projectRoot, "node_modules"))) {
     console.log("[bootstrap] node_modules is missing; running npm ci");
     const install: any = runSync(npmCommand, ["ci"], { inherit: true });
     if (install.status !== 0) throw new Error("npm ci failed");
+  }
+
+  const backendRunning: any = await probeBackend(options.port);
+  const viteRunning: any = options.mode === "dev"
+    ? await probeUrl(`http://127.0.0.1:${options.vitePort}/`)
+    : false;
+
+  if (backendRunning && (options.mode !== "dev" || viteRunning)) {
+    console.log("[ok] services are already running; nothing to start");
+    if (options.mode === "dev") {
+      console.log(`[info] backend http://127.0.0.1:${options.port}; frontend http://127.0.0.1:${options.vitePort}`);
+    } else {
+      console.log(`[info] console http://127.0.0.1:${options.port}`);
+    }
+    console.log("[info] run tools/scripts/restart-all.sh to stop and restart all services");
+    return;
   }
 
   const children: any[] = [];
@@ -229,36 +247,41 @@ async function main() : Promise<any> {
     "--advertised-base-url", `http://127.0.0.1:${options.port}`
   ];
 
-  let serverChild: any;
-  if (options.mode === "console") {
-    console.log("[server] starting console mode: tools/server-scripts/start-server.ts --with-ui");
-    serverChild = spawnProcess(process.execPath, [serverScript, "--with-ui", ...commonArgs]);
-    children.push(serverChild);
+  let serverChild: any = null;
+  if (backendRunning) {
+    console.log(`[ok] backend is already running: http://127.0.0.1:${options.port}`);
   } else {
-    console.log("[server] starting dev mode: tools/server-scripts/start-server.ts + Vite");
-    serverChild = spawnProcess(process.execPath, [serverScript, ...commonArgs]);
+    if (options.mode === "console") {
+      console.log("[server] starting console mode: tools/server-scripts/start-server.ts --with-ui");
+      serverChild = spawnProcess(process.execPath, [serverScript, "--with-ui", ...commonArgs]);
+    } else {
+      console.log("[server] starting dev mode: tools/server-scripts/start-server.ts");
+      serverChild = spawnProcess(process.execPath, [serverScript, ...commonArgs]);
+    }
     children.push(serverChild);
-    if (await waitForServer(options.port, serverChild)) {
-      console.log("[server] backend is ready; starting Vite...");
-      const viteChild: any = spawnProcess(npmCommand, ["run", "server:dev:web"], {
+    if (!(await waitForServer(options.port, serverChild))) {
+      throw new Error(`backend was not ready on port ${options.port}; if a stale service occupies the port, run tools/scripts/restart-all.sh to restart all services`);
+    }
+    console.log(`[ok] backend is ready: http://127.0.0.1:${options.port}`);
+  }
+
+  let viteChild: any = null;
+  if (options.mode === "dev") {
+    if (viteRunning) {
+      console.log(`[ok] frontend is already running: http://127.0.0.1:${options.vitePort}`);
+    } else {
+      console.log("[web] starting Vite dev server: npm run server:dev:web");
+      viteChild = spawnProcess(npmCommand, ["run", "server:dev:web"], {
         env: {
           VITE_API_ORIGIN: `http://127.0.0.1:${options.port}`,
           VITE_API_PORT: options.port
         }
       });
       children.push(viteChild);
-    } else {
-      throw new Error("backend failed to start; check logs and retry");
     }
   }
 
-  if (await waitForServer(options.port, serverChild)) {
-    console.log(`[ok] backend is ready: http://127.0.0.1:${options.port}`);
-  } else {
-    throw new Error(`backend was not ready on port ${options.port}`);
-  }
-
-  if (options.registerMcp) {
+  if (serverChild && options.registerMcp) {
     console.log("[mcp] registering local MCP Hub: server:mcp:register");
     const result: any = runSync(npmCommand, ["run", "server:mcp:register", "--", "--url", `http://127.0.0.1:${options.port}`], { inherit: true });
     console.log(result.status === 0 ? "[ok] MCP Hub registration complete" : "[warn] MCP Hub registration failed; server remains running");
@@ -273,10 +296,11 @@ async function main() : Promise<any> {
   } else {
     console.log(`[info] dev environment is ready: backend http://127.0.0.1:${options.port}; frontend http://127.0.0.1:${options.vitePort}`);
   }
-  console.log("[info] press Ctrl+C to stop all processes");
+  console.log("[info] press Ctrl+C to stop the processes started by this run");
 
-  const exitCode: any = await new Promise((resolve?: any) : any => serverChild.once("exit", (code?: any) : any => resolve(code ?? 0)));
-  await cleanup(children.filter((child?: any) : any => child !== serverChild));
+  const primaryChild: any = serverChild || viteChild;
+  const exitCode: any = await new Promise((resolve?: any) : any => primaryChild.once("exit", (code?: any) : any => resolve(code ?? 0)));
+  await cleanup(children.filter((child?: any) : any => child !== primaryChild));
   process.exitCode = exitCode;
 }
 

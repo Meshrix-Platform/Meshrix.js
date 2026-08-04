@@ -96,7 +96,6 @@ try {
     "--dev",
     "--port", options.port,
     "--data-dir", dataDir,
-    "--skip-clean",
     ...options.extraArgs
   ], { inherit: true });
   process.exit(start.status ?? 1);
