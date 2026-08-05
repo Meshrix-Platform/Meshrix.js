@@ -156,15 +156,76 @@
   --skeleton-base: var(--bg-subtle);
   --skeleton-highlight: var(--bg-surface);
 
+  /* ── Border widths (derived from the spacing grid) ───────────────── */
+  --border-width-thin: 1px;
+  --border-width-medium: 2px;
+  --border-width-thick: 4px;
+
+  /* ── Breakpoints ────────────────────────────────────────────────────
+     Observed media-query set: 360/480/520/640/680/700/720/760/780/860/
+     880/900/901/960/980/1080/1120/1180/1280px. Collapsed to the smallest
+     honest tier set; the 700/720/760 cluster folds into sm (720), the
+     860/880/900/901 cluster folds into md (900), 1080/1120/1180 folds
+     into lg (1120). CSS custom properties cannot be consumed inside
+     @media conditions, so these document the tiers and serve JS
+     consumers. */
+  --breakpoint-sm: 720px;
+  --breakpoint-md: 900px;
+  --breakpoint-lg: 1120px;
+  --breakpoint-xl: 1280px;
+
+  /* ── Icon sizes (observed 16/18/34/36px) ─────────────────────────── */
+  --icon-xs: 16px;
+  --icon-sm: 18px;
+  --icon-lg: 34px;
+  --icon-xl: 36px;
+
+  /* ── Container max-widths (observed content widths) ──────────────── */
+  --container-narrow: 680px;
+  --container-standard: 720px;
+  --container-wide: 900px;
+  --container-max: 1280px;
+
+  /* ── Opacity scale ───────────────────────────────────────────────── */
+  --opacity-0: 0;
+  --opacity-10: 0.1;
+  --opacity-20: 0.2;
+  --opacity-30: 0.3;
+  --opacity-40: 0.4;
+  --opacity-50: 0.5;
+  --opacity-60: 0.6;
+  --opacity-70: 0.7;
+  --opacity-80: 0.8;
+  --opacity-90: 0.9;
+  --opacity-100: 1;
+
+  /* ── Display type tier (extends the --text-* ramp naming) ────────── */
+  --display-sm: 2rem;               /* 32 px — display floor */
+  --display-md: clamp(2rem, 6vw, 3.5rem); /* 32–56 px — landing hero */
+  --display-lg: 3.5rem;             /* 56 px — display ceiling */
+
+  /* ── Component override API ─────────────────────────────────────────
+     Defaults for consumer-overridable component hooks; consumers may
+     set these on their own scopes (inheritance) to override. */
+  --agent-option-height: var(--space-10);
+  --split-toggle-card-summary-radius: var(--radius-sm);
+  --split-toggle-card-body-padding-top: var(--space-2);
+  --split-toggle-card-divider-color: var(--border-subtle);
+  --split-toggle-card-toggle-bg: transparent;
+  --split-toggle-card-toggle-color: var(--text-secondary);
+  --split-toggle-card-toggle-hover-bg: var(--info-surface);
+
   /* ── Layout ─────────────────────────────────────────────────────── */
   --sidebar-width: 220px;
   --sidebar-width-collapsed: 56px;
   --sidebar-transition: transform 200ms var(--ease-std), opacity 200ms var(--ease-std);
   --topbar-height: 52px;
+  --side-nav-directory-min-width: 220px;
+  --side-nav-directory-width: 320px;
 
   /* Document defaults */
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--text-lg);
   line-height: var(--leading-normal);
   font-weight: var(--font-normal);
   color: var(--text-primary);

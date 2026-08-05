@@ -203,7 +203,7 @@ const displayedLabel = computed(() => props.selectedTag
   min-width: 0;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font: inherit;
 }
@@ -254,7 +254,7 @@ const displayedLabel = computed(() => props.selectedTag
   display: inline-flex;
   align-items: center;
   min-height: 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--bg-subtle);
   color: var(--text-muted);
   padding: 0 var(--space-2);
@@ -262,8 +262,8 @@ const displayedLabel = computed(() => props.selectedTag
 }
 
 .tag-state.archived {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
 }
 
 @media (max-width: 900px) {

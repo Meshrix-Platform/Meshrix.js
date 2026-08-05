@@ -188,21 +188,21 @@ onMounted(() => {
 .ws-layout.ws-layout-expanded-cards .ws-list { overflow: visible; }
 
 .ws-card {
-  --split-toggle-card-radius: var(--radius-m);
+  --split-toggle-card-radius: var(--radius-md);
   --split-toggle-card-bg: var(--bg-surface);
-  --split-toggle-card-open-bg: var(--accent-surface);
+  --split-toggle-card-open-bg: var(--brand-subtle);
   --split-toggle-card-open-border-color: var(--accent);
   --split-toggle-card-padding: var(--space-3);
   --split-toggle-card-main-gap: var(--space-1);
   --split-toggle-card-body-gap: var(--space-3);
   --split-toggle-card-toggle-width: 58px;
-  --split-toggle-card-toggle-padding: 24px 0;
+  --split-toggle-card-toggle-padding: var(--space-6) 0;
   --split-toggle-card-toggle-hover-color: var(--accent);
   --split-toggle-card-focus-color: var(--accent);
   position: relative;
   transition: border-color 0.15s, background-color 0.15s;
 }
-.ws-card + .ws-card { margin-top: -1px; }
+.ws-card + .ws-card { margin-top: calc(-1 * var(--space-px)); }
 .ws-card:not(:first-of-type) {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
@@ -211,15 +211,15 @@ onMounted(() => {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
-.ws-card:hover { --split-toggle-card-border-color: var(--border-accent); }
+.ws-card:hover { --split-toggle-card-border-color: var(--brand-border); }
 .ws-card.selected {
   --split-toggle-card-border-color: var(--accent);
-  --split-toggle-card-bg: var(--accent-surface);
+  --split-toggle-card-bg: var(--brand-subtle);
   z-index: 1;
 }
 .ws-card.expanded {
   --split-toggle-card-open-border-color: var(--accent);
-  --split-toggle-card-open-bg: var(--accent-surface);
+  --split-toggle-card-open-bg: var(--brand-subtle);
   z-index: 2;
 }
 .ws-card-summary {
@@ -258,7 +258,7 @@ onMounted(() => {
 }
 .ws-inherited-badge {
   font-size: 0.7rem; color: var(--info); border: 1px solid var(--info);
-  padding: 1px 6px; border-radius: 4px;
+  padding: var(--space-px) var(--space-1-5); border-radius: var(--radius-xs);
 }
 .ws-card-meta-list {
   gap: var(--space-2);
@@ -305,9 +305,9 @@ onMounted(() => {
   background: var(--meshrix-copy-popover-bg);
   color: var(--meshrix-copy-popover-fg);
   border: 1px solid var(--meshrix-copy-popover-border);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-md);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
@@ -348,7 +348,7 @@ onMounted(() => {
 .meshrix-modal {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-l);
+  border-radius: var(--radius-lg);
   padding: var(--space-4);
   width: 400px;
   max-width: 90vw;

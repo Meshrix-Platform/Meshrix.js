@@ -1,6 +1,6 @@
 /* ─── Topbar page title ─── */
 .topbar-page-title {
-  margin: 0 0 2px;
+  margin: 0 0 var(--space-0-5);
   font-size: var(--text-sm);
   font-weight: 700;
   color: var(--text-primary);
@@ -43,8 +43,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: 20px;
-  padding-bottom: 18px;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -52,7 +52,7 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  color: var(--text-tertiary);
+  color: var(--text-muted);
 }
 
 .auth-language-button {

@@ -69,13 +69,13 @@ async function startDownload() {
   max-width: 100%;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .bridge-download-button[data-inline="true"] {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .bridge-download-error {

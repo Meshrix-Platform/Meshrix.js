@@ -8,7 +8,7 @@
   min-height: 26px;
   display: inline-flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   background: var(--bg-subtle);
@@ -83,7 +83,7 @@
 
 .vocabulary-table th,
 .vocabulary-table td {
-  padding: 8px;
+  padding: var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
   vertical-align: top;
   text-align: left;
@@ -100,7 +100,7 @@
 .vocabulary-table select,
 .vocabulary-table textarea {
   min-width: 130px;
-  padding: 8px;
+  padding: var(--space-2);
   font-size: var(--text-sm);
 }
 
@@ -118,7 +118,7 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--space-3);
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-subtle);

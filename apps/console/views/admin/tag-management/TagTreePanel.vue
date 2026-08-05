@@ -141,7 +141,7 @@ const tagIcon = (kind: string) => kind === "role"
 .tag-pill {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   color: var(--text-muted);
   font-size: var(--text-xs);
 }

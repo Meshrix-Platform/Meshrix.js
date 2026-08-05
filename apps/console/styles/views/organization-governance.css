@@ -102,7 +102,7 @@
   flex: 0 0 auto;
   padding: var(--space-1) var(--space-2);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-full);
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font-size: var(--text-xs);
@@ -137,7 +137,7 @@
   padding: 0 var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
+  background: var(--bg-surface);
   color: var(--text-primary);
   font: inherit;
 }
@@ -160,7 +160,7 @@
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
-  margin-left: min(calc(var(--node-depth) * 22px), 45%);
+  margin-left: min(calc(var(--node-depth) * var(--space-5)), 45%);
   padding: var(--space-2) var(--space-3);
   border-left: 2px solid var(--border-strong);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
@@ -170,7 +170,7 @@
 .organization-governance-node-type {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   color: var(--text-secondary);
   font-weight: var(--font-semibold);
 }
@@ -233,15 +233,15 @@
 }
 
 .organization-governance-danger-action {
-  color: #fff;
+  color: var(--text-primary);
   background: var(--danger);
   border-color: var(--danger);
 }
 
 .organization-governance-danger-action:hover:not(:disabled) {
-  color: #fff;
-  background: color-mix(in srgb, var(--danger) 88%, #000 12%);
-  border-color: color-mix(in srgb, var(--danger) 88%, #000 12%);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--danger) 88%, var(--bg-base) 12%);
+  border-color: color-mix(in srgb, var(--danger) 88%, var(--bg-base) 12%);
 }
 
 .organization-governance-danger-action:focus-visible {
@@ -250,7 +250,7 @@
 }
 
 .organization-governance-danger-action:disabled {
-  color: color-mix(in srgb, #fff 62%, var(--danger) 38%);
+  color: color-mix(in srgb, var(--text-primary) 62%, var(--danger) 38%);
   background: color-mix(in srgb, var(--danger) 42%, var(--bg-surface) 58%);
   border-color: color-mix(in srgb, var(--danger) 42%, var(--border-subtle) 58%);
 }
@@ -282,7 +282,7 @@
   .organization-governance-node-row {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
-    margin-left: min(calc(var(--node-depth) * 10px), 28%);
+    margin-left: min(calc(var(--node-depth) * var(--space-2-5)), 28%);
   }
 
   .organization-governance-actions {

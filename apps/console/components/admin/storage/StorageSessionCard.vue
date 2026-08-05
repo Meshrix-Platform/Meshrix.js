@@ -25,7 +25,7 @@ const {
         <dd>{{ currentUser.roleLabel }}</dd>
       </div>
     </dl>
-    <div class="section-actions" style="margin-top: 12px;">
+    <div class="section-actions storage-session-actions">
       <button
         class="tool-button tool-button-ghost"
         type="button"
@@ -38,3 +38,9 @@ const {
     </div>
   </article>
 </template>
+
+<style scoped>
+.storage-session-actions {
+  margin-top: var(--space-3);
+}
+</style>

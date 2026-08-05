@@ -42,6 +42,7 @@ vi.mock("@meshrix/ui-console/page-refresh", async (importOriginal?: any) : Promi
 
 import UpstreamServicePublishView from "../../../apps/console/views/admin/UpstreamServicePublishView.vue";
 import { parsePortableUpstreamServiceImport } from "@meshrix/contracts/upstream-service-publishing";
+import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
 import {
   registerConsoleConfirmHost,
   settleConsoleConfirm,
@@ -101,7 +102,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     const saveButton: any = wrapper.findAll('.form-actions button').find((button?: any) : any => button.text() === "Save");
     await saveButton.trigger("click");
 
-    expect(wrapper.text()).toContain("Draft saved in this browser.");
+    expect(wrapper.text()).toContain(consoleMessages[currentConsoleLocale.value].publishDraft.saved);
     expect(client.createUpstreamService).not.toHaveBeenCalled();
     expect(window.localStorage.length).toBe(1);
     wrapper.unmount();
@@ -114,7 +115,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     await restoredBasicTab.trigger("click");
     expect((restored.find('#upstream-service-key').element as HTMLInputElement).value).toBe("inventory-draft");
     expect((restored.find('#upstream-service-url').element as HTMLInputElement).value).toBe("https://service.invalid:443");
-    expect(restored.text()).toContain("Draft restored from this browser.");
+    expect(restored.text()).toContain(consoleMessages[currentConsoleLocale.value].publishDraft.restored);
     const restoredToolPathsTab: any = restored.findAll('[role="tab"]').find((tab?: any) : any => tab.text() === "Tool paths");
     await restoredToolPathsTab.trigger("click");
     expect((restored.find('.operation-builder input').element as HTMLInputElement).value).toBe("list-items");
@@ -146,7 +147,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     const restored: any = mount(UpstreamServicePublishView);
     await flushPromises();
     expect((restored.find('#upstream-service-name').element as HTMLInputElement).value).toBe("Unpublished local edit");
-    expect(restored.text()).toContain("Draft restored from this browser.");
+    expect(restored.text()).toContain(consoleMessages[currentConsoleLocale.value].publishDraft.restored);
     expect(client.replaceUpstreamService).not.toHaveBeenCalled();
   });
 
@@ -271,6 +272,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect(wrapper.find("#upstream-service-saved-credential").exists()).toBe(true);
     expect(wrapper.find("#upstream-service-saved-credential").attributes("disabled")).toBeDefined();
     expect(wrapper.text()).toContain("No saved credentials are available");
+    wrapper.unmount();
   });
 
   it("loads saved credential choices without exposing a URI entry field", async () : Promise<any> => {
@@ -299,6 +301,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect((savedCredential.element as HTMLSelectElement).value).toBe("0");
     expect(savedCredential.text()).toContain("request-auth (revision 4)");
     expect(savedCredential.text()).not.toContain("secret://vault/catalog");
+    wrapper.unmount();
     expect(wrapper.find('input[placeholder*="credential://"]').exists()).toBe(false);
   });
 
@@ -354,6 +357,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect((serviceKey.element as HTMLInputElement).value).toBe("replacement");
     expect(client.createUpstreamService).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("Draft loaded. Review it, then select Publish.");
+    wrapper.unmount();
   });
 
   it("loads a selected local file without importing or publishing it", async () : Promise<any> => {
@@ -532,6 +536,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
 
     expect(wrapper.text()).toContain("JSON-RPC tool paths require Structured JSON for both request and response.");
     expect(wrapper.findAll(".op-list > li")).toHaveLength(1);
+    wrapper.unmount();
   });
 
   it("allows an HTTP tool path to omit response settings for governed passthrough", async () : Promise<any> => {
@@ -560,6 +565,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect((wrapper.vm as any).form.operations[0].payloadTransport).not.toHaveProperty("response");
     expect(wrapper.find(".op-list > li").text()).toContain("governed passthrough");
     expect(wrapper.find(".op-list > li").text()).not.toContain("Complete all response fields");
+    wrapper.unmount();
   });
 
   it("accepts portable HTTP descriptors without a response transport", () : any => {
@@ -706,9 +712,15 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
       const wrapper: any = mount(UpstreamServicePublishView);
       await flushPromises();
       const actions: any = wrapper.findAll(".form-actions button");
+      // Disable and republish route through the REQ-010 destructive registry
+      // confirm; the remove flow confirms through the same seam.
       await actions[2].trigger("click");
       await flushPromises();
+      settleConsoleConfirm(true);
+      await flushPromises();
       await actions[3].trigger("click");
+      await flushPromises();
+      settleConsoleConfirm(true);
       await flushPromises();
       await actions[4].trigger("click");
       await flushPromises();

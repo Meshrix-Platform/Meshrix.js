@@ -75,6 +75,65 @@ export type ApiKeyDistributionControllerOptions = {
 const RISK_ORDER = ["low", "medium", "high"] as const;
 type ApiKeyRisk = (typeof RISK_ORDER)[number];
 
+export type ApiKeyMcpTarget = (typeof API_KEY_MCP_TARGET_OPTIONS)[number]["value"];
+
+export type ApiKeyKeyMaterial = {
+  keyId: string;
+  displayPrefix: string;
+};
+
+/**
+ * Placeholder convention for the one-time key: the snippet NEVER contains the
+ * plaintext (the reveal holds it ephemerally and the builder does not receive
+ * it). The user pastes the one-time key into the MESHRIX_MCP_TOKEN environment
+ * variable referenced by the config (gateway installer DEFAULT_TOKEN_ENV).
+ */
+export const CONNECTOR_SNIPPET_SECRET_PLACEHOLDER = "<paste-one-time-key-here>";
+const CONNECTOR_TOKEN_ENV = "MESHRIX_MCP_TOKEN";
+const CONNECTOR_TIMEOUT_MS = 300_000;
+const ADAPTER_VERSION = "0.0.1";
+
+/**
+ * Copy-paste-runnable connector configuration for a frozen MCP client target
+ * (mirrors the gateway installer MCP_CLIENT_TARGETS). Honest facts only: the
+ * target's trusted adapter coordinate, the canonical Meshrix MCP server config
+ * shape (http-mcp-adapter-discovery), and the token env channel. No invented
+ * flags. Unknown targets return "" — the consumer renders guidance only.
+ */
+export function buildConnectorConfigSnippet(target: string, keyMaterial: ApiKeyKeyMaterial): string {
+  const targetEntry = API_KEY_MCP_TARGET_OPTIONS.find((entry) => entry.value === target);
+  if (!targetEntry) {
+    return "";
+  }
+  const adapterCoordinate = `@meshrix/agent-${targetEntry.value}-adapter@${ADAPTER_VERSION}`;
+  const audience = fallbackServerAudience() || `127.0.0.1:${DEFAULT_API_PORT}`;
+  const config = {
+    mcpServers: {
+      meshrix: {
+        httpUrl: `http://${audience}/mcp`,
+        headers: {
+          "X-Meshrix-Api-Key": `\${${CONNECTOR_TOKEN_ENV}}`,
+        },
+        authProviderType: "meshrix_api_key",
+        timeout: CONNECTOR_TIMEOUT_MS,
+      },
+    },
+    auth: {
+      type: "meshrix_operation_permission_token",
+    },
+  };
+  return [
+    `# ${targetEntry.label} — Meshrix MCP connector`,
+    `# Install the ${targetEntry.label} adapter: npx -y ${adapterCoordinate}`,
+    `# Key identifier: ${keyMaterial.keyId}`,
+    `# Key prefix: ${keyMaterial.displayPrefix}`,
+    `# The one-time key is never embedded in this config. Set it first:`,
+    `#   export ${CONNECTOR_TOKEN_ENV}=${CONNECTOR_SNIPPET_SECRET_PLACEHOLDER}`,
+    `# Register the Meshrix server with ${targetEntry.label}:`,
+    JSON.stringify(config, null, 2),
+  ].join("\n");
+}
+
 /** Server still requires positive limit integers; empty console fields mean unrestricted. */
 const UNLIMITED_MAX_USES = 2_000_000_000;
 const UNLIMITED_REQUESTS_PER_MINUTE = 2_000_000_000;
@@ -177,7 +236,12 @@ function inferFromTools(tools: OperationPermissionTool[]): ApiKeyInferredPolicyF
   const toolsetIds = uniqueSorted(tools.flatMap((tool) => tool.toolsets || []));
   const scopeIds = uniqueSorted(tools.flatMap((tool) => tool.requiredScopes || []));
   const serviceIds = uniqueSorted(tools.map((tool) => tool.serviceId || ""));
-  const capabilityIds = uniqueSorted(tools.map((tool) => tool.capabilityId || ""));
+  // Upstream projected tools carry their capability id inside
+  // dynamicCapability (no top-level field) — read both so the derived policy
+  // grants the upstream capabilities the audience evaluation requires.
+  const capabilityIds = uniqueSorted(tools.map((tool) =>
+    tool.capabilityId || tool.dynamicCapability?.capabilityId || ""));
+
   const minimumRisk = tools.reduce<ApiKeyRisk>(
     (current, tool) => higherRisk(current, toApiKeyRisk(String(tool.risk || "low"))),
     "low",
@@ -221,8 +285,13 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
 
   const inferredPolicy = computed(() => {
     const inferred = inferFromTools(selectedAllowedTools.value);
+    const toolsetScopes = uniqueSorted(
+      draft.value.selectedToolsetIds.flatMap((toolsetId) =>
+        catalogToolsets.value.find((toolset) => toolset.id === toolsetId)?.requiredScopes || []),
+    );
     return {
       ...inferred,
+      scopeIds: uniqueSorted([...inferred.scopeIds, ...toolsetScopes]),
       toolsetIds: uniqueSorted(draft.value.selectedToolsetIds.length
         ? draft.value.selectedToolsetIds
         : inferred.toolsetIds),
@@ -395,6 +464,7 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     oneTimeSecret.value = "";
     revealedRecord.value = null;
     copied.value = false;
+    snippetCopied.value = false;
     if (announce && hadSecret) {
       status.value = apiKeyDistributionText(
         "密钥明文已永久关闭；请仅使用已安全分发的副本。",
@@ -660,12 +730,37 @@ export function useConsoleApiKeyDistributionController(options: ApiKeyDistributi
     catch { copied.value = false; error.value = apiKeyDistributionText("无法写入剪贴板，请手动复制。", "Could not write to the clipboard. Copy the value manually."); }
   }
 
+  // REQ-018 connector snippet: scoped to the first target chosen in the draft,
+  // built from the revealed record's key identity. Copying the snippet is a
+  // separate affordance — it does NOT satisfy the storage acknowledgement.
+  const connectorSnippet = computed(() => {
+    const record = revealedRecord.value;
+    const target = draft.value.selectedTargetIds[0] || "";
+    if (!record || !target) return "";
+    return buildConnectorConfigSnippet(target, {
+      keyId: record.keyId,
+      displayPrefix: record.displayPrefix,
+    });
+  });
+
+  const snippetCopied = ref(false);
+
+  async function copyConnectorSnippet(): Promise<void> {
+    const snippet = connectorSnippet.value;
+    if (!snippet) return;
+    try { snippetCopied.value = Boolean(await copyText(snippet)); }
+    catch {
+      snippetCopied.value = false;
+      error.value = apiKeyDistributionText("无法写入剪贴板，请手动复制。", "Could not write to the clipboard. Copy the value manually.");
+    }
+  }
+
   return {
-    applyProfile, busy, catalog, catalogFingerprint, catalogMismatch, copied, copySecret, create,
-    creating, dataClassificationOptions, dismissSecret, draft, draftConfigDocument,
-    draftMissingHints, draftValid, eligible, error, importDraftConfig, inferredPolicy,
-    inferredSummaryItems, loading, maximumRiskOptions, mutatingKeyId, nodes, oneTimeSecret,
-    profileOptions, records, refresh, revealedRecord, revoke, rotate, scopes, status,
-    targetOptions, toolsetOptions,
+    applyProfile, busy, catalog, catalogFingerprint, catalogMismatch, connectorSnippet, copied,
+    copyConnectorSnippet, copySecret, create, creating, dataClassificationOptions, dismissSecret,
+    draft, draftConfigDocument, draftMissingHints, draftValid, eligible, error, importDraftConfig,
+    inferredPolicy, inferredSummaryItems, loading, maximumRiskOptions, mutatingKeyId, nodes,
+    oneTimeSecret, profileOptions, records, refresh, revealedRecord, revoke, rotate, scopes,
+    snippetCopied, status, targetOptions, toolsetOptions,
   };
 }

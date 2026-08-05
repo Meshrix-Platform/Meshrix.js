@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, resolveComponent } from "vue";
 import { useOperationPermissionViewContext } from "../../../composables/operationPermissionViewContext";
 import { toolRiskLabel, toolsetLabel } from "../../../composables/console-tool-display-utils";
+import { consoleMessages, currentConsoleLocale } from "../../../i18n/console";
 import ScopeSelector from "../../ScopeSelector.vue";
 
 const {
@@ -22,6 +23,10 @@ const grantableToolsets = computed(() =>
 );
 const selectedScopeCount = computed(() => newGrantScopes.value.length);
 const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
+const journeyMessages = computed(() => consoleMessages[currentConsoleLocale.value].journey);
+// Resolved through the app registry instead of a module import: consumers that
+// stub vue-router (tests) keep rendering without the links.
+const RouterLink: any = resolveComponent("RouterLink");
 </script>
 
 <template>
@@ -91,6 +96,11 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
       <button class="tool-button tool-button-ghost" type="button" @click="copyIssuedToolToken">
         复制
       </button>
+      <RouterLink
+        to="/admin/api-key-distribution"
+        class="token-panel-next-link"
+        data-testid="grant-success-client-key-link"
+      >{{ journeyMessages.issueClientKey }}</RouterLink>
     </div>
   </article>
 </template>
@@ -103,5 +113,22 @@ const selectedToolsetCount = computed(() => newGrantToolsets.value.length);
   border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: var(--text-sm);
+}
+.token-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+}
+.token-panel-next-link {
+  margin-left: auto;
+  color: var(--brand);
+  font-weight: var(--font-semibold);
+  text-decoration: underline;
 }
 </style>

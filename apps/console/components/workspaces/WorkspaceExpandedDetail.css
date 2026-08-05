@@ -15,7 +15,7 @@
 }
 
 .ws-card-expanded .workspace-source-id {
-  margin-right: 6px;
+  margin-right: var(--space-1-5);
 }
 
 .ws-card-expanded .workspace-stack-list {
@@ -30,14 +30,14 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 0.82rem;
 }
 
 .ws-card-expanded .ws-chain-item {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .ws-card-expanded .ws-chain-item.is-current {
@@ -63,7 +63,7 @@
   align-items: center;
   min-width: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-sm);
   padding: var(--space-1-5) var(--space-2);
   background: var(--bg-subtle);
   font-size: var(--text-sm);
@@ -108,7 +108,7 @@
 .ws-card-expanded .checkpoint-toolbar > div {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .ws-card-expanded .checkpoint-toolbar span,
@@ -137,14 +137,14 @@
 .ws-card-expanded .checkpoint-node-card,
 .ws-card-expanded .checkpoint-preview {
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
 }
 
 .ws-card-expanded .checkpoint-tree-item {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   padding: var(--space-2);
   text-align: left;
   color: var(--text-primary);
@@ -155,7 +155,7 @@
 .ws-card-expanded .checkpoint-tree-item.selected,
 .ws-card-expanded .checkpoint-node-card.selected {
   border-color: var(--accent);
-  background: var(--accent-surface);
+  background: var(--brand-subtle);
 }
 
 .ws-card-expanded .checkpoint-node-card {
@@ -169,7 +169,7 @@
 .ws-card-expanded .checkpoint-node-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   min-width: 0;
 }
 
@@ -187,7 +187,7 @@
 }
 
 .ws-card-expanded .danger-link {
-  color: #ef4444;
+  color: var(--danger);
   border-color: rgba(239, 68, 68, 0.35);
 }
 
@@ -202,7 +202,7 @@
 }
 
 .ws-card-expanded .checkpoint-error {
-  color: #ef4444;
+  color: var(--danger);
   margin: 0;
   font-size: var(--text-sm);
 }
@@ -212,7 +212,7 @@
   line-height: 1.5;
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-sm);
   padding: var(--space-3);
   overflow: auto;
   max-height: 240px;
@@ -233,12 +233,12 @@
 
 .ws-card-expanded .workspace-delete-button {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--danger);
   border: 1px solid rgba(239, 68, 68, 0.3);
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--space-1-5);
+  padding: var(--space-1-5) var(--space-3);
   transition: background-color 0.2s ease;
 }
 

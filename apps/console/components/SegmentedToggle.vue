@@ -55,7 +55,7 @@ const gridColumns = computed(() => `repeat(${props.options.length}, minmax(0, 1f
   gap: var(--space-1);
   width: min(360px, 100%);
   min-height: 44px;
-  padding: 4px;
+  padding: var(--space-1);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--info-surface);

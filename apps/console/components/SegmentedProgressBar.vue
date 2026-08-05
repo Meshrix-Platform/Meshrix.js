@@ -101,7 +101,7 @@ const gridColumns = computed(() =>
 
 .meshrix-segmented-progress-segment {
   display: grid;
-  gap: 7px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -111,8 +111,8 @@ const gridColumns = computed(() =>
   border-radius: var(--radius-full);
   background: var(--border-subtle);
   transition:
-    background-color var(--dur-med) var(--ease-std),
-    box-shadow var(--dur-med) var(--ease-std);
+    background-color var(--dur-base) var(--ease-std),
+    box-shadow var(--dur-base) var(--ease-std);
 }
 
 .meshrix-segmented-progress-segment[data-state="active"] .meshrix-segmented-progress-bar {

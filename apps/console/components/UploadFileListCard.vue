@@ -186,7 +186,7 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   justify-content: space-between;
   gap: var(--space-3);
   min-width: 0;
-  padding: 14px 16px;
+  padding: var(--space-3-5) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-subtle);
 }
@@ -224,7 +224,7 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   align-items: center;
   gap: var(--space-2);
   min-height: 72px;
-  padding: 18px 16px;
+  padding: var(--space-4) var(--space-4);
   color: var(--text-muted);
   font-weight: 700;
 }
@@ -242,7 +242,7 @@ const canChooseFiles = computed(() => props.canWriteJobs && !isBusy.value);
   justify-content: space-between;
   gap: var(--space-3);
   min-width: 0;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-subtle);
 }

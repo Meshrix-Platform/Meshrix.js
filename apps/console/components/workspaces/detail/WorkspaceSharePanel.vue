@@ -33,7 +33,7 @@ const {
       </label>
     </div>
     <p class="module-note">当前已共享给：
-      <code v-for="id in selected.accessibleWorkspaceIds" :key="id" style="margin-right:8px">{{ id }}</code>
+      <code v-for="id in selected.accessibleWorkspaceIds" :key="id" class="shared-ws-id">{{ id }}</code>
       <em v-if="selected.accessibleWorkspaceIds.length === 0">（无）</em>
     </p>
     <div class="module-actions">
@@ -44,3 +44,9 @@ const {
     </div>
   </div>
 </template>
+
+<style scoped>
+.shared-ws-id {
+  margin-right: var(--space-2);
+}
+</style>

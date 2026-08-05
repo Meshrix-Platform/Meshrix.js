@@ -92,8 +92,8 @@ useConsoleDocumentDismissController({
 .upload-split-button {
   --upload-split-control-height: 40px;
   --upload-split-control-bg: var(--success);
-  --upload-split-control-bg-hover: #15803d;
-  --upload-split-control-color: #ffffff;
+  --upload-split-control-bg-hover: color-mix(in srgb, var(--success) 25%, var(--success-border) 75%);
+  --upload-split-control-color: var(--text-primary);
   --upload-split-control-icon-size: 18px;
   --upload-split-control-font-size: var(--text-lg);
   --upload-split-control-font-weight: 800;
@@ -113,7 +113,7 @@ useConsoleDocumentDismissController({
 .upload-split-arrow {
   height: var(--upload-split-control-height);
   margin-left: 0;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border-color: var(--upload-split-control-bg);
   background: var(--upload-split-control-bg);
   color: var(--upload-split-control-color);
@@ -196,7 +196,7 @@ useConsoleDocumentDismissController({
   width: 100%;
   height: var(--upload-split-control-height);
   margin-left: 0;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--upload-split-control-bg);
   border-radius: var(--radius-md);
   background: var(--upload-split-control-bg);

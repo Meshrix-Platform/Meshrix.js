@@ -4,7 +4,7 @@
   z-index: var(--z-top);
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-6);
   background: var(--backdrop);
 }
 
@@ -16,7 +16,7 @@
   grid-template-rows: auto auto auto auto minmax(0, auto) auto;
   align-content: start;
   gap: var(--space-3);
-  padding: 18px;
+  padding: var(--space-4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
@@ -31,7 +31,7 @@
   z-index: var(--z-toast);
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-6);
   background: var(--backdrop);
 }
 
@@ -42,7 +42,7 @@
   display: grid;
   grid-template-rows: auto minmax(260px, 1fr) auto;
   gap: var(--space-3);
-  padding: 18px;
+  padding: var(--space-4);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
@@ -55,7 +55,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
-  padding-right: 58px;
+  padding-right: var(--space-16);
 }
 
 .agent-evidence-preview-header h3 {
@@ -67,7 +67,7 @@
 .agent-evidence-preview-header span {
   display: block;
   max-width: min(760px, 72vw);
-  margin-top: 4px;
+  margin-top: var(--space-1);
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--text-sm);

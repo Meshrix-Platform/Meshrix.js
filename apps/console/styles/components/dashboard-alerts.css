@@ -22,7 +22,7 @@
   display: inline-flex;
   min-height: 26px;
   align-items: center;
-  padding: 0 9px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   background: var(--bg-subtle);
@@ -55,7 +55,7 @@
 }
 
 .dashboard-plugin-empty {
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px dashed var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
@@ -82,7 +82,7 @@
   display: grid;
   gap: var(--space-2-5);
   min-width: 0;
-  padding: 14px;
+  padding: var(--space-3-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
@@ -174,7 +174,7 @@
   display: inline-flex;
   min-height: 24px;
   align-items: center;
-  padding: 0 9px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   background: color-mix(in srgb, var(--bg-surface) 78%, transparent);
@@ -217,7 +217,7 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: baseline;
   gap: var(--space-1-5);
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-subtle);
@@ -266,7 +266,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: start;
-  padding: 14px;
+  padding: var(--space-3-5);
   border: 1px solid var(--warning);
   border-radius: var(--radius-lg);
   background: var(--warning-surface);
@@ -313,7 +313,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--warning-border);
   border-radius: var(--radius-full);
   background: var(--bg-surface);
@@ -375,7 +375,7 @@
   min-width: 0;
   display: grid;
   gap: var(--space-2);
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-subtle);
@@ -435,7 +435,7 @@
   gap: var(--space-2) var(--space-2-5);
   align-items: center;
   min-width: 0;
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--warning);
   border-radius: var(--radius-lg);
   background: var(--warning-surface);
@@ -538,7 +538,7 @@
 
 .configuration-alert-action {
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
@@ -563,7 +563,7 @@
 .configuration-alert-empty {
   display: grid;
   gap: var(--space-1);
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--success);
   border-radius: var(--radius-lg);
   background: var(--success-surface);
@@ -618,9 +618,9 @@ html[data-appearance-color-scheme="light"] {
   background: var(--meshrix-copy-popover-bg);
   color: var(--meshrix-copy-popover-fg);
   border: 1px solid var(--meshrix-copy-popover-border);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-xs);
+  font-size: var(--text-md);
   pointer-events: none;
   z-index: 9999;
   opacity: 0;

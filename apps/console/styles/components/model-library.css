@@ -9,7 +9,7 @@
 .module-assignment-count {
   flex: 0 0 auto;
   min-height: 24px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--border-subtle);
@@ -36,7 +36,7 @@
 .module-assignment-row,
 .model-library-card {
   min-width: 0;
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
@@ -100,7 +100,7 @@
 }
 
 .module-agent-profile-card {
-  margin-top: 2px;
+  margin-top: var(--space-0-5);
 }
 
 .module-agent-add-row {
@@ -117,7 +117,7 @@
 
 .module-agent-profile-item {
   min-width: 0;
-  padding: 10px;
+  padding: var(--space-2-5);
   display: grid;
   gap: var(--space-2-5);
   border: 1px solid var(--border-subtle);
@@ -236,7 +236,7 @@
 
 .model-library-card-body {
   min-width: 0;
-  padding-top: 10px;
+  padding-top: var(--space-2-5);
   display: grid;
   gap: var(--space-2-5);
   border-top: 1px solid var(--border-subtle);
@@ -304,7 +304,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 2px 6px;
+  padding: var(--space-0-5) var(--space-1-5);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background: var(--bg-subtle);
@@ -342,7 +342,7 @@
 
 .model-library-binding-item {
   min-width: 0;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   display: grid;
   gap: var(--space-1);
   border: 1px solid var(--brand-ring);
@@ -387,7 +387,7 @@
   align-items: center;
   gap: var(--space-3);
   margin: 0;
-  padding: 8px 10px;
+  padding: var(--space-2) var(--space-2-5);
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
@@ -445,7 +445,7 @@
 
 .advanced-config {
   min-width: 0;
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-subtle);
@@ -459,5 +459,5 @@
 }
 
 .advanced-config[open] summary {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2-5);
 }

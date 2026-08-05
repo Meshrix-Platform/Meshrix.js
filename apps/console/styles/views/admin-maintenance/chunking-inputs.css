@@ -16,7 +16,7 @@
   grid-template-columns: 38px minmax(0, 1fr) auto auto;
   gap: var(--space-2);
   align-items: center;
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -38,7 +38,7 @@
 .document-chunking-attachment-main {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: var(--space-0-5);
 }
 
 .document-chunking-attachment-main strong,
@@ -61,7 +61,7 @@
 
 .document-chunking-attachment-remove {
   height: 30px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
 }
 
 .document-chunking-controls {
@@ -85,7 +85,7 @@
   width: 100%;
   min-width: 0;
   min-height: 36px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -103,7 +103,7 @@
 .document-chunking-switches label {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  padding: 9px 10px;
+  padding: var(--space-2-5) var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -123,8 +123,8 @@
 .document-chunking-pipeline div {
   min-width: 0;
   display: grid;
-  gap: 3px;
-  padding: 10px;
+  gap: var(--space-0-5);
+  padding: var(--space-2-5);
   border: 1px solid var(--brand-ring);
   border-radius: var(--radius-md);
   background: var(--info-surface);

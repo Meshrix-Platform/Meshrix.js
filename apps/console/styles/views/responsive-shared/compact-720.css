@@ -4,7 +4,7 @@
   }
 
   .view-content {
-    padding: 16px;
+    padding: var(--space-4);
   }
 
   .topbar {
@@ -15,7 +15,7 @@
     max-height: none;
     height: auto;
     flex: 0 0 auto;
-    padding: 10px 16px;
+    padding: var(--space-2-5) var(--space-4);
   }
 
   .identity-row {
@@ -164,11 +164,11 @@
   }
 
   .path-picker-backdrop {
-    padding: 10px;
+    padding: var(--space-2-5);
   }
 
   .agent-evidence-preview-backdrop {
-    padding: 10px;
+    padding: var(--space-2-5);
   }
 
   .path-picker-dialog {
@@ -188,7 +188,7 @@
 
   .path-picker-header,
   .agent-evidence-preview-header {
-    padding-right: 52px;
+    padding-right: var(--space-12);
   }
   .source-progress > div {
     flex-direction: column;

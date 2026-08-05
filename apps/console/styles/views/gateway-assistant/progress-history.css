@@ -1,7 +1,7 @@
 .gateway-assistant-progress {
   display: grid;
   gap: var(--space-2);
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -41,7 +41,7 @@
 
 .gateway-assistant-history,
 .gateway-assistant-trace-card {
-  padding: 8px;
+  padding: var(--space-2);
   border: 1px solid var(--info-border);
   border-radius: var(--radius-md);
   background: var(--info-surface);
@@ -73,7 +73,7 @@
   align-items: center;
   gap: var(--space-2-5);
   min-height: 36px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--brand);
@@ -97,7 +97,7 @@
   content: "▸";
   display: inline-grid;
   width: 14px;
-  margin-right: 6px;
+  margin-right: var(--space-1-5);
   place-items: center;
   color: var(--brand);
   font-size: var(--text-sm);
@@ -121,10 +121,10 @@
 .gateway-assistant-trace-list {
   display: grid;
   gap: var(--space-2);
-  margin-top: 10px;
+  margin-top: var(--space-2-5);
   max-height: 235px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: var(--space-1);
   scrollbar-gutter: stable;
 }
 
@@ -146,7 +146,7 @@
   gap: var(--space-1);
   min-width: 0;
   width: 100%;
-  padding: 9px 42px 9px 10px;
+  padding: var(--space-2-5) var(--space-10) var(--space-2-5) var(--space-2-5);
   border: 0;
   border-radius: var(--radius-md);
   background: transparent;

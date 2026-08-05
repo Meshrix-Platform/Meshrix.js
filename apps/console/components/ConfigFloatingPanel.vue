@@ -156,7 +156,7 @@ onBeforeUnmount(removeDocumentListeners);
   gap: var(--space-4);
   align-items: flex-start;
   padding: var(--space-4);
-  padding-right: 64px;
+  padding-right: var(--space-16);
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
 }
@@ -249,7 +249,7 @@ onBeforeUnmount(removeDocumentListeners);
 
   .config-floating-panel-toolbar {
     justify-content: flex-start;
-    padding-right: 44px;
+    padding-right: var(--space-10);
   }
 }
 

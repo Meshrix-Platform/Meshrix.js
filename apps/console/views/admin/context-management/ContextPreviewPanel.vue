@@ -64,10 +64,10 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
   flex-direction: column;
   gap: 1.25rem;
   margin-top: 1.5rem;
-  background: var(--el-bg-color-overlay);
+  background: var(--bg-subtle);
   padding: 1.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .preview-task-form label {
@@ -79,17 +79,17 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
 .preview-task-form label span {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--el-text-color-regular);
+  color: var(--text-secondary);
 }
 
 .preview-task-form input,
 .preview-task-form textarea {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-bg-color-page);
-  color: var(--el-text-color-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  color: var(--text-primary);
   font-size: 0.875rem;
   font-family: inherit;
   transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
@@ -98,7 +98,7 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
 .preview-task-form input:focus,
 .preview-task-form textarea:focus {
   outline: none;
-  border-color: var(--el-color-primary);
+  border-color: var(--brand);
 }
 
 .preview-task-form textarea {
@@ -111,10 +111,10 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
   display: flex;
   gap: 1rem;
   align-items: center;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-light);
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
   padding: 1rem;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-top: 1.5rem;
   margin-bottom: 1.5rem;
 }
@@ -128,13 +128,13 @@ const requiredEvidence = defineModel<string>("requiredEvidence", { required: tru
 }
 
 .context-action-bar .primary-action {
-  background: var(--el-color-primary);
-  color: var(--el-color-white);
+  background: var(--brand);
+  color: var(--text-on-brand);
   border: none;
 }
 
 .context-action-bar .primary-action:not(:disabled):hover {
-  background: var(--el-color-primary-light-3);
+  background: var(--brand-strong);
 }
 
 @media (max-width: 720px) {

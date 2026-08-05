@@ -103,7 +103,7 @@ function toggleFromSummary(event: MouseEvent | KeyboardEvent) {
   border: 1px solid var(--split-toggle-card-border-color, var(--border-subtle));
   border-radius: var(--split-toggle-card-radius, var(--radius-lg));
   background: var(--split-toggle-card-bg, var(--bg-surface));
-  transition: border-color var(--transition-fast), background var(--transition-fast);
+  transition: border-color var(--dur-fast) var(--ease-std), background var(--dur-fast) var(--ease-std);
 }
 
 .split-toggle-card[data-open="true"] {
@@ -115,7 +115,7 @@ function toggleFromSummary(event: MouseEvent | KeyboardEvent) {
   display: grid;
   gap: var(--split-toggle-card-main-gap, var(--space-2));
   min-width: 0;
-  padding: var(--split-toggle-card-padding, 12px);
+  padding: var(--split-toggle-card-padding, var(--space-3));
 }
 
 .split-toggle-card__summary {
@@ -145,13 +145,13 @@ function toggleFromSummary(event: MouseEvent | KeyboardEvent) {
   justify-self: stretch;
   width: 100%;
   min-width: 0;
-  padding: var(--split-toggle-card-toggle-padding, 18px 0);
+  padding: var(--split-toggle-card-toggle-padding, var(--space-4) 0);
   border: 0;
   border-inline-start: 1px solid var(--split-toggle-card-divider-color, var(--border-subtle));
   background: var(--split-toggle-card-toggle-bg, transparent);
   color: var(--split-toggle-card-toggle-color, var(--text-secondary));
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--dur-fast) var(--ease-std), color var(--dur-fast) var(--ease-std);
 }
 
 .split-toggle-card__toggle:hover,
