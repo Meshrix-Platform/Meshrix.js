@@ -1145,6 +1145,68 @@
       ]
     },
     {
+      "artifactId": "meshrix.console.component-reuse-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.console.component-reuse-report.",
+      "activeVersion": "v0.0.1:console:component-reuse-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:console:component-reuse-report-1",
+          "ref": "meshrix.console.component-reuse-report@v0.0.1:console:component-reuse-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-console-component-reuse-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-console-component-reuse-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-console-component-reuse.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.console.design-tokens-report",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.console.design-tokens-report.",
+      "activeVersion": "v0.0.1:console:design-tokens-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:console:design-tokens-report-1",
+          "ref": "meshrix.console.design-tokens-report@v0.0.1:console:design-tokens-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-console-design-tokens-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-console-design-tokens-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-console-design-tokens.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.console.gateway-mcp-workflows-report",
       "kind": "platform",
       "description": "Governed version registry entry for meshrix.console.gateway-mcp-workflows-report.",
@@ -1201,6 +1263,32 @@
               "evidenceId": "v0-0-1-console-redundancy-report-1-source-2",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-console-redundancy.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.console.upstream-service-publish-draft",
+      "kind": "platform",
+      "description": "Governed version registry entry for meshrix.console.upstream-service-publish-draft.",
+      "activeVersion": "v0.0.1:console:upstream-service-publish-draft-1",
+      "versions": [
+        {
+          "version": "v0.0.1:console:upstream-service-publish-draft-1",
+          "ref": "meshrix.console.upstream-service-publish-draft@v0.0.1:console:upstream-service-publish-draft-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-console-upstream-service-publish-draft-1-source",
+              "kind": "other",
+              "uri": "apps/console/composables/console-publish-draft-autosave.ts"
             }
           ]
         }

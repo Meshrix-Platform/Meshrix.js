@@ -129,6 +129,7 @@ routes:
       - featureId: admin.tools-list
         actions:
           - admin.tools.list
+          - admin.tools.audit.first-call
 
   - routePath: /admin/tool-governance
     viewFile: apps/console/views/admin/ToolsView.vue
@@ -153,11 +154,21 @@ routes:
         actions:
           - admin.operation-permission.list
           - admin.operation-permission.update
+          - admin.operation-permission.client-key-link
+          - admin.operation-permission.client-key-crosslink
       - featureId: admin.operation-permission-governance
         actions:
           - admin.tools.catalog.inspect
           - admin.tools.policy.evaluate
           - admin.tools.grants.manage
+
+  - routePath: /admin/api-key-distribution
+    viewFile: apps/console/views/admin/ApiKeyDistributionView.vue
+    features:
+      - featureId: admin.api-key-distribution
+        actions:
+          - apikey.connector-snippet.copy
+          - apikey.tool-token.crosslink
 
   - routePath: /admin/modules
     viewFile: apps/console/views/admin/ModulesView.vue
@@ -209,6 +220,14 @@ routes:
         actions:
           - admin.gateway-routes.audit
           - admin.gateway-routes.metrics
+
+  - routePath: /admin/publish-upstream-service
+    viewFile: apps/console/views/admin/UpstreamServicePublishView.vue
+    features:
+      - featureId: admin.upstream-service-publish
+        actions:
+          - upstream.publish.grant-link
+          - upstream.publish.gateway-link
 
   - routePath: /admin/maintenance-agent
     viewFile: apps/console/views/admin/MaintenanceAgentView.vue

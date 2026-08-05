@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createSignedMcpHeaders } from "../mcp-process-identity-test-helper.ts";
 import {
   normalizePath,
   safeTargetUrl
@@ -12,19 +11,10 @@ export function createRawMcpCaller({
 }: Record<string, any>) : any {
   return async function callMcpRaw(token?: any, message?: any, id: any = 1, expectedStatuses: any = [200]) : Promise<any> {
     const server: any = getServer();
-    const binding: any = mcpIdentityByToken.get(token);
-    assert.ok(binding, "MCP token must have a verifier process identity binding");
     const body: any = JSON.stringify({ jsonrpc: "2.0", id, ...message });
     const response: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: createSignedMcpHeaders({
-        token,
-        body,
-        nonce: `verify-upstream-gateway-raw-${id}`,
-        url: new URL("/mcp", server.url),
-        privateKeyPem: binding.identity.keyPair.privateKeyPem,
-        clientIdentityPackage: binding.clientIdentityPackage
-      }),
+      headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "codex" },
       body
     });
     assert.equal(

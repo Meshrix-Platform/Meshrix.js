@@ -5,12 +5,9 @@ import os from "node:os";
 import path from "node:path";
 
 import { startHttpServer } from "../../apps/server/runtime/http-server.ts";
-import { createServerUpstreamGatewayRegistry } from "../../packages/server-runtime/src/composition/server-runtime-providers.ts";
-import { executeConsoleDomainOperation } from "../../packages/server-runtime/src/composition/console-domain/operation-executor.ts";
 import { compileUpstreamOperationCapability } from "../../packages/agents/src/upstream-gateway/operation-capability.ts";
 import { installAuthenticatedFetch } from "./test-auth-helper.ts";
 import { useIsolatedCapabilityKernelForVerifier } from "./capability-kernel-test-env.ts";
-import { createSignedMcpHeaders, createVerifierMcpProcessIdentity } from "./mcp-process-identity-test-helper.ts";
 import { createUpstreamGatewayFixture, createUpstreamGatewayE2eServices, gatewayOperationNames, runConcurrentTrafficSlotWorkflow, structuredPayload } from "./lib/upstream-gateway-e2e-helpers.ts";
 import { loadVerifierPublishedServices, seedVerifierUpstreamServices, verifierOpaqueServiceId, writeVerifierLocalUpstreamSecret } from "./lib/upstream-gateway-verifier-publication.ts";
 import { createRawMcpCaller, runAggregateTrafficPolicyWorkflow, runEndpointPoolWorkflow, runProjectedToolWorkflows, runUrlAuthorityEscapeWorkflow } from "./lib/upstream-gateway-projected-tools-workflows.ts";
@@ -52,7 +49,6 @@ let fixtureUrl: any = "";
 let failingFixture: any = null;
 let failingFixtureUrl: any = "";
 let failingFixtureState: any = null;
-let consoleUpstreamGatewayRegistry: any = null;
 const dynamicSecretNeedles: any = new Set<any>();
 const mcpIdentityByToken: any = new Map<any, any>();
 let configuredServices: any[] = [];
@@ -198,25 +194,50 @@ async function rpc(method?: any, params: Record<string, any> = {}, id: any = 900
 }
 
 async function consoleOperation(operationId?: any, input: Record<string, any> = {}) : Promise<any> {
-  if (!consoleUpstreamGatewayRegistry) {
-    consoleUpstreamGatewayRegistry = createServerUpstreamGatewayRegistry({ userDataPath });
-    await loadVerifierPublishedServices({ userDataPath, registry: consoleUpstreamGatewayRegistry });
-  }
-  const result: any = await executeConsoleDomainOperation({
-    operationId,
-    input,
-    context: {
-      userDataPath,
-      upstreamGatewayRegistry: consoleUpstreamGatewayRegistry,
-      subject: {
-        subjectId: "verifier-console-subject",
-        roleId: "maintainer",
-        scopes: ["gateway:read", "gateway:write", "gateway:maintain", "gateway:admin"]
-      }
-    }
+  const response: any = await fetchJson(`${server.url}/api/gateway/v1/forward`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
   });
-  assertNoLeak(result, `console ${operationId}`);
-  return result;
+  assertNoLeak(response.payload, `console ${operationId}`);
+  return response;
+}
+
+let verifierCatalogToolsCache: any = null;
+
+async function verifierResourceAllowances(toolsets?: any) : Promise<any> {
+  // The api-key-only MCP machinery hides any catalog tool whose resourceContext facts are not
+  // covered by the key policy's resources when mode is "restricted" (which the verifier's
+  // secret bindings force). Derive the allowances from the live catalog for the selected
+  // toolsets so gateway core tools and projected upstream tools stay visible.
+  if (!verifierCatalogToolsCache) {
+    const catalogResponse: any = await fetchJson(`${server.url}/api/operation-permission/v1/catalog`, {
+      headers: { "Content-Type": "application/json" }
+    });
+    verifierCatalogToolsCache = catalogResponse.payload?.tools || [];
+  }
+  const selectedToolsets: any = new Set<any>(toolsets || []);
+  const selected: any[] = verifierCatalogToolsCache.filter((tool?: any) : any =>
+    (tool.toolsets || []).some((toolset?: any) : any => selectedToolsets.has(toolset))
+  );
+  const resourceFacts: any = (field?: any) : any => [...new Set<any>(selected.flatMap((tool?: any) : any => {
+    const resourceContext: any = tool.resourceContext || tool.dynamicCapability?.resourceContext || {};
+    return resourceContext[field] ? [String(resourceContext[field])] : [];
+  }))].filter(Boolean);
+  return {
+    mode: "restricted",
+    workspaceIds: [],
+    dataClassifications: [],
+    egressClasses: resourceFacts("egressClass"),
+    semanticFamilies: [],
+    capabilityDomains: resourceFacts("capabilityDomain"),
+    capabilityVerbs: resourceFacts("capabilityVerb"),
+    resourceKinds: resourceFacts("resourceKind"),
+    effectKinds: resourceFacts("effectKind"),
+    secretBindingIds: resourceFacts("secretBindingId"),
+    allowedOrigins: [],
+    allowedCidrs: []
+  };
 }
 
 async function createGrant(label?: any, toolsets?: any, extra: Record<string, any> = {}) : Promise<any> {
@@ -243,6 +264,8 @@ async function createGrant(label?: any, toolsets?: any, extra: Record<string, an
       dynamicCapabilities,
       allowedServiceIds,
       allowedSecretBindings,
+      maxRisk: "repair_write",
+      resources: await verifierResourceAllowances(toolsets),
       ...extra
     }
   });
@@ -745,7 +768,9 @@ try {
   });
 
   await destructiveTest("concurrent MCP forwarding is isolated and counted", async () : Promise<any> => {
-    const token: any = await createGrant("verify-gateway-concurrent", ["meshrix.gateway.read", "meshrix.gateway.write"]);
+    const token: any = await createGrant("verify-gateway-concurrent", ["meshrix.gateway.read", "meshrix.gateway.write"], {
+      maxConcurrentEffects: 64
+    });
     const before: any = fixtureState.concurrentCount;
     const calls: any = Array.from({ length: 32 }, (_?: any, index?: any) : any =>
       callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
@@ -781,7 +806,6 @@ try {
   }), null, 2));
   process.exitCode = 1;
 } finally {
-  await consoleUpstreamGatewayRegistry?.close?.();
   if (server?.close) {
     await server.close();
   }

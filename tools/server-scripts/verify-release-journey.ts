@@ -292,12 +292,14 @@ async function main() : Promise<any> {
           connectorScript,
           target,
           env: targetEnvs.get(target),
+          adapterCacheRoot,
           redact
         }));
         details.push({
           id: `connector-uninstall:${target}`,
           status: result.ok ? "passed" : "failed",
-          durationMs: Date.now() - started
+          durationMs: Date.now() - started,
+          error: result.ok ? "" : redact(String(result.detail || "uninstall failed")).slice(-400)
         });
         const matrixRow: any = report.clientAcceptanceMatrix?.find(
           (row?: any) : any => row.adapterTarget === target
@@ -592,6 +594,13 @@ async function main() : Promise<any> {
         serviceId: publishReceipt.serviceId,
         targetIds: detectedClients.map((client?: any) : any => client.target),
         operationKey: IMMEDIATE_OPERATION_KEY,
+        toolsetIds: [
+          "meshrix.gateway.write",
+          "meshrix.storage.read",
+          "meshrix.storage.write",
+          "meshrix.uploads.write",
+          `upstream:${publishReceipt.serviceId}`
+        ],
         allowedTools: [
           "uploads.create_session",
           "uploads.get_session",
@@ -699,8 +708,7 @@ async function main() : Promise<any> {
         operationKey: IMMEDIATE_OPERATION_KEY,
         organizationNodeId: "organization:secondary",
         workloadName: "Release journey sibling isolation probe",
-        allowedTools: ["uploads.get_session"],
-        toolsetIds: [],
+        toolsetIds: ["meshrix.uploads.write"],
         capabilityIds: [],
         permissionScopeIds: ["uploads:write"],
         maxUses: 4,

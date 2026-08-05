@@ -137,6 +137,18 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
       target: "codex",
       label: "verify-operation-permission-tag-governed-e2e"
     });
+    const requestedToolsets: any = [
+      "meshrix.gateway.write",
+      "meshrix.gateway.read",
+      "meshrix.agent.workspace.read",
+      "meshrix.agent.workspace",
+      "meshrix.agent.workspace.maintain",
+      "meshrix.storage.read",
+      "meshrix.storage.write",
+      "meshrix.runtime.maintain",
+      "meshrix.authorization.admin",
+      "meshrix.console.read"
+    ];
     const response: any = await issueVerifierMcpApiKey({
       server,
       access: {
@@ -150,19 +162,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
           { operationKey: "echo" }
         )],
         allowedServiceIds: [OPERATION_PERMISSION_TAG_GOVERNED_E2E.serviceId],
-        toolsets: [
-          "meshrix.gateway.admin",
-          "meshrix.gateway.write",
-          "meshrix.gateway.read",
-          "meshrix.agent.workspace.read",
-          "meshrix.agent.workspace",
-          "meshrix.agent.workspace.maintain",
-          "meshrix.storage.read",
-          "meshrix.storage.write",
-          "meshrix.runtime.maintain",
-          "meshrix.authorization.admin",
-          "meshrix.console.read"
-        ],
+        toolsets: requestedToolsets,
         label: verifierAccess.label,
         ...input
       }
@@ -178,7 +178,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
       record: response.record
     });
     createdGrantIds.push(keyId);
-    return { token, keyId, record: response.record };
+    return { token, keyId, record: response.record, toolsets: requestedToolsets };
   }
 
   function mcpPayload(jsonRpcPayload: Record<string, any> = {}) : any {

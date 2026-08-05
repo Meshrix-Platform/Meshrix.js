@@ -206,6 +206,10 @@ export function broadcastMcpToolListChanged({
 /**
  * Deliver revision-only catalog invalidation to affected audience partitions.
  * Resolves opaque partition keys to grant digests using current/previous projection maps.
+ * When the projection has no affected partitions (key-only deployments have zero grants,
+ * so partitions are empty), fall through with empty selectors: the matcher then takes its
+ * all-connections fallback and the capability/affected guards keep delivery precise, so
+ * api-key SSE connections still receive the audience publication.
  */
 export function broadcastAudienceCatalogInvalidation({
   sourceRevision = null,
@@ -230,16 +234,6 @@ export function broadcastAudienceCatalogInvalidation({
     const part: any = current.get(key) || previous.get(key);
     const digest: any = String(part?.grantIdDigest || "").trim();
     if (digest) grantIdDigests.push(digest);
-  }
-  if (partitionKeys.length === 0 && grantIdDigests.length === 0) {
-    return {
-      ok: true,
-      notification: "notifications/tools/list_changed",
-      reasonCode,
-      matchedConnectionCount: 0,
-      deliveredConnectionCount: 0,
-      skipped: true
-    };
   }
   return broadcastMcpToolListChanged({
     reasonCode,

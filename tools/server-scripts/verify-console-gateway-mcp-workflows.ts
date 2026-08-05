@@ -200,7 +200,7 @@ async function main() : Promise<any> {
   const realEvidence: Record<string, any> = {
     upstreamGatewayReleaseReady: releaseEvidenceReady("build/reports/upstream-gateway-e2e.json", upstream),
     upstreamGatewayAuditMetrics: Boolean(reportByName(upstream, "audit metrics").status === "passed" || reportByName(upstream, "MCP gateway forwarding").status === "passed"),
-    protocolDecisionConvergence: reportByName(protocol, "allow deny approval").status === "passed",
+    protocolDecisionConvergence: reportByName(protocol, "allow deny and governed approval").status === "passed",
     tagGovernedPendingApproval: reportByName(tagGoverned, "approval queue").evidence?.pendingOperationListed === true &&
       reportByName(tagGoverned, "approval queue").evidence?.pendingOperationResolved === true,
     reportsLeakScanned: tagGoverned.summary?.reportLeakScan === true

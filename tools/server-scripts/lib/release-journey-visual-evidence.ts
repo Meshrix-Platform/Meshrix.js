@@ -127,11 +127,15 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
   async function gotoConsoleRoute(route?: any) : Promise<any> {
     const current: any = page.url() ? new URL(page.url()) : null;
     if (current?.origin === expectedOrigin) {
-      if (current.hash !== `#${route}`) {
+      // The console's URL-state design (REQ-008) writes query keys into the
+      // hash (tabs, selection, filters) — compare the route path only.
+      const currentPath: any = current.hash.replace(/^#/u, "").split("?")[0] || "/";
+      if (currentPath !== route) {
         await page.evaluate((nextRoute?: any) : any => {
           window.location.hash = nextRoute;
         }, route);
-        await page.waitForURL((url?: any) : any => url.hash === `#${route}`);
+        await page.waitForURL((url?: any) : any =>
+          url.hash.replace(/^#/u, "").split("?")[0] === route);
       }
       await page.waitForTimeout(250);
     } else {
@@ -317,7 +321,6 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     await keyView.locator(".api-key-create-card").waitFor({ state: "visible", timeout: 30_000 });
     const field: any = (label: RegExp, selector: any = "input,textarea,select") : any =>
       keyView.locator("label").filter({ hasText: label }).locator(selector).first();
-    const immediateTool: any = `upstream.${serviceId}.${operationKey}`;
     const expiresAt: any = new Date(Date.now() + 60 * 60_000);
     const localExpiresAt: any = new Date(expiresAt.getTime() - expiresAt.getTimezoneOffset() * 60_000)
       .toISOString()
@@ -326,24 +329,36 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     await field(/所属层级|Owning Level|组织范围|Organization Scope/u, "select").selectOption(organizationNodeId);
     await field(/到期时间|Expires At/u, "input").fill(localExpiresAt);
     await field(/最高风险级别|Maximum Risk/u, "select").selectOption("medium");
-    await field(/服务 ID|Service IDs/u, "textarea").fill(serviceId);
-    await field(/能力 ID|Capability IDs/u, "textarea").fill((capabilityIds || [
-      `cap:upstream:${serviceId}:${operationKey}`
-    ]).join("\n"));
-    await field(/允许的工具|Allowed Tools/u, "textarea").fill((allowedTools || [
-      "uploads.create_session",
-      "uploads.get_session",
-      "uploads.upload_chunk",
-      "meshrix.gateway.artifacts.get",
-      immediateTool
-    ]).join("\n"));
-    await field(/工具集 ID|Toolset IDs/u, "textarea").fill(toolsetIds.join("\n"));
-    await field(/权限范围 ID|Permission Scope IDs/u, "textarea").fill(permissionScopeIds.join("\n"));
+    // The api-key form is toolset-driven: choosing toolsets auto-fills
+    // scopes, services, capabilities, and allowed tools (the old free-form
+    // textarea fields no longer exist). Select the requested toolsets, then
+    // the client targets and the resource scope below.
+    const serviceSection: any = keyView.locator("details.api-key-policy-section").filter({
+      hasText: /服务与工具权限|Service and Tool Permissions/u
+    });
+    if (!await serviceSection.evaluate((element?: any) : any => element.open === true)) {
+      await serviceSection.locator("summary").first().click();
+    }
+    const toolsetCard: any = serviceSection.locator(".multi-choice-list-card").filter({
+      hasText: /工具集|Toolsets/u
+    }).first();
+    await toolsetCard.locator(".multi-choice-list-item").first().waitFor({
+      state: "visible",
+      timeout: 30_000
+    });
+    for (const toolsetId of toolsetIds) {
+      const checkbox: any = toolsetCard.locator(`.multi-choice-list-item[title="${toolsetId}"]`).first();
+      if (!(await checkbox.count())) continue;
+      if (await checkbox.getAttribute("aria-checked") !== "true"
+        && await checkbox.getAttribute("data-checked") !== "true") {
+        await checkbox.click();
+      }
+    }
     const connectionSection: any = keyView.locator("details.api-key-policy-section").filter({
       hasText: /连接目标与资源|Connection Targets and Resources|连接目标与资源限制|Connection and Resource Restrictions/u
     });
     if (!await connectionSection.evaluate((element?: any) : any => element.open === true)) {
-      await connectionSection.locator("summary").click();
+      await connectionSection.locator("summary").first().click();
     }
     const targetCard: any = connectionSection.locator(".multi-choice-list-card").filter({
       hasText: /客户端目标|Client Targets/u
@@ -362,11 +377,21 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       hasText: /调用限制|Call Limits|进程身份与使用限制|Process Identity and Usage Limits/u
     });
     if (!await limitsSection.evaluate((element?: any) : any => element.open === true)) {
-      await limitsSection.locator("summary").click();
+      await limitsSection.locator("summary").first().click();
     }
     await field(/每分钟调用次数|Calls per minute|每窗口请求数|Requests per Window/u, "input").fill(String(requestsPerMinute));
     await field(/最大并发量|Maximum concurrency|最多并发操作|Maximum Concurrent Effects/u, "input").fill("2");
 
+    // The page's periodic refresh can re-filter the draft's toolsets against a
+    // concurrently fetched catalog; re-assert the selection right before submit.
+    for (const toolsetId of toolsetIds) {
+      const checkbox: any = toolsetCard.locator(`.multi-choice-list-item[title="${toolsetId}"]`).first();
+      if (!(await checkbox.count())) continue;
+      if (await checkbox.getAttribute("aria-checked") !== "true"
+        && await checkbox.getAttribute("data-checked") !== "true") {
+        await checkbox.click();
+      }
+    }
     const createButton: any = keyView.getByRole("button", { name: /创建并显示一次|Create and Show Once/u });
     if (await createButton.isDisabled()) throw visualError("release_journey_api_key_draft_invalid");
     await createButton.click();
@@ -387,6 +412,12 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       apiKey !== created?.apiKey || !created?.record?.keyId ||
       created?.record?.organizationNodeId !== organizationNodeId) {
       throw visualError("release_journey_api_key_one_time_response_invalid");
+    }
+    // The reveal step (secret-reveal hardening) requires the storage
+    // acknowledgement before the dismiss action is enabled.
+    const revealConfirm: any = keyView.locator('[data-testid="api-key-reveal-confirm"] input[type="checkbox"]');
+    if (await revealConfirm.count() && !await revealConfirm.isChecked()) {
+      await revealConfirm.check();
     }
     await keyView.getByRole("button", { name: /关闭且不再显示|Dismiss Permanently/u }).click();
     await secretOutput.waitFor({ state: "detached", timeout: 10_000 });
@@ -468,7 +499,7 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
         });
       } catch (error: any) {
         error.code = `${String(error?.code || "release_journey_visual_approval_failed")}_item_${index + 1}`;
-        error.message = error.code;
+        error.message = `${error.code} :: ${String(error?.message || "").slice(0, 300)}`;
         throw error;
       }
       const deadline: any = Date.now() + 30_000;
@@ -536,7 +567,9 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       throw visualError("release_journey_visual_checkpoint_duplicate");
     }
     const actualUrl: any = new URL(page.url());
-    const actualRoute: any = actualUrl.hash.replace(/^#/u, "") || "/";
+    // URL-synced console state (REQ-008) may add query keys to the hash —
+    // the checkpoint contract addresses the route path only.
+    const actualRoute: any = actualUrl.hash.replace(/^#/u, "").split("?")[0] || "/";
     if (actualUrl.origin !== expectedOrigin || actualRoute !== checkpoint.route) {
       throw visualError("release_journey_visual_console_route_mismatch");
     }
@@ -829,7 +862,9 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
       throw visualError("release_journey_visual_confirmation_action_missing");
     }
     await confirm.click();
-    await dialog.waitFor({ state: "hidden", timeout: 30_000 });
+    // The console shell drawer also matches the generic dialog selector, so
+    // wait for the confirm button itself to detach instead of a dialog hide.
+    await confirm.waitFor({ state: "detached", timeout: 30_000 });
   }
 
   async function close() : Promise<any> {
