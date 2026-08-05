@@ -112,8 +112,8 @@ try {
     assert.equal(Number(rebuild.count || 0) >= Object.keys(ENTITY_REFS).length, true);
     const gateway: any = await registerGatewayFixture();
     const grant: any = await createVerifierApiKey();
-    assert.equal(grant.grant?.toolsets?.includes("meshrix.gateway.read"), true);
-    assert.equal(grant.grant?.toolsets?.includes("meshrix.gateway.write"), true);
+    assert.equal(grant.toolsets?.includes("meshrix.gateway.read"), true);
+    assert.equal(grant.toolsets?.includes("meshrix.gateway.write"), true);
     setPrimaryGrant(grant);
     const capabilities: any = await refreshCapabilities();
     return {

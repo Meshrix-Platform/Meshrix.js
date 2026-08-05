@@ -72,7 +72,13 @@ export function parseMcpCatalogInvalidation(value?: any) : any {
   const audienceRevision: any = revision(value.audienceRevision);
   const catalogRevision: any = boundedText(value.catalogRevision);
   const reasonCode: any = boundedText(value.reasonCode, 128);
-  const affectedPartitions: any = opaquePartitionKeys(value.affectedPartitions);
+  // An empty affectedPartitions list is a valid global catalog invalidation
+  // (key-only deployments have zero grants, so no audience partitions exist).
+  const affectedPartitions: any = opaquePartitionKeys(value.affectedPartitions) || (
+    Array.isArray(value.affectedPartitions) && value.affectedPartitions.length === 0
+      ? Object.freeze([])
+      : null
+  );
   if (sourceRevision === null || audienceRevision === null || !catalogRevision ||
       !reasonCode || !affectedPartitions) return null;
   return Object.freeze({

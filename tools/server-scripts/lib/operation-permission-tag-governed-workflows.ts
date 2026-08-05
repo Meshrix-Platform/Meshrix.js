@@ -31,7 +31,10 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
   let workspaceId: any = "";
 
   async function verifyMcpDiscoveryAuthorizationRefresh() : Promise<any> {
-    const grant: any = await createVerifierApiKey({
+    // Api-key-only authorization: key policies are immutable snapshots, so an authorization
+    // change is a SECOND key issuance (the grant-update flow no longer exists). Tag policy
+    // changes refresh the audience projection and fire the list_changed SSE notification.
+    const readGrant: any = await createVerifierApiKey({
       label: "Operation Permission tag-governed E2E discovery verifier",
       grantMode: "read",
       maxRisk: "read_only",
@@ -43,30 +46,34 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       "meshrix.tagManagement.tags.upsert",
       "meshrix.operationPermission.createGrant"
     ];
-    const sse: any = await openMcpSse(grant.token);
+    const sse: any = await openMcpSse(readGrant.token);
     try {
-      const before: any = await capabilitiesForToken(grant.token, 130);
+      const before: any = await capabilitiesForToken(readGrant.token, 130);
       const beforeNames: any = operationNames(before);
       assert.equal(beforeNames.has("meshrix.gateway.metrics"), true, "read grant should see gateway metrics");
       assert.deepEqual(
         hiddenWithoutAuthority.filter((operation?: any) : any => beforeNames.has(operation)),
         [],
-        "unauthorized operations leaked before grant update"
+        "unauthorized operations leaked before write key issuance"
       );
 
-      const update: any = await api("POST", `/api/operation-permission/v1/grants/${encodeURIComponent(grant.grantId)}`, {
-        scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
+      const writeGrant: any = await createVerifierApiKey({
+        label: "Operation Permission tag-governed E2E discovery write verifier",
+        grantMode: "maintain",
         maxRisk: "safe_write",
-        metadata: { maxRisk: "safe_write" },
-        reason: "verify-operation-permission-tag-governed-e2e"
-      }, { expectedStatuses: [200] });
-      assert.equal(update.payload.grant?.enabled, true);
-      const grantEvent: any = await sse.waitForReasonCode("upstream_audiences_published");
-
-      const afterGrant: any = await capabilitiesForToken(grant.token, 131);
+        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.console.read"]
+      });
+      const afterGrant: any = await capabilitiesForToken(writeGrant.token, 131);
       const afterGrantNames: any = operationNames(afterGrant);
-      assert.equal(afterGrantNames.has("meshrix.gateway.forward"), true);
+      assert.equal(afterGrantNames.has("meshrix.gateway.forward"), true, "write key should see gateway forward");
+
+      const readAfterWrite: any = await capabilitiesForToken(readGrant.token, 133);
+      const readAfterWriteNames: any = operationNames(readAfterWrite);
+      assert.deepEqual(
+        hiddenWithoutAuthority.filter((operation?: any) : any => readAfterWriteNames.has(operation)),
+        [],
+        "read key visibility changed after write key issuance (key policies must stay immutable)"
+      );
 
       const tagUpdate: any = await api("POST", "/api/tag-management/v1/tags", {
         tagId: "governance:e2e-discovery-refresh",
@@ -76,7 +83,9 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       }, { expectedStatuses: [200, 201] });
       assert.equal(tagUpdate.payload.mcpToolListChanged, undefined);
 
-      const afterTag: any = await capabilitiesForToken(grant.token, 132);
+      const tagEvent: any = await sse.waitForReasonCode("upstream_audiences_published");
+
+      const afterTag: any = await capabilitiesForToken(writeGrant.token, 132);
       const afterTagNames: any = operationNames(afterTag);
       assert.equal(afterTagNames.has("meshrix.gateway.metrics"), true);
       assert.equal(afterTagNames.has("meshrix.gateway.forward"), true);
@@ -87,7 +96,7 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
         unauthorizedHiddenBeforeGrantUpdate: hiddenWithoutAuthority,
         writeVisibleAfterGrantUpdate: true,
         adminHiddenAfterTagPolicyUpdate: true,
-        notifications: [grantEvent.params?.change?.reasonCode, "unrelated_tag_catalog_unchanged"],
+        notifications: [tagEvent.params?.change?.reasonCode, "unrelated_tag_catalog_unchanged"],
         operationCounts: {
           before: before.operations?.length || 0,
           afterGrant: afterGrant.operations?.length || 0,
@@ -126,9 +135,9 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
       objective: "Verify tag-governed workspace and document operations."
     }, 103);
     assertMcpOk(createWorkspace, "workspace create");
-    workspaceId = mcpPayload(createWorkspace).workspace?.workspaceRef ||
-      mcpPayload(createWorkspace).workspace?.workspaceId ||
-      mcpPayload(createWorkspace).workspaceId ||
+    const createPayload: any = mcpPayload(createWorkspace);
+    workspaceId = createPayload.workspace?.workspaceId ||
+      createPayload.workspaceId ||
       "";
     assert.ok(workspaceId, "workspace create did not return an id");
     trackSecret(workspaceId);
@@ -187,7 +196,9 @@ export function createOperationPermissionTagGovernedWorkflows(context: Record<st
     assertMcpOk(approval, "approval required repair tool");
     const payload: any = mcpPayload(approval);
     assert.equal(payload.status, "pending_approval", JSON.stringify(safeEvidence(payload)));
-    assert.equal(payload.policy?.grantPolicyState || payload.resultSummary?.policy?.grantPolicyState || "stale", "stale");
+    // Api-key-only authorization has no grant entities, so the policy state recorded by the
+    // approval evaluation is "no-grant" (key policies are immutable snapshots).
+    assert.equal(payload.policy?.grantPolicyState || payload.resultSummary?.policy?.grantPolicyState || "no-grant", "no-grant");
     const pendingOperationId: any = String(payload.pendingOperation?.pendingOperationId || "");
     assert.ok(pendingOperationId);
     trackSecret(pendingOperationId);

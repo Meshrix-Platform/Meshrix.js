@@ -39,7 +39,6 @@ export async function installMatrixTargetWithApiKey({
     "--client-command", clientCommand,
     "--discovery-file", env.MESHRIX_MCP_DISCOVERY_FILE,
     "--token-env", "MESHRIX_MCP_TOKEN",
-    "--no-auto-token",
     "--no-verify"
   ];
   const child: any = spawn(process.execPath, args, {
@@ -92,14 +91,19 @@ export async function uninstallMatrixTarget({
   connectorScript,
   target,
   env,
+  adapterCacheRoot = "",
   redact = (value?: any) : any => value
 }: Record<string, any> = {}) : Promise<any> {
-  const child: any = spawn(process.execPath, [
+  const args: any[] = [
     connectorScript,
     "uninstall",
     "--target", target,
     "--json"
-  ], {
+  ];
+  if (adapterCacheRoot) {
+    args.push("--adapter-cache", adapterCacheRoot);
+  }
+  const child: any = spawn(process.execPath, args, {
     env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -116,8 +120,13 @@ export async function uninstallMatrixTarget({
   }
   const result: any = payload?.uninstalled?.[target];
   const removed: any = result?.status === "not-installed"
-    && result?.localProcessIdentityRemoved === true
-    && (result?.serverDeviceRemoved === true || result?.serverDeviceRemoval === "not-applicable");
+    && (
+      result?.removed === true
+      || (
+        result?.localProcessIdentityRemoved === true
+        && (result?.serverDeviceRemoved === true || result?.serverDeviceRemoval === "not-applicable")
+      )
+    );
   return {
     target,
     exitCode,

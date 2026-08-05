@@ -458,7 +458,7 @@ export async function probeApiKeyUploadRequest({
     try {
       credentials = await resolveProxyCredentials({ target });
     } catch (error: any) {
-      if (/missing MCP credential/iu.test(String(error?.message || ""))) {
+      if (/missing MCP credential|Missing API Key/iu.test(String(error?.message || ""))) {
         return Object.freeze({
           status: 0,
           ok: false,

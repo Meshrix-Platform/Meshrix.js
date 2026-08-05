@@ -1,9 +1,0 @@
-{
-  "schemaVersion": "v0.0.1:console:destructive-coverage-bootstrap-allowlist-1",
-  "deletionContract": "Pending-cleanup migration artifact for the console UX closure plan (frozen handoff 2, docs/plans/console-ux-closure/Architecture.md section 3.2). Marks destructive-operation registry ids whose confirm adoption (requestDestructiveConfirm / requestConsoleConfirm / confirmConsoleAction call site) is still pending. An absent file equals an empty allowlist. Entries are ratchet-only: an entry whose id has an adoption call site, or that is no longer in the landed registry, FAILS the gate. Shrunk by N10 (non-publish adoptions) and by N13/N14 (publish-lane adoptions); the Node removing the last entry deletes this file; FV asserts the end state.",
-  "ids": [
-    "publish.service.disable",
-    "publish.service.remove",
-    "publish.service.republish"
-  ]
-}
