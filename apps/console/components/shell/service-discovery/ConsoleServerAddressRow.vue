@@ -166,7 +166,7 @@ function handleUrlInput(event: Event) {
 .server-address-input-wrap input {
   width: 100%;
   min-width: 0;
-  padding-right: 72px;
+  padding-right: var(--space-16);
 }
 
 .server-address-icon-button,
@@ -239,7 +239,7 @@ function handleUrlInput(event: Event) {
   display: inline-flex;
   min-width: 54px;
   min-height: 22px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border-subtle);
@@ -272,7 +272,7 @@ function handleUrlInput(event: Event) {
 
 .server-address-row-message {
   grid-column: 2 / -1;
-  margin: -2px 0 0;
+  margin: calc(-1 * var(--space-0-5)) 0 0;
   color: var(--text-muted);
   font-size: var(--text-xs);
   line-height: var(--leading-snug);

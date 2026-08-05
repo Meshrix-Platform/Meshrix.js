@@ -41,7 +41,7 @@ function monitorAlertStateStatusLabel(status: unknown) {
 </script>
 
 <template>
-  <article class="surface-card" style="display: flex; flex-direction: column; gap: 16px;">
+  <article class="surface-card alerts-panel-layout">
     <div class="section-header">
       <div>
         <h3>监控报警</h3>
@@ -170,3 +170,11 @@ function monitorAlertStateStatusLabel(status: unknown) {
     </ConfigFoldCard>
   </article>
 </template>
+
+<style scoped>
+.alerts-panel-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+</style>

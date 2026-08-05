@@ -188,7 +188,7 @@ function stopSummaryToggle(event: Event) {
 .multi-choice-card-group {
   display: grid;
   gap: var(--space-2-5);
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
@@ -232,7 +232,7 @@ function stopSummaryToggle(event: Event) {
   align-content: start;
   gap: var(--space-2);
   min-width: 0;
-  padding: 10px;
+  padding: var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -306,7 +306,7 @@ function stopSummaryToggle(event: Event) {
 }
 
 .multi-choice-list-row:hover:not([data-disabled="true"]) {
-  background: color-mix(in srgb, var(--bg-elevated) 80%, var(--bg-surface) 20%);
+  background: color-mix(in srgb, var(--bg-subtle) 80%, var(--bg-surface) 20%);
 }
 
 .multi-choice-list-row[data-active="true"]:hover:not([data-disabled="true"]) {

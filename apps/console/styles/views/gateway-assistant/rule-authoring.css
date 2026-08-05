@@ -53,19 +53,19 @@
 
 .rule-authoring-form textarea {
   min-height: 76px;
-  padding: 10px 12px;
+  padding: var(--space-2-5) var(--space-3);
   resize: vertical;
 }
 
 .rule-authoring-form select {
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
 }
 
 .rule-authoring-result {
   display: grid;
   gap: var(--space-2-5);
-  padding-top: 12px;
+  padding-top: var(--space-3);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -97,7 +97,7 @@
   display: inline-flex;
   align-items: center;
   min-height: 26px;
-  padding: 0 9px;
+  padding: 0 var(--space-2-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   background: var(--bg-subtle);

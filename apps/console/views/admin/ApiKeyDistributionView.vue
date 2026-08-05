@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, resolveComponent, watch } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
 import BrowseSelectButton from "../../components/BrowseSelectButton.vue";
@@ -28,15 +28,19 @@ const localizeStatusPillLabel = (value: any) : any =>
 defineOptions({ name: "ApiKeyDistributionView" });
 
 const {
-  applyProfile, busy, copied, copySecret, create, creating, dataClassificationOptions,
-  dismissSecret, draft, draftConfigDocument, draftMissingHints, draftValid, eligible, error,
-  importDraftConfig, inferredSummaryItems, loading, maximumRiskOptions, mutatingKeyId, nodes,
-  oneTimeSecret, profileOptions, records, refresh, revealedRecord, revoke, rotate, scopes,
-  status, targetOptions, toolsetOptions,
+  applyProfile, busy, connectorSnippet, copied, copyConnectorSnippet, copySecret, create,
+  creating, dataClassificationOptions, dismissSecret, draft, draftConfigDocument,
+  draftMissingHints, draftValid, eligible, error, importDraftConfig, inferredSummaryItems,
+  loading, maximumRiskOptions, mutatingKeyId, nodes, oneTimeSecret, profileOptions, records,
+  refresh, revealedRecord, revoke, rotate, scopes, snippetCopied, status, targetOptions,
+  toolsetOptions,
 } = useConsoleApiKeyDistributionController();
 
 const t = apiKeyDistributionText;
 const msg = computed(() => consoleMessages[currentConsoleLocale.value]);
+// Resolved through the app registry instead of a module import: consumers that
+// stub vue-router (tests) keep rendering without the links.
+const RouterLink: any = resolveComponent("RouterLink");
 const revealCopyButton = ref<HTMLButtonElement | null>(null);
 let revealReturnFocus: HTMLElement | null = null;
 
@@ -189,6 +193,12 @@ usePageRefreshHandler(
       <div>
         <h2>{{ t("密钥分发", "Key Distribution") }}</h2>
         <p>{{ t("为明确的工作负载和组织范围创建、轮换与撤销 MCP 密钥。服务端始终负责最终授权。", "Create, rotate, and revoke MCP keys for a named workload and organization scope. The server always makes the final authorization decision.") }}</p>
+        <p class="journey-disambiguation" data-testid="journey-disambiguation">
+          {{ msg.journey.clientKeyDecision }}
+          <RouterLink to="/admin/operation-permission" class="journey-cross-link">
+            {{ msg.journey.toolTokenLink }}
+          </RouterLink>
+        </p>
       </div>
     </header>
 
@@ -240,6 +250,29 @@ usePageRefreshHandler(
             {{ msg.secretReveal.discard }}
           </button>
         </div>
+        <section
+          v-if="oneTimeSecret"
+          class="api-key-connector-snippet"
+          data-testid="api-key-connector-snippet"
+          :aria-label="msg.journey.snippetTitle"
+        >
+          <h4>{{ msg.journey.snippetTitle }}</h4>
+          <template v-if="connectorSnippet">
+            <p class="api-key-connector-snippet-note">{{ msg.journey.snippetSecretNote }}</p>
+            <pre class="api-key-connector-snippet-code">{{ connectorSnippet }}</pre>
+            <button
+              class="table-action"
+              type="button"
+              data-testid="api-key-connector-snippet-copy"
+              @click="copyConnectorSnippet"
+            >
+              {{ snippetCopied ? msg.journey.snippetCopied : msg.journey.snippetCopy }}
+            </button>
+          </template>
+          <p v-else class="api-key-connector-snippet-guidance" data-testid="api-key-connector-snippet-guidance">
+            {{ msg.journey.snippetGuidance }}
+          </p>
+        </section>
       </section>
 
       <section class="surface-card api-key-create-card" data-testid="api-key-distribution-workspace">

@@ -10,6 +10,10 @@ import {
   resolveEffectiveConsoleLocale,
   type ConsoleLocale,
 } from "../i18n/console";
+import {
+  buildGovernedConfirmPayload,
+  type GovernedConfirmPayload,
+} from "./console-governed-confirm-payload";
 import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 
 export type ApprovalFlowStatus = "pending" | "resolved" | "rejected" | "all";
@@ -720,94 +724,28 @@ export function approvalFlowCardMatchesStatus(
   );
 }
 
-type ApprovalDecisionCopy = {
-  confirmLabel: string;
-  message: string;
-  tone: "danger" | "neutral";
-  title: string;
-  toastMessage: string;
-  toastTitle: string;
-};
-
 export function operationPermissionDecisionCopy(
   operation: OperationPermissionPendingOperation,
   resolution: "approved" | "rejected",
   locale: any = approvalLocale(),
-): ApprovalDecisionCopy {
-  const requester: any = operationRequester(operation, locale);
-  const action: any = operationApprovalTitle(operation);
-  const impact: any = riskImpact(operation.risk, locale);
-  const hasApprovalLayers: any = operationHasApprovalLayers(operation);
-  const facts: any =
-    locale === "en"
-      ? [
-          `Requester: ${requester}`,
-          `Operation: ${action}`,
-          `Risk: ${riskLabel(operation.risk, locale)}`,
-          `Impact: ${impact}`,
-          `Valid until: ${displayDeadline(operation.expiresAt, locale)}`,
-        ].join("\n")
-      : [
-          `请求者：${requester}`,
-          `操作：${action}`,
-          `风险：${riskLabel(operation.risk, locale)}`,
-          `影响：${impact}`,
-          `有效期：${displayDeadline(operation.expiresAt, locale)}`,
-        ].join("\n");
-  if (resolution === "rejected") {
-    return {
-      confirmLabel: approvalText(locale, "拒绝请求", "Reject Request"),
-      message: `${facts}\n\n${approvalText(locale, "拒绝这一次执行请求？", "Reject this execution request?")}`,
-      tone: "danger",
-      title: approvalText(
-        locale,
-        "拒绝 Operation Permission 请求",
-        "Reject Operation Permission Request",
-      ),
-      toastMessage: approvalText(
-        locale,
-        "Operation Permission 请求已拒绝。",
-        "The Operation Permission request was rejected.",
-      ),
-      toastTitle: approvalText(locale, "审批已完成", "Approval Completed"),
-    };
-  }
-  return {
-    confirmLabel: approvalText(
-      locale,
-      hasApprovalLayers ? "通过当前审批层" : "批准请求",
-      hasApprovalLayers ? "Approve Current Layer" : "Approve Request",
-    ),
-    message: `${facts}\n\n${approvalText(
-      locale,
-      hasApprovalLayers
-        ? "批准后系统会重新评估；若仍需审批则进入下一层，全部满足后才最多尝试执行一次。"
-        : "批准后系统会重新评估；只有满足全部规则，才最多尝试执行一次。",
-      hasApprovalLayers
-        ? "After approval, the system re-evaluates the request. If more approval is required it advances to the next layer; only after every layer is satisfied may execution be attempted once at most."
-        : "After approval, the system re-evaluates the request; only when every rule is satisfied may execution be attempted once at most.",
-    )}`,
-    tone: operation.risk === "destructive" ? "danger" : "neutral",
-    title: approvalText(
-      locale,
-      hasApprovalLayers
-        ? "确认通过当前审批层"
-        : "确认批准 Operation Permission 请求",
-      hasApprovalLayers
-        ? "Confirm Current Approval Layer"
-        : "Confirm Operation Permission Request",
-    ),
-    toastMessage: approvalText(
-      locale,
-      hasApprovalLayers
-        ? "当前审批层已处理，流程已重新评估并推进。"
-        : "审批请求已处理，流程已重新评估。",
-      hasApprovalLayers
-        ? "The current approval layer was processed; the flow was re-evaluated and advanced."
-        : "The approval request was processed and the flow was re-evaluated.",
-    ),
-    toastTitle: approvalText(locale, "审批已完成", "Approval Completed"),
-  };
+): GovernedConfirmPayload {
+  // Facts are assembled here and resolved into copy inside the shared builder:
+  // effect = risk impact, resource = the operation, authority = the requester,
+  // duration = the deadline, risk = the operation risk enum.
+  return buildGovernedConfirmPayload(
+    {
+      effect: riskImpact(operation.risk, locale),
+      resource: operationApprovalTitle(operation),
+      authority: operationRequester(operation, locale),
+      duration: displayDeadline(operation.expiresAt, locale),
+      risk: String(operation.risk || ""),
+    },
+    locale,
+    {
+      resolution,
+      hasApprovalLayers: operationHasApprovalLayers(operation),
+    },
+  );
 }
 
 export function createApprovalFlowActionGuard() : any {
@@ -920,7 +858,7 @@ export function useApprovalFlowViewController() : any {
       "approved",
       async () : Promise<any> => {
         const copy: any = operationPermissionDecisionCopy(operation, "approved");
-        const confirmed: any = await confirmConsoleAction(copy.message, {
+        const confirmed: any = await confirmConsoleAction(copy.body, {
           title: copy.title,
           confirmLabel: copy.confirmLabel,
           tone: copy.tone,
@@ -949,7 +887,7 @@ export function useApprovalFlowViewController() : any {
       "rejected",
       async () : Promise<any> => {
         const copy: any = operationPermissionDecisionCopy(operation, "rejected");
-        const confirmed: any = await confirmConsoleAction(copy.message, {
+        const confirmed: any = await confirmConsoleAction(copy.body, {
           title: copy.title,
           tone: copy.tone,
           confirmLabel: copy.confirmLabel,

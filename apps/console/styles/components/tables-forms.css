@@ -10,7 +10,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .toolbar-left {
@@ -24,7 +24,7 @@
   max-width: 320px;
   min-height: 32px;
   font-size: var(--text-md);
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
 }
 
 .filter-select {
@@ -42,7 +42,7 @@
 
 .filter-select .el-select__wrapper {
   min-height: 32px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
 }
 
 .toolbar-actions {
@@ -57,7 +57,7 @@
 
 .jobs-table th,
 .jobs-table td {
-  padding: 14px 16px;
+  padding: var(--space-3-5) var(--space-4);
   text-align: left;
   vertical-align: middle;
 }
@@ -107,7 +107,7 @@
 
 .field-hint {
   display: block;
-  margin-top: 6px;
+  margin-top: var(--space-1-5);
   font-size: var(--text-sm);
   line-height: 1.45;
 }
@@ -171,7 +171,7 @@
 }
 
 .mount-item {
-  padding: 14px;
+  padding: var(--space-3-5);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);

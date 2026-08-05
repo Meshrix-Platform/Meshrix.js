@@ -122,7 +122,7 @@ const toggleExpand = (node: TreeNode) => {
             <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </template>
           <template v-else>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.6;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+            <svg class="tree-node-file-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
           </template>
         </span>
         <span class="tree-node-name">{{ node.name }}</span>
@@ -134,11 +134,15 @@ const toggleExpand = (node: TreeNode) => {
 </template>
 
 <style scoped>
+.tree-node-file-icon {
+  opacity: var(--opacity-60);
+}
+
 .workspace-file-tree {
   font-family: var(--font-mono, monospace);
   font-size: 0.85rem;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   overflow: hidden;
 }
@@ -146,7 +150,7 @@ const toggleExpand = (node: TreeNode) => {
 .tree-node {
   display: flex;
   align-items: center;
-  padding: 6px 12px;
+  padding: var(--space-1-5) var(--space-3);
   cursor: pointer;
   border-bottom: 1px solid var(--border-subtle);
   transition: background-color 0.15s;
@@ -166,7 +170,7 @@ const toggleExpand = (node: TreeNode) => {
   justify-content: center;
   width: 20px;
   height: 20px;
-  margin-right: 6px;
+  margin-right: var(--space-1-5);
   color: var(--text-secondary);
 }
 
@@ -185,6 +189,6 @@ const toggleExpand = (node: TreeNode) => {
 .tree-node-size {
   color: var(--text-secondary);
   font-size: 0.75rem;
-  margin-left: 12px;
+  margin-left: var(--space-3);
 }
 </style>

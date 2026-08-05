@@ -31,7 +31,7 @@ const {
     <p class="module-note">当前可用工作空间：</p>
     <ul class="ws-id-list">
       <li v-for="ws in workspaces.filter((w: any) => w.workspaceId !== selectedId)" :key="ws.workspaceId">
-        <code @click="parentForm.parentWorkspaceId = ws.workspaceId" style="cursor:pointer">{{ ws.workspaceId }}</code>
+        <code class="ws-id-link" @click="parentForm.parentWorkspaceId = ws.workspaceId">{{ ws.workspaceId }}</code>
         <span>{{ ws.title }}</span>
       </li>
     </ul>
@@ -43,3 +43,9 @@ const {
     </div>
   </div>
 </template>
+
+<style scoped>
+.ws-id-link {
+  cursor: pointer;
+}
+</style>

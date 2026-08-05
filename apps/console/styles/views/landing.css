@@ -4,20 +4,14 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .landing {
-  --lp-bg: #070707;
-  --lp-text: #ededed;
-  --lp-text-dim: #c8c8c8;
-  --lp-text-muted: #969696;
-  --lp-gold: #fef100;
-  --lp-gold-light: #fff75c;
-  --lp-gold-deep: #6b6117;
-  --lp-ice: #5ed7f2;
-  --lp-font: "SF Pro Display", "PingFang SC", -apple-system, system-ui, sans-serif;
-  --lp-mono: "SF Mono", "IBM Plex Mono", ui-monospace, monospace;
-
-  font-family: var(--lp-font);
-  background: var(--lp-bg);
-  color: var(--lp-text);
+  /* The parallel --lp-* palette was removed (REQ-022); uses map to the core
+     tokens below: lp-bg->bg-base, lp-text->text-primary, lp-text-dim->
+     text-secondary, lp-text-muted->text-muted, lp-gold->brand,
+     lp-gold-light->brand-strong, lp-gold-deep->brand-muted, lp-ice->info,
+     lp-font->font-display, lp-mono->font-mono. */
+  font-family: var(--font-display);
+  background: var(--bg-base);
+  color: var(--text-primary);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -57,7 +51,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 24px 80px;
+  padding: var(--space-12) var(--space-6) var(--space-16);
   position: relative;
   z-index: 1;
 }
@@ -66,7 +60,7 @@
 .landing-crystal {
   width: 128px;
   height: 128px;
-  margin-bottom: 48px;
+  margin-bottom: var(--space-12);
   animation: landing-float 8s ease-in-out infinite;
 }
 .landing-crystal svg {
@@ -85,20 +79,20 @@
 
 /* ── Typography ───────────────────────────────────────────────────────── */
 .landing-title {
-  font-size: clamp(32px, 6vw, 56px);
+  font-size: var(--display-md);
   font-weight: 200;
   letter-spacing: 14px;
-  margin: 0 0 16px;
-  color: var(--lp-text);
+  margin: 0 0 var(--space-4);
+  color: var(--text-primary);
   text-transform: uppercase;
 }
 
 .landing-tagline {
-  font-size: clamp(13px, 2vw, 15px);
+  font-size: clamp(var(--text-base), 2vw, var(--text-xl));
   font-weight: 300;
   letter-spacing: 3px;
   text-transform: uppercase;
-  color: var(--lp-text-dim);
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -112,7 +106,7 @@
 .landing-prism-line {
   width: 200px;
   height: 1px;
-  margin: 36px 0 40px;
+  margin: var(--space-8) 0 var(--space-10);
   background: linear-gradient(
     90deg,
     transparent,
@@ -126,22 +120,22 @@
 /* ── Hero CTA ─────────────────────────────────────────────────────────── */
 .landing-btn {
   display: inline-block;
-  font-family: var(--lp-font);
+  font-family: var(--font-display);
   cursor: pointer;
   text-decoration: none;
   outline: none;
 }
 
 .landing-btn--hero {
-  padding: 18px 52px;
-  font-size: 16px;
+  padding: var(--space-4) var(--space-12);
+  font-size: var(--text-2xl);
   font-weight: 500;
   letter-spacing: 2px;
   text-transform: uppercase;
-  border-radius: 10px;
-  border: 1px solid var(--lp-gold);
-  background: linear-gradient(135deg, var(--lp-gold), var(--lp-gold-deep));
-  color: var(--lp-bg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--brand-muted));
+  color: var(--bg-base);
   box-shadow:
     0 4px 24px rgba(254, 241, 0, 0.18),
     0 0 48px rgba(254, 241, 0, 0.06);
@@ -154,8 +148,8 @@
 }
 
 .landing-btn--hero:hover {
-  background: linear-gradient(135deg, var(--lp-gold-light), var(--lp-gold));
-  border-color: var(--lp-gold-light);
+  background: linear-gradient(135deg, var(--brand-strong), var(--brand));
+  border-color: var(--brand-strong);
   box-shadow:
     0 6px 32px rgba(254, 241, 0, 0.3),
     0 0 64px rgba(254, 241, 0, 0.1);
@@ -171,7 +165,7 @@
 }
 
 .landing-btn--hero:focus-visible {
-  outline: 2px solid var(--lp-gold-light);
+  outline: 2px solid var(--brand-strong);
   outline-offset: 3px;
 }
 
@@ -202,12 +196,12 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  row-gap: 2px;
+  row-gap: var(--space-0-5);
   max-width: calc(100vw - 48px);
-  gap: 8px;
-  font-size: 12px;
+  gap: var(--space-2);
+  font-size: var(--text-md);
   font-weight: 300;
-  color: var(--lp-text-muted);
+  color: var(--text-muted);
   letter-spacing: 0.4px;
   opacity: 0.7;
   z-index: 1;
@@ -218,18 +212,18 @@
 }
 
 .landing-version {
-  font-family: var(--lp-mono);
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-family: var(--font-mono);
+  padding: var(--space-0-5) var(--space-1-5);
+  border-radius: var(--radius-xs);
   background: rgba(254, 241, 0, 0.06);
   border: 1px solid rgba(254, 241, 0, 0.1);
-  color: var(--lp-gold);
-  font-size: 11px;
+  color: var(--brand);
+  font-size: var(--text-sm);
 }
 
 .landing-divider {
   opacity: 0.3;
-  margin: 0 4px;
+  margin: 0 var(--space-1);
 }
 
 .landing-sep {
@@ -241,7 +235,7 @@
   .landing-crystal {
     width: 100px;
     height: 100px;
-    margin-bottom: 36px;
+    margin-bottom: var(--space-8);
   }
   .landing-title {
     letter-spacing: 8px;
@@ -251,16 +245,16 @@
   }
   .landing-prism-line {
     width: 140px;
-    margin: 28px 0 32px;
+    margin: var(--space-7) 0 var(--space-8);
   }
   .landing-btn--hero {
-    padding: 16px 40px;
-    font-size: 15px;
+    padding: var(--space-4) var(--space-10);
+    font-size: var(--text-xl);
     letter-spacing: 1.5px;
   }
   .landing-footer {
     bottom: 20px;
-    font-size: 11px;
-    gap: 6px;
+    font-size: var(--text-sm);
+    gap: var(--space-1-5);
   }
 }

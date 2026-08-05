@@ -24,7 +24,7 @@
   display: grid;
   gap: var(--space-3);
   align-content: start;
-  padding: 14px;
+  padding: var(--space-3-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
@@ -46,7 +46,7 @@
   width: 100%;
   min-height: 360px;
   resize: vertical;
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -62,7 +62,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px dashed color-mix(in srgb, var(--brand) 36%, var(--border-strong) 64%);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--info-surface) 68%, var(--bg-surface) 32%);
@@ -83,7 +83,7 @@
 .document-chunking-dropcopy {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: var(--space-0-5);
 }
 
 .document-chunking-upload-actions {

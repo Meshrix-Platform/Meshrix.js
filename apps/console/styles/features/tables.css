@@ -146,7 +146,7 @@
 .primary-cell {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-px);
   min-width: 0;
 }
 .primary-cell strong { font-weight: var(--font-semibold); }

@@ -205,7 +205,7 @@ const {
 }
 .asset-operation-list li {
   display: grid;
-  gap: 2px;
+  gap: var(--space-0-5);
   min-width: 0;
   padding: var(--space-2);
   border: 1px solid var(--border-subtle);
@@ -243,10 +243,10 @@ const {
   display: grid;
   width: 100%;
   grid-template-columns: minmax(0, 1fr);
-  gap: 2px;
+  gap: var(--space-0-5);
   padding: var(--space-2);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   color: var(--text-primary);
   text-align: left;
@@ -254,7 +254,7 @@ const {
 .asset-row:hover,
 .asset-row.selected {
   border-color: var(--accent);
-  background: var(--accent-surface);
+  background: var(--brand-subtle);
 }
 .asset-row-title {
   font-weight: 600;

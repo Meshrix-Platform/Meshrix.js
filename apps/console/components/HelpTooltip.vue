@@ -133,7 +133,7 @@ onBeforeUnmount(removePositionListeners);
   flex: 0 0 auto;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-full);
   background: transparent;
   color: var(--text-muted);
   cursor: help;

@@ -1,9 +1,15 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { useUpstreamGatewayView } from "./upstream-gateway/useUpstreamGatewayView";
+import {
+  readinessStateLabelKey,
+  useServiceReadiness,
+} from "./upstream-gateway/useServiceReadiness";
 import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
 import ConsoleEmptyState from "../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
+import { consoleMessages, currentConsoleLocale } from "../../i18n/console";
 
 const { canAccessAdminView } = useServerConsoleShellContext();
 
@@ -22,6 +28,18 @@ const {
   services,
   status,
 } = useUpstreamGatewayView();
+
+const { readinessStages } = useServiceReadiness({ services, audit, selectedService });
+// REQ-004 keyed dictionary: readiness strip labels resolve here, both locales.
+const readinessMessages = computed(() => consoleMessages[currentConsoleLocale.value].readiness);
+
+function stageLabel(key: string): string {
+  return readinessMessages.value[key] || key;
+}
+
+function stateLabel(state: string): string {
+  return readinessMessages.value[readinessStateLabelKey(state as any)] || state;
+}
 </script>
 
 <template>
@@ -110,6 +128,34 @@ const {
               </RouterLink>
             </div>
           </div>
+          <div v-if="selectedService" class="gateway-readiness">
+            <span class="gateway-readiness-heading">{{ readinessMessages.title }}</span>
+            <div class="gateway-readiness-strip" role="group" :aria-label="readinessMessages.title">
+              <template v-for="stage in readinessStages" :key="stage.id">
+                <RouterLink
+                  v-if="stage.link"
+                  class="gateway-readiness-segment"
+                  :data-state="stage.state"
+                  :to="stage.link"
+                  :aria-label="`${stageLabel(stage.label)} ${stateLabel(stage.state)}`"
+                  :title="stateLabel(stage.state)"
+                >
+                  <span class="gateway-readiness-bar" aria-hidden="true" />
+                  <small>{{ stageLabel(stage.label) }}</small>
+                </RouterLink>
+                <div
+                  v-else
+                  class="gateway-readiness-segment"
+                  :data-state="stage.state"
+                  :aria-label="`${stageLabel(stage.label)} ${stateLabel(stage.state)}`"
+                  :title="stateLabel(stage.state)"
+                >
+                  <span class="gateway-readiness-bar" aria-hidden="true" />
+                  <small>{{ stageLabel(stage.label) }}</small>
+                </div>
+              </template>
+            </div>
+          </div>
           <table class="gateway-table">
             <thead>
               <tr>
@@ -194,46 +240,46 @@ const {
 .upstream-gateway-layout {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 18px;
+  gap: var(--space-4);
+  padding: var(--space-4);
 }
 
 .gateway-toolbar {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .gateway-grid {
   display: grid;
-  gap: 18px;
+  gap: var(--space-4);
   grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
 }
 
 .gateway-stack {
   display: grid;
-  gap: 14px;
+  gap: var(--space-3-5);
 }
 
 .gateway-service-actions {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: var(--space-2-5);
 }
 
 .gateway-panel {
-  border: 1px solid var(--border-subtle, #d5dce8);
-  border-radius: 8px;
-  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3-5);
 }
 
 .section-header {
   align-items: center;
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
 }
 
 .section-header h3,
@@ -242,33 +288,33 @@ const {
 }
 
 .section-header h3 {
-  font-size: 15px;
+  font-size: var(--text-xl);
 }
 
 .section-header p,
 .empty-copy,
 .gateway-form-grid span,
 .gateway-forward-body span {
-  color: var(--text-muted, #64748b);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-md);
 }
 
 .service-row {
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
-  padding: 9px;
+  padding: var(--space-2-5);
   text-align: left;
   width: 100%;
 }
 
 .service-row.active,
 .service-row:hover {
-  background: var(--surface-subtle, #f1f5f9);
+  background: var(--bg-subtle);
 }
 
 .service-row strong,
@@ -277,32 +323,32 @@ const {
 }
 
 .service-row small {
-  color: var(--text-muted, #64748b);
-  font-size: 11px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
   overflow-wrap: anywhere;
 }
 
 .gateway-state {
-  background: var(--surface-subtle, #eef2f7);
-  border-radius: 999px;
-  color: var(--text-muted, #475569);
-  font-size: 12px;
-  padding: 3px 8px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  padding: var(--space-0-5) var(--space-2);
 }
 
 .gateway-state-dot {
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   display: inline-block;
   height: 10px;
   width: 10px;
 }
 
 .gateway-state-dot.active {
-  background: #16a34a;
+  background: var(--success);
 }
 
 .gateway-state-dot.disabled {
-  background: #94a3b8;
+  background: var(--text-muted);
 }
 
 .gateway-table {
@@ -312,61 +358,111 @@ const {
 
 .gateway-table th,
 .gateway-table td {
-  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
-  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-2-5);
   text-align: left;
   vertical-align: top;
 }
 
 .gateway-table th {
-  color: var(--text-muted, #64748b);
-  font-size: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
 .gateway-form-grid {
   display: grid;
-  gap: 10px;
+  gap: var(--space-2-5);
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .gateway-form-grid label,
 .gateway-forward-body {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .gateway-form-grid input,
 .gateway-form-grid select,
 .gateway-forward-body textarea {
-  border: 1px solid var(--border-subtle, #d5dce8);
-  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   min-height: 34px;
-  padding: 7px 9px;
+  padding: var(--space-2) var(--space-2-5);
 }
 
 .gateway-actions button,
 .table-action,
 .tool-button {
-  border: 1px solid var(--border-subtle, #cbd5e1);
-  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   min-height: 32px;
-  padding: 6px 10px;
+  padding: var(--space-1-5) var(--space-2-5);
 }
 
 .tool-button {
-  background: var(--accent, #2563eb);
-  border-color: var(--accent, #2563eb);
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-brand);
 }
 
 pre {
-  background: var(--surface-subtle, #f8fafc);
-  border-radius: 6px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
   margin: 0;
   max-height: 360px;
   overflow: auto;
-  padding: 10px;
+  padding: var(--space-2-5);
+}
+
+.gateway-readiness {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3-5);
+}
+
+.gateway-readiness-heading {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.gateway-readiness-strip {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.gateway-readiness-segment {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.gateway-readiness-bar {
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+  display: block;
+  height: 8px;
+}
+
+.gateway-readiness-segment[data-state="done"] .gateway-readiness-bar {
+  background: var(--success);
+}
+
+.gateway-readiness-segment small {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.gateway-readiness-segment[data-state="done"] small {
+  color: var(--success);
 }
 
 @media (max-width: 880px) {

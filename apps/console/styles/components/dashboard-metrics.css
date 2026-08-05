@@ -9,7 +9,7 @@
 }
 
 .metric-card {
-  padding: 18px;
+  padding: var(--space-4);
   display: grid;
   gap: var(--space-3);
 }
@@ -73,7 +73,7 @@
 }
 
 .surface-card {
-  padding: 18px;
+  padding: var(--space-4);
 }
 
 .section-header {
@@ -81,7 +81,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3-5);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   min-width: 0;
 }
 
@@ -101,7 +101,7 @@
   align-items: center;
   min-height: 26px;
   max-width: 100%;
-  padding: 0 9px;
+  padding: 0 var(--space-2-5);
   border-radius: var(--radius-sm);
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);

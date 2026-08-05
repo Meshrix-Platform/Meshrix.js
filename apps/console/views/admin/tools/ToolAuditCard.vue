@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed, resolveComponent } from "vue";
 import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
 import type { OperationPermissionAuditItem } from "../../../lib/operation-permission-client";
 import ConsoleEmptyState from "../../../components/ConsoleEmptyState.vue";
+import { consoleMessages, currentConsoleLocale } from "../../../i18n/console";
 
 withDefaults(
   defineProps<{
@@ -11,6 +13,11 @@ withDefaults(
     items: () => [],
   },
 );
+
+const journeyMessages = computed(() => consoleMessages[currentConsoleLocale.value].journey);
+// Resolved through the app registry instead of a module import: consumers that
+// stub vue-router (tests) keep rendering without the links.
+const RouterLink: any = resolveComponent("RouterLink");
 </script>
 
 <template>
@@ -19,6 +26,9 @@ withDefaults(
       <div>
         <h3>最近调用</h3>
       </div>
+      <span v-if="items.length" class="first-call-indicator" data-testid="first-call-indicator">
+        {{ journeyMessages.firstCallRecorded }}
+      </span>
     </div>
     <div v-if="items.length" class="job-table compact-job-table tool-audit-table">
       <div class="job-table-header">
@@ -43,6 +53,29 @@ withDefaults(
         <span>{{ formatCompactDate(item.finishedAt || item.startedAt) }}</span>
       </div>
     </div>
-    <ConsoleEmptyState v-if="items.length === 0" title="暂无工具调用记录" />
+    <ConsoleEmptyState v-if="items.length === 0" title="暂无工具调用记录">
+      <template #action>
+        <RouterLink to="/admin/api-key-distribution" class="first-call-cta" data-testid="first-call-cta">
+          {{ journeyMessages.firstCallCta }}
+        </RouterLink>
+      </template>
+    </ConsoleEmptyState>
   </article>
 </template>
+
+<style scoped>
+/* REQ-018 first-call affordance — existing tokens only. */
+.first-call-indicator {
+  color: var(--success);
+  border: 1px solid var(--success-border);
+  background: var(--success-surface);
+  border-radius: var(--radius-full);
+  padding: 0.1rem 0.5rem;
+  font-size: var(--text-xs);
+}
+.first-call-cta {
+  color: var(--brand);
+  font-weight: var(--font-semibold);
+  text-decoration: underline;
+}
+</style>

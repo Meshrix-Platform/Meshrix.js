@@ -30,7 +30,7 @@ const emit = defineEmits<{
   width: 100%;
   min-height: 48px;
   justify-content: flex-start;
-  padding: 10px 14px;
+  padding: var(--space-2-5) var(--space-3-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);

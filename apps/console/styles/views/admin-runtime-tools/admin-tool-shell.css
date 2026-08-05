@@ -9,7 +9,7 @@
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 2px;
+  padding-bottom: var(--space-0-5);
   scroll-snap-type: x proximity;
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
@@ -54,7 +54,7 @@
   gap: var(--space-2-5);
   max-height: 680px;
   overflow: auto;
-  padding-right: 4px;
+  padding-right: var(--space-1);
 }
 
 .tool-catalog-card {
@@ -63,7 +63,7 @@
   gap: var(--space-2-5);
   align-items: flex-start;
   justify-content: space-between;
-  padding: 12px;
+  padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-surface);
@@ -97,7 +97,7 @@
   min-width: 0;
   display: grid;
   gap: var(--space-3);
-  padding: 14px;
+  padding: var(--space-3-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
@@ -113,5 +113,5 @@
 }
 
 .tool-rule-card {
-  padding: 10px;
+  padding: var(--space-2-5);
 }

@@ -85,8 +85,8 @@ const localDirectoryComponent = computed(() => {
 
 .ws-detail .ws-id-list code {
   background: var(--bg-subtle);
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: var(--space-px) var(--space-1-5);
+  border-radius: var(--radius-xs);
 }
 
 .ws-detail .module-field-block {
@@ -116,7 +116,7 @@ const localDirectoryComponent = computed(() => {
   line-height: 1.5;
   background: var(--bg-subtle);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-s);
+  border-radius: var(--radius-sm);
   padding: var(--space-3);
   overflow: auto;
   max-height: 240px;

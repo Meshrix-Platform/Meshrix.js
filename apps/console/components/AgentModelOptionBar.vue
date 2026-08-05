@@ -82,4 +82,4 @@ const {
   </label>
 </template>
 
-<style scoped src="./agent-model-option-bar/AgentModelOptionBar.css"></style>
+<style scoped src="./AgentModelOptionBar.css"></style>

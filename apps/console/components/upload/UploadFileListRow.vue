@@ -100,7 +100,7 @@ const activeStepLabel = computed(() => {
   gap: var(--space-4);
   align-items: center;
   min-width: 0;
-  padding: 14px 16px;
+  padding: var(--space-3-5) var(--space-4);
   border-top: 1px solid var(--border-subtle);
 }
 

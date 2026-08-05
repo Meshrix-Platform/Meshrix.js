@@ -1,32 +1,3 @@
-/* ─── Shell layout ──────────────────────────────────────────────────────── */
-
-.dashboard-shell {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  background: var(--bg-base);
-}
-
-.dashboard-shell.is-locked {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-}
-
-/* ─── Sidebar ────────────────────────────────────────────────────────────── */
-
-.side-nav {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sidebar);
-  height: 100vh;
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  overflow: visible;
-}
-
 .side-nav-primary {
   display: flex;
   min-height: 0;
@@ -63,7 +34,7 @@
   border-radius: var(--radius-md);
   background: var(--bg-inset);
   border: 1px solid var(--border-subtle);
-  padding: 3px;
+  padding: var(--space-0-5);
 }
 
 .brand-block h1 {
@@ -88,7 +59,7 @@
 .brand-loading-label {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-0-5);
   color: var(--brand);
   font-size: var(--text-2xs);
   letter-spacing: 0.06em;
@@ -99,8 +70,8 @@
 
 .brand-loading-dots {
   display: inline-flex;
-  gap: 2px;
-  margin-left: 2px;
+  gap: var(--space-0-5);
+  margin-left: var(--space-0-5);
 }
 
 .brand-loading-dots span {
@@ -146,7 +117,7 @@
     color-mix(in srgb, var(--brand) 70%, transparent) 80%,
     transparent 100%
   );
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   animation: brand-progress-sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 

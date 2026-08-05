@@ -151,7 +151,7 @@
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .side-nav-directory-status-pill {
@@ -159,7 +159,7 @@
   max-width: 100%;
   min-height: 18px;
   align-items: center;
-  padding: 0 7px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   background: var(--bg-subtle);

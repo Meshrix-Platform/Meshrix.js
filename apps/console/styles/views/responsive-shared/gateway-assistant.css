@@ -37,7 +37,7 @@
 
 @media (max-width: 860px) {
   .gateway-assistant-tab-strip {
-    margin-inline: -2px;
+    margin-inline: calc(-1 * var(--space-0-5));
   }
 
   .gateway-assistant-tab {
@@ -49,13 +49,13 @@
     align-items: flex-start;
     flex-wrap: wrap;
     height: auto;
-    padding-block: 7px;
+    padding-block: var(--space-2);
   }
 
   .gateway-assistant-history > summary small,
   .gateway-assistant-trace-card > summary small {
     flex-basis: 100%;
-    margin-left: 26px;
+    margin-left: var(--space-6);
   }
 
   .gateway-assistant-workspace {

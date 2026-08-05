@@ -18,8 +18,9 @@
 // resolving false — including the no-dialog-host case — aborts the operation
 // silently-clean: no error toast, no busy state.
 import { consoleMessages } from "../i18n/console-messages";
-import { currentConsoleLocale } from "../i18n/console-locale-state";
+import { currentConsoleLocale, type ConsoleLocale } from "../i18n/console-locale-state";
 import { requestConsoleConfirm } from "./console-confirm-controller";
+import { buildGovernedConfirmPayload } from "./console-governed-confirm-payload";
 
 export type ConsoleDestructiveOperationTone = "neutral" | "warning" | "danger";
 
@@ -92,19 +93,6 @@ export function getDestructiveOperation(id: string): ConsoleDestructiveOperation
   return CONSOLE_DESTRUCTIVE_OPERATIONS.find((operation) => operation.id === id);
 }
 
-function resolveConsoleMessage(dottedKey: string): string {
-  for (const locale of [currentConsoleLocale.value, "en"]) {
-    let node: any = consoleMessages[locale];
-    for (const segment of dottedKey.split(".")) {
-      node = node?.[segment];
-    }
-    if (typeof node === "string" && node.trim()) {
-      return node;
-    }
-  }
-  return "";
-}
-
 export function requestDestructiveConfirm(
   id: ConsoleDestructiveOperationId,
   context: { resource: string },
@@ -115,17 +103,31 @@ export function requestDestructiveConfirm(
     // unregistered ids statically. Fail loud here, never unguarded.
     throw new Error(`Unregistered destructive operation: ${id}`);
   }
-  const group: any = consoleMessages[currentConsoleLocale.value]?.destructive || consoleMessages.en.destructive;
-  const message: any = resolveConsoleMessage(operation.consequence).replaceAll(
-    "{resource}",
-    context.resource,
+  const locale: ConsoleLocale = currentConsoleLocale.value;
+  // Standard governed-confirm fact structure (shared with the approval flow):
+  // effect = the registry consequence key, resource = the call-site context,
+  // authority/duration = governedConfirm dictionary copy. The session-scoped
+  // revoke omits the duration fact (its effect is immediate).
+  const payload = buildGovernedConfirmPayload(
+    {
+      effect: operation.consequence,
+      resource: context.resource,
+      authority: "governedConfirm.authority.consoleSession",
+      duration:
+        id === "auth.session.revoke" ? "" : "governedConfirm.duration.untilRevoked",
+      risk: "destructive",
+    },
+    locale,
   );
+  const group: any = consoleMessages[locale]?.destructive || consoleMessages.en.destructive;
   return requestConsoleConfirm({
-    title: group.confirmTitle,
-    message,
-    // The dialog renders only neutral|danger; warning is an audit-level tone.
+    title: payload.title,
+    message: payload.body,
+    // The dialog renders only neutral|danger; warning is an audit-level tone,
+    // so the registry keeps its own mapping (the payload builder escalates on
+    // the destructive risk fact; danger entries stay danger here).
     tone: operation.tone === "danger" ? "danger" : "neutral",
-    confirmLabel: group.confirmLabel,
+    confirmLabel: payload.confirmLabel,
     cancelLabel: group.cancelLabel,
     requireText: operation.requireText,
   });

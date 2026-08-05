@@ -107,7 +107,7 @@
 .history-session-main {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-0-5);
   min-width: 0;
   flex: 1;
   padding: var(--space-1-5) var(--space-2-5);

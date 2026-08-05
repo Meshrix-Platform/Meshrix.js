@@ -80,9 +80,9 @@ const emit = defineEmits<{
 }
 
 .meshrix-modal {
-  background: var(--el-bg-color);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
   width: 440px;
   max-width: 90vw;
   box-shadow: 0 10px 30px rgba(0,0,0,0.2);
@@ -93,14 +93,14 @@ const emit = defineEmits<{
 
 .meshrix-modal-header {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .meshrix-modal-header h3 {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--text-primary);
   letter-spacing: 0;
 }
 
@@ -119,35 +119,35 @@ const emit = defineEmits<{
 .meshrix-modal-body label span {
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--el-text-color-regular);
+  color: var(--text-secondary);
 }
 
 .meshrix-modal-body input {
   width: 100%;
   height: 40px;
   padding: 0 0.75rem;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-bg-color-overlay);
-  color: var(--el-text-color-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  color: var(--text-primary);
   font-size: 0.875rem;
   transition: border-color 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
 .meshrix-modal-body input:focus {
   outline: none;
-  border-color: var(--el-color-primary);
+  border-color: var(--brand);
 }
 
 .meshrix-modal-body input::placeholder {
-  color: var(--el-text-color-placeholder);
+  color: var(--text-disabled);
 }
 
 .preset-form-error {
   margin: 0;
   padding: 0.75rem;
   border: 1px solid var(--danger-border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--danger-surface);
   color: var(--danger);
   font-size: 0.875rem;
@@ -155,11 +155,11 @@ const emit = defineEmits<{
 
 .meshrix-modal-footer {
   padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-subtle);
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
-  background: var(--el-bg-color-page);
+  background: var(--bg-base);
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
 }

@@ -19,7 +19,7 @@
 
 .el-select .el-select__wrapper {
   min-height: 40px;
-  padding: 6px 12px;
+  padding: var(--space-1-5) var(--space-3);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   box-shadow: 0 0 0 1px var(--border-subtle) inset;
@@ -59,14 +59,14 @@
   --el-color-primary-light-9: var(--brand-subtle);
   --el-color-primary-dark-2: var(--brand-strong);
   --el-border-color: var(--border-subtle);
-  --el-border-radius-base: 8px;
+  --el-border-radius-base: var(--radius-md);
   font-weight: 600;
 }
 
 .path-action-button.el-button {
   height: 40px;
   margin-left: 0;
-  padding: 0 14px;
+  padding: 0 var(--space-3-5);
 }
 
 .browse-select-button {

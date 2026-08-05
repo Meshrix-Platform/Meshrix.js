@@ -133,7 +133,7 @@
   display: grid;
   place-items: center;
   color: var(--text-muted);
-  transition: transform var(--transition-fast);
+  transition: transform var(--dur-fast) var(--ease-std);
 }
 
 .version-assembly-runtime-evidence[open] .version-assembly-evidence-chevron {
@@ -299,7 +299,7 @@
 .version-assembly-hydration-chip[data-hydratable="true"] {
   border-color: var(--success-border);
   background: var(--success-surface);
-  color: var(--success-text);
+  color: var(--success);
 }
 
 .version-assembly-hydration-chip[data-hydratable="false"] {
@@ -314,7 +314,7 @@
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-3);
-  padding-left: calc(var(--space-3) + var(--tree-indent, 18px));
+  padding-left: calc(var(--space-3) + var(--tree-indent, var(--space-4)));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-subtle);
@@ -327,7 +327,7 @@
   bottom: var(--space-3);
   left: calc(var(--space-3) + var(--tree-indent, 18px) - 10px);
   width: 2px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--border-subtle);
 }
 

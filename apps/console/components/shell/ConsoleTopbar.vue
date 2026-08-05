@@ -320,7 +320,7 @@ onBeforeUnmount(() => {
 .service-url-chevron {
   width: 13px;
   height: 13px;
-  margin-left: 4px;
+  margin-left: var(--space-1);
   flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
@@ -337,8 +337,8 @@ onBeforeUnmount(() => {
   z-index: 40;
   display: grid;
   width: min(360px, 82vw);
-  gap: 2px;
-  padding: 6px;
+  gap: var(--space-0-5);
+  padding: var(--space-1-5);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
@@ -348,9 +348,9 @@ onBeforeUnmount(() => {
 .service-address-option {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--space-2);
   min-height: 36px;
-  padding: 0 10px;
+  padding: 0 var(--space-2-5);
   align-items: center;
   border: 0;
   border-radius: var(--radius-sm);

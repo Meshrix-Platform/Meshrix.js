@@ -140,14 +140,14 @@ const emit = defineEmits<{
   flex-direction: column;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: var(--el-bg-color-overlay);
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 8px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   transition: border-color 0.2s ease;
 }
 
 .context-profile-item:hover {
-  border-color: var(--el-border-color);
+  border-color: var(--border-subtle);
 }
 
 .context-profile-item-header {
@@ -155,7 +155,7 @@ const emit = defineEmits<{
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 0.75rem;
 }
 
@@ -169,13 +169,13 @@ const emit = defineEmits<{
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--text-primary);
   letter-spacing: 0;
 }
 
 .profile-mode {
   font-size: 0.875rem;
-  color: var(--el-text-color-secondary);
+  color: var(--text-muted);
   font-weight: 500;
 }
 
@@ -210,13 +210,13 @@ const emit = defineEmits<{
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--el-text-color-secondary);
+  color: var(--text-muted);
 }
 
 .budget-value {
   font-size: 1.125rem;
   font-weight: 500;
-  color: var(--el-text-color-primary);
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -231,11 +231,11 @@ const emit = defineEmits<{
   display: inline-flex;
   align-items: center;
   padding: 0.375rem 0.625rem;
-  background: var(--el-fill-color-light);
-  border-radius: 6px;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--el-text-color-regular);
+  color: var(--text-secondary);
 }
 
 
