@@ -311,7 +311,7 @@ try {
     const adapterRunnerSource: any = await fs.readFile(CLIENT_ADAPTER_RUNNER_SOURCE, "utf8");
     const discoverySource: any = await fs.readFile(DISCOVERY_SOURCE, "utf8");
     assert.equal(basicUtilsSource.includes("--token TOKEN"), false);
-    assert.equal(adapterRunnerSource.includes('"X-Meshrix-Api-Key": token'), false);
+    assert.equal(adapterRunnerSource.includes('"X-Meshrix.js-Api-Key": token'), false);
     assert.match(adapterRunnerSource, /assertSecretFreeRequest/u);
     assert.match(adapterRunnerSource, /cleanEnv:\s*true/u);
     assert.match(discoverySource, /sensitive_environment_persistence_requires_a_secret_store/u);
@@ -341,7 +341,7 @@ try {
     assert.equal(Array.isArray(request.connector.args), true);
     assert.equal(CLIENT_ADAPTER_DESCRIPTOR_SCHEMA, "v0.0.1:meshrix:client-adapter-descriptor-1");
     assert.equal(CLIENT_ADAPTER_MAX_MESSAGE_BYTES, 256 * 1024);
-    assert.equal(formatterSource.includes("X-Meshrix-Api-Key: <token>"), false);
+    assert.equal(formatterSource.includes("X-Meshrix.js-Api-Key: <token>"), false);
     return {
       externalAdapterProtocolBounded: true,
       connectorMetadataOnly: true,
@@ -442,7 +442,7 @@ try {
     const markerServer: any = createServer((request?: any, response?: any) : any => {
       response.writeHead(200, { "Content-Type": "application/json" });
       response.end(JSON.stringify({
-        name: "Meshrix",
+        name: "Meshrix.js",
         interfaceVersion: "v0.0.1:mcp:interface-1",
         stableToolName: "meshrix.discovery"
       }));

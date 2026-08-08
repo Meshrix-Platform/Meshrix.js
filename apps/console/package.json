@@ -2,13 +2,8 @@
   "name": "@meshrix/console",
   "version": "0.0.1",
   "private": true,
-  "description": "Meshrix Vue 3 server console — console workspace",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "apps/console"
-  },
+  "description": "Meshrix.js Vue 3 server console — console workspace",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

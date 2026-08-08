@@ -1,6 +1,6 @@
 # What's Next: Highest-Value Open Problems
 
-This file ranks Meshrix's ten highest-value open problems; item 1 is the
+This file ranks Meshrix.js's ten highest-value open problems; item 1 is the
 highest priority. It is a factual index, not an execution plan, architecture
 decision, acceptance receipt, release result, or support claim. Current status
 belongs to [Status](STATUS.md).
@@ -9,7 +9,7 @@ belongs to [Status](STATUS.md).
 
 ### Background
 
-Meshrix has broad server, console, governance, storage, gateway, and release
+Meshrix.js has broad server, console, governance, storage, gateway, and release
 surfaces. Its release definition can name a candidate, and its Functional
 Release Gate can reduce repository-owned evidence.
 
@@ -46,7 +46,7 @@ upstream HTTP/MCP gateway, protected-sink permit, proof, and audit surfaces.
 
 ### Problem
 
-Meshrix still needs one minimal candidate-bound journey showing that a newly
+Meshrix.js still needs one minimal candidate-bound journey showing that a newly
 configured single-node deployment can admit one explicit principal, expose one
 allowed operation, consume one exact permit, produce at most one fixed
 upstream effect, and return a bounded outcome and receipt. The same journey
@@ -75,7 +75,7 @@ outcome behavior without additional effects.
 
 ### Background
 
-Meshrix exposes health, readiness, diagnostics, metrics, audit, job, storage,
+Meshrix.js exposes health, readiness, diagnostics, metrics, audit, job, storage,
 and integration-state surfaces. It also applies privacy and resource bounds to
 reports and telemetry.
 
@@ -108,7 +108,7 @@ runtime data.
 
 ### Background
 
-Meshrix implements backup manifests, SQLite online backup, integrity checks,
+Meshrix.js implements backup manifests, SQLite online backup, integrity checks,
 offline restore, rollback storage, crash reconciliation, and independent-root
 admission.
 
@@ -176,7 +176,7 @@ ordinary image caches do not constitute a disconnected installation artifact.
 
 ### Problem
 
-Meshrix lacks one candidate-bound package containing every required immutable
+Meshrix.js lacks one candidate-bound package containing every required immutable
 image and installation dependency together with inventory, SBOM, provenance,
 signature, extraction, verification, startup, shutdown, and cleanup procedures.
 
@@ -200,7 +200,7 @@ signature, extraction, verification, startup, shutdown, and cleanup procedures.
 
 ### Background
 
-Meshrix has a trusted-proxy ingress contract, encrypted local secret storage,
+Meshrix.js has a trusted-proxy ingress contract, encrypted local secret storage,
 separate proof-signing material, and fail-closed production configuration
 surfaces.
 
@@ -220,7 +220,7 @@ does not establish deployed support.
 
 ### Possible solution paths
 
-1. Keep TLS in the administrator-owned proxy unless Meshrix deliberately
+1. Keep TLS in the administrator-owned proxy unless Meshrix.js deliberately
    selects a different product boundary.
 2. Expose existing re-encryption through one governed operator operation.
 3. Retain only the minimum historical verification material.
@@ -231,8 +231,8 @@ does not establish deployed support.
 
 ### Background
 
-Meshrix has local console authentication and configuration surfaces for
-external identity. An optional identity provider must not own Meshrix startup,
+Meshrix.js has local console authentication and configuration surfaces for
+external identity. An optional identity provider must not own Meshrix.js startup,
 shutdown, or recovery.
 
 ### Problem
@@ -290,14 +290,14 @@ isolation.
 
 ### Background
 
-Meshrix has a common bounded supervisor for optional asynchronous integration
+Meshrix.js has a common bounded supervisor for optional asynchronous integration
 work, while concrete integrations still use multiple composition and shutdown
 patterns.
 
 ### Problem
 
 An integration with an independent startup, retry, queue, execution, or close
-loop cannot inherit the common isolation evidence and may influence Meshrix
+loop cannot inherit the common isolation evidence and may influence Meshrix.js
 availability beyond its capability.
 
 ### Affected scenarios

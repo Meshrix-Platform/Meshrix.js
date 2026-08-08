@@ -128,7 +128,7 @@ function record(pluginId?: any, kind?: any, id?: any, implementation?: any) : an
 function outletDescriptor(toolName: any = "meshrix.demo") : any {
   return Object.freeze({
     toolName,
-    title: "Meshrix Demo",
+    title: "Meshrix.js Demo",
     description: "Demo plugin outlet.",
     architectureCategory: "Demo",
     annotations: Object.freeze({ readOnlyHint: false, destructiveHint: false })

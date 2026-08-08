@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Workspace Governed Sharing"
+  short_description: "Guide workspace assets, controlled sharing, and recovery"
+  default_prompt: "Use $meshrix-js-workspace-governed-sharing to design, implement, or verify the workspace sharing capability flow."

@@ -9,8 +9,8 @@ import {
   PRIVATE_DEPLOYMENT_REQUIRED_REPORTS
 } from "./lib/platform-acceptance-command-catalog.ts";
 import {
-  PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH
-} from "./lib/private-deployment-open-platform-e2e-catalog.ts";
+  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "./lib/private-deployment-internal-platform-e2e-catalog.ts";
 import {
   createReleaseEvidenceReadiness
 } from "./lib/release-evidence-readiness.ts";
@@ -25,7 +25,7 @@ import {
 } from "./lib/sensitive-report-scan.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const REPORT_PATH: any = PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH;
+const REPORT_PATH: any = PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH;
 const dynamicRedactionNeedles: any = new Set<any>([repoRoot, os.homedir()].filter(Boolean));
 
 function redactText(value: any = "") : any {
@@ -96,11 +96,11 @@ export async function reduceExistingReports({
     Object.keys(reports).length === PRIVATE_DEPLOYMENT_REQUIRED_REPORTS.length;
   const reportLeakScan: any = Object.keys(reports).length === PRIVATE_DEPLOYMENT_REQUIRED_REPORTS.length;
   const report: Record<string, any> = {
-    schemaVersion: "v0.0.1:deployment:private-open-platform-e2e-report-1",
+    schemaVersion: "v0.0.1:deployment:private-internal-platform-e2e-report-1",
     generatedAt: finishedAt.toISOString(),
     startedAt: startedAt.toISOString(),
     finishedAt: finishedAt.toISOString(),
-    verifier: "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+    verifier: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
     status: releaseReady ? "accepted" : "blocked",
     algorithm: {
       commandExecutionMode: "platform-acceptance-existing-evidence-reduction",
@@ -139,7 +139,7 @@ export async function reduceExistingReports({
   await fs.writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   if (log) {
     console.log(
-      `[private-open-platform-e2e] reduction releaseReady=${releaseReady} missingEvidence=${missingEvidence.length} report=${REPORT_PATH}`
+      `[private-internal-platform-e2e] reduction releaseReady=${releaseReady} missingEvidence=${missingEvidence.length} report=${REPORT_PATH}`
     );
   }
   if (setExitCode) {
@@ -157,7 +157,7 @@ async function main() : Promise<any> {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error?: any) : any => {
-    console.error(`[private-open-platform-e2e] failed: ${redactText(error?.message || error)}`);
+    console.error(`[private-internal-platform-e2e] failed: ${redactText(error?.message || error)}`);
     process.exitCode = 1;
   });
 }

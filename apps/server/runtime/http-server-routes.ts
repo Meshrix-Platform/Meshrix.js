@@ -290,7 +290,7 @@ export function createHttpServerRequestHandler({
       actor: { type: "http-request" }
     });
     setTraceContextOnRequest(request, traceContext);
-    response.setHeader("X-Meshrix-Trace-Id", traceContext.traceId);
+    response.setHeader("X-Meshrix.js-Trace-Id", traceContext.traceId);
     request.__meshrixRequestId = requestId;
     let finished: any = false;
     let requestMetricRecorded: any = false;

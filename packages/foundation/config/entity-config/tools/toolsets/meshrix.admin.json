@@ -1,6 +1,6 @@
 {
   "id": "meshrix.admin",
-  "label": "Meshrix admin",
+  "label": "Meshrix.js admin",
   "requiredScopes": [
     "console:read",
     "gateway:admin",

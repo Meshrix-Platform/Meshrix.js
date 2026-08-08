@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Operations Observability"
+  short_description: "Guide bounded telemetry, alert lifecycle, and readiness evidence"
+  default_prompt: "Use $meshrix-js-operations-observability to design, implement, or verify the operations-observability capability flow."

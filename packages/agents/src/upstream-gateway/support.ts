@@ -713,7 +713,7 @@ export function mcpToolReadOnly(tool: Record<string, any> = {}) : any {
 export function mcpToolRisk(tool: Record<string, any> = {}) : any {
   const annotations: any = object(tool.annotations);
   // MCP destructiveHint means high-impact / approval-worthy work.
-  // Meshrix "destructive" is a hard dispatcher block; map to repair_write instead.
+  // Meshrix.js "destructive" is a hard dispatcher block; map to repair_write instead.
   if (annotations.destructiveHint === true) return "repair_write";
   return mcpToolReadOnly(tool) ? "read_only" : "safe_write";
 }

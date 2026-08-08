@@ -1,6 +1,6 @@
 # Operation Permission
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
@@ -51,7 +51,7 @@ even when it performs an earlier authorization check.
 
 Operation Permission owns console-issued `mxak1` API Keys as a credential
 lifecycle distinct from generic Grants. Possession authenticates the immutable
-workload principal recorded by Meshrix; client-supplied names, organization
+workload principal recorded by Meshrix.js; client-supplied names, organization
 nodes, roles, scopes, or agent-profile claims never add authority. The resolved
 principal and closed restriction enter the same canonical Operation Permission
 evaluator without creating or persisting a synthetic Grant.
@@ -72,7 +72,7 @@ Rotation preserves policy and accumulated use; revocation is terminal.
 Runtime selects one indexed public key id, compares its irreversible keyed
 verifier in constant time, reserves use atomically, and revalidates immediately
 before the protected effect. Expiry, exhaustion, lineage or policy change,
-rotation, and revocation therefore fence queued work. `X-Meshrix-Api-Key`
+rotation, and revocation therefore fence queued work. `X-Meshrix.js-Api-Key`
 accepts only strict `mxak1` credentials. Generic Grants continue to use
 `Authorization: Bearer` or `x-meshrix-tool-token`; the retired API-key-to-Grant
 header alias is not accepted.

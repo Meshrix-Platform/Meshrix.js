@@ -24,7 +24,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -913,7 +913,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -939,7 +939,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -965,7 +965,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -991,7 +991,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -1326,14 +1326,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.deployment.private-open-platform-e2e-report",
+      "artifactId": "meshrix.deployment.private-internal-platform-e2e-report",
       "kind": "platform",
-      "description": "Governed version registry entry for meshrix.deployment.private-open-platform-e2e-report.",
-      "activeVersion": "v0.0.1:deployment:private-open-platform-e2e-report-1",
+      "description": "Governed version registry entry for meshrix.deployment.private-internal-platform-e2e-report.",
+      "activeVersion": "v0.0.1:deployment:private-internal-platform-e2e-report-1",
       "versions": [
         {
-          "version": "v0.0.1:deployment:private-open-platform-e2e-report-1",
-          "ref": "meshrix.deployment.private-open-platform-e2e-report@v0.0.1:deployment:private-open-platform-e2e-report-1",
+          "version": "v0.0.1:deployment:private-internal-platform-e2e-report-1",
+          "ref": "meshrix.deployment.private-internal-platform-e2e-report@v0.0.1:deployment:private-internal-platform-e2e-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -1343,14 +1343,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-deployment-private-open-platform-e2e-report-1-source-1",
+              "evidenceId": "v0-0-1-deployment-private-internal-platform-e2e-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-deployment-private-open-platform-e2e-report-1-source-2",
+              "evidenceId": "v0-0-1-deployment-private-internal-platform-e2e-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
+              "uri": "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
             }
           ]
         }
@@ -1426,7 +1426,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2145,7 +2145,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2171,7 +2171,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2197,7 +2197,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2223,7 +2223,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2249,7 +2249,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2275,7 +2275,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2301,7 +2301,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2327,7 +2327,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2353,7 +2353,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -2379,7 +2379,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -3764,7 +3764,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -3852,7 +3852,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -3878,7 +3878,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -3904,7 +3904,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -3930,12 +3930,12 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-platform-acceptance-execution-lease-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-execution-lease-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
             }
@@ -3956,12 +3956,12 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-platform-acceptance-generation-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-generation-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
             }
@@ -3982,12 +3982,12 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-platform-acceptance-generation-pointer-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-generation-pointer-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-generation-store.ts"
             }
@@ -4008,12 +4008,12 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-platform-acceptance-plan-receipts-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-plan-receipts-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-plan-receipts.ts"
             }
@@ -4034,12 +4034,12 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-platform-acceptance-requirement-evidence-1-source",
+              "evidenceId": "v0-0-1-meshrix-js-platform-acceptance-requirement-evidence-1-source",
               "kind": "other",
               "uri": "tools/server-scripts/lib/platform-acceptance-requirement-evidence.ts"
             }
@@ -4839,7 +4839,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -4865,7 +4865,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -4891,7 +4891,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -4917,7 +4917,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -5326,7 +5326,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -5444,14 +5444,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.registry.open-platform-capability-matrix",
+      "artifactId": "meshrix.registry.internal-platform-capability-matrix",
       "kind": "schema",
-      "description": "Governed version registry entry for meshrix.registry.open-platform-capability-matrix.",
-      "activeVersion": "v0.0.1:registry:open-platform-capability-matrix-1",
+      "description": "Governed version registry entry for meshrix.registry.internal-platform-capability-matrix.",
+      "activeVersion": "v0.0.1:registry:internal-platform-capability-matrix-1",
       "versions": [
         {
-          "version": "v0.0.1:registry:open-platform-capability-matrix-1",
-          "ref": "meshrix.registry.open-platform-capability-matrix@v0.0.1:registry:open-platform-capability-matrix-1",
+          "version": "v0.0.1:registry:internal-platform-capability-matrix-1",
+          "ref": "meshrix.registry.internal-platform-capability-matrix@v0.0.1:registry:internal-platform-capability-matrix-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -5461,9 +5461,9 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-registry-open-platform-capability-matrix-1-source-1",
+              "evidenceId": "v0-0-1-registry-internal-platform-capability-matrix-1-source-1",
               "kind": "manifest",
-              "uri": "tools/registry/open-platform-capability-matrix.json"
+              "uri": "tools/registry/internal-platform-capability-matrix.json"
             }
           ]
         }
@@ -5622,7 +5622,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -5648,7 +5648,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -6971,7 +6971,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
@@ -6997,7 +6997,7 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current canonical Meshrix contract."
+            "notes": "Current canonical Meshrix.js contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [

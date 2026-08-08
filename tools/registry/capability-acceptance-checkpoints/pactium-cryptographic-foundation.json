@@ -14,7 +14,7 @@
         "text": "Operation Permission tool executions and policy decisions produce substrate facts with ledgerEventId cross-references stored in the SQLite projection.",
         "evidence": [
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           }
         ]
       },
@@ -26,7 +26,7 @@
             "acceptanceCommandId": "foundation-tests"
           },
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           }
         ]
       },
@@ -38,7 +38,7 @@
             "acceptanceCommandId": "foundation-tests"
           },
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           }
         ]
       },
@@ -47,7 +47,7 @@
         "text": "Production evidence policy readiness verifier fails when production policy is declared without a configured signer.",
         "evidence": [
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           }
         ]
       },

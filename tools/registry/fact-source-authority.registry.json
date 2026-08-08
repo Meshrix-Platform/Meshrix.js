@@ -157,13 +157,13 @@
       "authorityRole": "release-readiness-reducer",
       "projectionPaths": [
         "build/acceptance-evidence/current.json",
-        "build/reports/private-deployment-open-platform-e2e.json",
+        "build/reports/private-deployment-internal-platform-e2e.json",
         "build/reports/production-readiness-gates.json",
         "build/reports/gateway-platform-profile.json"
       ],
       "consumerPaths": [
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
         "tools/server-scripts/production-readiness-gate.ts",
         "tools/server-scripts/stress-gateway-platform-profile.ts"
       ],
@@ -185,7 +185,7 @@
       "projectionPaths": [
         "build/acceptance-evidence/current.json",
         "tools/registry/tests.registry.json",
-        "tools/registry/open-platform-capability-matrix.json"
+        "tools/registry/internal-platform-capability-matrix.json"
       ],
       "consumerPaths": [
         "tests/verify-script-registry.ts"
@@ -230,18 +230,18 @@
       ]
     },
     {
-      "id": "private-deployment-open-platform-e2e-catalog",
-      "factKey": "private-deployment.open-platform-e2e-catalog",
-      "domain": "Private deployment open platform evidence command selection, required report derivation, and canonical scheduling.",
+      "id": "private-deployment-internal-platform-e2e-catalog",
+      "factKey": "private-deployment.internal-platform-e2e-catalog",
+      "domain": "Private deployment internal platform evidence command selection, required report derivation, and canonical scheduling.",
       "authorityPath": "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
       "authorityRole": "platform-acceptance-command-and-report-ownership-catalog",
       "projectionPaths": [
-        "build/reports/private-deployment-open-platform-e2e.json",
+        "build/reports/private-deployment-internal-platform-e2e.json",
         "build/acceptance-evidence/current.json"
       ],
       "consumerPaths": [
-        "tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+        "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts",
+        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
         "tests/verify-script-registry.ts"
       ],
@@ -268,7 +268,7 @@
         "tools/server-scripts/lib/required-report-validator.ts",
         "tools/server-scripts/lib/release-evidence-readiness.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
+        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:upstream-service-publishing",
@@ -300,7 +300,7 @@
       "nonAuthorityBoundaries": [
         "The candidate receipt establishes only scoped upstream publishing prepublication evidence and never establishes or replaces the functional-complete release claim.",
         "The HTML report is a human-readable candidate-context projection; only the external receipt binds the final HTML bytes and the complete artifact set.",
-        "Optional sibling services, plugins, clients, and their repositories do not become Meshrix Core release authorities."
+        "Optional sibling services, plugins, clients, and their repositories do not become Meshrix.js Core release authorities."
       ]
     },
     {
@@ -315,7 +315,7 @@
       "consumerPaths": [
         "tools/server-scripts/verify-upstream-fixture-transit.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
         "tools/server-scripts/stress-gateway-platform-profile.ts"
       ],
       "verification": [
@@ -361,7 +361,7 @@
       "consumerPaths": [
         "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
         "tools/server-scripts/verify-platform-acceptance.ts",
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
+        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
       ],
       "verification": [
         "npm run verify:downstream-agent-tool-loop",
@@ -484,10 +484,10 @@
       ]
     },
     {
-      "id": "open-platform-capability-surface",
-      "factKey": "open-platform.capability-surface",
+      "id": "internal-platform-capability-surface",
+      "factKey": "internal-platform.capability-surface",
       "domain": "Open platform capability inventory, public functionality documentation mapping, requirement rows, and required integration edges.",
-      "authorityPath": "tools/registry/open-platform-capability-matrix.json",
+      "authorityPath": "tools/registry/internal-platform-capability-matrix.json",
       "authorityRole": "capability-surface-registry",
       "projectionPaths": [
         "build/reports/core-platform-gap-audit.json",

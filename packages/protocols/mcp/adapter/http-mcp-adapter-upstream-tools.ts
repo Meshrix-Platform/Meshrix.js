@@ -230,7 +230,7 @@ export async function executeUpstreamToolViaGatewayForward({
         text: `Artifact ready: ${artifact.name} (${artifact.mediaType}, ${Number(artifact.byteLength)} bytes). ` +
           (artifactId
             ? `Fetch it with meshrix-mcp fetch --artifact ${artifactId}.`
-            : "It can be fetched from the Meshrix gateway artifact download route.")
+            : "It can be fetched from the Meshrix.js gateway artifact download route.")
       }
     ];
   }

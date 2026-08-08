@@ -4,7 +4,7 @@ export const ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS: readonly any[] = Object.f
   Object.freeze({
     categoryId: "foundation",
     label: "基础模块",
-    description: "Platform substrate that cannot be removed without breaking Meshrix runtime and hydration mechanics."
+    description: "Platform substrate that cannot be removed without breaking Meshrix.js runtime and hydration mechanics."
   }),
   Object.freeze({
     categoryId: "core-capability",

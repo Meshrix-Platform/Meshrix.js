@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 2,
+  "stage": "plan",
+  "repository": "meshrix-js",
+  "feature": "replace-with-feature-id",
+  "scenario": "Describe one independently acceptable feature or scenario.",
+  "authority": {
+    "canonicalSources": [
+      "packages/replace-with-owner/src/replace-with-feature.mjs"
+    ],
+    "supersededSources": []
+  },
+  "surfaces": [
+    {
+      "id": "canonical-contract",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Identify the typed public contract."
+    },
+    {
+      "id": "composition",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Identify the single activation and lifecycle binding."
+    },
+    {
+      "id": "consumers",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Inventory every current consumer."
+    },
+    {
+      "id": "configuration",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Inventory explicit configuration and package selection facts."
+    },
+    {
+      "id": "registries-generated",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Inventory manifests, registries, schemas, and generated projections."
+    },
+    {
+      "id": "tests",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Identify current-contract and end-to-end verification."
+    },
+    {
+      "id": "documentation",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Identify factual architecture or runbook references."
+    },
+    {
+      "id": "external-adapters",
+      "owner": "meshrix-js",
+      "status": "pending",
+      "paths": [],
+      "reason": "Identify independently owned compatibility closures."
+    }
+  ],
+  "migration": {
+    "residueSelectors": [],
+    "compatibilityRetained": []
+  },
+  "verification": {
+    "profiles": [
+      "changed"
+    ],
+    "taskIds": [],
+    "blockers": []
+  }
+}

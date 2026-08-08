@@ -218,7 +218,7 @@ async function discoverSignedBaseUrl() : Promise<any> {
   const result: any = await run("sh", args);
   const payload: any = JSON.parse(result.stdout);
   if (!payload.ok || !payload.baseUrl) {
-    throw new Error(payload.reason || "No Meshrix MCP hub discovered.");
+    throw new Error(payload.reason || "No Meshrix.js MCP hub discovered.");
   }
   return payload;
 }
@@ -230,8 +230,8 @@ const target: any = String(argValue("--target", process.env.MESHRIX_MCP_TARGET |
 const headers: any = token
   ? {
       "Content-Type": "application/json",
-      "X-Meshrix-Api-Key": token,
-      ...(target ? { "X-Meshrix-MCP-Target": target } : {})
+      "X-Meshrix.js-Api-Key": token,
+      ...(target ? { "X-Meshrix.js-MCP-Target": target } : {})
     }
   : { "Content-Type": "application/json" };
 

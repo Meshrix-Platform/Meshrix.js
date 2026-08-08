@@ -12,7 +12,7 @@ export {
 
 export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
   schemaVersion: "v0.0.1:schema:definition-1",
-  label: "Meshrix FeatureManifest",
+  label: "Meshrix.js FeatureManifest",
   groups: Object.freeze([
     "core",
     "security",

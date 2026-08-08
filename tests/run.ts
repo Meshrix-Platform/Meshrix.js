@@ -205,7 +205,7 @@ function splitCsv(value?: any) : any {
 }
 
 function printHelp() : any {
-  console.log(`Meshrix unified test runner
+  console.log(`Meshrix.js unified test runner
 
 Usage:
   node tests/run.ts [--profile ${[...Object.keys(profileSuites), "changed"].filter((value?: any, index?: any, values?: any) : any => values.indexOf(value) === index).join("|")}]
@@ -388,7 +388,7 @@ async function main() : Promise<any> {
     ? startedAt.getTime() + profileTimeoutMs
     : null;
 
-  console.log(`Meshrix test runner: profile=${options.profile} suites=${selectedIds.length}`);
+  console.log(`Meshrix.js test runner: profile=${options.profile} suites=${selectedIds.length}`);
   console.log(`Report directory: ${displayReportPath(defaultReportDir)}`);
   printFeatureConsistencyGate();
 

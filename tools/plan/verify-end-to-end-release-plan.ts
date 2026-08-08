@@ -28,10 +28,7 @@ import {
 const modulePath: any = fileURLToPath(import.meta.url);
 const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
 const EXTERNAL_SOURCE_PATTERN: any = /^([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+):(.+)$/u;
-const EXTERNAL_SOURCE_AUTHORITIES: any = new Map<any, any>([
-  ["LicoLand/Lico-Dev", [/^skills\/[A-Za-z0-9_-][A-Za-z0-9._-]*\/.+$/u, /^workflows\/catalog\.json$/u]],
-  ["Meshrix/meshrix-plugins", [/^AGENTS\.md$/u, /^plugins(?:\/.+)?$/u]],
-]);
+const EXTERNAL_SOURCE_AUTHORITIES: any = new Map<any, any>();
 
 function requireCondition(condition?: any, message?: any) : any {
   if (!condition) throw new Error(message);

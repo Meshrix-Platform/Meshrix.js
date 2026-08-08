@@ -227,8 +227,8 @@ const PLATFORM_ACCEPTANCE_SOURCE: any =
   "tools/server-scripts/verify-platform-acceptance.ts";
 const PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE: any =
   "tools/server-scripts/lib/platform-acceptance-command-catalog.ts";
-const PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_CATALOG_SOURCE: any =
-  "tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts";
+const PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_CATALOG_SOURCE: any =
+  "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
 const FACT_SOURCE_AUTHORITY_REGISTRY: any = "tools/registry/fact-source-authority.registry.json";
 const REQUIRED_FACT_AUTHORITY_PATHS: readonly any[] = Object.freeze([
   "packages/contracts/src/operations/operation-registry.ts",
@@ -243,14 +243,14 @@ const REQUIRED_FACT_AUTHORITY_PATHS: readonly any[] = Object.freeze([
   "packages/foundation/src/security/process-identity/index.ts",
   "tools/server-scripts/package-server-source.ts",
   "tools/scripts/package-script-registry.ts",
-  "tools/registry/open-platform-capability-matrix.json"
+  "tools/registry/internal-platform-capability-matrix.json"
 ]);
 const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freeze({
   "server.operations": "packages/contracts/src/operations/operation-registry.ts",
   "process-identity.runtime-contract": "packages/foundation/src/security/process-identity/index.ts",
   "release.readiness-reduction": "tools/server-scripts/lib/release-evidence-readiness.ts",
   "platform.acceptance-workflow": "tools/server-scripts/verify-platform-acceptance.ts",
-  "private-deployment.open-platform-e2e-catalog": PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
+  "private-deployment.internal-platform-e2e-catalog": PLATFORM_ACCEPTANCE_COMMAND_CATALOG_SOURCE,
   "upstream-fixture.transit-evidence": "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts",
   "upstream-mcp.gateway-evidence": "tools/server-scripts/lib/upstream-mcp-gateway-evidence.ts",
   "downstream-agent.tool-loop-evidence": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
@@ -258,7 +258,7 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
   "mcp-release.targets": "packages/protocols/mcp/adapter/mcp-release-targets.ts",
   "composition.source-package": "tools/server-scripts/package-server-source.ts",
   "package-scripts.classification": "tools/scripts/package-script-registry.ts",
-  "open-platform.capability-surface": "tools/registry/open-platform-capability-matrix.json"
+  "internal-platform.capability-surface": "tools/registry/internal-platform-capability-matrix.json"
 });
 const RELEASE_PROFILE_SOURCES: readonly any[] = Object.freeze([
   "tools/server-scripts/stress-gateway-platform-profile.ts"
@@ -1036,7 +1036,7 @@ if (!AGGREGATE_RELEASE_EVIDENCE_READINESS_PATTERN.test(releaseAggregatorSource))
 if (OPEN_DIRECT_AGGREGATE_RELEASE_READY_PATTERN.test(releaseAggregatorSource)) {
   releaseSourceOfTruthFindings.push({
     source: PLATFORM_ACCEPTANCE_SOURCE,
-    kind: "open-platform-direct-aggregate-release-ready",
+    kind: "internal-platform-direct-aggregate-release-ready",
     detail: "final release aggregation must not recreate releaseReady from local failed-command and missing-evidence booleans"
   });
 }
@@ -1146,7 +1146,7 @@ if (!/createReportFreshnessEvidence/u.test(releaseEvidenceFreshnessHelperSource)
   });
 }
 for (const relativePath of [
-  "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
+  "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
 ]) {
   const source: any = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
   if (!RELEASE_EVIDENCE_FRESHNESS_PATTERN.test(source)) {
@@ -1227,19 +1227,19 @@ if (!PRODUCTION_GATE_PROJECTION_ONLY_PATTERN.test(productionReadinessGateSource)
   });
 }
 const privateDeploymentSource: any = await fs.readFile(
-  path.join(repoRoot, "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"),
+  path.join(repoRoot, "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"),
   "utf8"
 );
 if (!PRIVATE_REDUCER_ONLY_PATTERN.test(privateDeploymentSource)) {
   releaseSourceOfTruthFindings.push({
-    source: "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+    source: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
     kind: "private-deployment-not-reducer-only",
     detail: "private deployment must reduce evidence already produced by canonical platform acceptance command owners"
   });
 }
 if (RELEASE_COMMAND_DAG_RUNNER_IMPORT_PATTERN.test(privateDeploymentSource)) {
   releaseSourceOfTruthFindings.push({
-    source: "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+    source: "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
     kind: "private-deployment-shadow-dag",
     detail: "private deployment must not execute a second release command DAG"
   });
@@ -1257,7 +1257,7 @@ if (releaseSourceOfTruthFindings.length > 0) {
 console.log("10. Checking self-contained gateway scenario source of truth...");
 for (const relativePath of [
   PLATFORM_ACCEPTANCE_SOURCE,
-  "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+  "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
   ...RELEASE_PROFILE_SOURCES
 ]) {
   const source: any = await fs.readFile(path.join(repoRoot, relativePath), "utf8");

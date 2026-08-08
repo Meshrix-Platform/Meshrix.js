@@ -1,13 +1,13 @@
 /**
- * OTel Semantic Convention Fields — Meshrix Baseline
+ * OTel Semantic Convention Fields — Meshrix.js Baseline
  *
  * SINGLE SOURCE OF TRUTH for OpenTelemetry-aligned field names used across
- * Meshrix observability touchpoints.  All loggers, tracers, audit reports,
+ * Meshrix.js observability touchpoints.  All loggers, tracers, audit reports,
  * and metrics SHOULD reference these exported constants rather than
  * hard-coding string literals.
  *
  * Fields follow the OpenTelemetry semantic conventions where applicable
- * and extend them with "meshrix.*" namespaced attributes for Meshrix-specific
+ * and extend them with "meshrix.*" namespaced attributes for Meshrix.js-specific
  * concepts not covered by the standard.
  *
  * USAGE:
@@ -46,7 +46,7 @@ export const OTEL_SEMANTIC_FIELDS: Readonly<Record<string, any>> = Object.freeze
   // ── Gen AI ──────────────────────────────────────────────────────────────
   genAiOperationName: "gen_ai.operation.name",
 
-  // ── Meshrix extensions ─────────────────────────────────────────────────
+  // ── Meshrix.js extensions ─────────────────────────────────────────────────
   meshrixOperationId: "meshrix.operation.id",
   meshrixWorkspaceId: "meshrix.workspace.id",
   meshrixCapabilityId: "meshrix.capability.id",

@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="docs/banner.svg" alt="Meshrix" width="100%" />
+<img src="docs/banner.svg" alt="Meshrix.js" width="100%" />
 
-**开源、私有化部署的智能体网关 —— 上游服务由此进，受治理的 MCP 访问由此出。**
+**内部维护、私有化部署的智能体网关 —— 上游服务由此进，受治理的 MCP 访问由此出。**
 
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-c9a96e?style=flat-square)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-c9a96e?style=flat-square)](LICENSE)
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[产品网站](https://meshrix.io) · [概览](#概览) · [当前状态](docs/STATUS.md) · [十大优先问题](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
+[概览](#概览) · [当前状态](docs/STATUS.md) · [十大优先问题](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
 
 </div>
 
@@ -19,21 +19,24 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > 统一定义。
 
-> **当前优先级：** Meshrix 最有价值的十个未闭环问题按优先级维护在
+> **当前优先级：** Meshrix.js 最有价值的十个未闭环问题按优先级维护在
 > [What's Next](docs/WHATS-NEXT.md)。开始规划、实现或评审项目工作前，请先查看该清单。
 
 ---
 
 ## 概览
 
-Meshrix 以 Node.js 服务端运行，负责转发服务端配置文件声明的上游服务，并向下游智能体客户端提供受治理的 MCP 入口。运维方在自己的部署环境内声明服务与能力；每一次执行都先通过认证、授权、Operation Permission、标签策略、审批与流控，并留下审计证据。
+Meshrix.js 使用 Vue.js Web Console 与 Node.js 服务端。前后端分别维护，
+通过版本化 HTTP 边界通信。服务端负责转发配置声明的上游服务，并向下游智能体
+客户端提供受治理的 MCP 入口。运维方在自己的部署环境内声明服务与能力；每一次
+执行都先通过认证、授权、Operation Permission、标签策略、审批与流控，并留下审计证据。
 
 默认运行时自包含。元数据、raw objects、任务、设置、grant、审计记录和 checkpoint 存放在服务端数据目录。外部中间件和服务适配器作为面向特定部署集成的可选增强。
 
 > **当前状态：pre-release。** 源码可用、实现、验证、各发布渠道、环境支持与托管
 > 运营是彼此独立的事实。规范状态见 [Status](docs/STATUS.md)。
 
-Meshrix 将强制的功能验收与可选的环境声明严格分开。
+Meshrix.js 将强制的功能验收与可选的环境声明严格分开。
 `npm run verify:acceptance` 是 Functional Release Gate（功能完整有效发布门禁），
 必须在发布前通过。通过门禁的不可变候选版本可以继续运行
 `npm run verify:real-machine -- ...`；这一可重复执行的 Real-Machine
@@ -61,10 +64,10 @@ Environment Support Claim（环境支持声明）。真机是否可用、是否�
 ## 架构
 
 <div align="center">
-  <img src="docs/architecture-overview.svg" alt="Meshrix architecture overview" width="680" />
+  <img src="docs/architecture-overview.svg" alt="Meshrix.js architecture overview" width="680" />
 </div>
 
-Meshrix 的产品边界是私有化部署中的服务端治理层：它拥有配置、operation 暴露、权限决策、执行调度、审计、指标与证据生成。包分层、核心流程与部署边界详见[架构文档](docs/architecture/ARCHITECTURE.md)。
+Meshrix.js 的产品边界是私有化部署中的服务端治理层：它拥有配置、operation 暴露、权限决策、执行调度、审计、指标与证据生成。包分层、核心流程与部署边界详见[架构文档](docs/architecture/ARCHITECTURE.md)。
 
 ## 快速开始
 
@@ -110,13 +113,15 @@ npm run mcp:doctor
 | `MESHRIX_SERVER_HOST` | 服务监听地址。 |
 | `MESHRIX_SERVER_PORT` | 服务监听端口。 |
 | `MESHRIX_PUBLIC_BASE_URL` | 由管理员 TLS 反向代理对外公布的 HTTPS URL。 |
-| `MESHRIX_TRUSTED_PROXIES` | 管理员 TLS 反向代理访问 Meshrix 时使用的精确来源 IP 列表。 |
-| `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` | 生产 Secret Store 密钥的绝对宿主机路径；不得放入 Meshrix 数据或备份卷。 |
+| `MESHRIX_TRUSTED_PROXIES` | 管理员 TLS 反向代理访问 Meshrix.js 时使用的精确来源 IP 列表。 |
+| `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` | 生产 Secret Store 密钥的绝对宿主机路径；不得放入 Meshrix.js 数据或备份卷。 |
 | `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` | 独立的生产证据签名密钥绝对宿主机路径；不得与 Secret Store 主密钥相同，也不得放入数据或备份卷。 |
 
 ## 下游智能体客户端
 
-智能体客户端通过 MCP discovery 与受治理的 gateway 调用接入；operation 可见性由 grant 控制。当前文档记录的下游适配器目标范围是 OpenClaw、Codex、Claude Code、Antigravity、OpenCode 和 Pi——以外部 `Meshrix-Plugins` 适配器包的形式交付，而非 Meshrix 运行时依赖。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与[协议](docs/protocols/PROTOCOLS.md)文档。
+智能体客户端通过 MCP discovery 与受治理的 gateway 调用接入；operation 可见性
+由 grant 控制。适配器必须由运维方显式提供，运行时不会从其它源码仓库发现或加载
+实现。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与[协议](docs/protocols/PROTOCOLS.md)文档。
 
 ## 仓库结构
 
@@ -160,7 +165,7 @@ npm run typecheck
 npm run build
 npm test
 npm run verify:core-platform-surface-convergence
-npm run verify:private-deployment-open-platform-e2e
+npm run verify:private-deployment-internal-platform-e2e
 npm run verify:acceptance
 ```
 
@@ -175,8 +180,8 @@ npm run verify:acceptance
 
 ## 许可证
 
-GPL-3.0-or-later。参见 [LICENSE](LICENSE)。
+MIT。参见 [LICENSE](LICENSE)。
 
 <div align="center">
-  <sub>Meshrix —— 默认自包含，为私有化部署而生。</sub>
+  <sub>Meshrix.js —— 默认自包含，为私有化部署而生。</sub>
 </div>

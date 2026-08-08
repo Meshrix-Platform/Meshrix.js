@@ -66,13 +66,11 @@ async function readText(relativePath?: any) : Promise<any> {
   return fs.readFile(path.join(sourceRoot, relativePath), "utf8");
 }
 
-function isCompleteGpl3Text(text: any = "") : any {
+function isCompleteMitText(text: any = "") : any {
   const value: any = String(text || "").replace(/\r\n/gu, "\n");
-  return value.length > 30000 &&
-    value.includes("GNU GENERAL PUBLIC LICENSE") &&
-    value.includes("Version 3, 29 June 2007") &&
-    value.includes("17. Interpretation of Sections 15 and 16.") &&
-    value.includes("END OF TERMS AND CONDITIONS");
+  return value.includes("MIT License") &&
+    value.includes("Permission is hereby granted, free of charge") &&
+    value.includes('THE SOFTWARE IS PROVIDED "AS IS"');
 }
 
 async function sha256File(relativePath?: any) : Promise<any> {
@@ -168,18 +166,18 @@ const rootLicense: any = await readText("LICENSE").catch(() : any => "");
 const connectorLicense: any = await readText(
   "packages/protocols/mcp/adapter/gateway-installer/LICENSE"
 ).catch(() : any => "");
-if (!isCompleteGpl3Text(rootLicense)) {
-  findings.push({ code: "root_gpl_license_incomplete", detail: "LICENSE" });
+if (!isCompleteMitText(rootLicense)) {
+  findings.push({ code: "root_mit_license_incomplete", detail: "LICENSE" });
 }
-if (!isCompleteGpl3Text(connectorLicense)) {
+if (!isCompleteMitText(connectorLicense)) {
   findings.push({
-    code: "connector_gpl_license_incomplete",
+    code: "connector_mit_license_incomplete",
     detail: "packages/protocols/mcp/adapter/gateway-installer/LICENSE"
   });
 }
 if (rootLicense && connectorLicense && rootLicense !== connectorLicense) {
   findings.push({
-    code: "connector_gpl_license_mismatch",
+    code: "connector_mit_license_mismatch",
     detail: "packages/protocols/mcp/adapter/gateway-installer/LICENSE"
   });
 }
@@ -257,7 +255,7 @@ const report: Record<string, any> = {
     publicArtifactScannedFileCount: Number(artifactBoundaryScan?.summary?.scannedFileCount || 0),
     publicArtifactScannedTextFileCount: Number(artifactBoundaryScan?.summary?.scannedTextFileCount || 0),
     licenseBoundaryReady: !findings.some((finding?: any) : any =>
-      String(finding.code || "").includes("gpl_license") ||
+      String(finding.code || "").includes("mit_license") ||
       finding.code === "docker_license_copy_missing"
     ),
     dockerBoundaryReady: !findings.some((finding?: any) : any =>

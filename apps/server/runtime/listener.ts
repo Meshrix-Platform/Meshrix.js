@@ -1,5 +1,5 @@
 /**
- * Meshrix server HTTP listener lifecycle.
+ * Meshrix.js server HTTP listener lifecycle.
  *
  * Thin wrappers around the Node.js HTTP server listen / close lifecycle.
  * Used by bootstrap.ts for a clear separation between server setup and

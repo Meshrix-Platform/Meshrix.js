@@ -12,7 +12,7 @@ Core collaboration covers governed downstream MCP access, agent workspaces, sess
 
 ## Adapter Target Scope
 
-The documented downstream MCP adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Client-specific adapters are loaded from pinned Meshrix-Plugins packages and are not Core modules.
+The documented downstream MCP adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Client-specific adapters are explicit operator-supplied artifacts and are not Core modules.
 
 ## Verification
 

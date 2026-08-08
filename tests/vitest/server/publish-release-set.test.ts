@@ -131,7 +131,7 @@ describe("npm release-set publication", () : any => {
     expect(names).toContain("meshrix-mcp-connector");
     expect(names).not.toContain("@meshrix/server");
     expect(names).not.toContain("@meshrix/console");
-    expect(names.at(-1)).toBe("meshrix");
+    expect(names.at(-1)).toBe("meshrix.js");
 
     for (const packageRecord of releaseSet.packages) {
       for (const field of DEPENDENCY_FIELDS) {

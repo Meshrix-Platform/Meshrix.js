@@ -175,7 +175,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(run("git", ["add", "README.md"], root).status).toBe(0);
       expect(run("git", [
         "-c",
-        "user.name=Meshrix Test",
+        "user.name=Meshrix.js Test",
         "-c",
         "user.email=test@example.invalid",
         "commit",
@@ -290,7 +290,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(run("git", ["add", ".gitignore", "README.md"], root).status).toBe(0);
       expect(run("git", [
         "-c",
-        "user.name=Meshrix Test",
+        "user.name=Meshrix.js Test",
         "-c",
         "user.email=test@example.invalid",
         "commit",

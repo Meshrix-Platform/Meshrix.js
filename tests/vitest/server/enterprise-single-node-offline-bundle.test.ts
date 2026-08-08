@@ -70,14 +70,14 @@ function provenance(platform?: any, sourceCommit?: any) : any {
       SLSA: {
         buildType: "https://mobyproject.org/buildkit@v1",
         builder: {
-          id: "https://github.com/Acme/Meshrix/actions"
+          id: "https://github.com/Acme/Meshrix.js/actions"
         },
         invocation: {
           parameters: {
             frontend: "dockerfile.v0",
             args: {
               target: "runtime-ui",
-              "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix",
+              "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix.js",
               "build-arg:MESHRIX_SOURCE_REF": "refs/tags/v1.2.3",
               "build-arg:MESHRIX_SOURCE_COMMIT": sourceCommit
             },
@@ -100,7 +100,7 @@ function provenance(platform?: any, sourceCommit?: any) : any {
           "https://mobyproject.org/buildkit@v1#metadata": {
             vcs: {
               revision: sourceCommit,
-              source: "git+https://github.com/Acme/Meshrix.git"
+              source: "git+https://github.com/Acme/Meshrix.js.git"
             },
             parameters: {
               output: "linux/amd64"
@@ -109,11 +109,11 @@ function provenance(platform?: any, sourceCommit?: any) : any {
         },
         materials: [
           {
-            uri: "git+https://github.com/Acme/Meshrix.git",
+            uri: "git+https://github.com/Acme/Meshrix.js.git",
             digest: { sha256: "f".repeat(64) },
           },
           {
-            uri: "docker-image://ghcr.io/licoland/buildkit:latest",
+            uri: "docker-image://registry.example/buildkit/runtime:latest",
             digest: { sha256: "a".repeat(64) },
           }
         ]
@@ -324,11 +324,11 @@ async function writeTree(root?: any) : Promise<any> {
     target: `${image}:1.2.3`,
     candidate: `${image}:candidate-${sourceCommit}`,
     reused: false,
-    repository: "Acme/Meshrix",
+    repository: "Acme/Meshrix.js",
     sourceRef: "refs/tags/v1.2.3",
     sourceCommit,
     sourceCandidate,
-    workflowRef: "Acme/Meshrix/.github/workflows/release.yml@refs/tags/v1.2.3",
+    workflowRef: "Acme/Meshrix.js/.github/workflows/release.yml@refs/tags/v1.2.3",
     manifestDescriptorText: JSON.stringify({ digest: indexDigest, mediaType: OCI_IMAGE_INDEX_MEDIA_TYPE }),
     manifestText: indexText,
     provenanceText: JSON.stringify({

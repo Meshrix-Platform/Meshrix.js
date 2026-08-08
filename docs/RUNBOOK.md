@@ -1,11 +1,11 @@
 # Runbook
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-This runbook covers local startup, container startup, verification, and operational checks for the open platform repository.
+This runbook covers local startup, container startup, verification, and operational checks for the internal platform repository.
 
 ## Required Runtime
 
@@ -17,7 +17,7 @@ The default runtime is self-contained. Optional middleware integrations are enab
 
 ## Private-Deployment Dependency Admission
 
-Meshrix is delivered to enterprises for private deployment. Dependency
+Meshrix.js is delivered to enterprises for private deployment. Dependency
 admission therefore protects an operator's continuing right to install,
 redistribute, operate, maintain, back up, restore, modify, and upgrade the
 delivered system without an unexpected third-party commercial condition.
@@ -35,7 +35,7 @@ This gate applies to:
   admitted project.
 
 A generic protocol adapter is not an adoption of every compatible product only
-when Meshrix does not bundle, download, require, select by default, or make a
+when Meshrix.js does not bundle, download, require, select by default, or make a
 licensing claim for the operator-supplied service.
 
 ### Authority and maturity baseline
@@ -45,7 +45,7 @@ Default enterprise profiles must use established projects with durable public
 governance, current security maintenance, broad production evidence, and an
 operational ecosystem appropriate to the workload. Repository popularity,
 vendor marketing, a single large deployment, protocol compatibility, or an
-open-source license alone is not sufficient.
+internal license alone is not sufficient.
 
 A baseline dependency must satisfy every applicable condition:
 
@@ -59,8 +59,8 @@ A baseline dependency must satisfy every applicable condition:
    failure, recovery, backup or replay, observability, and capacity behavior
    relevant to the selected role;
 4. its standard protocol and data format permit replacement without moving
-   Meshrix governance or business authority into the dependency; and
-5. the exact artifact passes Meshrix conformance, failure injection,
+   Meshrix.js governance or business authority into the dependency; and
+5. the exact artifact passes Meshrix.js conformance, failure injection,
    migration, resource-bound, and private-deployment tests.
 
 In addition, a default dependency needs at least one authority anchor:
@@ -216,10 +216,8 @@ MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --
 The Compose file also defines an optional, profile-gated `format-convert`
 service for the file-parser/format-convert upstream example
 (`docs/examples/file-parser-format-convert.upstream.json`). A plain
-`docker compose up` never starts it. Its build context lives in the sibling
-Meshrix-Services repository, so the Compose file references the pre-built
-image: run `make image` in `file-parser/format-convert/` there, which tags
-`meshrix-format-convert:local`, then enable the profile:
+`docker compose up` never starts it. Set `MESHRIX_FORMAT_CONVERT_IMAGE_NAME`
+to an operator-supplied local image, then enable the profile:
 
 ```bash
 docker compose --profile format-convert up -d
@@ -254,7 +252,7 @@ not a floating tag. The runtime root filesystem is read-only, runs as UID/GID
 data, backups, and runtime home on separate writable volumes:
 
 ```bash
-candidate='ghcr.io/licoland/meshrix@sha256:<manifest-digest>'
+candidate='registry.example/meshrix-js/runtime@sha256:<manifest-digest>'
 public_base_url='https://meshrix.example.com'
 key_source='/etc/meshrix/secrets/local-secret-master-key'
 proof_signer_source='/etc/meshrix/secrets/operation-proof-signer-secret'
@@ -301,7 +299,7 @@ docker run -d \
 The same immutable activation is available through the production Compose
 overlay. `MESHRIX_IMAGE_NAME` must contain the digest reference.
 `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` must be an absolute operator-custodied
-file outside Meshrix data and backup volumes.
+file outside Meshrix.js data and backup volumes.
 `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` must be a second, different
 operator-custodied file with the same external-custody boundary, and
 `MESHRIX_PUBLIC_BASE_URL` must be the HTTPS URL owned by the administrator's
@@ -334,7 +332,7 @@ MESHRIX_TRUSTED_PROXIES="$trusted_proxy" \
   plan --candidate "$candidate" --offline
 ```
 
-Neither secret source is printed by the planner or stored in a Meshrix report.
+Neither secret source is printed by the planner or stored in a Meshrix.js report.
 The planner rejects shared paths or identical values. Do not replace the
 encryption key independently: current encrypted values intentionally fail with
 the wrong key. The Local Secret Store provides an all-active-value
@@ -387,7 +385,7 @@ real-machine receipt and cannot establish an Environment Support Claim.
 
 ## TypeScript Source And Build Boundary
 
-Meshrix source is authored as TypeScript throughout the Node.js backend,
+Meshrix.js source is authored as TypeScript throughout the Node.js backend,
 repository tooling, tests, and Vue application. Local npm scripts enable the
 `source` export condition so workspace packages resolve their `.ts` entry
 points. Run source entry points through the owning npm script; when invoking a
@@ -425,16 +423,12 @@ npm run build
 ```
 
 For a source split, package extraction, ownership move, protocol separation,
-or feature-surface reassembly, use the externally maintained
-`$lico-feature-reassembly` workflow. This repository supplies architecture and
-verification facts; it does not own or duplicate the maintenance skill,
-contract template, examples, or helper scripts.
-
-Inspect both catalog-backed closures before execution:
+or feature-surface reassembly, use the repository-owned architecture and
+verification contracts. Inspect the changed-file closure before execution:
 
 ```bash
-lico-dev workflow plan changed --changed-from <ref>
-lico-dev workflow plan reassembly
+npm run verify:better-plan
+npm run verify:core-platform-surface-convergence
 ```
 
 The reassembly profile covers the Core typecheck and build, public regression
@@ -524,7 +518,7 @@ non-converged rather than compensating with additional logs.
 
 ## Release Definition and Publication
 
-Meshrix has two deliberately separate acceptance standards:
+Meshrix.js has two deliberately separate acceptance standards:
 
 1. The **Functional Release Gate** is the mandatory project release closure.
    It proves that the implementation and code organization are complete,
@@ -622,16 +616,14 @@ also requires one expected `meshrix.agentWorkspace.list`
 `missing_capabilities` denial per real or simulated execution target because the journey Grant
 deliberately excludes unrelated workspace authority; the HTML distinguishes
 this non-amplification evidence from format-convert failures. The integration check
-needs Docker, the format-convert image (built
-automatically from the sibling `../Meshrix-Services` checkout when missing,
-or pass `--image-name`), and the client adapter sources (default
-`../Meshrix-Plugins/plugins/agents`; override with
-`MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE` or `--adapter-source`). Useful flags:
+needs Docker, an operator-supplied format-convert image passed with
+`--image-name`, and an operator-supplied client adapter source passed with
+`MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE` or `--adapter-source`. Useful flags:
 `--plan`, `--keep-stack`, `--port`, `--adapter-source`, `--image-name`,
 `--json`. A pass proves only that this optional service-and-adapter composition
-works end to end. Because the implementation is owned by detachable sibling
-repositories, the command is neither a Meshrix Functional Release Gate input
-nor a Meshrix publication dependency. Its absence or failure cannot change the
+works end to end. Because the supplied artifacts are outside the repository,
+the command is neither a Meshrix.js Functional Release Gate input
+nor a Meshrix.js publication dependency. Its absence or failure cannot change the
 Core `functional-complete` result.
 
 A successful journey writes a ten-section, navigable, bilingual, single-file
@@ -676,15 +668,15 @@ Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
 the optional Real-Machine Verification Workflows and cannot block publication.
 
-Meshrix `0.0.1` has an exact registry dependency on `pactium@0.7.0`. Publish
+Meshrix.js `0.0.1` has an exact registry dependency on `pactium@0.7.0`. Publish
 that Pactium version first and confirm registry visibility before creating the
-Meshrix tag:
+Meshrix.js tag:
 
 ```bash
 npm view pactium@0.7.0 version --registry=https://registry.npmjs.org/
 ```
 
-The Meshrix clean-install and container gates intentionally fail while that
+The Meshrix.js clean-install and container gates intentionally fail while that
 version is absent. This is a functional publication ordering requirement, not
 a client or environment support condition.
 
@@ -847,12 +839,12 @@ npm run verify:upstream-service-publishing
 ```
 
 The Core verifier writes the reducer-owned
-`build/reports/upstream-service-publishing.json`. When the independently owned
-service and adapter sources are available, run the complete detachable
-integration workflow with:
+`build/reports/upstream-service-publishing.json`. When explicitly supplied
+service and adapter artifacts are available, run the repository integration
+workflow with:
 
 ```bash
-lico-dev workflow run upstream-service-publishing --allow-side-effects
+npm run verify:release-journey -- --adapter-source <adapter-package-dir> --image-name <local-image>
 ```
 
 That closure additionally starts the isolated external service, publishes it,
@@ -863,7 +855,7 @@ with only the owner-bound `upload:` reference, and writes the offline
 the exact safe startup command, the non-Base64 upload configuration, the
 external service file budget, and the separate multipart request-envelope
 limit before the UI-enabled runtime configuration, then
-embeds ten digest-bound screenshots from the real Meshrix Web Console:
+embeds ten digest-bound screenshots from the real Meshrix.js Web Console:
 authenticated publishing, basic configuration, operation configuration,
 published runtime health, tool catalog projection, pending Token authorization,
 completed Token authorization, pending operation approval, completed operation
@@ -1082,7 +1074,7 @@ umask 077
 openssl rand -hex 32 > /etc/meshrix/secrets/operation-proof-signer-secret
 ```
 
-Keep the file outside Meshrix data and backup volumes and distinct from the
+Keep the file outside Meshrix.js data and backup volumes and distinct from the
 Local Secret Store master key. Do not write the value into repository source,
 documentation, generated reports, or a Compose environment field.
 

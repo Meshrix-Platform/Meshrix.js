@@ -1,4 +1,4 @@
-# Meshrix server container.
+# Meshrix.js server container.
 # Deployment preset index: packages/foundation/config/deployment/index.json
 ARG NODE_BASE_IMAGE=node:24.16.0-bookworm-slim@sha256:2c87ef9bd3c6a3bd4b472b4bec2ce9d16354b0c574f736c476489d09f560a203
 

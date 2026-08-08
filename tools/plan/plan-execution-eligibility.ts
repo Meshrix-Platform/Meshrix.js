@@ -875,9 +875,9 @@ export function assertRepositoryIdentity({ repoRoot, gitTopLevel, planRoot, pack
     "repository root is not the current Git top-level",
   );
   requireCondition(
-    isRecord(packageManifest) && packageManifest.name === "meshrix",
+    isRecord(packageManifest) && packageManifest.name === "meshrix.js",
     "repository_identity_mismatch",
-    "repository root is not the Meshrix Core package",
+    "repository root is not the Meshrix.js Core package",
   );
   requireCondition(
     path.resolve(planRoot ?? "") === path.join(resolvedRepoRoot, "docs", "plans"),

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Strategy Management"
+  short_description: "Guide deterministic policy preview without side effects"
+  default_prompt: "Use $meshrix-js-strategy-management to design, implement, or verify the policy-preview capability flow."

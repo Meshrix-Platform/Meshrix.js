@@ -1,13 +1,8 @@
 {
   "name": "@meshrix/capabilities",
   "version": "0.0.1",
-  "description": "Meshrix operation permission and runtime capabilities",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/capabilities"
-  },
+  "description": "Meshrix.js operation permission and runtime capabilities",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

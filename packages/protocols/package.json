@@ -1,13 +1,8 @@
 {
   "name": "@meshrix/protocols",
   "version": "0.0.1",
-  "description": "Meshrix MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/protocols"
-  },
+  "description": "Meshrix.js MCP, HTTP, pubsub, and agent-sync protocol contracts and adapters",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

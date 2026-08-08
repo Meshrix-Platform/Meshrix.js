@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Pi"
+  short_description: "Reference pi 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-pi as reference for pi 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

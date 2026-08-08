@@ -49,7 +49,7 @@ export const BACKGROUND_PROCESS_DEFINITIONS: any[] = [
 export const SERVER_PROCESS_DEFINITIONS: any[] = [
   {
     role: "server-main",
-    label: "Meshrix 服务端",
+    label: "Meshrix.js 服务端",
     description: "承载控制台、HTTP API、JSON-RPC、CLI 转发和本地运行时的主服务进程。",
     processType: "service",
     responsibility: "运行服务端主调用面和控制台 API。",

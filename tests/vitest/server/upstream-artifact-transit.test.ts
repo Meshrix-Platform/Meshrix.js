@@ -334,9 +334,9 @@ describe("owner-bound workspace artifact transit", () : any => {
   });
 
   it("filters API keys and tool tokens by semantic key shape", () : any => {
-    expect(isSensitiveMcpOutputKey("X-Meshrix-Api-Key")).toBe(true);
+    expect(isSensitiveMcpOutputKey("X-Meshrix.js-Api-Key")).toBe(true);
     expect(isSensitiveMcpOutputKey("X-Provider-Api-Key")).toBe(true);
-    expect(isSensitiveMcpOutputKey("X-Meshrix-Tool-Token")).toBe(true);
+    expect(isSensitiveMcpOutputKey("X-Meshrix.js-Tool-Token")).toBe(true);
     expect(isSensitiveMcpOutputKey("X-Provider-Tool-Token")).toBe(true);
 
     const value: Record<string, any> = {

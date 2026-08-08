@@ -26,7 +26,7 @@ function parseArgs(argv?: any) : any {
 }
 
 function usage() : any {
-  console.log(`Meshrix Console Auth
+  console.log(`Meshrix.js Console Auth
 
 Usage:
   npm run server:auth -- list-users

@@ -1,11 +1,11 @@
 # Security Policy
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-Meshrix is designed for private deployment. Security reporting, authorization behavior, and audit evidence must be handled as operational facts, not public claims.
+Meshrix.js is designed for private deployment. Security reporting, authorization behavior, and audit evidence must be handled as operational facts, not public claims.
 
 ## Supported State
 

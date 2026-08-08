@@ -245,8 +245,8 @@ describe("traffic gateway rendering", () : any => {
     expect(caddy).toContain("@meshrix_streaming path /api/healthz /mcp /mcp/* /");
     expect(caddy).toContain("reverse_proxy @meshrix_streaming http://upstream-a.example.invalid:7228 http://upstream-b.example.invalid:7229 {");
     expect(caddy).toContain("flush_interval -1");
-    expect(caddy).toContain("header_up X-Meshrix-Gateway caddy");
-    expect(caddy).toContain("header_up X-Meshrix-Gateway-Request-Id {http.request.uuid}");
+    expect(caddy).toContain("header_up X-Meshrix.js-Gateway caddy");
+    expect(caddy).toContain("header_up X-Meshrix.js-Gateway-Request-Id {http.request.uuid}");
 
     const nginx: any = renderNginxConfig({
       adapterId: "nginx",
@@ -286,7 +286,7 @@ describe("traffic gateway rendering", () : any => {
     expect(nginx).toContain("location ^~ /api/console {");
     expect(nginx).toContain("proxy_buffering off;");
     expect(nginx).toContain("proxy_request_buffering off;");
-    expect(nginx).toContain("proxy_set_header X-Meshrix-Gateway nginx;");
+    expect(nginx).toContain("proxy_set_header X-Meshrix.js-Gateway nginx;");
   });
 
   it("registers and renders a custom adapter", () : any => {
@@ -420,7 +420,7 @@ describe("traffic gateway runtime planning and validation", () : any => {
       },
       trustedHeaderPolicy: {
         trustedOnlyFrom: ["loopback"],
-        gatewayHeaders: ["X-Meshrix-Gateway"],
+        gatewayHeaders: ["X-Meshrix.js-Gateway"],
         directModeStripsGatewayOnlyHeaders: false
       },
       routes: [

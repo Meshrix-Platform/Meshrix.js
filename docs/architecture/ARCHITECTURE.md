@@ -1,17 +1,19 @@
 # Architecture
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-Meshrix is an open, private-deployable gateway platform for agent access and governed service forwarding.
+Meshrix.js is an internally maintained, private-deployable gateway platform
+for agent access and governed service forwarding. Its Vue.js frontend and
+Node.js backend are separate workspaces connected through versioned HTTP APIs.
 
 ## Runtime Shape
 
 | Layer | Roots | Responsibility |
 | --- | --- | --- |
-| Apps | `apps/server/`, `apps/console/` | Runtime entry points and console UI. |
+| Apps | `apps/server/`, `apps/console/` | Separate Node.js server and Vue.js console entry points. |
 | Contracts | `packages/contracts/` | Operation registry, module facts, generated contract data. |
 | Foundation | `packages/foundation/` | Security, authorization, redaction, state machines, storage primitives, config, observability. |
 | Server Runtime | `packages/server-runtime/` | Composition, HTTP lifecycle, settings, jobs, upload state, providers. |
@@ -22,16 +24,16 @@ Meshrix is an open, private-deployable gateway platform for agent access and gov
 
 ## Edge And Semantic Gateway Layers
 
-Meshrix separates deployment-edge networking from governed application
+Meshrix.js separates deployment-edge networking from governed application
 forwarding.
 
 An operator may place Nginx, Caddy, Envoy, or another independently admitted
-reverse proxy in front of Meshrix for TLS termination, HTTP-version
+reverse proxy in front of Meshrix.js for TLS termination, HTTP-version
 negotiation, connection handling, coarse-grained rate limiting, load
-balancing, and other edge concerns. The baseline Meshrix runtime remains
+balancing, and other edge concerns. The baseline Meshrix.js runtime remains
 self-contained and does not require an external proxy. An edge proxy is never
 an identity, policy, credential, Operation Permission, approval, or audit
-authority, and forwarded metadata cannot replace authenticated Meshrix
+authority, and forwarded metadata cannot replace authenticated Meshrix.js
 principal or process identity.
 
 The Node.js runtime is the embedded deployment profile and current semantic
@@ -39,17 +41,8 @@ gateway implementation. It owns MCP and RPC interpretation, operation
 resolution, governed permit preparation and consumption, policy and approval
 coordination, credential application, protocol sessions, upstream forwarding,
 and redacted governance evidence. These responsibilities remain inside
-Meshrix when an external edge is present; they are not delegated to a generic
+Meshrix.js when an external edge is present; they are not delegated to a generic
 reverse proxy.
-
-A separately deployed Go data plane is an optional future enhancement, not a
-current runtime capability. It may be introduced only when representative
-capacity evidence establishes an independently scalable forwarding boundary
-after connection pooling, storage, policy evaluation, and upstream latency
-have been accounted for. It must consume the same language-independent
-protocol, operation catalog, immutable snapshot, audience, and governed permit
-contracts. It must not mint permits, specialize policy, or create a second
-authorization or evidence authority.
 
 ## Source File Organization
 
@@ -298,5 +291,5 @@ npm run typecheck
 npm test -- --suite domains.manifest
 npm test
 npm run verify:core-platform-surface-convergence
-npm run verify:private-deployment-open-platform-e2e
+npm run verify:private-deployment-internal-platform-e2e
 ```

@@ -21,7 +21,7 @@ import { assertNoLeak as assertNoSensitiveLeak } from "../server-scripts/lib/rep
 import { createPluginDeploymentAuditCatalog } from "../server-scripts/lib/plugin-deployment-audit-catalog.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const DEFAULT_MATRIX_PATH: any = "tools/registry/open-platform-capability-matrix.json";
+const DEFAULT_MATRIX_PATH: any = "tools/registry/internal-platform-capability-matrix.json";
 const DEFAULT_REPORT_PATH: any = "build/reports/core-platform-gap-audit.json";
 
 const STATUS_PRIORITY: readonly any[] = Object.freeze([
@@ -524,7 +524,7 @@ async function auditCapability({
       addFinding(findings, {
         status: "non_current",
         code: "mcp_target_scope_mismatch",
-        message: `${capability.title} MCP adapter target metadata does not match the open platform release scope.`,
+        message: `${capability.title} MCP adapter target metadata does not match the internal platform release scope.`,
         evidence: {
           allowed: mcpTargetEvidence.allowed,
           unexpected: mcpTargetEvidence.unexpected,

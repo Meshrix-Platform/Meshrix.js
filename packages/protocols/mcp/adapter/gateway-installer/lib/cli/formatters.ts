@@ -98,7 +98,7 @@ export function appendRepairCommandLines(lines?: any, result?: any) : any {
 export function formatInstallResult(result?: any) : any {
   if (result.skipped) {
     return [
-      "Meshrix MCP install skipped.",
+      "Meshrix.js MCP install skipped.",
       "",
       result.reason || "No client configuration was changed.",
       "Run later: meshrix-mcp server-config --set --url <meshrix-url>"
@@ -106,13 +106,13 @@ export function formatInstallResult(result?: any) : any {
   }
   if (result.cancelled) {
     return [
-      "Meshrix MCP install cancelled.",
+      "Meshrix.js MCP install cancelled.",
       "",
       result.reason || "No client configuration was changed."
     ].join("\n");
   }
   const lines: any[] = [
-    result.ok ? "Meshrix MCP install completed." : "Meshrix MCP install completed with errors.",
+    result.ok ? "Meshrix.js MCP install completed." : "Meshrix.js MCP install completed with errors.",
     ""
   ];
   if (result.error) {
@@ -152,7 +152,7 @@ export function formatInstallResult(result?: any) : any {
 
 export function formatErrorResult(result?: any) : any {
   const lines: any[] = [
-    `Meshrix MCP ${result.command || "command"} failed.`,
+    `Meshrix.js MCP ${result.command || "command"} failed.`,
     "",
     `Reason: ${result.error || "Command failed."}`
   ];
@@ -166,7 +166,7 @@ export function formatErrorResult(result?: any) : any {
 
 export function formatRegisterResult(result?: any) : any {
   return [
-    "Meshrix MCP hub registered.",
+    "Meshrix.js MCP hub registered.",
     "",
     `MCP URL: ${result.mcpUrl || (result.baseUrl ? `${result.baseUrl}/mcp` : "unknown")}`,
     `Verified handshake: ${result.verifiedHandshake || "yes"}`,
@@ -179,7 +179,7 @@ export function formatRegisterResult(result?: any) : any {
 
 export function formatUninstallResult(result?: any) : any {
   const lines: any[] = [
-    result.ok ? "Meshrix MCP uninstall completed." : "Meshrix MCP uninstall completed with errors.",
+    result.ok ? "Meshrix.js MCP uninstall completed." : "Meshrix.js MCP uninstall completed with errors.",
     ""
   ];
   if (result.error) {
@@ -204,7 +204,7 @@ export function formatUninstallResult(result?: any) : any {
 export function formatDoctorResult(result?: any) : any {
   const checks: any = result.checks || {};
   const lines: any[] = [
-    result.ok ? "Meshrix MCP doctor passed." : "Meshrix MCP doctor found issues.",
+    result.ok ? "Meshrix.js MCP doctor passed." : "Meshrix.js MCP doctor found issues.",
     "",
     `  [${checks.signedDiscovery?.ok ? "OK" : "FAIL"}] Signed discovery${checks.signedDiscovery?.baseUrl ? `: ${checks.signedDiscovery.baseUrl}` : ""}`,
     `  [${checks.discovery?.ok ? "OK" : "FAIL"}] Discovery${checks.discovery?.httpUrl ? `: ${checks.discovery.httpUrl}` : ""}`,
@@ -232,16 +232,16 @@ export function formatDoctorResult(result?: any) : any {
 export function formatServerConfigResult(result?: any) : any {
   if (result.reset) {
     return [
-      "Meshrix MCP server config reset.",
+      "Meshrix.js MCP server config reset.",
       "",
       `Local registry: ${formatLocalPathForDisplay(result.path)}`,
-      "Next install will scan for a signed Meshrix server again."
+      "Next install will scan for a signed Meshrix.js server again."
     ].join("\n");
   }
   if (result.profiles) {
     const names: any = Object.keys(result.profiles);
     return [
-      "Meshrix MCP server config.",
+      "Meshrix.js MCP server config.",
       "",
       `Active profile: ${result.activeName || "(none)"}`,
       `Profiles: ${names.length ? names.join(", ") : "(none)"}`,
@@ -249,7 +249,7 @@ export function formatServerConfigResult(result?: any) : any {
     ].join("\n");
   }
   return [
-    "Meshrix MCP server config updated.",
+    "Meshrix.js MCP server config updated.",
     "",
     `Active profile: ${result.activeName || result.profile?.name || "default"}`,
     `MCP URL: ${result.profile?.mcpUrl || (result.profile?.baseUrl ? `${result.profile.baseUrl}/mcp` : "")}`,

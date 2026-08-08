@@ -47,7 +47,7 @@ function planFixtureCheckpointsPath(planOwner?: any) : any {
   return path.join(planFixtureRoot, ...planOwner.split("/"), "Checkpoints.json");
 }
 
-const CAPABILITY_MATRIX_PATH: any = "tools/registry/open-platform-capability-matrix.json";
+const CAPABILITY_MATRIX_PATH: any = "tools/registry/internal-platform-capability-matrix.json";
 const VERSION_REGISTRY_PATH: any = "packages/foundation/src/version-control/version-registry.json";
 const ACCEPTANCE_REGISTRY_PATH: any = "tools/registry/capability-acceptance.registry.json";
 const TESTS_REGISTRY_PATH: any = "tools/registry/tests.registry.json";

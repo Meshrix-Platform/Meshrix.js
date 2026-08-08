@@ -151,7 +151,7 @@ export function assertExistingLocalDirectoryWithinControlledRootsSync(sourcePath
   const realPath: any = fsSync.realpathSync.native(absolutePath);
   const pairs: any = rootPairsSync(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
-    throw new Error(`${label}必须位于 Meshrix 受控本机来源目录内。`);
+    throw new Error(`${label}必须位于 Meshrix.js 受控本机来源目录内。`);
   }
   return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair?: any) : any => pair.rootPath) };
 }
@@ -180,7 +180,7 @@ export async function assertExistingLocalDirectoryWithinControlledRoots(sourcePa
   const realPath: any = await fs.realpath(absolutePath);
   const pairs: any = await rootPairs(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
-    throw new Error(`${label}必须位于 Meshrix 受控本机来源目录内。`);
+    throw new Error(`${label}必须位于 Meshrix.js 受控本机来源目录内。`);
   }
   return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair?: any) : any => pair.rootPath) };
 }
@@ -205,7 +205,7 @@ export async function assertExistingLocalFileWithinControlledRoots(filePath?: an
   const realPath: any = await fs.realpath(absolutePath);
   const pairs: any = await rootPairs(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
-    throw new Error(`${label}必须位于 Meshrix 受控本机来源目录内。`);
+    throw new Error(`${label}必须位于 Meshrix.js 受控本机来源目录内。`);
   }
   return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair?: any) : any => pair.rootPath) };
 }

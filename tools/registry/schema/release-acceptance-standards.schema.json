@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.meshrix.example/schemas/release-acceptance-standards.schema.json",
-  "title": "Meshrix Release Acceptance Standards",
+  "title": "Meshrix.js Release Acceptance Standards",
   "type": "object",
   "required": ["$schema", "version", "functionalCompleteness", "realMachineVerification"],
   "properties": {

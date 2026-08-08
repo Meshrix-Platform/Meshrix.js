@@ -428,7 +428,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
   })),
 
   ...[
-    ["platform.canonical-state.execute", "Meshrix canonical state"],
+    ["platform.canonical-state.execute", "Meshrix.js canonical state"],
     ["platform.operation-proof.execute", "Operation Proof Substrate"],
     ["platform.state-commit.execute", "StateCommit"],
     ["platform.cas-merkle-state.execute", "CAS/Merkle state"],

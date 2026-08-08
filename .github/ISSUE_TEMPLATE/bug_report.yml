@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible defect in Meshrix.
+description: Report a reproducible defect in Meshrix.js.
 title: "[Bug]: "
 labels:
   - bug
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve Meshrix. Remove secrets, personal data, private hosts, absolute machine paths, and production payloads before submitting. Security vulnerabilities must use the private security reporting link instead of this form.
+        Thanks for helping improve Meshrix.js. Remove secrets, personal data, private hosts, absolute machine paths, and production payloads before submitting. Security vulnerabilities must use the private security reporting link instead of this form.
   - type: checkboxes
     id: preflight
     attributes:
@@ -22,7 +22,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Meshrix version or source revision
+      label: Meshrix.js version or source revision
       placeholder: v0.0.1 or a commit identifier
     validations:
       required: true

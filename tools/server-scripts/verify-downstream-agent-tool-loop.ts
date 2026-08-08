@@ -253,7 +253,7 @@ async function runScenarioTurn({ client, turn, requestId, target, observed }: Re
       clientInfo: profile.clientInfo
     }, { id: requestId, timeoutMs: 60000 });
     assert.equal(proxyResponseOk(initialize), true, JSON.stringify(safeEvidence(initialize)));
-    assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
+    assert.equal(initialize.result?.serverInfo?.name, "Meshrix.js");
     await client.notify("notifications/initialized", {}, {
       omitParams: profile.initializedParamsOmitted === true
     });
@@ -269,7 +269,7 @@ async function runScenarioTurn({ client, turn, requestId, target, observed }: Re
       framing: profile.framing
     };
     return {
-      serverName: "Meshrix",
+      serverName: "Meshrix.js",
       initializedNotificationSent: true,
       clientProtocolProfile: observed.clientProtocolProfile
     };

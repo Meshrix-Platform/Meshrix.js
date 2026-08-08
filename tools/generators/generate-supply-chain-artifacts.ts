@@ -292,7 +292,7 @@ function buildSbom(lockfile?: any, inventory?: any) : any {
 
 function buildNotices(inventory?: any) : any {
   const lines: any[] = [
-    "Meshrix Third-Party Dependency Notices",
+    "Meshrix.js Third-Party Dependency Notices",
     "",
     "Scope: production npm dependency graph from package-lock.json",
     `Components: ${inventory.components.length}`,

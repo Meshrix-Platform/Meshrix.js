@@ -36,7 +36,7 @@ export function usage() : any {
     "Options:",
     "  --target LIST                 Comma-separated targets for non-interactive install. Use auto for detected clients.",
     `                                Supported targets: ${SUPPORTED_TARGETS.join(", ")}.`,
-    "  --url URL                     Explicit Meshrix base URL. Still requires signed MCP handshake.",
+    "  --url URL                     Explicit Meshrix.js base URL. Still requires signed MCP handshake.",
     "  --scan-ports LIST            Local ports to scan when --url is omitted. Default: 7228-7237.",
     "  --token-stdin                 Read a pre-issued API Key from protected stdin.",
     "  --token-env NAME              API Key environment variable. Default: MESHRIX_MCP_TOKEN.",
@@ -132,7 +132,7 @@ export function mcpUrlForTarget(baseUrl?: any, target?: any) : any {
 
 export function mcpTargetHeaders(target?: any) : any {
   const normalizedTarget: any = normalizeTarget(target);
-  return normalizedTarget ? { "X-Meshrix-MCP-Target": normalizedTarget } : {};
+  return normalizedTarget ? { "X-Meshrix.js-MCP-Target": normalizedTarget } : {};
 }
 
 export function parseTargets(rawTarget?: any) : any {

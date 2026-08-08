@@ -1,4 +1,4 @@
-# Meshrix Storage
+# Meshrix.js Storage
 
 `packages/foundation/src/storage` owns storage provider contracts, object metadata projections, backup and restore primitives, adapter contracts, and serialized storage state coordination.
 
@@ -65,11 +65,11 @@ mutation. JSONL state uses `0700` directory ancestry and `0600` regular files,
 removes only an unterminated tail before the next append, synchronizes the file,
 and synchronizes its parent directory before acknowledging the record.
 
-Meshrix Pactium runtimes close storage only when they created it. Closure is
+Meshrix.js Pactium runtimes close storage only when they created it. Closure is
 asynchronous and idempotent, drains Pactium core mutations, and releases the
 selected persistent SQLite port. Direct checkpoint projection calls create a
 scoped runtime and close it in `finally`; injected runtimes remain caller-owned.
-Every persistent Meshrix Pactium runtime also holds the shared storage-runtime
+Every persistent Meshrix.js Pactium runtime also holds the shared storage-runtime
 lease. Runtimes in one process share that lease by reference count, and the
 underlying lease remains active until the final runtime closes. A runtime in
 another process therefore prevents confirmed restore through the same offline

@@ -66,7 +66,7 @@ function parseArgs(argv: any = []) : any {
 }
 
 function printUsageAndExit(code: any = 0) : any {
-  console.log(`Meshrix Agent Traffic Gateway
+  console.log(`Meshrix.js Agent Traffic Gateway
 
 Usage:
   node tools/server-scripts/external-gateway.ts list
@@ -80,9 +80,9 @@ Usage:
 
 Options:
   --gateway             Gateway adapter. Default: ${DEFAULT_GATEWAY_ADAPTER}
-  --direct-base-url     Direct Meshrix endpoint kept as required fallback. Default: ${DEFAULT_DIRECT_BASE_URL}
+  --direct-base-url     Direct Meshrix.js endpoint kept as required fallback. Default: ${DEFAULT_DIRECT_BASE_URL}
   --public-base-url     Gateway public endpoint. Default: ${DEFAULT_GATEWAY_BASE_URL}
-  --upstream            Upstream Meshrix endpoints, comma-separated. Default: direct-base-url
+  --upstream            Upstream Meshrix.js endpoints, comma-separated. Default: direct-base-url
   --listen-host         Gateway listen host. Default: public-base-url host
   --listen-port         Gateway listen port. Default: public-base-url port
   --server-name         Nginx server_name / Caddy host label. Default: public-base-url host

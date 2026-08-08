@@ -4,24 +4,24 @@ import {
 
 const MCP_SUPPORTED_TARGETS_REF: any = "$MCP_SUPPORTED_TARGETS";
 
-export function validateOpenPlatformCapabilityMatrix(data?: any) : any {
+export function validateInternalPlatformCapabilityMatrix(data?: any) : any {
   const issues: any[] = [];
   if (!Array.isArray(data.statusEnum) || data.statusEnum.length === 0) {
-    issues.push("open-platform-capability-matrix: statusEnum must be a non-empty array");
+    issues.push("internal-platform-capability-matrix: statusEnum must be a non-empty array");
   }
   if (!Array.isArray(data.capabilities)) {
-    issues.push("open-platform-capability-matrix: capabilities must be an array");
+    issues.push("internal-platform-capability-matrix: capabilities must be an array");
     return issues;
   }
   const ids: any = new Set<any>();
   for (const capability of data.capabilities) {
-    if (!capability.id) issues.push("open-platform-capability-matrix: capability missing id");
-    else if (ids.has(capability.id)) issues.push(`open-platform-capability-matrix: duplicate capability "${capability.id}"`);
+    if (!capability.id) issues.push("internal-platform-capability-matrix: capability missing id");
+    else if (ids.has(capability.id)) issues.push(`internal-platform-capability-matrix: duplicate capability "${capability.id}"`);
     else ids.add(capability.id);
-    if (!capability.title) issues.push(`open-platform-capability-matrix: capability "${capability.id || "(unnamed)"}" missing title`);
+    if (!capability.title) issues.push(`internal-platform-capability-matrix: capability "${capability.id || "(unnamed)"}" missing title`);
     for (const field of ["docs", "requirementRows", "requiredEdges"]) {
       if (!Array.isArray(capability[field])) {
-        issues.push(`open-platform-capability-matrix: capability "${capability.id || "(unnamed)"}" missing ${field} array`);
+        issues.push(`internal-platform-capability-matrix: capability "${capability.id || "(unnamed)"}" missing ${field} array`);
       }
     }
     if (capability.allowedMcpTargets !== undefined) {
@@ -33,7 +33,7 @@ export function validateOpenPlatformCapabilityMatrix(data?: any) : any {
 
 function validateAllowedMcpTargets(capability: Record<string, any> = {}) : any {
   const issues: any[] = [];
-  const label: any = `open-platform-capability-matrix: capability "${capability.id || "(unnamed)"}"`;
+  const label: any = `internal-platform-capability-matrix: capability "${capability.id || "(unnamed)"}"`;
   const value: any = capability.allowedMcpTargets;
   if (value === MCP_SUPPORTED_TARGETS_REF) {
     return issues;

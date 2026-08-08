@@ -28,7 +28,7 @@ class ServerConfigManager {
           : "config_read_failed";
       console.warn(`[server-config] load failed code=${failureCode}`);
       if (this.explicitConfigPath && !process.env.MESHRIX_SERVER_DATA_DIR) {
-        const error: Error & Record<string, any> = new Error("Explicit Meshrix server config could not be read.");
+        const error: Error & Record<string, any> = new Error("Explicit Meshrix.js server config could not be read.");
         error.code = "meshrix_server_config_read_failed";
         throw error;
       }

@@ -2,7 +2,7 @@
 /**
  * verify-observability-semantics.ts — OTel Semantic Conventions Baseline
  *
- * Defines the OTel semantic convention baseline for Meshrix and verifies
+ * Defines the OTel semantic convention baseline for Meshrix.js and verifies
  * that key observability touchpoints (operation dispatch, MCP gateway,
  * CLI dispatch, layout audit) produce logs/traces with stable field names
  * aligned to OpenTelemetry semantic conventions.

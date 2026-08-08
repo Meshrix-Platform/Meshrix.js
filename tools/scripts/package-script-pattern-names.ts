@@ -54,7 +54,7 @@ export const PATTERN_CLASSIFIED_SCRIPT_NAMES: readonly any[] = Object.freeze([
   "verify:operation-permission-tag-governed-e2e",
   "verify:operation-permission-universal-tag-policy",
   "verify:platform-audit",
-  "verify:private-deployment-open-platform-e2e",
+  "verify:private-deployment-internal-platform-e2e",
   "verify:upstream-gateway",
   "verify:upstream-mcp-gateway"
 ]);

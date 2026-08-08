@@ -27,7 +27,7 @@ assert.throws(
 
 const processRegistration: any = new ProcessUnifiedRegistration({
   role: "server-main",
-  label: "Meshrix 服务端",
+  label: "Meshrix.js 服务端",
   status: "running",
   processType: "service",
   pid: process.pid,

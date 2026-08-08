@@ -1,5 +1,5 @@
 # ==============================================================================
-# Meshrix Docker Compose
+# Meshrix.js Docker Compose
 #
 # Usage:
 #   docker compose up -d
@@ -63,15 +63,12 @@ services:
     networks:
       - meshrix-core
 
-  # Optional file-parser/format-convert upstream service used by
-  # docs/examples/file-parser-format-convert.upstream.json. Its build context
-  # lives in the sibling Meshrix-Services repository, so this file references
-  # the pre-built image; build it once from that checkout:
-  #   cd ../Meshrix-Services/file-parser/format-convert && make image
+  # Optional operator-supplied format conversion service used by
+  # docs/examples/file-parser-format-convert.upstream.json.
   # The service stays on the internal Compose network, where the server
   # reaches it as http://format-convert:8080.
   format-convert:
-    image: ${MESHRIX_FORMAT_CONVERT_IMAGE_NAME:-meshrix-format-convert:local}
+    image: ${MESHRIX_FORMAT_CONVERT_IMAGE_NAME:-meshrix-js-format-convert:local}
     container_name: ${MESHRIX_FORMAT_CONVERT_CONTAINER_NAME:-meshrix-format-convert}
     restart: unless-stopped
     profiles:

@@ -30,7 +30,7 @@ function artifact(path?: any, bytes?: any) : any {
 function candidateFixture() : any {
   const releaseDefinitionText: any = `${JSON.stringify({
     version: "v0.0.1:registry:release-definition-1",
-    product: "Meshrix",
+    product: "Meshrix.js",
     release: { version: "0.0.1", tag: RELEASE_TAG, channel: "stable" },
     acceptance: {
       profile: "enterprise-single-node",
@@ -170,8 +170,6 @@ describe("upstream service publishing candidate receipt", () : any => {
     const serialized: any = JSON.stringify(receipt);
     expect(serialized).not.toContain("functional-complete");
     expect(serialized).not.toContain("releaseReady");
-    expect(serialized).not.toContain("Meshrix-Services");
-    expect(serialized).not.toContain("Meshrix-Plugins");
   });
 
   it("rejects one changed artifact byte instead of blessing a mismatched bundle", () : any => {

@@ -1,6 +1,6 @@
 # Server Runtime
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
@@ -52,7 +52,7 @@ explicitly reasoned health, bootstrap, discovery, or public-catalog surfaces.
 Denied and failed operations still produce terminal receipt evidence even when
 successful audit persistence is disabled.
 
-Meshrix stores domain-separated request, result, subject, policy, and effect
+Meshrix.js stores domain-separated request, result, subject, policy, and effect
 commitments rather than raw request bodies, responses, policy objects, runtime
 URLs, user/session values, filesystem paths, or settings. Pactium ledger and
 envelope locators are the authoritative projection; there is no second entry,
@@ -153,15 +153,15 @@ The mount manager grants Host capabilities only when both the verified signed ma
 
 Opaque payload custody is bounded by record count, total bytes, per-payload bytes, and a fixed TTL. Each record is bound to the exact owner generation, tenant, session, and turn scope, supports digest-checked idempotency, and is cleared when the consuming plugin generation closes. It is temporary custody, not durable plugin state.
 
-Server composition creates Host-owned capabilities before plugin activation. Each port accepts only declared purposes, binds records to an authenticated owner generation and caller-supplied digest, enforces bounded time, record, and byte capacity, and keeps secret material behind Meshrix custody. A Host-injected port remains owned by its injector; otherwise server composition closes the port on startup rollback and normal shutdown.
+Server composition creates Host-owned capabilities before plugin activation. Each port accepts only declared purposes, binds records to an authenticated owner generation and caller-supplied digest, enforces bounded time, record, and byte capacity, and keeps secret material behind Meshrix.js custody. A Host-injected port remains owned by its injector; otherwise server composition closes the port on startup rollback and normal shutdown.
 
-Controlled execution adapters are created only from explicit Host configuration. Every execution target supplies its own target reference, configured sandbox workload kind, output contract, capability set, and resource limits. The runtime does not infer a target, workload, policy, command, or host executable. Empty or incomplete configuration produces no production adapter and a requesting plugin fails closed. Lifecycle-safe bindings use existing Meshrix process-identity and sandbox owners; they do not add another identity store or execution path.
+Controlled execution adapters are created only from explicit Host configuration. Every execution target supplies its own target reference, configured sandbox workload kind, output contract, capability set, and resource limits. The runtime does not infer a target, workload, policy, command, or host executable. Empty or incomplete configuration produces no production adapter and a requesting plugin fails closed. Lifecycle-safe bindings use existing Meshrix.js process-identity and sandbox owners; they do not add another identity store or execution path.
 
 Selected plugin modules are privileged in-process deployment code, not a sandbox boundary. Signed immutable artifacts and entry-path checks provide provenance, integrity, and declared-loading enforcement; they do not make hostile JavaScript safe. Operators must review, sign, trust, and explicitly select the artifacts they deploy.
 
 The [Execution Sandbox architecture](../architecture/EXECUTION-SANDBOX.md) isolates agent-controlled or otherwise untrusted workloads requested by trusted platform and plugin code; it does not isolate the plugin module itself. A plugin requests governed execution only through the narrow Host port and cannot receive a container socket, virtualization handle, host process API, raw credential, or host path. Empty or unavailable sandbox configuration denies execution, and the runtime has no host-process fallback. Manifest verifier contracts identify only verifier modules within the signed artifact and dedicated `plugin_verifier.*` workload kinds. The Host resolves the module from the verified snapshot, executes it only through the controlled sandbox, and accepts only a terminal receipt bound to the plugin, input digest, successful terminal state, and completed destruction.
 
-The repository builds no product plugin implementation. Meshrix composition consumes only dynamic contributions from verified installed packages selected by explicit deployment configuration; it does not copy plugin operations into the static Meshrix registry or provide a parallel compatibility registration. With an empty plugin selection, no plugin operations, routes, MCP outlets, console entries, state machines, or verifier hooks are active, while generic Meshrix workspace and context operations remain available.
+The repository builds no product plugin implementation. Meshrix.js composition consumes only dynamic contributions from verified installed packages selected by explicit deployment configuration; it does not copy plugin operations into the static Meshrix.js registry or provide a parallel compatibility registration. With an empty plugin selection, no plugin operations, routes, MCP outlets, console entries, state machines, or verifier hooks are active, while generic Meshrix.js workspace and context operations remain available.
 
 Server bootstrap constructs the Core `agent-workspace-core` provider but never creates product data. An empty workspace store remains empty until an authenticated, authorized `agent_workspaces.create` operation succeeds. This keeps ownership, naming, audit evidence, and lifecycle intent explicit and avoids startup side effects.
 

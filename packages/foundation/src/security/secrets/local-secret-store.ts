@@ -61,13 +61,13 @@ function emptyRegistry() : any {
 }
 
 function registryContractError() : any {
-  const error: Error & Record<string, any> = new Error("Meshrix local secret registry is invalid.");
+  const error: Error & Record<string, any> = new Error("Meshrix.js local secret registry is invalid.");
   error.code = "local_secret_registry_invalid";
   return error;
 }
 
 function targetContractError(field?: any, message: any = "") : any {
-  const error: Error & Record<string, any> = new Error(message || `Meshrix local secret target field ${field} is invalid.`);
+  const error: Error & Record<string, any> = new Error(message || `Meshrix.js local secret target field ${field} is invalid.`);
   error.code = "local_secret_target_invalid";
   error.field = field;
   return error;
@@ -86,7 +86,7 @@ function explicitTargetId(value?: any, field?: any) : any {
 function assertKnownKeys(value?: any, allowedKeys?: any, field?: any) : any {
   const unknown: any = Object.keys(asObject(value)).find((key?: any) : any => !allowedKeys.has(key));
   if (unknown) {
-    throw targetContractError(`${field}.${unknown}`, `Meshrix local secret target contains an unsupported field: ${field}.${unknown}.`);
+    throw targetContractError(`${field}.${unknown}`, `Meshrix.js local secret target contains an unsupported field: ${field}.${unknown}.`);
   }
 }
 
@@ -94,41 +94,41 @@ function assertSecretRef(secretRef: any = "") : any {
   const source: any = typeof secretRef === "string" ? secretRef : "";
   const value: any = text(source);
   if (source !== value || !SECRET_REF_PATTERN.test(value)) {
-    throw targetContractError("secretRef", "Meshrix local secret target requires an explicit canonical secret:// reference.");
+    throw targetContractError("secretRef", "Meshrix.js local secret target requires an explicit canonical secret:// reference.");
   }
   const segments: any = value.slice("secret://".length).split("/");
   if (segments.some((segment?: any) : any => segment === "." || segment === "..")) {
-    throw targetContractError("secretRef", "Meshrix local secret target secretRef cannot contain relative path segments.");
+    throw targetContractError("secretRef", "Meshrix.js local secret target secretRef cannot contain relative path segments.");
   }
   return value;
 }
 
 function explicitTextList(value?: any, field?: any, { normalize = text, allowEmpty = false }: Record<string, any> = {}) : any {
   if (!Array.isArray(value)) {
-    throw targetContractError(field, `Meshrix local secret target field ${field} must be an explicit array.`);
+    throw targetContractError(field, `Meshrix.js local secret target field ${field} must be an explicit array.`);
   }
   const normalizedValues: any = value.map((item?: any) : any => normalize(item));
   if (value.some((item?: any, index?: any) : any => typeof item !== "string" || item !== normalizedValues[index])) {
-    throw targetContractError(field, `Meshrix local secret target field ${field} must use canonical string values.`);
+    throw targetContractError(field, `Meshrix.js local secret target field ${field} must use canonical string values.`);
   }
   const values: any[] = [...new Set<any>(normalizedValues.filter(Boolean))];
   if (!allowEmpty && values.length === 0) {
-    throw targetContractError(field, `Meshrix local secret target field ${field} cannot be empty.`);
+    throw targetContractError(field, `Meshrix.js local secret target field ${field} cannot be empty.`);
   }
   if (values.length !== value.length) {
-    throw targetContractError(field, `Meshrix local secret target field ${field} contains an empty or duplicate value.`);
+    throw targetContractError(field, `Meshrix.js local secret target field ${field} contains an empty or duplicate value.`);
   }
   return values;
 }
 
 function explicitTargetScope(scope: any = null) : any {
   if (!scope || typeof scope !== "object" || Array.isArray(scope)) {
-    throw targetContractError("scope", "Meshrix local secret target requires an explicit scope object.");
+    throw targetContractError("scope", "Meshrix.js local secret target requires an explicit scope object.");
   }
   assertKnownKeys(scope, TARGET_SCOPE_KEYS, "scope");
   const serviceId: any = text(scope.serviceId);
   if (typeof scope.serviceId !== "string" || scope.serviceId !== serviceId || !serviceId) {
-    throw targetContractError("scope.serviceId", "Meshrix local secret target requires scope.serviceId.");
+    throw targetContractError("scope.serviceId", "Meshrix.js local secret target requires scope.serviceId.");
   }
   const scopes: any = explicitTextList(scope.scopes, "scope.scopes");
   const allowedHosts: any = explicitTextList(scope.allowedHosts, "scope.allowedHosts", {
@@ -136,7 +136,7 @@ function explicitTargetScope(scope: any = null) : any {
     allowEmpty: true
   });
   if (allowedHosts.some((host?: any) : any => host === "*" || !HOST_PATTERN.test(host))) {
-    throw targetContractError("scope.allowedHosts", "Meshrix local secret target allowedHosts must contain exact host names or addresses.");
+    throw targetContractError("scope.allowedHosts", "Meshrix.js local secret target allowedHosts must contain exact host names or addresses.");
   }
   const allowedProtocols: any = explicitTextList(scope.allowedProtocols, "scope.allowedProtocols", {
     normalize: protocolName,
@@ -156,7 +156,7 @@ function explicitTargetScope(scope: any = null) : any {
 
 export function validateLocalSecretTarget(target: any = null) : any {
   if (!target || typeof target !== "object" || Array.isArray(target)) {
-    throw targetContractError("target", "Meshrix local secret writes require an explicit target object.");
+    throw targetContractError("target", "Meshrix.js local secret writes require an explicit target object.");
   }
   assertKnownKeys(target, TARGET_KEYS, "target");
   return {
@@ -171,13 +171,13 @@ export function validateLocalSecretTarget(target: any = null) : any {
 function assertSecretPayload(payload: Record<string, any> = {}) : any {
   const secretPayload: any = asObject(payload, null);
   if (!secretPayload || Object.keys(secretPayload).length === 0) {
-    const error: Error & Record<string, any> = new Error("Meshrix local secret write requires a non-empty JSON object payload.");
+    const error: Error & Record<string, any> = new Error("Meshrix.js local secret write requires a non-empty JSON object payload.");
     error.code = "local_secret_payload_invalid";
     throw error;
   }
   const payloadBytes: any = Buffer.byteLength(JSON.stringify(secretPayload), "utf8");
   if (payloadBytes > MAX_SECRET_PAYLOAD_BYTES) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret payload exceeds the ${MAX_SECRET_PAYLOAD_BYTES} byte limit.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret payload exceeds the ${MAX_SECRET_PAYLOAD_BYTES} byte limit.`);
     error.code = "local_secret_payload_too_large";
     throw error;
   }
@@ -196,7 +196,7 @@ function hasExpectedRevision(expectedRevision?: any) : any {
 function parseExpectedRevision(expectedRevision?: any, secretRef?: any) : any {
   const revision: any = Number(expectedRevision);
   if (!Number.isSafeInteger(revision) || revision < 0) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret expectedRevision is invalid for ${secretRef}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret expectedRevision is invalid for ${secretRef}.`);
     error.code = "local_secret_revision_invalid";
     error.secretRef = secretRef;
     error.expectedRevision = expectedRevision;
@@ -210,7 +210,7 @@ function assertExpectedRevision(entry?: any, expectedRevision?: any, secretRef?:
   const expected: any = parseExpectedRevision(expectedRevision, secretRef);
   const actual: any = revisionOf(entry);
   if (actual !== expected) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret revision conflict for ${secretRef}: expected ${expected}, got ${actual}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret revision conflict for ${secretRef}: expected ${expected}, got ${actual}.`);
     error.code = "local_secret_revision_conflict";
     error.secretRef = secretRef;
     error.expectedRevision = expected;
@@ -258,7 +258,7 @@ function assertScopeTextMatch({
   if (!requested || allowed === requested) {
     return;
   }
-  const error: Error & Record<string, any> = new Error(`Meshrix local secret scope denied: ${reasonCode || field}.`);
+  const error: Error & Record<string, any> = new Error(`Meshrix.js local secret scope denied: ${reasonCode || field}.`);
   error.code = "local_secret_scope_denied";
   error.reasonCode = reasonCode || `${field}_mismatch`;
   error.field = field;
@@ -285,7 +285,7 @@ function assertScopeListIncludes({
   const deniedReason: any = !requested
     ? missingReasonCode || reasonCode || `${scopeField}_required`
     : reasonCode || `${scopeField}_not_allowed`;
-  const error: Error & Record<string, any> = new Error(`Meshrix local secret scope denied: ${deniedReason}.`);
+  const error: Error & Record<string, any> = new Error(`Meshrix.js local secret scope denied: ${deniedReason}.`);
   error.code = "local_secret_scope_denied";
   error.reasonCode = deniedReason;
   error.field = scopeField;
@@ -299,7 +299,7 @@ function assertSecretScopeAllowed({
 }: Record<string, any> = {}) : any {
   const expected: any = asObject(expectedScope, null);
   if (!expected) {
-    const error: Error & Record<string, any> = new Error("Meshrix local secret resolution requires an explicit expected scope.");
+    const error: Error & Record<string, any> = new Error("Meshrix.js local secret resolution requires an explicit expected scope.");
     error.code = "local_secret_scope_required";
     error.statusCode = 403;
     error.secretRef = secretRef;
@@ -307,7 +307,7 @@ function assertSecretScopeAllowed({
   }
   const unknownExpectedField: any = Object.keys(expected).find((key?: any) : any => !EXPECTED_SCOPE_KEYS.has(key));
   if (unknownExpectedField) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret expected scope contains an unsupported field: ${unknownExpectedField}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret expected scope contains an unsupported field: ${unknownExpectedField}.`);
     error.code = "local_secret_scope_invalid";
     error.statusCode = 403;
     error.secretRef = secretRef;
@@ -315,7 +315,7 @@ function assertSecretScopeAllowed({
     throw error;
   }
   if (!text(expected.serviceId) || !Array.isArray(expected.requiredScopes)) {
-    const error: Error & Record<string, any> = new Error("Meshrix local secret expected scope requires serviceId and requiredScopes.");
+    const error: Error & Record<string, any> = new Error("Meshrix.js local secret expected scope requires serviceId and requiredScopes.");
     error.code = "local_secret_scope_invalid";
     error.statusCode = 403;
     error.secretRef = secretRef;
@@ -408,7 +408,7 @@ function revisionValuePath(paths?: any, secretRef?: any, revision?: any) : any {
 
 function assertExpectedRevisionProvided(expectedRevision?: any, secretRef?: any) : any {
   if (!hasExpectedRevision(expectedRevision)) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret expectedRevision is required for ${secretRef}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret expectedRevision is required for ${secretRef}.`);
     error.code = "local_secret_revision_required";
     error.secretRef = secretRef;
     throw error;
@@ -419,7 +419,7 @@ function assertExpectedRevisionProvided(expectedRevision?: any, secretRef?: any)
 function assertTargetIdentityMatches(entry?: any, target?: any) : any {
   for (const field of ["provider", "family", "authType"]) {
     if (text(entry?.[field]) === target[field]) continue;
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret target does not match the configured ${field}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret target does not match the configured ${field}.`);
     error.code = "local_secret_target_mismatch";
     error.secretRef = target.secretRef;
     error.field = field;
@@ -427,7 +427,7 @@ function assertTargetIdentityMatches(entry?: any, target?: any) : any {
   }
   const configuredScope: any = effectiveSecretScope(entry?.metadata);
   if (JSON.stringify(configuredScope) !== JSON.stringify(target.scope)) {
-    const error: Error & Record<string, any> = new Error("Meshrix local secret target scope does not match the configured binding.");
+    const error: Error & Record<string, any> = new Error("Meshrix.js local secret target scope does not match the configured binding.");
     error.code = "local_secret_target_mismatch";
     error.secretRef = target.secretRef;
     error.field = "scope";
@@ -506,25 +506,25 @@ async function writeLocalSecret({
   const registry: any = await readRegistry(paths.dataDir);
   const existing: any = registry.refs[resolvedSecretRef] || null;
   if (operation === "initialize" && existing) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is already configured: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is already configured: ${resolvedSecretRef}`);
     error.code = "local_secret_already_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (operation === "initialize" && hasExpectedRevision(expectedRevision)) {
-    const error: Error & Record<string, any> = new Error("Meshrix local secret initialize does not accept expectedRevision.");
+    const error: Error & Record<string, any> = new Error("Meshrix.js local secret initialize does not accept expectedRevision.");
     error.code = "local_secret_revision_unexpected";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (operation === "rotate" && !existing) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is not configured: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is not configured: ${resolvedSecretRef}`);
     error.code = "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (operation === "rotate" && !entryResolvable(existing)) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is not active: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is not active: ${resolvedSecretRef}`);
     error.code = lifecycleStatus(existing) === "revoked" ? "local_secret_revoked" : "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
@@ -647,7 +647,7 @@ export async function rotateLocalSecretMasterKey({
   nextKeyProvider = null
 }: Record<string, any> = {}) : Promise<any> {
   if (!currentKeyProvider || !nextKeyProvider) {
-    const error: Error & Record<string, any> = new Error("Meshrix local secret master-key rotation requires current and next key providers.");
+    const error: Error & Record<string, any> = new Error("Meshrix.js local secret master-key rotation requires current and next key providers.");
     error.code = "local_secret_master_key_rotation_provider_required";
     throw error;
   }
@@ -664,7 +664,7 @@ export async function rotateLocalSecretMasterKey({
         !nextKeyFact?.keyId ||
         currentKeyFact.keyId === nextKeyFact.keyId
       ) {
-        const error: Error & Record<string, any> = new Error("Meshrix local secret master-key rotation requires a distinct next key.");
+        const error: Error & Record<string, any> = new Error("Meshrix.js local secret master-key rotation requires a distinct next key.");
         error.code = "local_secret_master_key_rotation_same_key";
         throw error;
       }
@@ -684,7 +684,7 @@ export async function rotateLocalSecretMasterKey({
         const currentValuePath: any = localValuePathForEntry(paths, entry);
         const currentValueRecord: any = await readLocalSecretJson(currentValuePath, null);
         if (!valueRecordMatchesEntry(currentValueRecord, entry, secretRef)) {
-          const error: Error & Record<string, any> = new Error("Meshrix local secret master-key rotation found an invalid value record.");
+          const error: Error & Record<string, any> = new Error("Meshrix.js local secret master-key rotation found an invalid value record.");
           error.code = "local_secret_master_key_rotation_value_invalid";
           throw error;
         }
@@ -836,13 +836,13 @@ async function revokeLocalSecretUnlocked({
   const registry: any = await readRegistry(paths.dataDir);
   const existing: any = registry.refs[resolvedSecretRef] || null;
   if (!existing) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is not configured: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is not configured: ${resolvedSecretRef}`);
     error.code = "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (!entryResolvable(existing)) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is not active: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is not active: ${resolvedSecretRef}`);
     error.code = lifecycleStatus(existing) === "revoked" ? "local_secret_revoked" : "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
@@ -916,14 +916,14 @@ export async function resolveLocalSecretPayload({
   const registry: any = await readRegistry(paths.dataDir);
   const entry: any = registry.refs[resolvedSecretRef] || null;
   if (!entry) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is not configured: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is not configured: ${resolvedSecretRef}`);
     error.code = "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (!entryResolvable(entry)) {
     const status: any = lifecycleStatus(entry);
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret is not active: ${resolvedSecretRef}`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret is not active: ${resolvedSecretRef}`);
     error.code = status === "revoked" ? "local_secret_revoked" : "local_secret_not_configured";
     error.secretRef = resolvedSecretRef;
     error.status = status;
@@ -935,27 +935,27 @@ export async function resolveLocalSecretPayload({
   assertSecretScopeAllowed({ entry, secretRef: resolvedSecretRef, expectedScope });
   const storageRef: any = text(entry.storageRef);
   if (!storageRef.startsWith("local:")) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret storage is not local for ${resolvedSecretRef}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret storage is not local for ${resolvedSecretRef}.`);
     error.code = "local_secret_storage_unsupported";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   const fileName: any = storageRef.slice("local:".length);
   if (!fileName || fileName.includes("/") || fileName.includes("\\") || path.basename(fileName) !== fileName) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret storage ref is invalid for ${resolvedSecretRef}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret storage ref is invalid for ${resolvedSecretRef}.`);
     error.code = "local_secret_storage_invalid";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   if (!canonicalStorageFileName(resolvedSecretRef, revisionOf(entry), fileName)) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret storage ref is not canonical for ${resolvedSecretRef}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret storage ref is not canonical for ${resolvedSecretRef}.`);
     error.code = "local_secret_storage_invalid";
     error.secretRef = resolvedSecretRef;
     throw error;
   }
   const valueRecord: any = await readLocalSecretJson(path.join(paths.valuesDir, fileName), null);
   if (!valueRecordMatchesEntry(valueRecord, entry, resolvedSecretRef)) {
-    const error: Error & Record<string, any> = new Error(`Meshrix local secret value record does not match ${resolvedSecretRef}.`);
+    const error: Error & Record<string, any> = new Error(`Meshrix.js local secret value record does not match ${resolvedSecretRef}.`);
     error.code = "local_secret_value_mismatch";
     error.secretRef = resolvedSecretRef;
     throw error;

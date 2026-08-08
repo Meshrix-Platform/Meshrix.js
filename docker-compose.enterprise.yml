@@ -6,7 +6,7 @@
 #   MESHRIX_PUBLIC_BASE_URL=https://meshrix.example.com
 #
 # Each secret file contains exactly 64 lowercase hexadecimal characters
-# (32 random bytes). They are distinct, stay outside Meshrix data and backup
+# (32 random bytes). They are distinct, stay outside Meshrix.js data and backup
 # volumes, and are mounted read-only.
 services:
   meshrix-server:

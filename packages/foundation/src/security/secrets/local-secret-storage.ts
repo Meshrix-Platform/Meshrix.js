@@ -142,7 +142,7 @@ async function acquireMutationLock(dataDir: any = "") : Promise<any> {
       await delay(15 + crypto.randomInt(35));
     }
   }
-  const error: Error & Record<string, any> = new Error("Meshrix local secret store is busy; retry the operation.");
+  const error: Error & Record<string, any> = new Error("Meshrix.js local secret store is busy; retry the operation.");
   error.code = "local_secret_store_busy";
   throw error;
 }
@@ -158,7 +158,7 @@ async function mutationLockOwned(lock?: any) : Promise<any> {
 
 export async function assertLocalSecretMutationLockOwned(lock?: any) : Promise<any> {
   if (await mutationLockOwned(lock)) return;
-  const error: Error & Record<string, any> = new Error("Meshrix local secret mutation lock ownership was lost.");
+  const error: Error & Record<string, any> = new Error("Meshrix.js local secret mutation lock ownership was lost.");
   error.code = "local_secret_store_lock_lost";
   throw error;
 }

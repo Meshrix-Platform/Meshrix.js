@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Codex"
+  short_description: "Reference codex 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-codex as reference for codex 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

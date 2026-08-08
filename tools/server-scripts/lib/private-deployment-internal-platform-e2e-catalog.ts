@@ -5,8 +5,8 @@
  * owned exclusively by platform-acceptance-command-catalog.ts.
  */
 
-export const PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH: any =
-  "build/reports/private-deployment-open-platform-e2e.json";
+export const PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH: any =
+  "build/reports/private-deployment-internal-platform-e2e.json";
 
 export const LOCAL_FIXTURE_SOURCE_FILES: readonly any[] = Object.freeze([
   "tools/server-scripts/verify-upstream-gateway-e2e.ts",

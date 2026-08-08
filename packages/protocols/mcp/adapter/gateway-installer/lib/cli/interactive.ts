@@ -17,7 +17,7 @@ export function selectionGlyph(selected?: any) : any {
 
 export function renderInstallMenu({ candidates, index, selectedIds, baseUrl, message = "", mode = "install" }: Record<string, any>) : any {
   const action: any = mode === "uninstall" ? "uninstall" : "install";
-  const title: any = mode === "uninstall" ? msg("Meshrix MCP uninstall", "Meshrix MCP 卸载") : msg("Meshrix MCP install", "Meshrix MCP 安装");
+  const title: any = mode === "uninstall" ? msg("Meshrix.js MCP uninstall", "Meshrix.js MCP 卸载") : msg("Meshrix.js MCP install", "Meshrix.js MCP 安装");
   const mcpLine: any = baseUrl ? `MCP: ${baseUrl}/mcp` : msg("MCP: no server URL required for local client removal", "MCP: 本地卸载无需服务端 URL");
   const rows: any[] = [
     "\x1b[2J\x1b[H",
@@ -41,7 +41,7 @@ export function renderInstallMenu({ candidates, index, selectedIds, baseUrl, mes
 export function renderAutoUpdateMenu({ enabled }: Record<string, any>) : any {
   const rows: any[] = [
     "\x1b[2J\x1b[H",
-    msg("Meshrix MCP Auto-Update Preference", "Meshrix MCP 自动推送更新设置"),
+    msg("Meshrix.js MCP Auto-Update Preference", "Meshrix.js MCP 自动推送更新设置"),
     "",
     msg("Do you want to enable automatic push updates?", "您是否希望启用自动推送更新？"),
     msg("If enabled, your local AI agent will automatically download and install updates when the server pushes them.", "如果启用，当服务端推送更新时，您的本地 AI 智能体将自动下载和安装更新。"),
@@ -62,7 +62,7 @@ function interactiveSelection({ candidates, baseUrl, mode = "install" }: Record<
   let index: any = Math.max(0, candidates.findIndex((candidate?: any) : any => candidate.status === "detected"));
   const selectedIds: any = new Set<any>();
   let message: any = mode === "uninstall"
-    ? msg("Space selects one or more clients. Enter removes Meshrix MCP from selected clients.", "空格键选择一个或多个客户端，Enter 键确认移除所选客户端的 Meshrix MCP 服务。")
+    ? msg("Space selects one or more clients. Enter removes Meshrix.js MCP from selected clients.", "空格键选择一个或多个客户端，Enter 键确认移除所选客户端的 Meshrix.js MCP 服务。")
     : msg("Space selects one or more clients. Enter installs selected clients.", "空格键选择一个或多个客户端，Enter 键确认安装。");
   return new Promise((resolve?: any, reject?: any) : any => {
     const stdin: any = process.stdin;
@@ -226,14 +226,14 @@ export async function resolveHubForInstall(options?: any) : Promise<any> {
   if (!canUseInstallTui(options)) {
     throw new Error(`${discovered.reason} Run meshrix-mcp server-config --set --url <meshrix-url>, or rerun install in a TTY and choose manual configuration.`);
   }
-  console.log("No signed Meshrix MCP service was discovered on this device.");
+  console.log("No signed Meshrix.js MCP service was discovered on this device.");
   console.log("The installer will not write any agent client config until a server identity signature is verified.\n");
   const answer: any = await promptLine("Choose: [c]onfigure server URL now, [s]kip, manually configure later [s]: ");
   if (!answer || answer.toLowerCase().startsWith("s")) {
     return { ...options, __meshrixSkippedDiscovery: { ok: false, skipped: true, attempts: discovered.attempts, reason: "Skipped. Manually configure later with meshrix-mcp server-config --set --url <meshrix-url>." } };
   }
   if (!answer.toLowerCase().startsWith("c")) return resolveHubForInstall(options);
-  const url: any = await promptLine("Meshrix server URL: ");
+  const url: any = await promptLine("Meshrix.js server URL: ");
   const manual: any = await discoverMeshrixHub({ ...options, url });
   if (!manual.ok) throw new Error(`Failed to verify ${url}: ${manual.reason}`);
   await writeServerConfigProfile({

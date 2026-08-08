@@ -38,7 +38,7 @@ const FLOW: readonly any[] = Object.freeze([
   },
   {
     phase: "publish",
-    actor: ["Meshrix runtime", "Meshrix 运行时"],
+    actor: ["Meshrix.js runtime", "Meshrix.js 运行时"],
     title: ["Publish one consistent revision", "发布一致修订"],
     detail: [
       "Manifest persistence, gateway snapshot, and Operation Permission catalog converge before discovery.",
@@ -99,7 +99,7 @@ const FLOW: readonly any[] = Object.freeze([
 ]);
 
 const VISUAL_TITLES: Readonly<Record<string, any>> = Object.freeze({
-  "console-authenticated": "已认证的 Meshrix 工作台",
+  "console-authenticated": "已认证的 Meshrix.js 工作台",
   "console-organization-permissions": "已发布的组织与权限配置",
   "console-upstream-basic-config": "上游服务基础配置",
   "console-upstream-operation-config": "上游操作配置",
@@ -670,7 +670,7 @@ export function renderUpstreamServicePublishingHtml(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
-  <title>Meshrix Upstream Service Publishing Release Report</title>
+  <title>Meshrix.js Upstream Service Publishing Release Report</title>
   <style>
     :root {
       --ink: #17231d;
@@ -1557,7 +1557,7 @@ export function renderUpstreamServicePublishingHtml(
   <header class="cover">
     <div class="cover-main">
       <p class="kicker">${bilingual("Console operation manual", "管控台操作手册")}</p>
-      <h1>${bilingual("Publish an Upstream Service through Meshrix", "通过 Meshrix 发布上游服务")}</h1>
+      <h1>${bilingual("Publish an Upstream Service through Meshrix.js", "通过 Meshrix.js 发布上游服务")}</h1>
       <p class="manual-scope">${bilingual("Follow these eleven Console steps from administrator sign-in through organization governance, API Key distribution, MCP conversion, and final audit.", "从管理员登录开始，依次完成下面十一个管控台步骤，直至组织治理、API Key 分发、MCP 转换和最终审计全部闭环。")}</p>
     </div>
   </header>
@@ -1637,13 +1637,13 @@ export function renderUpstreamServicePublishingHtml(
         <code>application/json · ${escapeHtml(basicConfig.byteLength)} B · sha256:${escapeHtml(basicConfig.sha256)}</code>
       </header>
       <div class="table-shell"><table><caption>${bilingual("Published upstream interface catalog", "已发布上游接口清单")}</caption><thead><tr>${INTERFACE_CATALOG_COLUMNS.map(([english, chinese]: any[]) : any => `<th>${bilingual(english, chinese)}</th>`).join("")}</tr></thead><tbody>${interfaceCatalogRows}</tbody></table></div>
-      <p class="note">${bilingual("Download is the artifact response of the same conversion POST, not a standalone download endpoint. Every listed interface shape is forwarded through the governed Meshrix gateway.", "下载是同一个转换 POST 的制品响应，不是独立的下载接口。表中每种接口形态都通过受治理的 Meshrix 网关尽职转发。")}</p>
+      <p class="note">${bilingual("Download is the artifact response of the same conversion POST, not a standalone download endpoint. Every listed interface shape is forwarded through the governed Meshrix.js gateway.", "下载是同一个转换 POST 的制品响应，不是独立的下载接口。表中每种接口形态都通过受治理的 Meshrix.js 网关尽职转发。")}</p>
     </article>
     <div class="config-grid">
       <article class="config-card">
         <header class="config-card-header"><div><p class="card-kicker">${bilingual("Data plane", "数据平面")}</p><h3>${bilingual("Native file upload", "原生文件上传")}</h3></div></header>
         <dl><dt>${bilingual("Ingress", "入口")}</dt><dd>${escapeHtml(upload.transport)}</dd><dt>${bilingual("Chunk media type", "分块媒体类型")}</dt><dd>${escapeHtml(upload.chunkContentType)}</dd><dt>${bilingual("Content encoding", "内容编码")}</dt><dd>${escapeHtml(upload.contentEncoding)}</dd><dt>${bilingual("Base64 JSON", "Base64 JSON")}</dt><dd>${bilingual("No", "否")}</dd><dt>${bilingual("Artifact reference", "制品引用")}</dt><dd>${escapeHtml(upload.artifactReference)}</dd><dt>${bilingual("Upstream representation", "上游表示")}</dt><dd>${escapeHtml(upload.upstreamRepresentation)}</dd><dt>${bilingual("External file budget", "外部服务文件预算")}</dt><dd>${escapeHtml(upload.externalFileBudgetBytes)} B (50 MiB)</dd><dt>${bilingual("Multipart request envelope", "Multipart 请求封装上限")}</dt><dd>${escapeHtml(upload.multipartRequestMaxBytes)} B (51 MiB)</dd></dl>
-        <p class="note">${bilingual("The multipart value bounds one upstream request envelope; it is not Meshrix's global upload limit.", "Multipart 数值约束单次上游请求封装，并非 Meshrix 的全局上传上限。")}</p>
+        <p class="note">${bilingual("The multipart value bounds one upstream request envelope; it is not Meshrix.js's global upload limit.", "Multipart 数值约束单次上游请求封装，并非 Meshrix.js 的全局上传上限。")}</p>
       </article>
       <article class="config-card config-card--connector">
         <header class="config-card-header"><div><p class="card-kicker">${bilingual("Governed delivery", "受治理交付")}</p><h3>${bilingual("Downstream MCP connector", "下游 MCP 连接器")}</h3></div></header>
@@ -1707,8 +1707,8 @@ export function renderUpstreamServicePublishingHtml(
         const language = requested === "zh-CN" ? "zh-CN" : "en";
         document.documentElement.lang = language;
         document.title = language === "zh-CN"
-          ? "Meshrix 上游服务发布报告"
-          : "Meshrix Upstream Service Publishing Release Report";
+          ? "Meshrix.js 上游服务发布报告"
+          : "Meshrix.js Upstream Service Publishing Release Report";
         for (const node of nodes) {
           node.textContent = language === "zh-CN" ? node.dataset.zh : node.dataset.en;
         }
@@ -1776,7 +1776,7 @@ function renderFailedUpstreamServicePublishingHtml(journeyReport?: any) : any {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
-  <title>Meshrix Upstream Service Publishing — Failed Journey</title>
+  <title>Meshrix.js Upstream Service Publishing — Failed Journey</title>
   <style>
     :root { color: #2d1e1b; background: #eee9e5; font: 16px/1.6 system-ui, sans-serif; }
     body { max-width: 760px; margin: 8vh auto; padding: 32px; background: #fff; border: 1px solid #cdbcb5; border-radius: 16px; }
@@ -1875,7 +1875,7 @@ export function renderUpstreamServicePublishingBlankTemplate() : any {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="data:,">
-  <title>Meshrix Upstream Service Publishing Report Template</title>
+  <title>Meshrix.js Upstream Service Publishing Report Template</title>
   <style>
     :root { color: #17231d; background: #e4e8e3; font: 15px/1.6 system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -1926,7 +1926,7 @@ export function renderUpstreamServicePublishingBlankTemplate() : any {
   </nav>
   <header>
     <p>${bilingual("Console operation manual", "管控台操作手册")}</p>
-    <h1>${bilingual("Publish an Upstream Service through Meshrix", "通过 Meshrix 发布上游服务")}</h1>
+    <h1>${bilingual("Publish an Upstream Service through Meshrix.js", "通过 Meshrix.js 发布上游服务")}</h1>
     <p>${bilingual("Follow the verified Console journey from sign-in through downstream MCP invocation.", "按照已验证的管控台路线，从登录开始完成下游 MCP 调用。")}</p>
     <p class="status">${bilingual("Not executed", "未执行")}</p>
   </header>
@@ -1963,14 +1963,14 @@ function renderInterfaceCatalogRows(catalog?: any) : any {
     <td><code>GET ${escapeHtml(catalog.healthPath)}</code></td>
     <td>${bilingual("No upload body", "无上传请求体")}</td>
     <td>${bilingual("Readiness response", "就绪状态响应")}</td>
-    <td>${bilingual("Forwarded through the Meshrix gateway runtime health path", "通过 Meshrix 网关运行时健康路径转发")}</td>
+    <td>${bilingual("Forwarded through the Meshrix.js gateway runtime health path", "通过 Meshrix.js 网关运行时健康路径转发")}</td>
   </tr>`;
   const operationRows: any = catalog.operations.map((operation?: any) : any => `<tr data-service-interface="${escapeHtml(operation.operationKey)}">
     <td><strong>${escapeHtml(operation.operationKey)}</strong><small>${bilingual(operation.approvalRequired ? "Approval-gated conversion" : "Immediate governed conversion", operation.approvalRequired ? "需审批的格式转换" : "立即执行但仍受治理的格式转换")}</small></td>
     <td><code>${escapeHtml(operation.method)} ${escapeHtml(operation.path)}</code></td>
     <td><code>${escapeHtml(operation.requestMode)} · ${escapeHtml(operation.requestMediaTypes.join(", "))}</code><small>${bilingual(`Required file; optional targetFormat; external file budget ${catalog.externalFileBudgetBytes} B; request envelope ${operation.requestMaxBytes} B`, `必填 file；可选 targetFormat；外部文件预算 ${catalog.externalFileBudgetBytes} B；请求封装上限 ${operation.requestMaxBytes} B`)}</small></td>
     <td><code>${escapeHtml(operation.responseMode)} · ${escapeHtml(operation.responseMediaTypes.join(", "))}</code><small>${bilingual(`Artifact response; byte ranges enabled; maximum ${operation.responseMaxBytes} B`, `制品响应；支持字节范围；上限 ${operation.responseMaxBytes} B`)}</small></td>
-    <td><code>${escapeHtml(operation.requiredScopes.join(", "))} · ${escapeHtml(operation.risk)} · ${escapeHtml(operation.timeoutMs)} ms</code><small>${bilingual(operation.approvalRequired ? "Request approval required; forwarded through the governed Meshrix gateway" : "No approval wait; Grant, scope, risk, owner, permit, and audit checks remain enforced by the Meshrix gateway", operation.approvalRequired ? "需要请求级审批；通过受治理的 Meshrix 网关转发" : "无需等待审批；Meshrix 网关仍执行 Grant、权限域、风险、所有者、许可与审计检查")}</small></td>
+    <td><code>${escapeHtml(operation.requiredScopes.join(", "))} · ${escapeHtml(operation.risk)} · ${escapeHtml(operation.timeoutMs)} ms</code><small>${bilingual(operation.approvalRequired ? "Request approval required; forwarded through the governed Meshrix.js gateway" : "No approval wait; Grant, scope, risk, owner, permit, and audit checks remain enforced by the Meshrix.js gateway", operation.approvalRequired ? "需要请求级审批；通过受治理的 Meshrix.js 网关转发" : "无需等待审批；Meshrix.js 网关仍执行 Grant、权限域、风险、所有者、许可与审计检查")}</small></td>
   </tr>`).join("");
   return `${healthRow}${operationRows}`;
 }

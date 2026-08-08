@@ -1,7 +1,7 @@
 {
-  "$schema": "./schema/open-platform-capability-matrix.schema.json",
-  "schemaVersion": "v0.0.1:registry:open-platform-capability-matrix-1",
-  "description": "Machine-readable evidence matrix for open platform release capability audits. Paths are repository-relative and contain no runtime-local data.",
+  "$schema": "./schema/internal-platform-capability-matrix.schema.json",
+  "schemaVersion": "v0.0.1:registry:internal-platform-capability-matrix-1",
+  "description": "Machine-readable evidence matrix for internal platform release capability audits. Paths are repository-relative and contain no runtime-local data.",
   "statusEnum": [
     "implemented",
     "partial",

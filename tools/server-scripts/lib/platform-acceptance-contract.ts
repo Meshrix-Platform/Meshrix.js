@@ -28,7 +28,7 @@ export function platformAcceptanceJobBudget(worstCaseTimeoutMs?: any) : any {
 
 export const PLATFORM_ACCEPTANCE_STATE_MACHINE: Readonly<Record<string, any>> = Object.freeze({
   schemaVersion: "v0.0.1:state-machine:platform-acceptance-1",
-  id: "meshrix-platform-acceptance",
+  id: "meshrix-js-platform-acceptance",
   initialState: "initialized",
   terminalStates: ["accepted", "failed"],
   states: [

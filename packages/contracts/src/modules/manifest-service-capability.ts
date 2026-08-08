@@ -3,7 +3,7 @@ export const SERVICE_CAPABILITY_LAYERS: readonly any[] = Object.freeze([
     layerNumber: 1,
     layerId: "client-types",
     label: "客户端类型",
-    functionItems: Object.freeze(["Agent Harness", "Meshrix Client"])
+    functionItems: Object.freeze(["Agent Harness", "Meshrix.js Client"])
   }),
   Object.freeze({
     layerNumber: 2,

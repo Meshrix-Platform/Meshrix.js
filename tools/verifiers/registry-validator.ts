@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { validateFactSourceAuthorityRegistry } from './registry-fact-source-authority.ts';
 import { validateReleaseAuthorityBaselineRegistry } from './registry-release-authority-baseline.ts';
 import { validateLocalJsonSchemaReference } from './registry-json-schema.ts';
-import { validateOpenPlatformCapabilityMatrix } from './registry-open-platform-capability-matrix.ts';
+import { validateInternalPlatformCapabilityMatrix } from './registry-internal-platform-capability-matrix.ts';
 import { validateOperationRegistryProjectionParity } from './registry-operation-parity.ts';
 import { validateRepoLayout } from './registry-repo-layout.ts';
 import { testSuiteReachabilityIssues } from '../registry/test-suite-reachability.ts';
@@ -37,7 +37,7 @@ const ADDITIONAL_REGISTRY_FILES: any[] = [
 ];
 
 const STRUCTURED_REGISTRY_FILES: any[] = [
-  'open-platform-capability-matrix.json',
+  'internal-platform-capability-matrix.json',
 ];
 
 function validateBasicStructure(data?: any, name?: any, { requireVersion = true }: Record<string, any> = {}) : any {
@@ -395,7 +395,7 @@ async function validateDocsRegistryAgainstSources(dataCache?: any) : Promise<any
     return issues;
   }
 
-  const matrix: any = dataCache.get('open-platform-capability-matrix.json');
+  const matrix: any = dataCache.get('internal-platform-capability-matrix.json');
   const matrixDocPaths: any = new Set<any>((matrix?.capabilities || []).flatMap((capability?: any) : any => capability.docs || []));
   const registeredPaths: any = new Set<any>(docsData.entries.map((entry?: any) : any => entry.path));
 
@@ -424,7 +424,7 @@ async function validateDocsRegistryAgainstSources(dataCache?: any) : Promise<any
       issues.push(`docs-registry: entry "${entry.id}" terms not found in ${entry.path}: ${missingTerms.join(', ')}`);
     }
 
-    if (entry.source === 'tools/registry/open-platform-capability-matrix.json' && !matrixDocPaths.has(entry.path)) {
+    if (entry.source === 'tools/registry/internal-platform-capability-matrix.json' && !matrixDocPaths.has(entry.path)) {
       issues.push(`docs-registry: matrix-sourced entry "${entry.id}" is not referenced by any capability docs list`);
     }
   }
@@ -684,8 +684,8 @@ async function main() : Promise<any> {
       dataCache.set(filename, data);
       let issues: any = validateBasicStructure(data, filename, { requireVersion: false });
       issues = issues.concat(await validateLocalJsonSchemaReference(data, filename, { registryDir: REGISTRY_DIR }));
-      if (filename === 'open-platform-capability-matrix.json') {
-        issues = issues.concat(validateOpenPlatformCapabilityMatrix(data));
+      if (filename === 'internal-platform-capability-matrix.json') {
+        issues = issues.concat(validateInternalPlatformCapabilityMatrix(data));
       }
       if (issues.length > 0) {
         totalIssues += issues.length;

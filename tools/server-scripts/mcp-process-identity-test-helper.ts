@@ -65,7 +65,7 @@ export function createSignedMcpHeaders({
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
-    "X-Meshrix-MCP-Target": target,
+    "X-Meshrix.js-MCP-Target": target,
     ...createProcessIdentityRequestHeaders({
       privateKeyPem,
       method,

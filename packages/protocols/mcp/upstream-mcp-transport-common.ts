@@ -130,7 +130,7 @@ export function initializeParams(config: Record<string, any> = {}) : any {
     protocolVersion: requestedProtocolVersion(config),
     capabilities: {},
     clientInfo: {
-      name: "Meshrix Upstream MCP Gateway",
+      name: "Meshrix.js Upstream MCP Gateway",
       version: "0.0.1"
     }
   };

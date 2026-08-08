@@ -98,7 +98,7 @@ export function createMeshrixSigner({
       publicKey: verifierPublicKey,
       async sign(message?: any) : Promise<any> {
         if (!privateKey) {
-          throw new Error("Ed25519 Meshrix signer requires a privateKey for signing.");
+          throw new Error("Ed25519 Meshrix.js signer requires a privateKey for signing.");
         }
         return `ed25519:${signWithKey(
           null,
@@ -123,14 +123,14 @@ export function createMeshrixSigner({
     });
   }
   if (resolvedAlgorithm !== "hmac-sha256") {
-    throw new Error(`Unsupported Meshrix signer algorithm: ${resolvedAlgorithm}`);
+    throw new Error(`Unsupported Meshrix.js signer algorithm: ${resolvedAlgorithm}`);
   }
   const retainedSecret: any = Buffer.isBuffer(secret)
     ? Buffer.from(secret)
     : Buffer.from(String(secret || ""), "utf8");
   let closed: any = false;
   const assertOpen: any = () : any => {
-    if (closed) throw new Error("Meshrix signer is closed.");
+    if (closed) throw new Error("Meshrix.js signer is closed.");
   };
   return Object.freeze({
     protocol: MESHRIX_ASPECT_PROTOCOL,
@@ -161,7 +161,7 @@ export function createMeshrixSignerKeyRing({
   if (!active || typeof active.sign !== "function" || typeof active.verify !== "function") {
     throw proofConfigurationError(
       "operation_proof_signer_keyring_active_required",
-      "Meshrix operation-proof signer key ring requires one active signer."
+      "Meshrix.js operation-proof signer key ring requires one active signer."
     );
   }
   const all: any[] = [active, ...asArray(verification)];
@@ -178,7 +178,7 @@ export function createMeshrixSignerKeyRing({
     ) {
       throw proofConfigurationError(
         "operation_proof_signer_keyring_invalid",
-        "Meshrix operation-proof signer key ring contains an invalid or duplicate verifier."
+        "Meshrix.js operation-proof signer key ring contains an invalid or duplicate verifier."
       );
     }
     byIdentity.set(identity, signer);
@@ -188,7 +188,7 @@ export function createMeshrixSignerKeyRing({
     if (closed) {
       throw proofConfigurationError(
         "operation_proof_signer_keyring_closed",
-        "Meshrix operation-proof signer key ring is closed."
+        "Meshrix.js operation-proof signer key ring is closed."
       );
     }
   };
@@ -250,7 +250,7 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
   if (!configuredPath || !path.isAbsolute(configuredPath)) {
     throw proofConfigurationError(
       "operation_proof_signer_secret_file_required",
-      "Meshrix operation-proof signer secret file is not configured.",
+      "Meshrix.js operation-proof signer secret file is not configured.",
     );
   }
   let stat: any;
@@ -267,7 +267,7 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
   } catch {
     throw proofConfigurationError(
       "operation_proof_signer_secret_file_unavailable",
-      "Meshrix operation-proof signer secret file is unavailable.",
+      "Meshrix.js operation-proof signer secret file is unavailable.",
     );
   }
   if (
@@ -278,7 +278,7 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
   ) {
     throw proofConfigurationError(
       "operation_proof_signer_custody_invalid",
-      "Meshrix operation-proof signer secret custody is invalid.",
+      "Meshrix.js operation-proof signer secret custody is invalid.",
     );
   }
   let bytes: any;
@@ -294,7 +294,7 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
     ) {
       throw proofConfigurationError(
         "operation_proof_signer_secret_invalid",
-        "Meshrix operation-proof signer secret is invalid.",
+        "Meshrix.js operation-proof signer secret is invalid.",
       );
     }
     return encoded;
@@ -304,7 +304,7 @@ function signerSecretFromExternalFile({ dataDir = "", signerSecretFile = "" }: R
     }
     throw proofConfigurationError(
       "operation_proof_signer_secret_file_unavailable",
-      "Meshrix operation-proof signer secret file is unavailable.",
+      "Meshrix.js operation-proof signer secret file is unavailable.",
     );
   } finally {
     bytes?.fill(0);
@@ -348,7 +348,7 @@ function resolveSignerSecret({
   if (directSecret && signerSecretFile) {
     throw proofConfigurationError(
       "operation_proof_signer_custody_ambiguous",
-      "Meshrix operation-proof signer secret custody is ambiguous.",
+      "Meshrix.js operation-proof signer secret custody is ambiguous.",
     );
   }
   return directSecret || (
@@ -938,7 +938,7 @@ function createMeshrixAspect({
   signerSecret = ""
 }: Record<string, any> = {}) : any {
   if (!core || !storage) {
-    throw new Error("Meshrix proof aspect requires Pactium core and storage ports.");
+    throw new Error("Meshrix.js proof aspect requires Pactium core and storage ports.");
   }
   const hasExplicitSignerSecret: any = text(signerSecret) !== "";
   const resolvedSigner: any = signer === false
@@ -951,7 +951,7 @@ function createMeshrixAspect({
 
   function assertProductionReady() : any {
     if (evidencePolicy === "production" && !resolvedSigner) {
-      throw new Error("Meshrix production evidence policy requires an explicit signer or signerSecret.");
+      throw new Error("Meshrix.js production evidence policy requires an explicit signer or signerSecret.");
     }
   }
 
@@ -960,10 +960,10 @@ function createMeshrixAspect({
     const policyEvidence: any = input.policyEvidence ?? input.policy;
     const effectEvidence: any = input.workspaceEffectEvidence ?? input.effectEvidence ?? input.workspaceEffect;
     if (evidencePolicy === "production" && !policyEvidence) {
-      throw new Error("Meshrix production evidence policy requires policy evidence.");
+      throw new Error("Meshrix.js production evidence policy requires policy evidence.");
     }
     if (evidencePolicy === "production" && !effectEvidence) {
-      throw new Error("Meshrix production evidence policy requires workspace effect evidence.");
+      throw new Error("Meshrix.js production evidence policy requires workspace effect evidence.");
     }
     assertProductionReady();
     const compactInput: Record<string, any> = {
@@ -1059,7 +1059,7 @@ function createMeshrixAspect({
         failures.push(createVerificationFailure({
           layer: "meshrix",
           code: `missing_${required.replace(/\W+/gu, "_")}`,
-          message: `Meshrix Proof Envelope is missing required critical extension ${required}.`,
+          message: `Meshrix.js Proof Envelope is missing required critical extension ${required}.`,
           evidenceRef: envelope?.envelopeId || "",
           repairable: evidencePolicy !== "production"
         }));
@@ -1067,7 +1067,7 @@ function createMeshrixAspect({
         failures.push(createVerificationFailure({
           layer: "meshrix",
           code: "noncritical_required_extension",
-          message: `Meshrix required extension ${required} must be critical and listed in criticalExtensions.`,
+          message: `Meshrix.js required extension ${required} must be critical and listed in criticalExtensions.`,
           evidenceRef: envelope?.envelopeId || "",
           repairable: true
         }));
@@ -1105,7 +1105,7 @@ function createMeshrixAspect({
       failures.push(createVerificationFailure({
         layer: "meshrix.signing",
         code: "missing_signature_verifier",
-        message: "Meshrix production verification requires an explicit signer or signerSecret.",
+        message: "Meshrix.js production verification requires an explicit signer or signerSecret.",
         evidenceRef: envelope?.envelopeId || "",
         repairable: true
       }));
@@ -1114,7 +1114,7 @@ function createMeshrixAspect({
       failures.push(createVerificationFailure({
         layer: "meshrix.signing",
         code: "missing_signature",
-        message: "Meshrix signing is enabled by default and no signature extension was found.",
+        message: "Meshrix.js signing is enabled by default and no signature extension was found.",
         evidenceRef: envelope?.envelopeId || "",
         repairable: evidencePolicy !== "production"
       }));
@@ -1157,7 +1157,7 @@ function createMeshrixAspect({
         failures.push(createVerificationFailure({
           layer: "meshrix.signing",
           code: "signature_verifier_unconfigured",
-          message: "Meshrix signature material cannot be verified without an explicit signer or signerSecret.",
+          message: "Meshrix.js signature material cannot be verified without an explicit signer or signerSecret.",
           evidenceRef: signatureExtension.valueRef,
           repairable: true
         }));
@@ -1183,7 +1183,7 @@ function createMeshrixAspect({
       failures.push(createVerificationFailure({
         layer: "meshrix.trust",
         code: "untrusted_verification",
-        message: "Meshrix production verification requires a caller-supplied trusted manifest.",
+        message: "Meshrix.js production verification requires a caller-supplied trusted manifest.",
         evidenceRef: envelope?.envelopeId || "",
         repairable: true
       }));
@@ -1307,7 +1307,7 @@ export function createOperationProofSubstrate({
   })) {
     throw proofConfigurationError(
       "operation_proof_signer_required",
-      "Meshrix production operation-proof evidence requires a configured signer.",
+      "Meshrix.js production operation-proof evidence requires a configured signer.",
     );
   }
   const ownsPactiumRuntime: any = !pactiumRuntime;

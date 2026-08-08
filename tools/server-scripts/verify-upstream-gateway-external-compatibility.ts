@@ -65,7 +65,7 @@ function externalServiceDescriptor() : any {
     baseUrl: `https://${EXTERNAL_HOST}:443`,
     healthPath: "/rate_limit",
     defaultHeaders: {
-      "user-agent": "Meshrix-Upstream-Gateway-External-Verifier",
+      "user-agent": "Meshrix.js-Upstream-Gateway-External-Verifier",
       accept: "application/vnd.github+json"
     },
     trafficPolicy: { perMinute: 20, burst: 20 },
@@ -300,7 +300,7 @@ async function callMcp(token?: any, toolName?: any, operation?: any, input: Reco
   }, id));
   const response: any = await fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "codex" },
+    headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "codex" },
     body
   });
   assert.equal(response.status, 200, `Unexpected MCP HTTP status ${response.status}`);

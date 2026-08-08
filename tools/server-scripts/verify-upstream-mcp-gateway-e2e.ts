@@ -167,7 +167,7 @@ async function mcp(token?: any, body?: any) : Promise<any> {
   const bodyText: any = JSON.stringify(body);
   return fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "opencode" },
+    headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "opencode" },
     body: bodyText
   });
 }

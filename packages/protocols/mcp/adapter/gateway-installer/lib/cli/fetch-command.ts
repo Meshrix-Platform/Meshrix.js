@@ -35,7 +35,7 @@ export function resolveArtifactUrl(options: Record<string, any> = {}) : any {
   }
   const configuredBaseUrl: any = normalizeBaseUrl(option(options, "resolved-url", option(options, "url", "")));
   if (!configuredBaseUrl) {
-    throw new Error("Artifact fetch requires a signed Meshrix server origin.");
+    throw new Error("Artifact fetch requires a signed Meshrix.js server origin.");
   }
   let candidate: any = raw;
   if (!/^https?:\/\//iu.test(candidate)) {
@@ -171,7 +171,7 @@ export async function fetchCommand(options: Record<string, any> = {}) : Promise<
     });
     if (!response.ok) {
       const reason: any = await responseErrorReason(response);
-      throw new Error(`Meshrix artifact fetch failed: ${reason}`);
+      throw new Error(`Meshrix.js artifact fetch failed: ${reason}`);
     }
     const contentLength: any = Number(response.headers.get("content-length") || "");
     if (Number.isSafeInteger(contentLength) && contentLength > MCP_FETCH_MAX_ARTIFACT_BYTES) {
@@ -182,7 +182,7 @@ export async function fetchCommand(options: Record<string, any> = {}) : Promise<
     const streamed: any = await streamResponseToFile(response, outputPath);
     if (expectedDigest && streamed.sha256 !== expectedDigest) {
       await fsp.rm(streamed.temporaryPath, { force: true });
-      throw new Error("Meshrix artifact fetch failed: response Digest header did not match the downloaded bytes.");
+      throw new Error("Meshrix.js artifact fetch failed: response Digest header did not match the downloaded bytes.");
     }
     await commitTemporaryFile(streamed.temporaryPath, outputPath);
     return {

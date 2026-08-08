@@ -162,14 +162,14 @@ export async function uninstallTuiCommand(options?: any) : Promise<any> {
   if (filteredCandidates.length === 0) {
     console.log(`\x1b[2J\x1b[HMeshrix MCP uninstall\n`);
     console.log(`Scanned ${scan.candidates.length} supported MCP clients.`);
-    console.log("None of these clients currently have Meshrix MCP installed.");
+    console.log("None of these clients currently have Meshrix.js MCP installed.");
     await waitAnyKey("\nPress any key to escape...");
     return {
       ok: true,
       cancelled: true,
       packageName: packageJson.name,
       packageVersion: packageJson.version,
-      reason: "No installed Meshrix MCP clients found to uninstall."
+      reason: "No installed Meshrix.js MCP clients found to uninstall."
     };
   }
 

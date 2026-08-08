@@ -118,7 +118,7 @@ const SAMPLE_PACKS: readonly any[] = Object.freeze([
         content: () : any => [
           "# Gateway Forwarding Pilot",
           "",
-          "本样例用于验证 Meshrix 对上游 API 注册、策略预览、审批和流控的整合能力。",
+          "本样例用于验证 Meshrix.js 对上游 API 注册、策略预览、审批和流控的整合能力。",
           "",
           "## 检查项",
           "",

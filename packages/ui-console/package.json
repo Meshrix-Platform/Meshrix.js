@@ -1,13 +1,8 @@
 {
   "name": "@meshrix/ui-console",
   "version": "0.0.1",
-  "description": "Meshrix reusable console components, typed API clients, route registry",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/ui-console"
-  },
+  "description": "Meshrix.js reusable console components, typed API clients, route registry",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

@@ -70,7 +70,7 @@ describe("console appearance preferences", () : any => {
     ]);
   });
 
-  it("applies the Meshrix Crystal dark palette with a blue primary", async () : Promise<any> => {
+  it("applies the Meshrix.js Crystal dark palette with a blue primary", async () : Promise<any> => {
     await refreshAvailableAppearancePresetConfigs();
 
     applyAppearancePresetDocument("meshrix-crystal");

@@ -46,7 +46,7 @@ export async function handleStaticFallback({
   if (url.pathname === "/" && !distPath) {
     sendJson(response, 200, {
       ok: true,
-      service: "Meshrix Server",
+      service: "Meshrix.js Server",
       serverId: discoveryState.serverId,
       activeServiceUrl: discoveryState.activeServiceUrl
     });

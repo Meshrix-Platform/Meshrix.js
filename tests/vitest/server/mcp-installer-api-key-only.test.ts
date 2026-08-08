@@ -91,7 +91,7 @@ describe("MCP installer API Key-only input", () : any => {
 
   it("uses only the API Key credential header", () : any => {
     const headers: any = authHeaders(KEY, "codex");
-    expect(headers["X-Meshrix-Api-Key"]).toBe(KEY);
+    expect(headers["X-Meshrix.js-Api-Key"]).toBe(KEY);
     expect(headers).not.toHaveProperty("Authorization");
     expect(headers).not.toHaveProperty("x-meshrix-tool-token");
     expect(Object.keys(headers).some((name?: any) : any => /claim|signature|verification/iu.test(name))).toBe(false);

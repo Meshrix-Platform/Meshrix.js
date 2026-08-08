@@ -1,7 +1,7 @@
 {
   "$schema": "./schema/release-definition.schema.json",
   "version": "v0.0.1:registry:release-definition-1",
-  "product": "Meshrix",
+  "product": "Meshrix.js",
   "release": {
     "version": "0.0.1",
     "tag": "v0.0.1",

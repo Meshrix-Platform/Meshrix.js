@@ -82,7 +82,7 @@ export function buildDeviceHubManifest({
     },
     servers: {
       [MCP_SERVER_NAME]: {
-        name: "Meshrix",
+        name: "Meshrix.js",
         transport: "streamable-http",
         httpUrl: mcpUrl,
         vmHttpUrl: vmMcpUrl,
@@ -149,7 +149,7 @@ export function buildDeviceHubManifest({
         auth: {
           type: "api-key",
           input: "protected-stdin-or-environment",
-          acceptedHeaders: ["X-Meshrix-Api-Key", "X-Meshrix-MCP-Target"],
+          acceptedHeaders: ["X-Meshrix.js-Api-Key", "X-Meshrix.js-MCP-Target"],
           tokenEnv
         },
         targets
@@ -368,7 +368,7 @@ export async function serverConfigCommand(options?: any) : Promise<any> {
     }
     const discovered: any = await discoverMeshrixHub({ ...options, url });
     if (!discovered.ok) {
-      throw new Error(`Failed to verify Meshrix MCP server at ${url}: ${discovered.reason}`);
+      throw new Error(`Failed to verify Meshrix.js MCP server at ${url}: ${discovered.reason}`);
     }
     return writeServerConfigProfile({
       options,
@@ -382,11 +382,11 @@ export async function serverConfigCommand(options?: any) : Promise<any> {
     const manifest: any = await readJson(discoveryPath, {});
     const profile: any = manifest?.serverConfig?.profiles?.[name];
     if (!profile?.baseUrl) {
-      throw new Error(`No Meshrix MCP server profile named ${name}.`);
+      throw new Error(`No Meshrix.js MCP server profile named ${name}.`);
     }
     const discovered: any = await discoverMeshrixHub({ ...options, url: profile.baseUrl });
     if (!discovered.ok) {
-      throw new Error(`Failed to verify Meshrix MCP server profile ${name}: ${discovered.reason}`);
+      throw new Error(`Failed to verify Meshrix.js MCP server profile ${name}: ${discovered.reason}`);
     }
     return writeServerConfigProfile({
       options,

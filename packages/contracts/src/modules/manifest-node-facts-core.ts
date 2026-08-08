@@ -68,7 +68,7 @@ export const CORE_ARCHITECTURE_NODE_FACTS: readonly any[] = Object.freeze([
     {
       moduleId: "credential-to-meshrix-client",
       parentModuleId: "credential-distribution",
-      label: "To Meshrix Client",
+      label: "To Meshrix.js Client",
       hydration: "optional",
       hydratable: true,
       functionItems: ["client credential projection", "secretRef only"]

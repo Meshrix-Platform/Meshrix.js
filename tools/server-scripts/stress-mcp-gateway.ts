@@ -179,8 +179,8 @@ function mcpHeaders({ body = "" }: Record<string, any> = {}) : any {
   void body;
   return {
     "Content-Type": "application/json",
-    "X-Meshrix-Api-Key": token,
-    "X-Meshrix-MCP-Target": "codex"
+    "X-Meshrix.js-Api-Key": token,
+    "X-Meshrix.js-MCP-Target": "codex"
   };
 }
 

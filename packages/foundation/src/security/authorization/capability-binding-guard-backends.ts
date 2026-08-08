@@ -293,7 +293,7 @@ export async function writeSecretServiceRecord({ alias = DEFAULT_ALIAS }: Record
   await runText("secret-tool", [
     "store",
     "--label",
-    `Meshrix Capability Binding Guard ${safeAlias(alias)}`,
+    `Meshrix.js Capability Binding Guard ${safeAlias(alias)}`,
     ...secretToolAttributes(alias)
   ], { input: JSON.stringify(record) });
   return record;

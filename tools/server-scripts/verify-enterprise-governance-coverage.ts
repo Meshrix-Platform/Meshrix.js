@@ -15,7 +15,7 @@ import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/t
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REPORT_PATH: any = "build/reports/enterprise-governance-coverage.json";
-const MATRIX_PATH: any = "tools/registry/open-platform-capability-matrix.json";
+const MATRIX_PATH: any = "tools/registry/internal-platform-capability-matrix.json";
 const CANONICAL_VERIFIER: any = "tools/server-scripts/verify-authorization-governance.ts";
 
 const SENSITIVE_REPORT_PATTERNS: readonly any[] = Object.freeze([

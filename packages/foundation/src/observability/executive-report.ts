@@ -259,7 +259,7 @@ export async function buildExecutiveReport(input: Record<string, any> = {}) : Pr
     timeRange: text(input.timeRange || "all"),
     status: risks.some((risk?: any) : any => risk.severity === "critical") ? "blocked" : text(health.status || "unknown"),
     executiveSummary: {
-      headline: text(input.headline || "Meshrix executive report"),
+      headline: text(input.headline || "Meshrix.js executive report"),
       keyFindings: keyFindings({ health, assetValue, evaluation, capacity, trace }),
       recommendedDecisions: risks.slice(0, 5).map((risk?: any) : any => ({
         riskType: risk.type,

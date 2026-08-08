@@ -17,15 +17,15 @@ import { ServerConfig } from "#meshrix/server-config";
 import { reconcileStorageRestoreTransactionsSync } from "../../storage/restore-transaction.ts";
 import { acquireStorageRuntimeLease } from "../../storage/storage-lifecycle-lock.ts";
 
-/** @deprecated Use `PACTIUM_MANIFEST_FILE` from `pactium`. Removal: next major (Meshrix 1.0.0). */
+/** @deprecated Use `PACTIUM_MANIFEST_FILE` from `pactium`. Removal: next major (Meshrix.js 1.0.0). */
 export const PACTIUM_MANIFEST_FILE: any = PACTIUM_PACKAGE_MANIFEST_FILE;
-/** @deprecated Use `PACTIUM_SQLITE_FILE` from `pactium`. Removal: next major (Meshrix 1.0.0). */
+/** @deprecated Use `PACTIUM_SQLITE_FILE` from `pactium`. Removal: next major (Meshrix.js 1.0.0). */
 export const PACTIUM_SQLITE_FILE: any = PACTIUM_PACKAGE_SQLITE_FILE;
-/** @deprecated Use `PROTOCOL_STORAGE_CATEGORY` from `pactium`. Removal: next major (Meshrix 1.0.0). */
+/** @deprecated Use `PROTOCOL_STORAGE_CATEGORY` from `pactium`. Removal: next major (Meshrix.js 1.0.0). */
 export const PROTOCOL_SUBSTRATE_STORAGE_CATEGORY: any = PROTOCOL_STORAGE_CATEGORY;
 
 /**
- * @deprecated Use `classifyProtocolStorageArtifact` from `pactium`. Removal: next major (Meshrix 1.0.0).
+ * @deprecated Use `classifyProtocolStorageArtifact` from `pactium`. Removal: next major (Meshrix.js 1.0.0).
  */
 export function classifyProtocolSubstrateStorageArtifact(relativePath: any = "") : any {
   return classifyProtocolStorageArtifact(relativePath);
@@ -36,14 +36,14 @@ export function resolveMeshrixPactiumDataDir(userDataPath: any = "") : any {
 }
 
 /**
- * @deprecated Use `inspectDataDir` from `pactium` with an explicit `dataDir`. Removal: next major (Meshrix 1.0.0).
+ * @deprecated Use `inspectDataDir` from `pactium` with an explicit `dataDir`. Removal: next major (Meshrix.js 1.0.0).
  */
 export function inspectPactiumFreshDataDir({ userDataPath = "" }: Record<string, any> = {}) : any {
   return inspectDataDir({ dataDir: resolveMeshrixPactiumDataDir(userDataPath) });
 }
 
 /**
- * @deprecated Use `assertCurrentDataDir` from `pactium` with an explicit `dataDir`. Removal: next major (Meshrix 1.0.0).
+ * @deprecated Use `assertCurrentDataDir` from `pactium` with an explicit `dataDir`. Removal: next major (Meshrix.js 1.0.0).
  */
 export function assertPactiumFreshDataDir(input: Record<string, any> = {}) : any {
   const dataDir: any = resolveMeshrixPactiumDataDir(input.userDataPath || input.dataDir || "");

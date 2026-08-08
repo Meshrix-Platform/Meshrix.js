@@ -1,13 +1,13 @@
-# Meshrix Documentation
+# Meshrix.js Documentation
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
 This directory contains the formal technical documentation for installing,
-running, operating, integrating, and verifying Meshrix as a
-private-deployable open platform.
+running, operating, integrating, and verifying Meshrix.js as a
+private-deployable internal platform.
 
 Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, and executable verification commands.
 
@@ -47,7 +47,7 @@ It is fail-closed: a direct, transitive, bundled, optional, example, image, or
 deployment dependency is rejected whenever its licensing, redistribution,
 production-use, maintenance-continuity, or project-governance risk cannot be
 resolved from primary evidence. A customer must never be required to absorb a
-third-party commercial risk in order to deploy or operate Meshrix privately.
+third-party commercial risk in order to deploy or operate Meshrix.js privately.
 License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
@@ -73,7 +73,7 @@ decision, execution plan, verifier, acceptance receipt, or release authority.
 | Governed release status | [releases/README.md](releases/README.md) |
 | License | [../LICENSE](../LICENSE) |
 
-## Meshrix Technical Documents
+## Meshrix.js Technical Documents
 
 | Topic | Document |
 | --- | --- |
@@ -102,19 +102,10 @@ projection manually. The architecture HTML diagrams are projections of
 `packages/contracts/src/modules/manifest.ts`; update their digest markers with
 `node tools/generators/generate-architecture-diagram-digests.ts`.
 
-## External Maintenance Framework
+## Maintenance Sources
 
-Reusable maintenance skills, delivery procedures, workflow definitions,
-contract templates, examples, and helper scripts are owned by the external
-`lico-dev` repository. They are not copied into this product repository.
-
-Use `$lico-feature-reassembly` and the `lico-dev reassembly` commands for a
-source split, package extraction, ownership move, protocol separation, or
-multi-surface feature closure. Use `lico-dev workflow plan changed` for the
-path-selected verification closure and `lico-dev workflow plan reassembly` for
-the Meshrix structural closure.
-
-This documentation remains a factual input to that framework:
+Repository-local source, registries, documentation, and verification commands
+are the complete maintenance authority for Meshrix.js:
 
 - [Architecture](architecture/ARCHITECTURE.md) owns current package, layer,
   composition, state, and protocol boundaries.

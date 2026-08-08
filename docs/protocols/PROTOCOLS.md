@@ -1,6 +1,6 @@
 # Protocols
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
@@ -70,7 +70,7 @@ declare `mcpOutlet` and do not contribute to the categorized outlet summary.
 
 Published operations choose one explicit request representation; HTTP operations
 may omit the response representation when they want governed native passthrough.
-Meshrix then applies the bounded opaque-stream response default, including the
+Meshrix.js then applies the bounded opaque-stream response default, including the
 response size limit and transport-header allowlist. JSON-RPC operations still
 declare a structured response representation.
 The native HTTP surface
@@ -101,22 +101,22 @@ The published protocol is the complete server-client boundary. Core owns only se
 
 ## Delegated MCP Child Calls
 
-Targets that call Meshrix MCP on behalf of a parent operation use a `delegated-mcp-child` grant. The MCP request carries the canonical child binding in `delegatedMcp.childOperation` or `delegatedChildOperation`, or through the corresponding headers:
+Targets that call Meshrix.js MCP on behalf of a parent operation use a `delegated-mcp-child` grant. The MCP request carries the canonical child binding in `delegatedMcp.childOperation` or `delegatedChildOperation`, or through the corresponding headers:
 
-- `X-Meshrix-Delegated-Mcp-Grant-Id`
-- `X-Meshrix-Delegated-Session-Id`
-- `X-Meshrix-Delegated-Turn-Id`
-- `X-Meshrix-Delegated-Subject-Id`
-- `X-Meshrix-Delegated-Target-Id`
-- `X-Meshrix-Delegated-Workspace-Id`
-- `X-Meshrix-Delegated-Parent-Operation-Id`
-- `X-Meshrix-Delegated-Trace-Id`
+- `X-Meshrix.js-Delegated-Mcp-Grant-Id`
+- `X-Meshrix.js-Delegated-Session-Id`
+- `X-Meshrix.js-Delegated-Turn-Id`
+- `X-Meshrix.js-Delegated-Subject-Id`
+- `X-Meshrix.js-Delegated-Target-Id`
+- `X-Meshrix.js-Delegated-Workspace-Id`
+- `X-Meshrix.js-Delegated-Parent-Operation-Id`
+- `X-Meshrix.js-Delegated-Trace-Id`
 
 The MCP adapter compares every request binding field with the authenticated grant metadata. A missing or mismatched field returns `delegated_child_operation_binding_mismatch` before operation dispatch. The bound workspace from the delegated grant takes precedence over a caller-supplied MCP envelope workspace. The execution context and audit projection use only generic delegated-child field names.
 
 ## Adapter Target Scope
 
-The open platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Their implementations and compatibility evidence are external Meshrix-Plugins packages; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
+The internal platform downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. Their implementations and compatibility evidence are explicit operator-supplied artifacts; Core owns only the bounded JSON-stdio adapter protocol and its security boundary.
 
 MCP user-device installation begins at platform-native launchers: macOS and Linux
 use `meshrix-mcp-install.sh`, and Windows uses `meshrix-mcp-install.ps1` only. The

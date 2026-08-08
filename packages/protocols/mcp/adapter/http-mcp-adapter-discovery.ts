@@ -42,7 +42,7 @@ export function mcpVersionInfo() : any {
     serverVersion: MCP_SERVER_VERSION,
     stableToolName: MCP_STABLE_TOOL_NAME,
     categorizedOutlets: [MCP_DISCOVERY_TOOL_NAME, MCP_GATEWAY_TOOL_NAME],
-    capabilitiesSummary: "Meshrix MCP gateway layer. Plugin outlets are advertised only when their contributions are active and visible.",
+    capabilitiesSummary: "Meshrix.js MCP gateway layer. Plugin outlets are advertised only when their contributions are active and visible.",
     capabilityFamilies: {},
     listChanged: true,
     upgradeNotification: "notifications/tools/list_changed",
@@ -259,8 +259,8 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
   const supportedTargets: any = mcpPublicSupportedTargetDetails();
   return {
     schemaVersion: "v0.0.1:schema:definition-1",
-    name: "Meshrix",
-    description: "Meshrix MCP gateway layer. Provides Discovery, Gateway, and enabled plugin outlets.",
+    name: "Meshrix.js",
+    description: "Meshrix.js MCP gateway layer. Provides Discovery, Gateway, and enabled plugin outlets.",
     interfaceVersion: MCP_INTERFACE_VERSION,
     toolsetVersion: MCP_TOOLSET_VERSION,
     serverVersion: MCP_SERVER_VERSION,
@@ -348,8 +348,8 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
         bootstrapScriptZhCN: MCP_BOOTSTRAP_INSTALL_SCRIPT_ZH_CN,
         windowsBootstrapScript: MCP_BOOTSTRAP_WINDOWS_INSTALL_SCRIPT,
         windowsUninstallScript: MCP_BOOTSTRAP_WINDOWS_UNINSTALL_SCRIPT,
-        githubLatestBootstrapUrl: `https://github.com/${MCP_CONNECTOR_GITHUB_REPO}/releases/latest/download/${MCP_BOOTSTRAP_INSTALL_SCRIPT}`,
-        githubLatestBootstrapUrlZhCN: `https://github.com/${MCP_CONNECTOR_GITHUB_REPO}/releases/latest/download/${MCP_BOOTSTRAP_INSTALL_SCRIPT_ZH_CN}`,
+        githubLatestBootstrapUrl: MCP_CONNECTOR_GITHUB_REPO ? `https://github.com/${MCP_CONNECTOR_GITHUB_REPO}/releases/latest/download/${MCP_BOOTSTRAP_INSTALL_SCRIPT}` : "",
+        githubLatestBootstrapUrlZhCN: MCP_CONNECTOR_GITHUB_REPO ? `https://github.com/${MCP_CONNECTOR_GITHUB_REPO}/releases/latest/download/${MCP_BOOTSTRAP_INSTALL_SCRIPT_ZH_CN}` : "",
         githubOneLineCommand,
         githubOneLineCommandZhCN,
         githubOneLineAutoInstallCommand,
@@ -398,7 +398,7 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
         httpUrl: `${baseUrl}/mcp`,
         vmHttpUrl: `${vmBaseUrl}/mcp`,
         headers: {
-          "X-Meshrix-Api-Key": "${MESHRIX_MCP_TOKEN}"
+          "X-Meshrix.js-Api-Key": "${MESHRIX_MCP_TOKEN}"
         },
         authProviderType: "meshrix_api_key",
         timeout: DEFAULT_TIMEOUT_MS
@@ -406,8 +406,8 @@ export function buildMeshrixMcpDiscovery({ listenUrl = "", discoveryState = null
     },
     auth: {
       type: "meshrix_operation_permission_token",
-      acceptedHeaders: ["Authorization: Bearer <token>", "X-Meshrix-Api-Key"],
-      tokenSource: "Meshrix Operation Permission grant token"
+      acceptedHeaders: ["Authorization: Bearer <token>", "X-Meshrix.js-Api-Key"],
+      tokenSource: "Meshrix.js Operation Permission grant token"
     },
     identity: discoveryState?.mcpIdentity
       ? publicMcpIdentity(discoveryState.mcpIdentity)
@@ -445,7 +445,7 @@ export function mcpHandshake({ request = null, requestBody, listenUrl = "", disc
       status: 503,
       body: {
         ok: false,
-        error: "Meshrix MCP identity is not available."
+        error: "Meshrix.js MCP identity is not available."
       }
     };
   }
@@ -493,7 +493,7 @@ export function mcpInitializeResult({ listenUrl = "", discoveryState = null }: R
       }
     },
     serverInfo: {
-      name: "Meshrix",
+      name: "Meshrix.js",
       version: MCP_SERVER_VERSION
     },
     _meta: mcpRuntimeMetadata({ listenUrl, discoveryState })

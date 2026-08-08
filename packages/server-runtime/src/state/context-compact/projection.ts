@@ -343,7 +343,7 @@ export function buildModelPrompt({ messages, runtimeState, targetTokens, compact
     toolResultIds: toolResultIds(message)
   }));
   return [
-    "You are Meshrix ContextCompactionRuntime.",
+    "You are Meshrix.js ContextCompactionRuntime.",
     "Compress context only. Do not invent facts. The output is auxiliary memory, not canonical evidence.",
     "Preserve user constraints, decisions, errors, TODOs, evidence/source ids, dates, amounts, file refs, tool call ids, and gateway references.",
     "Return strict JSON with keys: summary, constraints, decisions, risks, todos, evidenceRefs, fileRefs, gatewayRefs.",

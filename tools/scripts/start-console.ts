@@ -48,12 +48,12 @@ export function buildServerStartupArgs(passthroughArgs: any = []) : any {
 }
 
 export async function startConsole({ argv = process.argv.slice(2), cwd = process.cwd(), env = process.env }: Record<string, any> = {}) : Promise<any> {
-  console.log("Building Meshrix server console...");
+  console.log("Building Meshrix.js server console...");
   await runCommand("npm", ["run", "build"], { cwd, env });
 
   const finalArgs: any = buildServerStartupArgs(argv);
 
-  console.log("Starting Meshrix server with console...");
+  console.log("Starting Meshrix.js server with console...");
   const serverProcess: any = spawn("node", finalArgs, {
     cwd,
     stdio: "inherit",

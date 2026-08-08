@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "openapi": "3.1.0",
   "info": {
-    "title": "Meshrix API",
+    "title": "Meshrix.js API",
     "version": "v1.0.0",
     "description": "Generated from packages/contracts/src/operations/operation-registry.ts"
   },

@@ -14,7 +14,7 @@ export function createRawMcpCaller({
     const body: any = JSON.stringify({ jsonrpc: "2.0", id, ...message });
     const response: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "codex" },
+      headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "codex" },
       body
     });
     assert.equal(

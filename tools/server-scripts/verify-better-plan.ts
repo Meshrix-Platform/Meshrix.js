@@ -39,7 +39,7 @@ const STRATEGY_VERSION_REGISTRY_IDENTITIES: readonly any[] = Object.freeze([
   "v0-0-1-strategy-management-verification-report-1-verifier",
   "tools/server-scripts/verify-strategy-management.ts",
 ]);
-const CAPABILITY_MATRIX_PATH: any = "tools/registry/open-platform-capability-matrix.json";
+const CAPABILITY_MATRIX_PATH: any = "tools/registry/internal-platform-capability-matrix.json";
 const ACCEPTANCE_REGISTRY_PATH: any = "tools/registry/capability-acceptance.registry.json";
 const TESTS_REGISTRY_PATH: any = "tools/registry/tests.registry.json";
 const VERSION_REGISTRY_PATH: any = "packages/foundation/src/version-control/version-registry.json";
@@ -80,14 +80,14 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
   "server.operations": "packages/contracts/src/operations/operation-registry.ts",
   "release.readiness-reduction": "tools/server-scripts/lib/release-evidence-readiness.ts",
   "platform.acceptance-workflow": "tools/server-scripts/verify-platform-acceptance.ts",
-  "private-deployment.open-platform-e2e-catalog": "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
+  "private-deployment.internal-platform-e2e-catalog": "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
   "upstream-fixture.transit-evidence": "tools/server-scripts/lib/upstream-fixture-transit-evidence.ts",
   "downstream-agent.tool-loop-evidence": "tools/server-scripts/lib/downstream-agent-tool-loop-evidence.ts",
   "mcp-client.proxy-transport-evidence": "tools/server-scripts/lib/mcp-proxy-transport-evidence.ts",
   "mcp-release.targets": "packages/protocols/mcp/adapter/mcp-release-targets.ts",
   "composition.source-package": "tools/server-scripts/package-server-source.ts",
   "package-scripts.classification": "tools/scripts/package-script-registry.ts",
-  "open-platform.capability-surface": "tools/registry/open-platform-capability-matrix.json",
+  "internal-platform.capability-surface": "tools/registry/internal-platform-capability-matrix.json",
 });
 
 const CAPABILITY_OWNERS: Readonly<Record<string, any>> = Object.freeze({
@@ -381,7 +381,7 @@ async function defaultCustomValidator({ repoRoot, readRepositoryFile, enumerateP
     CAPABILITY_OWNERS[entry.id]?.[1], ...(entry.docs ?? []), ...(entry.verifierScripts ?? []),
   ]).filter(Boolean);
   const checks: Record<string, any> = {
-    schema: matrix?.schemaVersion === "v0.0.1:registry:open-platform-capability-matrix-1" &&
+    schema: matrix?.schemaVersion === "v0.0.1:registry:internal-platform-capability-matrix-1" &&
       ids.length > 0 && uniqueIds.size === ids.length,
     source: (await Promise.all([...REQUIRED_PUBLIC_DOCS, ...sourcePaths]
       .map((relativePath?: any) : any => exists(repoRoot, relativePath)))).every(Boolean) && await factAuthorityAccepted(repoRoot),

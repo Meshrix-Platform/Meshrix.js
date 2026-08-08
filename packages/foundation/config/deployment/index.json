@@ -1,7 +1,7 @@
 {
   "schemaVersion": "v0.0.1:schema:definition-1",
   "kind": "meshrix.deployment.entry-index",
-  "purpose": "Single deployment entry index for the public Meshrix gateway platform.",
+  "purpose": "Single deployment entry index for the public Meshrix.js gateway platform.",
   "agentDisclosure": {
     "openOrder": [
       {
@@ -12,7 +12,7 @@
       {
         "id": "main-service-dockerfile",
         "path": "Dockerfile",
-        "why": "Authoritative Meshrix server container build and runtime command."
+        "why": "Authoritative Meshrix.js server container build and runtime command."
       },
       {
         "id": "enterprise-compose-overlay",
@@ -27,7 +27,7 @@
       {
         "id": "deployment-container-flow",
         "path": "tools/server-scripts/verify-deployment-container-flow.ts",
-        "why": "Fresh-container deployment proof for Meshrix, including resumable dependency cache, Docker BuildKit cache mounts, Core compose startup, optional-plugin absence, MCP baseline, destructive rejection, and cleanup."
+        "why": "Fresh-container deployment proof for Meshrix.js, including resumable dependency cache, Docker BuildKit cache mounts, Core compose startup, optional-plugin absence, MCP baseline, destructive rejection, and cleanup."
       }
     ],
     "sectionHints": {
@@ -95,7 +95,7 @@
         {
           "id": "server-data",
           "containerPath": "data",
-          "purpose": "Persistent Meshrix server data, logs, jobs, and configured upstream service runtime evidence."
+          "purpose": "Persistent Meshrix.js server data, logs, jobs, and configured upstream service runtime evidence."
         },
         {
           "id": "server-backups",

@@ -44,7 +44,7 @@ const PRIVATE_MONOREPO_SOURCE_ROOTS: any = new Set<any>(["apps", "packages", "to
 const PROHIBITED: any[] = [
   {
     id: "restricted client repository marker",
-    pattern: new RegExp(`${escaped(join("Meshrix"))}-${escaped(join("Arc"))}`, "iu")
+    pattern: new RegExp(`${escaped(join("Meshrix.js"))}-${escaped(join("Arc"))}`, "iu")
   },
   {
     id: "restricted client wording",

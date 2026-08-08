@@ -609,7 +609,7 @@ function createSecretStorePort({ rootPath }: Record<string, any>) : any {
 
 export function createReadinessBaselineProvider({ userDataPath = "" }: Record<string, any> = {}) : any {
   if (!userDataPath) {
-    throw new Error("userDataPath is required for Meshrix readiness baseline provider.");
+    throw new Error("userDataPath is required for Meshrix.js readiness baseline provider.");
   }
   const rootPath: any = path.join(userDataPath, "readiness-baseline");
   const configRegistry: any = createConfigRegistryPort({ rootPath });

@@ -1,25 +1,25 @@
 <div align="center">
 
-<img src="docs/banner.svg" alt="Meshrix" width="100%" />
+<img src="docs/banner.svg" alt="Meshrix.js" width="100%" />
 
-**Open-source, private-deployable agent gateway — upstream services in, governed MCP access out.**
+**Internal, private-deployable agent gateway — upstream services in, governed MCP access out.**
 
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-c9a96e?style=flat-square)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-c9a96e?style=flat-square)](LICENSE)
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[Website](https://meshrix.io) · [Overview](#overview) · [Status](docs/STATUS.md) · [Top 10 Priorities](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
+[Overview](#overview) · [Status](docs/STATUS.md) · [Top 10 Priorities](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
 
 </div>
 
 English is the normative language of this repository's documentation; [简体中文](README.zh-CN.md) is the localized language version.
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-> **Current priorities:** Meshrix's ten highest-value open problems, ranked by
+> **Current priorities:** Meshrix.js's ten highest-value open problems, ranked by
 > priority, are maintained in [What's Next](docs/WHATS-NEXT.md). Read this
 > register before planning, implementing, or reviewing project work.
 
@@ -27,8 +27,10 @@ English is the normative language of this repository's documentation; [简体中
 
 ## Overview
 
-Meshrix runs as a Node.js server that forwards server-configured upstream
-services and exposes governed downstream MCP access for agent clients.
+Meshrix.js uses a Vue.js Web Console and a Node.js server. The frontend and
+backend are separate workspaces with a versioned HTTP boundary. The server
+forwards configured upstream services and exposes governed downstream MCP
+access for agent clients.
 Operators declare services and capabilities inside their own environment;
 every execution first passes authentication, authorization, Operation
 Permission, tag policy, approval, and traffic controls — and leaves audit
@@ -43,7 +45,7 @@ for deployment-specific integrations.
 > verification, publication channels, environment support, and hosted
 > operation are separate facts. See [Status](docs/STATUS.md).
 
-Meshrix separates mandatory functional acceptance from optional environment
+Meshrix.js separates mandatory functional acceptance from optional environment
 claims. `npm run verify:acceptance` is the Functional Release Gate and must
 pass before publication. An accepted immutable candidate may then be exercised
 by `npm run verify:real-machine -- ...`; that independently repeatable workflow
@@ -71,10 +73,10 @@ This English document is the normative project overview. See the
 ## Architecture
 
 <div align="center">
-  <img src="docs/architecture-overview.svg" alt="Meshrix architecture overview" width="680" />
+  <img src="docs/architecture-overview.svg" alt="Meshrix.js architecture overview" width="680" />
 </div>
 
-Meshrix's product boundary is the server-side governance layer of a private
+Meshrix.js's product boundary is the server-side governance layer of a private
 deployment: it owns configuration, operation exposure, permission decisions,
 execution dispatch, audit, metrics, and evidence generation. See
 [Architecture](docs/architecture/ARCHITECTURE.md) for package layering, core
@@ -133,17 +135,17 @@ npm run mcp:doctor
 | `MESHRIX_SERVER_HOST` | Server listen address. |
 | `MESHRIX_SERVER_PORT` | Server listen port. |
 | `MESHRIX_PUBLIC_BASE_URL` | HTTPS URL advertised behind the administrator-owned TLS proxy. |
-| `MESHRIX_TRUSTED_PROXIES` | Exact IP addresses from which the administrator-owned TLS proxy reaches Meshrix. |
-| `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` | Absolute host path to the production secret-store key; never place it in Meshrix data or backups. |
-| `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` | Absolute host path to the distinct production evidence-signing secret; never place it in Meshrix data or backups. |
+| `MESHRIX_TRUSTED_PROXIES` | Exact IP addresses from which the administrator-owned TLS proxy reaches Meshrix.js. |
+| `MESHRIX_LOCAL_SECRET_MASTER_KEY_SOURCE` | Absolute host path to the production secret-store key; never place it in Meshrix.js data or backups. |
+| `MESHRIX_OPERATION_PROOF_SIGNER_SECRET_SOURCE` | Absolute host path to the distinct production evidence-signing secret; never place it in Meshrix.js data or backups. |
 
 ## Downstream Agent Clients
 
 Agent clients connect through MCP discovery and governed gateway calls;
 operation visibility is grant-controlled. The documented downstream adapter
-target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi —
-delivered as external `Meshrix-Plugins` adapter packages rather than Meshrix
-runtime dependencies. See [Compatibility](docs/COMPATIBILITY.md) and
+target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi.
+Adapters are supplied explicitly by an operator and are never discovered from
+another source repository. See [Compatibility](docs/COMPATIBILITY.md) and
 [Protocols](docs/protocols/PROTOCOLS.md) for the exact scope and status.
 
 ## Repository Layout
@@ -188,7 +190,7 @@ npm run typecheck
 npm run build
 npm test
 npm run verify:core-platform-surface-convergence
-npm run verify:private-deployment-open-platform-e2e
+npm run verify:private-deployment-internal-platform-e2e
 npm run verify:acceptance
 ```
 
@@ -203,8 +205,8 @@ npm run verify:acceptance
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 <div align="center">
-  <sub>Meshrix — self-contained by default, built for private deployment.</sub>
+  <sub>Meshrix.js — self-contained by default, built for private deployment.</sub>
 </div>

@@ -25,7 +25,7 @@ const { consoleState, msg, tt } = useConsoleSideNavContext();
       <circle class="brand-dot" r="6" opacity="0.6"/>
     </svg>
     <div class="brand-text">
-      <h1>Meshrix</h1>
+      <h1>Meshrix.js</h1>
       <p class="brand-subtitle">
         <span v-if="!consoleState" class="brand-loading-label" aria-live="polite">
           {{ msg.loading }}

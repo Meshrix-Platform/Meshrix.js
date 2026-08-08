@@ -1,13 +1,8 @@
 {
   "name": "@meshrix/contracts",
   "version": "0.0.1",
-  "description": "Meshrix operation/api/event/receipt/schema/protocol contracts",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/contracts"
-  },
+  "description": "Meshrix.js operation/api/event/receipt/schema/protocol contracts",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

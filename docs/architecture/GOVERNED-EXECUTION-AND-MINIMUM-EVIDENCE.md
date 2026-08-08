@@ -1,11 +1,11 @@
 # Governed Execution And Minimum Evidence
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 
 ## Status And Scope
 
-This document is the canonical Meshrix maintenance and Functional Release Gate policy
+This document is the canonical Meshrix.js maintenance and Functional Release Gate policy
 for protected access, side effects, and their evidence. Every maintainer-facing
 document, Better Plan node, workflow, protocol projection, runtime path, and
 generated documentation projection under `docs/` inherits this policy. A more

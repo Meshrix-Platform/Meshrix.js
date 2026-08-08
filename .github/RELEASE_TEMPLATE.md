@@ -1,4 +1,4 @@
-# Meshrix v<VERSION>
+# Meshrix.js v<VERSION>
 
 This release was assembled by the canonical tag workflow after the Functional
 Release Gate, the required Node.js 22 clean install/start probe, and actionable
@@ -15,7 +15,7 @@ their absence or failure does not block this release.
 ### Docker (Server + Web Console)
 
 ```bash
-docker pull ghcr.io/licoland/meshrix:<VERSION>
+docker pull <registry>/<namespace>/meshrix-js:<VERSION>
 docker volume create meshrix-server-data
 docker run -d \
   --name meshrix-server \
@@ -23,7 +23,7 @@ docker run -d \
   --stop-timeout 90 \
   --publish 127.0.0.1:7228:7228 \
   --mount source=meshrix-server-data,target=<container-data-dir> \
-  ghcr.io/licoland/meshrix:<VERSION>
+  <registry>/<namespace>/meshrix-js:<VERSION>
 ```
 
 ### npm (Framework Integration)
@@ -37,7 +37,7 @@ GitHub Release is exposed. Install the framework package at the exact release
 version:
 
 ```bash
-npm install --save-exact meshrix@<VERSION>
+npm install --save-exact meshrix.js@<VERSION>
 ```
 
 ### MCP Connector (Agent Integration)
@@ -51,7 +51,7 @@ verify the selected asset before extraction. This release train publishes the
 
 ```bash
 asset="meshrix-mcp-connector-<VERSION>-macos-arm64.tar.gz"
-base="https://github.com/LicoLand/Meshrix/releases/download/v<VERSION>"
+base="<release-base-url>/v<VERSION>"
 curl -fLO "$base/$asset"
 curl -fLO "$base/RELEASE_SHA256SUMS"
 curl -fLO "$base/RELEASE_SHA256SUMS.sigstore.json"
@@ -85,11 +85,10 @@ cd "${asset%.tar.gz}"
 
 | Surface | Target | Release status |
 | --- | --- | --- |
-| npm packages | Seven public `@meshrix/*` workspaces, `meshrix-mcp-connector`, and `meshrix` | Published or integrity-reverified through npm trusted publishing. |
+| npm packages | Internal `@meshrix/*` workspaces, `meshrix-mcp-connector`, and `meshrix.js` | Published only to the configured private registry. |
 | Server and Web Console container | Linux amd64 and arm64 | Published as the signed multi-platform container after pinned Trivy scans and per-platform provenance/SBOM validation. Native runtime support is claimed only by a matching optional real-machine receipt. |
 | MCP Connector | macOS arm64 | Published as a functionally accepted artifact. Native runtime support is claimed only after the exact final archive passes the macOS arm64 Real-Machine Verification Workflow. |
 | MCP Connector | macOS x64, Linux x64/arm64, Windows x64/arm64 | Build support may remain in source; each runtime support claim requires its own optional real-machine receipt. |
-| MeshrixUp relay client | Separately versioned client platforms | Optional and removable; not shipped by or required for this core release. |
 | Pactium substrate | `pactium@0.5.0`, `pactium.v0.2`, `pactium.v0.2.schema.latest` | Exact runtime dependency for this release. |
 
 ## Uninstall
@@ -101,10 +100,9 @@ cd "meshrix-mcp-connector-<VERSION>-<PLATFORM>"
 
 ## Supported Agents
 
-The external Meshrix-Plugins catalog currently supplies adapters for OpenClaw,
-Codex, Claude Code, Antigravity, OpenCode, and Pi. Their compatibility evidence
-and release status are independent of this Core release.
+Client adapters are explicit operator-supplied artifacts. They are not
+discovered from another source repository and are not part of this release.
 
 ---
 
-[Full Changelog](https://github.com/LicoLand/Meshrix/blob/release/CHANGELOG.md)
+[Full Changelog](../CHANGELOG.md)

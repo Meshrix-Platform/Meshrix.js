@@ -714,22 +714,22 @@ export async function createPortableBundle({
         `  ./meshrix-mcp-uninstall.sh --target ${PRIORITY_INSTALL_TARGET}`
       ];
   await fs.writeFile(path.join(stagingRoot, "README.txt"), [
-    "Meshrix MCP Connector Portable Package",
+    "Meshrix.js MCP Connector Portable Package",
     "",
     "This package includes its own Node.js runtime. The target machine does not need Node.js, npm, npx, or a package manager.",
     "",
     "Licenses:",
-    "  Meshrix: LICENSE",
+    "  Meshrix.js: LICENSE",
     "  Node.js and bundled Node.js notices: licenses/node/",
     "  Third-party notice index: THIRD_PARTY_NOTICES.txt",
     "",
     ...usageLines,
     "",
-    "The connector scans local Meshrix candidates and verifies the MCP identity signature before using a URL.",
+    "The connector scans local Meshrix.js candidates and verifies the MCP identity signature before using a URL.",
     ...(macosBundle ? [
       "",
       "macOS double-click flow:",
-      "  Open install.command, choose one or more clients. The connector requests a local Meshrix grant automatically."
+      "  Open install.command, choose one or more clients. The connector requests a local Meshrix.js grant automatically."
     ] : []),
     "",
     `Platform: ${platform}`,

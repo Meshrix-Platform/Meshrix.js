@@ -2,7 +2,7 @@ export const MCP_CATALOG_DELIVERY_SCHEMA_VERSION: any = "v0.0.1:mcp-catalog-deli
 export const MCP_CATALOG_LIST_CHANGED_CAPABILITY: any = "upstream.catalog.list_changed";
 export const MCP_CATALOG_LIST_CHANGED_METHOD: any = "notifications/tools/list_changed";
 export const MCP_CATALOG_ACKNOWLEDGE_METHOD: any = "meshrix/catalog/acknowledge";
-export const MCP_PROXY_SESSION_HEADER: any = "X-Meshrix-Mcp-Proxy-Session";
+export const MCP_PROXY_SESSION_HEADER: any = "X-Meshrix.js-Mcp-Proxy-Session";
 export const MCP_PROXY_SESSION_HEADER_LOWER: any = MCP_PROXY_SESSION_HEADER.toLowerCase();
 export const MCP_PROXY_SESSION_MAX_BYTES: any = 64;
 

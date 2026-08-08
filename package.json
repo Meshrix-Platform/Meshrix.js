@@ -1,17 +1,9 @@
 {
-  "name": "meshrix",
+  "name": "meshrix.js",
   "version": "0.0.1",
-  "description": "Meshrix — A lightweight upstream/downstream service gateway with Operation Permission, approval, audit, and traffic controls. / 轻量的上下游服务网关，提供 Operation Permission 授权、审批、审计与流控。",
-  "author": "Meshrix Maintainers",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git"
-  },
-  "bugs": {
-    "url": "https://github.com/LicoLand/Meshrix/issues"
-  },
-  "homepage": "https://meshrix.io",
+  "description": "Meshrix.js — an internal Vue.js and Node.js platform for governed service and agent access.",
+  "author": "Meshrix.js Maintainers",
+  "license": "MIT",
   "workspaces": [
     "packages/contracts",
     "packages/foundation",
@@ -258,10 +250,11 @@
     "verify:better-plan": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-better-plan.ts",
     "verify:platform-audit": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/core-platform-gap-audit.ts",
     "verify:docs": "cross-env NODE_OPTIONS=--conditions=source node tools/verifiers/run-verifiers.ts --profile docs",
+    "verify:skills": "node tools/validate-skills.mjs",
     "verify:core-platform-surface-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-surface-convergence.ts",
     "verify:core-platform-documentation-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-documentation-convergence.ts",
     "verify:composition-source-package": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-composition-source-package.ts",
-    "verify:private-deployment-open-platform-e2e": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-private-deployment-open-platform-e2e.ts --reduce-existing",
+    "verify:private-deployment-internal-platform-e2e": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts --reduce-existing",
     "verify:release-authority-baseline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-authority-baseline.ts",
     "verify:upstream-service-publishing": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upstream-service-publishing.ts",
     "verify:upstream-service-publishing-candidate": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-upstream-service-publishing-candidate.ts",

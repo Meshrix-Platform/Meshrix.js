@@ -159,7 +159,7 @@ export async function forwardProxyMessage({
     body
   });
   if (!response.ok) {
-    const reason: any = response.payload?.error?.message || response.payload?.error || `Meshrix MCP proxy failed with HTTP ${response.status}`;
+    const reason: any = response.payload?.error?.message || response.payload?.error || `Meshrix.js MCP proxy failed with HTTP ${response.status}`;
     return {
       jsonrpc: "2.0",
       id: message?.id ?? null,
@@ -357,7 +357,7 @@ export function createProxyRequestDispatcher({
         emitMessage({
           jsonrpc: "2.0",
           id: requestId,
-          error: { code: -32001, message: error.message || "Meshrix MCP proxy forwarding failed." }
+          error: { code: -32001, message: error.message || "Meshrix.js MCP proxy forwarding failed." }
         }, framing);
       } finally {
         releaseCancellationReservation(entry);

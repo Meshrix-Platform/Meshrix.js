@@ -42,7 +42,7 @@ function createProbeFetch({ identity, adapterId = "caddy", mcpOk = true }: Recor
           keyId: identity.keyId,
           publicKeyJwk: identity.publicKeyJwk,
         },
-        server: { name: "Meshrix" },
+        server: { name: "Meshrix.js" },
         externalGateway: {
           adapterId,
           route: "/api/mcp/handshake",
@@ -55,7 +55,7 @@ function createProbeFetch({ identity, adapterId = "caddy", mcpOk = true }: Recor
       return jsonResponse(mcpOk ? {
         jsonrpc: "2.0",
         id: "external-gateway-probe",
-        result: { protocolVersion: "2025-06-18", serverInfo: { name: "Meshrix" } },
+        result: { protocolVersion: "2025-06-18", serverInfo: { name: "Meshrix.js" } },
       } : { error: "not mcp" }, { headers: { "Mcp-Session-Id": "probe-session" } });
     }
     if (parsed.pathname === "/mcp" && options.method === "DELETE") {

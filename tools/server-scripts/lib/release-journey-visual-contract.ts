@@ -6,7 +6,7 @@ export const RELEASE_JOURNEY_VISUAL_CAPTURE: Readonly<Record<string, any>> = Obj
 });
 
 export const RELEASE_JOURNEY_VISUAL_CHECKPOINTS: readonly any[] = Object.freeze([
-  ["console-authenticated", "Authenticated Meshrix Workbench", "/"],
+  ["console-authenticated", "Authenticated Meshrix.js Workbench", "/"],
   ["console-organization-permissions", "Published organization and permission projection", "/admin/organization-governance"],
   ["console-upstream-basic-config", "Upstream service basic configuration", "/admin/publish-upstream-service"],
   ["console-upstream-operation-config", "Upstream operation configuration", "/admin/publish-upstream-service"],

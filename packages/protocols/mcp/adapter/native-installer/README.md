@@ -1,4 +1,4 @@
-# Meshrix MCP Native Installer
+# Meshrix.js MCP Native Installer
 
 This directory owns the user-device MCP installer entrypoints.
 
@@ -16,7 +16,7 @@ uninstall. A pre-issued strict `mxak1` API Key must be supplied through protecte
 standard input or the configured environment variable. Shell and PowerShell
 remain narrow launchers for that connector-owned workflow.
 
-Supported targets are backed by pinned external client-adapter packages from Meshrix-Plugins. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
+Supported targets are backed by pinned operator-provided client-adapter packages. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
 
 This release installs local connector-managed clients only. OrbStack and
 remote-Linux direct HTTP client modes are outside the published support matrix

@@ -71,7 +71,7 @@ export function normalizeMcpOperationEnvelope(input?: any, authorization?: any) 
   if (apiVersion !== MCP_INTERFACE_VERSION) {
     return {
       ok: false,
-      error: jsonRpcError(null, -32602, `Unsupported Meshrix MCP apiVersion: ${apiVersion}`, {
+      error: jsonRpcError(null, -32602, `Unsupported Meshrix.js MCP apiVersion: ${apiVersion}`, {
         expectedApiVersion: MCP_INTERFACE_VERSION,
         toolsetVersion: MCP_TOOLSET_VERSION,
         upgrade: mcpVersionInfo()
@@ -82,7 +82,7 @@ export function normalizeMcpOperationEnvelope(input?: any, authorization?: any) 
   if (!operation) {
     return {
       ok: false,
-      error: jsonRpcError(null, -32602, "Meshrix MCP outlet calls require arguments.operation.", {
+      error: jsonRpcError(null, -32602, "Meshrix.js MCP outlet calls require arguments.operation.", {
         expectedApiVersion: MCP_INTERFACE_VERSION
       })
     };

@@ -267,7 +267,7 @@ export async function writeSecretServiceKernelRecord({ alias = DEFAULT_ALIAS }: 
   await runText("secret-tool", [
     "store",
     "--label",
-    `Meshrix Capability Kernel ${safeAlias(alias)}`,
+    `Meshrix.js Capability Kernel ${safeAlias(alias)}`,
     ...secretToolAttributes(alias)
   ], { input: JSON.stringify(record) });
   return record;

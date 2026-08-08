@@ -1,5 +1,5 @@
 /**
- * Runtime JSONL Logger — Meshrix structured logging with OTel alignment.
+ * Runtime JSONL Logger — Meshrix.js structured logging with OTel alignment.
  *
  * OTel Semantic Convention Fields (adoption baseline):
  *   service.name, service.version

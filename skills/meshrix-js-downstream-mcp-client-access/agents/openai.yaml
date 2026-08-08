@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Downstream MCP Client Access"
+  short_description: "Guide secure MCP client onboarding, access, and removal"
+  default_prompt: "Use $meshrix-js-downstream-mcp-client-access to design, implement, or verify the downstream MCP client access flow."

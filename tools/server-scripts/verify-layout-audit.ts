@@ -28,7 +28,7 @@
  *
  * OTel Semantic Convention Fields (adoption baseline):
  *   service.name, service.version
- *   vcs.repository.url, vcs.ref.head.name, vcs.ref.head.revision
+ *   vcs.ref.head.name, vcs.ref.head.revision
  *
  * The report output includes provenance metadata with VCS references.
  * Adoption is incremental; new audit sections should include these fields.
@@ -43,7 +43,6 @@ const repoRoot: any = process.cwd();
 const OTEL_LAYOUT_AUDIT_SEMANTICS: Readonly<Record<string, any>> = Object.freeze({
   "service.name": "meshrix-layout-audit",
   "service.version": "v0.0.1:repository:layout-audit-0.2.0",
-  "vcs.repository.url": "git+https://github.com/LicoLand/Meshrix.git",
   "vcs.ref.head.name": process.env.GITHUB_REF_NAME || "",
   "vcs.ref.head.revision": process.env.GITHUB_SHA || ""
 });
@@ -419,7 +418,7 @@ async function main() : Promise<any> {
 
   if (reportFormat === "markdown") {
     const lines: any[] = [
-      "# Meshrix Layout Audit Report",
+      "# Meshrix.js Layout Audit Report",
       `Generated: ${report.generatedAt}`,
       `Mode: ${report.mode}`,
       "",

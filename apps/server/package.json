@@ -2,13 +2,8 @@
   "name": "@meshrix/server",
   "version": "0.0.1",
   "private": true,
-  "description": "Meshrix Node server executable — HTTP runtime bootstrap, process lifecycle",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "apps/server"
-  },
+  "description": "Meshrix.js Node server executable — HTTP runtime bootstrap, process lifecycle",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

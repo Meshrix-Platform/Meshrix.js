@@ -267,7 +267,7 @@ function updateCredentialMode() {
   if (!savedCredentialOptions.value.length) {
     form.credentialSelection = "";
     form.references = [];
-    credentialError.value = "No saved credentials are available. Save a credential in Meshrix before selecting it.";
+    credentialError.value = "No saved credentials are available. Save a credential in Meshrix.js before selecting it.";
     return;
   }
   const currentIndex = savedCredentialOptions.value.findIndex((entry: any) =>
@@ -325,7 +325,7 @@ defineExpose({ focusFirstInvalid });
           <span class="console-form-field-required-marker" aria-hidden="true">*</span>
           <HelpTooltip
             aria-label="Protocol help"
-            text="The communication protocol Meshrix uses to call the external service. Choose HTTP for HTTP or REST endpoints, or JSON-RPC for JSON-RPC methods."
+            text="The communication protocol Meshrix.js uses to call the external service. Choose HTTP for HTTP or REST endpoints, or JSON-RPC for JSON-RPC methods."
           />
         </div>
         <select
@@ -363,7 +363,7 @@ defineExpose({ focusFirstInvalid });
           <label for="upstream-service-key">Service identifier *</label>
           <HelpTooltip
             aria-label="Service identifier help"
-            text="A unique, stable identifier used by Meshrix to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication."
+            text="A unique, stable identifier used by Meshrix.js to recognize this service. Start with a letter; use letters, numbers, dots, underscores, hyphens, or slash-separated segments. For example: inventory-api. It cannot be changed after publication."
             :max-width="420"
           />
         </div>
@@ -374,7 +374,7 @@ defineExpose({ focusFirstInvalid });
           <label for="upstream-service-name">Service name</label>
           <HelpTooltip
             aria-label="Service name help"
-            text="A human-readable name shown in Meshrix. It can differ from the service identifier and can be updated later."
+            text="A human-readable name shown in Meshrix.js. It can differ from the service identifier and can be updated later."
           />
         </div>
         <input id="upstream-service-name" v-model="form.label" type="text" placeholder="My Service" />
@@ -384,7 +384,7 @@ defineExpose({ focusFirstInvalid });
           <label for="upstream-service-description">Service description</label>
           <HelpTooltip
             aria-label="Service description help"
-            text="A short explanation of what the external service provides, shown to operators when they review the service in Meshrix."
+            text="A short explanation of what the external service provides, shown to operators when they review the service in Meshrix.js."
           />
         </div>
         <input id="upstream-service-description" v-model="form.description" type="text" placeholder="Service description" />
@@ -486,7 +486,7 @@ defineExpose({ focusFirstInvalid });
               <span>Response (optional)</span>
               <HelpTooltip
                 aria-label="Response help"
-                text="Leave empty to use governed native passthrough. Meshrix still enforces response size and transport boundaries."
+                text="Leave empty to use governed native passthrough. Meshrix.js still enforces response size and transport boundaries."
                 :max-width="420"
               />
             </legend>
@@ -528,7 +528,7 @@ defineExpose({ focusFirstInvalid });
     </div>
 
     <div v-if="activeTab === 'credentials'" class="tab-content" role="tabpanel" aria-label="Access credentials">
-      <p class="form-help">Public services can use no authentication. For protected services, select a credential already saved in Meshrix; secret values and reference URIs are never entered here.</p>
+      <p class="form-help">Public services can use no authentication. For protected services, select a credential already saved in Meshrix.js; secret values and reference URIs are never entered here.</p>
       <div class="credential-builder">
         <div class="field-grid">
           <div class="form-field">
@@ -536,7 +536,7 @@ defineExpose({ focusFirstInvalid });
               <label for="upstream-service-credential-mode">Access credential</label>
               <HelpTooltip
                 aria-label="Access credential help"
-                text="Choose no authentication for a public service, or select a credential already saved in Meshrix. This form never accepts a credential URI or secret value."
+                text="Choose no authentication for a public service, or select a credential already saved in Meshrix.js. This form never accepts a credential URI or secret value."
                 :max-width="420"
               />
             </div>

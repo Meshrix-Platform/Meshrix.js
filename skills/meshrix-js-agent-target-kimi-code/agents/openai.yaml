@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Kimi Code"
+  short_description: "Reference kimi-code 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-kimi-code as reference for kimi-code 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

@@ -1,6 +1,6 @@
 export const consoleMessages: any = {
   "zh-CN": {
-    appTitle: "Meshrix 服务端控制台",
+    appTitle: "Meshrix.js 服务端控制台",
     loading: "正在初始化",
     connecting: "正在连接服务端…",
     close: "关闭",
@@ -218,7 +218,7 @@ export const consoleMessages: any = {
       storageFailure: "浏览器存储不可用，自动保存已停用——请手动保存。",
     },
     publishForm: {
-      credentialSaveLink: "在 Meshrix 中保存凭据",
+      credentialSaveLink: "在 Meshrix.js 中保存凭据",
     },
     publishList: {
       title: "已发布服务",
@@ -273,7 +273,7 @@ export const consoleMessages: any = {
     },
   },
   en: {
-    appTitle: "Meshrix Server Console",
+    appTitle: "Meshrix.js Server Console",
     loading: "Initializing",
     connecting: "Connecting to server...",
     close: "Close",
@@ -491,7 +491,7 @@ export const consoleMessages: any = {
       storageFailure: "Browser storage is unavailable; autosave is disabled — save manually.",
     },
     publishForm: {
-      credentialSaveLink: "Save a credential in Meshrix",
+      credentialSaveLink: "Save a credential in Meshrix.js",
     },
     publishList: {
       title: "Published Services",

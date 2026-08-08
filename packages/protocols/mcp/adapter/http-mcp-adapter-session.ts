@@ -73,42 +73,42 @@ export function delegatedChildOperationFromMcpCall({
     delegatedMcpGrantId: firstText(
       childOperation.grantId,
       delegatedMcp.grantId,
-      requestHeader(request, "X-Meshrix-Delegated-Mcp-Grant-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Mcp-Grant-Id")
     ),
     delegatedSessionId: firstText(
       childOperation.sessionId,
       delegatedMcp.sessionId,
-      requestHeader(request, "X-Meshrix-Delegated-Session-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Session-Id")
     ),
     delegatedTurnId: firstText(
       childOperation.turnId,
       delegatedMcp.turnId,
-      requestHeader(request, "X-Meshrix-Delegated-Turn-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Turn-Id")
     ),
     delegatedSubjectId: firstText(
       childOperation.subjectId,
       delegatedMcp.subjectId,
-      requestHeader(request, "X-Meshrix-Delegated-Subject-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Subject-Id")
     ),
     delegatedTargetId: firstText(
       childOperation.targetId,
       delegatedMcp.targetId,
-      requestHeader(request, "X-Meshrix-Delegated-Target-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Target-Id")
     ),
     delegatedWorkspaceId: firstText(
       childOperation.workspaceId,
       delegatedMcp.workspaceId,
-      requestHeader(request, "X-Meshrix-Delegated-Workspace-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Workspace-Id")
     ),
     parentOperationId: firstText(
       childOperation.parentOperationId,
       delegatedMcp.parentOperationId,
-      requestHeader(request, "X-Meshrix-Delegated-Parent-Operation-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Parent-Operation-Id")
     ),
     traceId: firstText(
       childOperation.traceId,
       delegatedMcp.traceId,
-      requestHeader(request, "X-Meshrix-Delegated-Trace-Id")
+      requestHeader(request, "X-Meshrix.js-Delegated-Trace-Id")
     )
   };
   const canonical: Record<string, any> = {

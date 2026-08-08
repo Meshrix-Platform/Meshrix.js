@@ -96,7 +96,7 @@ const ADAPTER_VERSION = "0.0.1";
 /**
  * Copy-paste-runnable connector configuration for a frozen MCP client target
  * (mirrors the gateway installer MCP_CLIENT_TARGETS). Honest facts only: the
- * target's trusted adapter coordinate, the canonical Meshrix MCP server config
+ * target's trusted adapter coordinate, the canonical Meshrix.js MCP server config
  * shape (http-mcp-adapter-discovery), and the token env channel. No invented
  * flags. Unknown targets return "" — the consumer renders guidance only.
  */
@@ -112,7 +112,7 @@ export function buildConnectorConfigSnippet(target: string, keyMaterial: ApiKeyK
       meshrix: {
         httpUrl: `http://${audience}/mcp`,
         headers: {
-          "X-Meshrix-Api-Key": `\${${CONNECTOR_TOKEN_ENV}}`,
+          "X-Meshrix.js-Api-Key": `\${${CONNECTOR_TOKEN_ENV}}`,
         },
         authProviderType: "meshrix_api_key",
         timeout: CONNECTOR_TIMEOUT_MS,
@@ -123,13 +123,13 @@ export function buildConnectorConfigSnippet(target: string, keyMaterial: ApiKeyK
     },
   };
   return [
-    `# ${targetEntry.label} — Meshrix MCP connector`,
+    `# ${targetEntry.label} — Meshrix.js MCP connector`,
     `# Install the ${targetEntry.label} adapter: npx -y ${adapterCoordinate}`,
     `# Key identifier: ${keyMaterial.keyId}`,
     `# Key prefix: ${keyMaterial.displayPrefix}`,
     `# The one-time key is never embedded in this config. Set it first:`,
     `#   export ${CONNECTOR_TOKEN_ENV}=${CONNECTOR_SNIPPET_SECRET_PLACEHOLDER}`,
-    `# Register the Meshrix server with ${targetEntry.label}:`,
+    `# Register the Meshrix.js server with ${targetEntry.label}:`,
     JSON.stringify(config, null, 2),
   ].join("\n");
 }
