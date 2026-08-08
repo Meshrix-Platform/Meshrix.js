@@ -4,8 +4,8 @@
  */
 
 import {
-  PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH
-} from "./private-deployment-open-platform-e2e-catalog.ts";
+  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "./private-deployment-internal-platform-e2e-catalog.ts";
 import {
   PLATFORM_ACCEPTANCE_REPORT_PATH
 } from "./platform-acceptance-report-catalog.ts";
@@ -166,15 +166,15 @@ export const PRIVATE_DEPLOYMENT_REQUIRED_REPORTS: readonly any[] = Object.freeze
 ]);
 
 const PRIVATE_DEPLOYMENT_EVIDENCE_REDUCTION: any = command(
-  "private-deployment-open-platform-e2e",
-  "Private deployment open platform evidence reduction",
+  "private-deployment-internal-platform-e2e",
+  "Private deployment internal platform evidence reduction",
   "final-regression",
   nodeCommand([
-    "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+    "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
     "--reduce-existing"
   ]),
-  PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH,
-  ["final-regression", "private-deployment", "open-platform"],
+  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH,
+  ["final-regression", "private-deployment", "internal-platform"],
   {
     blockedExitCodes: [2],
     dependsOn: PRIVATE_DEPLOYMENT_EVIDENCE_COMMAND_IDS,

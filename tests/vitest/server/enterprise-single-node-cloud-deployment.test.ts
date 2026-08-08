@@ -9,9 +9,9 @@ import {
 } from "../../../tools/server-scripts/enterprise-single-node-cloud-deployment.ts";
 
 const CANDIDATE: any =
-  "ghcr.io/licoland/meshrix@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  "registry.example/meshrix-js/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const PREVIOUS: any =
-  "ghcr.io/licoland/meshrix@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  "registry.example/meshrix-js/runtime@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 describe("enterprise single-node cloud deployment", () : any => {
   it("activates an admitted immutable candidate without build or network access", () : any => {
@@ -69,7 +69,7 @@ describe("enterprise single-node cloud deployment", () : any => {
 
   it("rejects floating tags, raw image ids, and same-candidate rollback", () : any => {
     expect(() : any => createEnterpriseSingleNodeCloudDeploymentPlan({
-      candidateImage: "ghcr.io/licoland/meshrix:latest",
+      candidateImage: "registry.example/meshrix-js/runtime:latest",
       secretKeySourceConfigured: true,
       proofSignerSecretSourceConfigured: true,
       securePublicBaseUrlConfigured: true,

@@ -604,9 +604,9 @@ describe("direct MCP API key authentication", () : any => {
 
   it("makes connector credential headers API-Key-only", () : any => {
     expect(authHeaders(API_KEY, "neutral-peer")).toMatchObject({
-      "X-Meshrix-Api-Key": API_KEY,
-      "X-Meshrix-Connector-Package-Id": "meshrix-mcp-connector",
-      "X-Meshrix-MCP-Target": "neutral-peer"
+      "X-Meshrix.js-Api-Key": API_KEY,
+      "X-Meshrix.js-Connector-Package-Id": "meshrix-mcp-connector",
+      "X-Meshrix.js-MCP-Target": "neutral-peer"
     });
     expect(authHeaders(API_KEY, "neutral-peer")).not.toHaveProperty("Authorization");
     expect(() : any => authHeaders("generic-grant", "neutral-peer")).toThrow("strict mxak1");

@@ -76,7 +76,7 @@ export async function registerCommand(options?: any) : Promise<any> {
     priorityInstall: guidance.priorityInstallCommand,
     verifiedHandshake: resolvedOptions.__meshrixDiscovery?.handshake?.payload?.identity?.keyId || "",
     serverConfig: profile.profile,
-    note: "Discovered and registered the signed Meshrix MCP endpoint without installing it into any client."
+    note: "Discovered and registered the signed Meshrix.js MCP endpoint without installing it into any client."
   };
 }
 
@@ -274,7 +274,7 @@ export async function discoverCommand(options?: any) : Promise<any> {
   const baseUrl: any = installerOptions(resolvedOptions).baseUrl;
   const discovery: any = await fetchJson(`${baseUrl}/api/mcp/discovery`);
   if (!discovery.ok) {
-    throw new Error(`Meshrix MCP discovery failed: HTTP ${discovery.status}`);
+    throw new Error(`Meshrix.js MCP discovery failed: HTTP ${discovery.status}`);
   }
   return {
     ...discovery.payload,

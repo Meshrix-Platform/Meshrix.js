@@ -114,7 +114,7 @@ function compactedMessagesForGateway(result: Record<string, any> = {}) : any {
     messages.push({
       role: "system",
       content: [
-        "Meshrix context compaction summary follows. It is auxiliary memory, not canonical evidence.",
+        "Meshrix.js context compaction summary follows. It is auxiliary memory, not canonical evidence.",
         summary
       ].join("\n")
     });
@@ -192,7 +192,7 @@ async function prepareAgentGatewayInputWithCompaction({
   }
   const gatewayMessages: any = compactedMessagesForGateway(compaction);
   const compactedQuestion: any = [
-    "Meshrix compacted prior context before this agent call.",
+    "Meshrix.js compacted prior context before this agent call.",
     `Boundary: ${compaction.boundary?.boundaryId || ""}`,
     compaction.summary || "",
     compaction.reinjection?.items?.length

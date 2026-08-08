@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://meshrix.local/schema/plugin-manifest.schema.json",
-  "title": "Meshrix Plugin Manifest",
+  "title": "Meshrix.js Plugin Manifest",
   "type": "object",
   "required": ["schemaVersion", "id", "label", "version"],
   "properties": {

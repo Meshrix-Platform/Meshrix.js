@@ -1,4 +1,4 @@
-# Meshrix Work Queue
+# Meshrix.js Work Queue
 
 `packages/foundation/src/work-queue` owns the platform infrastructure queue primitive.
 

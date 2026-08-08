@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Security Boundary Audit"
+  short_description: "Audit Meshrix.js attack surfaces and exploit paths"
+  default_prompt: "Use $meshrix-js-security-boundary-audit to review this Meshrix.js change for exploitable security-boundary failures."

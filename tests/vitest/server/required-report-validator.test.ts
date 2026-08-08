@@ -23,8 +23,8 @@ import {
   createPlatformAcceptancePlan
 } from "../../../tools/server-scripts/verify-platform-acceptance.ts";
 import {
-  PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH
-} from "../../../tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts";
+  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "../../../tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
 import { reportPayloadDigest } from "../../../tools/server-scripts/lib/sensitive-report-scan.ts";
 import {
   createReleaseEvidenceInventory,
@@ -421,7 +421,7 @@ describe("required report validator", () : any => {
         report: "build/reports/production-readiness-gates.json"
       }),
       expect.objectContaining({
-        report: PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH
+        report: PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
       })
     ]));
   });

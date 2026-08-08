@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Ingestion Job Processing"
+  short_description: "Guide uploads, queued work, durable results, and recovery"
+  default_prompt: "Use $meshrix-js-ingestion-job-processing to design, implement, or verify the ingestion and asynchronous-job capability flow."

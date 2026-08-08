@@ -1,4 +1,4 @@
-# Meshrix Tests
+# Meshrix.js Tests
 
 This directory stores repository-level test assets.
 

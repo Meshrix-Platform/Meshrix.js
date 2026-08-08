@@ -1,13 +1,13 @@
-# Meshrix Product
+# Meshrix.js Product
 
-This document owns Meshrix's durable product goal and boundary. It does not
+This document owns Meshrix.js's durable product goal and boundary. It does not
 record current implementation, verification, release, support, or hosted
 operation. Those facts belong to [Status](docs/STATUS.md),
 [Compatibility](docs/COMPATIBILITY.md), and the owning technical documents.
 
 ## Purpose
 
-Meshrix is the full private-deployable governance platform for organizations
+Meshrix.js is the full private-deployable governance platform for organizations
 that need to connect agent clients, upstream services, plugins, workspaces, and
 operator actions without distributing unchecked credentials or bypassing a
 single execution authority.
@@ -19,7 +19,7 @@ surfaces.
 
 ## Durable outcome
 
-A Meshrix deployment should let an authorized user or agent discover an
+A Meshrix.js deployment should let an authorized user or agent discover an
 allowed operation, request it through a published boundary, satisfy any
 required policy or approval, produce no more authority or effect than was
 admitted, and receive a bounded outcome with privacy-preserving evidence.
@@ -37,7 +37,7 @@ The normative technical meaning of those requirements belongs to
 
 ## Product boundary
 
-Meshrix owns the complete server-side governance platform for a private
+Meshrix.js owns the complete server-side governance platform for a private
 deployment:
 
 - server configuration and runtime composition;
@@ -58,7 +58,7 @@ become a configured default or a false capability claim.
 
 ## Product direction
 
-Meshrix is intended to provide:
+Meshrix.js is intended to provide:
 
 - a dependable single-node private deployment before broader deployment
   shapes;
@@ -74,14 +74,14 @@ Meshrix is intended to provide:
 
 ## Non-goals
 
-Meshrix is not:
+Meshrix.js is not:
 
 - a hosted SaaS product by default;
 - a model provider or model-hosting product;
 - a human messaging or federation protocol;
 - the owner of client keys, end-to-end encryption, plaintext, or endpoint
   trust decisions;
-- a station implementation or Lico Arc Protocol authority;
+- a client transport or messaging protocol authority;
 - a bypass that lets plugins, agents, controllers, queues, or internal
   services create execution authority;
 - a guarantee that an optional third-party integration is configured,
@@ -89,14 +89,9 @@ Meshrix is not:
 - a substitute for a product-specific client, plugin, service, or hosted
   operation receipt.
 
-MeshCore is an independent same-origin product. It is not Meshrix's internal
-Core, library, backend, compatibility layer, or reduced distribution. Neither
-product uses the other's source, runtime, contract, verification, release, or
-support evidence.
-
 ## Documentation authorities
 
-- [Domain language](CONTEXT.md) defines Meshrix vocabulary.
+- [Domain language](CONTEXT.md) defines Meshrix.js vocabulary.
 - [Status](docs/STATUS.md) records the five current status dimensions.
 - [Compatibility](docs/COMPATIBILITY.md) records exact runtime, protocol,
   adapter, and environment claim boundaries.

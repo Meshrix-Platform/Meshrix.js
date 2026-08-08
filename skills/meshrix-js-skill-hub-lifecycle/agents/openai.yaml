@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Skill Hub Lifecycle"
+  short_description: "Guide safe skill submission, review, publishing, and adoption"
+  default_prompt: "Use $meshrix-js-skill-hub-lifecycle to design, implement, or verify the Skill Hub capability lifecycle."

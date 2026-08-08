@@ -175,7 +175,7 @@ export function sanitizeInternalPaths(value?: any) : any {
 export function sanitizeSensitiveMcpText(value?: any) : any {
   return String(value || "")
     .replace(/\b(Authorization\s*:\s*Bearer\s+)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
-    .replace(/\b(X-Meshrix-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
+    .replace(/\b(X-Meshrix.js-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/\b(x-meshrix-tool-token\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/(^|[\s"'=:(])(--token(?:=|\s+))[^\s"',;)\]}]+/gi, "$1$2<redacted-token>")
     .replace(/\b(token|access_token|refresh_token|api_key|apiKey|secret|password)=([^\s"',;)\]}]+)/gi, "$1=<redacted-secret>");

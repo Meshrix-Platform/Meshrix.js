@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Memory Leak Detection"
+  short_description: "Run bounded real-service memory leak verification"
+  default_prompt: "Use $meshrix-js-memory-leak-detection to design and run a real-service memory leak gate."

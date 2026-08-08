@@ -24,7 +24,7 @@ function sharedHubContract() : any {
 function githubOwnerRepo(packageJson?: any) : any {
   const repositoryUrl: any = String(packageJson.repository?.url || "");
   const match: any = repositoryUrl.match(/github\.com[:/](.+?)(?:\.git)?$/);
-  return match?.[1] || "LicoLand/Meshrix";
+  return match?.[1] || String(process.env.GITHUB_REPOSITORY || "internal/meshrix-js");
 }
 
 export function releaseGeneratedAtFromSourceDateEpoch(value?: any) : any {

@@ -286,7 +286,7 @@ async function callMcp(token?: any, toolName?: any, operation?: any, input: Reco
   }, id));
   const response: any = await fetchJson(`${server.url}/mcp`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": token, "X-Meshrix-MCP-Target": "codex" },
+    headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": token, "X-Meshrix.js-MCP-Target": "codex" },
     body
   });
   assert.equal(expectedStatuses.includes(response.status), true, `Unexpected MCP HTTP status ${response.status}: ${JSON.stringify(response.payload, null, 2)}`);

@@ -677,7 +677,7 @@ jobs:
           const actualNames = assets.map(({ name }) => name).sort();
           const releaseMetadataMatches =
             release.tag_name === process.env.GITHUB_REF_NAME
-            && release.name === `Meshrix ${process.env.GITHUB_REF_NAME}`
+            && release.name === `Meshrix.js ${process.env.GITHUB_REF_NAME}`
             && release.body === fs.readFileSync(process.env.RELEASE_NOTES, "utf8")
             && release.prerelease === expectedPrerelease
             && (release.draft === true || release.immutable === true);
@@ -967,7 +967,7 @@ jobs:
             gh release edit "$GITHUB_REF_NAME" \
               --latest=false \
               --prerelease="$prerelease" \
-              --title "Meshrix ${GITHUB_REF_NAME}" \
+              --title "Meshrix.js ${GITHUB_REF_NAME}" \
               --notes-file build/release/RELEASE_NOTES.md
             gh api --paginate "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" --jq '.[].id' \
               | while IFS= read -r asset_id; do
@@ -980,7 +980,7 @@ jobs:
               --latest=false \
               --prerelease="$prerelease" \
               --verify-tag \
-              --title "Meshrix ${GITHUB_REF_NAME}" \
+              --title "Meshrix.js ${GITHUB_REF_NAME}" \
               --notes-file build/release/RELEASE_NOTES.md
           fi
           echo "published=false" >> "$GITHUB_OUTPUT"
@@ -1264,7 +1264,7 @@ jobs:
             .sort((left, right) => left.name.localeCompare(right.name));
           if (
             release.tag_name !== process.env.EXPECTED_TAG
-            || release.name !== `Meshrix ${process.env.EXPECTED_TAG}`
+            || release.name !== `Meshrix.js ${process.env.EXPECTED_TAG}`
             || release.body !== expectedBody
             || release.draft !== false
             || release.prerelease !== expectedPrerelease

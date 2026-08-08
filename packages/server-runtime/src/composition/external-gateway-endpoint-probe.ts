@@ -63,7 +63,7 @@ function validHandshakeIdentity({ payload, expectedIdentity, nonce }: Record<str
   return payload?.ok === true &&
     handshake.schemaVersion === "v0.0.1:mcp:handshake-1" &&
     handshake.nonce === nonce &&
-    handshake.server?.name === "Meshrix" &&
+    handshake.server?.name === "Meshrix.js" &&
     handshake.identity?.keyId === expectedIdentity.keyId &&
     samePublicKey(handshake.identity?.publicKeyJwk, expectedIdentity.publicKeyJwk) &&
     signature.algorithm === "Ed25519" &&
@@ -120,7 +120,7 @@ export async function probeExternalGatewayEndpoint({ profile, expectedIdentity, 
       },
       body: JSON.stringify({
         nonce,
-        client: { name: "Meshrix External Gateway Probe", version: "1" },
+        client: { name: "Meshrix.js External Gateway Probe", version: "1" },
       }),
     });
     if (!handshake.response.ok || !validHandshakeIdentity({
@@ -154,12 +154,12 @@ export async function probeExternalGatewayEndpoint({ profile, expectedIdentity, 
         params: {
           protocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: {},
-          clientInfo: { name: "Meshrix External Gateway Probe", version: "1" },
+          clientInfo: { name: "Meshrix.js External Gateway Probe", version: "1" },
         },
       }),
     });
     sessionId = String(initialized.response.headers.get("mcp-session-id") || "").trim();
-    if (!initialized.response.ok || initialized.payload?.result?.serverInfo?.name !== "Meshrix" ||
+    if (!initialized.response.ok || initialized.payload?.result?.serverInfo?.name !== "Meshrix.js" ||
       initialized.payload?.result?.protocolVersion !== MCP_PROTOCOL_VERSION) {
       return Object.freeze({ ok: false, reason: "external_gateway_mcp_probe_failed" });
     }

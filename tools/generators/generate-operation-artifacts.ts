@@ -368,7 +368,7 @@ function generateOpenApi(registry?: any) : any {
     "$comment": `GENERATED - DO NOT EDIT MANUALLY. Source: ${SOURCE_OPERATION_REGISTRY}`,
     openapi: "3.1.0",
     info: {
-      title: "Meshrix API",
+      title: "Meshrix.js API",
       version: registry.version || "v1.0.0",
       description: `Generated from ${SOURCE_OPERATION_REGISTRY}`,
     },

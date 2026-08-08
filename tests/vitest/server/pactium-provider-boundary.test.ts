@@ -83,7 +83,7 @@ async function descriptorsUnder(directoryPath?: any) : Promise<any> {
 }
 
 describe("Pactium provider boundary", () : any => {
-  it("uses Pactium behind Meshrix facades without changing checkpoint ids or data dir", async () : Promise<any> => {
+  it("uses Pactium behind Meshrix.js facades without changing checkpoint ids or data dir", async () : Promise<any> => {
     await withTempDataDir(async (userDataPath?: any) : Promise<any> => {
       const provider: any = createDataStructureSubstrate({ userDataPath });
       let proofSubstrate: any = null;

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Antigravity"
+  short_description: "Reference antigravity 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-antigravity as reference for antigravity 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

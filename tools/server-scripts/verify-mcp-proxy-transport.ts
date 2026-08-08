@@ -74,7 +74,7 @@ function redactText(value: any = "") : any {
   }
   text = text.replace(/Bearer\s+(?!\[redacted\])(?:[A-Za-z0-9._~+/=-]{8,})/giu, "Bearer [redacted]");
   text = text.replace(/"token"\s*:\s*"[^"]+"/giu, "\"token\":\"[redacted]\"");
-  text = text.replace(/"X-Meshrix-Api-Key"\s*:\s*"[^"]+"/giu, "\"X-Meshrix-Api-Key\":\"[redacted]\"");
+  text = text.replace(/"X-Meshrix.js-Api-Key"\s*:\s*"[^"]+"/giu, "\"X-Meshrix.js-Api-Key\":\"[redacted]\"");
   text = text.replace(/\bmeshrix_[A-Za-z0-9_-]{12,}\b/gu, "meshrix_[redacted]");
   return text;
 }
@@ -95,8 +95,8 @@ function assertNoLeakText(text: any = "", label: any = "text") : any {
   }
   assert.equal(/Bearer\s+(?!\[redacted\])(?:[A-Za-z0-9._~+/=-]{8,})/iu.test(value), false, `${label} leaked a bearer token`);
   assert.equal(/"token"\s*:\s*"(?!\[redacted\])[^"]+"/iu.test(value), false, `${label} leaked a token field`);
-  assert.equal(/"X-Meshrix-Api-Key"\s*:\s*"(?!\[redacted\])[^"]+"/iu.test(value), false, `${label} leaked an MCP API key`);
-  assert.equal(/\bmeshrix_[A-Za-z0-9_-]{12,}\b/u.test(value), false, `${label} leaked a Meshrix token-like value`);
+  assert.equal(/"X-Meshrix.js-Api-Key"\s*:\s*"(?!\[redacted\])[^"]+"/iu.test(value), false, `${label} leaked an MCP API key`);
+  assert.equal(/\bmeshrix_[A-Za-z0-9_-]{12,}\b/u.test(value), false, `${label} leaked a Meshrix.js token-like value`);
 }
 
 function failureEvidence(error?: any) : any {
@@ -162,7 +162,7 @@ async function verifyTargetProxyTransport(target?: any) : Promise<any> {
       capabilities: profile.capabilities,
       clientInfo: profile.clientInfo
     }, { id: 0 });
-    assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
+    assert.equal(initialize.result?.serverInfo?.name, "Meshrix.js");
     assert.equal(initialize.result?.capabilities?.tools?.listChanged, true);
     await proxy.notify("notifications/initialized", {}, {
       omitParams: profile.initializedParamsOmitted === true

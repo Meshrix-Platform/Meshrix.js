@@ -95,15 +95,10 @@ describe("release workflow supply-chain boundary", () : any => {
       "name: Verify the self-contained Core upstream publishing boundary"
     );
     expect(upstream).toContain("run: npm run verify:upstream-service-publishing");
-    expect(upstream).not.toContain("lico-dev workflow run");
-    expect(upstream).not.toContain("../lico-dev");
-    expect(upstream).not.toMatch(/repository:\s+LicoLand\/lico-dev\b/u);
     expect(upstream).not.toMatch(/\b(?:git|gh repo) clone\b/u);
     expect(upstream).not.toContain("contents: write");
     expect(upstream).not.toContain("packages: write");
     expect(upstream).not.toContain("id-token: write");
-    expect(upstream).not.toContain("repository: LicoLand/Meshrix-Services");
-    expect(upstream).not.toContain("repository: LicoLand/Meshrix-Plugins");
 
     expect(directJobNeeds(workflow, "functional-completeness"))
       .toContain(upstreamJobId);
@@ -238,8 +233,6 @@ describe("release workflow supply-chain boundary", () : any => {
       "publish-container-version",
       "verify-release-image-native"
     )).toBe(false);
-    expect(workflow).not.toContain("repository: LicoLand/Meshrix-Services");
-    expect(workflow).not.toContain("repository: LicoLand/Meshrix-Plugins");
     expect(workflow).not.toContain("npm run verify:real-machine");
     expect(jobTransitivelyNeeds(workflow, "publish-container-version", "npm-registry-preflight"))
       .toBe(true);
@@ -654,7 +647,7 @@ describe("release workflow supply-chain boundary", () : any => {
       maxParallel: 4
     });
     const privateDeploymentCommand: any = PLATFORM_ACCEPTANCE_COMMANDS.find((command?: any) : any =>
-      command.id === "private-deployment-open-platform-e2e"
+      command.id === "private-deployment-internal-platform-e2e"
     );
     expect(privateDeploymentCommand?.timeoutMs).toBe(2 * 60 * 1000);
     expect(PLATFORM_ACCEPTANCE_JOB_BUDGET_MS).toBeGreaterThanOrEqual(

@@ -13,7 +13,7 @@ describe("feature manifest public boundary", () : any => {
     expect(filterOperationsForFeatures(operations, { activeFeatureIds: [] })).toEqual([]);
   });
 
-  it("keeps public editions focused on the current open platform baseline", () : any => {
+  it("keeps public editions focused on the current internal platform baseline", () : any => {
     expect(Object.keys(FEATURE_MANIFEST.editions)).toEqual(["core", "standard", "integrations"]);
     const core: any = resolveEdition("core");
     const standard: any = resolveEdition("standard");

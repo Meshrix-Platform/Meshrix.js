@@ -76,7 +76,7 @@ function writeInitialOwnerCredentials({ userDataPath, initialOwner, runtimeLogge
   const credentialsPath: any = path.join(userDataPath, "auth", "initial-credentials.txt");
   fs.mkdirSync(path.dirname(credentialsPath), { recursive: true, mode: 0o700 });
   const content: any = [
-    "Meshrix Console Initial Credentials",
+    "Meshrix.js Console Initial Credentials",
     "=====================================",
     `Username : ${initialOwner.username}`,
     `Password : ${initialOwner.password}`,

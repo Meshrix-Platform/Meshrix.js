@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.meshrix.example/registry/schema/open-platform-capability-matrix.schema.json",
-  "title": "Open Platform Capability Matrix",
-  "description": "Machine-readable evidence matrix for open platform capability audits.",
+  "$id": "https://schemas.meshrix.example/registry/schema/internal-platform-capability-matrix.schema.json",
+  "title": "Internal Platform Capability Matrix",
+  "description": "Machine-readable evidence matrix for internal platform capability audits.",
   "type": "object",
   "required": ["$schema", "schemaVersion", "description", "statusEnum", "capabilities"],
   "properties": {

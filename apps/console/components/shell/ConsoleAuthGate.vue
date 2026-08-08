@@ -34,7 +34,7 @@ const {
           <circle class="brand-dot" r="6" opacity="0.6"/>
         </svg>
         <div>
-          <h1 class="auth-brand-name">Meshrix</h1>
+          <h1 class="auth-brand-name">Meshrix.js</h1>
           <p class="brand-subtitle">{{ tt('服务端控制台') }}</p>
         </div>
         <button

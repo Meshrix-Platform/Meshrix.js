@@ -5,7 +5,7 @@
   "category": "agent-ingress",
   "agentIngressKind": "external-gateway",
   "applicationSubsystem": "agent-gateway",
-  "description": "Optional traffic gateway profile and config renderer for core ingress plus enabled plugin route contributions. Direct mode remains required so Meshrix keeps working when the gateway is removed.",
+  "description": "Optional traffic gateway profile and config renderer for core ingress plus enabled plugin route contributions. Direct mode remains required so Meshrix.js keeps working when the gateway is removed.",
   "defaultLoaded": true,
   "protocol": "v0.0.1:agent:external-gateway-1",
   "components": {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target OpenCode"
+  short_description: "Reference opencode 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-opencode as reference for opencode 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

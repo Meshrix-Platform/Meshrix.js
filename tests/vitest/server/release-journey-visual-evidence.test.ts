@@ -167,9 +167,9 @@ describe("release journey visual evidence contract", () : any => {
     expect(source).toContain("Edit from Published Version");
     expect(source).not.toContain("document.documentElement.style.zoom");
     expect(source).toContain('capture("console-api-key-generated"');
-    expect(source.lastIndexOf('waitFor({ state: "detached"')).toBeLessThan(
-      source.indexOf('capture("console-api-key-generated"')
-    );
+    const apiKeyCaptureIndex: any = source.indexOf('capture("console-api-key-generated"');
+    expect(source.lastIndexOf('waitFor({ state: "detached"', apiKeyCaptureIndex))
+      .toBeGreaterThan(-1);
     expect(source).not.toContain('"meshrix.discovery",\n      "meshrix.gateway",');
     expect(source).toContain("captureDownstreamAgentConfigured");
     expect(source).toContain('data-testid="api-key-distribution-workspace"');

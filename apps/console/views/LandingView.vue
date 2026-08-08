@@ -23,7 +23,7 @@ const ctaLabel = computed(() => (isZh.value ? "进入控制台" : "Open Console"
     <div class="landing-center">
       <!-- Crystal Icon -->
       <div class="landing-crystal">
-        <svg viewBox="-150 -150 300 300" aria-label="Meshrix">
+        <svg viewBox="-150 -150 300 300" aria-label="Meshrix.js">
           <defs>
             <linearGradient id="lp-gold" x1="0" y1="0" x2="1" y2="1">
               <stop class="crystal-gold-0" offset="0%" />
@@ -72,7 +72,7 @@ const ctaLabel = computed(() => (isZh.value ? "进入控制台" : "Open Console"
     <footer class="landing-footer">
       <span class="landing-version">v0.0.1</span>
       <span class="landing-divider">|</span>
-      <span>&copy; 2026 Meshrix Contributors</span>
+      <span>&copy; 2026 Meshrix.js Contributors</span>
       <span class="landing-sep">&middot;</span>
       <span>GPL Licensed</span>
     </footer>

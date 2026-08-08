@@ -1,8 +1,7 @@
 // Release journey client-adapter cache seeding.
 //
 // The connector installs client adapters from a verified local cache. The
-// gate seeds that cache from a trusted source — the sibling Meshrix-Plugins
-// checkout by default, or an explicit directory / tarball through
+// gate seeds that cache from an explicit operator-supplied directory or tarball through
 // MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE / --adapter-source — and validates
 // every seeded adapter through the connector's own descriptor contract before
 // the real install matrix runs.
@@ -21,7 +20,6 @@ import {
   mcpClientAdapterForTarget
 } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-release-targets.ts";
 
-export const DEFAULT_ADAPTER_SOURCE: any = "../Meshrix-Plugins/plugins/agents";
 export const ADAPTER_KIT_PACKAGE: any = "@meshrix/client-adapter-kit";
 
 function adapterCachePaths(cacheRoot?: any, target?: any, version?: any) : any {
@@ -109,15 +107,21 @@ export async function seedClientAdapterCache({
     error.code = "release_journey_adapter_target_unsupported";
     throw error;
   }
-  const source: any = String(adapterSource || process.env.MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE || "").trim()
-    || path.join(repoRoot, DEFAULT_ADAPTER_SOURCE);
+  const source: any = String(adapterSource || process.env.MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE || "").trim();
+  if (!source) {
+    const error: Error & Record<string, any> = new Error(
+      "Release journey adapter source is required. Provide a directory or .tgz with --adapter-source or MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE."
+    );
+    error.code = "release_journey_adapter_source_required";
+    throw error;
+  }
   const resolvedSource: any = path.resolve(repoRoot, source);
   const kind: any = await pathKind(resolvedSource);
   if (!kind) {
     const error: Error & Record<string, any> = new Error(
       "Release journey adapter source not found. Provide the client adapter packages via " +
       "MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE or --adapter-source (directory or .tgz); " +
-      `the default sibling checkout is missing at ${DEFAULT_ADAPTER_SOURCE}.`
+      "the supplied source does not exist."
     );
     error.code = "release_journey_adapter_source_missing";
     throw error;

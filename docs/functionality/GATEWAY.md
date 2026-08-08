@@ -1,6 +1,6 @@
 # Gateway
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
@@ -20,26 +20,19 @@ can accept HTTP directly for local, development, desktop-adjacent, and bounded
 private deployments without requiring an external reverse proxy.
 
 For production deployments, an operator may place an independently admitted
-Nginx, Caddy, Envoy, or equivalent edge in front of Meshrix. The edge may own
+Nginx, Caddy, Envoy, or equivalent edge in front of Meshrix.js. The edge may own
 TLS, HTTP protocol negotiation, connection reuse, coarse-grained rate limits,
-load balancing, and standard edge observability. It does not parse Meshrix
+load balancing, and standard edge observability. It does not parse Meshrix.js
 governance semantics and cannot authorize an operation, mint or consume a
-governed permit, resolve a credential, approve an action, or emit Meshrix
+governed permit, resolve a credential, approve an action, or emit Meshrix.js
 governance evidence.
 
-Meshrix remains the semantic gateway in both profiles. It interprets HTTP,
+Meshrix.js remains the semantic gateway in both profiles. It interprets HTTP,
 JSON-RPC, and MCP contracts; resolves registered operations; applies
 authentication, Operation Permission, tag, risk, approval, and traffic policy;
 injects scoped credentials at the protected sink; manages protocol sessions;
 and emits bounded redacted evidence. An external edge therefore augments the
 Node.js runtime instead of replacing the application gateway.
-
-No separate Go data plane is currently implemented. Any future data-plane
-service must be justified by representative load and saturation evidence,
-preserve the language-independent gateway contracts, and consume the same
-Core-minted governed permit at protected sinks. It cannot introduce a second
-policy engine, authorization authority, service-publication authority, or
-audit lifecycle.
 
 The console can load a portable service document with kind
 `meshrix.upstream-service` and schema version
@@ -209,9 +202,9 @@ Canonical gateway verification runs against the repository's self-contained upst
 
 Server protocol conformance uses a neutral downstream peer generated from the MCP and catalog-delivery contracts. It exercises initialize, initialized notification, tools/list, governed tools/call, denied destructive call, cancellation, scoped invalidation, authenticated pull, acknowledgement, disconnect, and reconnect fencing without loading a connector or client implementation. Target-specific connector and client probes remain separate compatibility checks and cannot block or promote a server receipt.
 
-Native downstream installation requires an administrator-issued scoped API Key supplied through the documented environment variable or protected standard input. The connector validates the key before I/O, stores only the environment-variable reference, and sends only `X-Meshrix-Api-Key`. The server authenticates the workload before catalog projection and routes every permitted call through canonical Operation Permission; optional pending-operation approval remains a separate post-authentication control. Local uninstall removes connector-managed configuration without a credential or server request.
+Native downstream installation requires an administrator-issued scoped API Key supplied through the documented environment variable or protected standard input. The connector validates the key before I/O, stores only the environment-variable reference, and sends only `X-Meshrix.js-Api-Key`. The server authenticates the workload before catalog projection and routes every permitted call through canonical Operation Permission; optional pending-operation approval remains a separate post-authentication control. Local uninstall removes connector-managed configuration without a credential or server request.
 
-The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. The catalog pins external packages from Meshrix-Plugins; all client commands, configuration formats, probes, installation code, and compatibility evidence live there. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
+The connector-managed downstream adapter target set is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, Pi, and Kimi CLI. The catalog accepts only explicit operator-supplied packages; all client commands, configuration formats, probes, installation code, and compatibility evidence remain outside Core. Core owns only package verification/cache, the bounded adapter process protocol, authorization, credentials, proxying, and rollback.
 
 The pre-release format-convert compatibility fixture projects one external
 `POST /v1/convert` route as
@@ -268,7 +261,7 @@ skill then runs the isolated external-service and downstream-agent journey and
 writes `build/reports/upstream-service-publishing.html`. The report records the
 exact safe startup, native upload-session, raw binary chunk, owner-bound
 `upload:` reference, and connector configuration, then embeds ten digest-bound
-screenshots captured from the real Meshrix Web Console: authenticated
+screenshots captured from the real Meshrix.js Web Console: authenticated
 publishing, basic configuration, operation configuration, published runtime
 health, tool catalog projection, pending Token authorization, completed Token
 authorization, pending operation approval, completed operation approval, and
@@ -289,12 +282,12 @@ is local-only under Git-ignored `build/`; synthetic fixture and generated
 platform identifiers remain visible while credentials and protected identities
 remain protected. The report identifies the operation `maxBytes` value as a
 single multipart request-envelope bound, separate from the external service's
-file-size budget and from any global Meshrix upload policy:
+file-size budget and from any global Meshrix.js upload policy:
 
 ```bash
 npm run verify:upstream-gateway
 npm run verify:upstream-service-publishing
-lico-dev workflow run upstream-service-publishing --allow-side-effects
+npm run verify:release-journey -- --adapter-source <adapter-package-dir> --image-name <local-image>
 npm run verify:upstream-fixture-transit
 npm run verify:console-gateway-mcp-workflows
 npx vitest run tests/vitest/server/http-mcp-adapter-cancellation.test.ts tests/vitest/server/mcp-sse-admission.test.ts tests/vitest/server/upstream-mcp-session-manager.test.ts tests/vitest/server/upstream-gateway-session-cancellation.test.ts tests/vitest/server/mcp-proxy-cancellation.test.ts

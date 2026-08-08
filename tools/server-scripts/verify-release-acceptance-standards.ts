@@ -162,8 +162,6 @@ export async function verifyReleaseAcceptanceStandards({
     "verify-macos-mcp-final-asset",
     "npm-package-node22",
     "--host-platform-probe",
-    "repository: LicoLand/Meshrix-Services",
-    "repository: LicoLand/Meshrix-Plugins",
     "npm run verify:real-machine",
     "continue-on-error: true",
     "\n  platform-acceptance:\n",

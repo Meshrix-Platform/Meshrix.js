@@ -1081,7 +1081,7 @@ describe("Core Plan execution eligibility", () : any => {
       repoRoot: "/workspace/core",
       gitTopLevel: "/workspace/core",
       planRoot: "/workspace/core/docs/plans",
-      packageManifest: { name: "meshrix" },
+      packageManifest: { name: "meshrix.js" },
       gitMarkerPresent: true,
     };
     expect(() : any => assertRepositoryIdentity(identity)).not.toThrow();
@@ -1089,7 +1089,7 @@ describe("Core Plan execution eligibility", () : any => {
       "repository_identity_mismatch: repository root is not the current Git top-level",
     );
     expect(() : any => assertRepositoryIdentity({ ...identity, packageManifest: { name: "other" } })).toThrow(
-      "repository_identity_mismatch: repository root is not the Meshrix Core package",
+      "repository_identity_mismatch: repository root is not the Meshrix.js Core package",
     );
     expect(() : any => assertRepositoryIdentity({ ...identity, planRoot: "/workspace/core/plan" })).toThrow(
       "repository_identity_mismatch: plan root is not the canonical Core Plan root",

@@ -13,7 +13,7 @@ export function redactSensitiveText(value?: any, secrets: any = []) : any {
     .replace(/mxak1\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}/gu, "<redacted-api-key>")
     .replace(/(^|[\s"'=:(])((?:\/(?:Users|home|root|private|var|tmp|opt|usr|Volumes)\/)[^\s"',)\]}]+)/g, "$1<local-path>")
     .replace(/(^|[\s"'=:(])([A-Za-z]:[\\/][^\s"',)\]}]+)/g, "$1<local-path>")
-    .replace(/\b(X-Meshrix-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
+    .replace(/\b(X-Meshrix.js-Api-Key\s*:\s*)[^\s"',;)\]}]+/gi, "$1<redacted-token>")
     .replace(/(^|[\s"'=:(])(--token(?:=|\s+))[^\s"',;)\]}]+/gi, "$1$2<redacted-token>")
     .replace(/\b(token|access_token|refresh_token|api_key|apiKey|secret|password)=([^\s"',;)\]}]+)/gi, "$1=<redacted-secret>");
 }

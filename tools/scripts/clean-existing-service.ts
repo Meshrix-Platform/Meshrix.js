@@ -15,12 +15,12 @@ function usage() : any {
 Options:
   --port <n>            Kill listeners on a server port. Can be repeated.
   --vite-port <n>       Alias for --port, intended for local Vite dev server.
-  --data-dir <path>     Data dir used by Meshrix service processes.
+  --data-dir <path>     Data dir used by Meshrix.js service processes.
   --project-root <path> Project root used for command-line matching.
   --launch-label <name> Best-effort launchctl bootout for a user service label.
   --launch-plist <path> Best-effort launchctl bootout for a LaunchAgent plist.
-  --process-only        Stop matched Meshrix processes; do not kill port listeners.
-  --global              Kill any Meshrix process matching the project root, regardless of data-dir.
+  --process-only        Stop matched Meshrix.js processes; do not kill port listeners.
+  --global              Kill any Meshrix.js process matching the project root, regardless of data-dir.
   --quiet               Reduce informational output.
   --help                Show help.`);
 }
@@ -317,7 +317,7 @@ function stopPids(pids?: any, options?: any) : any {
   }
   const remaining: any = unique.filter(processAlive);
   if (remaining.length > 0) {
-    log(options, `[clean] force stopping stale Meshrix process(es): ${remaining.join(" ")}`);
+    log(options, `[clean] force stopping stale Meshrix.js process(es): ${remaining.join(" ")}`);
     for (const pid of remaining) {
       terminatePid(pid, true);
     }
@@ -340,7 +340,7 @@ function killPortListeners(port?: any, options?: any, resolved?: any) : any {
     }
   }
   if (externalPids.length > 0) {
-    log(options, `[clean] port ${port} is occupied by non-Meshrix process(es); refusing to stop them`);
+    log(options, `[clean] port ${port} is occupied by non-Meshrix.js process(es); refusing to stop them`);
     for (const pid of externalPids) {
       describeProcess(pid, options);
     }
@@ -348,10 +348,10 @@ function killPortListeners(port?: any, options?: any, resolved?: any) : any {
     return;
   }
   if (ownPids.length === 0) {
-    log(options, `[clean] port ${port} has no Meshrix-owned listeners`);
+    log(options, `[clean] port ${port} has no Meshrix.js-owned listeners`);
     return;
   }
-  log(options, `[clean] stopping Meshrix-owned listeners on port ${port}: ${ownPids.join(" ")}`);
+  log(options, `[clean] stopping Meshrix.js-owned listeners on port ${port}: ${ownPids.join(" ")}`);
   stopPids(ownPids, options);
 }
 
@@ -387,10 +387,10 @@ try {
     .filter((item?: any) : any => pidIsMeshrixOwned(item, options, resolved))
     .map((item?: any) : any => item.pid);
   if (stalePids.length > 0) {
-    log(options, `[clean] stopping stale Meshrix service processes: ${stalePids.join(" ")}`);
+    log(options, `[clean] stopping stale Meshrix.js service processes: ${stalePids.join(" ")}`);
     stopPids(stalePids, options);
   } else {
-    log(options, `[clean] no stale Meshrix service processes for ${dataDir}`);
+    log(options, `[clean] no stale Meshrix.js service processes for ${dataDir}`);
   }
 
   if (options.processOnly) {
@@ -403,7 +403,7 @@ try {
       killPortListeners(port, options, resolved);
     }
   }
-  log(options, "[clean] existing Meshrix service cleanup complete");
+  log(options, "[clean] existing Meshrix.js service cleanup complete");
 } catch (error: any) {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;

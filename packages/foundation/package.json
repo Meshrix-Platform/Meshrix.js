@@ -1,13 +1,8 @@
 {
   "name": "@meshrix/foundation",
   "version": "0.0.1",
-  "description": "Meshrix pure infrastructure primitives — security, policy, config, storage, proof, checkpoint, workflow, observability, module-system",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/foundation"
-  },
+  "description": "Meshrix.js pure infrastructure primitives — security, policy, config, storage, proof, checkpoint, workflow, observability, module-system",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

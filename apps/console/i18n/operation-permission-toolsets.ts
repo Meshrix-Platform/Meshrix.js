@@ -1,7 +1,7 @@
 import { currentConsoleLocale, resolveEffectiveConsoleLocale } from "./console-locale-state";
 
 const toolsetNames: Readonly<Record<string, readonly [string, string]>> = Object.freeze({
-  "meshrix.admin": ["Meshrix 管理", "Meshrix admin"],
+  "meshrix.admin": ["Meshrix.js 管理", "Meshrix.js admin"],
   "meshrix.agent.sync.publish": ["智能体同步发布", "Agent sync publish"],
   "meshrix.agent.workspace": ["智能体工作空间", "Agent workspace"],
   "meshrix.agent.workspace.maintain": ["智能体工作空间维护", "Agent workspace maintain"],

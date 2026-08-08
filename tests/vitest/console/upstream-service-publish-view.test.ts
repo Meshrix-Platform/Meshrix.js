@@ -211,7 +211,7 @@ describe("UpstreamServicePublishView configuration truthfulness", () : any => {
     expect(client.listPublishedServices.mock.calls.length).toBe(refreshCallCount + 1);
   });
 
-  it("orders external connection fields before Meshrix metadata and explains the service identifier", async () : Promise<any> => {
+  it("orders external connection fields before Meshrix.js metadata and explains the service identifier", async () : Promise<any> => {
     const wrapper: any = mount(UpstreamServicePublishView);
     await flushPromises();
     const fieldLabels: string[] = wrapper.findAll('.tab-content > .form-field').map((field: any) : string =>

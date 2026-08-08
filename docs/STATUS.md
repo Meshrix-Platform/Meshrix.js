@@ -1,8 +1,8 @@
-# Meshrix Status
+# Meshrix.js Status
 
 Status assessed on 2026-07-28.
 
-This document is the authority for current Meshrix status claims. It separates
+This document is the authority for current Meshrix.js status claims. It separates
 intent, implementation, verification, release, and support. A command,
 workflow, source file, changelog entry, or release definition is not by itself
 evidence that another dimension has been satisfied.
@@ -17,7 +17,7 @@ evidence that another dimension has been satisfied.
 | **Release** | The repository declares a `0.0.1` release target and contains a changelog entry. No source tag, npm package set, container manifest, GitHub Release, or other publication channel is claimed by this document without immutable channel evidence for the same accepted candidate. |
 | **Support** | No operating-system, architecture, connector, deployment, or hosted-service support claim is made at product level. A support claim requires the exact accepted candidate and the named environment workflow defined in [Compatibility](COMPATIBILITY.md). |
 
-Meshrix is therefore **pre-release**. It must not be described as
+Meshrix.js is therefore **pre-release**. It must not be described as
 release-ready, production-ready, published, or supported without naming the
 dimension, candidate, evidence, channel, and environment.
 
@@ -31,8 +31,8 @@ dimension, candidate, evidence, channel, and environment.
 | Independent backup and clean-root restore | Required for the single-node closure | Backup, restore, integrity, and recovery mechanisms exist | Complete same-candidate clean-root closure not asserted | No recovery support claim |
 | N-1 upgrade and rollback | Required after recovery closure | Candidate orchestration and focused verifier surfaces exist | Two distinct immutable images, schema transition, failure rollback, and reopen closure not asserted | No upgrade support claim |
 | Offline dual-architecture delivery | Later release work | Source and container assembly surfaces exist | Complete disconnected artifact closure not asserted | No Linux architecture support claim |
-| External identity, telemetry, notification, datastore, and provider integrations | Optional extension intent | Varies by independently owned integration | Each enabled integration needs its own evidence | Cannot promote or block Meshrix release |
-| Meshrix hosted service | Separate hosted-service concern | Not established by this repository | No operation evidence asserted | No operation claim |
+| External identity, telemetry, notification, datastore, and provider integrations | Optional extension intent | Varies by independently owned integration | Each enabled integration needs its own evidence | Cannot promote or block Meshrix.js release |
+| Meshrix.js hosted service | Separate hosted-service concern | Not established by this repository | No operation evidence asserted | No operation claim |
 
 ## Next acceptance order
 

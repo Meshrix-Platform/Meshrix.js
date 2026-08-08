@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Protocol Gateway"
+  short_description: "Maintain governed protocol gateway boundaries"
+  default_prompt: "Use $meshrix-js-protocol-gateway to handle this Meshrix.js task through its canonical owner and validation path."

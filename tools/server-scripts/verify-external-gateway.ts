@@ -41,7 +41,7 @@ assert.equal(
 );
 assert.match(caddy.config, /reverse_proxy @meshrix_streaming/);
 assert.match(caddy.config, /flush_interval -1/);
-assert.match(caddy.config, /X-Meshrix-Gateway caddy/);
+assert.match(caddy.config, /X-Meshrix.js-Gateway caddy/);
 assert.match(caddy.config, /\{http\.request\.uuid\}/);
 assert.match(caddy.config, /http:\/\/127\.0\.0\.1:7228 http:\/\/127\.0\.0\.1:7229/);
 
@@ -79,8 +79,8 @@ assert.match(nginx.config, /server 127\.0\.0\.1:7229;/);
 assert.match(nginx.config, /proxy_buffering off;/);
 assert.match(nginx.config, /proxy_request_buffering off;/);
 assert.match(nginx.config, /proxy_set_header Upgrade \$http_upgrade;/);
-assert.match(nginx.config, /proxy_set_header X-Meshrix-Gateway nginx;/);
-assert.match(nginx.config, /proxy_set_header X-Meshrix-Gateway-Request-Id \$request_id;/);
+assert.match(nginx.config, /proxy_set_header X-Meshrix.js-Gateway nginx;/);
+assert.match(nginx.config, /proxy_set_header X-Meshrix.js-Gateway-Request-Id \$request_id;/);
 
 function parseLastJsonPayload(stdout: any = "") : any {
   const text: any = String(stdout || "").trim();

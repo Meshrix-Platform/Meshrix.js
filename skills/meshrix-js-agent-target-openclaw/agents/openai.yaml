@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target OpenClaw"
+  short_description: "Reference openclaw 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-openclaw as reference for openclaw 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

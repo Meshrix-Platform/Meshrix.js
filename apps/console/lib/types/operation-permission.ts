@@ -108,6 +108,10 @@ export type OperationPermissionTool = {
   tags: string[];
   serviceId?: string;
   capabilityId?: string;
+  dynamicCapability?: {
+    capabilityId?: string;
+    [key: string]: unknown;
+  };
 };
 
 export type OperationPermissionCatalog = {

@@ -27,7 +27,7 @@ function resolveProjectRoot(scriptDirectory: string): string {
   for (const candidate of candidates) {
     try {
       const manifest = JSON.parse(fs.readFileSync(path.join(candidate, "package.json"), "utf8"));
-      if (manifest?.name === "meshrix") {
+      if (manifest?.name === "meshrix.js") {
         return candidate;
       }
     } catch {
@@ -35,7 +35,7 @@ function resolveProjectRoot(scriptDirectory: string): string {
     }
   }
 
-  throw new Error("无法定位 Meshrix 项目根目录。请从完整的软件包中启动服务。");
+  throw new Error("无法定位 Meshrix.js 项目根目录。请从完整的软件包中启动服务。");
 }
 
 const projectRoot: any = resolveProjectRoot(__dirname);
@@ -277,7 +277,7 @@ process.on("unhandledRejection", (reason?: any) : any => {
 });
 
 function printUsageAndExit(code: any = 0) : any {
-  console.log(`Meshrix Server
+  console.log(`Meshrix.js Server
 
 Usage:
   node tools/server-scripts/start-server.ts [--runtime-config /path/to/runtime-instance.json] [--host 0.0.0.0] [--port ${DEFAULT_SERVER_PORT}] [--data-dir /path/to/data] [--with-ui] [--profile minimal|default] [--edition core|standard|integrations]

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Feature Reassembly"
+  short_description: "Recover delivery with proportional heuristics"
+  default_prompt: "Use $meshrix-js-feature-reassembly to choose a proportionate path for this stalled capability and close it without turning workflow advice into gates."

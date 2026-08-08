@@ -1,6 +1,6 @@
 # Security, Authorization, And Identity
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
@@ -46,7 +46,7 @@ Functional Release Gate even when its ingress check succeeds.
 ### Mandatory attack-resistance boundary
 
 Every value that an external subject can supply, select, observe, persist, or
-cause Meshrix to retrieve is attacker-controlled until the consuming boundary
+cause Meshrix.js to retrieve is attacker-controlled until the consuming boundary
 has admitted it. This includes HTTP, browser, MCP and stdio fields; uploaded
 bytes and archives; imported configuration; plugin metadata and results;
 upstream responses; agent prompts, retrieved content, tool descriptions, tool
@@ -240,7 +240,7 @@ surface is removed, disabled, or protected and covered by negative evidence.
 
 ## Organization Governance Snapshot
 
-Meshrix stores one canonical organization-governance aggregate in the
+Meshrix.js stores one canonical organization-governance aggregate in the
 tag-management SQLite store. An empty store returns `configured: false`, revision
 zero, and empty nodes, tags, and roles. Built-in choices are versioned TOML files
 under the Foundation package configuration directory; catalog summaries never
@@ -288,7 +288,7 @@ interface projection; every create, list, rotate, and revoke request repeats the
 same current server-side authority and lineage checks.
 
 An API Key is the downstream workload credential, not an enrollment request or
-approval ticket. Meshrix records the workload principal before distribution,
+approval ticket. Meshrix.js records the workload principal before distribution,
 shows plaintext only in the create or rotate response, and provides no later
 reveal operation. The console keeps that response only in ephemeral view state
 and clears it on dismissal, refresh, route history, and reload. Lists, audit,
@@ -311,7 +311,7 @@ Owner-scoped Host ports bind every admission to the verified artifact generation
 
 Process identity issuance and controlled execution additionally require a Host-issued invocation authorization derived from the admitted request's subject and current governance result. The signed in-memory authorization is bounded, short-lived, operation-, request-, source-request-, owner-, and generation-bound, and separately single-use for each Host capability audience. Host ports use only its principal and governance claims. The authorization is transient call data and is not persisted in plugin state, relay sessions, logs, audit, or recovery storage.
 
-The generic process-identity Host capability reuses the sealed Meshrix process-identity state. A binding covers tenant, subject, target, device, process, workspace, correlation, and the request idempotency digest. Issue, inspect, and revoke serialize through the same persistent authority, so valid and revoked bindings survive restart. Revocation records a minimum Ed25519 receipt bound to the process identity reference, binding reference, target, context digest, revocation time, and Meshrix server signing identity. Public plugin projections contain controlled references, status, expiry, revocation time, and receipt digest only.
+The generic process-identity Host capability reuses the sealed Meshrix.js process-identity state. A binding covers tenant, subject, target, device, process, workspace, correlation, and the request idempotency digest. Issue, inspect, and revoke serialize through the same persistent authority, so valid and revoked bindings survive restart. Revocation records a minimum Ed25519 receipt bound to the process identity reference, binding reference, target, context digest, revocation time, and Meshrix.js server signing identity. Public plugin projections contain controlled references, status, expiry, revocation time, and receipt digest only.
 
 Process-identity persistence accepts only the exact current top-level state schema and current state version. A non-current version or unexpected field initializes fresh current state; no retired binding field is discovered, translated, or imported, and no compatibility migration remains.
 

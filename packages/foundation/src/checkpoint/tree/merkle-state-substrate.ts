@@ -321,7 +321,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
   });
 
   async function appendEventUnlocked(input: Record<string, any> = {}) : Promise<any> {
-    // Meshrix-normalize before Pactium so event payloads / eventHash match
+    // Meshrix.js-normalize before Pactium so event payloads / eventHash match
     // commit records that already use normalizeCanonical(asObject(...)).
     return protocolEventLog.appendEvent({
       ...input,

@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 
 export function defaultLocalSharedRootPath({ homeDir = os.homedir() }: Record<string, any> = {}) : any {
-  return path.join(homeDir, "Meshrix", "shared");
+  return path.join(homeDir, "Meshrix.js", "shared");
 }
 
 export function defaultLocalProjectionRootPath(_provider: any = "", options: Record<string, any> = {}) : any {

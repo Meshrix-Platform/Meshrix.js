@@ -19,7 +19,7 @@ import { mcpOutletForTool } from "../../packages/protocols/mcp/adapter/http-mcp-
 import { createPluginDeploymentAuditCatalog } from "./lib/plugin-deployment-audit-catalog.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const MATRIX_PATH: any = "tools/registry/open-platform-capability-matrix.json";
+const MATRIX_PATH: any = "tools/registry/internal-platform-capability-matrix.json";
 const REPORT_PATH: any = "build/reports/core-platform-surface-convergence.json";
 
 const BASELINE_CAPABILITY_FEATURES: Readonly<Record<string, any>> = Object.freeze({

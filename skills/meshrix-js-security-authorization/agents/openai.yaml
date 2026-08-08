@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Security Authorization"
+  short_description: "Maintain fail-closed security and authorization"
+  default_prompt: "Use $meshrix-js-security-authorization to handle this Meshrix.js task through its canonical owner and validation path."

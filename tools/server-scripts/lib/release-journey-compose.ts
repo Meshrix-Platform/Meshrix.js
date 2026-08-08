@@ -11,8 +11,7 @@ export const RELEASE_JOURNEY_COMPOSE_PROJECT: any = "meshrix-release-journey";
 export const RELEASE_JOURNEY_SERVER_CONTAINER: any = "meshrix-release-server";
 export const RELEASE_JOURNEY_CONVERTER_CONTAINER: any = "meshrix-release-format-convert";
 export const RELEASE_JOURNEY_SERVER_IMAGE: any = "meshrix-server:release-journey-gate";
-export const DEFAULT_CONVERTER_IMAGE: any = "meshrix-format-convert:local";
-export const DEFAULT_FORMAT_CONVERTER_BUILD_DIR: any = "../Meshrix-Services/file-parser/format-convert";
+export const DEFAULT_CONVERTER_IMAGE: any = "meshrix-js-format-convert:local";
 export const RELEASE_JOURNEY_STACK_UP_ARGS: readonly any[] = Object.freeze([
   "--profile",
   "format-convert",

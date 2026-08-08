@@ -4,7 +4,7 @@ import { assertModelAssistedEgressAllowed } from "../model-egress-policy.ts";
 import { redactSecretText, truncateText } from "../shared.ts";
 
 const PROBE_EXPECTED_ANSWER: any = "MeshrixProbeOK";
-const PROBE_PROMPT: any = `This is a Meshrix model connectivity probe. Reply only with: ${PROBE_EXPECTED_ANSWER}`;
+const PROBE_PROMPT: any = `This is a Meshrix.js model connectivity probe. Reply only with: ${PROBE_EXPECTED_ANSWER}`;
 const SUPPORTED_MODEL_PROVIDERS: any = new Set<any>([
   "openai",
   "deepseek",

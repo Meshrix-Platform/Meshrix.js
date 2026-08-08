@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Agent Adaptation"
+  short_description: "Reference index for per-agent 适配项 skills"
+  default_prompt: "Use $meshrix-js-agent-adaptation as the reference index for the matching meshrix-js-agent-target skill and its 适配项."

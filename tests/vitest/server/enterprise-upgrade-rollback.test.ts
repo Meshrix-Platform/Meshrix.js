@@ -5,9 +5,9 @@ import {
 } from "../../../tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts";
 
 const CANDIDATE: any =
-  "ghcr.io/licoland/meshrix@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  "registry.example/meshrix-js/runtime@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const PREVIOUS: any =
-  "ghcr.io/licoland/meshrix@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  "registry.example/meshrix-js/runtime@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 function harness({ candidateHealthy = true, restoreSucceeds = true }: Record<string, any> = {}) : any {
   const calls: any[] = [];
@@ -119,7 +119,7 @@ describe("enterprise N-1 upgrade rollback", () : any => {
   it("rejects floating or identical images before side effects", async () : Promise<any> => {
     const fixture: any = harness();
     await expect(executeEnterpriseUpgradeRollback({
-      candidateImage: "ghcr.io/licoland/meshrix:latest",
+      candidateImage: "registry.example/meshrix-js/runtime:latest",
       previousImage: PREVIOUS,
       ...fixture.ports
     })).rejects.toMatchObject({ code: "enterprise_upgrade_candidate_digest_required" });

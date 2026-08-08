@@ -514,9 +514,9 @@ async function runAcceptanceWorker() : Promise<any> {
     verifier: "tools/server-scripts/verify-platform-acceptance.ts",
     algorithm: {
       commandExecutionMode: "dag-parallel-full-aggregation",
-      commandExecution: "Run Meshrix acceptance commands through a DAG with parallel downstream-gateway, upstream-gateway, and platform-capability layers, respecting dependencies and resource locks.",
+      commandExecution: "Run Meshrix.js acceptance commands through a DAG with parallel downstream-gateway, upstream-gateway, and platform-capability layers, respecting dependencies and resource locks.",
       evidenceReduction: "Validate every Core acceptance-required report against the exact required-report schema, verifier, timestamp, leak-scan, ready-field, and reducer registry, then bind every checked Core capability criterion to a command that passed in this same DAG run. Client implementations, cryptographic evidence, platform adoption, and product receipts are not inputs; verifier-health failures and Core-actionable gaps remain release failures.",
-      finalRegression: "Run private deployment open platform E2E only after the required upstream/downstream/platform acceptance dependencies pass."
+      finalRegression: "Run private deployment internal platform E2E only after the required upstream/downstream/platform acceptance dependencies pass."
     },
     stateMachine: {
       ...PLATFORM_ACCEPTANCE_STATE_MACHINE,

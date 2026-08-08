@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Release Engineering"
+  short_description: "Route substantial delivery through safe gates"
+  default_prompt: "Use $meshrix-js-release-engineering-workflow to implement one bounded feature, run repository-local verification, and produce sanitized acceptance evidence."

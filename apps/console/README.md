@@ -1,10 +1,10 @@
-# Meshrix Console Application
+# Meshrix.js Console Application
 
-`apps/console` is the Meshrix Vue 3 server console (`@meshrix/console`). It provides the operator-facing console workspace: views, components, composables, routing, i18n, and appearance presets that drive the governed server console UI.
+`apps/console` is the Meshrix.js Vue 3 server console (`@meshrix/console`). It provides the operator-facing console workspace: views, components, composables, routing, i18n, and appearance presets that drive the governed server console UI.
 
 ## Responsibilities
 
-- Console workspace UI for operating the Meshrix server.
+- Console workspace UI for operating the Meshrix.js server.
 - Console routing, event routing, and admin surface composition.
 - Appearance presets and localized console copy.
 

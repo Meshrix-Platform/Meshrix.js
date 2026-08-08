@@ -17,7 +17,7 @@ function record(value?: any) : any {
 }
 
 function encryptionError(code: any = "local_secret_decryption_failed") : any {
-  const error: Error & Record<string, any> = new Error("Meshrix local secret encrypted value is unavailable.");
+  const error: Error & Record<string, any> = new Error("Meshrix.js local secret encrypted value is unavailable.");
   error.code = code;
   return error;
 }

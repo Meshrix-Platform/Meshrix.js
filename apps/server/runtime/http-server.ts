@@ -60,7 +60,7 @@ function resolveServerUserDataPath(inputUserDataPath?: any) : any {
   const runningFromSourceCheckout: any = fs.existsSync(path.join(sourceCheckoutRoot, ".git"));
   if (runningFromSourceCheckout && isPathInside(sourceCheckoutRoot, resolved)) {
     throw new Error(
-      "Refusing a project-local Meshrix server data directory. Use the platform data directory or an external MESHRIX_SERVER_DATA_DIR."
+      "Refusing a project-local Meshrix.js server data directory. Use the platform data directory or an external MESHRIX_SERVER_DATA_DIR."
     );
   }
   return resolved;
@@ -99,7 +99,7 @@ function assertProductionSecretCustodySeparated({
       timingSafeEqual(encryptionValue, signerValue);
     if (sameFile || sameValue) {
       throw Object.assign(
-        new Error("Meshrix production encryption and proof-signing secrets must be distinct."),
+        new Error("Meshrix.js production encryption and proof-signing secrets must be distinct."),
         { code: "production_secret_custody_separation_required" }
       );
     }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Migration Completion"
+  short_description: "Finish migrations without compatibility residue"
+  default_prompt: "Use $meshrix-js-migration-completion to handle this Meshrix.js task through its canonical owner and validation path."

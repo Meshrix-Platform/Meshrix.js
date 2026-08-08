@@ -1,7 +1,6 @@
 // Release journey PDF verification (pure Node, no external dependencies).
 //
-// Ports the stdlib-only checks from Meshrix-Services
-// build/cjk-proof/verify_pdf.py so the release journey gate can prove that a
+// Verifies that the release journey converted a
 // converted Chinese TXT became a real PDF with embedded CJK glyphs:
 // 1. `%PDF-` magic.
 // 2. Byte-length sanity bound.

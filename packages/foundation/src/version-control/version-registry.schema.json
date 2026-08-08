@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://meshrix.local/packages/foundation/src/version-control/version-registry.schema.json",
   "x-governedVersion": "v0.0.1:version-governance:registry-schema-1",
-  "title": "Meshrix Version Registry",
+  "title": "Meshrix.js Version Registry",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -303,7 +303,7 @@ async function waitForServerReady(timeoutMs: any = 150_000) : Promise<any> {
       const response: any = await fetch(`${baseUrl}/api/mcp/discovery`, { headers: { "Cache-Control": "no-store" } });
       if (response.status === 200) {
         const payload: any = await response.json();
-        if (payload?.server?.name === "Meshrix" || payload?.name === "Meshrix" || payload?.mcpUrl) {
+        if (payload?.server?.name === "Meshrix.js" || payload?.name === "Meshrix.js" || payload?.mcpUrl) {
           return { ready: true, waitedMs: Date.now() - started };
         }
       }
@@ -765,7 +765,7 @@ try {
       capabilities: {},
       clientInfo: { name: "verify-deployment-container-flow", version: "0.0.0" }
     }, { id: 1 });
-    assert.equal(initialize.result?.serverInfo?.name, "Meshrix");
+    assert.equal(initialize.result?.serverInfo?.name, "Meshrix.js");
     const inspected: any = inspectContainer();
     assert.equal(inspected.Image, expectedImageId);
     assert.equal(inspected.Config?.User, "10001:10001");

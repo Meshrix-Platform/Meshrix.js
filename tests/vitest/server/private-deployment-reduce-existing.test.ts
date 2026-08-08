@@ -5,14 +5,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
-  PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH
-} from "../../../tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts";
+  PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH
+} from "../../../tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts";
 import {
   PRIVATE_DEPLOYMENT_REQUIRED_REPORTS
 } from "../../../tools/server-scripts/lib/platform-acceptance-command-catalog.ts";
 import {
   reduceExistingReports
-} from "../../../tools/server-scripts/verify-private-deployment-open-platform-e2e.ts";
+} from "../../../tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts";
 
 describe("private deployment existing-evidence reduction", () : any => {
   it("does not remove or execute child evidence while producing a fail-closed aggregate", async () : Promise<any> => {
@@ -35,7 +35,7 @@ describe("private deployment existing-evidence reduction", () : any => {
       });
       expect(await fs.readFile(childPath, "utf8")).toBe(sentinel);
       await expect(fs.readFile(
-        path.join(root, ...PRIVATE_DEPLOYMENT_OPEN_PLATFORM_E2E_REPORT_PATH.split("/")),
+        path.join(root, ...PRIVATE_DEPLOYMENT_INTERNAL_PLATFORM_E2E_REPORT_PATH.split("/")),
         "utf8"
       )).resolves.toContain("platform-acceptance-existing-evidence-reduction");
     } finally {

@@ -63,7 +63,7 @@ const REQUIRED_TERMS: Readonly<Record<string, any>> = Object.freeze({
     "Upstream service gateway",
     "Downstream MCP",
     "Operation Permission",
-    "npm run verify:private-deployment-open-platform-e2e"
+    "npm run verify:private-deployment-internal-platform-e2e"
   ],
   "docs/architecture/EXECUTION-SANDBOX.md": [
     "Execution is disabled by absence",

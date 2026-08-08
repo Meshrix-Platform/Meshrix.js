@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Hermes"
+  short_description: "Reference hermes 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-hermes as reference for hermes 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

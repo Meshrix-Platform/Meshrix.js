@@ -59,7 +59,7 @@ function provenanceFor(platform?: any) : any {
           frontend: "dockerfile.v0",
           args: {
             target: "runtime-ui",
-            "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix",
+            "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix.js",
             "build-arg:MESHRIX_SOURCE_REF": "refs/tags/v1.2.3",
             "build-arg:MESHRIX_SOURCE_COMMIT": COMMIT
           }
@@ -75,7 +75,7 @@ function provenanceFor(platform?: any) : any {
         "https://mobyproject.org/buildkit@v1#metadata": {
           vcs: {
             revision: COMMIT,
-            source: "https://github.com/Acme/Meshrix.git"
+            source: "https://github.com/Acme/Meshrix.js.git"
           }
         }
       },
@@ -109,11 +109,11 @@ function fixture() : any {
     target: "ghcr.io/acme/meshrix:1.2.3",
     candidate: `ghcr.io/acme/meshrix:candidate-${COMMIT}`,
     reused: false,
-    repository: "Acme/Meshrix",
+    repository: "Acme/Meshrix.js",
     sourceRef: "refs/tags/v1.2.3",
     sourceCommit: COMMIT,
     sourceCandidate: sourceCandidate(),
-    workflowRef: "Acme/Meshrix/.github/workflows/release.yml@refs/tags/v1.2.3",
+    workflowRef: "Acme/Meshrix.js/.github/workflows/release.yml@refs/tags/v1.2.3",
     manifestDescriptorText: JSON.stringify({ digest: ROOT_DIGEST, mediaType: MEDIA_TYPE }),
     manifestText: JSON.stringify({
       schemaVersion: 2,
@@ -172,11 +172,11 @@ describe("release image evidence authority", () : any => {
       "--target", "ghcr.io/acme/meshrix:1.2.3",
       "--candidate", `ghcr.io/acme/meshrix:candidate-${COMMIT}`,
       "--reused", "false",
-      "--repository", "Acme/Meshrix",
+      "--repository", "Acme/Meshrix.js",
       "--source-ref", "refs/tags/v1.2.3",
       "--source-commit", COMMIT,
       "--source-candidate", "source-candidate.json",
-      "--workflow-ref", "Acme/Meshrix/.github/workflows/release.yml@refs/tags/v1.2.3",
+      "--workflow-ref", "Acme/Meshrix.js/.github/workflows/release.yml@refs/tags/v1.2.3",
       "--manifest-descriptor", "descriptor.json",
       "--manifest", "manifest.json",
       "--provenance", "provenance.json",
@@ -211,7 +211,7 @@ describe("release image evidence authority", () : any => {
     const authority: any = buildReleaseImageAuthority(input);
     expect(authority).toMatchObject({
       schemaVersion: RELEASE_IMAGE_AUTHORITY_SCHEMA,
-      repository: "Acme/Meshrix",
+      repository: "Acme/Meshrix.js",
       sourceCommit: COMMIT,
       sourceRef: "refs/tags/v1.2.3",
       candidateDigest: input.sourceCandidate.candidate_digest,

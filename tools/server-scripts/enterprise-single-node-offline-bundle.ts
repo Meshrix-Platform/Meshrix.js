@@ -2756,11 +2756,11 @@ async function buildFixture(root?: any) : Promise<any> {
     target: `${image}:1.2.3`,
     candidate: `${image}:candidate-${sourceCommit}`,
     reused: false,
-    repository: "Acme/Meshrix",
+    repository: "Acme/Meshrix.js",
     sourceRef: "refs/tags/v1.2.3",
     sourceCommit,
     sourceCandidate,
-    workflowRef: "Acme/Meshrix/.github/workflows/release.yml@refs/tags/v1.2.3",
+    workflowRef: "Acme/Meshrix.js/.github/workflows/release.yml@refs/tags/v1.2.3",
     manifestDescriptorText: JSON.stringify({
       digest: `sha256:${sha256(indexText)}`,
       mediaType: OCI_IMAGE_INDEX_MEDIA_TYPE,
@@ -2770,13 +2770,13 @@ async function buildFixture(root?: any) : Promise<any> {
       "linux/amd64": {
         SLSA: {
           buildType: "https://mobyproject.org/buildkit@v1",
-          builder: { id: "https://github.com/Acme/Meshrix/actions" },
+          builder: { id: "https://github.com/Acme/Meshrix.js/actions" },
           invocation: {
             parameters: {
               frontend: "dockerfile.v0",
               args: {
                 target: "runtime-ui",
-                "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix",
+                "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix.js",
                 "build-arg:MESHRIX_SOURCE_REF": "refs/tags/v1.2.3",
                 "build-arg:MESHRIX_SOURCE_COMMIT": sourceCommit,
               },
@@ -2790,13 +2790,13 @@ async function buildFixture(root?: any) : Promise<any> {
             reproducible: true,
             completeness: { parameters: true, environment: true, materials: true },
             ["https://mobyproject.org/buildkit@v1#metadata"]: {
-              vcs: { revision: sourceCommit, source: "https://github.com/Acme/Meshrix.git" },
+              vcs: { revision: sourceCommit, source: "https://github.com/Acme/Meshrix.js.git" },
               parameters: { output: "linux/amd64" },
             },
           },
           materials: [
             {
-              uri: "git+https://github.com/Acme/Meshrix.git",
+              uri: "git+https://github.com/Acme/Meshrix.js.git",
               digest: { sha256: sha256(sourceCommit) },
             },
           ],
@@ -2805,13 +2805,13 @@ async function buildFixture(root?: any) : Promise<any> {
       "linux/arm64": {
         SLSA: {
           buildType: "https://mobyproject.org/buildkit@v1",
-          builder: { id: "https://github.com/Acme/Meshrix/actions" },
+          builder: { id: "https://github.com/Acme/Meshrix.js/actions" },
           invocation: {
             parameters: {
               frontend: "dockerfile.v0",
               args: {
                 target: "runtime-ui",
-                "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix",
+                "build-arg:MESHRIX_SOURCE_REPOSITORY": "Acme/Meshrix.js",
                 "build-arg:MESHRIX_SOURCE_REF": "refs/tags/v1.2.3",
                 "build-arg:MESHRIX_SOURCE_COMMIT": sourceCommit,
               },
@@ -2825,13 +2825,13 @@ async function buildFixture(root?: any) : Promise<any> {
             reproducible: true,
             completeness: { parameters: true, environment: true, materials: true },
             ["https://mobyproject.org/buildkit@v1#metadata"]: {
-              vcs: { revision: sourceCommit, source: "https://github.com/Acme/Meshrix.git" },
+              vcs: { revision: sourceCommit, source: "https://github.com/Acme/Meshrix.js.git" },
               parameters: { output: "linux/arm64" },
             },
           },
           materials: [
             {
-              uri: "git+https://github.com/Acme/Meshrix.git",
+              uri: "git+https://github.com/Acme/Meshrix.js.git",
               digest: { sha256: sha256(sourceCommit) },
             },
           ],

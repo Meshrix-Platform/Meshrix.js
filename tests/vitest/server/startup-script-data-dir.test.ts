@@ -47,7 +47,7 @@ describe("startup data-dir resolver", () : any => {
     });
   });
 
-  it("uses the fresh Meshrix data directory by default", async () : Promise<any> => {
+  it("uses the fresh Meshrix.js data directory by default", async () : Promise<any> => {
     await withTempHome(async (homeDir?: any) : Promise<any> => {
       const defaultDataDir: any = path.join(homeDir, "meshrix-data");
 

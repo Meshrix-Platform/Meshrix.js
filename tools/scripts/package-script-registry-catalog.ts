@@ -142,7 +142,7 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/platform-acceptance-reducer.ts",
       "tools/server-scripts/lib/platform-acceptance-contract.ts",
       "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
-      "tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts"
+      "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts"
     ], outputs: [],
   },
   "verify:acceptance:standards": {
@@ -558,6 +558,12 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "build/reports/console-admin-browser-visual-screenshots/**"
     ],
   },
+  "verify:skills": {
+    scriptName: "verify:skills", command: "npm run verify:skills", category: "verifier", subsystem: "repository",
+    owner: "platform", tier: "hygiene", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "hygiene", expectedDurationClass: "fast",
+    inputs: ["skills/**", "tools/validate-skills.mjs"], outputs: [],
+  },
   "verify:repo-organization": {
     scriptName: "verify:repo-organization", command: "npm run verify:repo-organization", category: "verifier", subsystem: "repository",
     owner: "platform", tier: "release", sideEffects: "build-output",
@@ -709,10 +715,10 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
 	      "tools/server-scripts/lib/platform-acceptance-report-catalog.ts",
 	      "tools/server-scripts/lib/platform-acceptance-command-catalog.ts",
 	      "tools/server-scripts/lib/platform-acceptance-reducer.ts",
-	      "tools/server-scripts/lib/private-deployment-open-platform-e2e-catalog.ts",
+	      "tools/server-scripts/lib/private-deployment-internal-platform-e2e-catalog.ts",
 	      "tools/server-scripts/verify-platform-acceptance.ts",
       "tools/server-scripts/production-readiness-gate.ts",
-      "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts",
+      "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts",
       "tools/server-scripts/verify-upstream-fixture-transit.ts",
       "tools/server-scripts/verify-downstream-agent-tool-loop.ts",
       "tools/server-scripts/stress-gateway-platform-profile.ts",

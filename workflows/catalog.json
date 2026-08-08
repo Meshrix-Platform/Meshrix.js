@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "profiles": {
+    "changed": ["meshrix-js.typecheck", "meshrix-js.test"],
+    "reassembly": ["meshrix-js.typecheck", "meshrix-js.build", "meshrix-js.test"]
+  },
+  "tasks": [
+    {
+      "id": "meshrix-js.typecheck",
+      "command": "npm",
+      "args": ["run", "typecheck"]
+    },
+    {
+      "id": "meshrix-js.build",
+      "command": "npm",
+      "args": ["run", "build"]
+    },
+    {
+      "id": "meshrix-js.test",
+      "command": "npm",
+      "args": ["test"]
+    }
+  ]
+}

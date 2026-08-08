@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Regression Planner"
+  short_description: "Select the minimal safe verification closure"
+  default_prompt: "Use $meshrix-js-regression-planner to handle this Meshrix.js task through its canonical owner and validation path."

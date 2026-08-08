@@ -33,7 +33,7 @@ import {
   authorizeApiKeyUpload
 } from "../../../apps/server/runtime/http-server-routes.ts";
 
-const FIXTURE_TEXT: any = "格式转换服务中文验收样例\n第一段：Meshrix 格式转换服务将 UTF-8 纯文本文档转换为 DOCX 或 PDF。";
+const FIXTURE_TEXT: any = "格式转换服务中文验收样例\n第一段：Meshrix.js 格式转换服务将 UTF-8 纯文本文档转换为 DOCX 或 PDF。";
 
 function streamOf(payload?: any) : any {
   return Buffer.concat([Buffer.from("stream\n"), deflateSync(payload), Buffer.from("\nendstream")]);

@@ -144,9 +144,9 @@ async function toolRequest(route?: any, token?: any, body?: any) : Promise<any> 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Meshrix-Api-Key": token,
-      "X-Meshrix-MCP-Target": "codex",
-      "X-Meshrix-Agent-Profile-Id": AGENT_PROFILE_ID
+      "X-Meshrix.js-Api-Key": token,
+      "X-Meshrix.js-MCP-Target": "codex",
+      "X-Meshrix.js-Agent-Profile-Id": AGENT_PROFILE_ID
     },
     body: bodyText
   });

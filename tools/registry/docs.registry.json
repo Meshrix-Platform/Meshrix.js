@@ -6,13 +6,13 @@
     {
       "id": "docs.functionality.gateway",
       "path": "docs/functionality/GATEWAY.md",
-      "source": "tools/registry/open-platform-capability-matrix.json",
+      "source": "tools/registry/internal-platform-capability-matrix.json",
       "description": "Governed upstream gateway functionality and verification."
     },
     {
       "id": "docs.functionality.strategy-management",
       "path": "docs/functionality/STRATEGY-MANAGEMENT.md",
-      "source": "tools/registry/open-platform-capability-matrix.json",
+      "source": "tools/registry/internal-platform-capability-matrix.json",
       "description": "Strategy Management policy preview boundary and verification."
     },
     {
@@ -36,19 +36,19 @@
     {
       "id": "docs.functionality.security-authorization",
       "path": "docs/functionality/SECURITY-AUTHORIZATION.md",
-      "source": "tools/registry/open-platform-capability-matrix.json",
+      "source": "tools/registry/internal-platform-capability-matrix.json",
       "description": "Security authorization, policy, approval, and audit functionality."
     },
     {
       "id": "docs.functionality.operations-observability",
       "path": "docs/functionality/OPERATIONS-OBSERVABILITY.md",
-      "source": "tools/registry/open-platform-capability-matrix.json",
+      "source": "tools/registry/internal-platform-capability-matrix.json",
       "description": "Operations observability, alerts, metrics, and production health functionality."
     },
     {
       "id": "docs.functionality.ingestion-jobs",
       "path": "docs/functionality/INGESTION-JOBS.md",
-      "source": "tools/registry/open-platform-capability-matrix.json",
+      "source": "tools/registry/internal-platform-capability-matrix.json",
       "description": "Jobs and work queue runtime functionality and verification."
     },
     {
@@ -60,7 +60,7 @@
     {
       "id": "docs.functionality.workspace-assets",
       "path": "docs/functionality/WORKSPACE-ASSETS.md",
-      "source": "tools/registry/open-platform-capability-matrix.json",
+      "source": "tools/registry/internal-platform-capability-matrix.json",
       "description": "Core workspace assets, controlled Host capabilities, file operations, and verification."
     }
   ],

@@ -53,8 +53,8 @@ function mcpRequest(method?: any, params: Record<string, any> = {}, id: any = 1)
 function apiKeyHeaders(token?: any) : any {
   return {
     "Content-Type": "application/json",
-    "X-Meshrix-Api-Key": token,
-    "X-Meshrix-MCP-Target": "codex"
+    "X-Meshrix.js-Api-Key": token,
+    "X-Meshrix.js-MCP-Target": "codex"
   };
 }
 
@@ -246,7 +246,7 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
     const toolsListBody: any = JSON.stringify(mcpRequest("tools/list", {}, 2));
     const toolsList: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": apiKey.apiKey, "X-Meshrix-MCP-Target": "codex" },
+      headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": apiKey.apiKey, "X-Meshrix.js-MCP-Target": "codex" },
       body: toolsListBody
     });
     assert.equal(toolsList.status, 200);
@@ -261,7 +261,7 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
     }, 3));
     const capabilities: any = await fetchJson(`${server.url}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Meshrix-Api-Key": apiKey.apiKey, "X-Meshrix-MCP-Target": "codex" },
+      headers: { "Content-Type": "application/json", "X-Meshrix.js-Api-Key": apiKey.apiKey, "X-Meshrix.js-MCP-Target": "codex" },
       body: capabilitiesBody
     });
     assert.equal(capabilities.status, 200);

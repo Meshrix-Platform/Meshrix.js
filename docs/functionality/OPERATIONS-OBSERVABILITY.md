@@ -1,6 +1,6 @@
 # Operations And Observability
 
-> **Meshrix trusted-forwarding requirements:** verifiable identity,
+> **Meshrix.js trusted-forwarding requirements:** verifiable identity,
 > non-amplifying authority, content integrity, and end-to-end traceability.
 > [Governed Execution And Minimum Evidence](../architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
@@ -176,7 +176,7 @@ that omit or contradict these fields.
 
 ## Operational Evidence
 
-Operational reports are redacted and intended for health checks, audits, and Meshrix release validation. External plugin-product reports are separately owned facts; Meshrix reports and acceptance do not consume them.
+Operational reports are redacted and intended for health checks, audits, and Meshrix.js release validation. External plugin-product reports are separately owned facts; Meshrix.js reports and acceptance do not consume them.
 
 The upstream-service-publishing command traverses the production publishing
 flow and writes a required functional report. The Functional Release Gate

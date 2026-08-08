@@ -204,7 +204,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
         body: "",
         url,
         extraHeaders: {
-          "X-Meshrix-Mcp-Proxy-Session": "taggovernede2esession"
+          "X-Meshrix.js-Mcp-Proxy-Session": "taggovernede2esession"
         }
       }),
       signal: controller.signal

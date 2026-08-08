@@ -13,7 +13,7 @@ function usage() : any {
   console.log(`Usage:
   node tools/scripts/restart-all.ts [options]
 
-Stops existing Meshrix services for this project, then starts everything
+Stops existing Meshrix.js services for this project, then starts everything
 again through tools/scripts/start-all.ts. All options are forwarded to
 start-all.ts.
 
@@ -81,7 +81,7 @@ async function main() : Promise<any> {
   const options: any = parseArgs(process.argv.slice(2));
   const dataDir: any = resolveDataDir(options.dataDir);
 
-  console.log("[restart] stopping existing Meshrix services...");
+  console.log("[restart] stopping existing Meshrix.js services...");
   const cleanArgs: any[] = [
     path.join(projectRoot, "tools", "scripts", "clean-existing-service.ts"),
     "--port", options.port,

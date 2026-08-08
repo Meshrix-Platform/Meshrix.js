@@ -174,7 +174,7 @@ export function readHeaders(args?: any) : any {
     }
     const name: any = text.slice(0, separatorIndex).trim();
     if (SENSITIVE_ARG_HEADER_NAMES.has(name.toLowerCase())) {
-      throw new Error(`禁止通过命令行参数传入敏感请求头 ${name}；请使用 Meshrix 密钥入口或受控环境变量`);
+      throw new Error(`禁止通过命令行参数传入敏感请求头 ${name}；请使用 Meshrix.js 密钥入口或受控环境变量`);
     }
     headers[name] = text.slice(separatorIndex + 1).trim();
   }

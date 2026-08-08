@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Meshrix System Architecture</title><style>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Meshrix.js System Architecture</title><style>
   :root { color-scheme: light; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
   body { margin: 0; color: #182026; background: #f7f8fa; }
   main { max-width: 1180px; margin: 0 auto; padding: 32px 20px 56px; }
@@ -23,7 +23,7 @@
 </style><!-- architecture-facts-digest: sha256:d5b62c7f131fbfb085b1767db3e51f46011cec5c83e17abb50432131ffd7bf96 -->
 </head>
 <body><main>
-<h1>Meshrix System Architecture</h1>
+<h1>Meshrix.js System Architecture</h1>
 <p>Authority: packages/contracts/src/modules/manifest.ts. Projection-only diagram; digest sha256:d5b62c7f131fbfb085b1767db3e51f46011cec5c83e17abb50432131ffd7bf96.</p>
 <h2>System Layers</h2>
 <div class="grid">
@@ -274,7 +274,7 @@
     <td>client credential projection<br>MCP credential projection<br>secretRef only</td>
   </tr>
   <tr>
-    <td>To Meshrix Client</td>
+    <td>To Meshrix.js Client</td>
     <td><code>credential-to-meshrix-client</code></td>
     <td>core-capability</td>
     <td>optional</td>
@@ -597,7 +597,7 @@
     <td>aspect</td>
     <td>optional</td>
     <td>downstream-client-aspect</td>
-    <td>Meshrix Client 双向交互<br>MCP request intake</td>
+    <td>Meshrix.js Client 双向交互<br>MCP request intake</td>
   </tr>
   <tr>
     <td>MCP Adapter Layer</td>

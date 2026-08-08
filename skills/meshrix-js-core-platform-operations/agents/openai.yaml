@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Core Platform"
+  short_description: "Maintain core server and platform capabilities"
+  default_prompt: "Use $meshrix-js-core-platform-operations to handle this Meshrix.js task through its canonical owner and validation path."

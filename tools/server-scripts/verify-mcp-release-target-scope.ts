@@ -225,7 +225,7 @@ try {
     for (const filePath of ADAPTER_BOUNDARY_DOCUMENT_FILES) {
       const source: any = await fs.readFile(filePath, "utf8");
       assertNoHostPathText(source, filePath);
-      assert.equal(/Meshrix-Plugins|external (?:client-)?adapter|external plugin/iu.test(source), true, `${filePath} does not declare the external adapter boundary`);
+      assert.equal(/operator-supplied|external (?:client-)?adapter|external plugin/iu.test(source), true, `${filePath} does not declare the external adapter boundary`);
     }
     return {
       filesChecked: ADAPTER_BOUNDARY_DOCUMENT_FILES.length,

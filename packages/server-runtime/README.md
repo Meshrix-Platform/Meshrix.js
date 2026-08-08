@@ -1,6 +1,6 @@
 # Server Runtime Package
 
-The server runtime package is Meshrix's composition root for state stores, jobs, workers, settings, discovery, server-side console operation projection, and product API orchestration.
+The server runtime package is Meshrix.js's composition root for state stores, jobs, workers, settings, discovery, server-side console operation projection, and product API orchestration.
 
 ## Boundaries
 

@@ -38,7 +38,7 @@ function parseMasterKey(bytes?: any) : any {
   if (!HEX_KEY_PATTERN.test(encoded)) {
     throw keyProviderError(
       "local_secret_key_invalid",
-      "Meshrix local secret master key is invalid.",
+      "Meshrix.js local secret master key is invalid.",
     );
   }
   return Buffer.from(encoded, "hex");
@@ -48,7 +48,7 @@ function keyFact(key?: any, custody?: any) : any {
   if (!Buffer.isBuffer(key) || key.length !== MASTER_KEY_BYTES) {
     throw keyProviderError(
       "local_secret_key_invalid",
-      "Meshrix local secret master key is invalid.",
+      "Meshrix.js local secret master key is invalid.",
     );
   }
   return Object.freeze({
@@ -64,7 +64,7 @@ async function validateExternalKeyFile({ dataDir, keyFile }: Record<string, any>
   if (!configuredPath || !path.isAbsolute(configuredPath)) {
     throw keyProviderError(
       "local_secret_key_unavailable",
-      "Meshrix local secret master key file is not configured.",
+      "Meshrix.js local secret master key file is not configured.",
     );
   }
   const [keyStat, keyRealPath, dataRealPath] = await Promise.all([
@@ -80,13 +80,13 @@ async function validateExternalKeyFile({ dataDir, keyFile }: Record<string, any>
   ) {
     throw keyProviderError(
       "local_secret_key_unavailable",
-      "Meshrix local secret master key file is unavailable.",
+      "Meshrix.js local secret master key file is unavailable.",
     );
   }
   if (pathIsWithin(dataRealPath, keyRealPath)) {
     throw keyProviderError(
       "local_secret_key_custody_invalid",
-      "Meshrix local secret master key must be kept outside governed data.",
+      "Meshrix.js local secret master key must be kept outside governed data.",
     );
   }
   return keyRealPath;
@@ -131,7 +131,7 @@ export function createFileLocalSecretKeyProvider({
         if (error?.code?.startsWith?.("local_secret_key_")) throw error;
         throw keyProviderError(
           "local_secret_key_unavailable",
-          "Meshrix local secret master key file is unavailable.",
+          "Meshrix.js local secret master key file is unavailable.",
         );
       } finally {
         bytes?.fill(0);
@@ -162,7 +162,7 @@ export function createMemoryLocalSecretKeyProvider({
     retained.fill(0);
     throw keyProviderError(
       "local_secret_key_invalid",
-      "Meshrix local secret master key is invalid.",
+      "Meshrix.js local secret master key is invalid.",
     );
   }
   const keyId: any = `sha256:${crypto.createHash("sha256").update(retained).digest("hex")}`;
@@ -173,7 +173,7 @@ export function createMemoryLocalSecretKeyProvider({
       if (closed) {
         throw keyProviderError(
           "local_secret_key_unavailable",
-          "Meshrix local secret master key is unavailable.",
+          "Meshrix.js local secret master key is unavailable.",
         );
       }
       return Object.freeze({
@@ -202,7 +202,7 @@ export function resolveLocalSecretKeyProvider({ dataDir = "", keyProvider = null
     if (typeof keyProvider.loadKey !== "function") {
       throw keyProviderError(
         "local_secret_key_provider_invalid",
-        "Meshrix local secret key provider is invalid.",
+        "Meshrix.js local secret key provider is invalid.",
       );
     }
     return keyProvider;
@@ -231,7 +231,7 @@ export async function assertLocalSecretKeyReady({
     ) {
       throw keyProviderError(
         "local_secret_key_invalid",
-        "Meshrix local secret master key is invalid.",
+        "Meshrix.js local secret master key is invalid.",
       );
     }
     return Object.freeze({

@@ -143,14 +143,14 @@ export async function fetchMeshrixDiscovery(baseUrl?: any) : Promise<any> {
   const identity: any = payload.identity || null;
   if (
     !result.ok ||
-    payload.name !== "Meshrix" ||
+    payload.name !== "Meshrix.js" ||
     payload.interfaceVersion !== MCP_INTERFACE_VERSION ||
     payload.stableToolName !== MCP_STABLE_TOOL_NAME ||
     identity?.algorithm !== "Ed25519" ||
     !identity?.publicKeyJwk ||
     !payload.handshake?.url
   ) {
-    throw new Error("not an Meshrix MCP discovery response");
+    throw new Error("not an Meshrix.js MCP discovery response");
   }
   return payload;
 }
@@ -177,14 +177,14 @@ export async function verifyMeshrixHandshake(baseUrl?: any, discovery?: any) : P
     result.payload?.ok !== true ||
     payload.schemaVersion !== "v0.0.1:mcp:handshake-1" ||
     payload.nonce !== nonce ||
-    payload.server?.name !== "Meshrix" ||
+    payload.server?.name !== "Meshrix.js" ||
     payload.server?.interfaceVersion !== MCP_INTERFACE_VERSION ||
     payload.server?.stableToolName !== MCP_STABLE_TOOL_NAME ||
     payload.identity?.keyId !== discovery.identity?.keyId ||
     signature.algorithm !== "Ed25519" ||
     !verifyMcpHandshakeSignature({ publicKeyJwk, payload, signature: signature.value })
   ) {
-    throw new Error("Meshrix MCP handshake signature verification failed");
+    throw new Error("Meshrix.js MCP handshake signature verification failed");
   }
   return {
     ok: true,
@@ -220,14 +220,14 @@ export async function discoverMeshrixHub(options: Record<string, any> = {}) : Pr
   return {
     ok: false,
     attempts,
-    reason: "No signed Meshrix MCP hub was discovered on this device."
+    reason: "No signed Meshrix.js MCP hub was discovered on this device."
   };
 }
 
 export async function optionsWithDiscoveredBaseUrl(options: Record<string, any> = {}) : Promise<any> {
   const discovered: any = await discoverMeshrixHub(options);
   if (!discovered.ok) {
-    throw new Error(`${discovered.reason} Use --url only if you know the Meshrix base URL; it will still be handshake-verified.`);
+    throw new Error(`${discovered.reason} Use --url only if you know the Meshrix.js base URL; it will still be handshake-verified.`);
   }
   return {
     ...options,
@@ -307,8 +307,8 @@ export async function ensureService(baseUrl?: any) : Promise<any> {
       }
     })
   });
-  if (!initialize.ok || initialize.payload?.result?.serverInfo?.name !== "Meshrix") {
-    throw new Error(`Meshrix MCP is not available at ${baseUrl}/mcp.`);
+  if (!initialize.ok || initialize.payload?.result?.serverInfo?.name !== "Meshrix.js") {
+    throw new Error(`Meshrix.js MCP is not available at ${baseUrl}/mcp.`);
   }
   return initialize;
 }
@@ -320,8 +320,8 @@ export function authHeaders(token?: any, target: any = "") : any {
   }
   return {
     "Content-Type": "application/json",
-    "X-Meshrix-Api-Key": credential,
-    "X-Meshrix-Connector-Package-Id": "meshrix-mcp-connector",
+    "X-Meshrix.js-Api-Key": credential,
+    "X-Meshrix.js-Connector-Package-Id": "meshrix-mcp-connector",
     ...mcpTargetHeaders(target)
   };
 }

@@ -119,12 +119,12 @@ export async function authenticateMcpApiKey({
     return denial(400, "mcp_credential_ambiguous", "MCP request contains multiple credential kinds.");
   }
   if (isStrictMcpApiKey(bearerCredential) || isStrictMcpApiKey(toolToken)) {
-    return denial(401, "api_key_wrong_auth_scheme", "API keys must use X-Meshrix-Api-Key.");
+    return denial(401, "api_key_wrong_auth_scheme", "API keys must use X-Meshrix.js-Api-Key.");
   }
   if (!apiKey) return { handled: false };
   if (!isStrictMcpApiKey(apiKey)) {
     const reasonCode: any = apiKey.trim().startsWith("mxak1.") ? "api_key_invalid" : "api_key_legacy_grant_rejected";
-    return denial(401, reasonCode, "X-Meshrix-Api-Key accepts only a valid mxak1 credential.");
+    return denial(401, reasonCode, "X-Meshrix.js-Api-Key accepts only a valid mxak1 credential.");
   }
   if (typeof apiKeyDistributionProvider?.authenticateRuntime !== "function") {
     return denial(503, "api_key_authority_unavailable", "API key authorization is unavailable.");

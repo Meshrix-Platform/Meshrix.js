@@ -1,6 +1,6 @@
 # MCP Native Installer
 
-Meshrix ships a signed portable connector and native launchers for the supported downstream MCP
+Meshrix.js ships a signed portable connector and native launchers for the supported downstream MCP
 target matrix. The installer verifies signed discovery and release metadata, detects supported
 targets, invokes the target adapter, and writes only connector-managed configuration.
 
@@ -18,7 +18,7 @@ duplicate, or ambiguous input fails locally. Multi-target installation reuses th
 never generates per-target credentials.
 
 Client configuration stores the environment-variable name, never plaintext. Protected requests
-carry exactly `X-Meshrix-Api-Key`; the connector does not add bearer, tool-token, client authority,
+carry exactly `X-Meshrix.js-Api-Key`; the connector does not add bearer, tool-token, client authority,
 or process-signature credentials. The server authenticates the recorded workload, projects only
 policy-visible tools, and routes calls through canonical Operation Permission. A higher-risk tool
 may enter the ordinary pending-operation approval flow after authentication.

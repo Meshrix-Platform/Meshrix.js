@@ -1,16 +1,10 @@
 {
   "name": "meshrix-mcp-connector",
   "version": "0.0.1",
-  "description": "Runtime MCP connector for API-Key-authenticated Meshrix stdio proxy access.",
+  "description": "Runtime MCP connector for API-Key-authenticated Meshrix.js stdio proxy access.",
   "type": "module",
-  "license": "GPL-3.0-or-later",
-  "author": "Meshrix Maintainers",
-  "homepage": "https://meshrix.io",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/protocols/mcp/adapter/gateway-installer"
-  },
+  "license": "MIT",
+  "author": "Meshrix.js Maintainers",
   "bin": {
     "meshrix-mcp": "dist/bin/meshrix-mcp.js"
   },

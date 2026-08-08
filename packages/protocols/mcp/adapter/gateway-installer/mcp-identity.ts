@@ -30,7 +30,7 @@ export function buildMcpHandshakePayload({
     issuedAt,
     identity: publicMcpIdentity(identity),
     server: {
-      name: "Meshrix",
+      name: "Meshrix.js",
       serverId: discovery?.serverId || "",
       serverVersion: discovery?.serverVersion || "",
       interfaceVersion: discovery?.interfaceVersion || "",

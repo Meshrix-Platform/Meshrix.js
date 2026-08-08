@@ -229,8 +229,8 @@ export function verifierMcpApiKeyHeaders({
 }: Record<string, any> = {}) : any {
   return {
     "Content-Type": "application/json",
-    ...(apiKey ? { "X-Meshrix-Api-Key": apiKey } : {}),
-    "X-Meshrix-MCP-Target": target,
+    ...(apiKey ? { "X-Meshrix.js-Api-Key": apiKey } : {}),
+    "X-Meshrix.js-MCP-Target": target,
     ...extraHeaders
   };
 }

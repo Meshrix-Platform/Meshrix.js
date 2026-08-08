@@ -235,14 +235,14 @@ describe("enabled plugin MCP outlets", () : any => {
     runtime.publicMcpToolPayload = vi.fn(async ({ payload }: Record<string, any>) : Promise<any> => payload);
     runtime.executeTool.mockResolvedValue({ ok: true, status: 200, payload: { ok: true } });
     const headers: Record<string, any> = {
-      "X-Meshrix-Delegated-Mcp-Grant-Id": "delegated-grant-1",
-      "X-Meshrix-Delegated-Session-Id": delegation.sessionId,
-      "X-Meshrix-Delegated-Turn-Id": delegation.turnId,
-      "X-Meshrix-Delegated-Subject-Id": delegation.subjectId,
-      "X-Meshrix-Delegated-Target-Id": delegation.targetId,
-      "X-Meshrix-Delegated-Workspace-Id": delegation.workspaceId,
-      "X-Meshrix-Delegated-Parent-Operation-Id": delegation.parentOperationId,
-      "X-Meshrix-Delegated-Trace-Id": delegation.traceId
+      "X-Meshrix.js-Delegated-Mcp-Grant-Id": "delegated-grant-1",
+      "X-Meshrix.js-Delegated-Session-Id": delegation.sessionId,
+      "X-Meshrix.js-Delegated-Turn-Id": delegation.turnId,
+      "X-Meshrix.js-Delegated-Subject-Id": delegation.subjectId,
+      "X-Meshrix.js-Delegated-Target-Id": delegation.targetId,
+      "X-Meshrix.js-Delegated-Workspace-Id": delegation.workspaceId,
+      "X-Meshrix.js-Delegated-Parent-Operation-Id": delegation.parentOperationId,
+      "X-Meshrix.js-Delegated-Trace-Id": delegation.traceId
     };
     const { payload } = await mcpRequest(runtime, {
       jsonrpc: "2.0",
@@ -294,7 +294,7 @@ describe("enabled plugin MCP outlets", () : any => {
       }
     }, {
       ...headers,
-      "X-Meshrix-Delegated-Subject-Id": "different-subject"
+      "X-Meshrix.js-Delegated-Subject-Id": "different-subject"
     });
     expect(mismatch.payload.error.data).toEqual({
       code: "delegated_child_operation_binding_mismatch",

@@ -78,7 +78,7 @@ resolve_and_exec_connector() {
     exec_connector "$repository_connector" "$@"
   fi
 
-  fail "No verified Meshrix MCP connector was found. Download a release bundle, verify its published SHA256, extract it, and run this script from that bundle."
+  fail "No verified Meshrix.js MCP connector was found. Download a release bundle, verify its published SHA256, extract it, and run this script from that bundle."
 }
 
 main() {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deterministic upstream service fixture for Meshrix gateway verification.
+// Deterministic upstream service fixture for Meshrix.js gateway verification.
 //
 // Standalone HTTP mode (REST API + OpenAPI document + MCP JSON-RPC at /mcp):
 //   node tools/server-scripts/upstream-fixture-service.ts --mode http --port 8091

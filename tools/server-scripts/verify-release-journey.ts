@@ -3,7 +3,7 @@
 //
 // Re-runs the v0.1.0-alpha release-defining scenario deterministically on
 // every release: every detected supported local MCP client installs the
-// Meshrix MCP connector, publishes the containerized file-parser/format-convert upstream
+// Meshrix.js MCP connector, publishes the containerized file-parser/format-convert upstream
 // service, uploads a tracked Chinese UTF-8 fixture through the native
 // authenticated upload-session byte stream, converts it through the governed
 // gateway via an owner-bound upload: artifact reference, and downloads the resulting
@@ -15,9 +15,8 @@
 //   --keep-stack            Leave the compose stack running (debug).
 //   --port N                Pin the host port (must be free).
 //   --adapter-source PATH   Directory or .tgz with the client adapters
-//                           (default: ../Meshrix-Plugins/plugins/agents,
 //                           or MESHRIX_RELEASE_JOURNEY_ADAPTER_SOURCE).
-//   --image-name NAME       format-convert image (default: meshrix-format-convert:local).
+//   --image-name NAME       operator-supplied format-convert image.
 //   --json                  Also print the final report JSON to stdout.
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -29,7 +28,6 @@ import { fileURLToPath } from "node:url";
 
 import {
   DEFAULT_CONVERTER_IMAGE,
-  DEFAULT_FORMAT_CONVERTER_BUILD_DIR,
   RELEASE_JOURNEY_COMPOSE_PROJECT,
   RELEASE_JOURNEY_CONVERTER_CONTAINER,
   RELEASE_JOURNEY_SERVER_CONTAINER,
@@ -449,16 +447,11 @@ async function main() : Promise<any> {
     await recordStep("stack-build-up", async () : Promise<any> => {
       const env: any = composeEnv({ hostPort, converterImage: options.imageName });
       if (!dockerImageExists(options.imageName)) {
-        const buildDir: any = path.resolve(repoRoot, DEFAULT_FORMAT_CONVERTER_BUILD_DIR);
-        await fs.access(buildDir).catch(() : any => {
-          const error: Error & Record<string, any> = new Error(
-            `format-convert image ${options.imageName} is missing and the default build directory ${DEFAULT_FORMAT_CONVERTER_BUILD_DIR} is unavailable. ` +
-            "Build the image first (make image in Meshrix-Services/file-parser/format-convert) or pass --image-name."
-          );
-          error.code = "release_journey_image_missing";
-          throw error;
-        });
-        runDocker(["build", "--pull=false", "--tag", options.imageName, buildDir], { env, redact });
+        const error: Error & Record<string, any> = new Error(
+          `Operator-supplied format-convert image ${options.imageName} is unavailable. Pass --image-name with a locally present image.`
+        );
+        error.code = "release_journey_image_missing";
+        throw error;
       }
       await runCompose(["--profile", "format-convert", "build", "meshrix-server"], { cwd: repoRoot, env, redact });
       await runCompose(RELEASE_JOURNEY_STACK_UP_ARGS, { cwd: repoRoot, env, redact });

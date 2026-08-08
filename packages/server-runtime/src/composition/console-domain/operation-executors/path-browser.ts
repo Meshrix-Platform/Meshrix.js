@@ -50,10 +50,10 @@ export function createPathBrowserRoots({ userDataPath, distPath }: Record<string
   };
 
   addRoot("当前项目", process.cwd());
-  addRoot("Meshrix 数据目录", userDataPath);
-  addRoot("Meshrix 前端构建", distPath);
+  addRoot("Meshrix.js 数据目录", userDataPath);
+  addRoot("Meshrix.js 前端构建", distPath);
   for (const root of controlledLocalSourceRoots({ userDataPath })) {
-    addRoot("Meshrix 受控本机来源", root);
+    addRoot("Meshrix.js 受控本机来源", root);
   }
 
   return [...roots.values()];

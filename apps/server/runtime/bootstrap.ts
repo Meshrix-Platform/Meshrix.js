@@ -1,5 +1,5 @@
 /**
- * Meshrix server bootstrap.
+ * Meshrix.js server bootstrap.
  *
  * Parses configuration from environment variables and explicit options,
  * then creates and returns the HTTP server handle.
@@ -37,7 +37,7 @@ function resolveRuntimeOptions(overrides: Record<string, any> = {}) : any {
 }
 
 /**
- * Bootstrap the Meshrix HTTP server.
+ * Bootstrap the Meshrix.js HTTP server.
  *
  * @param {object} [options]
  * @param {string}  [options.userDataPath]   — data directory (default: ServerConfig.getDataDir())

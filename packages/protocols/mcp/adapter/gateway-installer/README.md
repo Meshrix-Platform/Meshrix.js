@@ -1,4 +1,4 @@
-# Meshrix MCP Connector Runtime
+# Meshrix.js MCP Connector Runtime
 
 This directory contains the Node.js MCP connector runtime used for protocol
 functions such as API-Key-authenticated stdio proxy forwarding and verifier
@@ -25,7 +25,7 @@ powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native
 powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
 ```
 
-Supported targets are supplied by pinned client-adapter packages published from Meshrix-Plugins. Core retains only the target catalog, adapter protocol, package integrity/cache policy, API Key input, proxy, and local lifecycle transaction. Client commands, configuration formats, probes, and mutations are not implemented in Core.
+Supported targets are supplied by pinned operator-provided client-adapter packages. Core retains only the target catalog, adapter protocol, package integrity/cache policy, API Key input, proxy, and local lifecycle transaction. Client commands, configuration formats, probes, and mutations are not implemented in Core.
 
 The published target matrix supports these clients through a local connector
 process. OrbStack and remote-Linux direct HTTP registration are rejected before

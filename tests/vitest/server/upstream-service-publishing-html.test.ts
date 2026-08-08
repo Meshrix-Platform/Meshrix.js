@@ -115,7 +115,7 @@ function renderUpstreamServicePublishingHtml(
 }
 
 const VISUAL_EVIDENCE: readonly any[] = Object.freeze([
-  ["console-authenticated", "Authenticated Meshrix Workbench", "/"],
+  ["console-authenticated", "Authenticated Meshrix.js Workbench", "/"],
   ["console-organization-permissions", "Published organization and permission projection", "/admin/organization-governance"],
   ["console-upstream-basic-config", "Upstream service basic configuration", "/admin/publish-upstream-service"],
   ["console-upstream-operation-config", "Upstream operation configuration", "/admin/publish-upstream-service"],
@@ -397,8 +397,8 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain("&lt;control &amp; plane&gt;");
     expect(html).toContain("Registration to downstream invocation");
     expect(html).toContain("从注册到下游调用");
-    expect(html).toContain("Publish an Upstream Service through Meshrix");
-    expect(html).toContain("通过 Meshrix 发布上游服务");
+    expect(html).toContain("Publish an Upstream Service through Meshrix.js");
+    expect(html).toContain("通过 Meshrix.js 发布上游服务");
     expect(html).toContain("Where to go");
     expect(html).toContain("去哪里");
     expect(html).toContain("What is produced");
@@ -414,8 +414,8 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain("原生文件上传");
     expect(html).toContain("application/octet-stream");
     expect(html).toContain("upload:&lt;session-id&gt;:0");
-    expect(html).toContain("it is not Meshrix&#39;s global upload limit");
-    expect(html).toContain("并非 Meshrix 的全局上传上限");
+    expect(html).toContain("it is not Meshrix.js&#39;s global upload limit");
+    expect(html).toContain("并非 Meshrix.js 的全局上传上限");
     expect(html).toContain("MCP acceptance matrix");
     expect(html).toContain("MCP 验收矩阵");
     expect(html).toContain(".provenance .panel");
@@ -436,7 +436,7 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain(BASIC_CONFIG_SHA256);
     expect(html).toContain("not a standalone download endpoint");
     expect(html).toContain("不是独立的下载接口");
-    expect(html).toContain("forwarded through the governed Meshrix gateway");
+    expect(html).toContain("forwarded through the governed Meshrix.js gateway");
     expect(html.match(/data-service-interface=/gu)).toHaveLength(3);
     expect(html).toContain("cap:upstream:&lt;generated-service-id&gt;:convert-full-access-debug");
     expect(html).toContain("Pending → approved → completed once");
@@ -454,8 +454,8 @@ describe("upstream service publishing HTML report", () : any => {
     expect(html).toContain('data-evidence-kind="decision"');
     expect(html).toContain('data-evidence-kind="execution"');
     expect(html).toContain('data-evidence-kind="audit"');
-    expect(html).toContain('data-alt-en="Authenticated Meshrix Workbench"');
-    expect(html).toContain('data-alt-zh="已认证的 Meshrix 工作台"');
+    expect(html).toContain('data-alt-en="Authenticated Meshrix.js Workbench"');
+    expect(html).toContain('data-alt-zh="已认证的 Meshrix.js 工作台"');
     expect(html).toContain("image.dataset.altZh");
     expect(html.match(/<article class="manual-step"[^>]*data-evidence-kind=/gu)).toHaveLength(VISUAL_EVIDENCE.length);
     expect(html).toContain("MESHRIX_BUILD_TARGET=runtime-ui");

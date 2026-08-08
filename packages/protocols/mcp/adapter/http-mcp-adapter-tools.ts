@@ -209,16 +209,16 @@ function publicMcpInputSchema(value?: any) : any {
         const refKey: any = key.replace(/Id$/i, "Ref");
         properties[refKey] = {
           type: "string",
-          description: "Meshrix MCP workspace reference, for example 'workspace-1'. Discover it with operation 'meshrix.agentWorkspace.list'."
+          description: "Meshrix.js MCP workspace reference, for example 'workspace-1'. Discover it with operation 'meshrix.agentWorkspace.list'."
         };
         if (key === "workspaceId") {
           properties.workspaceIndex = {
             type: "integer",
-            description: "Meshrix MCP workspace index from operation 'meshrix.agentWorkspace.list', for example 1."
+            description: "Meshrix.js MCP workspace index from operation 'meshrix.agentWorkspace.list', for example 1."
           };
           properties["workspace-index"] = {
             type: "integer",
-            description: "Alias for workspaceIndex. Meshrix MCP workspace index from operation 'meshrix.agentWorkspace.list', for example 1."
+            description: "Alias for workspaceIndex. Meshrix.js MCP workspace index from operation 'meshrix.agentWorkspace.list', for example 1."
           };
           properties.workspaceName = {
             type: "string",
@@ -271,13 +271,13 @@ export function meshrixCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES
     properties: {
       apiVersion: {
         type: "string",
-        description: "Meshrix MCP interface version expected by the caller.",
+        description: "Meshrix.js MCP interface version expected by the caller.",
         default: MCP_INTERFACE_VERSION,
         enum: [MCP_INTERFACE_VERSION]
       },
       operation: {
         type: "string",
-        description: "Concrete Meshrix operation id to execute, for example 'operation_permission.catalog'. Do not use an outlet tool name itself here, such as 'meshrix.discovery' or 'meshrix.gateway'. If unsure, first call tool 'meshrix.discovery' with operation 'meshrix.capabilities.list' and then use one returned operations[].name value."
+        description: "Concrete Meshrix.js operation id to execute, for example 'operation_permission.catalog'. Do not use an outlet tool name itself here, such as 'meshrix.discovery' or 'meshrix.gateway'. If unsure, first call tool 'meshrix.discovery' with operation 'meshrix.capabilities.list' and then use one returned operations[].name value."
       },
       input: {
         type: "object",
@@ -287,7 +287,7 @@ export function meshrixCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES
       },
       subject: {
         type: "object",
-        description: "Optional caller subject. If omitted, Meshrix injects the authenticated grant subject.",
+        description: "Optional caller subject. If omitted, Meshrix.js injects the authenticated grant subject.",
         additionalProperties: true
       },
       operatorId: {
@@ -304,11 +304,11 @@ export function meshrixCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES
       },
       traceId: {
         type: "string",
-        description: "Caller trace id. Meshrix generates one when omitted."
+        description: "Caller trace id. Meshrix.js generates one when omitted."
       },
       idempotencyKey: {
         type: "string",
-        description: "Caller idempotency key. Meshrix generates one when omitted."
+        description: "Caller idempotency key. Meshrix.js generates one when omitted."
       },
       intent: {
         type: "string",
@@ -342,8 +342,8 @@ export function meshrixCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES
   const coreTools: any[] = [
     {
       name: MCP_DISCOVERY_TOOL_NAME,
-      title: "Meshrix Discovery",
-      description: "Discovery outlet/router for capability discovery, tool descriptions, doctor checks, available commands, connection state, and gateway availability. Start here with operation='meshrix.capabilities.list', then use one returned operations[].name as the operation value for a Meshrix outlet.",
+      title: "Meshrix.js Discovery",
+      description: "Discovery outlet/router for capability discovery, tool descriptions, doctor checks, available commands, connection state, and gateway availability. Start here with operation='meshrix.capabilities.list', then use one returned operations[].name as the operation value for a Meshrix.js outlet.",
       inputSchema: commonSchema,
       annotations: { readOnlyHint: true, destructiveHint: false },
       _meta: {
@@ -353,7 +353,7 @@ export function meshrixCategorizedTools({ activeOutlets = CATEGORIZED_TOOL_NAMES
     },
     {
       name: MCP_GATEWAY_TOOL_NAME,
-      title: "Meshrix Gateway",
+      title: "Meshrix.js Gateway",
       description: "Gateway outlet/router for upstream service registrations, toolsets, grants, policy preview, approval, audit, and governed forwarding operations. Do not call operation='meshrix.gateway'. First discover concrete operation ids by calling tool 'meshrix.discovery' with operation='meshrix.capabilities.list'.",
       inputSchema: commonSchema,
       annotations: { readOnlyHint: false, destructiveHint: false },

@@ -1,13 +1,8 @@
 {
   "name": "@meshrix/server-runtime",
   "version": "0.0.1",
-  "description": "Meshrix composition root, state stores, jobs, workers, product API",
-  "license": "GPL-3.0-or-later",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/LicoLand/Meshrix.git",
-    "directory": "packages/server-runtime"
-  },
+  "description": "Meshrix.js composition root, state stores, jobs, workers, product API",
+  "license": "MIT",
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },

@@ -241,7 +241,7 @@ async function buildRuntimeAssemblyPackage({ input = {}, context = {} }: Record<
     packageFiles.push(await writePackageTextFile(packageRoot, componentFile, `${JSON.stringify(component, null, 2)}\n`));
   }
   packageFiles.push(await writePackageTextFile(packageRoot, "README.md", [
-    "# Meshrix Runtime Assembly Portable Directory",
+    "# Meshrix.js Runtime Assembly Portable Directory",
     "",
     "This directory is a portable runtime assembly evidence package generated from the current architecture component inventory.",
     "",

@@ -2,7 +2,7 @@
   "schemaVersion": "v0.0.1:schema:definition-1",
   "id": "meshrix-crystal",
   "label": {
-    "en": "Meshrix Crystal",
+    "en": "Meshrix.js Crystal",
     "zh-CN": "黑晶蓝调"
   },
   "mode": "dark",

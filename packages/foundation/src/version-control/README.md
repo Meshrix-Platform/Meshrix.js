@@ -1,6 +1,6 @@
 # Version Governance Module
 
-`packages/foundation/src/version-control` is the infrastructure boundary for Meshrix version governance. It owns the shared vocabulary, registry facts, scan rules, and gates for platform, protocol, schema, runtime capability, and migration-path versions.
+`packages/foundation/src/version-control` is the infrastructure boundary for Meshrix.js version governance. It owns the shared vocabulary, registry facts, scan rules, and gates for platform, protocol, schema, runtime capability, and migration-path versions.
 
 ## Layer
 

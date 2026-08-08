@@ -99,7 +99,7 @@ describe("MCP SSE admission", () : any => {
     request.url = "/mcp?capability=upstream.catalog.list_changed";
     request.headers = {
       authorization: "Bearer redacted",
-      "x-meshrix-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
+      "x-meshrix.js-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
     };
     request.socket = { remoteAddress: "127.0.0.2" };
     const response: any = responseFixture();
@@ -151,7 +151,7 @@ describe("MCP SSE admission", () : any => {
     request.url = "/mcp";
     request.headers = {
       authorization: "Bearer redacted",
-      "x-meshrix-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
+      "x-meshrix.js-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
     };
     request.socket = { remoteAddress: "127.0.0.7" };
     const response: any = responseFixture();

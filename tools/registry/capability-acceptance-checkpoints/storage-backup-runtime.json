@@ -18,7 +18,7 @@
             "report": "build/reports/state-machines/latest.json"
           },
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           }
         ]
       },
@@ -27,7 +27,7 @@
         "text": "Restore proves hashes and metadata before apply and records audit evidence after apply.",
         "evidence": [
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           },
           {
             "acceptanceCommandId": "storage-restore",
@@ -44,7 +44,7 @@
             "report": "build/reports/local-info-hygiene.json"
           },
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           },
           {
             "acceptanceCommandId": "storage-restore",
@@ -83,7 +83,7 @@
             "report": "build/reports/state-machines/latest.json"
           },
           {
-            "acceptanceCommandId": "private-deployment-open-platform-e2e"
+            "acceptanceCommandId": "private-deployment-internal-platform-e2e"
           },
           {
             "acceptanceCommandId": "storage-restore",

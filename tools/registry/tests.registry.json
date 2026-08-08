@@ -128,9 +128,9 @@
         "console.design-tokens",
         "console.gateway-mcp-workflows",
         "governance.production-health-console",
-        "open-platform.documentation-convergence",
-        "open-platform.surface-convergence",
-        "open-platform.capability-audit",
+        "internal-platform.documentation-convergence",
+        "internal-platform.surface-convergence",
+        "internal-platform.capability-audit",
         "upstream-gateway.fixture-transit",
         "downstream-mcp.agent-tool-loop"
       ],
@@ -150,7 +150,7 @@
       "suites": [
         "release.npm-package-installability",
         "jobs.work-queue-postgres-container",
-        "open-platform.private-deployment-e2e"
+        "internal-platform.private-deployment-e2e"
       ],
       "timeoutMs": 7200000
     },
@@ -982,7 +982,7 @@
       "artifacts": []
     },
     {
-      "id": "open-platform.capability-audit",
+      "id": "internal-platform.capability-audit",
       "label": "Open platform capability matrix and gap audit",
       "owner": "platform",
       "package": "repo",
@@ -1001,7 +1001,7 @@
       ]
     },
     {
-      "id": "open-platform.surface-convergence",
+      "id": "internal-platform.surface-convergence",
       "label": "Open platform feature operation protocol console and verifier convergence",
       "owner": "platform",
       "package": "repo",
@@ -1020,7 +1020,7 @@
       ]
     },
     {
-      "id": "open-platform.documentation-convergence",
+      "id": "internal-platform.documentation-convergence",
       "label": "Open platform documentation and verifier command convergence",
       "owner": "platform",
       "package": "repo",
@@ -1039,14 +1039,14 @@
       ]
     },
     {
-      "id": "open-platform.private-deployment-e2e",
-      "label": "Private deployment open platform aggregate E2E verifier",
+      "id": "internal-platform.private-deployment-e2e",
+      "label": "Private deployment internal platform aggregate E2E verifier",
       "owner": "platform",
       "package": "repo",
       "level": "e2e",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-private-deployment-open-platform-e2e.ts"
+        "tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts"
       ],
       "sideEffects": "container",
       "timeoutClass": "slow",
@@ -1056,7 +1056,7 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/private-deployment-open-platform-e2e.json"
+        "build/reports/private-deployment-internal-platform-e2e.json"
       ]
     },
     {

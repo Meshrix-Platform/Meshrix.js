@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Claude Code"
+  short_description: "Reference claude-code 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-claude-code as reference for claude-code 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

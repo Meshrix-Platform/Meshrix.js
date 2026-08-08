@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Upstream Service Publishing"
+  short_description: "Verify publishing and produce a Console operation manual"
+  default_prompt: "Use $meshrix-js-upstream-service-publishing to verify the real governed publishing journey and produce a screenshot-complete Console operation manual with technical evidence in the appendix."

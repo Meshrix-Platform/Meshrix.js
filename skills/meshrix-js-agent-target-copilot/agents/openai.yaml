@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Target Copilot"
+  short_description: "Reference copilot 适配项: forms, paths, sessions, access"
+  default_prompt: "Use $meshrix-js-agent-target-copilot as reference for copilot 适配项 (forms, paths, config, sessions, databases, access, operations, consumers)."

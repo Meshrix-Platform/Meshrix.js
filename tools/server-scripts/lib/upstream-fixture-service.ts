@@ -467,9 +467,9 @@ export function upstreamFixtureOpenApiDocument() : any {
   return {
     openapi: "3.1.0",
     info: {
-      title: "Meshrix upstream fixture service",
+      title: "Meshrix.js upstream fixture service",
       version: UPSTREAM_FIXTURE_SERVICE_VERSION,
-      description: "Deterministic upstream service fixture used by Meshrix gateway verifiers."
+      description: "Deterministic upstream service fixture used by Meshrix.js gateway verifiers."
     },
     paths: {
       "/health": { get: { operationId: "health", responses: { 200: { description: "Service health" } } } },
