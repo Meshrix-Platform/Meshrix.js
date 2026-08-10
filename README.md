@@ -8,7 +8,7 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[Overview](#overview) · [Status](docs/STATUS.md) · [Top 10 Priorities](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
+[Overview](#overview) · [Status](docs/STATUS.md) · [Roadmap](docs/WHATS-NEXT.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Documentation](docs/README.md) · [Runbook](docs/RUNBOOK.md) · **[简体中文](README.zh-CN.md)**
 
 </div>
 
@@ -19,9 +19,10 @@ English is the normative language of this repository's documentation; [简体中
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > owns their normative meaning.
 
-> **Current priorities:** Meshrix.js's ten highest-value open problems, ranked by
-> priority, are maintained in [What's Next](docs/WHATS-NEXT.md). Read this
-> register before planning, implementing, or reviewing project work.
+> **Current outcome:** Meshrix.js is closing one enterprise single-node
+> functional candidate through four mandatory workstreams documented in
+> [What's Next](docs/WHATS-NEXT.md). Read it before planning, implementing, or
+> reviewing project work.
 
 ---
 
@@ -142,10 +143,11 @@ npm run mcp:doctor
 ## Downstream Agent Clients
 
 Agent clients connect through MCP discovery and governed gateway calls;
-operation visibility is grant-controlled. The documented downstream adapter
-target scope is OpenClaw, Codex, Claude Code, Antigravity, OpenCode, and Pi.
-Adapters are supplied explicitly by an operator and are never discovered from
-another source repository. See [Compatibility](docs/COMPATIBILITY.md) and
+operation visibility is grant-controlled. The repository-local downstream
+adapter implementations cover OpenClaw, Codex, Claude Code, Antigravity,
+OpenCode, Kimi, and Pi. Adapters are enabled explicitly by an operator and are
+never discovered from another source repository. See
+[Compatibility](docs/COMPATIBILITY.md) and
 [Protocols](docs/protocols/PROTOCOLS.md) for the exact scope and status.
 
 ## Repository Layout
@@ -154,6 +156,8 @@ another source repository. See [Compatibility](docs/COMPATIBILITY.md) and
 | --- | --- |
 | `apps/` | Server entry point, console app, and MCP gateway installer package. |
 | `packages/` | Contracts, foundation, workspace, agents, capabilities, protocols, server runtime, and UI console packages. |
+| `services/` | Repository-local service implementations, including format conversion. |
+| `plugins/` | Repository-local runtime plugins, client adapters, manifests, and schemas. |
 | `tools/` | Server scripts, verifiers, generators, and registry tooling. |
 | `docs/` | Public runtime, architecture, protocol, compatibility, and feature documentation. |
 | `tests/` | Repository verification suite. |
@@ -162,7 +166,7 @@ another source repository. See [Compatibility](docs/COMPATIBILITY.md) and
 
 | Topic | Document |
 | --- | --- |
-| Top 10 project priorities | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
+| Product closure roadmap | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
 | Product goal and boundary | [PRODUCT.md](PRODUCT.md) |
 | Domain language | [CONTEXT.md](CONTEXT.md) |
 | Current status | [docs/STATUS.md](docs/STATUS.md) |

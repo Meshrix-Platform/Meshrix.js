@@ -116,7 +116,8 @@ describe("security permissions provider behavior", () : any => {
       userPolicies: ["policy-a"],
       agentBindings: ["binding-a"],
       agentGroups: ["group-a"],
-      approvals: ["approval-a"]
+      approvals: ["approval-a"],
+      apiKeyRecoveryAssignments: []
     });
     expect(governanceStore.listApprovals).toHaveBeenCalledWith({ includeRevoked: true });
     expect(provider.listGovernanceRoles({ active: true })).toEqual(["role-a"]);

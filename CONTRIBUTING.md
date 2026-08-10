@@ -64,7 +64,7 @@ const msg = computed(() => consoleMessages[currentConsoleLocale.value]);
 // template: {{ msg.nav.dashboard }}
 ```
 
-The dictionary is one shared file edited by many plan Nodes in parallel: each copy-bearing Node owns exactly one new top-level group and inserts it in alphabetical order among plan-added groups within each locale block, so parallel appends merge cleanly. The frozen Node-to-group namespace table is published in [apps/console/i18n/README.md](apps/console/i18n/README.md) (identical to `docs/plans/console-ux-closure/Architecture.md` §5 H3).
+The dictionary is one shared file: each copy-bearing feature owns one top-level group and inserts it alphabetically in both locale blocks, so independent changes merge cleanly. The durable namespace table is published in [apps/console/i18n/README.md](apps/console/i18n/README.md).
 
 ## Documentation Rules
 

@@ -23,7 +23,7 @@ async function fixtureRoot(source: any = "export default true;\n") : Promise<any
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plugin-verifier-runner-"));
   temporaryRoots.push(root);
   await fs.mkdir(path.join(root, "verifiers"), { recursive: true });
-  await fs.writeFile(path.join(root, "verifiers", "check.ts"), source, { mode: 0o600 });
+  await fs.writeFile(path.join(root, "verifiers", "check.mjs"), source, { mode: 0o600 });
   return root;
 }
 
@@ -87,7 +87,7 @@ afterEach(async () : Promise<any> => {
 describe("plugin verifier controlled execution boundary", () : any => {
   it("fails closed without a verified installed-artifact resolver", async () : Promise<any> => {
     await expect(runPluginVerifierWorkload(
-      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" },
+      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" },
       {}
     )).rejects.toMatchObject({ code: "PLUGIN_VERIFIER_ARTIFACT_AUTHORITY_REQUIRED" });
   });
@@ -103,11 +103,11 @@ describe("plugin verifier controlled execution boundary", () : any => {
         observedOptions = options;
         const resolved: any = await resolveInput(request.inputs[0]);
         expect(resolved.files).toHaveLength(1);
-        expect(resolved.files[0].path).toBe("verifiers/check.ts");
+        expect(resolved.files[0].path).toBe("verifiers/check.mjs");
         expect(resolved.files[0].digest).toBe(sha256(source));
         expect(Buffer.from(resolved.files[0].content).toString("utf8")).toBe(source);
         expect(resolved.digest).toBe(sandboxDigest([{
-          path: "verifiers/check.ts",
+          path: "verifiers/check.mjs",
           digest: sha256(source)
         }]));
         return receiptForRequest(request);
@@ -115,7 +115,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
     };
 
     const result: any = await runPluginVerifierWorkload(
-      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" },
+      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" },
       {
         resolveSource: artifactResolver(root),
         sandboxExecution,
@@ -137,7 +137,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
     });
     expect(observedRequest).toMatchObject({
       workloadKind: "plugin_verifier.check",
-      invocation: { args: ["verifiers/check.ts"], workingDirectory: "workspace" },
+      invocation: { args: ["verifiers/check.mjs"], workingDirectory: "workspace" },
       principal: principal(),
       governance: governance()
     });
@@ -160,7 +160,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
     };
 
     const result: any = await runPluginVerifierWorkload(
-      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" },
+      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" },
       {
         resolveSource: artifactResolver(root),
         sandboxExecution,
@@ -190,7 +190,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
     };
 
     const result: any = await runPluginVerifierWorkload(
-      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" },
+      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" },
       {
         resolveSource: artifactResolver(root),
         sandboxExecution,
@@ -212,7 +212,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
   it("rejects a success claim without completed sandbox cleanup", async () : Promise<any> => {
     const root: any = await fixtureRoot();
     const result: any = await runPluginVerifierWorkload(
-      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" },
+      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" },
       {
         resolveSource: artifactResolver(root),
         sandboxExecution: {
@@ -256,7 +256,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
       }
     };
     const execution: any = runPluginVerifierWorkload(
-      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" },
+      { id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" },
       {
         resolveSource: artifactResolver(root),
         sandboxExecution,
@@ -280,7 +280,7 @@ describe("plugin verifier controlled execution boundary", () : any => {
     const root: any = await fixtureRoot();
     const hooks: any = createPluginVerifierHooks({
       id: "fixture-plugin",
-      verifierHooks: [{ id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.ts" }]
+      verifierHooks: [{ id: "check", workloadKind: "plugin_verifier.check", source: "verifiers/check.mjs" }]
     }, { resolveSource: artifactResolver(root) });
 
     await expect(hooks.check.run()).resolves.toMatchObject({

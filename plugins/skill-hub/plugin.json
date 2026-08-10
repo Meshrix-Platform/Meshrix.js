@@ -1,0 +1,101 @@
+{
+  "schemaVersion": "v0.0.1:plugin:manifest-1",
+  "id": "skill-hub",
+  "label": "Skill Hub",
+  "version": "0.0.1",
+  "description": "Governed Skill Hub contribution custody, review, publication, adoption, permissions, statistics, and controlled execution.",
+  "defaultEnabled": false,
+  "contributionMode": "selected",
+  "dependencies": [],
+  "hostCapabilities": [],
+  "features": ["skill-hub"],
+  "operations": [
+    "skill_hub.search",
+    "skill_hub.list",
+    "skill_hub.get",
+    "skill_hub.submit",
+    "skill_hub.scan",
+    "skill_hub.build",
+    "skill_hub.execute",
+    "skill_hub.execution.cancel",
+    "skill_hub.execution.status",
+    "skill_hub.review",
+    "skill_hub.publish",
+    "skill_hub.download",
+    "skill_hub.install",
+    "skill_hub.usage.record",
+    "skill_hub.revoke",
+    "skill_hub.rollback.record",
+    "skill_hub.stats",
+    "skill_hub.leaderboard",
+    "skill_hub.permission.request",
+    "skill_hub.permission.grant"
+  ],
+  "opaqueInputPreprocessing": {
+    "skill_hub.submit": [
+      {
+        "schemaVersion": "v0.0.1:plugin:opaque-input-preprocessing-1",
+        "encoding": "base64",
+        "sourceField": "packageBundleBase64",
+        "targetField": "packageBundle",
+        "mediaType": "application/vnd.meshrix.skill-package",
+        "maxBytes": 1048576,
+        "outputSchemaVersion": "v0.0.1:plugin:opaque-input-handle-1"
+      }
+    ]
+  },
+  "routes": [
+    { "id": "skill_hub.search.http", "path": "/api/skill-hub/v1/search", "kind": "http" },
+    { "id": "skill_hub.list.http", "path": "/api/skill-hub/v1/skills", "kind": "http" },
+    { "id": "skill_hub.get.http", "path": "/api/skill-hub/v1/skills/:skillId", "kind": "http" },
+    { "id": "skill_hub.submit.http", "path": "/api/skill-hub/v1/skills", "kind": "http" },
+    { "id": "skill_hub.scan.http", "path": "/api/skill-hub/v1/skills/:skillId/scan", "kind": "http" },
+    { "id": "skill_hub.build.http", "path": "/api/skill-hub/v1/skills/:skillId/build", "kind": "http" },
+    { "id": "skill_hub.execute.http", "path": "/api/skill-hub/v1/skills/:skillId/execute", "kind": "http" },
+    { "id": "skill_hub.execution.cancel.http", "path": "/api/skill-hub/v1/executions/:executionRef/cancel", "kind": "http" },
+    { "id": "skill_hub.execution.status.http", "path": "/api/skill-hub/v1/executions/:executionRef", "kind": "http" },
+    { "id": "skill_hub.review.http", "path": "/api/skill-hub/v1/skills/:skillId/review", "kind": "http" },
+    { "id": "skill_hub.publish.http", "path": "/api/skill-hub/v1/skills/:skillId/publish", "kind": "http" },
+    { "id": "skill_hub.download.http", "path": "/api/skill-hub/v1/skills/:skillId/download", "kind": "http" },
+    { "id": "skill_hub.install.http", "path": "/api/skill-hub/v1/skills/:skillId/install", "kind": "http" },
+    { "id": "skill_hub.usage.record.http", "path": "/api/skill-hub/v1/skills/:skillId/usage", "kind": "http" },
+    { "id": "skill_hub.revoke.http", "path": "/api/skill-hub/v1/skills/:skillId/revoke", "kind": "http" },
+    { "id": "skill_hub.rollback.record.http", "path": "/api/skill-hub/v1/skills/:skillId/rollback", "kind": "http" },
+    { "id": "skill_hub.stats.http", "path": "/api/skill-hub/v1/stats", "kind": "http" },
+    { "id": "skill_hub.leaderboard.http", "path": "/api/skill-hub/v1/leaderboard", "kind": "http" },
+    { "id": "skill_hub.permission.request.http", "path": "/api/skill-hub/v1/skills/:skillId/permission/request", "kind": "http" },
+    { "id": "skill_hub.permission.grant.http", "path": "/api/skill-hub/v1/skills/:skillId/permission/grant", "kind": "http" }
+  ],
+  "mcpTools": [
+    "meshrix.skillHub.search",
+    "meshrix.skillHub.list",
+    "meshrix.skillHub.get",
+    "meshrix.skillHub.submit",
+    "meshrix.skillHub.scan",
+    "meshrix.skillHub.build",
+    "meshrix.skillHub.execute",
+    "meshrix.skillHub.execution.cancel",
+    "meshrix.skillHub.execution.status",
+    "meshrix.skillHub.review",
+    "meshrix.skillHub.publish",
+    "meshrix.skillHub.download",
+    "meshrix.skillHub.install",
+    "meshrix.skillHub.usage.record",
+    "meshrix.skillHub.revoke",
+    "meshrix.skillHub.rollback.record",
+    "meshrix.skillHub.stats",
+    "meshrix.skillHub.leaderboard",
+    "meshrix.skillHub.permission.request",
+    "meshrix.skillHub.permission.grant"
+  ],
+  "consoleEntries": ["admin.skill-hub"],
+  "stateMachines": ["contribution.lifecycle"],
+  "runtime": { "module": "./runtime.mjs" },
+  "verifierHooks": [
+    {
+      "id": "skill-hub-artifact-contract",
+      "workloadKind": "plugin_verifier.skill_hub_artifact_contract",
+      "source": "verifiers/artifact-contract.mjs"
+    }
+  ]
+}

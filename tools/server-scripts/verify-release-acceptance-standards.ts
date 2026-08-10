@@ -10,7 +10,7 @@ const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.ur
 const EXPECTED_FUNCTIONAL_CLAIM: any = "functional-complete";
 const EXPECTED_REAL_MACHINE_CLAIM: any = "real-machine-verified";
 const EXPECTED_REAL_MACHINE_SCRIPT: any =
-  "node tools/server-scripts/verify-real-machine-validation.ts";
+  "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-real-machine-validation.ts";
 const EXPECTED_REAL_MACHINE_TARGETS: readonly any[] = Object.freeze([
   "native-linux-x64",
   "native-linux-arm64",

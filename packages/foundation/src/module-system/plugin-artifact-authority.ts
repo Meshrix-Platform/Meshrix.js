@@ -531,7 +531,7 @@ export async function createPluginArtifactAuthority({
           throw controlledError("PLUGIN_ARTIFACT_MANIFEST_MISMATCH", "Plugin artifact manifest does not match its Host scope or dependency closure.");
         }
         const runtimeModule: any = safeName(String(rawManifest?.runtime?.module || "").replace(/^\.\//u, ""));
-        if (!runtimeModule.endsWith(".ts")) {
+        if (!runtimeModule.endsWith(".mjs")) {
           throw controlledError("PLUGIN_ARTIFACT_CONTENT_INVALID", "Plugin artifact runtime module must be an ECMAScript module.");
         }
         const files: any = await inventory(source);

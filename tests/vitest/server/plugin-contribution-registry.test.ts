@@ -77,7 +77,7 @@ function manifest(patch: Record<string, any> = {}) : any {
     verifierHooks: [{
       id: "demo.verify",
       workloadKind: "plugin_verifier.demo",
-      source: "verifiers/demo.ts",
+      source: "verifiers/demo.mjs",
       report: ""
     }],
     ...patch

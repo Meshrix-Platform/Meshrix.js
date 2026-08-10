@@ -53,7 +53,8 @@ describe("security permissions provider defaults and fallback paths", () : any =
       userPolicies: [],
       agentBindings: [],
       agentGroups: [],
-      approvals: []
+      approvals: [],
+      apiKeyRecoveryAssignments: []
     });
 
     await expect(provider.authorizeOperation({

@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-02",
+  "updatedAt": "2026-08-10",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -1005,6 +1005,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.client-adapter.release-index",
+      "kind": "schema",
+      "description": "Governed release index schema for repository-local client adapter packages.",
+      "activeVersion": "v0.0.1:client-adapter:release-index-1",
+      "versions": [
+        {
+          "version": "v0.0.1:client-adapter:release-index-1",
+          "ref": "meshrix.client-adapter.release-index@v0.0.1:client-adapter:release-index-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local adapter packaging contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-client-adapter-release-index-1-source",
+              "kind": "other",
+              "uri": "tools/plugins/client-adapter-packages.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.client.fingerprint",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.client.fingerprint.",
@@ -1025,6 +1051,58 @@
               "evidenceId": "v0-0-1-client-fingerprint-1-source",
               "kind": "other",
               "uri": "packages/foundation/src/security/process-identity/process-identity-core.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.coding-github.operation-result",
+      "kind": "schema",
+      "description": "Governed operation result schema for the repository-local Coding GitHub runtime plugin.",
+      "activeVersion": "v0.0.1:coding-github:operation-result-1",
+      "versions": [
+        {
+          "version": "v0.0.1:coding-github:operation-result-1",
+          "ref": "meshrix.coding-github.operation-result@v0.0.1:coding-github:operation-result-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-coding-github-operation-result-1-source",
+              "kind": "other",
+              "uri": "plugins/coding/github/runtime.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.coding-github.skill-install-state",
+      "kind": "store",
+      "description": "Governed persistent skill installation state for the repository-local Coding GitHub runtime plugin.",
+      "activeVersion": "v0.0.1:coding-github:skill-install-state-1",
+      "versions": [
+        {
+          "version": "v0.0.1:coding-github:skill-install-state-1",
+          "ref": "meshrix.coding-github.skill-install-state@v0.0.1:coding-github:skill-install-state-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin state contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-coding-github-skill-install-state-1-source",
+              "kind": "other",
+              "uri": "plugins/coding/github/runtime/skill-install-state.mjs"
             }
           ]
         }
@@ -2791,6 +2869,32 @@
               "evidenceId": "v0-0-1-mcp-release-target-scope-report-1-source-2",
               "kind": "verifier",
               "uri": "tools/server-scripts/verify-mcp-release-target-scope.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.mcp.sharedspace-exchange",
+      "kind": "protocol",
+      "description": "Governed MCP exchange receipt protocol for the repository-local Shared Space runtime plugin.",
+      "activeVersion": "v0.0.1:mcp:sharedspace-exchange-1",
+      "versions": [
+        {
+          "version": "v0.0.1:mcp:sharedspace-exchange-1",
+          "ref": "meshrix.mcp.sharedspace-exchange@v0.0.1:mcp:sharedspace-exchange-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin protocol."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-mcp-sharedspace-exchange-1-source",
+              "kind": "other",
+              "uri": "plugins/shared-space/runtime/shared-space-mcp.mjs"
             }
           ]
         }
@@ -4830,11 +4934,11 @@
       "artifactId": "meshrix.plugin-bundle-manifest",
       "kind": "other",
       "description": "Governed version registry entry for meshrix.plugin-bundle-manifest.",
-      "activeVersion": "v0.0.1:meshrix:plugin-bundle-manifest-1",
+      "activeVersion": "v0.0.1:plugin:bundle-manifest-1",
       "versions": [
         {
-          "version": "v0.0.1:meshrix:plugin-bundle-manifest-1",
-          "ref": "meshrix.plugin-bundle-manifest@v0.0.1:meshrix:plugin-bundle-manifest-1",
+          "version": "v0.0.1:plugin:bundle-manifest-1",
+          "ref": "meshrix.plugin-bundle-manifest@v0.0.1:plugin:bundle-manifest-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -4844,7 +4948,7 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-meshrix-plugin-bundle-manifest-1-source",
+              "evidenceId": "v0-0-1-plugin-bundle-manifest-1-source",
               "kind": "other",
               "uri": "packages/contracts/src/plugins/plugin-bundle-manifest.ts"
             }
@@ -4931,6 +5035,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.plugin.build-week-demo-profile",
+      "kind": "schema",
+      "description": "Governed schema for the synthetic repository-local plugin demonstration profile.",
+      "activeVersion": "v0.0.1:plugin:build-week-demo-profile-1",
+      "versions": [
+        {
+          "version": "v0.0.1:plugin:build-week-demo-profile-1",
+          "ref": "meshrix.plugin.build-week-demo-profile@v0.0.1:plugin:build-week-demo-profile-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current synthetic documentation profile."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-plugin-build-week-demo-profile-1-source",
+              "kind": "other",
+              "uri": "docs/examples/plugins-build-week-profile.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.plugin.bundle-protocol-verification",
       "kind": "protocol",
       "description": "Governed verifier report for plugin bundle acquisition, staging, activation, and rollback behavior.",
@@ -4982,6 +5112,84 @@
               "evidenceId": "v0-0-1-plugin-call-context-1-test",
               "kind": "test",
               "uri": "tests/vitest/server/plugin-contribution-registry.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.plugin.catalog-manifest",
+      "kind": "schema",
+      "description": "Governed manifest schema for implemented catalog plugins and client adapters.",
+      "activeVersion": "v0.0.1:schema:meshrix-plugin-manifest-1",
+      "versions": [
+        {
+          "version": "v0.0.1:schema:meshrix-plugin-manifest-1",
+          "ref": "meshrix.plugin.catalog-manifest@v0.0.1:schema:meshrix-plugin-manifest-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin catalog contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-schema-meshrix-plugin-manifest-1-source",
+              "kind": "schema",
+              "uri": "plugins/schemas/plugin.schema.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.plugin.catalog-registry",
+      "kind": "schema",
+      "description": "Governed implemented-only local plugin catalog registry schema.",
+      "activeVersion": "v0.0.1:schema:meshrix-plugins-registry-2",
+      "versions": [
+        {
+          "version": "v0.0.1:schema:meshrix-plugins-registry-2",
+          "ref": "meshrix.plugin.catalog-registry@v0.0.1:schema:meshrix-plugins-registry-2",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current implemented-only local catalog contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-schema-meshrix-plugins-registry-2-source",
+              "kind": "other",
+              "uri": "tools/plugins/lib/repository.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.plugin.host-contract-reference",
+      "kind": "schema",
+      "description": "Governed reference schema for the repository-local published Core Host contract digest.",
+      "activeVersion": "v0.0.1:plugin:host-contract-reference-1",
+      "versions": [
+        {
+          "version": "v0.0.1:plugin:host-contract-reference-1",
+          "ref": "meshrix.plugin.host-contract-reference@v0.0.1:plugin:host-contract-reference-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local Core Host contract reference."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-plugin-host-contract-reference-1-source",
+              "kind": "manifest",
+              "uri": "plugins/core-host-contract.json"
             }
           ]
         }
@@ -7063,6 +7271,84 @@
       ]
     },
     {
+      "artifactId": "meshrix.shared-space.sandbox-state",
+      "kind": "store",
+      "description": "Governed sandbox state store for the repository-local Shared Space runtime plugin.",
+      "activeVersion": "v0.0.1:shared-space:sandbox-state-1",
+      "versions": [
+        {
+          "version": "v0.0.1:shared-space:sandbox-state-1",
+          "ref": "meshrix.shared-space.sandbox-state@v0.0.1:shared-space:sandbox-state-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin state contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-shared-space-sandbox-state-1-source",
+              "kind": "other",
+              "uri": "plugins/shared-space/runtime/sandbox-state-store.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.contribution-dashboard",
+      "kind": "schema",
+      "description": "Governed contribution dashboard schema for the repository-local Skill Hub runtime plugin.",
+      "activeVersion": "v0.0.1:skill-hub:contribution-dashboard-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:contribution-dashboard-1",
+          "ref": "meshrix.skill-hub.contribution-dashboard@v0.0.1:skill-hub:contribution-dashboard-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin dashboard contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-contribution-dashboard-1-source",
+              "kind": "other",
+              "uri": "plugins/skill-hub/runtime/skill-hub-executor.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.runtime",
+      "kind": "protocol",
+      "description": "Governed operation payload protocol for the repository-local Skill Hub runtime plugin.",
+      "activeVersion": "v0.0.1:skill-hub:runtime-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:runtime-1",
+          "ref": "meshrix.skill-hub.runtime@v0.0.1:skill-hub:runtime-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin protocol."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-runtime-1-source",
+              "kind": "other",
+              "uri": "plugins/skill-hub/runtime/skill-hub-executor.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.state-machine.alert-lifecycle",
       "kind": "state_machine",
       "description": "Governed version registry entry for meshrix.state-machine.alert-lifecycle.",
@@ -7583,6 +7869,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.state-machine.coding-github-skill-install",
+      "kind": "state_machine",
+      "description": "Governed skill installation lifecycle for the repository-local Coding GitHub runtime plugin.",
+      "activeVersion": "v0.0.1:state-machine:github-skill-install-1",
+      "versions": [
+        {
+          "version": "v0.0.1:state-machine:github-skill-install-1",
+          "ref": "meshrix.state-machine.coding-github-skill-install@v0.0.1:state-machine:github-skill-install-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin state machine."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-state-machine-github-skill-install-1-source",
+              "kind": "manifest",
+              "uri": "plugins/coding/github/state-machines/skill-install.lifecycle.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.state-machine.deployment-lifecycle",
       "kind": "state_machine",
       "description": "Governed version registry entry for meshrix.state-machine.deployment-lifecycle.",
@@ -7681,6 +7993,58 @@
               "evidenceId": "v0-0-1-state-machine-production-readiness-lifecycle-1-source",
               "kind": "manifest",
               "uri": "packages/foundation/src/workflow/state-machine/definitions/production.readiness.lifecycle.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.state-machine.shared-space-checkpoint-restore",
+      "kind": "state_machine",
+      "description": "Governed checkpoint restore lifecycle for the repository-local Shared Space runtime plugin.",
+      "activeVersion": "v0.0.1:state-machine:checkpoint-restore-1",
+      "versions": [
+        {
+          "version": "v0.0.1:state-machine:checkpoint-restore-1",
+          "ref": "meshrix.state-machine.shared-space-checkpoint-restore@v0.0.1:state-machine:checkpoint-restore-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin state machine."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-state-machine-checkpoint-restore-1-source",
+              "kind": "manifest",
+              "uri": "plugins/shared-space/state-machines/checkpoint.restore.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.state-machine.skill-hub-contribution-lifecycle",
+      "kind": "state_machine",
+      "description": "Governed contribution lifecycle for the repository-local Skill Hub runtime plugin.",
+      "activeVersion": "v0.0.1:state-machine:contribution-lifecycle-1",
+      "versions": [
+        {
+          "version": "v0.0.1:state-machine:contribution-lifecycle-1",
+          "ref": "meshrix.state-machine.skill-hub-contribution-lifecycle@v0.0.1:state-machine:contribution-lifecycle-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current repository-local plugin state machine."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-state-machine-contribution-lifecycle-1-source",
+              "kind": "manifest",
+              "uri": "plugins/skill-hub/state-machines/contribution.lifecycle.json"
             }
           ]
         }

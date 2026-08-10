@@ -130,14 +130,14 @@ async function main() : Promise<any> {
         fullRoute: true
       }));
     }
-    for (const entry of allAdminRoutes.filter((item?: any) : any => CONSOLE_ADMIN_WORKFLOW_CHECKS[item.slug])) {
+    for (const entry of allAdminRoutes) {
       routeResults.push(await verifyRouteInViewport({
         context: mobileContext,
         serverUrl: server.url,
         entry,
         viewportName: "mobile",
         viewport: CONSOLE_ADMIN_VIEWPORTS.mobile,
-        fullRoute: false
+        fullRoute: true
       }));
     }
 
@@ -159,7 +159,7 @@ async function main() : Promise<any> {
       browser: {
         engine: "chromium",
         headless: true,
-        viewportCoverage: ["desktop:all-admin-routes", "mobile:workflow-checks"]
+        viewportCoverage: ["desktop:all-admin-routes", "mobile:all-admin-routes"]
       },
       server: {
         distPath: "build/dist",
@@ -181,6 +181,7 @@ async function main() : Promise<any> {
       routeResults,
       summary: {
         desktopRouteCount: allAdminRoutes.length,
+        mobileRouteCount: allAdminRoutes.length,
         workflowViewportCount: workflowResults.length,
         screenshotCount: routeResults.length,
         consoleErrorCount: routeResults.reduce((sum?: any, item?: any) : any => sum + item.consoleErrors.length, 0),

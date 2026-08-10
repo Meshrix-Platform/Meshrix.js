@@ -40,13 +40,19 @@ function classifyConsoleErrors({ consoleErrors = [] }: Record<string, any> = {})
 async function waitForStableRoute(page?: any, entry?: any, serverUrl?: any) : Promise<any> {
   await page.goto(adminRouteUrl(serverUrl, entry.slug), { waitUntil: "domcontentloaded" });
   await page.locator(".dashboard-shell").waitFor({ state: "visible", timeout: 10_000 });
+  const expectedHash: any = `#/admin/${entry.slug}`;
+  await page.waitForFunction(
+    (hash?: any) : any => window.location.hash === hash,
+    expectedHash,
+    { timeout: 10_000 }
+  );
   await page.waitForFunction(
     () : any => document.body && document.body.innerText.trim().length > 40,
     null,
     { timeout: 10_000 }
   );
   const hash: any = await page.evaluate(() : any => window.location.hash);
-  assert.equal(hash, `#/admin/${entry.slug}`, `route hash must stay on /admin/${entry.slug}`);
+  assert.equal(hash, expectedHash, `route hash must stay on /admin/${entry.slug}`);
 }
 
 async function readLayoutMetrics(page?: any) : Promise<any> {
@@ -67,6 +73,89 @@ async function readLayoutMetrics(page?: any) : Promise<any> {
       scrollHeight: document.documentElement.scrollHeight,
       clientHeight: document.documentElement.clientHeight,
       visibleControlCount
+    };
+  });
+}
+
+async function readTopbarLayoutMetrics(page?: any) : Promise<any> {
+  return page.evaluate(() : any => {
+    const topbar: any = document.querySelector(".topbar");
+    const actions: any = document.querySelector(".topbar-actions");
+    const heading: any = document.querySelector(".topbar-heading");
+    const status: any = document.querySelector(".topbar-status");
+    const title: any = document.querySelector(".topbar-page-title");
+
+    function rectOf(element?: any) : any {
+      if (!element) return null;
+      const rect: any = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height
+      };
+    }
+
+    function textRectOf(element?: any) : any {
+      if (!element || !String(element.textContent || "").trim()) return null;
+      const range: any = document.createRange();
+      range.selectNodeContents(element);
+      const rect: any = range.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height
+      };
+    }
+
+    function intersectionArea(first?: any, second?: any) : any {
+      if (!first || !second) return 0;
+      const width: any = Math.max(0, Math.min(first.right, second.right) - Math.max(first.left, second.left));
+      const height: any = Math.max(0, Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top));
+      return width * height;
+    }
+
+    const topbarRect: any = rectOf(topbar);
+    const actionsRect: any = rectOf(actions);
+    const headingRect: any = rectOf(heading);
+    const statusRect: any = rectOf(status);
+    const titleTextRect: any = textRectOf(title);
+    const viewportRect: any = {
+      left: 0,
+      top: 0,
+      right: window.innerWidth,
+      bottom: window.innerHeight,
+      width: window.innerWidth,
+      height: window.innerHeight
+    };
+    const titleArea: any = titleTextRect ? titleTextRect.width * titleTextRect.height : 0;
+
+    return {
+      topbarRect,
+      actionsRect,
+      headingRect,
+      statusRect,
+      titleTextRect,
+      titleText: String(title?.textContent || "").trim(),
+      titleVisibleRatio: titleArea > 0 ? intersectionArea(titleTextRect, viewportRect) / titleArea : 0,
+      overlapAreas: {
+        titleActions: intersectionArea(titleTextRect, actionsRect),
+        titleStatus: intersectionArea(titleTextRect, statusRect),
+        actionsStatus: intersectionArea(actionsRect, statusRect)
+      },
+      titleContainedByTopbar: Boolean(
+        topbarRect &&
+        titleTextRect &&
+        titleTextRect.left >= topbarRect.left - 1 &&
+        titleTextRect.right <= topbarRect.right + 1 &&
+        titleTextRect.top >= topbarRect.top - 1 &&
+        titleTextRect.bottom <= topbarRect.bottom + 1
+      )
     };
   });
 }
@@ -218,6 +307,7 @@ export function createConsoleAdminBrowserAssertions({ repoRoot, screenshotRoot }
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await waitForStableRoute(page, entry, serverUrl);
       const layout: any = await assertGenericAdminRoute(page, entry);
+      const topbarLayout: any = await readTopbarLayoutMetrics(page);
       const emulation: any = await page.evaluate(() : any => ({
         coarsePointer: window.matchMedia("(pointer: coarse)").matches,
         hoverNone: window.matchMedia("(hover: none)").matches,
@@ -228,6 +318,12 @@ export function createConsoleAdminBrowserAssertions({ repoRoot, screenshotRoot }
         assert.equal(emulation.hoverNone, true, `${entry.slug} mobile run must emulate hover:none`);
         assert.ok(emulation.maxTouchPoints > 0, `${entry.slug} mobile run must expose touch input`);
         assert.ok(layout.scrollWidth <= layout.clientWidth + 1, `${entry.slug} mobile document must not overflow horizontally`);
+        assert.ok(topbarLayout.titleText.length > 0, `${entry.slug} mobile topbar must render a page title`);
+        assert.ok(topbarLayout.titleVisibleRatio >= 0.99, `${entry.slug} mobile topbar title must remain inside the viewport`);
+        assert.equal(topbarLayout.titleContainedByTopbar, true, `${entry.slug} mobile topbar must contain its title`);
+        assert.ok(topbarLayout.overlapAreas.titleActions <= 1, `${entry.slug} mobile title must not overlap page actions`);
+        assert.ok(topbarLayout.overlapAreas.titleStatus <= 1, `${entry.slug} mobile title must not overlap current status`);
+        assert.ok(topbarLayout.overlapAreas.actionsStatus <= 1, `${entry.slug} mobile actions must not overlap current status`);
       }
       const workflowCheck: any = CONSOLE_ADMIN_WORKFLOW_CHECKS[entry.slug] || null;
       const workflow: any = workflowCheck ? await assertWorkflow(page, entry, workflowCheck) : null;
@@ -240,6 +336,7 @@ export function createConsoleAdminBrowserAssertions({ repoRoot, screenshotRoot }
         viewport: viewportName,
         routeCoverage: fullRoute ? "registry-route" : "workflow-check",
         layout,
+        topbarLayout,
         emulation,
         workflow,
         screenshot,

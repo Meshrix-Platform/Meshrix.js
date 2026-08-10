@@ -57,7 +57,7 @@ async function writePlugin(root?: any, record?: any, source?: any) : Promise<any
   const directory: any = path.join(root, "plugins", record.id);
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, "plugin.json"), JSON.stringify(record), "utf8");
-  if (source) await fs.writeFile(path.join(directory, "runtime.ts"), source, "utf8");
+  if (source) await fs.writeFile(path.join(directory, "runtime.mjs"), source, "utf8");
 }
 
 async function createManager(root?: any, enabledPlugins: any = []) : Promise<any> {
@@ -99,7 +99,7 @@ describe("plugin runtime", () : any => {
   it("propagates selected contribution changes from an active plugin", async () : Promise<any> => {
     const root: any = await tempRoot();
     await writePlugin(root, manifest("demo", {
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       contributionMode: "selected",
       operations: ["demo.run"]
     }), `
@@ -140,7 +140,7 @@ export async function activatePlugin({ manifest }) {
 
   it("fails closed when production artifact activation has no lifecycle ledger", async () : Promise<any> => {
     const root: any = await tempRoot();
-    await writePlugin(root, manifest("demo", { runtime: { module: "./runtime.ts" } }), `
+    await writePlugin(root, manifest("demo", { runtime: { module: "./runtime.mjs" } }), `
 export async function activatePlugin({ manifest }) {
   return { id: manifest.id, mounts: {}, close() {} };
 }`);
@@ -164,7 +164,7 @@ export async function activatePlugin({ manifest }) {
     const root: any = await tempRoot();
     const importMarker: any = Symbol.for("meshrix.plugin-runtime.production-import-marker");
     delete globalThis[importMarker];
-    await writePlugin(root, manifest("demo", { runtime: { module: "./runtime.ts" } }), `
+    await writePlugin(root, manifest("demo", { runtime: { module: "./runtime.mjs" } }), `
 globalThis[Symbol.for("meshrix.plugin-runtime.production-import-marker")] = true;
 export async function activatePlugin({ manifest }) {
   return { id: manifest.id, mounts: {}, close() {} };
@@ -215,11 +215,11 @@ export async function activatePlugin({ manifest }) {
   it("keeps an unavailable configured verifier workload source as a fixed failure", async () : Promise<any> => {
     const root: any = await tempRoot();
     await writePlugin(root, manifest("sample-plugin", {
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       verifierHooks: [{
         id: "sample-plugin.verify",
         workloadKind: "plugin_verifier.sample_plugin",
-        source: "verifiers/missing.ts",
+        source: "verifiers/missing.mjs",
         report: "build/reports/sample-plugin.json"
       }]
     }), `
@@ -239,11 +239,11 @@ export async function activatePlugin({ manifest }) {
   it("resolves only declared verifier workload sources from the verified artifact snapshot", async () : Promise<any> => {
     const root: any = await tempRoot();
     const record: any = manifest("sample-plugin", {
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       verifierHooks: [{
         id: "sample-plugin.verify",
         workloadKind: "plugin_verifier.sample_plugin",
-        source: "verifiers/runtime.ts",
+        source: "verifiers/runtime.mjs",
         report: "build/reports/sample-plugin.json"
       }]
     });
@@ -253,7 +253,7 @@ export async function activatePlugin({ manifest }) {
 }`);
     const verifierRoot: any = path.join(root, "plugins", "sample-plugin", "verifiers");
     await fs.mkdir(verifierRoot);
-    await fs.writeFile(path.join(verifierRoot, "runtime.ts"), "export const verify = true;\n", "utf8");
+    await fs.writeFile(path.join(verifierRoot, "runtime.mjs"), "export const verify = true;\n", "utf8");
     const registry: any = await loadFixtureRegistry(root);
     const plugin: any = registry.getPlugin("sample-plugin");
 
@@ -292,7 +292,7 @@ export async function activatePlugin({ manifest }) {
       defaultEnabled: true
     }))).toThrow(/explicit deployment selection/u);
     expect(() : any => normalizePluginManifest(manifest("demo", {
-      runtime: { module: "../outside.ts" }
+      runtime: { module: "../outside.mjs" }
     }))).toThrow(/inside the plugin directory/u);
     expect(() : any => normalizePluginManifest({
       ...manifest("demo"),
@@ -350,8 +350,8 @@ export async function activatePlugin({ manifest }) {
       manifest("beta", { stateMachines: ["shared.lifecycle"] })
     ])).toThrow(/Duplicate plugin state machine claim/u);
     expect(() : any => createPluginRegistry([
-      manifest("alpha", { verifierHooks: [{ id: "shared.verify", workloadKind: "plugin_verifier.alpha", source: "verifiers/alpha.ts" }] }),
-      manifest("beta", { verifierHooks: [{ id: "shared.verify", workloadKind: "plugin_verifier.beta", source: "verifiers/beta.ts" }] })
+      manifest("alpha", { verifierHooks: [{ id: "shared.verify", workloadKind: "plugin_verifier.alpha", source: "verifiers/alpha.mjs" }] }),
+      manifest("beta", { verifierHooks: [{ id: "shared.verify", workloadKind: "plugin_verifier.beta", source: "verifiers/beta.mjs" }] })
     ])).toThrow(/Duplicate plugin verifier hook claim/u);
   });
 
@@ -423,7 +423,7 @@ export async function activatePlugin({ manifest }) {
 
   it("publishes the exact explicit deployment profile without synthesizing one", async () : Promise<any> => {
     const root: any = await tempRoot();
-    await writePlugin(root, manifest("base", { runtime: { module: "./runtime.ts" } }), `
+    await writePlugin(root, manifest("base", { runtime: { module: "./runtime.mjs" } }), `
 export async function activatePlugin({ manifest }) {
   return { id: manifest.id, mounts: {}, close() {} };
 }`);
@@ -453,7 +453,7 @@ export async function activatePlugin({ manifest }) {
     const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("base", {
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       mounts: { base: { id: "base.mount", kind: "document" } }
     }), `
 const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
@@ -469,7 +469,7 @@ export async function activatePlugin({ manifest, onClose }) {
 }`);
     await writePlugin(root, manifest("consumer", {
       dependencies: ["base"],
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       mounts: { consumer: { id: "consumer.mount", kind: "document" } },
       mountRouting: {
         extensionRoutes: { txt: { mountName: "consumer", action: "extract" } }
@@ -525,9 +525,9 @@ export async function activatePlugin({ manifest, context }) {
   return { id: manifest.id, mounts: {}, close() {} };
 }`;
     const claims: any[] = ["owner-process-identity", "controlled-execution", "protected-recovery", "downstream-client-aspect", "outbound-egress-policy"];
-    await writePlugin(root, manifest("granted", { runtime: { module: "./runtime.ts" }, hostCapabilities: claims }), source);
-    await writePlugin(root, manifest("unconfigured", { runtime: { module: "./runtime.ts" }, hostCapabilities: claims }), source);
-    await writePlugin(root, manifest("unclaimed", { runtime: { module: "./runtime.ts" } }), source);
+    await writePlugin(root, manifest("granted", { runtime: { module: "./runtime.mjs" }, hostCapabilities: claims }), source);
+    await writePlugin(root, manifest("unconfigured", { runtime: { module: "./runtime.mjs" }, hostCapabilities: claims }), source);
+    await writePlugin(root, manifest("unclaimed", { runtime: { module: "./runtime.mjs" } }), source);
     const fixture: any = await stagePluginArtifactFixture({ sourcePluginRoot: path.join(root, "plugins") });
     artifactFixtures.push(fixture);
     const registry: any = await loadPluginRegistry({ artifactAuthority: fixture.authority });
@@ -566,13 +566,13 @@ export async function activatePlugin({ manifest, context }) {
   it("registers an exact executable contribution set for every manifest claim", async () : Promise<any> => {
     const root: any = await tempRoot();
     await writePlugin(root, manifest("contributor", {
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       operations: ["contributor.run"],
       routes: [{ id: "contributor.route", path: "/contributor", kind: "http" }],
       mcpTools: ["contributor.tool"],
       consoleEntries: ["admin.contributor"],
       stateMachines: ["contributor.lifecycle"],
-      verifierHooks: [{ id: "contributor.verify", workloadKind: "plugin_verifier.contributor", source: "verifiers/contributor.ts" }]
+      verifierHooks: [{ id: "contributor.verify", workloadKind: "plugin_verifier.contributor", source: "verifiers/contributor.mjs" }]
     }), `
 export async function activatePlugin({ manifest }) {
   return {
@@ -609,7 +609,7 @@ export async function activatePlugin({ manifest }) {
   it("fails closed when runtime contributions omit or invent manifest claims", async () : Promise<any> => {
     const root: any = await tempRoot();
     await writePlugin(root, manifest("mismatch", {
-      runtime: { module: "./runtime.ts" },
+      runtime: { module: "./runtime.mjs" },
       operations: ["mismatch.required"]
     }), `
 export async function activatePlugin({ manifest }) {
@@ -633,7 +633,7 @@ export async function activatePlugin({ manifest }) {
     const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("alpha", {
-      runtime: { module: "./runtime.ts" }
+      runtime: { module: "./runtime.mjs" }
     }), `
 const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ manifest, onClose }) {
@@ -642,7 +642,7 @@ export async function activatePlugin({ manifest, onClose }) {
   return { id: manifest.id, mounts: {}, close() { events.push("alpha:close"); } };
 }`);
     await writePlugin(root, manifest("beta", {
-      runtime: { module: "./runtime.ts" }
+      runtime: { module: "./runtime.mjs" }
     }), `
 const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ onClose }) {
@@ -673,7 +673,7 @@ export async function activatePlugin({ onClose }) {
     const eventKey: any = Symbol.for("meshrix.plugin-runtime.test-events");
     globalThis[eventKey] = [];
     await writePlugin(root, manifest("demo", {
-      runtime: { module: "./runtime.ts" }
+      runtime: { module: "./runtime.mjs" }
     }), `
 const events = globalThis[Symbol.for("meshrix.plugin-runtime.test-events")];
 export async function activatePlugin({ manifest, onClose }) {
@@ -705,7 +705,7 @@ export async function activatePlugin({ manifest, onClose }) {
     await fs.mkdir(pluginDataRoot, { recursive: true });
     await fs.symlink(outside, path.join(pluginDataRoot, "demo"));
     await writePlugin(root, manifest("demo", {
-      runtime: { module: "./runtime.ts" }
+      runtime: { module: "./runtime.mjs" }
     }), `
 export async function activatePlugin({ manifest }) {
   throw new Error("activation must not run");
@@ -726,7 +726,7 @@ export async function activatePlugin({ manifest }) {
     await fs.chmod(path.dirname(pluginDataPath), 0o755);
     await fs.chmod(pluginDataPath, 0o755);
     await writePlugin(root, manifest("demo", {
-      runtime: { module: "./runtime.ts" }
+      runtime: { module: "./runtime.mjs" }
     }), `
 export async function activatePlugin({ manifest }) {
   return { id: manifest.id, mounts: {}, close() {} };

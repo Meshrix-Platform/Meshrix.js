@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.io/schemas/plugin-bundle.schema.json",
+  "title": "Meshrix closed plugin bundle manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "pluginId",
+    "version",
+    "label",
+    "entrypoint",
+    "files",
+    "coreCompatibility",
+    "dependencies",
+    "configurationSchema",
+    "permissions",
+    "lifecycleHooks",
+    "payloadDigest",
+    "trust"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "meshrix.plugin-bundle.manifest.v1" },
+    "pluginId": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "version": { "type": "string", "minLength": 1 },
+    "label": { "type": "string", "minLength": 1 },
+    "entrypoint": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*\\.mjs$" },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256", "size"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+          "size": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "coreCompatibility": { "type": "object" },
+    "dependencies": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "configurationSchema": { "type": "object" },
+    "permissions": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "lifecycleHooks": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "payloadDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "trust": {
+      "type": "object",
+      "required": ["algorithm"],
+      "properties": {
+        "algorithm": { "enum": ["configured-digest", "ed25519"] },
+        "publicKeyId": { "type": "string" },
+        "signature": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

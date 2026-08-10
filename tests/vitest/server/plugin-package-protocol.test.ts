@@ -33,7 +33,7 @@ function buildBundle({
     "utf8"
   );
   const contentFiles: any[] = [
-    { path: "runtime.ts", content: runtime },
+    { path: "runtime.mjs", content: runtime },
     ...extraFiles.map((file?: any) : any => ({
       path: file.path,
       content: Buffer.isBuffer(file.content) ? file.content : Buffer.from(String(file.content || ""), "utf8")
@@ -47,7 +47,7 @@ function buildBundle({
     pluginId,
     version: "1.0.0",
     label: pluginId,
-    entrypoint: "runtime.ts",
+    entrypoint: "runtime.mjs",
     files: contentFiles.map((entry?: any) : any => ({
       path: entry.path,
       sha256: sha256Digest(entry.content),
@@ -94,8 +94,8 @@ describe("plugin package protocol", () : any => {
         schemaVersion: PLUGIN_BUNDLE_MANIFEST_SCHEMA,
         pluginId: "Bad_ID",
         version: "1",
-        entrypoint: "runtime.ts",
-        files: [{ path: "runtime.ts", sha256: "sha256:" + "a".repeat(64), size: 1 }],
+        entrypoint: "runtime.mjs",
+        files: [{ path: "runtime.mjs", sha256: "sha256:" + "a".repeat(64), size: 1 }],
         payloadDigest: "sha256:" + "b".repeat(64),
         trust: { algorithm: "configured-digest" }
       }),
@@ -127,7 +127,7 @@ describe("plugin package protocol", () : any => {
     assert.throws(
       () : any => validatePluginPackageArchive({
         bytes: createPluginPackageTarGz([
-          { path: "runtime.ts", content: Buffer.from("export default 1\n") }
+          { path: "runtime.mjs", content: Buffer.from("export default 1\n") }
         ])
       }),
       /manifest file is missing/

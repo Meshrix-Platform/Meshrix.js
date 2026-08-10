@@ -37,9 +37,9 @@ async function writePlugin(repoRoot?: any, id?: any, source?: any, { dependencie
     consoleEntries: [],
     stateMachines: [],
     verifierHooks: [],
-    runtime: { module: "./runtime.ts" }
+    runtime: { module: "./runtime.mjs" }
   }));
-  await fs.writeFile(path.join(directory, "runtime.ts"), source);
+  await fs.writeFile(path.join(directory, "runtime.mjs"), source);
 }
 
 function runtimeSource(id?: any) : any {

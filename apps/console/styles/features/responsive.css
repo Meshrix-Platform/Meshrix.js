@@ -50,7 +50,24 @@
 @media (max-width: 520px) {
   .metric-grid { grid-template-columns: 1fr; }
   .compact-form-grid { grid-template-columns: 1fr; }
-  .topbar { padding: 0 var(--space-3); }
+  .topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "actions status"
+      "heading heading";
+    min-height: auto;
+    max-height: none;
+    height: auto;
+    flex-basis: auto;
+    row-gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+  .topbar-actions { grid-area: actions; }
+  .topbar-heading {
+    grid-area: heading;
+    width: 100%;
+  }
+  .topbar-status { grid-area: status; }
   .view-content { padding: var(--space-3); }
 
   /* Mobile topbar: collapse the service address to its status dot and drop

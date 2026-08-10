@@ -1,0 +1,10 @@
+{
+  "name": "@meshrix/agent-codex-adapter",
+  "version": "0.0.1",
+  "type": "module",
+  "license": "Apache-2.0",
+  "bin": { "meshrix-agent-codex-adapter": "./adapter.mjs" },
+  "files": ["adapter.mjs", "adapter.json", "README.md"],
+  "dependencies": { "@meshrix/client-adapter-kit": "0.0.1" },
+  "engines": { "node": "^22.0.0 || ^24.0.0" }
+}

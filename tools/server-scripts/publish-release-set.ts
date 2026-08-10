@@ -14,6 +14,8 @@ const execFileAsync: any = promisify(execFile);
 const OFFICIAL_NPM_REGISTRY: any = "https://registry.npmjs.org/";
 const GATEWAY_INSTALLER_DIRECTORY: any =
   "packages/protocols/mcp/adapter/gateway-installer";
+const AGENT_PLUGIN_WORKSPACE_PATTERN: any = "plugins/agents/*";
+const AGENT_PLUGIN_WORKSPACE_DIRECTORY: any = "plugins/agents";
 const DEPENDENCY_FIELDS: readonly any[] = Object.freeze([
   "dependencies",
   "devDependencies",
@@ -89,6 +91,72 @@ function normalizeRelativeDirectory(value?: any) : any {
     );
   }
   return normalized;
+}
+
+async function containsPackageManifest(repositoryRoot?: any, directory?: any) : Promise<any> {
+  try {
+    return (await fs.stat(path.join(repositoryRoot, directory, "package.json"))).isFile();
+  } catch (error: any) {
+    if (error?.code === "ENOENT") return false;
+    throw publicationError(
+      "release_set_manifest_invalid",
+      "Every release-set directory must contain a readable package manifest."
+    );
+  }
+}
+
+export async function resolveReleaseWorkspaceDirectories({
+  rootDir = process.cwd(),
+  workspaces
+}: Record<string, any> = {}) : Promise<any> {
+  if (!Array.isArray(workspaces) || workspaces.some((workspace?: any) : any => typeof workspace !== "string")) {
+    throw publicationError(
+      "release_set_workspaces_invalid",
+      "The root package must declare a workspace directory array."
+    );
+  }
+
+  const repositoryRoot: any = path.resolve(rootDir);
+  const directories: any[] = [];
+  for (const workspace of workspaces) {
+    if (workspace !== AGENT_PLUGIN_WORKSPACE_PATTERN) {
+      directories.push(normalizeRelativeDirectory(workspace));
+      continue;
+    }
+
+    let entries: any[];
+    try {
+      entries = await fs.readdir(path.join(repositoryRoot, AGENT_PLUGIN_WORKSPACE_DIRECTORY), {
+        withFileTypes: true
+      });
+    } catch {
+      throw publicationError(
+        "release_set_workspace_path_invalid",
+        "The agent plugin workspace boundary must resolve to repository package directories."
+      );
+    }
+    const matches: any[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const directory: any = `${AGENT_PLUGIN_WORKSPACE_DIRECTORY}/${entry.name}`;
+      if (await containsPackageManifest(repositoryRoot, directory)) matches.push(directory);
+    }
+    if (matches.length === 0) {
+      throw publicationError(
+        "release_set_workspace_path_invalid",
+        "The agent plugin workspace boundary must resolve to repository package directories."
+      );
+    }
+    directories.push(...matches.sort((left?: any, right?: any) : any => left.localeCompare(right)));
+  }
+
+  if (new Set<any>(directories).size !== directories.length) {
+    throw publicationError(
+      "release_set_workspace_duplicate",
+      "Release-set package directories must be unique."
+    );
+  }
+  return directories;
 }
 
 async function readManifest(repositoryRoot?: any, directory?: any, { root = false }: Record<string, any> = {}) : Promise<any> {
@@ -197,15 +265,10 @@ export async function discoverReleaseSet({ rootDir = process.cwd() }: Record<str
   const repositoryRoot: any = path.resolve(rootDir);
   const rootPackage: any = await readManifest(repositoryRoot, ".", { root: true });
   const version: any = normalizeReleaseVersion(rootPackage.manifest.version);
-  const workspaces: any = rootPackage.manifest.workspaces;
-  if (!Array.isArray(workspaces) || workspaces.some((workspace?: any) : any => typeof workspace !== "string")) {
-    throw publicationError(
-      "release_set_workspaces_invalid",
-      "The root package must declare an explicit workspace directory array."
-    );
-  }
-
-  const workspaceDirectories: any = workspaces.map(normalizeRelativeDirectory);
+  const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({
+    rootDir: repositoryRoot,
+    workspaces: rootPackage.manifest.workspaces
+  });
   const candidateDirectories: any[] = [...workspaceDirectories, GATEWAY_INSTALLER_DIRECTORY];
   if (new Set<any>(candidateDirectories).size !== candidateDirectories.length) {
     throw publicationError(

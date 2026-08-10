@@ -593,18 +593,6 @@ async function main() : Promise<any> {
           "meshrix.storage.write",
           "meshrix.uploads.write",
           `upstream:${publishReceipt.serviceId}`
-        ],
-        allowedTools: [
-          "uploads.create_session",
-          "uploads.get_session",
-          "uploads.upload_chunk",
-          "meshrix.gateway.artifacts.get",
-          `upstream.${publishReceipt.serviceId}.${IMMEDIATE_OPERATION_KEY}`,
-          `upstream.${publishReceipt.serviceId}.${APPROVAL_OPERATION_KEY}`
-        ],
-        capabilityIds: [
-          `cap:upstream:${publishReceipt.serviceId}:${IMMEDIATE_OPERATION_KEY}`,
-          `cap:upstream:${publishReceipt.serviceId}:${APPROVAL_OPERATION_KEY}`
         ]
       });
       addNeedle(provisionedApiKey.apiKey);
@@ -702,10 +690,7 @@ async function main() : Promise<any> {
         organizationNodeId: "organization:secondary",
         workloadName: "Release journey sibling isolation probe",
         toolsetIds: ["meshrix.uploads.write"],
-        capabilityIds: [],
-        permissionScopeIds: ["uploads:write"],
-        maxUses: 4,
-        requestsPerWindow: 4
+        requestsPerMinute: 4
       });
       addNeedle(siblingProvisioned.apiKey);
       if (

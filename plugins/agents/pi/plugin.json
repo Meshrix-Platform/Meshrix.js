@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "v0.0.1:schema:meshrix-plugin-manifest-1",
+  "kind": "meshrix.plugin.manifest",
+  "id": "agent-pi",
+  "name": "Pi Agent Adapter",
+  "status": "stable",
+  "types": ["client-peer-plugin"],
+  "summary": "Official Pi extension package for the governed Meshrix MCP connector.",
+  "group": "agents",
+  "integration": {
+    "sourceBoundary": "Repository-local optional adapter using only the public Meshrix MCP connector boundary.",
+    "meshrixBoundaries": ["signed MCP connector stdio proxy", "target-scoped process identity"],
+    "operations": [],
+    "toolsets": [],
+    "mountNames": [],
+    "coveredCapabilities": ["Pi MCP tool discovery and invocation"]
+  },
+  "security": {
+    "secrets": [],
+    "risk": "mixed",
+    "notes": [
+      "The plugin configuration contains connector metadata only.",
+      "Credentials remain in the Core-managed operating-system credential store.",
+      "The plugin never accepts raw tokens in configuration or process arguments."
+    ]
+  },
+  "artifacts": {
+    "externalServiceConfigs": [],
+    "capabilityPackages": [],
+    "docs": ["README.md"],
+    "clientAdapter": "adapter.json"
+  }
+}

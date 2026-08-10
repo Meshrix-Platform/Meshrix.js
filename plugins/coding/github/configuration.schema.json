@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.io/schemas/plugins/coding-github/configuration.schema.json",
+  "type": "object",
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "modules": {
+      "type": "object",
+      "properties": {
+        "rest": { "const": true },
+        "mcp": { "const": true },
+        "codespaces": { "const": true },
+        "skillInstaller": { "const": true }
+      },
+      "required": ["rest", "mcp", "codespaces", "skillInstaller"],
+      "additionalProperties": false
+    },
+    "services": {
+      "type": "object",
+      "properties": {
+        "rest": { "$ref": "#/$defs/serviceBinding" },
+        "mcp": { "$ref": "#/$defs/serviceBinding" }
+      },
+      "required": ["rest", "mcp"],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "enabled": { "const": true } },
+        "required": ["enabled"]
+      },
+      "then": { "required": ["modules", "services"] },
+      "else": {
+        "allOf": [
+          { "not": { "required": ["modules"] } },
+          { "not": { "required": ["services"] } }
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "serviceBinding": {
+      "type": "object",
+      "properties": {
+        "serviceRef": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{2,127}$"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 120000
+        }
+      },
+      "required": ["serviceRef", "timeoutMs"],
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

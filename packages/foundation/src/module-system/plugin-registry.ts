@@ -8,8 +8,8 @@ const PLUGIN_ID_PATTERN: any = /^[a-z][a-z0-9-]*$/u;
 const DEPLOYMENT_PROFILE_ID_PATTERN: any = /^[a-z][a-z0-9._-]*$/u;
 const CLAIM_ID_PATTERN: any = /^[a-z][a-zA-Z0-9._-]*$/u;
 const MCP_TOOL_ID_PATTERN: any = CLAIM_ID_PATTERN;
-const RUNTIME_MODULE_PATTERN: any = /^\.\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.ts$/u;
-const VERIFIER_SOURCE_PATTERN: any = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*\.ts$/u;
+const RUNTIME_MODULE_PATTERN: any = /^\.\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.mjs$/u;
+const VERIFIER_SOURCE_PATTERN: any = /^[a-zA-Z0-9][a-zA-Z0-9._/-]*\.mjs$/u;
 const VERIFIER_WORKLOAD_PATTERN: any = /^plugin_verifier\.[a-z][a-z0-9._-]*$/u;
 const TOP_LEVEL_FIELDS: any = new Set<any>([
   "schemaVersion",
@@ -143,7 +143,7 @@ function normalizeVerifierHook(hook?: any, index?: any) : any {
     source.includes("\\") ||
     source.split("/").some((segment?: any) : any => segment === ".." || segment === "")
   ) {
-    throw new Error(`Plugin verifier hook ${index} source must be a normalized artifact-relative verifiers/*.ts path.`);
+    throw new Error(`Plugin verifier hook ${index} source must be a normalized artifact-relative verifiers/*.mjs path.`);
   }
   return Object.freeze({
     id: normalizeClaimId(hook.id, `plugin verifier hook ${index} id`),
@@ -167,7 +167,7 @@ function normalizeRuntime(value?: any) : any {
     module.split("/").includes("..") ||
     normalizedModule !== module
   ) {
-    throw new Error("Plugin runtime module must be a normalized relative .ts path inside the plugin directory.");
+    throw new Error("Plugin runtime module must be a normalized relative .mjs path inside the plugin directory.");
   }
   return Object.freeze({ module });
 }

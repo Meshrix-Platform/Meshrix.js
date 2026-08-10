@@ -116,8 +116,7 @@ const LAUNCHER_CATALOG: any = new Map<any, any>([
   ]),
   ...[
     "packages/protocols/mcp/adapter/gateway-installer/lib/cli/constants.ts",
-    "packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.ts",
-    "packages/protocols/mcp/adapter/gateway-installer/lib/process-identity-store.ts"
+    "packages/protocols/mcp/adapter/gateway-installer/lib/cli/connector-process.ts"
   ].map((sourcePath?: any) : any => [
     sourcePath,
     Object.freeze({

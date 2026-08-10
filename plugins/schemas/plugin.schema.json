@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.io/schemas/plugin.schema.json",
+  "title": "Meshrix external plugin manifest",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "name",
+    "status",
+    "types",
+    "summary",
+    "group",
+    "integration",
+    "security",
+    "artifacts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "v0.0.1:schema:meshrix-plugin-manifest-1"
+    },
+    "kind": {
+      "const": "meshrix.plugin.manifest"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^(service|coding|document|datastore|agent)-[a-z0-9][a-z0-9-]*$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "planned",
+        "experimental",
+        "stable"
+      ]
+    },
+    "types": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "external-service",
+          "mount",
+          "capability-package",
+          "reference-service",
+          "client-peer-plugin"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "summary": {
+      "type": "string"
+    },
+    "group": {
+      "type": "string"
+    },
+    "integration": {
+      "type": "object",
+      "required": [
+        "sourceBoundary",
+        "meshrixBoundaries"
+      ],
+      "properties": {
+        "sourceBoundary": {
+          "type": "string"
+        },
+        "meshrixBoundaries": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "toolsets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mountNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": [
+        "secrets",
+        "risk"
+      ],
+      "properties": {
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "risk": {
+          "enum": [
+            "read_only",
+            "safe_write",
+            "repair_write",
+            "destructive",
+            "mixed"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "properties": {
+        "externalServiceConfigs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mountModules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "capabilityPackages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "docs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

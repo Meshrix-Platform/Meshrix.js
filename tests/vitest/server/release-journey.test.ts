@@ -128,20 +128,20 @@ describe("release-journey upload checkpoint identity", () : any => {
 });
 
 describe("release-journey native upload", () : any => {
-  it("uses an upload session and raw octet-stream bytes without Base64", async () : Promise<any> => {
+  it("uses a strict API key upload session and raw octet-stream bytes without Base64", async () : Promise<any> => {
     const fixtureBytes: any = Buffer.from("native upload fixture", "utf8");
     const calls: any[] = [];
     const protectedValues: any[] = [];
+    const apiKey: any = `mxak1.${"a".repeat(22)}.${"b".repeat(43)}`;
     const result: any = await uploadBinaryFixtureThroughConnector({
       baseUrl: "http://127.0.0.1:8080",
       fixtureBytes,
       fixtureFileName: "fixture.txt",
       addNeedle: (value?: any) : any => protectedValues.push(value),
       resolveCredentials: async () : Promise<any> => ({
-        token: "synthetic-token",
+        token: apiKey,
         identity: null
       }),
-      buildIdentityHeaders: () : any => ({ "x-meshrix-signature": "synthetic-signature" }),
       fetchImpl: async (url?: any, options?: any) : Promise<any> => {
         calls.push({ url: String(url), options });
         if (new URL(url).pathname === "/api/upload-sessions") {
@@ -169,8 +169,9 @@ describe("release-journey native upload", () : any => {
     expect(result.reference).toBe("upload:upload_session_synthetic:0");
     expect(result.receipt.base64Encoded).toBe(false);
     expect(result.receipt.contentEncoding).toBe("identity");
-    expect(result.receipt.processIdentityBound).toBe(true);
-    expect(protectedValues).toEqual(["synthetic-token", "upload_session_synthetic"]);
+    expect(result.receipt.processIdentityBound).toBe(false);
+    expect(result.receipt.workloadIdentityBound).toBe(true);
+    expect(protectedValues).toEqual([apiKey, "upload_session_synthetic"]);
   });
 
   it("uses a scoped API key without fabricating process identity headers", async () : Promise<any> => {
@@ -221,7 +222,7 @@ describe("release-journey API key upload owner", () : any => {
       ), "utf8")
     );
     expect(source).toContain('organizationNodeId: "organization:secondary"');
-    expect(source).toContain('allowedTools: ["uploads.get_session"]');
+    expect(source).toContain('toolsetIds: ["meshrix.uploads.write"]');
     expect(source).toContain("siblingProvisioned.apiKey");
     expect(source).toContain("siblingOrganizationCredential");
     expect(source).toContain("installMatrixTargetWithApiKey");

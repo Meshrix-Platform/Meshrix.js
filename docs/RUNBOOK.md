@@ -180,6 +180,29 @@ Default local server URL:
 http://127.0.0.1:7228
 ```
 
+### Local instance reuse
+
+Before starting an ordinary local server, resolve the effective default data
+directory and inspect the default backend and frontend ports.
+
+- Reuse the default data directory when it already contains Meshrix.js runtime
+  state. Do not replace it with an isolated or temporary data directory.
+- Reuse a healthy server and console that already belong to the same local
+  instance. Do not start a duplicate process pair.
+- When the data directory exists but no service is running, start exactly one
+  server against that directory and one console against that server.
+- When a default port is occupied by an unrelated or unidentified process,
+  stop and report the conflict. Do not silently select another port or create
+  another data directory.
+- Use an isolated data directory only when the operator explicitly requests
+  one or when a repository-owned test or verifier requires isolation and owns
+  its cleanup.
+
+Run authentication and operational utilities against the same effective data
+directory as the server. A successful command against a different data
+directory updates another local instance and does not change the running
+server.
+
 Non-development server startup:
 
 ```bash

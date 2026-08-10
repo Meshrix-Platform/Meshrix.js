@@ -167,7 +167,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
     }
   });
 
-  it("generates one self-contained Core plan without detachable repair prerequisites", async () : Promise<any> => {
+  it("generates only the five current candidate plans without inherited evidence", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plan-baseline-"));
     try {
       await fs.writeFile(path.join(root, "README.md"), "synthetic candidate\n");
@@ -195,13 +195,8 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(manifest.map((entry?: any) : any => entry.directory)).toEqual([
         "end-to-end-release",
         "end-to-end-release/enterprise-single-node",
+        "end-to-end-release/plugin-console-isolation",
         "end-to-end-release/cross-system-offline-transfer",
-        "end-to-end-release/native-linux-x64",
-        "end-to-end-release/native-linux-arm64",
-        "end-to-end-release/native-macos-arm64",
-        "end-to-end-release/native-windows-x64",
-        "end-to-end-release/public-cloud-single-node",
-        "end-to-end-release/clean-host-recovery",
         "end-to-end-release/functional-release-acceptance",
       ]);
       for (const entry of manifest) {
@@ -219,33 +214,73 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(dependencyMap.plans.map((entry?: any) : any => entry.directory)).toEqual([
         "end-to-end-release",
         "end-to-end-release/enterprise-single-node",
+        "end-to-end-release/plugin-console-isolation",
         "end-to-end-release/cross-system-offline-transfer",
         "end-to-end-release/functional-release-acceptance",
       ]);
       expect(dependencyMap.plans[1].prerequisite_receipts).toEqual([]);
+      expect(dependencyMap.plans.every((entry?: any) : any =>
+        Object.keys(entry.accepted_final_receipts).length === 0)).toBe(true);
       expect(dependencyMap.plans.at(-1).prerequisite_receipts.map((receipt?: any) : any => receipt.plan))
         .toEqual([
           "end-to-end-release/enterprise-single-node",
+          "end-to-end-release/plugin-console-isolation",
           "end-to-end-release/cross-system-offline-transfer",
         ]);
-      expect(JSON.stringify(dependencyMap)).not.toContain("repair");
+      expect(JSON.stringify({ manifest, dependencyMap })).not.toMatch(
+        /native-linux|native-macos|native-windows|public-cloud|clean-host|organization-governance|api-key-only|console-ux/u,
+      );
 
       const delivery: any = JSON.parse(await fs.readFile(
         path.join(planRoot, "end-to-end-release/enterprise-single-node/Checkpoints.json"),
         "utf8",
       ));
-      const security: any = delivery.find((node?: any) : any =>
-        node.requirements.includes("REQ-ENT-E2"));
-      expect(security.regression.commands).toContain(
-        "node tools/server-scripts/verify-trusted-forwarding-invariants.ts",
+      expect(delivery.every((node?: any) : any => node.status === "pending")).toBe(true);
+      const governedJourney: any = delivery.find((node?: any) : any =>
+        node.role === "implementation" && node.requirements.includes("REQ-ENT-GOVERNED-JOURNEY"));
+      expect(governedJourney.regression.commands).toContain(
+        "npm run verify:release-journey",
       );
+      const pluginIsolation: any = JSON.parse(await fs.readFile(
+        path.join(planRoot, "end-to-end-release/plugin-console-isolation/Checkpoints.json"),
+        "utf8",
+      ));
+      expect(pluginIsolation.some((node?: any) : any =>
+        node.requirements.includes("REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING"))).toBe(true);
+      expect(JSON.stringify(pluginIsolation)).toContain("sandbox=allow-scripts only");
+      expect(JSON.stringify(pluginIsolation)).toContain("No same-origin plugin import path remains");
       const currentPlan: any = await fs.readFile(
         path.join(planRoot, "end-to-end-release/CurrentPlan.md"),
         "utf8",
       );
       expect(currentPlan).toContain(
-        "Authenticated forward-server delegation and concrete third-party adapter support.",
+        "Native hosts, client platforms, public cloud, and independent recovery environments remain downstream support workflows.",
       );
+      const futureGoals: any = await fs.readFile(path.join(planRoot, "FutureGoals.md"), "utf8");
+      expect(futureGoals).not.toContain("plugin Console isolation");
+
+      const secondPlanRoot: any = path.join(root, "generated-plan-copy");
+      const regenerated: any = run(
+        process.execPath,
+        [BASELINE_SCRIPT, root, "--output-root", secondPlanRoot],
+        REPO_ROOT,
+      );
+      expect(regenerated.status, regenerated.stderr).toBe(0);
+      const generatedFiles: any[] = [
+        "Capabilities.json",
+        "FutureGoals.md",
+        "Manifest.json",
+        ...manifest.flatMap((entry?: any) : any => [
+          entry.checkpoints,
+          ...entry.source_files.map((sourceFile?: any) : any =>
+            sourceFile.replace(/^docs\/plans\//u, "")),
+        ]),
+      ];
+      for (const relativePath of [...new Set(generatedFiles)]) {
+        expect(await fs.readFile(path.join(secondPlanRoot, relativePath))).toEqual(
+          await fs.readFile(path.join(planRoot, relativePath)),
+        );
+      }
 
       const repeated: any = run(process.execPath, [BASELINE_SCRIPT, root], REPO_ROOT);
       expect(repeated.status).not.toBe(0);

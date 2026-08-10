@@ -42,29 +42,28 @@ const msg = computed(() => consoleMessages[currentConsoleLocale.value]);
 // template: {{ msg.nav.dashboard }}
 ```
 
-New plan entries follow the same shape inside the Node's assigned top-level group (table below).
+New copy follows the same shape inside its owning top-level group.
 
 ## Namespace table (shared-dictionary merge rule)
 
-`console-messages.ts` is one shared file edited by up to 13 copy-bearing plan Nodes in parallel.
-Each Node owns exactly one new top-level group and inserts it in alphabetical order among
-plan-added groups within each locale block, so parallel appends merge cleanly. This table is
-identical to `docs/plans/console-ux-closure/Architecture.md` §5 H3:
+`console-messages.ts` is one shared file. Each copy-bearing feature owns one
+top-level group and inserts it alphabetically in both locale blocks, which
+keeps independently developed copy easy to merge. This document is the durable
+namespace authority:
 
-| Node | Group | Node | Group |
-| --- | --- | --- | --- |
-| N5 | `toast` | N13 | `publishList` |
-| N6 | `skeleton` | N14 | `publishForm` |
-| N7 | `formField` | N15 | `publishDraft` |
-| N9 | `overlay` | N16 | `publishOutcome` |
-| N10 | `destructive` | N17 | `journey` |
-| N11 | `governedConfirm` | N18 | `readiness` |
-| N12 | `secretReveal` | | |
+| Group | Group | Group |
+| --- | --- | --- |
+| `destructive` | `formField` | `governedConfirm` |
+| `journey` | `overlay` | `publishDraft` |
+| `publishForm` | `publishList` | `publishOutcome` |
+| `readiness` | `secretReveal` | `skeleton` |
+| `toast` | | |
 
-## Mechanisms in this directory (legacy for this plan's purposes)
+## Mechanisms in this directory
 
-Only mechanism 1 accepts new copy. Converting existing views off the other four is a separate
-effort and out of scope for this plan — do not migrate existing strings.
+Only mechanism 1 accepts new copy. Converting existing views off the other four
+requires its own independently accepted migration; do not mix it into ordinary
+copy changes.
 
 1. `console-messages.ts` — the keyed dictionary, canonical for new copy. Re-exported from
    `console.ts` together with `currentConsoleLocale` and the `ConsoleMessageKey` type.

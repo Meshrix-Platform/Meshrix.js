@@ -845,6 +845,55 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "plugins/*/plugin.json"
     ], outputs: ["build/reports/plugin-bundle-protocol.json", "build/reports/plugin-runtime.json"],
   },
+  "verify:local-services": {
+    scriptName: "verify:local-services", command: "npm run verify:local-services", category: "verifier", subsystem: "services",
+    owner: "platform", tier: "unit", sideEffects: "none",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: [
+      "tools/plugins/verify-local-services.mjs",
+      "services/file-parser/format-convert/**"
+    ], outputs: [],
+  },
+  "verify:local-runtime-plugins": {
+    scriptName: "verify:local-runtime-plugins", command: "npm run verify:local-runtime-plugins", category: "verifier", subsystem: "module-system",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: [
+      "tools/plugins/verify-local-runtime-plugins.mjs",
+      "tools/plugins/**",
+      "plugins/shared-space/**",
+      "plugins/skill-hub/**",
+      "plugins/coding/github/**",
+      "plugins/registry/plugins.json",
+      "packages/contracts/src/plugins/**",
+      "packages/foundation/src/module-system/**",
+      "tests/plugins/**"
+    ], outputs: ["build/plugins/**"],
+  },
+  "verify:local-client-adapters": {
+    scriptName: "verify:local-client-adapters", command: "npm run verify:local-client-adapters", category: "verifier", subsystem: "module-system",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
+    inputs: [
+      "tools/plugins/verify-local-client-adapters.mjs",
+      "tools/plugins/**",
+      "plugins/agents/**",
+      "tests/plugins/**"
+    ], outputs: ["build/client-adapters/**"],
+  },
+  "verify:local-extension-package-closure": {
+    scriptName: "verify:local-extension-package-closure", command: "npm run verify:local-extension-package-closure", category: "verifier", subsystem: "module-system",
+    owner: "platform", tier: "release", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "standard",
+    inputs: [
+      "tools/plugins/verify-local-extension-package-closure.mjs",
+      "services/**",
+      "plugins/**",
+      "tests/plugins/**",
+      "package.json",
+      "THIRD_PARTY_NOTICES.md"
+    ], outputs: [],
+  },
   "server:verify:architecture-graph": {
     scriptName: "server:verify:architecture-graph", command: "npm run server:verify:architecture-graph", category: "verifier", subsystem: "tests",
     owner: "platform", tier: "hygiene", sideEffects: "build-output",

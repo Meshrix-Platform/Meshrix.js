@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "v0.0.1:schema:meshrix-plugin-manifest-1",
+  "kind": "meshrix.plugin.manifest",
+  "id": "agent-antigravity",
+  "name": "Antigravity Agent Adapter",
+  "status": "stable",
+  "types": [
+    "client-peer-plugin"
+  ],
+  "summary": "Antigravity peer adapter plugin.",
+  "group": "agents",
+  "integration": {
+    "sourceBoundary": "Repository-local optional adapter using only public Meshrix extension boundaries.",
+    "meshrixBoundaries": [
+      "target agent peer plugin configuration"
+    ],
+    "operations": [],
+    "toolsets": [],
+    "mountNames": [],
+    "coveredCapabilities": ["Antigravity MCP configuration, discovery, verification, and removal"]
+  },
+  "security": {
+    "secrets": [],
+    "risk": "mixed",
+    "notes": [
+      "Use secretRef for provider credentials.",
+      "Expose agent-facing calls through Operation Permission v1 after policy review.",
+      "Do not commit provider runtime data or local operator paths."
+    ]
+  },
+  "artifacts": {
+    "externalServiceConfigs": [],
+    "capabilityPackages": [],
+    "docs": ["README.md"],
+    "clientAdapter": "adapter.json"
+  }
+}

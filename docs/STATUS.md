@@ -1,50 +1,43 @@
 # Meshrix.js Status
 
-Status assessed on 2026-07-28.
+Status assessed on 2026-08-09.
 
-This document is the authority for current Meshrix.js status claims. It separates
-intent, implementation, verification, release, and support. A command,
-workflow, source file, changelog entry, or release definition is not by itself
-evidence that another dimension has been satisfied.
+This document owns current product status claims. It separates intent,
+implementation, verification, release, and support: source, a command, a
+workflow definition, a prior report, or a changelog entry cannot satisfy a
+different dimension by itself.
 
 ## Product-wide status
 
 | Dimension | Current status |
 | --- | --- |
-| **Intent** | Approved direction: a full, private-deployable governance platform. The next product closure is one independently acceptable enterprise single-node candidate. |
-| **Implementation** | The repository contains the server, Web Console, protocol gateways, Operation Permission, workspace, storage, plugin Host boundaries, agent gateway, jobs, and operations surfaces described by their owning technical documents. The current source remains a mutable pre-release candidate and is not represented here as a closed release. |
-| **Verification** | Focused verifiers and the Functional Release Gate exist. This status document does not assert a current immutable candidate with a complete passing functional receipt. Individual checks, prior reports, and development-host simulations cannot be combined across candidates. |
-| **Release** | The repository declares a `0.0.1` release target and contains a changelog entry. No source tag, npm package set, container manifest, GitHub Release, or other publication channel is claimed by this document without immutable channel evidence for the same accepted candidate. |
-| **Support** | No operating-system, architecture, connector, deployment, or hosted-service support claim is made at product level. A support claim requires the exact accepted candidate and the named environment workflow defined in [Compatibility](COMPATIBILITY.md). |
+| **Intent** | The only current closure is one enterprise single-node functional candidate, delivered through three mandatory workstreams and one functional acceptance gate. |
+| **Implementation** | Server, Web Console, protocol gateways, Operation Permission, workspace, storage, jobs, plugin Host, agent gateway, and operations surfaces exist. The source remains a mutable pre-release candidate. |
+| **Verification** | Focused verifiers and release reducers exist, but this document does not assert a current immutable candidate with all three mandatory final receipts. Historical reports and receipts are not current evidence. |
+| **Release** | `0.0.1` is a declared target. No tag, npm package set, OCI manifest, GitHub Release, or hosted deployment is claimed without immutable same-candidate channel evidence. |
+| **Support** | No operating system, architecture, client, connector, cloud, cross-host, or recovery environment is currently supported by product-level claim. Functional acceptance does not create an environment support claim. |
 
 Meshrix.js is therefore **pre-release**. It must not be described as
 release-ready, production-ready, published, or supported without naming the
-dimension, candidate, evidence, channel, and environment.
+candidate, evidence, channel, configuration, and environment.
 
-## Capability status
+## Current candidate boundary
 
-| Capability | Intent | Implementation | Verification | Release or support |
-| --- | --- | --- | --- | --- |
-| Enterprise single-node private deployment | Current closure | Candidate source and deployment assets exist | Complete same-candidate closure not asserted | Not claimed |
-| First governed MCP-to-upstream call | Required minimum user journey | Governing server, MCP, permission, gateway, and receipt surfaces exist | Must pass as one same-candidate positive and negative journey | Not a separate release claim |
-| Local diagnostics and bounded observability | Required for the single-node closure | Health, diagnostic, metric, audit, and report surfaces exist | Complete operator diagnosis journey not asserted | No environment claim |
-| Independent backup and clean-root restore | Required for the single-node closure | Backup, restore, integrity, and recovery mechanisms exist | Complete same-candidate clean-root closure not asserted | No recovery support claim |
-| N-1 upgrade and rollback | Required after recovery closure | Candidate orchestration and focused verifier surfaces exist | Two distinct immutable images, schema transition, failure rollback, and reopen closure not asserted | No upgrade support claim |
-| Offline dual-architecture delivery | Later release work | Source and container assembly surfaces exist | Complete disconnected artifact closure not asserted | No Linux architecture support claim |
-| External identity, telemetry, notification, datastore, and provider integrations | Optional extension intent | Varies by independently owned integration | Each enabled integration needs its own evidence | Cannot promote or block Meshrix.js release |
-| Meshrix.js hosted service | Separate hosted-service concern | Not established by this repository | No operation evidence asserted | No operation claim |
+| Capability | Current fact | Remaining candidate evidence | Claim boundary |
+| --- | --- | --- | --- |
+| Enterprise single-node delivery | Candidate source and deployment surfaces exist | Same-candidate governed journey, diagnostics, administration and keys, clean-root restore, N-1 rollback, and named capacity envelopes | Functional candidate only |
+| Plugin runtime and package loading | Signed or digest-bound packages, lifecycle, contribution projection, and focused verification exist; server plugin modules are trusted in-process deployment code | Register the runtime verifier in unified verification | Provenance is not isolation |
+| Plugin Console contributions | The current Host loads verified Console code by trusted same-origin dynamic `import()` | Migrate to the closed contribution contract, opaque-origin iframe, bounded revocable MessageChannel bridge, and browser escape evidence; delete the old importer | Until that migration closes, third-party browser-code isolation is **not implemented or claimed** |
+| Cross-system offline delivery | Source and container assembly surfaces exist | Candidate-bound Linux amd64 and arm64 bundle, inventory, SBOM, signatures, disconnected import, startup, first governed call, shutdown, and cleanup | Required functional artifact; no native Linux support claim |
+| Functional acceptance | Gate and receipt authorities exist | Exact current final receipts from enterprise delivery, plugin isolation, and offline transfer; one gate execution | No publication or environment claim |
+| Optional identity, telemetry, notification, datastore, and provider integrations | Varies by independently owned integration | Each enabled integration needs its own evidence | Cannot promote or block the current candidate |
+| Hosted Meshrix.js service | Not established by this repository | Separate operating evidence | No hosted-service claim |
 
-## Next acceptance order
+Resource and capacity boundaries are part of the first candidate, but results
+apply only to the named configuration, workload, saturation point, and recovery
+behavior. Synthetic throughput is not a general production guarantee.
 
-1. Freeze one auditable single-node candidate and its exact scope.
-2. Prove the first governed call and its denial, replay, and uncertain-outcome
-   boundaries on that candidate.
-3. Prove an operator can diagnose startup, readiness, upstream, storage, and
-   resource failures using bounded, privacy-safe output.
-4. Prove independent backup and clean-root restore.
-5. Prove N-1 upgrade, failure rollback, and healthy retry.
-6. Run the Functional Release Gate once for the immutable candidate.
-
-The prioritized gaps are maintained in [What's Next](WHATS-NEXT.md). Local
-execution detail remains in ignored `docs/plans/` material and is never a
-public completion claim.
+The current priority summary is [What's Next](WHATS-NEXT.md). Compatibility and
+support evidence rules are in [Compatibility](COMPATIBILITY.md). Execution
+state remains in ignored `docs/plans/` material and is never a public
+completion claim.

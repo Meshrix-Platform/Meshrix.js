@@ -9,6 +9,9 @@ implementation, verification, release, and support result.
 - A source path or configured target is an implementation fact, not support.
 - A passing focused check is verification for its exact scope, not a release.
 - A Functional Release Gate receipt applies only to its immutable candidate.
+- Functional candidate acceptance, including Linux amd64 and arm64 offline
+  artifacts, does not automatically establish Linux real-machine, cloud,
+  macOS, Windows, connector, cross-host, or recovery-environment support.
 - A source tag, npm package, container manifest, GitHub Release, and hosted
   deployment are separate release or operation facts.
 - Environment support requires the same accepted candidate to pass the named
@@ -25,6 +28,7 @@ implementation, verification, release, and support result.
 | Node.js runtime | Version range declared by `package.json` | Implemented target; no operating-system support claim is asserted here. |
 | Local source startup | Repository npm scripts and local server entry point | Development path; not a release or production-support claim. |
 | Server and Web Console container | Linux amd64 and arm64 OCI artifacts | Assembly and functional-verification target; native environment support remains unclaimed until its exact workflow passes. |
+| Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Target contract only. Current verified Console code still executes as trusted same-origin code; third-party browser isolation is unclaimed until migration and browser escape verification pass. |
 | npm release set | Manifests named by the release definition | Publication target only; package publication must be proved independently for the immutable accepted candidate. |
 | MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact requires its own publication and environment receipt. |
 | Storage | Self-contained local storage by default; optional integrations only when explicitly configured | Local implementation target; an optional datastore has a separate compatibility claim. |
@@ -37,10 +41,11 @@ implementation, verification, release, and support result.
 | Surface | Owner and boundary | Current claim |
 | --- | --- | --- |
 | HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocols | Meshrix.js protocol and technical documents | Implemented scope is defined only by the owning documents and schemas. |
+| Plugin browser code | Planned opaque-origin iframe with a bounded Host bridge | Current same-origin loading is trusted deployment code, not a hostile-code sandbox or compatibility guarantee for legacy plugin entries. |
 | Upstream service publishing | Meshrix.js server gateway and Operation Permission | Server-side functional target; compatible external-service adoption is independently owned. |
 | Downstream client protocol | Meshrix.js generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix.js release dependency. |
-| Client-specific adapters | Explicit operator-supplied artifacts | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
-| Optional parsers, providers, datastores, and service adapters | Owning plugin or service repository | Disabled or absent by default; each enabled path needs its own contract and evidence. |
+| Client-specific adapters | Repository-local packages selected explicitly by an operator | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
+| Optional parsers, providers, datastores, and service adapters | Repository-local `services/` or `plugins/` implementation when present | Disabled or absent by default; each enabled path needs its own contract and evidence. |
 | Pactium | Exact dependency `pactium@0.7.0` and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities; it does not establish Meshrix.js release or environment support. |
 
 ## Pactium host-helper deprecation

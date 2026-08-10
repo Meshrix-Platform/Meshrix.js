@@ -35,9 +35,9 @@ async function writePlugin(root?: any, source?: any) : Promise<any> {
     consoleEntries: [],
     stateMachines: [],
     verifierHooks: [],
-    runtime: { module: "./runtime.ts" }
+    runtime: { module: "./runtime.mjs" }
   }), "utf8");
-  await fs.writeFile(path.join(directory, "runtime.ts"), source, "utf8");
+  await fs.writeFile(path.join(directory, "runtime.mjs"), source, "utf8");
 }
 
 async function createManager(root?: any, runtime: Record<string, any> = {}) : Promise<any> {

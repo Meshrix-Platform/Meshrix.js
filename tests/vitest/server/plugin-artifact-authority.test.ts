@@ -26,7 +26,7 @@ function canonicalJson(value?: any) : any {
 async function fixture({
   pluginId = "sample-plugin",
   version = "1.0.0",
-  runtimeModule = "./runtime.ts",
+  runtimeModule = "./runtime.mjs",
   faultInjector = null
 }: Record<string, any> = {}) : Promise<any> {
   const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "plugin-artifact-authority-"));
@@ -183,7 +183,7 @@ describe("canonical PluginArtifactAuthority", () : any => {
   it("loads the runtime path declared by the manifest and exposes only verified contained files", async () : Promise<any> => {
     const context: any = await fixture({
       pluginId: "nested-runtime",
-      runtimeModule: "./dist/runtime.ts"
+      runtimeModule: "./dist/runtime.mjs"
     });
     const published: any = await context.port.publish({
       sourceRoot: context.sourceRoot,
@@ -217,13 +217,13 @@ describe("canonical PluginArtifactAuthority", () : any => {
     await expect(context.port.remove({ expectedArtifactDigest: first.artifactDigest, expectedGeneration: 2 }))
       .rejects.toMatchObject({ code: "PLUGIN_ARTIFACT_REMOVAL_MISMATCH" });
     const snapshot: any = await context.port.loadSnapshot();
-    const runtimePath: any = path.join(context.artifactRoot, "installed", "sample-plugin", String(snapshot.generation), "content", "runtime.ts");
+    const runtimePath: any = path.join(context.artifactRoot, "installed", "sample-plugin", String(snapshot.generation), "content", "runtime.mjs");
     await fs.chmod(runtimePath, 0o600);
     await fs.appendFile(runtimePath, "\n// tampered");
     await expect(context.port.loadSnapshot()).rejects.toMatchObject({ code: "PLUGIN_ARTIFACT_TAMPERED" });
 
     const symlinkFixture: any = await fixture({ pluginId: "symlink-plugin" });
-    await fs.symlink(path.join(symlinkFixture.sourceRoot, "runtime.ts"), path.join(symlinkFixture.sourceRoot, "linked.ts"));
+    await fs.symlink(path.join(symlinkFixture.sourceRoot, "runtime.mjs"), path.join(symlinkFixture.sourceRoot, "linked.ts"));
     await expect(symlinkFixture.port.publish({ sourceRoot: symlinkFixture.sourceRoot, version: "1.0.0", generation: 1, dependencyClosure: [] }))
       .rejects.toMatchObject({ code: "PLUGIN_ARTIFACT_SYMLINK_DENIED" });
   });

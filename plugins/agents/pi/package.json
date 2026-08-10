@@ -1,0 +1,21 @@
+{
+  "name": "@meshrix/agent-pi-adapter",
+  "version": "0.0.1",
+  "description": "Official Meshrix client adapter and MCP extension package for Pi.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "keywords": ["pi-package", "pi-extension", "meshrix", "mcp"],
+  "bin": { "meshrix-agent-pi-adapter": "./adapter.mjs" },
+  "files": ["adapter.mjs", "adapter.json", "extension.mjs", "README.md"],
+  "pi": {
+    "extensions": ["./extension.mjs"]
+  },
+  "dependencies": {
+    "@meshrix/client-adapter-kit": "0.0.1",
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "typebox": "1.3.6"
+  },
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  }
+}

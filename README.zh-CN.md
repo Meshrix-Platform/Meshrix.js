@@ -8,7 +8,7 @@
 [![Node.js ^22 || ^24](https://img.shields.io/badge/node-%5E22.0.0%20%7C%7C%20%5E24.0.0-4fc3f7?style=flat-square)](package.json)
 [![Status: pre-release](https://img.shields.io/badge/status-pre--release-a78bfa?style=flat-square)](CHANGELOG.md)
 
-[概览](#概览) · [当前状态](docs/STATUS.md) · [十大优先问题](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
+[概览](#概览) · [当前状态](docs/STATUS.md) · [产品路线](docs/WHATS-NEXT.md) · [快速开始](#快速开始) · [架构](#架构) · [文档](docs/README.md) · [运维手册](docs/RUNBOOK.md) · **[English](README.md)**
 
 </div>
 
@@ -19,8 +19,8 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > 统一定义。
 
-> **当前优先级：** Meshrix.js 最有价值的十个未闭环问题按优先级维护在
-> [What's Next](docs/WHATS-NEXT.md)。开始规划、实现或评审项目工作前，请先查看该清单。
+> **当前目标：** Meshrix.js 正通过四条必需工作流闭环一个企业单节点功能候选，详见
+> [What's Next](docs/WHATS-NEXT.md)。开始规划、实现或评审项目工作前，请先查看该文档。
 
 ---
 
@@ -120,8 +120,10 @@ npm run mcp:doctor
 ## 下游智能体客户端
 
 智能体客户端通过 MCP discovery 与受治理的 gateway 调用接入；operation 可见性
-由 grant 控制。适配器必须由运维方显式提供，运行时不会从其它源码仓库发现或加载
-实现。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与[协议](docs/protocols/PROTOCOLS.md)文档。
+由 grant 控制。仓库内已实现 OpenClaw、Codex、Claude Code、Antigravity、
+OpenCode、Kimi 和 Pi 适配器；适配器必须由运维方显式启用，运行时不会从其它源码
+仓库发现或加载实现。确切范围与状态见[兼容性](docs/COMPATIBILITY.md)与
+[协议](docs/protocols/PROTOCOLS.md)文档。
 
 ## 仓库结构
 
@@ -129,6 +131,8 @@ npm run mcp:doctor
 | --- | --- |
 | `apps/` | 服务端入口、控制台应用和 MCP gateway installer package。 |
 | `packages/` | contracts、foundation、workspace、agents、capabilities、protocols、server runtime 和 UI console package。 |
+| `services/` | 仓库内服务实现，包括格式转换服务。 |
+| `plugins/` | 仓库内运行时插件、客户端适配器、manifest 与 schema。 |
 | `tools/` | 服务端脚本、验证器、生成器和 registry 工具。 |
 | `docs/` | 公开运行、架构、协议、兼容性和功能文档。 |
 | `tests/` | 仓库验证套件。 |
@@ -137,7 +141,7 @@ npm run mcp:doctor
 
 | 主题 | 文档 |
 | --- | --- |
-| 十大项目优先问题 | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
+| 产品闭环路线 | [docs/WHATS-NEXT.md](docs/WHATS-NEXT.md) |
 | 产品目标与边界 | [PRODUCT.md](PRODUCT.md) |
 | 领域词汇 | [CONTEXT.md](CONTEXT.md) |
 | 当前状态 | [docs/STATUS.md](docs/STATUS.md) |
