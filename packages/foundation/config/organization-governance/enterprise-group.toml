@@ -83,6 +83,7 @@ management_actions = [
   "organization.structure.read",
   "organization.membership.read",
   "organization.membership.manage",
+  "operation_permission.api_keys.manage",
 ]
 
 [[roles]]
@@ -93,6 +94,7 @@ management_actions = [
   "organization.structure.read",
   "organization.membership.read",
   "organization.membership.manage",
+  "operation_permission.api_keys.manage",
 ]
 
 [[roles]]
@@ -103,6 +105,7 @@ management_actions = [
   "organization.structure.read",
   "organization.membership.read",
   "organization.membership.manage",
+  "operation_permission.api_keys.manage",
 ]
 
 [[roles]]
@@ -113,6 +116,7 @@ management_actions = [
   "organization.structure.read",
   "organization.membership.read",
   "organization.membership.manage",
+  "operation_permission.api_keys.manage",
 ]
 
 [[roles]]
@@ -123,4 +127,5 @@ management_actions = [
   "organization.structure.read",
   "organization.membership.read",
   "organization.membership.manage",
+  "operation_permission.api_keys.manage",
 ]

@@ -99,7 +99,7 @@ const CAPABILITY_OWNERS: Readonly<Record<string, any>> = Object.freeze({
   "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-CONTAINER-DEPLOYMENT", "container-deployment-resumability"],
   storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-STORAGE", "storage-backup-runtime"],
   jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-JOBS", "jobs-work-queue-runtime"],
-  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING", "plugin-runtime-and-module-system"],
+  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.ts", "docs/plans/end-to-end-release/plugin-console-isolation", "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING", "plugin-runtime-and-module-system"],
   "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING", "agent-gateway-model-routing"],
   "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE", "core-workspace-assets-governance"],
 });

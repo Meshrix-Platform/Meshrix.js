@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "v0.0.1:plugin:host-contract-reference-1",
+  "bundleManifestSchema": "meshrix.plugin-bundle.manifest.v1",
+  "runtimeManifestSchema": "v0.0.1:plugin:manifest-1",
+  "coreContractDigest": "sha256:9daab5a14ddd4b273a6615aeb45c6769d3f4d1d74d1b203bad17066fa1aecb9f"
+}

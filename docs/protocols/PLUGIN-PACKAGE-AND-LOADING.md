@@ -4,7 +4,7 @@ This contract defines the Core-owned boundary for loading optional plugin artifa
 
 ## Closed one-plugin bundle
 
-External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `v0.0.1:meshrix:plugin-bundle-manifest-1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.ts` path present in that inventory.
+External plugins enter Core as one closed, content-addressed archive per plugin identity. The archive is a gzip-compressed ustar with a closed manifest file `plugin.bundle.json` (`schemaVersion` `meshrix.plugin-bundle.manifest.v1`) and the declared payload files. The manifest is archive metadata and a closed object: unknown fields fail admission. Exactly one `pluginId` is allowed; the payload inventory lists every non-manifest archive member with per-file `sha256` and `size`. The `entrypoint` must be a contained `.mjs` path present in that inventory.
 
 `payloadDigest` binds the sorted payload file contents. The archive digest is recorded separately as `packageDigest` / `archiveDigest` after acquisition so the digest field never circularly hashes itself. Trust evidence is explicit (`configured-digest` or `ed25519` with an operator-configured public-key allow-list). Empty trust configuration admits nothing that requires a trusted key set.
 
@@ -27,6 +27,38 @@ The durable package lifecycle covers `declared → acquiring → acquired → ve
 Dependencies activate before dependents. The declared runtime module exports `activatePlugin`; activation returns the manifest identity, the exact declared mounts and executable contributions, and a `close` function. Operations, routes, MCP tools, console entries, state machines, and verifier hooks must match the signed or digest-bound package. Core snapshots and freezes accepted declarations before publishing read-only contribution maps.
 
 Plugin modules are privileged in-process deployment code. Signature and entry validation prove provenance and declared loading; they are not an isolation boundary for hostile JavaScript. Agent-controlled or otherwise untrusted execution uses the separately governed execution-sandbox port and has no host-process fallback.
+
+## Plugin Console browser boundary
+
+**Current status:** verified plugin Console contributions still execute as
+trusted same-origin browser code through dynamic `import()`. Package provenance
+does not make that code a browser sandbox. Third-party Console isolation is a
+required candidate workstream and remains incomplete until the old loader is
+deleted and real-browser escape verification passes.
+
+The target contribution contract replaces public `assetUrl` and `assetExport`
+with `sandboxUrl`, a bridge version, an artifact identity, and an explicit set
+of plugin-owned `toolId` capabilities. An entry that does not satisfy the new
+contract is rejected; no same-origin compatibility mode remains.
+
+The target Host boundary is closed as follows:
+
+- the iframe uses only `sandbox="allow-scripts"`; it receives no same-origin,
+  form, popup, download, top-navigation, or direct-network capability;
+- the Host transfers one one-time `MessageChannel` containing theme, locale,
+  and privacy-safe read-only route context, never secrets or arbitrary Host
+  state;
+- actions may invoke only tools declared by that Console entry, owned by the
+  same plugin, and still governed by Operation Permission;
+- every invocation revalidates session, scope, active route, plugin enablement,
+  and artifact generation; logout, unmount, disablement, revocation, or
+  generation drift closes the channel and cancels work; and
+- admission and transport limits are 4 MiB per plugin asset, 1 MiB per request,
+  8 MiB per response, four concurrent calls per iframe, and a 30-second
+  timeout.
+
+These statements define the target implementation boundary, not current
+implementation or support facts.
 
 ## Failure and shutdown
 

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "kind": "meshrix.capability-package",
+  "packageKind": "codespace-provider",
+  "pluginId": "coding-github",
+  "provider": "github",
+  "name": "github-codespace-provider",
+  "version": "0.0.1",
+  "title": "GitHub Codespace Provider",
+  "description": "External GitHub provider capability for governed repository status, change preparation, pull request upload, review status, and Actions state.",
+  "source": "external",
+  "risk": "mixed",
+  "credentialContract": {
+    "kind": "secretRef",
+    "source": "operator-published-service",
+    "required": true
+  },
+  "toolsets": [
+    "meshrix.codespace",
+    "meshrix.repo.read",
+    "meshrix.repo.write",
+    "meshrix.repo.review"
+  ],
+  "operations": [
+    "codespace.providers.manifest",
+    "codespace.repository.status",
+    "codespace.tree.list",
+    "codespace.file.read",
+    "codespace.diff.read",
+    "codespace.change.prepare",
+    "codespace.change.upload",
+    "codespace.review.comment",
+    "codespace.review.requestChanges",
+    "codespace.review.approve",
+    "codespace.review.status.sync"
+  ],
+  "providerConfig": {
+    "provider": "github",
+    "mode": "external-service",
+    "serviceBindingSource": "configuration.services.rest.serviceRef",
+    "operatorSupplied": true,
+    "credentialCustody": "host-secret-ref"
+  },
+  "promotion": {
+    "defaultVisibility": "disabled",
+    "readOnlyFirst": true,
+    "writeToolsRequirePolicyPreview": true,
+    "liveModeRequiresProviderReceipt": true
+  },
+  "metadata": {
+    "pluginId": "coding-github"
+  }
+}

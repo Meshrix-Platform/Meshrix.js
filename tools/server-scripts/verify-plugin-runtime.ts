@@ -78,7 +78,7 @@ async function writePlugin(repoRoot?: any, record?: any, source?: any) : Promise
   await fs.mkdir(directory, { recursive: true });
   await fs.writeFile(path.join(directory, "plugin.json"), `${JSON.stringify(record, null, 2)}\n`, "utf8");
   if (source !== undefined) {
-    await fs.writeFile(path.join(directory, "runtime.ts"), source, "utf8");
+    await fs.writeFile(path.join(directory, "runtime.mjs"), source, "utf8");
   }
 }
 
@@ -596,7 +596,7 @@ async function main() : Promise<any> {
     await writePlugin(
       fixtureRoot,
       manifest("dependency", {
-        runtime: { module: "./runtime.ts" },
+        runtime: { module: "./runtime.mjs" },
         mounts: { dependency: { id: "dependency.mount", kind: "document" } }
       }),
       runtimeSource("dependency", "dependency", "dependency.mount", "document", { eventFile: fixtureEventPath })
@@ -605,7 +605,7 @@ async function main() : Promise<any> {
       fixtureRoot,
       manifest("demo", {
         dependencies: ["dependency"],
-        runtime: { module: "./runtime.ts" },
+        runtime: { module: "./runtime.mjs" },
         mounts: { demo: { id: "demo.mount", kind: "document" } },
         mountRouting: {
           kindRoutes: { document: { mountName: "demo", action: "extract" } },
@@ -617,7 +617,7 @@ async function main() : Promise<any> {
     await writePlugin(
       fixtureRoot,
       manifest("contributor", {
-        runtime: { module: "./runtime.ts" },
+        runtime: { module: "./runtime.mjs" },
         operations: ["contributor.run"],
         routes: [{ id: "contributor.route", path: "/contributor", kind: "http" }],
         mcpTools: ["contributor.tool"],
@@ -626,7 +626,7 @@ async function main() : Promise<any> {
         verifierHooks: [{
           id: "contributor.verify",
           workloadKind: "plugin_verifier.contributor",
-          source: "verifiers/contributor.ts"
+          source: "verifiers/contributor.mjs"
         }]
       }),
       contributionRuntimeSource("contributor")
@@ -701,7 +701,7 @@ async function main() : Promise<any> {
       await writePlugin(
         removalRoot,
         manifest("removable", {
-          runtime: { module: "./runtime.ts" },
+          runtime: { module: "./runtime.mjs" },
           mounts: { removable: { id: "removable.mount", kind: "document" } }
         }),
         runtimeSource("removable", "removable", "removable.mount", "document", { eventFile: path.join(tempRoot, "removable-events.jsonl") })
@@ -753,7 +753,7 @@ async function main() : Promise<any> {
     await check("manifest-schema-path-and-claim-conflicts-fail-closed", async () : Promise<any> => {
       let rejectedTraversal: any = false;
       try {
-        normalizePluginManifest(manifest("escape", { runtime: { module: "../escape.ts" } }));
+        normalizePluginManifest(manifest("escape", { runtime: { module: "../escape.mjs" } }));
       } catch {
         rejectedTraversal = true;
       }
@@ -775,7 +775,7 @@ async function main() : Promise<any> {
       const failureEventPath: any = path.join(tempRoot, "failure-events.jsonl");
       await writePlugin(
         failureRoot,
-        manifest("alpha", { runtime: { module: "./runtime.ts" } }),
+        manifest("alpha", { runtime: { module: "./runtime.mjs" } }),
         `
 import { appendFileSync } from "node:fs";
 const event = (value) => appendFileSync(${JSON.stringify(failureEventPath)}, value + "\\n", "utf8");
@@ -787,7 +787,7 @@ export async function activatePlugin({ manifest, onClose }) {
       );
       await writePlugin(
         failureRoot,
-        manifest("beta", { runtime: { module: "./runtime.ts" } }),
+        manifest("beta", { runtime: { module: "./runtime.mjs" } }),
         `
 import { appendFileSync } from "node:fs";
 const event = (value) => appendFileSync(${JSON.stringify(failureEventPath)}, value + "\\n", "utf8");
@@ -850,7 +850,7 @@ export async function activatePlugin({ onClose }) {
       const closeFailureEventPath: any = path.join(tempRoot, "close-failure-events.jsonl");
       await writePlugin(
         closeFailureRoot,
-        manifest("close-failure", { runtime: { module: "./runtime.ts" } }),
+        manifest("close-failure", { runtime: { module: "./runtime.mjs" } }),
         `
 import { appendFileSync } from "node:fs";
 const event = (value) => appendFileSync(${JSON.stringify(closeFailureEventPath)}, value + "\\n", "utf8");

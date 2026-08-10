@@ -13,6 +13,10 @@ import {
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
+const CANONICAL_PUBLIC_SCHEMA_TOKENS: ReadonlySet<string> = new Set([
+  "meshrix.plugin-bundle.manifest.v1"
+]);
+
 const forbiddenPatterns: any[] = [
   {
     id: "non-governed-meshrix-version-token",
@@ -67,6 +71,13 @@ function isAllowedPublicProtocolMatch(check?: any, text?: any, match?: any) : an
   return prefix === "application/" && /^(?:\+|\.)[a-z0-9][a-z0-9.+-]*(?:\b|$)/u.test(suffix);
 }
 
+function isAllowedCanonicalPublicSchemaMatch(check?: any, match?: any) : boolean {
+  return (
+    check.id === "non-governed-meshrix-version-token" &&
+    CANONICAL_PUBLIC_SCHEMA_TOKENS.has(String(match?.[0] || ""))
+  );
+}
+
 function isAllowedOrganizationReleasePlanMatch(check?: any, relativePath?: any): boolean {
   return (
     check.id === "bare-schema-version-field" &&
@@ -82,6 +93,7 @@ function verifyVersionNaming() : any {
     for (const check of forbiddenPatterns) {
       for (const match of text.matchAll(check.pattern)) {
         if (isAllowedOrganizationReleasePlanMatch(check, relativePath)) continue;
+        if (isAllowedCanonicalPublicSchemaMatch(check, match)) continue;
         if (isAllowedPublicProtocolMatch(check, text, match)) continue;
         findings.push({
           id: check.id,

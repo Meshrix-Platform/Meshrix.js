@@ -39,14 +39,14 @@ function buildFixtureArchive() : any {
     "export async function activatePlugin(){ return { id: 'fixture-plugin', close: async () => {} }; }\n",
     "utf8"
   );
-  const contentFiles: any[] = [{ path: "runtime.ts", content: runtime }];
-  const payloadDigest: any = computePluginPackagePayloadDigest(new Map<any, any>([["runtime.ts", runtime]]));
+  const contentFiles: any[] = [{ path: "runtime.mjs", content: runtime }];
+  const payloadDigest: any = computePluginPackagePayloadDigest(new Map<any, any>([["runtime.mjs", runtime]]));
   const manifestObject: Record<string, any> = {
     schemaVersion: PLUGIN_BUNDLE_MANIFEST_SCHEMA,
     pluginId: "fixture-plugin",
     version: "1.0.0",
     label: "fixture-plugin",
-    entrypoint: "runtime.ts",
+    entrypoint: "runtime.mjs",
     files: contentFiles.map((entry?: any) : any => ({
       path: entry.path,
       sha256: sha256Digest(entry.content),

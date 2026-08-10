@@ -16,7 +16,7 @@ const dependencyRules: any = require("../registry/dependency-rules.registry.json
 const rootPackageJson: any = require("../../package.json");
 
 const SOURCE_ROOTS: readonly any[] = Object.freeze(["apps", "packages", "plugins", "tools"]);
-const SOURCE_EXTENSIONS: any = new Set<any>([".js", ".ts", ".cjs", ".ts", ".tsx", ".vue"]);
+const SOURCE_EXTENSIONS: any = new Set<any>([".js", ".mjs", ".ts", ".cjs", ".tsx", ".vue"]);
 const TARGET_EXTENSIONS: any = new Set<any>([...SOURCE_EXTENSIONS, ".css", ".json"]);
 const EXCLUDED_SEGMENTS: any = new Set<any>([
   ".git",
@@ -124,21 +124,65 @@ async function resolveFileTarget(basePath?: any) : Promise<any> {
   return null;
 }
 
-function workspaceDescriptors() : any {
-  const descriptors: any = (rootPackageJson.workspaces || []).map((workspaceRoot?: any) : any => {
+async function expandWorkspaceRoots() : Promise<any> {
+  const roots: any[] = [];
+  for (const configuredRoot of rootPackageJson.workspaces || []) {
+    const workspaceRoot: any = String(configuredRoot || "").replace(/\\/gu, "/");
+    if (!workspaceRoot.includes("*")) {
+      roots.push(workspaceRoot);
+      continue;
+    }
+    if (!workspaceRoot.endsWith("/*") || workspaceRoot.slice(0, -2).includes("*")) {
+      throw new Error(`Unsupported workspace pattern: ${workspaceRoot}`);
+    }
+    const parentRoot: any = workspaceRoot.slice(0, -2);
+    const entries: any = await fs.readdir(path.join(repoRoot, parentRoot), { withFileTypes: true });
+    const matches: any[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const relativeRoot: any = `${parentRoot}/${entry.name}`;
+      if (await fileExists(path.join(repoRoot, relativeRoot, "package.json"))) {
+        matches.push(relativeRoot);
+      }
+    }
+    if (matches.length === 0) {
+      throw new Error(`Workspace pattern resolved no packages: ${workspaceRoot}`);
+    }
+    roots.push(...matches.sort((a?: any, b?: any) : any => a.localeCompare(b)));
+  }
+  if (new Set<any>(roots).size !== roots.length) {
+    throw new Error("Workspace configuration resolves duplicate package roots.");
+  }
+  return roots;
+}
+
+async function workspaceDescriptors() : Promise<any> {
+  const descriptors: any[] = [];
+  for (const workspaceRoot of await expandWorkspaceRoots()) {
     const absoluteRoot: any = path.join(repoRoot, workspaceRoot);
-    const manifest: any = require(path.join(absoluteRoot, "package.json"));
-    return {
+    const manifest: any = JSON.parse(await fs.readFile(path.join(absoluteRoot, "package.json"), "utf8"));
+    descriptors.push({
       absoluteRoot,
       manifest,
       relativeRoot: workspaceRoot.replace(/\\/gu, "/")
-    };
-  });
+    });
+  }
+  const names: any = descriptors.map((descriptor?: any) : any => descriptor.manifest.name);
+  if (names.some((name?: any) : any => typeof name !== "string" || !name) || new Set<any>(names).size !== names.length) {
+    throw new Error("Workspace package names must be present and unique.");
+  }
   return {
     root: { absoluteRoot: repoRoot, manifest: rootPackageJson, relativeRoot: "" },
     scopes: descriptors.sort((a?: any, b?: any) : any => b.absoluteRoot.length - a.absoluteRoot.length),
     byName: new Map<any, any>(descriptors.map((descriptor?: any) : any => [descriptor.manifest.name, descriptor]))
   };
+}
+
+function packageExportMatch(exportsMap?: any, request?: any) : any {
+  if (request === "." && (typeof exportsMap === "string" || Array.isArray(exportsMap))) {
+    return { capture: "", target: exportsMap };
+  }
+  return patternMatch(exportsMap, request);
 }
 
 function packageScopeForFile(fromFile?: any, workspaces?: any) : any {
@@ -253,7 +297,7 @@ async function resolvePackageImport(specifier?: any, fromFile?: any, workspaces?
       target: null
     };
   }
-  const match: any = patternMatch(request.descriptor.manifest.exports, request.subpath);
+  const match: any = packageExportMatch(request.descriptor.manifest.exports, request.subpath);
   if (!match) return { reason: "workspace_export_not_mapped", target: null };
   return resolveMappedTarget({
     descriptor: request.descriptor,
@@ -506,7 +550,7 @@ export async function runArchitectureGraph({
       "Resolve the underlying layer/constraint ownership instead of recording cross-layer exceptions."
     );
   }
-  const workspaces: any = workspaceDescriptors();
+  const workspaces: any = await workspaceDescriptors();
   const files: any = await collectSourceFiles();
   const edges: any[] = [];
   const unresolvedImports: any[] = [];

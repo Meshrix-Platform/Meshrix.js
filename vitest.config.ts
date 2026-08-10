@@ -4,7 +4,10 @@ import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vitest/config";
 
 const webRoot = path.resolve(__dirname, "apps", "console");
-const jobManagerTestPattern = "tests/vitest/server/job-manager*.test.ts";
+const serialTestPatterns = [
+  "tests/vitest/server/job-manager*.test.ts",
+  "tests/vitest/server/upload-custody-workspace-materialization.test.ts",
+];
 
 const testFilePatterns = [
   "tests/vitest/**/*.{test,spec}.{ts,tsx}",
@@ -139,14 +142,14 @@ export default defineConfig({
         test: {
           name: "parallel",
           include: testFilePatterns,
-          exclude: [...excludedTestPatterns, jobManagerTestPattern],
+          exclude: [...excludedTestPatterns, ...serialTestPatterns],
         },
       },
       {
         extends: true,
         test: {
-          name: "job-manager-serial",
-          include: [jobManagerTestPattern],
+          name: "serial",
+          include: serialTestPatterns,
           exclude: excludedTestPatterns,
           fileParallelism: false,
         },

@@ -1,0 +1,12 @@
+{
+  "name": "@meshrix/client-adapter-kit",
+  "version": "0.0.1",
+  "description": "Public JSON-stdio contract and local execution helpers for Meshrix client adapters.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": "./index.mjs",
+  "files": ["index.mjs"],
+  "engines": {
+    "node": "^22.0.0 || ^24.0.0"
+  }
+}

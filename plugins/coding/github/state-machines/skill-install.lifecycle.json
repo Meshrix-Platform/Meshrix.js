@@ -1,0 +1,105 @@
+{
+  "machineId": "github-skill-install.lifecycle",
+  "entityType": "github_skill_install",
+  "version": "v0.0.1:state-machine:github-skill-install-1",
+  "description": "Digest-bound planning, installation, and rollback lifecycle for a governed external skill source.",
+  "initialState": "planned",
+  "states": [
+    {
+      "id": "planned"
+    },
+    {
+      "id": "installed"
+    },
+    {
+      "id": "rolled_back",
+      "terminal": true
+    }
+  ],
+  "events": [
+    {
+      "id": "github.skills.install.plan",
+      "riskLevel": "low",
+      "idempotent": true
+    },
+    {
+      "id": "github.skills.install.apply",
+      "riskLevel": "high",
+      "idempotent": true
+    },
+    {
+      "id": "github.skills.install.rollback",
+      "riskLevel": "high",
+      "idempotent": true
+    }
+  ],
+  "totalMatrix": [
+    {
+      "from": "planned",
+      "event": "github.skills.install.plan",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "planned",
+      "event": "github.skills.install.apply",
+      "result": "requires_external_receipt",
+      "to": "installed",
+      "sideEffects": [
+        "record_digest_bound_install_receipt"
+      ]
+    },
+    {
+      "from": "planned",
+      "event": "github.skills.install.rollback",
+      "result": "illegal_transition",
+      "errorCode": "GITHUB_SKILL_INSTALL_NOT_APPLIED"
+    },
+    {
+      "from": "installed",
+      "event": "github.skills.install.plan",
+      "result": "illegal_transition",
+      "errorCode": "GITHUB_SKILL_INSTALL_ALREADY_APPLIED"
+    },
+    {
+      "from": "installed",
+      "event": "github.skills.install.apply",
+      "result": "ignored_idempotent_event"
+    },
+    {
+      "from": "installed",
+      "event": "github.skills.install.rollback",
+      "result": "requires_external_receipt",
+      "to": "rolled_back",
+      "sideEffects": [
+        "record_digest_bound_rollback_receipt"
+      ]
+    },
+    {
+      "from": "rolled_back",
+      "event": "github.skills.install.plan",
+      "result": "illegal_transition",
+      "errorCode": "GITHUB_SKILL_INSTALL_TERMINAL"
+    },
+    {
+      "from": "rolled_back",
+      "event": "github.skills.install.apply",
+      "result": "illegal_transition",
+      "errorCode": "GITHUB_SKILL_INSTALL_TERMINAL"
+    },
+    {
+      "from": "rolled_back",
+      "event": "github.skills.install.rollback",
+      "result": "ignored_idempotent_event"
+    }
+  ],
+  "invariants": [
+    "Plan and mutation inputs are digest-bound before external execution.",
+    "Apply and rollback require current Operation Permission authorization.",
+    "Only sanitized receipt digests enter plugin-owned state."
+  ],
+  "proofObligations": [
+    "PO-GITHUB-SKILL-INSTALL-001",
+    "PO-GITHUB-SKILL-INSTALL-002",
+    "PO-GITHUB-SKILL-INSTALL-003"
+  ]
+}

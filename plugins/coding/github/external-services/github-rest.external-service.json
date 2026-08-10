@@ -1,0 +1,618 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "kind": "meshrix.external-service.contract",
+  "contractId": "coding-github.rest.external-service",
+  "displayName": "GitHub REST contract",
+  "description": "Closed contract for an operator-published GitHub REST service selected by plugin configuration.",
+  "serviceSelection": {
+    "configurationPath": "services.rest.serviceRef",
+    "operatorSupplied": true,
+    "required": true
+  },
+  "upstreamContract": {
+    "protocol": "https-json",
+    "endpoint": {
+      "operatorSupplied": true,
+      "required": true,
+      "allowedSchemes": ["https"]
+    },
+    "credential": {
+      "operatorSupplied": true,
+      "required": true,
+      "custody": "secretRef"
+    },
+    "timeoutConfigurationPath": "services.rest.timeoutMs",
+    "fixedHeaders": {
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  },
+  "authorizationContract": {
+    "boundary": "Operation Permission v1",
+    "serviceAndCredentialBindingRequired": true
+  },
+  "tools": [
+    {
+      "operationId": "github.repository.get",
+      "label": "Get repository",
+      "transport": {
+        "type": "http",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}"
+      },
+      "requiredScopes": [
+        "repo:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.repository.contents.get",
+      "label": "Get repository contents",
+      "transport": {
+        "type": "http",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}/contents/{path}"
+      },
+      "requiredScopes": [
+        "repo:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo",
+          "path"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.repository.compare",
+      "label": "Compare refs",
+      "transport": {
+        "type": "http",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}/compare/{base}...{head}"
+      },
+      "requiredScopes": [
+        "repo:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo",
+          "base",
+          "head"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.pullRequests.list",
+      "label": "List pull requests",
+      "transport": {
+        "type": "http",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}/pulls"
+      },
+      "requiredScopes": [
+        "repo:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "open",
+              "closed",
+              "all"
+            ]
+          },
+          "base": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.pullRequests.createDraft",
+      "label": "Create draft pull request",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/repos/{owner}/{repo}/pulls"
+      },
+      "requiredScopes": [
+        "repo:write"
+      ],
+      "risk": "safe_write",
+      "request": {
+        "body": {
+          "title": "$input.title",
+          "head": "$input.head",
+          "base": "$input.base",
+          "body": "$input.body",
+          "draft": true
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo",
+          "title",
+          "head",
+          "base"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "head": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.pullRequests.review.create",
+      "label": "Create pull request review",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/repos/{owner}/{repo}/pulls/{pullNumber}/reviews"
+      },
+      "requiredScopes": [
+        "repo:review"
+      ],
+      "risk": "safe_write",
+      "request": {
+        "body": {
+          "event": "$input.event",
+          "body": "$input.body",
+          "comments": "$input.comments"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo",
+          "pullNumber",
+          "event"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "pullNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "event": {
+            "enum": [
+              "COMMENT",
+              "APPROVE",
+              "REQUEST_CHANGES"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.issues.comment.create",
+      "label": "Create issue or pull request comment",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/repos/{owner}/{repo}/issues/{issueNumber}/comments"
+      },
+      "requiredScopes": [
+        "repo:review"
+      ],
+      "risk": "safe_write",
+      "request": {
+        "body": {
+          "body": "$input.body"
+        }
+      },
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo",
+          "issueNumber",
+          "body"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "issueNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "body": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.actions.workflowRuns.list",
+      "label": "List workflow runs",
+      "transport": {
+        "type": "http",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}/actions/runs"
+      },
+      "requiredScopes": [
+        "repo:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": [
+          "owner",
+          "repo"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "branch": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.repository.status",
+      "label": "Read repository status for a Codespace",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/commits/{ref}" },
+      "requiredScopes": ["repo:read"],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "ref"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "ref": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.tree.list",
+      "label": "List a Codespace tree",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/git/trees/{treeRef}" },
+      "requiredScopes": ["repo:read"],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "treeRef"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "treeRef": { "type": "string" },
+          "recursive": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.file.read",
+      "label": "Read a Codespace file",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/contents/{path}" },
+      "requiredScopes": ["repo:read"],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "path", "ref"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "path": { "type": "string" },
+          "ref": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.diff.read",
+      "label": "Read a Codespace diff",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/compare/{base}...{head}" },
+      "requiredScopes": ["repo:read"],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "base", "head"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "base": { "type": "string" },
+          "head": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.change.prepare",
+      "label": "Prepare a Codespace change against a base ref",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/git/ref/heads/{base}" },
+      "requiredScopes": ["repo:read"],
+      "risk": "read_only",
+      "request": { "omitFields": ["changes"] },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "base", "changes"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "base": { "type": "string" },
+          "changes": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "type": "object" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.change.upload",
+      "label": "Upload a Codespace change ref",
+      "transport": { "type": "http", "method": "POST", "path": "/repos/{owner}/{repo}/git/refs" },
+      "requiredScopes": ["repo:write"],
+      "risk": "safe_write",
+      "request": { "body": { "ref": "refs/heads/$input.head", "sha": "$input.preparedChangeRef" } },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "preparedChangeRef", "head"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "preparedChangeRef": { "type": "string" },
+          "head": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.review.comment",
+      "label": "Comment on a Codespace review",
+      "transport": { "type": "http", "method": "POST", "path": "/repos/{owner}/{repo}/issues/{pullNumber}/comments" },
+      "requiredScopes": ["repo:review"],
+      "risk": "safe_write",
+      "request": { "body": { "body": "$input.body" } },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "pullNumber", "body"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "pullNumber": { "type": "integer", "minimum": 1 },
+          "body": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.review.requestChanges",
+      "label": "Request Codespace review changes",
+      "transport": { "type": "http", "method": "POST", "path": "/repos/{owner}/{repo}/pulls/{pullNumber}/reviews" },
+      "requiredScopes": ["repo:review"],
+      "risk": "safe_write",
+      "request": { "body": { "event": "REQUEST_CHANGES", "body": "$input.body" } },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "pullNumber", "body"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "pullNumber": { "type": "integer", "minimum": 1 },
+          "body": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.review.approve",
+      "label": "Approve a Codespace review",
+      "transport": { "type": "http", "method": "POST", "path": "/repos/{owner}/{repo}/pulls/{pullNumber}/reviews" },
+      "requiredScopes": ["repo:review"],
+      "risk": "safe_write",
+      "request": { "body": { "event": "APPROVE", "body": "$input.body" } },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "pullNumber"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "pullNumber": { "type": "integer", "minimum": 1 },
+          "body": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "codespace.review.status.sync",
+      "label": "Synchronize Codespace review status",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/pulls/{pullNumber}" },
+      "requiredScopes": ["repo:read"],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "pullNumber"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "pullNumber": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.skills.install.plan",
+      "label": "Plan a GitHub-hosted skill install",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/contents/{path}" },
+      "requiredScopes": ["repo:read", "skill:install"],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "ref", "path"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "ref": { "type": "string" },
+          "path": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.skills.install.apply",
+      "label": "Resolve a GitHub-hosted skill install plan",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/contents/{path}" },
+      "requiredScopes": ["repo:read", "skill:install"],
+      "risk": "safe_write",
+      "request": { "omitFields": ["planRef"] },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "ref", "path", "planRef"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "ref": { "type": "string" },
+          "path": { "type": "string" },
+          "planRef": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "operationId": "github.skills.install.rollback",
+      "label": "Verify a GitHub-hosted skill source before rollback",
+      "transport": { "type": "http", "method": "GET", "path": "/repos/{owner}/{repo}/contents/{path}" },
+      "requiredScopes": ["repo:read", "skill:install", "workspace:maintain"],
+      "risk": "repair_write",
+      "request": { "omitFields": ["installRef"] },
+      "inputSchema": {
+        "type": "object",
+        "required": ["owner", "repo", "ref", "path", "installRef"],
+        "properties": {
+          "owner": { "type": "string" },
+          "repo": { "type": "string" },
+          "ref": { "type": "string" },
+          "path": { "type": "string" },
+          "installRef": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "healthCheck": {
+    "type": "none"
+  },
+  "metadata": {
+    "pluginId": "coding-github",
+    "managedBy": "meshrix-plugins",
+    "adoption": "operator-service-required"
+  }
+}

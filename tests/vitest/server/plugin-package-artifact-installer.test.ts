@@ -38,7 +38,7 @@ function canonicalJson(value?: any) : any {
 function packageBytes({
   bundlePluginId = "fixture-plugin",
   runtimePluginId = bundlePluginId,
-  entrypoint = "dist/runtime.ts",
+  entrypoint = "dist/runtime.mjs",
   runtimeModule = `./${entrypoint}`,
   trust = { algorithm: "configured-digest" },
   contractDigest = coreContractDigest
@@ -184,7 +184,7 @@ describe("canonical plugin package artifact installer", () : any => {
   it("rejects package/runtime identity, entrypoint, digest, compatibility, and unsupported trust drift", async () : Promise<any> => {
     for (const bytes of [
       packageBytes({ runtimePluginId: "other-plugin" }),
-      packageBytes({ runtimeModule: "./runtime.ts" }),
+      packageBytes({ runtimeModule: "./runtime.mjs" }),
       packageBytes({ contractDigest: `sha256:${"d".repeat(64)}` }),
       packageBytes({ trust: { algorithm: "ed25519", publicKeyId: "ed25519:unverified", signature: "unverified" } })
     ]) {

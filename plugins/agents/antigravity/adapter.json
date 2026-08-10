@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "v0.0.1:meshrix:client-adapter-descriptor-1", "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
+  "target": "antigravity", "label": "Antigravity", "version": "0.0.1",
+  "packageName": "@meshrix/agent-antigravity-adapter", "entrypoint": "adapter.mjs",
+  "commandNames": ["antigravity-ide", "agy", "agy-ide", "antigravity"], "locations": ["local"],
+  "actions": ["describe", "scan", "install", "verify", "uninstall"], "installMode": "external-client-adapter"
+}

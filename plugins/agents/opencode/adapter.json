@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "v0.0.1:meshrix:client-adapter-descriptor-1", "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
+  "target": "opencode", "label": "OpenCode", "version": "0.0.1",
+  "packageName": "@meshrix/agent-opencode-adapter", "entrypoint": "adapter.mjs",
+  "commandNames": ["opencode"], "locations": ["local"],
+  "actions": ["describe", "scan", "install", "verify", "uninstall"], "installMode": "external-client-adapter"
+}

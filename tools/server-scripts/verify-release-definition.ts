@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   verifyReleaseAcceptanceStandards,
 } from "./verify-release-acceptance-standards.ts";
+import { resolveReleaseWorkspaceDirectories } from "./publish-release-set.ts";
 
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const definitionPath: any = "tools/registry/release-definition.registry.json";
@@ -60,9 +61,13 @@ export async function verifyReleaseDefinition({
   }
 
   const rootPackage: any = JSON.parse(await fs.readFile(path.join(rootDir, "package.json"), "utf8"));
+  const workspaceDirectories: any = await resolveReleaseWorkspaceDirectories({
+    rootDir,
+    workspaces: rootPackage.workspaces
+  });
   const expectedManifests: any[] = [
     "package.json",
-    ...rootPackage.workspaces.map((workspace?: any) : any => `${workspace}/package.json`),
+    ...workspaceDirectories.map((workspace?: any) : any => `${workspace}/package.json`),
     "packages/protocols/mcp/adapter/gateway-installer/package.json"
   ];
   if (JSON.stringify(definition.packages.manifests) !== JSON.stringify(expectedManifests)) {

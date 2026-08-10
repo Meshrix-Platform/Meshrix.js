@@ -1,7 +1,8 @@
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
 
-export const PLUGIN_BUNDLE_MANIFEST_SCHEMA: any = "v0.0.1:meshrix:plugin-bundle-manifest-1";
+export const PLUGIN_BUNDLE_MANIFEST_GOVERNED_VERSION: any = "v0.0.1:plugin:bundle-manifest-1";
+export const PLUGIN_BUNDLE_MANIFEST_SCHEMA: any = "meshrix.plugin-bundle.manifest.v1";
 export const PLUGIN_BUNDLE_MANIFEST_FILENAME: any = "plugin.bundle.json";
 
 const PLUGIN_ID_PATTERN: any = /^[a-z][a-z0-9-]*$/u;
@@ -61,8 +62,8 @@ export function normalizePluginBundleManifest(input?: any) : any {
   const version: any = requireString(input.version, "version");
   const label: any = input.label === undefined ? pluginId : requireString(input.label, "label");
   const entrypoint: any = requireString(input.entrypoint, "entrypoint");
-  if (!RELATIVE_FILE_PATTERN.test(entrypoint) || entrypoint.includes("..") || !entrypoint.endsWith(".ts")) {
-    throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: entrypoint must be a contained .ts path");
+  if (!RELATIVE_FILE_PATTERN.test(entrypoint) || entrypoint.includes("..") || !entrypoint.endsWith(".mjs")) {
+    throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: entrypoint must be a contained .mjs path");
   }
   if (!Array.isArray(input.files) || input.files.length === 0) {
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: files inventory is required");

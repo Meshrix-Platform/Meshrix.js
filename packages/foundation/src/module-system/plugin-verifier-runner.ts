@@ -28,10 +28,10 @@ function boundedPositiveInteger(value?: any, fallback?: any, maximum?: any) : an
 
 async function resolveVerifierSourceWithAuthority(source?: any, resolveSource?: any) : Promise<any> {
   const relativeScript: any = String(source || "").trim();
-  if (!/^verifiers\/[A-Za-z0-9][A-Za-z0-9._/-]*\.ts$/u.test(relativeScript) ||
+  if (!/^verifiers\/[A-Za-z0-9][A-Za-z0-9._/-]*\.mjs$/u.test(relativeScript) ||
       relativeScript.includes("\\") ||
       relativeScript.split("/").some((segment?: any) : any => segment === ".." || segment === "")) {
-    throw verifierError("PLUGIN_VERIFIER_SOURCE_INVALID", "Plugin verifier source must be a bounded artifact-relative .ts file.");
+    throw verifierError("PLUGIN_VERIFIER_SOURCE_INVALID", "Plugin verifier source must be a bounded artifact-relative .mjs file.");
   }
   const resolved: any = await resolveSource(relativeScript);
   const absolutePath: any = fileURLToPath(resolved);

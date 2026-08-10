@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "v0.0.1:plugin:build-week-demo-profile-1",
+  "id": "build-week-demo",
+  "summary": "Synthetic deployment profile for repository-verified runtime plugins. Use only after Core admits matching plugin packages; this file does not install or enable plugins by itself.",
+  "status": "pre-release-demo",
+  "runtime": {
+    "deploymentProfileId": "build-week-demo",
+    "enabledPlugins": [
+      "coding-github",
+      "shared-space",
+      "skill-hub"
+    ],
+    "pluginConfigurations": {
+      "shared-space": {
+        "enabled": true,
+        "modules": {
+          "localDirectory": true,
+          "controlledSandbox": true
+        }
+      },
+      "skill-hub": {
+        "enabled": true,
+        "modules": {
+          "registry": true,
+          "opaqueCustody": true,
+          "controlledSandbox": true,
+          "operationPermission": true
+        }
+      },
+      "coding-github": {
+        "enabled": true,
+        "modules": {
+          "rest": true,
+          "mcp": true,
+          "codespaces": true,
+          "skillInstaller": true
+        },
+        "services": {
+          "rest": {
+            "serviceRef": "demo-github-rest-binding",
+            "timeoutMs": 30000
+          },
+          "mcp": {
+            "serviceRef": "demo-github-mcp-binding",
+            "timeoutMs": 60000
+          }
+        }
+      }
+    }
+  },
+  "operatorNotes": [
+    "Repository verification and this profile are separate from a tagged production release.",
+    "coding-github serviceRef values are logical names. Operators must publish matching upstream services and grants in Core before live GitHub access works.",
+    "Do not place credentials, tokens, endpoints, or local paths in this profile."
+  ]
+}

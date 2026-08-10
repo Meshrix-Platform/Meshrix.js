@@ -307,10 +307,7 @@ export async function createReleaseJourneyVisualRecorder({ repoRoot, baseUrl }: 
     operationKey = "convert-full-access-debug",
     organizationNodeId = "group:team",
     workloadName = "Release journey PDF workload",
-    allowedTools = null,
     toolsetIds = ["meshrix.gateway.write"],
-    capabilityIds = null,
-    permissionScopeIds = ["gateway:read", "gateway:write", "storage:read", "storage:write", "uploads:write"],
     requestsPerMinute = 128
   }: Record<string, any> = {}) : Promise<any> {
     const organization: any = await configureOrganizationGovernance();

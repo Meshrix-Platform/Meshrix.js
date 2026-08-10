@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "v0.0.1:meshrix:client-adapter-descriptor-1", "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1",
+  "target": "openclaw", "label": "OpenClaw", "version": "0.0.1",
+  "packageName": "@meshrix/agent-openclaw-adapter", "entrypoint": "adapter.mjs",
+  "commandNames": ["openclaw", "ironclaw", "zeroclaw"], "locations": ["local"],
+  "actions": ["describe", "scan", "install", "verify", "uninstall"], "installMode": "external-client-adapter"
+}

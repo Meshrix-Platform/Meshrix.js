@@ -9,7 +9,8 @@ import {
   discoverReleaseSet,
   parsePublishArguments,
   publishReleaseSet,
-  releaseTagForVersion
+  releaseTagForVersion,
+  resolveReleaseWorkspaceDirectories
 } from "../../../tools/server-scripts/publish-release-set.ts";
 
 const ROOT: any = path.resolve(import.meta.dirname, "../../..");
@@ -19,6 +20,17 @@ const DEPENDENCY_FIELDS: any[] = [
   "optionalDependencies",
   "peerDependencies"
 ];
+const AGENT_PLUGIN_PACKAGE_NAMES: readonly any[] = Object.freeze([
+  "@meshrix/agent-antigravity-adapter",
+  "@meshrix/agent-claude-code-adapter",
+  "@meshrix/agent-codex-adapter",
+  "@meshrix/agent-kimi-adapter",
+  "@meshrix/agent-openclaw-adapter",
+  "@meshrix/agent-opencode-adapter",
+  "@meshrix/agent-pi-adapter",
+  "@meshrix/client-adapter-kit"
+]);
+const RELEASE_PACKAGE_COUNT: any = 17;
 
 function integrityFor(name?: any) : any {
   return `sha512-${createHash("sha512").update(`fixture:${name}`).digest("base64")}`;
@@ -127,8 +139,9 @@ describe("npm release-set publication", () : any => {
     const names: any = releaseSet.packages.map(({ name }: Record<string, any>) : any => name);
     const positions: any = new Map<any, any>(names.map((name?: any, index?: any) : any => [name, index]));
 
-    expect(names).toHaveLength(9);
+    expect(names).toHaveLength(RELEASE_PACKAGE_COUNT);
     expect(names).toContain("meshrix-mcp-connector");
+    for (const packageName of AGENT_PLUGIN_PACKAGE_NAMES) expect(names).toContain(packageName);
     expect(names).not.toContain("@meshrix/server");
     expect(names).not.toContain("@meshrix/console");
     expect(names.at(-1)).toBe("meshrix.js");
@@ -142,6 +155,30 @@ describe("npm release-set publication", () : any => {
         }
       }
     }
+  });
+
+  it("expands only the governed agent-plugin workspace boundary", async () : Promise<any> => {
+    const rootPackage: any = JSON.parse(await fs.readFile(path.join(ROOT, "package.json"), "utf8"));
+    const directories: any = await resolveReleaseWorkspaceDirectories({
+      rootDir: ROOT,
+      workspaces: rootPackage.workspaces
+    });
+
+    expect(directories.filter((directory?: any) : any => directory.startsWith("plugins/agents/")))
+      .toEqual([
+        "plugins/agents/antigravity",
+        "plugins/agents/claude-code",
+        "plugins/agents/client-adapter-kit",
+        "plugins/agents/codex",
+        "plugins/agents/kimi",
+        "plugins/agents/openclaw",
+        "plugins/agents/opencode",
+        "plugins/agents/pi"
+      ]);
+    await expect(resolveReleaseWorkspaceDirectories({
+      rootDir: ROOT,
+      workspaces: ["packages/*"]
+    })).rejects.toMatchObject({ code: "release_set_workspace_path_invalid" });
   });
 
   it("keeps dry-run fully offline while packing the complete real release set", async () : Promise<any> => {
@@ -158,10 +195,10 @@ describe("npm release-set publication", () : any => {
       dryRun: true,
       version: "0.0.1",
       tag: "latest",
-      packageCount: 9
+      packageCount: RELEASE_PACKAGE_COUNT
     });
-    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(9).fill("planned"));
-    expect(injected.calls).toHaveLength(9);
+    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(RELEASE_PACKAGE_COUNT).fill("planned"));
+    expect(injected.calls).toHaveLength(RELEASE_PACKAGE_COUNT);
     expect(injected.calls.every(({ args }: Record<string, any>) : any => args[0] === "pack")).toBe(true);
   });
 
@@ -180,11 +217,11 @@ describe("npm release-set publication", () : any => {
       preflight: true,
       version: "0.0.1",
       tag: "latest",
-      packageCount: 9
+      packageCount: RELEASE_PACKAGE_COUNT
     });
-    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(9).fill("publish"));
-    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "pack")).toHaveLength(9);
-    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(18);
+    expect(result.packages.map(({ action }: Record<string, any>) : any => action)).toEqual(Array(RELEASE_PACKAGE_COUNT).fill("publish"));
+    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "pack")).toHaveLength(RELEASE_PACKAGE_COUNT);
+    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(RELEASE_PACKAGE_COUNT * 2);
     expect(injected.calls.some(({ args }: Record<string, any>) : any => (
       args[0] === "publish" || args[0] === "install" || args[0] === "audit"
     ))).toBe(false);
@@ -211,8 +248,8 @@ describe("npm release-set publication", () : any => {
     });
     expect(first.packages.filter(({ action }: Record<string, any>) : any => action === "skipped").map(({ name }: Record<string, any>) : any => name))
       .toEqual([alreadyPublished.name]);
-    expect(first.packages.filter(({ action }: Record<string, any>) : any => action === "published")).toHaveLength(8);
-    expect(injected.calls.slice(0, 9).every(({ args }: Record<string, any>) : any => args[0] === "pack")).toBe(true);
+    expect(first.packages.filter(({ action }: Record<string, any>) : any => action === "published")).toHaveLength(RELEASE_PACKAGE_COUNT - 1);
+    expect(injected.calls.slice(0, RELEASE_PACKAGE_COUNT).every(({ args }: Record<string, any>) : any => args[0] === "pack")).toBe(true);
     expect(injected.publishCalls.map(({ name }: Record<string, any>) : any => name)).toEqual(
       first.packages.filter(({ action }: Record<string, any>) : any => action === "published").map(({ name }: Record<string, any>) : any => name)
     );
@@ -267,7 +304,7 @@ describe("npm release-set publication", () : any => {
       environment: {}
     })).rejects.toMatchObject({ code: "release_set_registry_integrity_mismatch" });
     expect(injected.publishCalls).toHaveLength(0);
-    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(18);
+    expect(injected.calls.filter(({ args }: Record<string, any>) : any => args[0] === "view")).toHaveLength(RELEASE_PACKAGE_COUNT * 2);
   });
 
   it("requires signatures and provenance before accepting an existing immutable version", async () : Promise<any> => {

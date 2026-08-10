@@ -16,7 +16,7 @@ function rootPackage() : any {
       "verify:mcp-release-portable-assembly":
         "node tools/server-scripts/verify-mcp-release-portable-assembly.ts",
       "verify:real-machine":
-        "node tools/server-scripts/verify-real-machine-validation.ts",
+        "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-real-machine-validation.ts",
     },
   };
 }

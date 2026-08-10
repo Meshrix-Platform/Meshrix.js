@@ -222,13 +222,12 @@ try {
     );
   }
 
-  const workspacePackages: any[] = [];
-  for (const directory of rootPackage.workspaces || []) {
-    const manifest: any = JSON.parse(await fs.readFile(path.join(directory, "package.json"), "utf8"));
-    if (manifest.private === true) continue;
-    assert.equal(manifest.version, rootPackage.version, "npm_package_workspace_version_mismatch");
-    workspacePackages.push({ directory, name: String(manifest.name || "") });
-  }
+  const workspacePackages: any[] = releaseSet.packages
+    .filter((packageRecord?: any) : any => !packageRecord.root && packageRecord.name.startsWith("@meshrix/"))
+    .map((packageRecord?: any) : any => ({
+      directory: packageRecord.directory,
+      name: packageRecord.name
+    }));
   const workspaceNames: any = workspacePackages.map(({ name }: Record<string, any>) : any => name).sort();
   const rootInternalDependencies: any = Object.keys(rootPackage.dependencies || {})
     .filter((name?: any) : any => name.startsWith("@meshrix/"))

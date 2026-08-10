@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "v0.0.1:plugin:manifest-1",
+  "id": "shared-space",
+  "label": "Shared Space",
+  "version": "0.0.1",
+  "description": "Governed Shared Space snapshots, reversible mutations, and controlled sandbox execution contributions.",
+  "defaultEnabled": false,
+  "contributionMode": "selected",
+  "dependencies": [],
+  "features": ["local-sharedspace"],
+  "operations": [
+    "sharedspace.localDir.connect",
+    "sharedspace.localDir.list",
+    "sharedspace.item.list",
+    "sharedspace.item.stat",
+    "sharedspace.file.read",
+    "sharedspace.file.write",
+    "sharedspace.directory.create",
+    "sharedspace.item.delete",
+    "sharedspace.item.move",
+    "sharedspace.sync.plan",
+    "sharedspace.sync.apply",
+    "sharedspace.snapshot.create",
+    "sharedspace.sandbox.input.seal",
+    "sharedspace.sandbox.run",
+    "sharedspace.sandbox.runOpaque",
+    "sharedspace.sandbox.cancel",
+    "sharedspace.sandbox.status",
+    "sharedspace.output.preview",
+    "sharedspace.output.approve",
+    "sharedspace.output.commit",
+    "sharedspace.output.reject"
+  ],
+  "opaqueInputPreprocessing": {
+    "sharedspace.sandbox.input.seal": [
+      {
+        "schemaVersion": "v0.0.1:plugin:opaque-input-preprocessing-1",
+        "encoding": "base64",
+        "sourceField": "contentBase64",
+        "targetField": "opaqueInput",
+        "mediaType": "application/octet-stream",
+        "maxBytes": 268435456,
+        "outputSchemaVersion": "v0.0.1:plugin:opaque-input-handle-1"
+      }
+    ]
+  },
+  "hostPathInputPreprocessing": {
+    "sharedspace.localDir.connect": [
+      {
+        "schemaVersion": "v0.0.1:plugin:host-path-input-preprocessing-1",
+        "kind": "local-directory-selection",
+        "sourceField": "sourcePath",
+        "targetField": "mountSelectionRef"
+      }
+    ]
+  },
+  "routes": [
+    { "id": "sharedspace.localDir.connect.http", "path": "/api/agent-workspaces/:workspaceId/local-dir/connect", "kind": "http" },
+    { "id": "sharedspace.localDir.list.http", "path": "/api/agent-workspaces/:workspaceId/local-dir/mounts", "kind": "http" },
+    { "id": "sharedspace.item.list.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/items", "kind": "http" },
+    { "id": "sharedspace.item.stat.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/items/stat", "kind": "http" },
+    { "id": "sharedspace.file.read.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/files/read", "kind": "http" },
+    { "id": "sharedspace.file.write.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/files/write", "kind": "http" },
+    { "id": "sharedspace.directory.create.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/directories", "kind": "http" },
+    { "id": "sharedspace.item.delete.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/items", "kind": "http" },
+    { "id": "sharedspace.item.move.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/items/move", "kind": "http" },
+    { "id": "sharedspace.sync.plan.http", "path": "/api/agent-workspaces/:workspaceId/local-dir/sync/plan", "kind": "http" },
+    { "id": "sharedspace.sync.apply.http", "path": "/api/agent-workspaces/:workspaceId/local-dir/sync/apply", "kind": "http" },
+    { "id": "sharedspace.snapshot.create.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/snapshots", "kind": "http" },
+    { "id": "sharedspace.sandbox.input.seal.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/sandbox/opaque-inputs", "kind": "http" },
+    { "id": "sharedspace.sandbox.run.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/sandbox/runs", "kind": "http" },
+    { "id": "sharedspace.sandbox.runOpaque.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/sandbox/opaque-runs", "kind": "http" },
+    { "id": "sharedspace.sandbox.cancel.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/sandbox/runs/cancel", "kind": "http" },
+    { "id": "sharedspace.sandbox.status.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/sandbox/runs/status", "kind": "http" },
+    { "id": "sharedspace.output.preview.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/output-proposals/preview", "kind": "http" },
+    { "id": "sharedspace.output.approve.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/output-proposals/approve", "kind": "http" },
+    { "id": "sharedspace.output.commit.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/output-proposals/commit", "kind": "http" },
+    { "id": "sharedspace.output.reject.http", "path": "/api/agent-workspaces/:workspaceId/sharedspace/output-proposals/reject", "kind": "http" }
+  ],
+  "mcpTools": [
+    "meshrix.sharedspace.localDir.connect",
+    "meshrix.sharedspace.localDir.list",
+    "meshrix.sharedspace.item.list",
+    "meshrix.sharedspace.item.stat",
+    "meshrix.sharedspace.file.read",
+    "meshrix.sharedspace.file.write",
+    "meshrix.sharedspace.directory.create",
+    "meshrix.sharedspace.item.delete",
+    "meshrix.sharedspace.item.move",
+    "meshrix.sharedspace.sync.plan",
+    "meshrix.sharedspace.sync.apply",
+    "meshrix.sharedspace.snapshot.create",
+    "meshrix.sharedspace.sandbox.input.seal",
+    "meshrix.sharedspace.sandbox.run",
+    "meshrix.sharedspace.sandbox.runOpaque",
+    "meshrix.sharedspace.sandbox.cancel",
+    "meshrix.sharedspace.sandbox.status",
+    "meshrix.sharedspace.output.preview",
+    "meshrix.sharedspace.output.approve",
+    "meshrix.sharedspace.output.commit",
+    "meshrix.sharedspace.output.reject"
+  ],
+  "consoleEntries": ["workspaces.local-directory"],
+  "stateMachines": ["checkpoint.restore"],
+  "runtime": { "module": "./runtime.mjs" },
+  "verifierHooks": [
+    {
+      "id": "shared-space-artifact-contract",
+      "workloadKind": "plugin_verifier.shared_space_artifact_contract",
+      "source": "verifiers/artifact-contract.mjs"
+    }
+  ]
+}

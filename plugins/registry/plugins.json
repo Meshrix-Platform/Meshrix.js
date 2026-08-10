@@ -1,0 +1,227 @@
+{
+  "schemaVersion": "v0.0.1:schema:meshrix-plugins-registry-2",
+  "kind": "meshrix.plugins.registry",
+  "policy": {
+    "externalOnly": true,
+    "namingRule": "Provider plugins use capability-domain prefixes. Migrated product plugins retain stable shared-space and skill-hub identities.",
+    "uniquenessRule": "One product or upstream concept owns one plugin; sub-capabilities remain inside that plugin.",
+    "credentialRule": "Credentials use secretRef and are resolved only for an authorized operation.",
+    "integrationRule": "Runtime plugins use verified one-plugin bundles and public Meshrix Host ports."
+  },
+  "groups": [
+    {
+      "id": "products",
+      "path": "plugins",
+      "description": "Detachable Meshrix product plugins."
+    },
+    {
+      "id": "services",
+      "path": "plugins/services",
+      "description": "External service wrappers and provider integrations."
+    },
+    {
+      "id": "coding",
+      "path": "plugins/coding",
+      "description": "Code hosting, repository, review, CI, and skill-source providers."
+    },
+    {
+      "id": "documents",
+      "path": "plugins/documents",
+      "description": "Document and OCR processing plugins."
+    },
+    {
+      "id": "datastores",
+      "path": "plugins/datastores",
+      "description": "Datastore and backend mounts."
+    },
+    {
+      "id": "agents",
+      "path": "plugins/agents",
+      "description": "Peer adapter plugins."
+    }
+  ],
+  "plugins": [
+    {
+      "id": "agent-antigravity",
+      "path": "plugins/agents/antigravity",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Antigravity peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "antigravity",
+        "packageName": "@meshrix/agent-antigravity-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-claude-code",
+      "path": "plugins/agents/claude-code",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Claude Code peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "claude-code",
+        "packageName": "@meshrix/agent-claude-code-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-codex",
+      "path": "plugins/agents/codex",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Codex peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "codex",
+        "packageName": "@meshrix/agent-codex-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-kimi",
+      "path": "plugins/agents/kimi",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Kimi CLI peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "kimi",
+        "packageName": "@meshrix/agent-kimi-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-openclaw",
+      "path": "plugins/agents/openclaw",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "OpenClaw peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "openclaw",
+        "packageName": "@meshrix/agent-openclaw-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-opencode",
+      "path": "plugins/agents/opencode",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "OpenCode peer adapter plugin.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "opencode",
+        "packageName": "@meshrix/agent-opencode-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "agent-pi",
+      "path": "plugins/agents/pi",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "agents",
+      "types": [
+        "client-peer-plugin"
+      ],
+      "summary": "Official Pi extension package for the governed Meshrix MCP connector.",
+      "runtime": false,
+      "adapter": true,
+      "release": true,
+      "adapterContract": {
+        "target": "pi",
+        "packageName": "@meshrix/agent-pi-adapter",
+        "entrypoint": "adapter.mjs",
+        "protocol": "v0.0.1:meshrix:client-adapter-json-stdio-1"
+      }
+    },
+    {
+      "id": "coding-github",
+      "path": "plugins/coding/github",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "coding",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Governed GitHub REST, MCP, Codespace provider, and GitHub-hosted skill installer contributions.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
+      "id": "shared-space",
+      "path": "plugins/shared-space",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Governed Shared Space snapshots, reversible mutations, and controlled sandbox execution contributions.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
+      "id": "skill-hub",
+      "path": "plugins/skill-hub",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Governed Skill Hub contribution custody, review, publication, adoption, permissions, statistics, and controlled execution.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    }
+  ]
+}
