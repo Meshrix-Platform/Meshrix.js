@@ -1,82 +1,21 @@
-import crypto from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
-import {
-  buildSkillHubStatsDashboard,
-  createSkillHubContributionRegistry
-} from "./runtime/skill-hub-registry.mjs";
-import { createStateMutationQueue } from "./runtime/state-mutation-queue.mjs";
-import {
-  callerIdClaim,
-  callerKindClaim,
-  errorPayload,
-  objectOrNull,
-  protocolPayload,
-  result,
-  workspaceIdFrom
-} from "./runtime/operation-helpers.mjs";
-import { createSkillHubOperationExecutor } from "./runtime/skill-hub-executor.mjs";
-import {
-  createSkillHubSandboxOperations,
-  SKILL_HUB_SANDBOX_OPERATION_IDS
-} from "./runtime/skill-hub-sandbox.mjs";
-import { materializeSkillHubAsset } from "./runtime/skill-hub-assets.mjs";
-import {
-  normalizeSkillHubContribution,
-  projectPublicSkillHubContribution,
-  projectSkillHubAssetRecord,
-  SKILL_HUB_ASSET_BUCKETS,
-  skillHubAssetBucketForType
-} from "./runtime/skill-hub-contribution.mjs";
 import {
   PLUGIN_MCP_TOOL_BINDINGS,
   SKILL_HUB_OPERATION_DEFINITIONS,
   skillHubRouteId
 } from "./src/operation-definitions.mjs";
+import { createSkillHubExternalServiceClient } from "./runtime/external-service-client.mjs";
+import { executeRemoteSandboxOperation, sandboxStatusOperation } from "./runtime/remote-sandbox.mjs";
 
-const CONFIGURATION_FIELDS = new Set(["enabled", "modules"]);
-const MODULE_FIELDS = new Set(["registry", "opaqueCustody", "controlledSandbox", "operationPermission"]);
+const CONFIGURATION_FIELDS = new Set(["enabled", "service"]);
+const SERVICE_FIELDS = new Set(["serviceRef", "timeoutMs"]);
+const SANDBOX_OPERATIONS = new Set(["skill_hub.scan", "skill_hub.build", "skill_hub.execute"]);
+const SANDBOX_STATUS_OPERATIONS = new Set(["skill_hub.execution.cancel", "skill_hub.execution.status"]);
 const CONTRIBUTION_KINDS = Object.freeze([
-  "operations",
-  "routes",
-  "mcpTools",
-  "consoleEntries",
-  "stateMachines",
-  "verifierHooks"
+  "operations", "routes", "mcpTools", "consoleEntries", "stateMachines", "verifierHooks"
 ]);
-const MUTATING_REGISTRY_METHODS = new Set([
-  "submitContribution",
-  "scanContribution",
-  "reviewContribution",
-  "publishContribution",
-  "adoptContribution",
-  "deprecateContribution",
-  "revokeContribution",
-  "requestPermission",
-  "grantPermission",
-  "recordDownload",
-  "recordUsage",
-  "recordExecutionReceipt",
-  "recordRollback"
-]);
-const HOST_PORTS_BY_OPERATION = Object.freeze({
-  "skill_hub.submit": Object.freeze(["opaqueArtifactCustody"]),
-  "skill_hub.scan": Object.freeze(["sandboxExecution"]),
-  "skill_hub.build": Object.freeze(["sandboxExecution"]),
-  "skill_hub.execute": Object.freeze(["sandboxExecution"]),
-  "skill_hub.execution.cancel": Object.freeze(["sandboxExecution"]),
-  "skill_hub.execution.status": Object.freeze(["sandboxExecution"]),
-  "skill_hub.review": Object.freeze(["securityAlertStore"]),
-  "skill_hub.download": Object.freeze(["securityAlertStore"]),
-  "skill_hub.install": Object.freeze(["securityAlertStore"]),
-  "skill_hub.permission.grant": Object.freeze(["operationPermissionGrant"])
-});
 
 function plainObject(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  return value && typeof value === "object" && !Array.isArray(value);
 }
 
 function assertKnownFields(value, allowed, label) {
@@ -88,41 +27,41 @@ function assertKnownFields(value, allowed, label) {
 export function validateSkillHubConfiguration(configuration = {}) {
   assertKnownFields(configuration, CONFIGURATION_FIELDS, "Skill Hub configuration");
   if (configuration.enabled === undefined || configuration.enabled === false) {
-    if (configuration.modules !== undefined) {
-      const error = new Error("Skill Hub modules require explicit activation.");
-      error.code = "skill_hub_partial_configuration";
-      throw error;
+    if (configuration.service !== undefined) {
+      throw Object.assign(new Error("Skill Hub service binding requires explicit activation."), {
+        code: "skill_hub_partial_configuration"
+      });
     }
     return Object.freeze({ enabled: false });
   }
   if (configuration.enabled !== true) throw new TypeError("Skill Hub enabled must be a boolean.");
-  assertKnownFields(configuration.modules, MODULE_FIELDS, "Skill Hub modules configuration");
-  if ([...MODULE_FIELDS].some((field) => configuration.modules[field] !== true)) {
-    const error = new Error("Skill Hub activation requires the complete governed module set.");
-    error.code = "skill_hub_partial_configuration";
-    throw error;
+  assertKnownFields(configuration.service, SERVICE_FIELDS, "Skill Hub service configuration");
+  const serviceRef = String(configuration.service.serviceRef || "").trim();
+  const timeoutMs = Number(configuration.service.timeoutMs);
+  if (!/^[a-z][a-z0-9._:-]{2,127}$/u.test(serviceRef)) {
+    throw new TypeError("Skill Hub serviceRef is invalid.");
   }
-  return Object.freeze({ enabled: true });
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 120_000) {
+    throw new TypeError("Skill Hub timeoutMs must be between 100 and 120000.");
+  }
+  return Object.freeze({ enabled: true, serviceRef, timeoutMs });
 }
 
 function emptyContributions() {
-  return Object.freeze(Object.fromEntries(
-    CONTRIBUTION_KINDS.map((kind) => [kind, Object.freeze({})])
-  ));
+  return Object.freeze(Object.fromEntries(CONTRIBUTION_KINDS.map((kind) => [kind, Object.freeze({})])));
 }
 
-function filterContributionsForWorkspace(items = [], input = {}) {
-  const workspaceId = String(input.workspaceId || input.workspace || "").trim();
-  if (!workspaceId || !items.some((item) => Object.hasOwn(item, "workspaceId"))) return items;
-  return items.filter((item) => item.workspaceId === workspaceId);
-}
-
-function runtimeClosedResponse() {
+function failure(code, statusCode = 502) {
   return Object.freeze({
-    statusCode: 503,
+    statusCode,
     headers: Object.freeze({ "content-type": "application/json" }),
-    body: Object.freeze({ ok: false, error: Object.freeze({ code: "skill_hub_runtime_closed" }) })
+    body: Object.freeze({ ok: false, error: Object.freeze({ code }) })
   });
+}
+
+function currentCall(call = {}) {
+  return call?.auth?.authenticated === true && call?.governance?.authorized === true &&
+    call?.governance?.current === true && call?.governance?.revoked !== true;
 }
 
 export async function activatePlugin({ manifest, context = {} } = {}) {
@@ -142,249 +81,112 @@ export async function activatePlugin({ manifest, context = {} } = {}) {
     });
   }
 
-  const pluginData = context.pluginData;
-  if (!pluginData || typeof pluginData.readFile !== "function" ||
-      typeof pluginData.writeFile !== "function" || typeof pluginData.stat !== "function") {
-    throw new TypeError("Skill Hub requires an opaque plugin data capability.");
-  }
-
-  const mutationQueue = createStateMutationQueue();
+  const remote = createSkillHubExternalServiceClient(admission);
   const inFlight = new Set();
   let closed = false;
   let closePromise = null;
-  try {
-    const lifecycleDefinition = Object.freeze(JSON.parse(await readFile(
-      new URL("./state-machines/contribution.lifecycle.json", import.meta.url),
-      "utf8"
-    )));
-    const registryDescriptorFor = (input = {}, operationContext = {}) => {
-      const workspaceId = workspaceIdFrom({
-        workspaceId: input.registryWorkspaceId || input.contributionRegistryWorkspaceId
-      }, operationContext.contributionRegistryWorkspaceId || "default");
-      const registryId = crypto.createHash("sha256").update(workspaceId).digest("hex");
-      return Object.freeze({
-        workspaceId,
-        registryRelativePath: path.posix.join("SkillHub", "registries", `${registryId}.json`),
-        queueKey: `skill-hub-registry:${registryId}`
-      });
-    };
-    const registrySessions = new Map();
-    const contributionRegistryFor = async (input = {}, operationContext = {}) => {
-      const descriptor = registryDescriptorFor(input, operationContext);
-      if (!registrySessions.has(descriptor.registryRelativePath)) {
-        registrySessions.set(descriptor.registryRelativePath, (async () => {
-          let initialPersistedState;
-          try {
-            initialPersistedState = JSON.parse(await pluginData.readFile(descriptor.registryRelativePath, "utf8"));
-          } catch (error) {
-            if (error?.code !== "PLUGIN_DATA_NOT_FOUND") throw error;
-          }
-          let persistenceTail = Promise.resolve();
-          const schedulePersistence = (operation) => {
-            persistenceTail = persistenceTail.then(operation);
-            return persistenceTail;
-          };
-          const registry = createSkillHubContributionRegistry({
-            workspaceId: descriptor.workspaceId,
-            registryRelativePath: descriptor.registryRelativePath,
-            initialPersistedState,
-            schedulePersistence,
-            pluginData,
-            contributionNormalizer: normalizeSkillHubContribution,
-            materializeAsset: materializeSkillHubAsset,
-            assetRecordProjector: projectSkillHubAssetRecord,
-            assetBucketResolver: skillHubAssetBucketForType,
-            assetBuckets: SKILL_HUB_ASSET_BUCKETS,
-            lifecycleDefinition
-          });
-          const asyncRegistry = { protocolVersion: registry.protocolVersion };
-          for (const [name, method] of Object.entries(registry)) {
-            if (typeof method !== "function" || name.startsWith("_")) continue;
-            asyncRegistry[name] = async (...args) => {
-              if (!MUTATING_REGISTRY_METHODS.has(name)) {
-                await persistenceTail.catch(() => {});
-                return Reflect.apply(method, registry, args);
-              }
-              persistenceTail = Promise.resolve();
-              const snapshot = registry._snapshotState();
-              try {
-                const value = await Reflect.apply(method, registry, args);
-                await persistenceTail;
-                return value;
-              } catch (error) {
-                registry._restoreState(snapshot);
-                persistenceTail = Promise.resolve();
-                throw error;
-              }
-            };
-          }
-          return Object.freeze(asyncRegistry);
-        })());
-      }
-      return registrySessions.get(descriptor.registryRelativePath);
-    };
 
-    const executeSkillHubOperation = createSkillHubOperationExecutor({
-      assetRecordProjector: projectSkillHubAssetRecord,
-      buildContributionStatsDashboard: buildSkillHubStatsDashboard,
-      callerIdClaim,
-      callerKindClaim,
-      contributionRegistryFor,
-      errorPayload,
-      filterContributionsForWorkspace,
-      objectOrNull,
-      projectPublicSkillHubContribution,
-      protocolPayload,
-      result,
-      workspaceIdFrom
-    });
-    const sandboxOperations = createSkillHubSandboxOperations({ contributionRegistryFor, workspaceIdFrom });
-    const operations = {};
-    const routes = {};
-    const mcpTools = {};
-
-    for (const definition of SKILL_HUB_OPERATION_DEFINITIONS) {
-      operations[definition.id] = Object.freeze({
-        definition,
-        ...(manifest.opaqueInputPreprocessing?.[definition.id]
-          ? { opaqueInputPreprocessing: manifest.opaqueInputPreprocessing[definition.id] }
-          : {}),
-        requiredHostPorts: HOST_PORTS_BY_OPERATION[definition.id] || Object.freeze([]),
-        async execute({ operation = definition, input = {}, call = {}, signal = null, host = {} } = {}) {
-          if (closed || !mutationQueue.isAccepting()) return runtimeClosedResponse();
-          const descriptor = registryDescriptorFor(input);
-          const operationId = operation.id || definition.id;
-          const auth = plainObject(call.auth) ? call.auth : {};
-          const governance = plainObject(call.governance) ? call.governance : {};
-          const operationContext = {
-            pluginData,
-            transport: String(call.transport || "internal"),
-            subject: {
-              type: String(auth.actorType || (auth.authenticated ? "authenticated" : "anonymous")),
-              subjectId: String(auth.subjectRef || ""),
-              scopes: Array.isArray(auth.scopes) ? auth.scopes.map(String).filter(Boolean) : []
-            },
-            governance: Object.freeze({
-              authorized: governance.authorized === true,
-              current: governance.current === true
-            }),
-            securityAlertStore: host.securityAlertStore || null,
-            opaqueArtifactCustody: host.opaqueArtifactCustody || null,
-            operationPermissionGrant: host.operationPermissionGrant || null,
-            contributionRegistryWorkspaceId: String(input.contributionRegistryWorkspaceId || input.registryWorkspaceId || ""),
-            skillId: input.skillId || input["skill-id"] || "",
-            contributionId: input.contributionId || input["contribution-id"] || "",
-            principal: {
-              subjectRef: String(auth.subjectRef || "").trim(),
-              tenantRef: String(auth.tenantRef || input.workspaceId || input.workspace || "").trim()
-            },
-            signal
-          };
-          const task = async () => {
-            operationContext.contributionRegistry = await contributionRegistryFor(input, operationContext);
-            let operationResult;
-            if (SKILL_HUB_SANDBOX_OPERATION_IDS.has(operationId)) {
-              try {
-                let payload;
-                if (operationId === "skill_hub.execution.cancel") {
-                  payload = await sandboxOperations.cancel({ input, sandboxExecution: host.sandboxExecution });
-                } else if (operationId === "skill_hub.execution.status") {
-                  payload = await sandboxOperations.getStatus({ input, sandboxExecution: host.sandboxExecution });
-                } else {
-                  payload = await sandboxOperations.execute({
-                    operationId,
-                    input,
-                    context: operationContext,
-                    sandboxExecution: host.sandboxExecution
-                  });
-                }
-                operationResult = result(200, protocolPayload({
-                  protocolVersion: "v0.0.1:skill-hub:runtime-1",
-                  ...(payload.receipt !== undefined ? { receipt: payload.receipt } : {}),
-                  ...(payload.scan ? { scan: {
-                    contribution: projectPublicSkillHubContribution(payload.scan.contribution),
-                    lifecycleDecision: payload.scan.lifecycleDecision
-                  } } : {}),
-                  ...(payload.runId !== undefined ? { runId: payload.runId } : {}),
-                  ...(payload.status !== undefined ? { status: payload.status } : {}),
-                  ...(payload.reasonCode !== undefined ? { reasonCode: payload.reasonCode } : {}),
-                  ...(payload.cleanupStatus !== undefined ? { cleanupStatus: payload.cleanupStatus } : {}),
-                  ...(payload.outputDisposition !== undefined ? { outputDisposition: payload.outputDisposition } : {})
-                }));
-              } catch (error) {
-                operationResult = result(400, errorPayload(error, "skill_hub_sandbox_operation_failed"));
-              }
-            } else {
-              operationResult = await executeSkillHubOperation({ operationId, input, context: operationContext });
-            }
-            if (!operationResult) {
-              return Object.freeze({
-                statusCode: 501,
-                headers: Object.freeze({ "content-type": "application/json" }),
-                body: Object.freeze({ ok: false, error: Object.freeze({ code: "skill_hub_operation_not_registered" }) })
-              });
-            }
-            return Object.freeze({
-              statusCode: operationResult.status,
-              headers: Object.freeze({ "content-type": "application/json" }),
-              body: operationResult.payload
-            });
-          };
-          const pending = mutationQueue.run(descriptor.queueKey, task);
-          inFlight.add(pending);
-          try {
-            return await pending;
-          } finally {
-            inFlight.delete(pending);
-          }
-        }
-      });
-      routes[skillHubRouteId(definition.id)] = Object.freeze({ operationId: definition.id });
+  async function executeOperation({ operation, input = {}, call = {}, signal = null, host = {} }) {
+    if (!currentCall(call)) return failure("skill_hub_operation_denied", 403);
+    if (SANDBOX_OPERATIONS.has(operation.id)) {
+      return executeRemoteSandboxOperation({ operation, input, call, signal, host, remote });
     }
-    for (const [toolId, binding] of Object.entries(PLUGIN_MCP_TOOL_BINDINGS)) mcpTools[toolId] = binding;
+    if (SANDBOX_STATUS_OPERATIONS.has(operation.id)) {
+      return sandboxStatusOperation({ operation, input, host });
+    }
+    if (operation.id === "skill_hub.permission.grant") {
+      const prepared = await remote.request({ operation, input, call, signal, host, phase: "prepare" });
+      if (prepared.statusCode >= 400) return prepared;
+      const loanRecord = prepared.body?.loanRecord;
+      if (!loanRecord || typeof host.operationPermissionGrant?.recordPluginGrant !== "function") {
+        return failure("skill_hub_operation_permission_unavailable", 503);
+      }
+      let receipt;
+      try {
+        receipt = await host.operationPermissionGrant.recordPluginGrant({ loanRecord });
+      } catch (error) {
+        return failure(
+          /^[a-z][a-z0-9_]{2,96}$/u.test(String(error?.code || ""))
+            ? String(error.code)
+            : "skill_hub_operation_permission_denied",
+          400
+        );
+      }
+      if (receipt?.ok !== true || !String(receipt.receiptId || "")) {
+        return failure("skill_hub_operation_permission_denied", 400);
+      }
+      return remote.request({
+        operation,
+        input,
+        call,
+        signal,
+        host,
+        phase: "commit",
+        operationPermissionReceipt: receipt
+      });
+    }
+    return remote.request({ operation, input, call, signal, host });
+  }
 
-    return Object.freeze({
-      id: manifest.id,
-      mounts: Object.freeze({}),
-      contributions: Object.freeze({
-        operations: Object.freeze(operations),
-        routes: Object.freeze(routes),
-        mcpTools: Object.freeze(mcpTools),
-        consoleEntries: Object.freeze({
-          "admin.skill-hub": Object.freeze({
-            label: "Skill Hub",
-            featureId: "skill-hub",
-            viewKey: "skillHub",
-            routePath: "/admin/skill-hub",
-            componentId: "skill-hub/SkillHubView",
-            assetPath: "console/index.mjs",
-            assetExport: "mountPluginConsole",
-            requiredScopes: Object.freeze(["console:read"])
-          })
-        }),
-        stateMachines: Object.freeze({
-          "contribution.lifecycle": Object.freeze({ definition: lifecycleDefinition })
-        }),
-        verifierHooks: Object.freeze({})
-      }),
-      async close() {
-        if (closePromise) {
-          const receipt = await closePromise;
-          return Object.freeze({ ...receipt, alreadyClosed: true });
-        }
-        closed = true;
-        closePromise = (async () => {
-          const queueReceipt = await mutationQueue.close();
-          await Promise.allSettled([...inFlight]);
-          await Promise.allSettled([...registrySessions.values()]);
-          return Object.freeze({ ok: queueReceipt.ok, alreadyClosed: false, drained: queueReceipt.drained });
-        })();
-        return closePromise;
+  const operations = {};
+  const routes = {};
+  const mcpTools = {};
+  for (const definition of SKILL_HUB_OPERATION_DEFINITIONS) {
+    const requiredHostPorts = SANDBOX_OPERATIONS.has(definition.id)
+      ? ["externalService", "sandboxExecution"]
+      : SANDBOX_STATUS_OPERATIONS.has(definition.id)
+        ? ["sandboxExecution"]
+      : definition.id === "skill_hub.permission.grant"
+        ? ["externalService", "operationPermissionGrant"]
+        : ["externalService"];
+    operations[definition.id] = Object.freeze({
+      definition,
+      requiredHostPorts: Object.freeze(requiredHostPorts),
+      execute(args = {}) {
+        if (closed || !remote.isAccepting()) return Promise.resolve(failure("skill_hub_runtime_closed", 503));
+        const task = executeOperation({ ...args, operation: definition }).catch(() =>
+          failure("skill_hub_external_service_failed", 502)
+        );
+        inFlight.add(task);
+        task.finally(() => inFlight.delete(task)).catch(() => {});
+        return task;
       }
     });
-  } catch (error) {
-    closed = true;
-    await mutationQueue.close();
-    throw error;
+    routes[skillHubRouteId(definition.id)] = Object.freeze({ operationId: definition.id });
   }
+  for (const [toolId, binding] of Object.entries(PLUGIN_MCP_TOOL_BINDINGS)) mcpTools[toolId] = binding;
+
+  return Object.freeze({
+    id: manifest.id,
+    mounts: Object.freeze({}),
+    contributions: Object.freeze({
+      operations: Object.freeze(operations),
+      routes: Object.freeze(routes),
+      mcpTools: Object.freeze(mcpTools),
+      consoleEntries: Object.freeze({
+        "admin.skill-hub": Object.freeze({
+          label: "Skill Hub",
+          featureId: "skill-hub",
+          viewKey: "skillHub",
+          routePath: "/admin/skill-hub",
+          componentId: "skill-hub/SkillHubView",
+          assetPath: "console/index.mjs",
+          assetExport: "mountPluginConsole",
+          requiredScopes: Object.freeze(["console:read"])
+        })
+      }),
+      stateMachines: Object.freeze({}),
+      verifierHooks: Object.freeze({})
+    }),
+    close() {
+      if (closePromise) return closePromise.then((value) => Object.freeze({ ...value, alreadyClosed: true }));
+      closed = true;
+      closePromise = (async () => {
+        const remoteReceipt = await remote.close();
+        await Promise.allSettled([...inFlight]);
+        return Object.freeze({ ok: true, alreadyClosed: remoteReceipt.alreadyClosed });
+      })();
+      return closePromise;
+    }
+  });
 }

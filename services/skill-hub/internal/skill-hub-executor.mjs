@@ -6,7 +6,7 @@ import {
   SKILL_HUB_SKILL_STORAGE_DIR,
   SKILL_HUB_STORAGE_ROOT_DIR
 } from "./skill-hub-storage.mjs";
-import { SKILL_HUB_OPAQUE_BUNDLE_PATH } from "./skill-hub-opaque-bundle.mjs";
+import { SKILL_HUB_PACKAGE_PATH } from "./skill-hub-package.mjs";
 
 const SKILL_HUB_MAX_PACKAGE_BYTES = 1024 * 1024;
 const SKILL_HUB_EXECUTABLE_EXTENSIONS = new Set([
@@ -156,22 +156,22 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
       throw new Error("Skill package submissions require a manifest or payload reference.");
     }
     if (input.contentBase64 !== undefined || input.packageBundleBase64 !== undefined) {
-      throw new Error("Skill package plaintext transport must be removed before plugin execution.");
+      throw new Error("Skill package transport must be normalized before domain execution.");
     }
     const packageBundle = objectOrNull(input.packageBundle);
     const allowedBundleFields = new Set([
       "schemaVersion", "custodyRef", "contentDigest", "envelopeDigest", "byteCount"
     ]);
-    if (!packageBundle || packageBundle.schemaVersion !== "v0.0.1:plugin:opaque-input-handle-1" ||
+    if (!packageBundle || packageBundle.schemaVersion !== "v0.0.1:skill-hub:package-handle-1" ||
         Object.keys(packageBundle).some((field) => !allowedBundleFields.has(field)) ||
-        !/^custody:[A-Za-z0-9._-]{1,160}$/u.test(String(packageBundle.custodyRef || "")) ||
+        !/^service-package:[a-f0-9]{64}$/u.test(String(packageBundle.custodyRef || "")) ||
         !/^[a-f0-9]{64}$/u.test(String(packageBundle.contentDigest || "")) ||
         !/^[a-f0-9]{64}$/u.test(String(packageBundle.envelopeDigest || ""))) {
-      throw new Error("Skill package submissions require one valid core-sealed opaque package bundle.");
+      throw new Error("Skill package submissions require one valid service-custodied package bundle.");
     }
     const packageSize = Number(packageBundle.byteCount);
     if (input.skillManifest !== undefined || input.manifest !== undefined) {
-      throw new Error("Skill package manifest content must be carried only inside the opaque package bundle.");
+      throw new Error("Skill package manifest content must be carried only inside the package bundle.");
     }
     const runtimeKind = String(input.runtimeKind || "").trim();
     const entryPoint = String(input.entryPoint || "").trim();
@@ -227,15 +227,15 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
       appendSkillHubAlert("skill_hub_asset_path_escape_denied", "Skill Hub asset path escape denied");
       throw new Error("Skill package asset path must stay inside the Skill Hub storage boundary.");
     }
-    if (!context.pluginData || typeof context.pluginData.stat !== "function" || typeof context.pluginData.readFile !== "function") {
-      throw new Error("Skill package integrity requires opaque plugin data access.");
+    if (!context.serviceData || typeof context.serviceData.stat !== "function" || typeof context.serviceData.readFile !== "function") {
+      throw new Error("Skill package integrity requires service data access.");
     }
     let assetStat;
     try {
-      assetStat = await context.pluginData.stat(assetPath);
+      assetStat = await context.serviceData.stat(assetPath);
     } catch (error) {
       appendSkillHubAlert(
-        error?.code === "PLUGIN_DATA_BOUNDARY_REJECTED"
+        error?.code === "SERVICE_DATA_BOUNDARY_REJECTED"
           ? "skill_hub_asset_symlink_denied"
           : "skill_hub_asset_access_denied",
         "Skill Hub asset access denied"
@@ -247,7 +247,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
       appendSkillHubAlert("skill_hub_executable_asset_denied", "Skill Hub executable asset denied");
       throw new Error("Stored asset file has executable permissions.");
     }
-    const manifest = JSON.parse(await context.pluginData.readFile(assetPath, "utf8"));
+    const manifest = JSON.parse(await context.serviceData.readFile(assetPath, "utf8"));
     const { assetId, assetPath: storedAssetPath, manifestHash, fixedSkillHubAssetBuckets, ...hashableManifest } = manifest;
     if (storedAssetPath !== assetPath) {
       throw new Error("Skill package manifest path metadata mismatch.");
@@ -373,9 +373,9 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
 
       if (id === "skill_hub.submit") {
         const packagePolicy = assertSkillHubPackagePolicy(input);
-        if (!context.opaqueArtifactCustody ||
-            typeof context.opaqueArtifactCustody.delete !== "function") {
-          throw new Error("Skill package submission requires opaque artifact custody.");
+        if (!context.packageCustody ||
+            typeof context.packageCustody.delete !== "function") {
+          throw new Error("Skill package submission requires service package custody.");
         }
         const workspaceId = workspaceIdFrom(input);
         const sealed = {
@@ -403,15 +403,15 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
             packageSize: packagePolicy.packageSize,
             packageChecksum,
             packageBundle: {
-              path: SKILL_HUB_OPAQUE_BUNDLE_PATH,
+              path: SKILL_HUB_PACKAGE_PATH,
               digest: packageChecksum,
               size: packagePolicy.packageSize,
               custodyRef: sealed.handle,
               envelopeDigest: sealed.envelopeDigest
             },
-            opaqueCustodyRef: sealed.handle,
-            opaqueContentDigest: sealed.contentDigest,
-            opaqueEnvelopeDigest: sealed.envelopeDigest,
+            packageCustodyRef: sealed.handle,
+            packageContentDigest: sealed.contentDigest,
+            packageEnvelopeDigest: sealed.envelopeDigest,
             custodyState: "blocked",
             executionState: "blocked",
             runtimeKind: packagePolicy.runtimeKind,
@@ -429,7 +429,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
         } catch (error) {
           if (sealed.handle && !committed) {
             try {
-              await context.opaqueArtifactCustody.delete({
+              await context.packageCustody.delete({
                 handle: sealed.handle,
                 authorizationRef: `skill-hub-submission-rollback:${skillHubSha256(sealed.handle, 32)}`,
                 ownerBinding: {
@@ -440,7 +440,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
             } catch (rollbackError) {
               throw new AggregateError(
                 [error, rollbackError],
-                "Skill package submission failed and opaque custody rollback did not complete."
+                "Skill package submission failed and service custody rollback did not complete."
               );
             }
           }
@@ -497,7 +497,7 @@ export function createSkillHubOperationExecutor(dependencies = {}) {
         }
         await readSkillHubAssetManifest(skill, context);
         const currentInputDigest = sandboxDigest([{
-          path: SKILL_HUB_OPAQUE_BUNDLE_PATH,
+          path: SKILL_HUB_PACKAGE_PATH,
           digest: skill.packageChecksum
         }]);
         const scanReceipt = [...(skill.executionReceipts || [])].reverse().find((receipt) =>

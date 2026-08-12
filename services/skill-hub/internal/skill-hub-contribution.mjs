@@ -73,9 +73,9 @@ export function projectSkillHubAssetRecord(record = {}) {
       custodyRef: text(record.packageBundle?.custodyRef),
       envelopeDigest: text(record.packageBundle?.envelopeDigest)
     },
-    opaqueCustodyRef: text(record.opaqueCustodyRef),
-    opaqueContentDigest: text(record.opaqueContentDigest),
-    opaqueEnvelopeDigest: text(record.opaqueEnvelopeDigest),
+    packageCustodyRef: text(record.packageCustodyRef),
+    packageContentDigest: text(record.packageContentDigest),
+    packageEnvelopeDigest: text(record.packageEnvelopeDigest),
     custodyState: text(record.custodyState),
     executionState: text(record.executionState),
     payloadRefs: asArray(record.payloadRefs).map(text).filter(Boolean),
@@ -149,9 +149,9 @@ export function normalizeSkillHubContribution(input = {}, defaults = {}) {
     envelopeDigest: text(input.packageBundle?.envelopeDigest)
   };
   const license = text(input.license || "UNREVIEWED");
-  const opaqueCustodyRef = text(input.opaqueCustodyRef);
-  const opaqueContentDigest = text(input.opaqueContentDigest);
-  const opaqueEnvelopeDigest = text(input.opaqueEnvelopeDigest);
+  const packageCustodyRef = text(input.packageCustodyRef);
+  const packageContentDigest = text(input.packageContentDigest);
+  const packageEnvelopeDigest = text(input.packageEnvelopeDigest);
   const packageFingerprint = stableJson({
     license,
     payloadRefs,
@@ -195,11 +195,11 @@ export function normalizeSkillHubContribution(input = {}, defaults = {}) {
     packageSize: Number(input.packageSize || Buffer.byteLength(packageFingerprint)),
     packageChecksum: text(input.packageChecksum || hash(packageFingerprint, 64)),
     packageBundle,
-    opaqueCustodyRef,
-    opaqueContentDigest,
-    opaqueEnvelopeDigest,
-    custodyState: text(input.custodyState || (opaqueCustodyRef ? "blocked" : "")),
-    executionState: text(input.executionState || (opaqueCustodyRef ? "blocked" : "")),
+    packageCustodyRef,
+    packageContentDigest,
+    packageEnvelopeDigest,
+    custodyState: text(input.custodyState || (packageCustodyRef ? "blocked" : "")),
+    executionState: text(input.executionState || (packageCustodyRef ? "blocked" : "")),
     declaredPermissions: asArray(input.declaredPermissions || input.permissions || requestedActions)
       .map(text)
       .filter(Boolean),

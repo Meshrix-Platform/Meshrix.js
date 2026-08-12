@@ -31,19 +31,6 @@
     "skill_hub.permission.request",
     "skill_hub.permission.grant"
   ],
-  "opaqueInputPreprocessing": {
-    "skill_hub.submit": [
-      {
-        "schemaVersion": "v0.0.1:plugin:opaque-input-preprocessing-1",
-        "encoding": "base64",
-        "sourceField": "packageBundleBase64",
-        "targetField": "packageBundle",
-        "mediaType": "application/vnd.meshrix.skill-package",
-        "maxBytes": 1048576,
-        "outputSchemaVersion": "v0.0.1:plugin:opaque-input-handle-1"
-      }
-    ]
-  },
   "routes": [
     { "id": "skill_hub.search.http", "path": "/api/skill-hub/v1/search", "kind": "http" },
     { "id": "skill_hub.list.http", "path": "/api/skill-hub/v1/skills", "kind": "http" },
@@ -89,7 +76,7 @@
     "meshrix.skillHub.permission.grant"
   ],
   "consoleEntries": ["admin.skill-hub"],
-  "stateMachines": ["contribution.lifecycle"],
+  "stateMachines": [],
   "runtime": { "module": "./runtime.mjs" },
   "verifierHooks": [
     {

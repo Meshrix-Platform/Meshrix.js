@@ -38,6 +38,12 @@ compiled identifiers. Grants and tool calls bind to the service id returned by
 the publish response: the compiled capability is `cap:upstream:svc_…:convert`
 and the projected MCP tool is `upstream.svc_….convert`. Do not precompute
 capabilities from the `serviceKey`.
+
+[skill-hub.upstream.json](skill-hub.upstream.json) is the portable contract for
+the independently deployed Skill Hub service. Publish it after the service is
+reachable from Meshrix, then configure the `skill-hub` adapter with the opaque
+server-assigned service id returned by publication. The adapter does not accept
+a URL and stores no local Skill Hub registry.
 The authoritative schema and runtime behavior are owned by:
 
 - [Gateway functionality](../functionality/GATEWAY.md)

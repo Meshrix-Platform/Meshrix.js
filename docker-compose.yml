@@ -5,6 +5,7 @@
 #   docker compose up -d
 #   MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --build
 #   docker compose --profile format-convert up -d (optional converter service)
+#   docker compose --profile skill-hub up -d --build (independent Skill Hub)
 #
 # The default build remains API-only. Select runtime-ui explicitly to build and
 # serve the Vue Console. The service binds to 127.0.0.1.
@@ -82,10 +83,45 @@ services:
     networks:
       - meshrix-core
 
+  # Independent Skill Hub service used by docs/examples/skill-hub.upstream.json.
+  # Meshrix reaches it through the internal network as http://skill-hub:8080.
+  skill-hub:
+    build:
+      context: ./services/skill-hub
+      dockerfile: Dockerfile
+    image: ${MESHRIX_SKILL_HUB_IMAGE_NAME:-meshrix-skill-hub:local}
+    container_name: ${MESHRIX_SKILL_HUB_CONTAINER_NAME:-meshrix-skill-hub}
+    restart: unless-stopped
+    profiles:
+      - skill-hub
+    init: true
+    user: "10001:10001"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      PORT: 8080
+      SKILL_HUB_DATA_ROOT: /var/lib/skill-hub
+      MAX_REQUEST_BYTES: 2097152
+      SKILL_HUB_AUTH_TOKEN: ${MESHRIX_SKILL_HUB_AUTH_TOKEN:?set MESHRIX_SKILL_HUB_AUTH_TOKEN}
+    volumes:
+      - meshrix-skill-hub-data:/var/lib/skill-hub
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/readyz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - meshrix-core
+
 volumes:
   meshrix-server-data:
   meshrix-server-backups:
   meshrix-codex-home:
+  meshrix-skill-hub-data:
 
 networks:
   meshrix-core: {}

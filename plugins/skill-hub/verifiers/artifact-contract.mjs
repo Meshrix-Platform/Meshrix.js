@@ -15,10 +15,6 @@ const configurationSchema = JSON.parse(await readFile(
   new URL("configuration.schema.json", pluginRoot),
   "utf8"
 ));
-const lifecycle = JSON.parse(await readFile(
-  new URL("state-machines/contribution.lifecycle.json", pluginRoot),
-  "utf8"
-));
 const consoleSource = await readFile(new URL("console/index.mjs", pluginRoot), "utf8");
 
 async function relativeInventory(directory = pluginRoot, prefix = "") {
@@ -40,7 +36,7 @@ assert.equal(manifest.operations.length, 20);
 assert.equal(manifest.routes.length, 20);
 assert.equal(manifest.mcpTools.length, 20);
 assert.deepEqual(manifest.consoleEntries, ["admin.skill-hub"]);
-assert.deepEqual(manifest.stateMachines, ["contribution.lifecycle"]);
+assert.deepEqual(manifest.stateMachines, []);
 assert.deepEqual(
   manifest.operations,
   SKILL_HUB_OPERATION_DEFINITIONS.map((definition) => definition.id)
@@ -59,51 +55,38 @@ assert.equal(configurationSchema.additionalProperties, false);
 assert.deepEqual(validateSkillHubConfiguration({}), { enabled: false });
 assert.deepEqual(validateSkillHubConfiguration({
   enabled: true,
-  modules: {
-    registry: true,
-    opaqueCustody: true,
-    controlledSandbox: true,
-    operationPermission: true
-  }
-}), { enabled: true });
-assert.equal(lifecycle.machineId, "contribution.lifecycle");
-assert.equal(lifecycle.totalMatrix.length, lifecycle.states.length * lifecycle.events.length);
+  service: { serviceRef: "operator-skill-hub-service", timeoutMs: 30000 }
+}), { enabled: true, serviceRef: "operator-skill-hub-service", timeoutMs: 30000 });
 assert.match(consoleSource, /export function mountPluginConsole/u);
 
 const disabled = await activatePlugin({ manifest, context: { configuration: {} } });
 assert.equal(Object.values(disabled.contributions).flatMap((value) => Object.keys(value)).length, 0);
 await disabled.close();
 
-const pluginData = Object.freeze({
-  async readFile() {
-    throw Object.assign(new Error("Synthetic record is absent."), { code: "PLUGIN_DATA_NOT_FOUND" });
-  },
-  async writeFile() {},
-  async stat() { return { type: "file", executable: false }; }
-});
 const enabled = await activatePlugin({
   manifest,
   context: {
     configuration: {
       enabled: true,
-      modules: {
-        registry: true,
-        opaqueCustody: true,
-        controlledSandbox: true,
-        operationPermission: true
-      }
-    },
-    pluginData
+      service: { serviceRef: "operator-skill-hub-service", timeoutMs: 30000 }
+    }
   }
 });
 assert.equal(Object.keys(enabled.contributions.operations).length, 20);
 assert.equal(Object.keys(enabled.contributions.routes).length, 20);
 assert.equal(Object.keys(enabled.contributions.mcpTools).length, 20);
+assert.deepEqual(enabled.contributions.stateMachines, {});
 assert.deepEqual(
   enabled.contributions.operations["skill_hub.permission.grant"].requiredHostPorts,
-  ["operationPermissionGrant"]
+  ["externalService", "operationPermissionGrant"]
 );
 assert.ok(Object.values(enabled.contributions.operations).every((operation) =>
+  operation.requiredHostPorts.includes("externalService") ||
+  operation.definition.id.startsWith("skill_hub.execution.")
+));
+assert.ok(Object.values(enabled.contributions.operations).every((operation) =>
+  !operation.requiredHostPorts.includes("pluginData") &&
+  !operation.requiredHostPorts.includes("opaqueArtifactCustody") &&
   !operation.requiredHostPorts.includes("securityPermissions") &&
   !operation.requiredHostPorts.includes("operationPermissionPlatform")
 ));
@@ -113,6 +96,7 @@ const inventory = await relativeInventory();
 assert.ok(inventory.includes("runtime.mjs"));
 assert.ok(inventory.includes("configuration.schema.json"));
 assert.ok(inventory.includes("console/index.mjs"));
+assert.ok(inventory.includes("external-services/skill-hub.external-service.json"));
 assert.ok(inventory.every((file) => !/\.(?:vue|ts|tsx)$/u.test(file)));
 
 const contract = Object.freeze({
@@ -123,7 +107,8 @@ const contract = Object.freeze({
   mcpTools: manifest.mcpTools,
   consoleEntries: manifest.consoleEntries,
   stateMachines: manifest.stateMachines,
-  storageBoundary: "plugin-data-only",
+  storageBoundary: "independent-service-only",
+  serviceBinding: "service.serviceRef",
   operationPermissionWritePort: "operationPermissionGrant.recordPluginGrant"
 });
 

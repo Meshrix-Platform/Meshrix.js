@@ -4,15 +4,20 @@
   "type": "object",
   "properties": {
     "enabled": { "type": "boolean" },
-    "modules": {
+    "service": {
       "type": "object",
       "properties": {
-        "registry": { "const": true },
-        "opaqueCustody": { "const": true },
-        "controlledSandbox": { "const": true },
-        "operationPermission": { "const": true }
+        "serviceRef": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9._:-]{2,127}$"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 120000
+        }
       },
-      "required": ["registry", "opaqueCustody", "controlledSandbox", "operationPermission"],
+      "required": ["serviceRef", "timeoutMs"],
       "additionalProperties": false
     }
   },
@@ -22,8 +27,8 @@
         "properties": { "enabled": { "const": true } },
         "required": ["enabled"]
       },
-      "then": { "required": ["modules"] },
-      "else": { "not": { "required": ["modules"] } }
+      "then": { "required": ["service"] },
+      "else": { "not": { "required": ["service"] } }
     }
   ],
   "additionalProperties": false

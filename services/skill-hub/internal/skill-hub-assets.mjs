@@ -29,7 +29,7 @@ function safePathSegment(value) {
 
 export function materializeSkillHubAsset(contribution, {
   persistenceEnabled = false,
-  pluginData = null,
+  serviceData = null,
   schedulePersistence = null,
   lifecycleState = contribution.status || "submitted",
   targetWorkspaceId = contribution.workspaceId,
@@ -53,8 +53,8 @@ export function materializeSkillHubAsset(contribution, {
     relation,
     safePathSegment
   });
-  if (!contribution.opaqueCustodyRef) {
-    throw new Error("Skill Hub assets require an opaque custody bundle.");
+  if (!contribution.packageCustodyRef) {
+    throw new Error("Skill Hub assets require a service custody bundle.");
   }
   const packageRoot = "";
   const packageBundle = {
@@ -90,9 +90,9 @@ export function materializeSkillHubAsset(contribution, {
     packageChecksum: contribution.packageChecksum,
     packageRoot,
     packageBundle,
-    opaqueCustodyRef: text(contribution.opaqueCustodyRef),
-    opaqueContentDigest: text(contribution.opaqueContentDigest),
-    opaqueEnvelopeDigest: text(contribution.opaqueEnvelopeDigest),
+    packageCustodyRef: text(contribution.packageCustodyRef),
+    packageContentDigest: text(contribution.packageContentDigest),
+    packageEnvelopeDigest: text(contribution.packageEnvelopeDigest),
     custodyState: text(contribution.custodyState),
     executionState: text(contribution.executionState),
     declaredPermissions: contribution.declaredPermissions,
@@ -123,9 +123,9 @@ export function materializeSkillHubAsset(contribution, {
     manifestHash,
     packageRoot,
     packageBundle,
-    opaqueCustodyRef: text(contribution.opaqueCustodyRef),
-    opaqueContentDigest: text(contribution.opaqueContentDigest),
-    opaqueEnvelopeDigest: text(contribution.opaqueEnvelopeDigest),
+    packageCustodyRef: text(contribution.packageCustodyRef),
+    packageContentDigest: text(contribution.packageContentDigest),
+    packageEnvelopeDigest: text(contribution.packageEnvelopeDigest),
     custodyState: text(contribution.custodyState),
     executionState: text(contribution.executionState),
     payloadRefs: contribution.payloadRefs,
@@ -133,8 +133,8 @@ export function materializeSkillHubAsset(contribution, {
     updatedAt: timestamp
   });
   if (persistenceEnabled) {
-    if (!pluginData || typeof pluginData.writeFile !== "function" || typeof schedulePersistence !== "function") {
-      throw new TypeError("Skill Hub asset persistence requires an opaque plugin data capability.");
+    if (!serviceData || typeof serviceData.writeFile !== "function" || typeof schedulePersistence !== "function") {
+      throw new TypeError("Skill Hub asset persistence requires the service data capability.");
     }
     const persistedManifest = {
       ...manifest,
@@ -143,7 +143,7 @@ export function materializeSkillHubAsset(contribution, {
       manifestHash,
       fixedSkillHubAssetBuckets: storageDirectories
     };
-    schedulePersistence(() => pluginData.writeFile(
+    schedulePersistence(() => serviceData.writeFile(
       assetPath,
       `${JSON.stringify(persistedManifest, null, 2)}\n`,
       "utf8"

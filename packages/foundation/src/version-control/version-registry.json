@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-10",
+  "updatedAt": "2026-08-12",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -7299,7 +7299,7 @@
     {
       "artifactId": "meshrix.skill-hub.contribution-dashboard",
       "kind": "schema",
-      "description": "Governed contribution dashboard schema for the repository-local Skill Hub runtime plugin.",
+      "description": "Governed contribution dashboard schema for the independent Skill Hub service.",
       "activeVersion": "v0.0.1:skill-hub:contribution-dashboard-1",
       "versions": [
         {
@@ -7309,14 +7309,14 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current repository-local plugin dashboard contract."
+            "notes": "Current independent service dashboard contract."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
               "evidenceId": "v0-0-1-skill-hub-contribution-dashboard-1-source",
               "kind": "other",
-              "uri": "plugins/skill-hub/runtime/skill-hub-executor.mjs"
+              "uri": "services/skill-hub/internal/skill-hub-executor.mjs"
             }
           ]
         }
@@ -7325,7 +7325,7 @@
     {
       "artifactId": "meshrix.skill-hub.runtime",
       "kind": "protocol",
-      "description": "Governed operation payload protocol for the repository-local Skill Hub runtime plugin.",
+      "description": "Governed operation payload protocol for the independent Skill Hub service and its Meshrix adapter.",
       "activeVersion": "v0.0.1:skill-hub:runtime-1",
       "versions": [
         {
@@ -7335,14 +7335,66 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current repository-local plugin protocol."
+            "notes": "Current independent service protocol."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
               "evidenceId": "v0-0-1-skill-hub-runtime-1-source",
               "kind": "other",
-              "uri": "plugins/skill-hub/runtime/skill-hub-executor.mjs"
+              "uri": "services/skill-hub/internal/skill-hub-executor.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.service",
+      "kind": "protocol",
+      "description": "Authenticated HTTP operation protocol for the independently deployed Skill Hub service.",
+      "activeVersion": "v0.0.1:skill-hub:service-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:service-1",
+          "ref": "meshrix.skill-hub.service@v0.0.1:skill-hub:service-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current independently deployed Skill Hub HTTP service protocol."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-service-1-source",
+              "kind": "other",
+              "uri": "services/skill-hub/internal/http-service.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.package-handle",
+      "kind": "protocol",
+      "description": "Service-custodied package handle exchanged across Skill Hub prepare and commit phases.",
+      "activeVersion": "v0.0.1:skill-hub:package-handle-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:package-handle-1",
+          "ref": "meshrix.skill-hub.package-handle@v0.0.1:skill-hub:package-handle-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current digest-bound handle for packages held by the independent Skill Hub service."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-package-handle-1-source",
+              "kind": "other",
+              "uri": "services/skill-hub/internal/application.mjs"
             }
           ]
         }
@@ -8027,7 +8079,7 @@
     {
       "artifactId": "meshrix.state-machine.skill-hub-contribution-lifecycle",
       "kind": "state_machine",
-      "description": "Governed contribution lifecycle for the repository-local Skill Hub runtime plugin.",
+      "description": "Governed contribution lifecycle owned by the independent Skill Hub service.",
       "activeVersion": "v0.0.1:state-machine:contribution-lifecycle-1",
       "versions": [
         {
@@ -8037,14 +8089,14 @@
           "compatibility": {
             "newBindingsAllowed": true,
             "historicalResolutionAllowed": true,
-            "notes": "Current repository-local plugin state machine."
+            "notes": "Current independent service state machine."
           },
           "artifactRefs": [],
           "evidenceRefs": [
             {
               "evidenceId": "v0-0-1-state-machine-contribution-lifecycle-1-source",
               "kind": "manifest",
-              "uri": "plugins/skill-hub/state-machines/contribution.lifecycle.json"
+              "uri": "services/skill-hub/state-machines/contribution.lifecycle.json"
             }
           ]
         }

@@ -157,7 +157,7 @@ export function createSkillHubContributionRegistry({
   workspaceId,
   initialPersistedState,
   schedulePersistence,
-  pluginData,
+  serviceData,
   registryRelativePath,
   contributionNormalizer,
   materializeAsset,
@@ -177,7 +177,7 @@ export function createSkillHubContributionRegistry({
     return materializeAsset(contribution, {
       ...input,
       persistenceEnabled: true,
-      pluginData,
+      serviceData,
       schedulePersistence,
       assetRecordProjector
     });
@@ -191,7 +191,7 @@ export function createSkillHubContributionRegistry({
       contributions: Object.fromEntries(contributions),
       auditEvents
     };
-    schedulePersistence(() => pluginData.writeFile(registryRelativePath, `${JSON.stringify(state, null, 2)}\n`, "utf8"));
+    schedulePersistence(() => serviceData.writeFile(registryRelativePath, `${JSON.stringify(state, null, 2)}\n`, "utf8"));
   }
 
   function get(id) {

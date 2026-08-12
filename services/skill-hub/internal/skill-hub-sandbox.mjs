@@ -1,10 +1,8 @@
 import {
   SANDBOX_CONFIGURED_WORKLOAD_REQUEST_SCHEMA,
-  SANDBOX_CUSTODY_PROMOTION_SCHEMA,
-  custodyPromotionSetDigest,
   sandboxDigest
 } from "./skill-hub-contracts.mjs";
-import { SKILL_HUB_OPAQUE_BUNDLE_PATH } from "./skill-hub-opaque-bundle.mjs";
+import { SKILL_HUB_PACKAGE_PATH } from "./skill-hub-package.mjs";
 
 const WORKLOAD_BY_OPERATION = Object.freeze({
   "skill_hub.scan": "skill_scan",
@@ -147,7 +145,7 @@ function normalizedReceipt(receiptValue, request, workspaceId, packageDigest) {
     receiptInputDigests.length > 0 &&
     (receiptInputDigests.length !== 1 || receiptInputDigests[0] !== normalized.inputDigest)
   ) {
-    throw new Error("Sandbox receipt does not match the opaque package input.");
+    throw new Error("Sandbox receipt does not match the service package input.");
   }
   if (
     normalized.status === "output_quarantined" &&
@@ -165,69 +163,6 @@ function normalizedReceipt(receiptValue, request, workspaceId, packageDigest) {
     throw new Error("Sandbox success requires completed output disposition.");
   }
   return normalized;
-}
-
-async function acceptScanOutput(rawReceipt, sandboxExecution) {
-  const outputHandle = requiredText(rawReceipt?.outputHandle, "Sandbox output handle");
-  if (typeof sandboxExecution.resolveQuarantinedOutput !== "function" ||
-      typeof sandboxExecution.disposeOutput !== "function" ||
-      typeof sandboxExecution.getReceipt !== "function") {
-    throw new Error("Controlled scan output disposition is unavailable.");
-  }
-  let disposition = "rejected";
-  try {
-    const quarantined = await sandboxExecution.resolveQuarantinedOutput(outputHandle);
-    const files = Array.isArray(quarantined?.output?.files) ? quarantined.output.files : [];
-    if (files.length !== 1 || files[0]?.path !== "scan.json" ||
-        !Number.isSafeInteger(files[0]?.bytes) || files[0].bytes <= 0 || files[0].bytes > 1024 ||
-        !/^[a-f0-9]{64}$/u.test(String(files[0]?.digest || "")) ||
-        typeof quarantined?.readFile !== "function") {
-      throw new Error("Controlled scan output manifest is invalid.");
-    }
-    const bytes = await quarantined.readFile("scan.json");
-    if (!Buffer.isBuffer(bytes) || bytes.byteLength !== files[0].bytes) {
-      throw new Error("Controlled scan output content is invalid.");
-    }
-    let result;
-    try {
-      result = JSON.parse(bytes.toString("utf8"));
-    } catch {
-      throw new Error("Controlled scan output content is invalid.");
-    }
-    if (!result || typeof result !== "object" || Array.isArray(result) ||
-        Object.keys(result).length !== 1 || result.scan !== "passed") {
-      throw new Error("Controlled scan did not produce an accepted result.");
-    }
-    disposition = "committed";
-  } finally {
-    const disposed = await sandboxExecution.disposeOutput(outputHandle, disposition);
-    if (disposed !== true) throw new Error("Controlled scan output disposition did not complete.");
-  }
-  const finalReceipt = await sandboxExecution.getReceipt(requiredText(rawReceipt?.runId, "Sandbox receipt run identifier"));
-  if (finalReceipt?.status !== "succeeded" || finalReceipt?.outputDisposition !== "committed") {
-    throw new Error("Controlled scan final receipt is unavailable.");
-  }
-  return finalReceipt;
-}
-
-function projectedStatus(value, runId = "") {
-  if (typeof value === "boolean") {
-    return {
-      runId,
-      status: value ? "cancellation_requested" : "not_cancelled",
-      reasonCode: value ? "" : "sandbox_run_not_cancellable",
-      cleanupStatus: "",
-      outputDisposition: ""
-    };
-  }
-  const status = record(value);
-  return {
-    runId: String(status.runId || runId).trim(),
-    status: String(status.status || "unknown").trim(),
-    reasonCode: String(status.reasonCode || "").trim(),
-    cleanupStatus: String(status.cleanupState || "").trim(),
-    outputDisposition: String(status.outputDisposition || "").trim()
-  };
 }
 
 export function createSkillHubSandboxOperations({ contributionRegistryFor, workspaceIdFrom } = {}) {
@@ -257,19 +192,19 @@ export function createSkillHubSandboxOperations({ contributionRegistryFor, works
       });
     }
     const bundle = record(asset.packageBundle);
-    const opaquePackage = Boolean(
+    const storedPackage = Boolean(
       bundle &&
-      bundle.path === SKILL_HUB_OPAQUE_BUNDLE_PATH &&
+      bundle.path === SKILL_HUB_PACKAGE_PATH &&
       bundle.custodyRef &&
-      bundle.custodyRef === asset.opaqueCustodyRef &&
+      bundle.custodyRef === asset.packageCustodyRef &&
       bundle.envelopeDigest &&
-      bundle.envelopeDigest === asset.opaqueEnvelopeDigest &&
+      bundle.envelopeDigest === asset.packageEnvelopeDigest &&
       bundle.digest &&
-      bundle.digest === asset.opaqueContentDigest &&
+      bundle.digest === asset.packageContentDigest &&
       !asset.packageRoot
     );
-    if (!opaquePackage) {
-      throw new Error("Immutable skill package requires one canonical opaque custody bundle.");
+    if (!storedPackage) {
+      throw new Error("Immutable skill package requires one canonical service custody bundle.");
     }
     const inputDigest = sandboxDigest([{
       path: relativeLogicalPath(bundle.path, "Skill package bundle path"),
@@ -314,30 +249,10 @@ export function createSkillHubSandboxOperations({ contributionRegistryFor, works
     };
   }
 
-  async function execute({ operationId, input = {}, context = {}, sandboxExecution }) {
-    if (!sandboxExecution || typeof sandboxExecution.executeConfiguredOpaque !== "function") {
-      throw new Error("Controlled execution sandbox is unavailable.");
-    }
+  async function commit({ operationId, input = {}, context = {}, rawReceipt }) {
     const prepared = await prepare({ operationId, input, context });
-    const opaqueFile = {
-      path: relativeLogicalPath(prepared.packageBundle.path, "Skill package bundle path"),
-      digest: requiredText(prepared.packageBundle.digest, "Skill package bundle digest"),
-      custodyRef: requiredText(prepared.packageBundle.custodyRef, "Skill package custody reference"),
-      envelopeDigest: requiredText(prepared.packageBundle.envelopeDigest, "Skill package envelope digest"),
-      promotionSchemaVersion: SANDBOX_CUSTODY_PROMOTION_SCHEMA
-    };
-    const rawReceipt = await sandboxExecution.executeConfiguredOpaque(prepared.request, [{
-      handle: prepared.asset.assetId,
-      promotionDigest: custodyPromotionSetDigest({
-        files: [{ ...opaqueFile, contentDigest: opaqueFile.digest }]
-      }),
-      files: [opaqueFile]
-    }], { signal: context.signal || null });
-    const disposedReceipt = prepared.request.workloadKind === "skill_scan" && rawReceipt?.status === "output_quarantined"
-      ? await acceptScanOutput(rawReceipt, sandboxExecution)
-      : rawReceipt;
     const receipt = normalizedReceipt(
-      disposedReceipt,
+      rawReceipt,
       prepared.request,
       prepared.workspaceId,
       prepared.packageDigest
@@ -354,27 +269,5 @@ export function createSkillHubSandboxOperations({ contributionRegistryFor, works
     return { request: prepared.request, receipt: recorded.executionReceipt, scan };
   }
 
-  async function cancel({ input = {}, sandboxExecution }) {
-    if (!sandboxExecution || typeof sandboxExecution.cancel !== "function") {
-      throw new Error("Controlled execution sandbox is unavailable.");
-    }
-    const executionRef = requiredText(input.executionRef, "Sandbox execution reference");
-    return projectedStatus(await sandboxExecution.cancel(executionRef), executionRef);
-  }
-
-  async function getStatus({ input = {}, sandboxExecution }) {
-    if (!sandboxExecution || typeof sandboxExecution.getStatus !== "function") {
-      throw new Error("Controlled execution sandbox is unavailable.");
-    }
-    const executionRef = requiredText(input.executionRef, "Sandbox execution reference");
-    return projectedStatus(await sandboxExecution.getStatus(executionRef), executionRef);
-  }
-
-  return Object.freeze({ execute, cancel, getStatus });
+  return Object.freeze({ prepare, commit });
 }
-
-export const SKILL_HUB_SANDBOX_OPERATION_IDS = Object.freeze(new Set([
-  ...Object.keys(WORKLOAD_BY_OPERATION),
-  "skill_hub.execution.cancel",
-  "skill_hub.execution.status"
-]));

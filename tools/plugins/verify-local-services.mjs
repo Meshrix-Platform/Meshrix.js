@@ -4,11 +4,12 @@ import { spawn } from "node:child_process";
 
 import { repoRoot, sanitizeError } from "./lib/repository.mjs";
 
-const serviceRoot = path.join(repoRoot, "services", "file-parser", "format-convert");
+const formatConvertRoot = path.join(repoRoot, "services", "file-parser", "format-convert");
+const skillHubRoot = path.join(repoRoot, "services", "skill-hub");
 
-function run(command, args) {
+function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: serviceRoot, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf8"); });
@@ -19,11 +20,18 @@ function run(command, args) {
 }
 
 async function main() {
-  const format = await run("gofmt", ["-l", "cmd", "internal"]);
+  const format = await run("gofmt", ["-l", "cmd", "internal"], formatConvertRoot);
   if (format.stdout.trim()) throw new Error(`gofmt reported unformatted files: ${format.stdout.trim()}`);
-  await run("go", ["test", "./..."]);
-  await run("go", ["vet", "./..."]);
-  process.stdout.write(`${JSON.stringify({ ok: true, service: "file-parser/format-convert", route: "POST /v1/convert", transport: "multipart" })}\n`);
+  await run("go", ["test", "./..."], formatConvertRoot);
+  await run("go", ["vet", "./..."], formatConvertRoot);
+  await run(process.execPath, ["--test", "test/http-service.test.mjs"], skillHubRoot);
+  process.stdout.write(`${JSON.stringify({
+    ok: true,
+    services: [
+      { service: "file-parser/format-convert", route: "POST /v1/convert", transport: "multipart" },
+      { service: "skill-hub", route: "POST /v1/operations/:operationId", transport: "json" }
+    ]
+  })}\n`);
 }
 
 main().catch((error) => {

@@ -1,0 +1,312 @@
+{
+  "kind": "meshrix.upstream-service",
+  "schemaVersion": "v0.0.1:upstream-service:portable-import-2",
+  "serviceKey": "skill-hub",
+  "descriptor": {
+    "serviceProtocol": "http",
+    "label": "Skill Hub",
+    "description": "Independent governed skill registry, lifecycle, and package custody service.",
+    "baseUrl": "http://skill-hub:8080",
+    "healthPath": "/readyz",
+    "allowLocalNetwork": true,
+    "tags": [
+      "skill-hub",
+      "skills"
+    ],
+    "trafficPolicy": {
+      "perMinute": 600,
+      "burst": 60,
+      "maxConcurrent": 16
+    },
+    "operations": [
+      {
+        "operationKey": "skill_hub.search",
+        "label": "Search Skill Hub",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.search",
+        "risk": "read_only",
+        "requiredScopes": [
+          "workspace:read"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.list",
+        "label": "List Skill Hub skills",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.list",
+        "risk": "read_only",
+        "requiredScopes": [
+          "workspace:read"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.get",
+        "label": "Read a Skill Hub skill",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.get",
+        "risk": "read_only",
+        "requiredScopes": [
+          "workspace:read"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.submit",
+        "label": "Submit a Skill Hub skill",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.submit",
+        "risk": "safe_write",
+        "requiredScopes": [
+          "workspace:write"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.scan",
+        "label": "Scan a Skill Hub revision in the controlled sandbox",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.scan",
+        "risk": "repair_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.build",
+        "label": "Build a Skill Hub revision in the controlled sandbox",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.build",
+        "risk": "repair_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.execute",
+        "label": "Execute a Skill Hub revision in the controlled sandbox",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.execute",
+        "risk": "repair_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.review",
+        "label": "Review a Skill Hub skill",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.review",
+        "risk": "safe_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.publish",
+        "label": "Publish a Skill Hub skill",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.publish",
+        "risk": "repair_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.download",
+        "label": "Download a Skill Hub package reference",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.download",
+        "risk": "read_only",
+        "requiredScopes": [
+          "workspace:read"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.install",
+        "label": "Install a Skill Hub skill",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.install",
+        "risk": "safe_write",
+        "requiredScopes": [
+          "workspace:write"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.usage.record",
+        "label": "Record Skill Hub usage",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.usage.record",
+        "risk": "safe_write",
+        "requiredScopes": [
+          "workspace:write"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.revoke",
+        "label": "Revoke a Skill Hub skill",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.revoke",
+        "risk": "repair_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.rollback.record",
+        "label": "Record a Skill Hub rollback",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.rollback.record",
+        "risk": "safe_write",
+        "requiredScopes": [
+          "workspace:write"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.stats",
+        "label": "Read Skill Hub statistics",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.stats",
+        "risk": "read_only",
+        "requiredScopes": [
+          "workspace:read"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.leaderboard",
+        "label": "Read the Skill Hub leaderboard",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.leaderboard",
+        "risk": "read_only",
+        "requiredScopes": [
+          "workspace:read"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.permission.request",
+        "label": "Request Skill Hub permission",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.permission.request",
+        "risk": "safe_write",
+        "requiredScopes": [
+          "workspace:write"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      {
+        "operationKey": "skill_hub.permission.grant",
+        "label": "Grant Skill Hub permission",
+        "protocol": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.permission.grant",
+        "risk": "repair_write",
+        "requiredScopes": [
+          "workspace:maintain"
+        ],
+        "timeoutMs": 120000,
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    ]
+  }
+}

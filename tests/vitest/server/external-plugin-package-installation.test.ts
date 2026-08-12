@@ -222,12 +222,7 @@ describe("external plugin package installation", () : any => {
       pluginId: "skill-hub",
       configuration: {
         enabled: true,
-        modules: {
-          registry: true,
-          opaqueCustody: true,
-          controlledSandbox: true,
-          operationPermission: true
-        }
+        service: { serviceRef: "service.fixture.skill-hub", timeoutMs: 30_000 }
       }
     });
     expect(receipt).toMatchObject({
@@ -315,7 +310,7 @@ describe("external plugin package installation", () : any => {
           pluginId: "skill-hub",
           configuration: {
             enabled: true,
-            modules: { registry: true, opaqueCustody: true, controlledSandbox: true, operationPermission: true }
+            service: { serviceRef: "service.fixture.skill-hub", timeoutMs: 30_000 }
           }
         },
         {

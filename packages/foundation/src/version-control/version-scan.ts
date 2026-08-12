@@ -8,6 +8,7 @@ export const VERSION_SCAN_ROOTS: readonly any[] = Object.freeze([
   "apps",
   "packages",
   "plugins",
+  "services",
   "crates",
   "content",
   "fixtures",

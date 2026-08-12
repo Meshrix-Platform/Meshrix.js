@@ -1,0 +1,351 @@
+{
+  "schemaVersion": "v0.0.1:schema:definition-1",
+  "kind": "meshrix.external-service.contract",
+  "contractId": "skill-hub.external-service",
+  "displayName": "Skill Hub service contract",
+  "description": "Closed contract for the independently deployed Skill Hub HTTP service.",
+  "serviceSelection": {
+    "configurationPath": "service.serviceRef",
+    "operatorSupplied": true,
+    "required": true
+  },
+  "upstreamContract": {
+    "protocol": "http-json",
+    "endpoint": {
+      "operatorSupplied": true,
+      "required": true,
+      "allowedSchemes": [
+        "http",
+        "https"
+      ]
+    },
+    "credential": {
+      "operatorSupplied": true,
+      "required": true,
+      "custody": "secretRef",
+      "authType": "bearer"
+    },
+    "timeoutConfigurationPath": "service.timeoutMs"
+  },
+  "authorizationContract": {
+    "boundary": "Operation Permission v1",
+    "serviceBindingRequired": true
+  },
+  "tools": [
+    {
+      "operationId": "skill_hub.search",
+      "label": "Search Skill Hub",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.search"
+      },
+      "requiredScopes": [
+        "workspace:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.list",
+      "label": "List Skill Hub skills",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.list"
+      },
+      "requiredScopes": [
+        "workspace:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.get",
+      "label": "Read a Skill Hub skill",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.get"
+      },
+      "requiredScopes": [
+        "workspace:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.submit",
+      "label": "Submit a Skill Hub skill",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.submit"
+      },
+      "requiredScopes": [
+        "workspace:write"
+      ],
+      "risk": "safe_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.scan",
+      "label": "Scan a Skill Hub revision in the controlled sandbox",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.scan"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "repair_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.build",
+      "label": "Build a Skill Hub revision in the controlled sandbox",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.build"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "repair_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.execute",
+      "label": "Execute a Skill Hub revision in the controlled sandbox",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.execute"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "repair_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.review",
+      "label": "Review a Skill Hub skill",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.review"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "safe_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.publish",
+      "label": "Publish a Skill Hub skill",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.publish"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "repair_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.download",
+      "label": "Download a Skill Hub package reference",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.download"
+      },
+      "requiredScopes": [
+        "workspace:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.install",
+      "label": "Install a Skill Hub skill",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.install"
+      },
+      "requiredScopes": [
+        "workspace:write"
+      ],
+      "risk": "safe_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.usage.record",
+      "label": "Record Skill Hub usage",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.usage.record"
+      },
+      "requiredScopes": [
+        "workspace:write"
+      ],
+      "risk": "safe_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.revoke",
+      "label": "Revoke a Skill Hub skill",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.revoke"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "repair_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.rollback.record",
+      "label": "Record a Skill Hub rollback",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.rollback.record"
+      },
+      "requiredScopes": [
+        "workspace:write"
+      ],
+      "risk": "safe_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.stats",
+      "label": "Read Skill Hub statistics",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.stats"
+      },
+      "requiredScopes": [
+        "workspace:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.leaderboard",
+      "label": "Read the Skill Hub leaderboard",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.leaderboard"
+      },
+      "requiredScopes": [
+        "workspace:read"
+      ],
+      "risk": "read_only",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.permission.request",
+      "label": "Request Skill Hub permission",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.permission.request"
+      },
+      "requiredScopes": [
+        "workspace:write"
+      ],
+      "risk": "safe_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    {
+      "operationId": "skill_hub.permission.grant",
+      "label": "Grant Skill Hub permission",
+      "transport": {
+        "type": "http",
+        "method": "POST",
+        "path": "/v1/operations/skill_hub.permission.grant"
+      },
+      "requiredScopes": [
+        "workspace:maintain"
+      ],
+      "risk": "repair_write",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  ],
+  "healthCheck": {
+    "type": "http",
+    "method": "GET",
+    "path": "/readyz"
+  },
+  "metadata": {
+    "pluginId": "skill-hub",
+    "deployment": "independent-service-required"
+  }
+}
