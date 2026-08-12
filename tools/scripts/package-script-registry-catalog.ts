@@ -851,7 +851,8 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "core", expectedDurationClass: "fast",
     inputs: [
       "tools/plugins/verify-local-services.mjs",
-      "services/file-parser/format-convert/**"
+      "services/file-parser/format-convert/**",
+      "services/skill-hub/**"
     ], outputs: [],
   },
   "verify:local-runtime-plugins": {

@@ -40,7 +40,7 @@ const EXTERNAL_SERVICE_REQUEST_FIELDS: any = new Set<any>([
 ]);
 const EXTERNAL_SERVICE_OPTIONS_FIELDS: any = new Set<any>(["signal"]);
 const EXTERNAL_SERVICE_REFERENCE_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/u;
-const EXTERNAL_SERVICE_MAX_REQUEST_BYTES: any = 1024 * 1024;
+const EXTERNAL_SERVICE_MAX_REQUEST_BYTES: any = 2 * 1024 * 1024;
 const EXTERNAL_SERVICE_MAX_RESPONSE_BYTES: any = 8 * 1024 * 1024;
 const UNSAFE_JSON_KEYS: any = new Set<any>(["__proto__", "prototype", "constructor"]);
 
