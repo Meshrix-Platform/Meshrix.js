@@ -14,7 +14,7 @@
         "claim": { "const": "functional-complete" },
         "requiredForRelease": { "const": true },
         "command": { "const": "npm run verify:acceptance" },
-        "plan": { "const": "end-to-end-release/functional-release-acceptance" },
+        "plan": { "const": "end-to-end-release" },
         "covers": {
           "type": "array",
           "minItems": 1,

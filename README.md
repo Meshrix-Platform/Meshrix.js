@@ -20,7 +20,8 @@ English is the normative language of this repository's documentation; [简体中
 > owns their normative meaning.
 
 > **Current outcome:** Meshrix.js is closing one enterprise single-node
-> functional candidate through four mandatory workstreams documented in
+> functional candidate led by Agent-to-MCP Service collaboration efficiency,
+> with the required closures documented in
 > [What's Next](docs/WHATS-NEXT.md). Read it before planning, implementing, or
 > reviewing project work.
 

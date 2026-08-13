@@ -1,22 +1,15 @@
 #!/usr/bin/env node
 
 import crypto from "node:crypto";
-import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { writePrivateFileAtomic } from "../../packages/foundation/src/storage/private-file-atomic.ts";
-import { acceptedFinalReceipt } from "../plan/plan-dependency-map.ts";
-import { assertReceiptIntegrity } from "../plan/plan-final-receipt.ts";
-import { reduceEndToEndReleaseReceipt } from "../plan/reduce-end-to-end-release-receipt.ts";
-
 const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const reportPath: any = path.join(repoRoot, "build/reports/cross-system-offline-transfer.json");
-const planDirectory: any = "end-to-end-release/cross-system-offline-transfer";
 const platforms: readonly any[] = Object.freeze(["linux/amd64", "linux/arm64"]);
-const SHA256_PATTERN: any = /^[a-f0-9]{64}$/u;
 
 function digest(bytes?: any) : any {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -24,69 +17,6 @@ function digest(bytes?: any) : any {
 
 function jsonBytes(value?: any) : any {
   return Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-async function recordPlanReceipt(recordedAt?: any) : Promise<any> {
-  const dependencyMap: any = JSON.parse(await fs.readFile(
-    path.join(repoRoot, "docs", "plans", "end-to-end-release", "DependencyMap.json"),
-    "utf8",
-  ));
-  const mapPlan: any = dependencyMap.plans?.find((entry?: any) : any => entry.directory === planDirectory);
-  const prerequisite: any = mapPlan?.prerequisite_receipts?.find((entry?: any) : any =>
-    entry.kind === "final_validation");
-  const provider: any = dependencyMap.plans?.find((entry?: any) : any => entry.directory === prerequisite?.plan);
-  const prerequisiteReceipt: any = provider
-    ? acceptedFinalReceipt(provider, prerequisite.node_id)
-    : null;
-  assertReceiptIntegrity(prerequisiteReceipt);
-  const candidateDigest: any = String(prerequisiteReceipt.candidate_digest || "");
-  if (!SHA256_PATTERN.test(candidateDigest)) {
-    throw new Error("offline_transfer_candidate_digest_unavailable");
-  }
-  const checkpointsPath: any = path.join(
-    repoRoot,
-    "docs",
-    "plans",
-    planDirectory,
-    "Checkpoints.json",
-  );
-  const reportBytes: any = await fs.readFile(reportPath);
-  const checkpoints: any = JSON.parse(await fs.readFile(checkpointsPath, "utf8"));
-  const repositoryRevision: any = spawnSync("git", ["rev-parse", "HEAD"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    windowsHide: true,
-  }).stdout?.trim() || "";
-  if (!/^[a-f0-9]{40,64}$/u.test(repositoryRevision)) {
-    throw new Error("offline_transfer_repository_revision_unavailable");
-  }
-  const evidence: Record<string, any> = {
-    type: "file",
-    path: "build/reports/cross-system-offline-transfer.json",
-    sha256: digest(reportBytes),
-    recorded_at: recordedAt,
-  };
-  for (const node of checkpoints) {
-    node.status = "completed";
-    node.candidate_digest = candidateDigest;
-    node.commit = { ...node.commit, delivered: repositoryRevision };
-    node.acceptance_criteria = node.acceptance_criteria.map((criterion?: any) : any => ({
-      ...criterion,
-      checked: true,
-      evidence_refs: [evidence],
-    }));
-  }
-  await writePrivateFileAtomic(
-    checkpointsPath,
-    `${JSON.stringify(checkpoints, null, 2)}\n`,
-  );
-  const finalNode: any = checkpoints.find((node?: any) : any => node.role === "final_validation");
-  if (!finalNode) throw new Error("offline_transfer_final_node_missing");
-  await reduceEndToEndReleaseReceipt({
-    repoRoot,
-    planDirectory,
-    finalNodeId: finalNode.id,
-  });
 }
 
 async function writeBundleFile(root?: any, relativePath?: any, bytes?: any) : Promise<any> {
@@ -246,9 +176,6 @@ async function main() : Promise<any> {
       },
     };
     await writePrivateFileAtomic(reportPath, `${JSON.stringify(report, null, 2)}\n`);
-    if (process.argv.includes("--record-plan-receipt")) {
-      await recordPlanReceipt(now);
-    }
     process.stdout.write(`${JSON.stringify({
       ok: true,
       platforms: platforms.length,

@@ -167,7 +167,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
     }
   });
 
-  it("generates only the five current candidate plans without inherited evidence", async () : Promise<any> => {
+  it("generates one efficiency-led candidate plan without inherited evidence", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-plan-baseline-"));
     try {
       await fs.writeFile(path.join(root, "README.md"), "synthetic candidate\n");
@@ -194,10 +194,6 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       ));
       expect(manifest.map((entry?: any) : any => entry.directory)).toEqual([
         "end-to-end-release",
-        "end-to-end-release/enterprise-single-node",
-        "end-to-end-release/plugin-console-isolation",
-        "end-to-end-release/cross-system-offline-transfer",
-        "end-to-end-release/functional-release-acceptance",
       ]);
       for (const entry of manifest) {
         await expect(fs.access(path.join(planRoot, entry.checkpoints))).resolves.toBeUndefined();
@@ -213,49 +209,36 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       ));
       expect(dependencyMap.plans.map((entry?: any) : any => entry.directory)).toEqual([
         "end-to-end-release",
-        "end-to-end-release/enterprise-single-node",
-        "end-to-end-release/plugin-console-isolation",
-        "end-to-end-release/cross-system-offline-transfer",
-        "end-to-end-release/functional-release-acceptance",
       ]);
-      expect(dependencyMap.plans[1].prerequisite_receipts).toEqual([]);
+      expect(dependencyMap.plans[0].prerequisite_receipts).toEqual([]);
+      expect(dependencyMap.plans[0].children).toEqual([]);
       expect(dependencyMap.plans.every((entry?: any) : any =>
         Object.keys(entry.accepted_final_receipts).length === 0)).toBe(true);
-      expect(dependencyMap.plans.at(-1).prerequisite_receipts.map((receipt?: any) : any => receipt.plan))
-        .toEqual([
-          "end-to-end-release/enterprise-single-node",
-          "end-to-end-release/plugin-console-isolation",
-          "end-to-end-release/cross-system-offline-transfer",
-        ]);
       expect(JSON.stringify({ manifest, dependencyMap })).not.toMatch(
         /native-linux|native-macos|native-windows|public-cloud|clean-host|organization-governance|api-key-only|console-ux/u,
       );
 
-      const delivery: any = JSON.parse(await fs.readFile(
-        path.join(planRoot, "end-to-end-release/enterprise-single-node/Checkpoints.json"),
+      const checkpoints: any = JSON.parse(await fs.readFile(
+        path.join(planRoot, "end-to-end-release/Checkpoints.json"),
         "utf8",
       ));
-      expect(delivery.every((node?: any) : any => node.status === "pending")).toBe(true);
-      const governedJourney: any = delivery.find((node?: any) : any =>
-        node.role === "implementation" && node.requirements.includes("REQ-ENT-GOVERNED-JOURNEY"));
-      expect(governedJourney.regression.commands).toContain(
-        "npm run verify:release-journey",
-      );
-      const pluginIsolation: any = JSON.parse(await fs.readFile(
-        path.join(planRoot, "end-to-end-release/plugin-console-isolation/Checkpoints.json"),
-        "utf8",
-      ));
-      expect(pluginIsolation.some((node?: any) : any =>
+      expect(checkpoints).toHaveLength(12);
+      expect(checkpoints.every((node?: any) : any => node.status === "pending")).toBe(true);
+      expect(checkpoints.some((node?: any) : any =>
         node.requirements.includes("REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING"))).toBe(true);
-      expect(JSON.stringify(pluginIsolation)).toContain("sandbox=allow-scripts only");
-      expect(JSON.stringify(pluginIsolation)).toContain("No same-origin plugin import path remains");
+      expect(checkpoints.some((node?: any) : any =>
+        node.requirements.includes("REQ-EFF-TARGETS"))).toBe(true);
       const currentPlan: any = await fs.readFile(
-        path.join(planRoot, "end-to-end-release/CurrentPlan.md"),
+        path.join(planRoot, "end-to-end-release/Plan.md"),
         "utf8",
       );
-      expect(currentPlan).toContain(
-        "Native hosts, client platforms, public cloud, and independent recovery environments remain downstream support workflows.",
-      );
+      expect(currentPlan).toContain("The Shared-Document Model");
+      expect(currentPlan).toContain("subscriptions/listen");
+      expect(currentPlan).toContain("at most one bounded typed Change Set");
+      expect(currentPlan).toContain("Effect Commands");
+      expect(currentPlan).toContain("at least 60 percent fewer model-visible calls");
+      expect(currentPlan).toContain("at least 70 percent fewer combined model-context and wire bytes");
+      expect(currentPlan).toContain("EFF-7");
       const futureGoals: any = await fs.readFile(path.join(planRoot, "FutureGoals.md"), "utf8");
       expect(futureGoals).not.toContain("plugin Console isolation");
 
@@ -288,7 +271,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
 
       const checkpointPath: any = path.join(
         planRoot,
-        "end-to-end-release/enterprise-single-node/Checkpoints.json",
+        "end-to-end-release/Checkpoints.json",
       );
       const checkpointSentinel: any = Buffer.from(
         `${JSON.stringify([{ sentinel: "immutable-existing-evidence" }])}\n`,
@@ -347,16 +330,16 @@ describe("enterprise single-node release Plan execution authority", () : any => 
     }
   });
 
-  it("reduces a delivery receipt before any platform acceptance consumer", () : any => {
+  it("records operations and offline checkpoints before platform acceptance", () : any => {
     const schedule: any = createEnterpriseSingleNodeExecutionSchedule();
     expect(schedule.valid).toBe(true);
     expect(schedule.phases.map((phase?: any) : any => phase.id)).toEqual(ENTERPRISE_SINGLE_NODE_PHASES);
-    expect(schedule.phases.find((phase?: any) : any => phase.id === "delivery-receipt")?.dependsOn)
+    expect(schedule.phases.find((phase?: any) : any => phase.id === "operations-checkpoint")?.dependsOn)
       .toEqual(["ubuntu-delivery"]);
-    expect(schedule.phases.find((phase?: any) : any => phase.id === "offline-transfer-receipt")?.dependsOn)
-      .toEqual(["delivery-receipt"]);
+    expect(schedule.phases.find((phase?: any) : any => phase.id === "offline-transfer-simulation")?.dependsOn)
+      .toEqual(["operations-checkpoint"]);
     expect(schedule.phases.find((phase?: any) : any => phase.id === "platform-acceptance")?.dependsOn)
-      .toEqual(["offline-transfer-receipt"]);
+      .toEqual(["offline-transfer-simulation"]);
     expect(schedule.phases.filter((phase?: any) : any => phase.id === "initialize-plan")).toHaveLength(1);
     expect(schedule.phases.at(-1)?.id).toBe("platform-acceptance");
   });

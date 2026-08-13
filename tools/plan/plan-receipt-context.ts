@@ -127,10 +127,7 @@ export function resolveContainedPlanDirectory(planRoot?: any, planDirectory?: an
 
 export function planAuthorityPaths(planRoot?: any, planDirectory?: any) : any {
   const resolved: any = resolveContainedPlanDirectory(planRoot, planDirectory);
-  const names: any = resolved.planDirectory === "end-to-end-release"
-    ? ["Requirements.md", "Evidence.md", "Architecture.md", "Validation.md"]
-    : ["Plan.md"];
-  return names.map((name?: any) : any => path.join(resolved.planPath, name));
+  return [path.join(resolved.planPath, "Plan.md")];
 }
 
 export function loadPlanAuthorityTextSync(planRoot?: any, planDirectory?: any) : any {

@@ -262,9 +262,9 @@ export function createPlatformAcceptancePlan(
     releaseEvidenceInventoryDigest: RELEASE_EVIDENCE_INVENTORY_DIGEST,
     requirementEvidence: PLATFORM_ACCEPTANCE_REQUIREMENT_EVIDENCE,
     planReceiptPreflight: {
-      consumerPlan: "end-to-end-release/functional-release-acceptance",
+      consumerPlan: "end-to-end-release",
       planProfile: "enterprise-single-node",
-      requiredKind: "final_validation",
+      requiredKind: "candidate-bound-final-prerequisites",
       verifier: "tools/server-scripts/lib/platform-acceptance-plan-receipts.ts",
     },
     summary: {
@@ -504,7 +504,7 @@ async function runAcceptanceWorker() : Promise<any> {
     schemaVersion: "v0.0.1:acceptance:platform-report-2",
     acceptanceStandard: "functional-completeness",
     claim: "functional-complete",
-    candidate_digest: planReceiptPreflight.bindings[0].candidateDigest,
+    candidate_digest: planReceiptPreflight.candidateDigest,
     status: finalState,
     selectedProfile,
     sourceRevision: ledgerAnchor.evidenceContext?.sourceRevision || "",

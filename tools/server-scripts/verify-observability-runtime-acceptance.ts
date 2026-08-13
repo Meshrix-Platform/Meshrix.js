@@ -37,7 +37,7 @@ import {
 const execFileAsync: any = promisify(execFile);
 const ROOT: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REPORT_PATH: any = path.join(ROOT, "build/reports/observability-runtime-acceptance.json");
-const PLAN_FILE: any = "docs/plans/end-to-end-release/enterprise-single-node/Plan.md";
+const PLAN_FILE: any = "docs/plans/end-to-end-release/Plan.md";
 const REQUIREMENTS: readonly any[] = Object.freeze(["REQ-REL-003", "REQ-REL-009", "REQ-REL-010", "REQ-REL-011", "REQ-REL-024", "REQ-REL-025", "REQ-USP-013"]);
 const REPORT_SCHEMA_VERSION: any = "v0.0.1:observability:runtime-acceptance-report-1";
 const VERIFIER: any = "tools/server-scripts/verify-observability-runtime-acceptance.ts";

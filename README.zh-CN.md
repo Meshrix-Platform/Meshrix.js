@@ -19,8 +19,9 @@
 > [Governed Execution And Minimum Evidence](docs/architecture/GOVERNED-EXECUTION-AND-MINIMUM-EVIDENCE.md)
 > 统一定义。
 
-> **当前目标：** Meshrix.js 正通过四条必需工作流闭环一个企业单节点功能候选，详见
-> [What's Next](docs/WHATS-NEXT.md)。开始规划、实现或评审项目工作前，请先查看该文档。
+> **当前目标：** Meshrix.js 正闭环一个由 Agent 与 MCP Service 协作效率主导的
+> 企业单节点功能候选，所需闭环详见 [What's Next](docs/WHATS-NEXT.md)。
+> 开始规划、实现或评审项目工作前，请先查看该文档。
 
 ---
 

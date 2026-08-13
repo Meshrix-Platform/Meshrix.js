@@ -15,8 +15,7 @@ import {
 
 const modulePath: any = fileURLToPath(import.meta.url);
 const defaultRepoRoot: any = path.resolve(path.dirname(modulePath), "../..");
-const DELIVERY_PLAN: any = "end-to-end-release/enterprise-single-node";
-const DELIVERY_FINAL_NODE: any = "aca5ebca-d8b2-4688-a1bf-70dc1d2ce8d4";
+const DELIVERY_PLAN: any = "end-to-end-release";
 const ACCEPTANCE_IMAGE_DOCKERFILE: any =
   "tools/containers/enterprise-single-node-acceptance.Dockerfile";
 const WORKER_SUMMARY: any = "worker-summary.json";
@@ -37,8 +36,8 @@ const DIGEST_PINNED_IMAGE_PATTERN: any =
 export const ENTERPRISE_SINGLE_NODE_PHASES: readonly any[] = Object.freeze([
   "initialize-plan",
   "ubuntu-delivery",
-  "delivery-receipt",
-  "offline-transfer-receipt",
+  "operations-checkpoint",
+  "offline-transfer-simulation",
   "platform-acceptance",
 ]);
 
@@ -390,9 +389,9 @@ export function createEnterpriseSingleNodeExecutionSchedule() : any {
   const phases: any[] = [
     { id: "initialize-plan", dependsOn: [] },
     { id: "ubuntu-delivery", dependsOn: ["initialize-plan"] },
-    { id: "delivery-receipt", dependsOn: ["ubuntu-delivery"] },
-    { id: "offline-transfer-receipt", dependsOn: ["delivery-receipt"] },
-    { id: "platform-acceptance", dependsOn: ["offline-transfer-receipt"] },
+    { id: "operations-checkpoint", dependsOn: ["ubuntu-delivery"] },
+    { id: "offline-transfer-simulation", dependsOn: ["operations-checkpoint"] },
+    { id: "platform-acceptance", dependsOn: ["offline-transfer-simulation"] },
   ];
   const seen: any = new Set<any>();
   const valid: any = phases.every((phase?: any) : any => {
@@ -800,7 +799,9 @@ async function materializeWorker({ candidateRoot, workerRoot, evidenceRoot }: Re
 }
 
 function implementationNodes(checkpoints?: any) : any {
-  return checkpoints.filter((node?: any) : any => node.role === "implementation");
+  return checkpoints.filter((node?: any) : any =>
+    node.role === "implementation" &&
+    node.regression?.commands?.includes("node tools/server-scripts/enterprise-operations-closure.ts"));
 }
 
 function implementationCriteriaByNode(nodes?: any) : any {
@@ -966,13 +967,13 @@ async function recordWorkerEvidence({
       canonicalDigest(hostAuditObservation),
     "ubuntu_delivery_host_audit_evidence_mismatch",
   );
-  for (const node of checkpoints) {
-    if (node.role !== "implementation") continue;
+  for (const node of deliveryImplementationNodes) {
     const observed: any = validation.evidenceByNode.get(node.id);
     requireCondition(observed, "ubuntu_delivery_node_evidence_missing");
     const refs: any = observed.refs.map((ref?: any) : any =>
       commandEvidence(ref, validation.recordedAt));
     node.status = "completed";
+    node.candidate_digest = candidate.candidate_digest;
     node.commit = { ...node.commit, delivered: candidate.source_revision };
     const criteria: any = criteriaByNode.get(node.id);
     requireCondition(criteria, "ubuntu_delivery_criterion_evidence_missing");
@@ -988,46 +989,9 @@ async function recordWorkerEvidence({
       };
     });
   }
-  const finalNode: any = checkpoints.find((node?: any) : any => node.id === DELIVERY_FINAL_NODE);
-  requireCondition(finalNode?.role === "final_validation", "delivery_final_node_missing");
-  const finalEvidence: any = [
-    [summaryPath, summaryBytes],
-    [acceptanceRunnerPath, acceptanceRunnerBytes],
-  ].map(([evidencePath, evidenceBytes]: any[]) : any => ({
-    type: "file",
-    path: path.posix.relative(
-      repoRoot.split(path.sep).join(path.posix.sep),
-      evidencePath.split(path.sep).join(path.posix.sep),
-    ),
-    sha256: sha256(evidenceBytes),
-    recorded_at: validation.recordedAt,
-  }));
-  finalNode.status = "completed";
-  finalNode.candidate_digest = candidate.candidate_digest;
-  finalNode.commit = { ...finalNode.commit, delivered: candidate.source_revision };
-  finalNode.acceptance_criteria = finalNode.acceptance_criteria.map((criterion?: any) : any => ({
-    ...criterion,
-    checked: true,
-    evidence_refs: finalEvidence,
-  }));
   const temporary: any = `${checkpointsPath}.tmp-${crypto.randomUUID()}`;
   await fs.writeFile(temporary, `${JSON.stringify(checkpoints, null, 2)}\n`, "utf8");
   await fs.rename(temporary, checkpointsPath);
-}
-
-async function reduceDeliveryReceipt(repoRoot?: any) : Promise<any> {
-  const result: any = await runProcess({
-    executable: process.execPath,
-    args: [
-      "tools/plan/reduce-end-to-end-release-receipt.ts",
-      "--plan",
-      DELIVERY_PLAN,
-      "--final-node",
-      DELIVERY_FINAL_NODE,
-    ],
-    cwd: repoRoot,
-  });
-  requireCondition(result.exitCode === 0, "delivery_receipt_reduction_failed");
 }
 
 async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<string, any>) : Promise<any> {
@@ -1085,19 +1049,17 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
     acceptanceRunner,
     hostAuditObservation,
   });
-  await reduceDeliveryReceipt(repoRoot);
   const offlineTransfer: any = await runProcess({
     executable: process.execPath,
     args: [
       "tools/server-scripts/verify-cross-system-offline-transfer-evidence.ts",
-      "--record-plan-receipt",
     ],
     cwd: repoRoot,
     env: process.env,
   });
   requireCondition(
     offlineTransfer.exitCode === 0,
-    "cross_system_offline_transfer_receipt_failed",
+    "cross_system_offline_transfer_simulation_failed",
   );
   if (!receiptOnly) {
     const acceptance: any = await runProcess({
@@ -1114,7 +1076,8 @@ async function runHost({ repoRoot, receiptOnly, sourceCandidatePath }: Record<st
   }
   process.stdout.write(`${JSON.stringify({
     status: "passed",
-    receipt_ready: true,
+    operations_checkpoint_ready: true,
+    offline_simulation_ready: true,
     platform_acceptance_executed: !receiptOnly,
     candidate_digest: candidate.candidate_digest,
   })}\n`);
@@ -1153,11 +1116,13 @@ if (isDirectRun) {
   main().catch((error?: any) : any => {
     const phase: any = error?.message?.startsWith("release_plan_")
       ? "initialize-plan"
-      : error?.message?.startsWith("delivery_receipt_")
-        ? "delivery-receipt"
-        : error?.message?.startsWith("platform_acceptance_")
-          ? "platform-acceptance"
-          : "ubuntu-delivery";
+      : error?.message?.startsWith("operations_checkpoint_")
+        ? "operations-checkpoint"
+        : error?.message?.startsWith("cross_system_offline_transfer_")
+          ? "offline-transfer-simulation"
+          : error?.message?.startsWith("platform_acceptance_")
+            ? "platform-acceptance"
+            : "ubuntu-delivery";
     process.stderr.write(`${JSON.stringify(reduceEnterpriseSingleNodeFailure({ phase, error }))}\n`);
     process.exitCode = 1;
   });

@@ -22,6 +22,7 @@ import {
 import { verifyPlanEvidenceCurrent } from "../../../tools/plan/plan-evidence-verifier.ts";
 import {
   createPlanContractReceipt,
+  planAuthorityPaths,
   normalizePlanDirectory,
   planReceiptSourceTreeDigest
 } from "../../../tools/plan/plan-receipt-context.ts";
@@ -110,6 +111,19 @@ async function createEvidenceRepository() : Promise<any> {
 }
 
 describe("plan receipt report digests", () : any => {
+  it("uses the consolidated root Plan.md as the complete receipt authority", async () : Promise<any> => {
+    const repoRoot: any = await fs.mkdtemp(path.join(os.tmpdir(), "plan-authority-root-"));
+    temporaryRoots.push(repoRoot);
+    const planRoot: any = path.join(repoRoot, "docs", "plans");
+    const rootPlan: any = path.join(planRoot, "end-to-end-release");
+    await fs.mkdir(rootPlan, { recursive: true });
+    await fs.writeFile(path.join(rootPlan, "Plan.md"), "# Consolidated Plan\n", "utf8");
+
+    expect(planAuthorityPaths(planRoot, "end-to-end-release")).toEqual([
+      path.join(await fs.realpath(rootPlan), "Plan.md"),
+    ]);
+  });
+
   it("accepts current file and successful digest-bound command evidence", async () : Promise<any> => {
     const { repoRoot, reportDigest } = await createEvidenceRepository();
 
@@ -327,8 +341,7 @@ describe("plan receipt report digests", () : any => {
       "docs",
       "plans",
       "end-to-end-release",
-      "operator-administration",
-      "strategy-management",
+      "example-nested",
     );
     await fs.mkdir(strategyPlan, { recursive: true });
     await fs.writeFile(path.join(repoRoot, "docs", "plans", "Manifest.json"), "[]\n", "utf8");
@@ -368,7 +381,7 @@ describe("plan receipt report digests", () : any => {
     expect(planReceiptSourceTreeDigest(repoRoot)).not.toBe(initialDigest);
 
     const mapPlan: any = currentMapPlan(
-      "end-to-end-release/operator-administration/strategy-management",
+      "end-to-end-release/example-nested",
     );
     const stableTreeDigest: any = planReceiptSourceTreeDigest(repoRoot);
     const firstReceipt: any = buildReceipt({

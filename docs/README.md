@@ -52,8 +52,8 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
-The [What's Next register](WHATS-NEXT.md) names the sole current functional
-candidate and its four mandatory workstreams without duplicating execution
+The [What's Next register](WHATS-NEXT.md) names the sole current efficiency-led
+functional candidate and its required closures without duplicating execution
 detail. It summarizes tracked facts without replacing the owning
 implementation, architecture decision, local execution plan, verifier,
 acceptance receipt, or release authority.

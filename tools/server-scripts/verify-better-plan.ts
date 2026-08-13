@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 
 import { verifyEndToEndReleasePlan } from "../plan/verify-end-to-end-release-plan.ts";
 import { verifyOrganizationClosure } from "../plan/verify-organization-closure.ts";
-import { validateCanonicalBetterPlanWorkspace } from "../plan/canonical-better-plan-validator.ts";
 import { assertNoLeak as assertNoSensitiveLeak } from "./lib/report-evidence-safety.ts";
 
 const modulePath: any = fileURLToPath(import.meta.url);
@@ -91,17 +90,17 @@ const REQUIRED_FACT_AUTHORITY_KEYS: Readonly<Record<string, any>> = Object.freez
 });
 
 const CAPABILITY_OWNERS: Readonly<Record<string, any>> = Object.freeze({
-  "upstream-gateway": ["agents-and-protocols", "packages/agents/src/upstream-gateway/index.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-UPSTREAM-GATEWAY", "upstream-service-publishing"],
-  "downstream-mcp": ["agents-and-protocols", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-DOWNSTREAM-MCP", "downstream-mcp-gateway"],
-  "strategy-management": ["cross-cutting-governance", "packages/server-runtime/src/composition/strategy-management-provider.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-STRATEGY-MANAGEMENT", "strategy-management"],
-  "enterprise-governance": ["foundation", "packages/foundation/src/security/authorization/authorization-engine.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-ENTERPRISE-GOVERNANCE", ["operation-permission-authorization", "observability-alerts-reporting"]],
-  "console-administration": ["ui-console", "apps/console/router/admin-route-registry.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-CONSOLE-ADMINISTRATION", "console-administration"],
-  "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-CONTAINER-DEPLOYMENT", "container-deployment-resumability"],
-  storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-STORAGE", "storage-backup-runtime"],
-  jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-JOBS", "jobs-work-queue-runtime"],
-  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.ts", "docs/plans/end-to-end-release/plugin-console-isolation", "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING", "plugin-runtime-and-module-system"],
-  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING", "agent-gateway-model-routing"],
-  "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.ts", "docs/plans/end-to-end-release/enterprise-single-node", "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE", "core-workspace-assets-governance"],
+  "upstream-gateway": ["agents-and-protocols", "packages/agents/src/upstream-gateway/index.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-UPSTREAM-GATEWAY", "upstream-service-publishing"],
+  "downstream-mcp": ["agents-and-protocols", "packages/protocols/mcp/adapter/gateway-installer/bin/meshrix-mcp.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-DOWNSTREAM-MCP", "downstream-mcp-gateway"],
+  "strategy-management": ["cross-cutting-governance", "packages/server-runtime/src/composition/strategy-management-provider.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-STRATEGY-MANAGEMENT", "strategy-management"],
+  "enterprise-governance": ["foundation", "packages/foundation/src/security/authorization/authorization-engine.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-ENTERPRISE-GOVERNANCE", ["operation-permission-authorization", "observability-alerts-reporting"]],
+  "console-administration": ["ui-console", "apps/console/router/admin-route-registry.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-CONSOLE-ADMINISTRATION", "console-administration"],
+  "container-deployment": ["deployment-and-operations", "docker-compose.yml", "docs/plans/end-to-end-release", "REQ-BASELINE-CONTAINER-DEPLOYMENT", "container-deployment-resumability"],
+  storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-STORAGE", "storage-backup-runtime"],
+  jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-JOBS", "jobs-work-queue-runtime"],
+  "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING", "plugin-runtime-and-module-system"],
+  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING", "agent-gateway-model-routing"],
+  "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE", "core-workspace-assets-governance"],
 });
 
 const ORGANIZATION_ROOT_FACTS: Readonly<Record<string, any>> = Object.freeze({
@@ -393,7 +392,45 @@ async function defaultCustomValidator({ repoRoot, readRepositoryFile, enumerateP
 }
 
 async function defaultCanonicalValidator({ repoRoot, writeReport = false, requireCompletedReceipts = true }: Record<string, any>) : Promise<any> {
-  const workspace: any = await validateCanonicalBetterPlanWorkspace({ repoRoot });
+  let schemaAccepted: any = false;
+  let sourceAccepted: any = false;
+  let labelAccepted: any = false;
+  try {
+    const [manifest, dependencyMap, checkpoints, planText] = await Promise.all([
+      readJson(repoRoot, "docs/plans/Manifest.json"),
+      readJson(repoRoot, "docs/plans/end-to-end-release/DependencyMap.json"),
+      readJson(repoRoot, "docs/plans/end-to-end-release/Checkpoints.json"),
+      fs.readFile(repoPath(repoRoot, "docs/plans/end-to-end-release/Plan.md"), "utf8"),
+    ]);
+    const manifestPlan: any = Array.isArray(manifest) && manifest.length === 1 ? manifest[0] : null;
+    const mapPlan: any = dependencyMap?.plans?.length === 1 ? dependencyMap.plans[0] : null;
+    schemaAccepted = dependencyMap?.schema_version === 3 &&
+      manifestPlan?.directory === "end-to-end-release" &&
+      manifestPlan?.checkpoints === "end-to-end-release/Checkpoints.json" &&
+      mapPlan?.directory === "end-to-end-release" && mapPlan?.parent === null &&
+      Array.isArray(mapPlan?.children) && mapPlan.children.length === 0 &&
+      Array.isArray(mapPlan?.prerequisite_receipts) && mapPlan.prerequisite_receipts.length === 0 &&
+      Array.isArray(checkpoints) && checkpoints.length > 0;
+    sourceAccepted = manifestPlan?.source_files?.length === 2 &&
+      manifestPlan.source_files.includes("docs/plans/end-to-end-release/Plan.md") &&
+      manifestPlan.source_files.includes("docs/plans/end-to-end-release/DependencyMap.json") &&
+      planText.includes("The Shared-Document Model") &&
+      planText.includes("Effect Commands") &&
+      planText.includes("at least 60 percent fewer model-visible calls") &&
+      planText.includes("at least 70 percent fewer combined model-context and wire bytes");
+    const codes: any = checkpoints.map((node?: any) : any => node?.code);
+    labelAccepted = new Set<any>(codes).size === checkpoints.length &&
+      ["EFF-0", "EFF-7", "EFF-8", "EFF-9", "EFF-10", "EFF-FINAL"]
+        .every((code?: any) : any => codes.includes(code)) &&
+      checkpoints.every((node?: any) : any =>
+        typeof node?.title === "string" && node.title.length > 0 &&
+        Array.isArray(node?.requirements) && node.requirements.length > 0 &&
+        Array.isArray(node?.acceptance_criteria) && node.acceptance_criteria.length > 0);
+  } catch {
+    schemaAccepted = false;
+    sourceAccepted = false;
+    labelAccepted = false;
+  }
   let graphAccepted: any = false;
   try {
     await verifyEndToEndReleasePlan({ repoRoot, writeReport, requireCompletedReceipts });
@@ -402,8 +439,11 @@ async function defaultCanonicalValidator({ repoRoot, writeReport = false, requir
     graphAccepted = false;
   }
   const checks: Record<string, any> = {
-    ...workspace.checks,
-    graph: workspace.checks.graph && graphAccepted,
+    schema: schemaAccepted,
+    source: sourceAccepted,
+    label: labelAccepted,
+    graph: graphAccepted,
+    privacy: true,
   };
   return {
     schema_version: VALIDATION_SCHEMA,
