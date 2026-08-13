@@ -95,7 +95,7 @@ jobs:
     runs-on: ${{ inputs.target == 'native-linux-x64' && 'ubuntu-24.04' || inputs.target == 'native-linux-arm64' && 'ubuntu-24.04-arm' || inputs.target == 'native-macos-arm64' && 'macos-15' || inputs.target == 'native-windows-x64' && 'windows-2025' || inputs.target == 'public-cloud-single-node' && 'meshrix-public-cloud' || 'meshrix-clean-host-recovery' }}
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ inputs.source_revision }}
           persist-credentials: false
