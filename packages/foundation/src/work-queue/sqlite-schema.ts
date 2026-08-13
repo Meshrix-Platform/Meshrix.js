@@ -6,6 +6,9 @@ const SQLITE_EXPIRY_MIGRATION_REVISION: any = 5;
 const SQLITE_RETENTION_MIGRATION_REVISION: any = 7;
 const SQLITE_DEFINITION_IMMUTABILITY_MIGRATION_REVISION: any = 8;
 const SQLITE_CHECKPOINT_MIGRATION_REVISION: any = 9;
+const SQLITE_SINK_FENCE_MIGRATION_REVISION: any = 10;
+const SQLITE_VIRTUAL_FINISH_MIGRATION_REVISION: any = 11;
+const SQLITE_RETENTION_STATE_MIGRATION_REVISION: any = 12;
 
 export function ensureSqliteWorkQueueSchema(db?: any) : any {
   db.exec(`
@@ -308,6 +311,60 @@ export function ensureSqliteWorkQueueSchema(db?: any) : any {
           if (!columns.has(column)) migrationDb.exec(`ALTER TABLE work_items ADD COLUMN ${column} ${declaration};`);
         }
       }
+    },
+    {
+      version: SQLITE_SINK_FENCE_MIGRATION_REVISION,
+      up: (migrationDb?: any) : any => migrationDb.exec(`
+        CREATE TABLE IF NOT EXISTS work_queue_sink_fences (
+          work_item_id TEXT NOT NULL,
+          generation INTEGER NOT NULL,
+          sink_id TEXT NOT NULL,
+          effect_id TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'settled',
+          settled_at_ms INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (work_item_id, generation, sink_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_work_queue_sink_fence_item
+          ON work_queue_sink_fences(work_item_id, generation);
+      `)
+    },
+    {
+      version: SQLITE_VIRTUAL_FINISH_MIGRATION_REVISION,
+      up: (migrationDb?: any) : any => migrationDb.exec(`
+        DROP TABLE IF EXISTS work_queue_fairness_cursors;
+
+        CREATE TABLE IF NOT EXISTS work_queue_virtual_finish (
+          queue_definition_id TEXT NOT NULL,
+          queue_definition_version INTEGER NOT NULL,
+          selector_scope_key TEXT NOT NULL,
+          priority_class TEXT NOT NULL,
+          tenant_id TEXT NOT NULL,
+          workspace_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          virtual_finish INTEGER NOT NULL DEFAULT 0,
+          updated_at_ms INTEGER NOT NULL,
+          PRIMARY KEY (
+            queue_definition_id, queue_definition_version, selector_scope_key,
+            priority_class, tenant_id, workspace_id, project_id
+          )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_work_queue_virtual_finish_claim
+          ON work_queue_virtual_finish(
+            queue_definition_id, selector_scope_key, priority_class, virtual_finish
+          );
+      `)
+    },
+    {
+      version: SQLITE_RETENTION_STATE_MIGRATION_REVISION,
+      up: (migrationDb?: any) : any => migrationDb.exec(`
+        CREATE TABLE IF NOT EXISTS work_queue_retention_state (
+          queue_definition_id TEXT PRIMARY KEY,
+          pending_transitions INTEGER NOT NULL DEFAULT 0,
+          updated_at_ms INTEGER NOT NULL
+        );
+      `)
     }
   ]);
 }

@@ -13,27 +13,112 @@
     "@meshrix/protocols": "0.0.1"
   },
   "exports": {
-    "./workspace-contribution": {
-      "types": "./dist/workspace-contribution/index.d.ts",
-      "source": "./src/workspace-contribution/index.ts",
-      "default": "./dist/workspace-contribution/index.js"
+    "./agent-configs/config-registry": {
+      "types": "./dist/agent-configs/config-registry.d.ts",
+      "source": "./src/agent-configs/config-registry.ts",
+      "default": "./dist/agent-configs/config-registry.js"
     },
-    "./agent-workspace/agent-workspace-materialization-port": {
-      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
-      "source": "./src/agent-workspace/agent-workspace-materialization-port.ts",
-      "default": "./dist/agent-workspace/agent-workspace-materialization-port.js"
+    "./agent-configs/credential-binding": {
+      "types": "./dist/agent-configs/credential-binding.d.ts",
+      "source": "./src/agent-configs/credential-binding.ts",
+      "default": "./dist/agent-configs/credential-binding.js"
     },
+    "./agent-gateway/external-gateway/index": {
+      "types": "./dist/agent-gateway/external-gateway/index.d.ts",
+      "source": "./src/agent-gateway/external-gateway/index.ts",
+      "default": "./dist/agent-gateway/external-gateway/index.js"
+    },
+    "./agent-gateway/index": {
+      "types": "./dist/agent-gateway/index.d.ts",
+      "source": "./src/agent-gateway/index.ts",
+      "default": "./dist/agent-gateway/index.js"
+    },
+    "./agent-gateway/model-probe/index": {
+      "types": "./dist/agent-gateway/model-probe/index.d.ts",
+      "source": "./src/agent-gateway/model-probe/index.ts",
+      "default": "./dist/agent-gateway/model-probe/index.js"
+    },
+    "./agent-gateway/policy-validation": {
+      "types": "./dist/agent-gateway/policy-validation.d.ts",
+      "source": "./src/agent-gateway/policy-validation.ts",
+      "default": "./dist/agent-gateway/policy-validation.js"
+    },
+    "./agent-gateway/shared": {
+      "types": "./dist/agent-gateway/shared.d.ts",
+      "source": "./src/agent-gateway/shared.ts",
+      "default": "./dist/agent-gateway/shared.js"
+    },
+    "./agent-memory/index": {
+      "types": "./dist/agent-memory/index.d.ts",
+      "source": "./src/agent-memory/index.ts",
+      "default": "./dist/agent-memory/index.js"
+    },
+    "./agent-runtime-provider": {
+      "types": "./dist/agent-runtime-provider.d.ts",
+      "source": "./src/agent-runtime-provider.ts",
+      "default": "./dist/agent-runtime-provider.js"
+    },
+    "./agent-workspace/agent-workspace-materialization": null,
     "./agent-workspace/agent-workspace-materialization-brand": {
       "types": "./dist/agent-workspace/agent-workspace-materialization-brand.d.ts",
       "source": "./src/agent-workspace/agent-workspace-materialization-brand.ts",
       "default": "./dist/agent-workspace/agent-workspace-materialization-brand.js"
     },
-    "./agent-workspace/agent-workspace-materialization": null,
     "./agent-workspace/agent-workspace-materialization-file-worker": null,
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "source": "./src/*.ts",
-      "default": "./dist/*.js"
+    "./agent-workspace/agent-workspace-materialization-port": {
+      "types": "./dist/agent-workspace/agent-workspace-materialization-port.d.ts",
+      "source": "./src/agent-workspace/agent-workspace-materialization-port.ts",
+      "default": "./dist/agent-workspace/agent-workspace-materialization-port.js"
+    },
+    "./agent-workspace/index": {
+      "types": "./dist/agent-workspace/index.d.ts",
+      "source": "./src/agent-workspace/index.ts",
+      "default": "./dist/agent-workspace/index.js"
+    },
+    "./maintenance/index": {
+      "types": "./dist/maintenance/index.d.ts",
+      "source": "./src/maintenance/index.ts",
+      "default": "./dist/maintenance/index.js"
+    },
+    "./maintenance/planner": {
+      "types": "./dist/maintenance/planner.d.ts",
+      "source": "./src/maintenance/planner.ts",
+      "default": "./dist/maintenance/planner.js"
+    },
+    "./maintenance/tool-registry": {
+      "types": "./dist/maintenance/tool-registry.d.ts",
+      "source": "./src/maintenance/tool-registry.ts",
+      "default": "./dist/maintenance/tool-registry.js"
+    },
+    "./maintenance/work-queue-contract": {
+      "types": "./dist/maintenance/work-queue-contract.d.ts",
+      "source": "./src/maintenance/work-queue-contract.ts",
+      "default": "./dist/maintenance/work-queue-contract.js"
+    },
+    "./upstream-gateway/index": {
+      "types": "./dist/upstream-gateway/index.d.ts",
+      "source": "./src/upstream-gateway/index.ts",
+      "default": "./dist/upstream-gateway/index.js"
+    },
+    "./workspace-asset-registry/index": {
+      "types": "./dist/workspace-asset-registry/index.d.ts",
+      "source": "./src/workspace-asset-registry/index.ts",
+      "default": "./dist/workspace-asset-registry/index.js"
+    },
+    "./workspace-contribution": {
+      "types": "./dist/workspace-contribution/index.d.ts",
+      "source": "./src/workspace-contribution/index.ts",
+      "default": "./dist/workspace-contribution/index.js"
+    },
+    "./workspace-contribution/index": {
+      "types": "./dist/workspace-contribution/index.d.ts",
+      "source": "./src/workspace-contribution/index.ts",
+      "default": "./dist/workspace-contribution/index.js"
+    },
+    "./workspace-governance/index": {
+      "types": "./dist/workspace-governance/index.d.ts",
+      "source": "./src/workspace-governance/index.ts",
+      "default": "./dist/workspace-governance/index.js"
     }
   },
   "files": [
@@ -41,5 +126,8 @@
     "README.md",
     "LICENSE",
     "package.json"
-  ]
+  ],
+  "imports": {
+    "#meshrix/foundation/storage/bounded-jsonl": "@meshrix/foundation/storage/bounded-jsonl"
+  }
 }

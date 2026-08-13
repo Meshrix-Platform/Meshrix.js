@@ -179,7 +179,7 @@ export function createPendingOperationRuntime({
     reason = "",
     resumeInput = undefined
   }: Record<string, any> = {}) : Promise<any> {
-    const pending: any = store.getPendingOperation?.(pendingOperationId, { includeOriginalInput: true });
+    const pending: any = await store.getPendingOperation?.(pendingOperationId, { includeOriginalInput: true });
     if (!pending) {
       return {
         ok: false,
@@ -211,7 +211,7 @@ export function createPendingOperationRuntime({
       };
     }
     if (resolution === "cancelled" || resolution === "canceled") {
-      const cancelled: any = store.resolvePendingOperation({
+      const cancelled: any = await store.resolvePendingOperation({
         pendingOperationId: pending.pendingOperationId,
         resolution: "cancelled",
         resolvedBy,
@@ -219,7 +219,7 @@ export function createPendingOperationRuntime({
         errorCode: "pending_operation_cancelled",
         resultSummary: { type: "approval_decision", resolution: "cancelled" }
       });
-      store.appendMetric({
+      await store.appendMetric({
         traceId: pending.traceId,
         toolId: pending.toolId,
         grantId: pending.grantId,
@@ -246,7 +246,7 @@ export function createPendingOperationRuntime({
       };
     }
     if (resolution === "rejected" || resolution === "denied") {
-      const rejected: any = store.resolvePendingOperation({
+      const rejected: any = await store.resolvePendingOperation({
         pendingOperationId: pending.pendingOperationId,
         resolution: "rejected",
         resolvedBy,
@@ -254,7 +254,7 @@ export function createPendingOperationRuntime({
         errorCode: "pending_operation_rejected",
         resultSummary: { type: "approval_decision", resolution: "denied" }
       });
-      store.appendMetric({
+      await store.appendMetric({
         traceId: pending.traceId,
         toolId: pending.toolId,
         grantId: pending.grantId,
@@ -297,7 +297,7 @@ export function createPendingOperationRuntime({
       const boundDigest: any = stablePayloadDigest(pending.originalInput || {});
       const resumeDigest: any = stablePayloadDigest(resumeInput);
       if (boundDigest !== resumeDigest) {
-        const mismatched: any = store.resolvePendingOperation({
+        const mismatched: any = await store.resolvePendingOperation({
           pendingOperationId: pending.pendingOperationId,
           resolution: "payload_mismatch",
           resolvedBy,
@@ -308,7 +308,7 @@ export function createPendingOperationRuntime({
             resolution: "payload_mismatch"
           }
         });
-        store.appendMetric({
+        await store.appendMetric({
           traceId: pending.traceId,
           toolId: pending.toolId,
           grantId: pending.grantId,
@@ -361,7 +361,7 @@ export function createPendingOperationRuntime({
     const approvalRecord: any = approvalRecordFromPending(pending, { resolvedBy, reason, facts: approvalFacts });
     if (approvalRecord) {
       if (typeof securityPermissions?.upsertGovernanceApproval !== "function") {
-        const failed: any = store.resolvePendingOperation({
+        const failed: any = await store.resolvePendingOperation({
           pendingOperationId: pending.pendingOperationId,
           resolution: "failed",
           resolvedBy,
@@ -433,7 +433,7 @@ export function createPendingOperationRuntime({
       } catch (error: any) {
         const errorCode: any = String(error?.code || "api_key_authority_unavailable");
         const statusCode: any = Math.max(400, Math.min(Number(error?.statusCode || 503), 599));
-        const failed: any = store.resolvePendingOperation({
+        const failed: any = await store.resolvePendingOperation({
           pendingOperationId: pending.pendingOperationId,
           resolution: "failed",
           resolvedBy,
@@ -457,7 +457,7 @@ export function createPendingOperationRuntime({
       }
     } else {
       grant = typeof store.getGrant === "function"
-        ? await Promise.resolve(store.getGrant(pending.grantId))
+        ? await store.getGrant(pending.grantId)
         : null;
     }
     if (!apiKeySnapshot && (
@@ -467,7 +467,7 @@ export function createPendingOperationRuntime({
       grant.enabled === false ||
       grant.revokedAt
     )) {
-      const failed: any = store.resolvePendingOperation({
+      const failed: any = await store.resolvePendingOperation({
         pendingOperationId: pending.pendingOperationId,
         resolution: "failed",
         resolvedBy,
@@ -496,7 +496,7 @@ export function createPendingOperationRuntime({
         approvalActorId: String(resolvedBy || "")
       }
     };
-    const approved: any = store.resolvePendingOperation({
+    const approved: any = await store.resolvePendingOperation({
       pendingOperationId: pending.pendingOperationId,
       resolution: "approved",
       resolvedBy,
@@ -505,7 +505,7 @@ export function createPendingOperationRuntime({
       resultSummary: { type: "approval_decision", resolution: "approved" }
     });
     if (!approved) {
-      const replayed: any = store.getPendingOperation?.(pending.pendingOperationId);
+      const replayed: any = await store.getPendingOperation?.(pending.pendingOperationId);
       return {
         ok: false,
         status: 409,
@@ -526,7 +526,7 @@ export function createPendingOperationRuntime({
       try {
         await securityPermissions.upsertGovernanceApproval(approvalRecord);
       } catch {
-        const failed: any = store.resolvePendingOperation({
+        const failed: any = await store.resolvePendingOperation({
           pendingOperationId: pending.pendingOperationId,
           resolution: "failed",
           resolvedBy,
@@ -603,7 +603,7 @@ export function createPendingOperationRuntime({
       ? String(result.payload?.pendingOperation?.pendingOperationId || "")
       : "";
     const finalStatus: any = result.ok ? "completed" : "failed";
-    const completed: any = store.resolvePendingOperation({
+    const completed: any = await store.resolvePendingOperation({
       pendingOperationId: pending.pendingOperationId,
       resolution: finalStatus,
       resolvedBy,

@@ -24,20 +24,31 @@ describe("isolated plugin process host", () : any => {
 globalThis[${JSON.stringify(marker)}] = process.pid;
 export async function invoke(input) {
   const hostValue = await input.hostPort(input.value);
-  return { childPid: process.pid, hostValue };
+  const capabilityValue = await input.capability.read(input.value);
+  return { childPid: process.pid, hostValue, capabilityValue };
 }
 `, "utf8");
 
     const host: any = await createIsolatedPluginProcessHost();
     hosts.push(host);
     const runtimeModule: any = await host.loadModule({ moduleUrl: pathToFileURL(modulePath).href });
+    const capability: any = Object.create(null);
+    Object.defineProperty(capability, "read", {
+      value: async (value?: any) : Promise<any> => value + 5,
+      enumerable: false
+    });
+    Object.defineProperty(capability, "privateState", {
+      value: "must-not-cross-process-boundary",
+      enumerable: false
+    });
     const result: any = await runtimeModule.invoke({
       value: 7,
-      hostPort: async (value?: any) : Promise<any> => value * 3
+      hostPort: async (value?: any) : Promise<any> => value * 3,
+      capability
     });
 
     expect(globalThis[marker]).toBeUndefined();
-    expect(result).toEqual({ childPid: host.processId, hostValue: 21 });
+    expect(result).toEqual({ childPid: host.processId, hostValue: 21, capabilityValue: 12 });
     expect(result.childPid).not.toBe(process.pid);
   });
 });

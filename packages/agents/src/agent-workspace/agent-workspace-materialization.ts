@@ -317,11 +317,11 @@ function assertPrivateDirectory(stat?: any) : any {
     statMode(stat) !== PRIVATE_DIRECTORY_MODE ||
     (
       Number.isInteger(process.geteuid?.()) &&
-      Number(stat.uid) !== process.geteuid()
+      Number(stat.uid) !== process.geteuid?.()
     ) ||
     (
       Number.isInteger(process.getegid?.()) &&
-      Number(stat.gid) !== process.getegid()
+      Number(stat.gid) !== process.getegid?.()
     )
   ) {
     throw materializationError(

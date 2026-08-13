@@ -20,7 +20,10 @@ import {
 import {
   PACTIUM_PACKAGE_VERSION,
   PACTIUM_PROTOCOL,
-  PACTIUM_SCHEMA_VERSION
+  PACTIUM_SCHEMA_VERSION,
+  PROTOCOL_STORAGE_CATEGORY,
+  assertCurrentDataDir,
+  classifyProtocolStorageArtifact
 } from "pactium";
 import {
   clamp,
@@ -30,23 +33,17 @@ import {
   truncateText,
   uniqueNormalizedStrings
 } from "./text-normalization-substrate.ts";
-import {
-  assertPactiumFreshDataDir,
-  classifyProtocolSubstrateStorageArtifact,
-  createMeshrixPactiumRuntime,
-  PROTOCOL_SUBSTRATE_STORAGE_CATEGORY,
-  resolveMeshrixPactiumDataDir
-} from "./pactium-substrate-preflight.ts";
+import { createMeshrixPactiumRuntime, resolveMeshrixPactiumDataDir } from "./pactium-runtime.ts";
 
 export const DATA_STRUCTURE_SUBSTRATE_PROTOCOL_VERSION: any = "v0.0.1:storage:data-structure-substrate-1";
 
 export {
-  classifyProtocolSubstrateStorageArtifact,
-  PROTOCOL_SUBSTRATE_STORAGE_CATEGORY
+  classifyProtocolStorageArtifact,
+  PROTOCOL_STORAGE_CATEGORY
 };
 
 const storageArtifactClassifiers: readonly any[] = Object.freeze([
-  classifyProtocolSubstrateStorageArtifact
+  classifyProtocolStorageArtifact
 ]);
 
 function withUserDataPath(userDataPath?: any, input: Record<string, any> = {}) : any {
@@ -59,7 +56,7 @@ function withUserDataPath(userDataPath?: any, input: Record<string, any> = {}) :
 
 export function createDataStructureSubstrate({ userDataPath = "" }: Record<string, any> = {}) : any {
   const dataDir: any = resolveMeshrixPactiumDataDir(userDataPath);
-  assertPactiumFreshDataDir({ userDataPath: dataDir });
+  assertCurrentDataDir({ dataDir });
   const pactiumRuntime: any = createMeshrixPactiumRuntime({ dataDir });
   const checkpointTreeProjection: Readonly<Record<string, any>> = Object.freeze({
     checkpointTreeId,
@@ -160,7 +157,7 @@ export function createDataStructureSubstrate({ userDataPath = "" }: Record<strin
               "merkleIndex",
               "eventLog",
               "stateCommit",
-              "lsmIngest"
+              "uploadManifest"
             ]
           },
           {
@@ -179,7 +176,7 @@ export function createDataStructureSubstrate({ userDataPath = "" }: Record<strin
             id: "protocol-substrate-storage-classifier",
             kind: "storage-artifact-classifier",
             operations: [
-              "classifyProtocolSubstrateStorageArtifact"
+              "classifyProtocolStorageArtifact"
             ]
           }
         ]

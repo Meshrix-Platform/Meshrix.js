@@ -1,6 +1,6 @@
 {
   "$schema": "./schema/module.schema.json",
-  "version": "v0.1.0",
+  "version": "v0.2.0",
   "modules": [
     {
       "id": "contracts",
@@ -10,7 +10,17 @@
       "chineseName": "契约",
       "description": "Operation and module contracts.",
       "publicApi": [
-        "#meshrix/contracts/*"
+        "#meshrix/contracts/mcp-catalog-delivery",
+        "#meshrix/contracts/modules/model-usage",
+        "#meshrix/contracts/operations/operation-decorators",
+        "#meshrix/contracts/operations/operation-feature-resolution",
+        "#meshrix/contracts/operations/operation-registry",
+        "#meshrix/contracts/operations/protocol-operation-definitions",
+        "#meshrix/contracts/operations/static-semantic-family-catalog",
+        "#meshrix/contracts/plugins/plugin-bundle-manifest",
+        "#meshrix/contracts/plugins/plugin-package-source",
+        "#meshrix/contracts/plugins/plugin-package-state",
+        "#meshrix/contracts/serialization/canonical-json"
       ]
     },
     {
@@ -21,7 +31,79 @@
       "chineseName": "基础设施",
       "description": "Security, state, configuration, and governance primitives.",
       "publicApi": [
-        "#meshrix/foundation/*"
+        "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection",
+        "#meshrix/foundation/checkpoint/tree/data-structure-substrate",
+        "#meshrix/foundation/checkpoint/tree/data-structure-substrate-register",
+        "#meshrix/foundation/checkpoint/tree/merkle-state-substrate",
+        "#meshrix/foundation/checkpoint/tree/pactium-runtime",
+        "#meshrix/foundation/concurrency/lock-manager",
+        "#meshrix/foundation/environment-compatibility/host-services",
+        "#meshrix/foundation/environment-compatibility/index",
+        "#meshrix/foundation/execution-sandbox/contracts",
+        "#meshrix/foundation/execution-sandbox/custody-contracts",
+        "#meshrix/foundation/execution-sandbox/index",
+        "#meshrix/foundation/http/http-response",
+        "#meshrix/foundation/module-system/github-release-plugin-package-source",
+        "#meshrix/foundation/module-system/local-plugin-package-source",
+        "#meshrix/foundation/module-system/module-management-provider",
+        "#meshrix/foundation/module-system/mount-config",
+        "#meshrix/foundation/module-system/mount-manager",
+        "#meshrix/foundation/module-system/plugin-artifact-authority",
+        "#meshrix/foundation/module-system/plugin-artifact-trust",
+        "#meshrix/foundation/module-system/plugin-package-acquisition",
+        "#meshrix/foundation/module-system/plugin-package-acquisition-port",
+        "#meshrix/foundation/module-system/plugin-package-artifact-installer",
+        "#meshrix/foundation/module-system/plugin-package-custody",
+        "#meshrix/foundation/module-system/plugin-package-lifecycle",
+        "#meshrix/foundation/module-system/plugin-package-tar",
+        "#meshrix/foundation/module-system/plugin-package-validator",
+        "#meshrix/foundation/module-system/plugin-registry",
+        "#meshrix/foundation/module-system/register",
+        "#meshrix/foundation/observability/alert-contract",
+        "#meshrix/foundation/observability/alert-service",
+        "#meshrix/foundation/observability/background-process-status",
+        "#meshrix/foundation/observability/executive-report",
+        "#meshrix/foundation/observability/metric-registry",
+        "#meshrix/foundation/observability/observability-budgets",
+        "#meshrix/foundation/observability/observability-config",
+        "#meshrix/foundation/observability/readiness-baseline/baseline-provider",
+        "#meshrix/foundation/observability/runtime-logger",
+        "#meshrix/foundation/observability/sample-capability-pack",
+        "#meshrix/foundation/observability/sensitive-report-scan",
+        "#meshrix/foundation/observability/trace-context",
+        "#meshrix/foundation/proof/proof-substrate/index",
+        "#meshrix/foundation/proof/proof-substrate/register",
+        "#meshrix/foundation/security/auth/console-auth",
+        "#meshrix/foundation/security/authorization/authorization-engine",
+        "#meshrix/foundation/security/authorization/tag-store-provider-registry",
+        "#meshrix/foundation/security/authorization/tag-store.port",
+        "#meshrix/foundation/security/authorization/tag-tree",
+        "#meshrix/foundation/security/final-protected-sink-permit",
+        "#meshrix/foundation/security/governed-execution-permit-authority",
+        "#meshrix/foundation/security/local-path-boundary",
+        "#meshrix/foundation/security/operation-audit",
+        "#meshrix/foundation/security/outbound-egress-policy",
+        "#meshrix/foundation/security/process-identity/index",
+        "#meshrix/foundation/security/production-ingress-contract",
+        "#meshrix/foundation/security/register",
+        "#meshrix/foundation/security/risk-control/index",
+        "#meshrix/foundation/security/secrets/local-secret-key-provider",
+        "#meshrix/foundation/security/secrets/local-secret-store",
+        "#meshrix/foundation/security/security-alerts",
+        "#meshrix/foundation/security/security-permissions-provider",
+        "#meshrix/foundation/storage/artifact-transit-port",
+        "#meshrix/foundation/storage/backup-contract",
+        "#meshrix/foundation/storage/bounded-jsonl",
+        "#meshrix/foundation/storage/object-store",
+        "#meshrix/foundation/storage/private-file-atomic",
+        "#meshrix/foundation/storage/private-sqlite",
+        "#meshrix/foundation/storage/register",
+        "#meshrix/foundation/storage/state-coordinator",
+        "#meshrix/foundation/storage/storage-kernel",
+        "#meshrix/foundation/storage/storage-provider",
+        "#meshrix/foundation/unified-registration-core/unified-registration",
+        "#meshrix/foundation/workflow/durable-workflow-substrate",
+        "#meshrix/foundation/workflow/state-machine/engine/state-machine-core"
       ]
     },
     {
@@ -31,7 +113,23 @@
       "directory": "packages/agents",
       "description": "Agent gateway and local agent workspace primitives.",
       "publicApi": [
-        "#meshrix/agents/*"
+        "#meshrix/agents/agent-configs/config-registry",
+        "#meshrix/agents/agent-configs/credential-binding",
+        "#meshrix/agents/agent-gateway/external-gateway/index",
+        "#meshrix/agents/agent-gateway/index",
+        "#meshrix/agents/agent-gateway/model-probe/index",
+        "#meshrix/agents/agent-memory/index",
+        "#meshrix/agents/agent-runtime-provider",
+        "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
+        "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
+        "#meshrix/agents/maintenance/index",
+        "#meshrix/agents/maintenance/planner",
+        "#meshrix/agents/maintenance/tool-registry",
+        "#meshrix/agents/maintenance/work-queue-contract",
+        "#meshrix/agents/upstream-gateway/index",
+        "#meshrix/agents/workspace-asset-registry/index",
+        "#meshrix/agents/workspace-contribution",
+        "#meshrix/agents/workspace-governance/index"
       ]
     },
     {
@@ -41,7 +139,10 @@
       "directory": "packages/capabilities",
       "description": "Operation Permission and capability catalog.",
       "publicApi": [
-        "#meshrix/capabilities/*"
+        "#meshrix/capabilities/operation-permission-core/index",
+        "#meshrix/capabilities/operation-permission-core/runtime-schema",
+        "#meshrix/capabilities/operation-permission-core/store",
+        "#meshrix/capabilities/skills/tool-skill-management-provider"
       ]
     },
     {
@@ -51,7 +152,14 @@
       "directory": "packages/protocols/mcp",
       "description": "MCP gateway adapter.",
       "publicApi": [
-        "#meshrix/protocols/*"
+        "#meshrix/protocols/downstream-client-aspect/index",
+        "#meshrix/protocols/http/controllers/jobs-controller",
+        "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers",
+        "#meshrix/protocols/http/controllers/system-controller",
+        "#meshrix/protocols/http/controllers/system-controller-foundation-handlers",
+        "#meshrix/protocols/http/controllers/upstream-payload-transit-controller",
+        "#meshrix/protocols/mcp/adapter/http-mcp-adapter",
+        "#meshrix/protocols/pubsub/event-bus"
       ]
     },
     {
@@ -61,7 +169,32 @@
       "directory": "packages/server-runtime",
       "description": "Server composition runtime.",
       "publicApi": [
-        "#meshrix/server-runtime/*"
+        "#meshrix/server-runtime/composition/composition-root",
+        "#meshrix/server-runtime/composition/console-domain/operation-executor",
+        "#meshrix/server-runtime/composition/console-domain/services",
+        "#meshrix/server-runtime/composition/core-platform-provider",
+        "#meshrix/server-runtime/composition/core-platform-register",
+        "#meshrix/server-runtime/composition/devops-provider",
+        "#meshrix/server-runtime/composition/devops-register",
+        "#meshrix/server-runtime/composition/dispatch-operation",
+        "#meshrix/server-runtime/composition/dispatch-operation-risk-control",
+        "#meshrix/server-runtime/composition/http-application-assembly",
+        "#meshrix/server-runtime/composition/operation-dispatch-lock",
+        "#meshrix/server-runtime/composition/plugin-contribution-transaction",
+        "#meshrix/server-runtime/events/protocol-event-runtime",
+        "#meshrix/server-runtime/execution-sandbox/custody-key-broker",
+        "#meshrix/server-runtime/execution-sandbox/oci-backend",
+        "#meshrix/server-runtime/jobs/batch-deletion-coordinator",
+        "#meshrix/server-runtime/jobs/job-pipeline",
+        "#meshrix/server-runtime/jobs/upload-no-run-custody",
+        "#meshrix/server-runtime/module-runtime/server-runtime",
+        "#meshrix/server-runtime/routing/operation-route-index",
+        "#meshrix/server-runtime/routing/radix-path-trie",
+        "#meshrix/server-runtime/state/interface/index",
+        "#meshrix/server-runtime/state/tag-store-adapter",
+        "#meshrix/server-runtime/state/upload-session-admission",
+        "#meshrix/server-runtime/state/upload-session-store",
+        "#meshrix/server-runtime/state/upload-session-support"
       ]
     },
     {
@@ -71,18 +204,16 @@
       "directory": "packages/ui-console",
       "description": "Shared console domain services and portable UI contracts.",
       "publicApi": [
-        "#meshrix/ui-console/*",
+        "#meshrix/ui-console/binary-checkbox",
         "#meshrix/ui-console/bridge-http",
+        "#meshrix/ui-console/console-client-display-utils",
+        "#meshrix/ui-console/console-format-utils",
+        "#meshrix/ui-console/error-message",
+        "#meshrix/ui-console/option-bar",
         "#meshrix/ui-console/page-refresh",
         "#meshrix/ui-console/rpc-client",
-        "#meshrix/ui-console/error-message",
-        "#meshrix/ui-console/binary-checkbox",
-        "#meshrix/ui-console/workspaces-view-context",
-        "#meshrix/ui-console/server-console-shell-context",
-        "#meshrix/ui-console/console-format-utils",
-        "#meshrix/ui-console/console-client-display-utils",
-        "#meshrix/ui-console/option-bar",
-        "#meshrix/ui-console/status-pill"
+        "#meshrix/ui-console/status-pill",
+        "#meshrix/ui-console/workspaces-view-context"
       ]
     },
     {

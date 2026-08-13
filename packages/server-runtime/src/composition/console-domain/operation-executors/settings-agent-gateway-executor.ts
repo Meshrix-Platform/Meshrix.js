@@ -97,7 +97,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
         (beforeModelLibrarySummary?.items || []),
         afterModelLibrarySummary.items || []
       );
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.save",
         event: "console.settings.model_library.saved",
         authSession: context.authSession,
@@ -169,7 +169,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
         message
       };
     }
-    appendConsoleLog(context, {
+    await appendConsoleLog(context, {
       operationId: "settings.model_library.probe",
       event: "console.settings.model_library.probe",
       authSession: context.authSession,
@@ -283,7 +283,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
     try {
       const { registry: gatewayRegistry } = await saveAgentModelLibrary(context, current, models);
       const agent: any = gatewayRegistry.agents.find((item?: any) : any => item.alias === entry.uid) || null;
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.create",
         event: "console.settings.model_library.created",
         authSession: context.authSession,
@@ -317,7 +317,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
       });
     } catch (error: any) {
       const message: any = error instanceof Error ? error.message : "创建智能体模型配置失败。";
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.create",
         event: "console.settings.model_library.create_failed",
         authSession: context.authSession,
@@ -353,7 +353,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
     const index: any = findAgentModelIndex(models, agentId);
     if (index < 0) {
       const message: any = "智能体模型配置不存在。";
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.update",
         event: "console.settings.model_library.update_failed",
         authSession: context.authSession,
@@ -381,7 +381,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
     try {
       const { registry: gatewayRegistry } = await saveAgentModelLibrary(context, current, models);
       const agent: any = gatewayRegistry.agents.find((item?: any) : any => item.alias === next.uid) || null;
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.update",
         event: "console.settings.model_library.updated",
         authSession: context.authSession,
@@ -417,7 +417,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
       });
     } catch (error: any) {
       const message: any = error instanceof Error ? error.message : "更新智能体模型配置失败。";
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.update",
         event: "console.settings.model_library.update_failed",
         authSession: context.authSession,
@@ -455,7 +455,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
     const normalizedAgentId: any = String(agentId || "").trim();
     if (index < 0) {
       const message: any = "智能体模型配置不存在。";
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.delete",
         event: "console.settings.model_library.delete_failed",
         authSession: context.authSession,
@@ -480,7 +480,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
     const [removed] = models.splice(index, 1);
     try {
       const { registry: gatewayRegistry } = await saveAgentModelLibrary(context, current, models);
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.delete",
         event: "console.settings.model_library.deleted",
         authSession: context.authSession,
@@ -514,7 +514,7 @@ export async function executeSettingsAgentGatewayOperation({ operationId, input 
     } catch (error: any) {
       const removedAgentId: any = removed.uid || removed.instanceId || removed.alias || normalizedAgentId;
       const message: any = error instanceof Error ? error.message : "删除智能体模型配置失败。";
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "settings.model_library.delete",
         event: "console.settings.model_library.delete_failed",
         authSession: context.authSession,

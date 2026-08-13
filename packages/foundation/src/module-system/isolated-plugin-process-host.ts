@@ -2,7 +2,10 @@ import { fork } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createPluginProcessRpcPeer } from "./plugin-process-rpc.ts";
 
-const WORKER_PATH: any = fileURLToPath(new URL("./plugin-process-worker.ts", import.meta.url));
+const WORKER_PATH: any = fileURLToPath(new URL(
+  `./plugin-process-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
+  import.meta.url
+));
 
 export async function createIsolatedPluginProcessHost({ startupTimeoutMs = 10_000 }: Record<string, any> = {}) : Promise<any> {
   const child: any = fork(WORKER_PATH, [], {

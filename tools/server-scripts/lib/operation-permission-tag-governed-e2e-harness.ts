@@ -196,17 +196,24 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     const controller: any = new AbortController();
     const events: any[] = [];
     let buffer: any = "";
-    const url: any = `${server.url}/mcp?capability=upstream.catalog.list_changed`;
+    const url: any = `${server.url}/mcp`;
+    const body: any = JSON.stringify({
+      jsonrpc: "2.0",
+      id: "tag-governed-e2e-subscription",
+      method: "subscriptions/listen",
+      params: { notifications: ["notifications/tools/list_changed"] }
+    });
     const stream: any = fetch(url, {
-      method: "GET",
+      method: "POST",
       headers: mcpHeaders(token, {
-        method: "GET",
-        body: "",
+        method: "POST",
+        body,
         url,
         extraHeaders: {
           "X-Meshrix.js-Mcp-Proxy-Session": "taggovernede2esession"
         }
       }),
+      body,
       signal: controller.signal
     }).then(async (response?: any) : Promise<any> => {
       assert.equal(response.status, 200, "MCP SSE stream did not open");

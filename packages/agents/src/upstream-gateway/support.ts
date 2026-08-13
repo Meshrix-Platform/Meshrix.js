@@ -1,6 +1,5 @@
 import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash, randomUUID } from "node:crypto";
-import fsSync from "node:fs";
 import path from "node:path";
 import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import {
@@ -83,56 +82,8 @@ export function runtimePath(userDataPath: any = "") : any {
   return path.join(dataRoot(userDataPath), RUNTIME_FILE);
 }
 
-export function readJsonSync(filePath?: any, fallback?: any) : any {
-  try {
-    return JSON.parse(fsSync.readFileSync(filePath, "utf8"));
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return fallback;
-    throw error;
-  }
-}
-
-export function writeJsonSyncAtomic(filePath?: any, value?: any) : any {
-  fsSync.mkdirSync(path.dirname(filePath), { recursive: true });
-  const tmpPath: any = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
-  fsSync.writeFileSync(tmpPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-  fsSync.renameSync(tmpPath, filePath);
-}
-
 export function clone(value?: any) : any {
   return JSON.parse(JSON.stringify(value));
-}
-
-export function emptyState() : any {
-  return {
-    schemaVersion: "v0.0.1:schema:definition-1",
-    protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
-    updatedAt: nowIso(),
-    services: {},
-    auditEvents: [],
-    metrics: {
-      totalForwardCount: 0,
-      totalFailureCount: 0,
-      byService: {},
-      byStatus: {}
-    }
-  };
-}
-
-export function normalizeState(value: Record<string, any> = {}) : any {
-  const fallback: any = emptyState();
-  return {
-    ...fallback,
-    ...object(value),
-    services: object(value.services),
-    auditEvents: asArray(value.auditEvents),
-    metrics: {
-      ...fallback.metrics,
-      ...object(value.metrics),
-      byService: object(value.metrics?.byService),
-      byStatus: object(value.metrics?.byStatus)
-    }
-  };
 }
 
 export function normalizeBaseUrl(value?: any, { required = true }: Record<string, any> = {}) : any {

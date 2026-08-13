@@ -465,11 +465,19 @@ await withTempQueueStore(async ({ store, timeSource }: Record<string, any>) : Pr
       }
     }
   });
-  const fallbackRun: any = await runtime.runOnce({
+  const fallbackClaim: any = store.claim({
     queueDefinitionId: definition.queueDefinitionId,
-    scope: fallbackResolved.scope
+    scope: fallbackResolved.scope,
+    schedulingScope: {},
+    workerId: "worker-fallback",
+    batchSize: 1
   });
-  assert.equal(fallbackRun.results[0].result.failed, true);
+  assert.equal(fallbackClaim.claimed.length, 1);
+  const fallbackRun: any = await runtime.runLeased({
+    workItem: fallbackClaim.claimed[0].workItem,
+    lease: fallbackClaim.claimed[0].lease
+  });
+  assert.equal(fallbackRun.result.failed, true);
   assert.equal(store.inspect({ states: [WORK_QUEUE_STATES.FAILED] }).items.length, 1);
 
   const replay: any = store.rebuildProjection();
@@ -611,30 +619,46 @@ await withTempQueueStore(async ({ store }: Record<string, any>) : Promise<any> =
     }));
     assert.equal(store.enqueue(admission).workItem.workItemId, enqueued.workItem.workItemId);
     timeSource.advance(10);
-    assert.equal(store.claim({
+    const firstAfterRestart: any = store.claim({
       queueDefinitionId,
       scope,
       workerId: "worker-after-restart",
       leaseTimeoutMs: 10
-    }).recovered.length, 1);
+    });
+    assert.equal(firstAfterRestart.recovered.length, 1);
+    assert.equal(firstAfterRestart.recovered[0].state, WORK_QUEUE_STATES.IN_DOUBT);
+    assert.equal(firstAfterRestart.recovered[0].lease?.leaseSeq, original.lease.leaseSeq);
     timeSource.advance(1);
-    const takeover: any = store.claim({
+    const noTakeover: any = store.claim({
       queueDefinitionId,
       scope,
       workerId: "worker-after-restart",
       leaseTimeoutMs: 10
-    }).claimed[0];
-    assert.ok(takeover?.lease?.leaseId);
-    assert.notEqual(takeover.lease.leaseId, original.lease.leaseId);
-    assert.equal(takeover.lease.leaseSeq, original.lease.leaseSeq + 1);
+    });
+    assert.equal(
+      noTakeover.claimed.some((entry?: any) : any => entry.workItem.workItemId === original.workItem.workItemId),
+      false
+    );
+    assert.equal(
+      noTakeover.reconciled.some((entry?: any) : any => entry.workItemId === original.workItem.workItemId),
+      false
+    );
     assert.throws(() : any => store.complete({
       workItemId: original.workItem.workItemId,
       leaseId: original.lease.leaseId
-    }), /Lease fence rejected/);
-    assert.equal(store.complete({
-      workItemId: takeover.workItem.workItemId,
-      leaseId: takeover.lease.leaseId
-    }).completed, true);
+    }), /not leased/);
+    const receipt: any = store.recordSinkReceipt({
+      workItemId: original.workItem.workItemId,
+      generation: original.lease.leaseSeq,
+      sinkId: "complete",
+      effectId: "restart-effect-1"
+    });
+    assert.equal(receipt.recorded, true);
+    const reconciled: any = store.reconcileInDoubt({
+      workItemId: original.workItem.workItemId
+    });
+    assert.equal(reconciled.count, 1);
+    assert.equal(reconciled.reconciled[0].state, WORK_QUEUE_STATES.COMPLETED);
     assert.equal(store.enqueue(admission).workItem.state, WORK_QUEUE_STATES.COMPLETED);
 
     const cancellation: any = store.enqueue({

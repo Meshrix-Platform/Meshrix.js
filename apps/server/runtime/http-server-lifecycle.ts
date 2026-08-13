@@ -2,6 +2,7 @@ import { parsePositiveInt } from "./http-server-middleware.ts";
 
 export function createHttpServerLifecycle({ server, runtimeLogger, transportLimits = {} }: Record<string, any>) : any {
   let inFlightCount: any = 0;
+  let inFlightCost: any = 0;
   let acceptingRequests: any = false;
   let admissionSealed: any = false;
   let admissionClosedReason: any = new Error("HTTP server startup is not complete.");
@@ -10,12 +11,21 @@ export function createHttpServerLifecycle({ server, runtimeLogger, transportLimi
   const activeSockets: any = new Map<any, any>();
   const requestAbortControllers: any = new Set<any>();
 
-  function incrementInflight() : any {
+  const maxActiveRequests: any = parsePositiveInt(transportLimits.maxActiveRequests, 1_024);
+  const maxActiveCost: any = parsePositiveInt(transportLimits.maxActiveCost, 2_048);
+  const reservedLightCost: any = Math.min(
+    maxActiveCost - 1,
+    parsePositiveInt(transportLimits.reservedLightCost, 64)
+  );
+
+  function incrementInflight(cost?: any) : any {
     inFlightCount++;
+    inFlightCost += cost;
   }
 
-  function decrementInflight() : any {
+  function decrementInflight(cost?: any) : any {
     inFlightCount--;
+    inFlightCost = Math.max(0, inFlightCost - cost);
     if (inFlightCount <= 0) {
       drainCallbacks.splice(0).forEach((cb?: any) : any => cb());
     }
@@ -37,20 +47,37 @@ export function createHttpServerLifecycle({ server, runtimeLogger, transportLimi
     });
   }
 
-  function beginRequest() : any {
+  function beginRequest({ cost = 1, workloadClass = "light" }: Record<string, any> = {}) : any {
     const controller: any = new AbortController();
     if (!acceptingRequests) {
       controller.abort(admissionClosedReason || new Error("HTTP server is not accepting requests."));
       return controller;
     }
+    const normalizedCost: any = parsePositiveInt(cost, 1);
+    const normalizedClass: any = String(workloadClass || "light");
+    const costCeiling: any = normalizedClass === "light"
+      ? maxActiveCost
+      : Math.max(1, maxActiveCost - reservedLightCost);
+    if (inFlightCount >= maxActiveRequests || normalizedCost > costCeiling - inFlightCost) {
+      controller.abort(Object.assign(
+        new Error("HTTP request admission capacity is exhausted."),
+        { code: "http_request_capacity_exceeded", statusCode: 429 }
+      ));
+      return controller;
+    }
+    Object.defineProperty(controller, "__meshrixAdmissionCost", {
+      configurable: false,
+      enumerable: false,
+      value: normalizedCost
+    });
     requestAbortControllers.add(controller);
-    incrementInflight();
+    incrementInflight(normalizedCost);
     return controller;
   }
 
   function endRequest(controller?: any) : any {
     if (!requestAbortControllers.delete(controller)) return;
-    decrementInflight();
+    decrementInflight(controller?.__meshrixAdmissionCost || 1);
   }
 
   function abortInflight(reason: any = new Error("HTTP server is shutting down.")) : any {
@@ -108,6 +135,13 @@ export function createHttpServerLifecycle({ server, runtimeLogger, transportLimi
     beginRequest,
     endRequest,
     getInFlightCount: () : any => inFlightCount,
+    getAdmissionUsage: () : any => Object.freeze({
+      inFlightCount,
+      inFlightCost,
+      maxActiveRequests,
+      maxActiveCost,
+      reservedLightCost
+    }),
     isAdmissionOpen: () : any => acceptingRequests,
     isSocketActive: (socket?: any) : any => activeSockets.has(socket),
     markSocketActive,

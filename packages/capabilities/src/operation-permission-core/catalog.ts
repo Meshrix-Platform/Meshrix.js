@@ -191,7 +191,9 @@ function createInternalToolDefinition({
     risk,
     readOnly: !writeCapable,
     destructive: risk === "destructive",
-    concurrencySafe: risk === "read_only",
+    concurrency: risk === "read_only"
+      ? { workloadClass: "light", maxParallel: 64, cost: 1 }
+      : { workloadClass: "standard", maxParallel: 1, cost: 2 },
     requiresApproval: approvalRequired,
     approvalScope: approvalRequired ? "operation:approve" : "",
     timeoutMs: 30_000,
@@ -485,7 +487,7 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
       risk,
       readOnly: operation.readOnly !== false,
       destructive: operation.destructive === true || risk === "destructive",
-      concurrencySafe: operation.concurrencySafe === true,
+      concurrency: operation.concurrency,
       requiresApproval,
       approvalScope: requiresApproval ? operation.safety?.approvalScope || "operation:approve" : "",
       timeoutMs: operationTimeoutMs(operation),

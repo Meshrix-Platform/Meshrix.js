@@ -46,7 +46,14 @@ const contract = {
     protocol: "http-json",
     endpoint: { operatorSupplied: true, required: true, allowedSchemes: ["http", "https"] },
     credential: { operatorSupplied: true, required: true, custody: "secretRef", authType: "bearer" },
-    timeoutConfigurationPath: "service.timeoutMs"
+    timeoutConfigurationPath: "service.timeoutMs",
+    eventStream: {
+      transport: "sse",
+      method: "GET",
+      path: "/v1/events",
+      cursorHeader: "Last-Event-ID",
+      eventType: "skill-hub.catalog.changed"
+    }
   },
   authorizationContract: {
     boundary: "Operation Permission v1",

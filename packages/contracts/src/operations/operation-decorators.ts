@@ -100,22 +100,13 @@ export function withAudit(audit: Record<string, any> = {}) : any {
 }
 
 export function withConcurrency(concurrency: Record<string, any> = {}) : any {
-  return (operation?: any) : any => {
-    const concurrencySafe: any =
-      typeof concurrency === "boolean"
-        ? concurrency
-        : concurrency.concurrencySafe === undefined
-          ? operation.concurrencySafe
-          : concurrency.concurrencySafe;
-    return {
-      ...operation,
-      concurrencySafe: Boolean(concurrencySafe),
-      concurrencyGroup:
-        typeof concurrency === "object" && concurrency.group
-          ? String(concurrency.group)
-          : operation.concurrencyGroup || ""
-    };
-  };
+  return (operation?: any) : any => ({
+    ...operation,
+    concurrency: {
+      ...(operation.concurrency || {}),
+      ...(concurrency || {})
+    }
+  });
 }
 
 export function defineOperation(definition: any, ...decorators: any[]) : any {
@@ -476,6 +467,22 @@ function normalizeOperationProofPolicy(proof: Record<string, any> = {}, operatio
 
 function normalizeOperationContract(operation?: any) : any {
   const safety: any = normalizeOperationSafety(operation.safety || {}, operation);
+  const concurrencyInput: any = operation.concurrency || {};
+  const defaultMaxParallel: any = safety.readOnly ? 64 : 1;
+  const maxParallel: any = Math.max(1, Math.min(
+    4_096,
+    Number.isSafeInteger(Number(concurrencyInput.maxParallel))
+      ? Number(concurrencyInput.maxParallel)
+      : defaultMaxParallel
+  ));
+  const concurrency: any = Object.freeze({
+    workloadClass: String(concurrencyInput.workloadClass || (safety.readOnly ? "light" : "standard")),
+    key: String(concurrencyInput.key || operation.id || ""),
+    maxParallel,
+    cost: Math.max(1, Math.min(64, Number.isSafeInteger(Number(concurrencyInput.cost))
+      ? Number(concurrencyInput.cost)
+      : safety.readOnly ? 1 : 2))
+  });
   const publicAccess: any = operation.public === true || PUBLIC_OPERATION_IDS.has(operation.id);
   const externalAuth: any =
     operation.externalAuth === true ||
@@ -499,10 +506,7 @@ function normalizeOperationContract(operation?: any) : any {
     resource: resourceContext,
     resourceContext,
     proof: normalizeOperationProofPolicy(operation.proof || {}, { ...operation, safety, readOnly: safety.readOnly }),
-    concurrencySafe:
-      typeof operation.concurrencySafe === "boolean"
-        ? operation.concurrencySafe
-        : safety.readOnly,
+    concurrency,
     inputSchema: normalizeInputSchema(operation.inputSchema, operation),
     audit: normalizeAuditPolicy(operation.audit || {}, { ...operation, safety }),
     log: normalizeLogPolicy(operation.log || {}, { ...operation, safety })
@@ -537,10 +541,20 @@ function validateOperation(operation?: any, seen?: any) : any {
     seen.rpc.add(operation.rpc.method);
   }
 
-  for (const key of ["readOnly", "destructive", "concurrencySafe"]) {
+  for (const key of ["readOnly", "destructive"]) {
     if (typeof operation[key] !== "boolean") {
       throw new Error(`Operation registration failed: ${operation.id} missing boolean ${key}.`);
     }
+  }
+  if (
+    !operation.concurrency ||
+    !operation.concurrency.key ||
+    !Number.isSafeInteger(operation.concurrency.maxParallel) ||
+    operation.concurrency.maxParallel <= 0 ||
+    !Number.isSafeInteger(operation.concurrency.cost) ||
+    operation.concurrency.cost <= 0
+  ) {
+    throw new Error(`Operation registration failed: ${operation.id} missing bounded concurrency metadata.`);
   }
   if (!operation.safety?.risk) {
     throw new Error(`Operation registration failed: ${operation.id} missing safety.risk.`);
@@ -608,8 +622,10 @@ function decorateOperation(operation?: any) : any {
   const safetyDecorator: any = withSafety(SAFETY_DECORATORS.get(operation.id) || {});
   const concurrencyDecorator: any = CONCURRENCY_GROUP_DECORATORS.has(operation.id)
     ? withConcurrency({
-        concurrencySafe: false,
-        group: CONCURRENCY_GROUP_DECORATORS.get(operation.id)
+        workloadClass: "exclusive",
+        key: CONCURRENCY_GROUP_DECORATORS.get(operation.id),
+        maxParallel: 1,
+        cost: 2
       })
     : (value?: any) : any => value;
 
@@ -798,7 +814,6 @@ export function serializableOperationSafety(operation?: any) : any {
     risk: safety.risk,
     readOnly: operation.readOnly === true || safety.readOnly === true,
     destructive: operation.destructive === true || safety.destructive === true,
-    concurrencySafe: operation.concurrencySafe === true,
     approvalScope: safety.approvalScope,
     requiresConfirmation: safety.requiresConfirmation,
     blocked: safety.blocked,

@@ -418,7 +418,7 @@ export function createSecurityPermissionsProvider({
         : input.operationInput && typeof input.operationInput === "object" && !Array.isArray(input.operationInput)
           ? input.operationInput
           : {};
-    const decision: any = resolvedAuthorizationEngine.evaluate({
+    const decision: any = await resolvedAuthorizationEngine.evaluate({
       operation: input.operation || {},
       request: input.request || null,
       authSession: input.authSession || null,
@@ -565,7 +565,7 @@ export function createSecurityPermissionsProvider({
         ? resolvedAuthorizationEngine.resolveSubject(input)
         : null;
     },
-    evaluatePolicy(input: Record<string, any> = {}) : any {
+    async evaluatePolicy(input: Record<string, any> = {}) : Promise<any> {
       if (!resolvedAuthorizationEngine || typeof resolvedAuthorizationEngine.evaluate !== "function") {
         return {
           effect: "deny",
@@ -578,7 +578,7 @@ export function createSecurityPermissionsProvider({
           createdAt: new Date().toISOString()
         };
       }
-      const authorizationDecision: any = resolvedAuthorizationEngine.evaluate(input);
+      const authorizationDecision: any = await resolvedAuthorizationEngine.evaluate(input);
       return evaluateTagPolicy(input, authorizationDecision);
     },
     getGovernancePolicyRevision() : any {
@@ -835,11 +835,11 @@ export function createSecurityPermissionsProvider({
       }
       return workspaceAssetPolicies.get(workspaceAssetPolicyKey(workspaceId, policyId)) || null;
     },
-    checkWorkspaceAssetPermission(input: Record<string, any> = {}) : any {
+    async checkWorkspaceAssetPermission(input: Record<string, any> = {}) : Promise<any> {
       if (!resolvedAuthorizationEngine || typeof resolvedAuthorizationEngine.evaluate !== "function") {
         return null;
       }
-      return resolvedAuthorizationEngine.evaluate({
+      return await resolvedAuthorizationEngine.evaluate({
         operation: {
           id: "workspace.asset.permission.check",
           requiredScopes: ["workspace:read"],

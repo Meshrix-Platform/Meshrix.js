@@ -112,10 +112,10 @@ export async function authenticateMcpApiKey({
   const authorizationHeader: any = header(request, "authorization");
   const bearerCredential: any = authorizationHeader.match(/^Bearer\s+(.+)$/iu)?.[1]?.trim() || "";
   const toolToken: any = header(request, "x-meshrix-tool-token");
-  const apiKey: any = rawHeader(request, "x-meshrix-api-key");
+  const apiKey: any = rawHeader(request, "x-meshrix.js-api-key");
   const credentialKinds: any = [Boolean(authorizationHeader), Boolean(toolToken), Boolean(apiKey)].filter(Boolean).length;
 
-  if (["authorization", "x-meshrix-tool-token", "x-meshrix-api-key"].some((name?: any) : any => repeatedHeader(request, name)) || credentialKinds > 1) {
+  if (["authorization", "x-meshrix-tool-token", "x-meshrix.js-api-key"].some((name?: any) : any => repeatedHeader(request, name)) || credentialKinds > 1) {
     return denial(400, "mcp_credential_ambiguous", "MCP request contains multiple credential kinds.");
   }
   if (isStrictMcpApiKey(bearerCredential) || isStrictMcpApiKey(toolToken)) {
@@ -136,8 +136,8 @@ export async function authenticateMcpApiKey({
     const authorization: any = await apiKeyDistributionProvider.authenticateRuntime({
       credential: apiKey,
       serverAudience: header(request, "host"),
-      targetId: header(request, "x-meshrix-mcp-target"),
-      connectorPackageId: header(request, "x-meshrix-connector-package-id") || null,
+      targetId: header(request, "x-meshrix.js-mcp-target"),
+      connectorPackageId: header(request, "x-meshrix.js-connector-package-id") || null,
       processIdentityEvidence: identity.evidence
     });
     if (!authorization ||

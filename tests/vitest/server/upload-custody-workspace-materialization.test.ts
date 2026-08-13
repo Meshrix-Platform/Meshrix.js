@@ -24,6 +24,7 @@ import { createSqliteWorkQueueStore } from "../../../packages/foundation/src/wor
 import { createUploadSessionHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-upload-handlers.ts";
 import { createQueueApplicationPort } from "../../../packages/server-runtime/src/composition/queue-application-port.ts";
 import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
+import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { createServerCompositionRoot } from "../../../packages/server-runtime/src/composition/composition-root.ts";
 import {
   createUploadWorkspaceMaterializationProvider,
@@ -1241,6 +1242,7 @@ async function submitMaterialization(
     operationProofSubstrate:
       fixture.operationProofSubstrate,
     operations: [fixture.operationAuthority],
+    routeIndex: createOperationRouteIndex([fixture.operationAuthority], { strict: true }),
     request,
     requestBody: Buffer.from(JSON.stringify(input)),
     response,
@@ -1451,6 +1453,10 @@ async function spawnCrashChild(
     closeCaptureFds();
     throw error;
   }
+  // The child owns duplicated descriptors after fork. Keeping the parent's
+  // copies open across the crash matrix leaks two descriptors per case and can
+  // starve later children under the complete suite.
+  closeCaptureFds();
   retainedCrashChildren.push(child);
   const terminateCrashUnit: any = () : any => {
     if (
@@ -1557,10 +1563,98 @@ async function waitForExpiredCrashLeases() : Promise<any> {
   );
 }
 
-async function expectQueueOrphanRecovery(runtime?: any, bindingDigest?: any) : Promise<any> {
+async function acknowledgeTerminatedCrashExecution(
+  root?: any,
+  workItemId?: any
+) : Promise<any> {
+  const store: any = createSqliteWorkQueueStore({
+    userDataPath: root,
+    policy: { leaseTimeoutMs: CRASH_LEASE_MS }
+  });
+  try {
+    const before: any = store.inspect({
+      includeJournal: true,
+      workItemId
+    });
+    expect(before.workItem).toMatchObject({
+      state: "running",
+      lease: {
+        leaseId: expect.any(String),
+        leaseSeq: expect.any(Number)
+      }
+    });
+    const terminatedLease: Readonly<Record<string, any>> = Object.freeze({
+      leaseId: before.workItem.lease.leaseId,
+      leaseSeq: before.workItem.lease.leaseSeq
+    });
+    const interrupted: any = store.markInDoubt({
+      workItemId,
+      leaseId: terminatedLease.leaseId,
+      reason: "isolated_execution_terminated",
+      error: {
+        type: "isolated_execution_terminated"
+      }
+    });
+    expect(interrupted).toMatchObject({
+      interrupted: true,
+      idempotent: false,
+      workItem: {
+        state: "in_doubt",
+        lease: terminatedLease
+      }
+    });
+    const acknowledged: any = store.acknowledgeTermination({
+      workItemId,
+      leaseId: terminatedLease.leaseId,
+      toState: "retry",
+      delayMs: 0,
+      reason: "isolated_execution_termination_acknowledged",
+      error: {
+        type: "isolated_execution_termination_acknowledged"
+      }
+    });
+    expect(acknowledged).toMatchObject({
+      acknowledged: true,
+      idempotent: false,
+      toState: "queued",
+      workItem: {
+        state: "queued",
+        lease: null
+      }
+    });
+    expect(store.acknowledgeTermination({
+      workItemId,
+      leaseId: terminatedLease.leaseId,
+      toState: "retry",
+      delayMs: 0,
+      reason: "isolated_execution_termination_acknowledged"
+    })).toMatchObject({
+      acknowledged: false,
+      idempotent: true,
+      workItem: {
+        state: "queued"
+      }
+    });
+    const after: any = store.inspect({
+      includeJournal: true,
+      workItemId
+    });
+    expect(after.journal.slice(-2).map(
+      (entry?: any) : any => entry.transition
+    )).toEqual([
+      "interrupt",
+      "termination_acknowledged"
+    ]);
+    return terminatedLease;
+  } finally {
+    await store.close?.();
+  }
+}
+
+async function expectTerminatedQueueRecovery(runtime?: any, bindingDigest?: any) : Promise<any> {
   const workItemId: any = `materialization-work:${bindingDigest}`;
   expect(runtime.queueGate.recoveredWorkItemIds())
-    .toContain(workItemId);
+    .not.toContain(workItemId);
   const inspection: any = await runtime.queueGate.observe({
     includeJournal: true,
     workItemId
@@ -1616,12 +1710,20 @@ async function expectQueueOrphanRecovery(runtime?: any, bindingDigest?: any) : P
   }
   expect(transitions[0]).toBe("enqueue");
   expect(
-    transitions.filter((entry?: any) : any => entry === "lease_expired")
+    transitions.filter((entry?: any) : any => entry === "interrupt")
   ).toHaveLength(1);
-  const expiredAt: any = transitions.indexOf("lease_expired");
   expect(
-    transitions.slice(expiredAt + 1),
-    `queue recovery transitions: ${transitions.join(" -> ")}`
+    transitions.filter(
+      (entry?: any) : any =>
+        entry === "termination_acknowledged"
+    )
+  ).toHaveLength(1);
+  expect(transitions).not.toContain("lease_expired");
+  const acknowledgedAt: any =
+    transitions.indexOf("termination_acknowledged");
+  expect(
+    transitions.slice(acknowledgedAt + 1),
+    `terminated queue recovery transitions: ${transitions.join(" -> ")}`
   ).toContain("claim");
   expect(transitions.at(-1)).toBe("complete");
 }
@@ -2423,7 +2525,7 @@ describe(
         }
       });
       const auditBeforeReplay: any =
-        fixture.operationAuditStore.getById(
+        await fixture.operationAuditStore.getById(
           completed.evidence.auditId
         );
       expect(auditBeforeReplay).toBeTruthy();
@@ -2519,7 +2621,7 @@ describe(
           `materialization-work:${completed.bindingDigest}`
       })).toEqual(queueBeforeReplay);
       expect(
-        fixture.operationAuditStore.getById(
+        await fixture.operationAuditStore.getById(
           completed.evidence.auditId
         )
       ).toEqual(auditBeforeReplay);
@@ -2961,6 +3063,10 @@ describe(
         stage: "after_temp_reserved",
         stateCommits: 0
       });
+      await acknowledgeTerminatedCrashExecution(
+        fixture.root,
+        `materialization-work:${admittedRecord.bindingDigest}`
+      );
       const interruptedStore: any =
         createUploadWorkspaceMaterializationTransactionStore({
           leaseMs: RUNTIME_LEASE_MS,
@@ -3033,7 +3139,7 @@ describe(
       expect((await fs.lstat(displacedTemp)).size).toBe(0);
       expect(await fixture.materializationEvents())
         .toHaveLength(0);
-      await expectQueueOrphanRecovery(
+      await expectTerminatedQueueRecovery(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
@@ -3211,6 +3317,10 @@ describe(
         upload,
         { logicalTarget }
       );
+      const admittedRecord: any =
+        await runtime.transactionStore.get(
+          admitted.payload.requestRef
+        );
       await fixture.suspendPersistent();
       const marker: any = await spawnCrashChild(
         fixture.root,
@@ -3225,6 +3335,10 @@ describe(
         stage: "after_publication_prepared",
         stateCommits: 0
       });
+      await acknowledgeTerminatedCrashExecution(
+        fixture.root,
+        `materialization-work:${admittedRecord.bindingDigest}`
+      );
 
       const closedStore: any =
         createUploadWorkspaceMaterializationTransactionStore({
@@ -3496,26 +3610,11 @@ describe(
           queueClaims: 1,
           stage: crashStage
         });
-        const crashedQueueStore: any = createSqliteWorkQueueStore({
-          userDataPath: fixture.root,
-          policy: { leaseTimeoutMs: CRASH_LEASE_MS }
-        });
-        const crashedQueue: any = crashedQueueStore.inspect({
-          includeJournal: true,
-          workItemId
-        });
-        expect(crashedQueue.workItem).toMatchObject({
-          state: "running",
-          lease: {
-            leaseId: expect.any(String),
-            leaseSeq: expect.any(Number)
-          }
-        });
-        const staleLease: Readonly<Record<string, any>> = Object.freeze({
-          leaseId: crashedQueue.workItem.lease.leaseId,
-          leaseSeq: crashedQueue.workItem.lease.leaseSeq
-        });
-        await crashedQueueStore.close?.();
+        const staleLease: any =
+          await acknowledgeTerminatedCrashExecution(
+            fixture.root,
+            workItemId
+          );
 
         await waitForExpiredCrashLeases();
         await fixture.resumePersistent();
@@ -3557,13 +3656,9 @@ describe(
             workItemId
           );
           expect(safeEffectCounts(fixture))
-            .toEqual({
-              ...effectsBeforeQueueAck,
-              queueClaims:
-                effectsBeforeQueueAck.queueClaims + 1
-            });
+            .toEqual(effectsBeforeQueueAck);
         }
-        await expectQueueOrphanRecovery(
+        await expectTerminatedQueueRecovery(
           recoveredRuntime,
           admittedRecord.bindingDigest
         );
@@ -3643,6 +3738,10 @@ describe(
         stage: "after_temp_inode_reserved_before_wal",
         stateCommits: 0
       });
+      await acknowledgeTerminatedCrashExecution(
+        fixture.root,
+        `materialization-work:${admittedRecord.bindingDigest}`
+      );
       await waitForExpiredCrashLeases();
       await fixture.resumePersistent();
       const interruptedStore: any =
@@ -3723,7 +3822,7 @@ describe(
         .toBe("neighbor");
       expect(await fixture.materializationEvents())
         .toEqual([]);
-      await expectQueueOrphanRecovery(
+      await expectTerminatedQueueRecovery(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
@@ -3771,6 +3870,10 @@ describe(
           stage: crashStage,
           stateCommits: 0
         });
+        await acknowledgeTerminatedCrashExecution(
+          fixture.root,
+          `materialization-work:${admittedRecord.bindingDigest}`
+        );
         await waitForExpiredCrashLeases();
         await fixture.resumePersistent();
         const interruptedStore: any =
@@ -3890,7 +3993,7 @@ describe(
           finalPermits: 1,
           stateCommits: 1
         });
-        await expectQueueOrphanRecovery(
+        await expectTerminatedQueueRecovery(
           recoveredRuntime,
           admittedRecord.bindingDigest
         );
@@ -3940,6 +4043,10 @@ describe(
         custodyReads: 1,
         stateCommits: 1
       });
+      await acknowledgeTerminatedCrashExecution(
+        fixture.root,
+        `materialization-work:${admittedRecord.bindingDigest}`
+      );
       await waitForExpiredCrashLeases();
       await fixture.resumePersistent();
       const eventsBefore: any = await fixture.materializationEvents();
@@ -4010,7 +4117,7 @@ describe(
           DEFAULT_LOGICAL_TARGET
         ))
       ).toEqual(bytes);
-      await expectQueueOrphanRecovery(
+      await expectTerminatedQueueRecovery(
         recoveredRuntime,
         admittedRecord.bindingDigest
       );
@@ -4035,10 +4142,18 @@ describe(
           runtime,
           upload
         );
+        const admittedRecord: any =
+          await runtime.transactionStore.get(
+            admitted.payload.requestRef
+          );
         await fixture.suspendPersistent();
         await spawnCrashChild(
           fixture.root,
           "after_state_commit"
+        );
+        await acknowledgeTerminatedCrashExecution(
+          fixture.root,
+          `materialization-work:${admittedRecord.bindingDigest}`
         );
         const target: any = path.join(
           fixture.workspaceRoot,
@@ -4174,10 +4289,18 @@ describe(
           runtime,
           upload
         );
+        const admittedRecord: any =
+          await runtime.transactionStore.get(
+            admitted.payload.requestRef
+          );
         await fixture.suspendPersistent();
         await spawnCrashChild(
           fixture.root,
           "after_state_commit"
+        );
+        await acknowledgeTerminatedCrashExecution(
+          fixture.root,
+          `materialization-work:${admittedRecord.bindingDigest}`
         );
         await waitForExpiredCrashLeases();
         fixture.recoveryTransforms[transformTarget] = transform;
@@ -4258,6 +4381,10 @@ describe(
           custodyReads: 1,
           stateCommits: 1
         });
+        await acknowledgeTerminatedCrashExecution(
+          fixture.root,
+          `materialization-work:${admittedRecord.bindingDigest}`
+        );
         await waitForExpiredCrashLeases();
         await fixture.resumePersistent();
         const interruptedStore: any =
@@ -4315,7 +4442,7 @@ describe(
           interrupted.requestRef
         )).toEqual(evidenceRowBeforeFence);
         const auditBefore: any =
-          fixture.operationAuditStore.getById(
+          await fixture.operationAuditStore.getById(
             interrupted.evidence.auditId
           );
         if (expectedAuditPresent) {
@@ -4381,7 +4508,7 @@ describe(
           stateCommits: 0
         });
         const auditAfter: any =
-          fixture.operationAuditStore.getById(
+          await fixture.operationAuditStore.getById(
             interrupted.evidence.auditId
           );
         expect(auditAfter).toBeTruthy();
@@ -4440,7 +4567,7 @@ describe(
             proofLedgerEventId
           )
         ).resolves.toEqual(proofReceiptsAfter[0]);
-        await expectQueueOrphanRecovery(
+        await expectTerminatedQueueRecovery(
           recoveredRuntime,
           admittedRecord.bindingDigest
         );

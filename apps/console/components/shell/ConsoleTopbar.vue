@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { ADMIN_ROUTE_REGISTRY } from "../../router/admin-route-registry.ts";
 import { openConsoleCommandPalette, resolveAdminSectionLabel } from "../../composables/console-command-palette-controller";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import {
   SERVER_ADDRESS_STORAGE_EVENT,
   normalizeServerAddressUrl,
@@ -13,23 +13,31 @@ import {
 } from "../../lib/console-server-addresses";
 
 const {
-  activeRouteAdminView,
-  activeRouteView,
   currentUser,
   isAuthenticated,
+} = useServerConsoleShellContext().access;
+const {
+  activeRouteAdminView,
+  activeRouteView,
   localizedViewTitle,
+  sideNavCollapsed,
+  sideNavOpen,
+} = useServerConsoleShellContext().navigation;
+const {
   msg,
+  tt,
+} = useServerConsoleShellContext().preferences;
+const {
   pageRefreshAriaLabel,
   pageRefreshBusy,
   pageRefreshTitle,
   refreshCurrentPage,
+} = useServerConsoleShellContext().refresh;
+const {
   serverAvailable,
   serviceStatusLabel,
   serviceUrl,
-  sideNavCollapsed,
-  sideNavOpen,
-  tt,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().runtime;
 
 const topbarUserName = computed(() => currentUser.value?.username || currentUser.value?.displayName || "");
 const breadcrumbSectionLabel = computed(() => {
@@ -44,6 +52,7 @@ const breadcrumbSectionLabel = computed(() => {
 });
 const serviceAddressMenuRef = ref<HTMLElement | null>(null);
 const serviceAddressMenuOpen = ref(false);
+const sideNavOverlay = ref(false);
 const storedServerAddresses = ref<StoredServerAddresses>(readStoredServerAddresses());
 const normalizedCurrentServiceUrl = computed(() => normalizeServerAddressUrl(serviceUrl.value));
 const normalizedStoredActiveUrl = computed(() => normalizeServerAddressUrl(storedServerAddresses.value.activeUrl));
@@ -60,9 +69,18 @@ const serviceAddressOptions = computed(() =>
   })),
 );
 const hasMultipleServiceAddresses = computed(() => serviceAddressOptions.value.length > 1);
+const sideNavExpanded = computed(() =>
+  sideNavOverlay.value ? sideNavOpen.value : !sideNavCollapsed.value
+);
+
+let sideNavOverlayQuery: MediaQueryList | null = null;
+
+function syncSideNavOverlay(event: MediaQueryList | MediaQueryListEvent) {
+  sideNavOverlay.value = event.matches;
+}
 
 function toggleSideNav() {
-  if (typeof window !== "undefined" && window.matchMedia("(max-width: 860px)").matches) {
+  if (sideNavOverlay.value) {
     sideNavCollapsed.value = false;
     sideNavOpen.value = !sideNavOpen.value;
     return;
@@ -136,6 +154,9 @@ function switchServiceAddress(url: string) {
 }
 
 onMounted(() => {
+  sideNavOverlayQuery = window.matchMedia("(max-width: 860px)");
+  syncSideNavOverlay(sideNavOverlayQuery);
+  sideNavOverlayQuery.addEventListener("change", syncSideNavOverlay);
   refreshStoredServerAddresses();
   window.addEventListener(SERVER_ADDRESS_STORAGE_EVENT, refreshStoredServerAddresses);
   document.addEventListener("pointerdown", handleDocumentPointerDown);
@@ -143,6 +164,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  sideNavOverlayQuery?.removeEventListener("change", syncSideNavOverlay);
+  sideNavOverlayQuery = null;
   window.removeEventListener(SERVER_ADDRESS_STORAGE_EVENT, refreshStoredServerAddresses);
   document.removeEventListener("pointerdown", handleDocumentPointerDown);
   document.removeEventListener("keydown", handleDocumentKeydown);
@@ -156,9 +179,9 @@ onBeforeUnmount(() => {
         class="topbar-sidebar-toggle"
         type="button"
         :disabled="!isAuthenticated"
-        :aria-expanded="!sideNavCollapsed"
-        :aria-label="sideNavCollapsed ? tt('展开侧边栏') : tt('收起侧边栏')"
-        :title="sideNavCollapsed ? tt('展开侧边栏') : tt('收起侧边栏')"
+        :aria-expanded="sideNavExpanded"
+        :aria-label="sideNavExpanded ? tt('收起侧边栏') : tt('展开侧边栏')"
+        :title="sideNavExpanded ? tt('收起侧边栏') : tt('展开侧边栏')"
         @click="toggleSideNav"
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

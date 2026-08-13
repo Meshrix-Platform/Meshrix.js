@@ -1,38 +1,28 @@
 <script setup lang="ts">
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import MeshrixJsMark from "../MeshrixJsMark.vue";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 
+const {
+  loginForm,
+  submitLoginAuth,
+} = useServerConsoleShellContext().access;
+const {
+  languageMode,
+  msg,
+  toggleLanguage,
+  tt,
+} = useServerConsoleShellContext().preferences;
 const {
   consoleBootstrapping,
   isBusy,
-  languageMode,
-  loginForm,
-  msg,
-  submitLoginAuth,
-  toggleLanguage,
-  tt,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().runtime;
 </script>
 
 <template>
   <section class="auth-gate">
     <article class="surface-card auth-card">
       <div class="auth-brand">
-        <svg class="brand-mark" aria-hidden="true" viewBox="-150 -150 300 300" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="ag-gold" x1="0" y1="0" x2="1" y2="1">
-              <stop class="brand-gold-0" offset="0%"/><stop class="brand-gold-1" offset="50%"/><stop class="brand-gold-2" offset="100%"/>
-            </linearGradient>
-            <linearGradient id="ag-silver" x1="0" y1="1" x2="1" y2="0">
-              <stop class="brand-silver-0" offset="0%"/><stop class="brand-silver-1" offset="100%"/>
-            </linearGradient>
-          </defs>
-          <polygon fill="none" points="115.5,47.8 47.8,115.5 -47.8,115.5 -115.5,47.8 -115.5,-47.8 -47.8,-115.5 47.8,-115.5 115.5,-47.8" stroke="url(#ag-gold)" stroke-width="6" opacity="0.75"/>
-          <circle class="brand-ring-primary" r="113" fill="none" stroke-width="4" opacity="0.5"/>
-          <circle cx="-16" cy="16" r="89" fill="none" stroke="url(#ag-silver)" stroke-width="3.5" opacity="0.45"/>
-          <circle class="brand-ring-secondary" cx="13" cy="-10" r="63" fill="none" stroke-width="3.5" opacity="0.5"/>
-          <circle r="36" fill="none" stroke="url(#ag-gold)" stroke-width="4" opacity="0.6"/>
-          <circle class="brand-dot" r="6" opacity="0.6"/>
-        </svg>
+        <MeshrixJsMark class="brand-mark" />
         <div>
           <h1 class="auth-brand-name">Meshrix.js</h1>
           <p class="brand-subtitle">{{ tt('服务端控制台') }}</p>
@@ -75,14 +65,3 @@ const {
     </article>
   </section>
 </template>
-
-<style scoped>
-.brand-mark .brand-gold-0 { stop-color: var(--brand); }
-.brand-mark .brand-gold-1 { stop-color: var(--brand-strong); }
-.brand-mark .brand-gold-2 { stop-color: var(--brand-muted); }
-.brand-mark .brand-silver-0 { stop-color: var(--text-muted); }
-.brand-mark .brand-silver-1 { stop-color: var(--text-secondary); }
-.brand-mark .brand-ring-primary { stroke: var(--text-primary); }
-.brand-mark .brand-ring-secondary { stroke: var(--text-secondary); }
-.brand-mark .brand-dot { fill: var(--brand); }
-</style>

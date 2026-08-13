@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue';
-import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { useServerConsoleShellContext } from '#meshrix/console/server-console-shell-context';
 import { formatMachineDate } from '@meshrix/ui-console/console-format-utils';
 import DataTable from '../../components/DataTable.vue';
 import OptionBar from "@meshrix/ui-console/option-bar";
@@ -28,15 +28,21 @@ onBeforeUnmount(() => {
   narrowLayoutMedia?.removeEventListener("change", syncNarrowLayout);
 });
 const {
+  isAuthenticated,
+} = useServerConsoleShellContext().access;
+const {
   adminView,
   currentView,
-  error,
+} = useServerConsoleShellContext().navigation;
+const {
+  workQueueSummary,
+} = useServerConsoleShellContext().jobs;
+const {
   exportSystemLogRows,
   filteredSystemLogRows,
   goToSystemLogNextPage,
   goToSystemLogPreviousPage,
   handleSystemLogTableScroll,
-  isAuthenticated,
   systemLogColumnWidths,
   systemLogCurrentPage,
   systemLogDisplayStatusLabel,
@@ -51,9 +57,11 @@ const {
   systemLogTableShellRef,
   monitorAlertSummary,
   paginatedSystemLogRows,
-  workQueueSummary,
   serverLogRows,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().monitoring;
+const {
+  error,
+} = useServerConsoleShellContext().runtime;
 
 function handleHeaderDragend(newWidth: number, oldWidth: number, column: any) {
   const key = column.property;

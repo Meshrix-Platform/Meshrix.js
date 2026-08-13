@@ -7,7 +7,7 @@ function toText(value?: any) : any {
   return String(value ?? "").trim();
 }
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
@@ -407,21 +407,42 @@ export function createQueueWorkerRuntime({
       if (executionController.signal.aborted) {
         settled = true;
         const explained: any = explainError(error, { workItem, lease: activeLease });
+        const provablyTerminable: any = resolvedHandler?.terminable === true;
         try {
-          const result: any = await store.retry({
+          if (provablyTerminable) {
+            const result: any = await store.retry({
+              workItemId: workItem.workItemId,
+              leaseId: activeLease.leaseId,
+              delayMs: 0,
+              actor: runtimeActor,
+              reason: error?.code === "queue_handler_timeout" ? "handler_timeout" : "handler_interrupted",
+              error: explained
+            });
+            return {
+              settled: true,
+              interrupted: true,
+              workItemId: workItem.workItemId,
+              error: explained,
+              result
+            };
+          }
+          const inDoubt: any = await store.markInDoubt({
             workItemId: workItem.workItemId,
             leaseId: activeLease.leaseId,
-            delayMs: 0,
             actor: runtimeActor,
-            reason: error?.code === "queue_handler_timeout" ? "handler_timeout" : "handler_interrupted",
-            error: explained
+            reason: error?.code === "queue_handler_timeout" ? "handler_timeout_unconfirmed" : "handler_interrupted_unconfirmed",
+            error: {
+              type: "handler_unconfirmed",
+              ...explained
+            }
           });
           return {
             settled: true,
             interrupted: true,
+            inDoubt: inDoubt.interrupted === true,
             workItemId: workItem.workItemId,
             error: explained,
-            result
+            result: inDoubt
           };
         } catch {
           throw error;
@@ -471,61 +492,11 @@ export function createQueueWorkerRuntime({
     }
   }
 
-  async function runOnce(input: Record<string, any> = {}) : Promise<any> {
-    const claim: any = await store.claim({
-      ...input,
-      workerId: input.workerId || runtimeWorkerId,
-      batchSize: asPositiveInt(input.batchSize ?? input.batch ?? 1, 1)
-    });
-    const results: any[] = [];
-    for (const leased of claim.claimed || []) {
-      results.push(await runLeased({
-        workItem: leased.workItem,
-        lease: leased.lease,
-        actor: input.actor
-      }));
-    }
-    return {
-      workerId: claim.workerId || runtimeWorkerId,
-      claimed: claim.claimed || [],
-      recovered: claim.recovered || [],
-      matured: claim.matured || [],
-      results
-    };
-  }
-
-  async function startPolling({
-    intervalMs = 1000,
-    signal = null,
-    maxIterations = 0,
-    ...claimInput
-  }: Record<string, any> = {}) : Promise<any> {
-    const safeIntervalMs: any = Math.max(10, Number(intervalMs) || 1000);
-    let iterations: any = 0;
-    let stopped: any = false;
-    const stop: any = () : any => {
-      stopped = true;
-    };
-    signal?.addEventListener?.("abort", stop, { once: true });
-    while (!stopped) {
-      iterations += 1;
-      await runOnce(claimInput);
-      if (maxIterations > 0 && iterations >= maxIterations) {
-        break;
-      }
-      await new Promise((resolve?: any) : any => setTimeout(resolve, safeIntervalMs));
-    }
-    signal?.removeEventListener?.("abort", stop);
-    return { stopped: true, iterations };
-  }
-
   return Object.freeze({
     workerId: runtimeWorkerId,
     maxHandlerDurationMs: runtimeHandlerDurationLimitMs,
     registerHandler,
     unregisterHandler,
-    runLeased,
-    runOnce,
-    startPolling
+    runLeased
   });
 }

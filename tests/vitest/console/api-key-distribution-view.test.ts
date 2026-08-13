@@ -49,14 +49,16 @@ const catalog: OperationPermissionCatalog = {
     {
       id: "tool.read", version: "1", label: "Read Tool", description: "", owner: "core", source: "core",
       operationId: "op.read", handlerId: "h", toolsets: ["toolset-a"], requiredScopes: ["scope-a"],
-      risk: "read_only", readOnly: true, destructive: false, concurrencySafe: true, requiresApproval: false,
+      risk: "read_only", readOnly: true, destructive: false,
+      concurrency: { workloadClass: "light", maxParallel: 64, cost: 1 }, requiresApproval: false,
       approvalScope: "", timeoutMs: 1, maxResultBytes: 1, status: "active", tags: [],
       serviceId: "service-a", capabilityId: "capability-a",
     },
     {
       id: "tool.write", version: "1", label: "Write Tool", description: "", owner: "core", source: "core",
       operationId: "op.write", handlerId: "h", toolsets: ["toolset-a"], requiredScopes: ["scope-a"],
-      risk: "safe_write", readOnly: false, destructive: false, concurrencySafe: true, requiresApproval: false,
+      risk: "safe_write", readOnly: false, destructive: false,
+      concurrency: { workloadClass: "standard", maxParallel: 16, cost: 2 }, requiresApproval: false,
       approvalScope: "", timeoutMs: 1, maxResultBytes: 1, status: "active", tags: [],
       serviceId: "service-a", capabilityId: "capability-b",
     },
@@ -252,7 +254,13 @@ describe("API key distribution console", () => {
     expect(view).toContain("调用限制");
     expect(view).toContain("每分钟调用次数");
     expect(view).toContain("最大并发量");
-    expect(view).toContain("客户端目标");
+    expect(view).toContain("三步完成 Agent MCP 接入");
+    expect(view).toContain('data-testid="agent-setup-agent-step"');
+    expect(view).toContain('data-testid="agent-target-select"');
+    expect(view).toContain("targetId ? [targetId] : []");
+    expect(view).toContain('data-testid="agent-setup-access-step"');
+    expect(view).toContain('data-testid="agent-setup-review-step"');
+    expect(view).toContain("高级设置");
     expect(view).toContain("允许访问全部资源");
     expect(view).not.toContain("连接器包 ID");
     expect(view).not.toContain("进程身份与使用限制");

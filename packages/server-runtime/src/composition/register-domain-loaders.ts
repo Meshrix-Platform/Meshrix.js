@@ -12,7 +12,7 @@
  * Registers domain loaders into the provided registries.
  *
  * @param {object} options
- * @param {import("#meshrix/foundation/security/authorization/tag-store.port.ts").TagStoreProviderRegistry} [options.tagStoreProviderRegistry]
+ * @param {import("#meshrix/foundation/security/authorization/tag-store.port").TagStoreProviderRegistry} [options.tagStoreProviderRegistry]
  * @param {boolean} [options.enableTagStore=true]
  */
 export async function registerDomainLoaders({

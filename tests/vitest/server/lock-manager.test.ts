@@ -19,8 +19,7 @@ import {
 } from "../../../packages/foundation/src/concurrency/lock-manager.ts";
 import {
   PostgresLockBackendError,
-  PostgresLockManager,
-  postgresAdvisoryKey
+  PostgresLockManager
 } from "../../../packages/foundation/src/concurrency/postgres-lock-manager.ts";
 import {
   SqliteLockBackendError,
@@ -409,38 +408,58 @@ class MockPgClient extends EventEmitter {
   }
 
   async query(sql?: any, params: any = []) : Promise<any> {
-    const key: any = params.join(":");
-    if (sql.includes("pg_try_advisory_lock")) {
-      const owner: any = this.coordinator.locks.get(key);
-      const acquired: any = !owner || owner === this;
-      if (acquired) this.coordinator.locks.set(key, this);
-      if (sql.includes("pg_current_xact_id")) {
-        return {
-          rows: [{
-            acquired,
-            fencing_token: acquired ? String(this.coordinator.nextFence++) : null
-          }]
-        };
+    if (sql.includes("CREATE TABLE IF NOT EXISTS _meshrix_lock_leases")) {
+      return { rows: [] };
+    }
+    const key: any = `${params[0]}\0${params[1]}`;
+    const now: any = Date.now();
+    if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
+      const current: any = this.coordinator.locks.get(key);
+      if (current && current.expiresAt > now) return { rows: [] };
+      const ttlMs: any = Number(params[3]);
+      const lease: any = {
+        ownerId: params[2],
+        fencingToken: String(this.coordinator.nextFence++),
+        acquiredAt: new Date(now),
+        expiresAt: now + ttlMs
+      };
+      this.coordinator.locks.set(key, lease);
+      return { rows: [{
+        owner_id: lease.ownerId,
+        fencing_token: lease.fencingToken,
+        acquired_at: lease.acquiredAt,
+        expires_at: new Date(lease.expiresAt),
+        lease_ms: ttlMs
+      }] };
+    }
+    if (sql.includes("SELECT EXISTS") && sql.includes("_meshrix_lock_leases")) {
+      const lease: any = this.coordinator.locks.get(key);
+      return { rows: [{ locked: Boolean(lease && lease.expiresAt > now) }] };
+    }
+    if (sql.includes("UPDATE _meshrix_lock_leases")) {
+      const lease: any = this.coordinator.locks.get(key);
+      const ttlMs: any = Number(params[4]);
+      if (!lease || lease.ownerId !== params[2] || lease.fencingToken !== String(params[3]) || lease.expiresAt <= now) {
+        return { rows: [] };
       }
-      return { rows: [{ acquired }] };
+      lease.expiresAt = now + ttlMs;
+      return { rows: [{ expires_at: new Date(lease.expiresAt), lease_ms: ttlMs }] };
     }
-    if (sql.includes("pg_advisory_unlock")) {
+    if (sql.includes("DELETE FROM _meshrix_lock_leases")) {
       if (this.failUnlock) throw new Error("sensitive backend detail");
-      const unlocked: any = this.coordinator.locks.get(key) === this;
-      if (unlocked) this.coordinator.locks.delete(key);
-      return { rows: [{ unlocked }] };
+      const lease: any = this.coordinator.locks.get(key);
+      const expiredDelete: any = sql.includes("expires_at <= clock_timestamp()");
+      const matches: any = lease && lease.ownerId === params[2] && lease.fencingToken === String(params[3]);
+      const eligible: any = matches && (expiredDelete ? lease.expiresAt <= now : lease.expiresAt > now);
+      if (eligible) this.coordinator.locks.delete(key);
+      return { rows: eligible ? [{ fencing_token: lease.fencingToken }] : [] };
     }
-    return { rows: [{ alive: 1 }] };
+    throw new Error(`Unexpected PostgreSQL lock query: ${String(sql).slice(0, 40)}`);
   }
 
   release(destroy: any = false) : any {
     this.released = true;
     this.destroyed = Boolean(destroy);
-    if (destroy) {
-      for (const [key, owner] of this.coordinator.locks) {
-        if (owner === this) this.coordinator.locks.delete(key);
-      }
-    }
   }
 }
 
@@ -489,16 +508,16 @@ describe("PostgreSQL lock manager", () : any => {
     })).toThrow("EventEmitter listener methods");
   });
 
-  it("hashes stable namespaced advisory keys without exposing source keys", () : any => {
-    expect(postgresAdvisoryKey("alpha")).toEqual(postgresAdvisoryKey("alpha"));
-    expect(postgresAdvisoryKey("alpha", "one")).not.toEqual(postgresAdvisoryKey("alpha", "two"));
-    expect(postgresAdvisoryKey("alpha")).toHaveLength(2);
+  it("requires an explicit bounded pool-credit configuration", () : any => {
+    const pool: any = new MockPgPool();
+    expect(() : any => new PostgresLockManager({ pool, maxPoolCredits: 0 })).toThrow(TypeError);
   });
 
-  it("holds a dedicated session, times out contenders, and increments fences", async () : Promise<any> => {
-    const { manager } = createPostgresManager();
+  it("releases every checkout between database-time lease operations and increments fences", async () : Promise<any> => {
+    const { manager, pool } = createPostgresManager();
     const first: any = await manager.acquire("distributed");
     expect(first.fencingToken).toBe("fence_postgres_100");
+    expect(pool.clients.every((client?: any) : any => client.released)).toBe(true);
     await expect(manager.acquire("distributed", { waitMs: 0 })).rejects.toBeInstanceOf(LockTimeoutError);
     await first.release();
     const second: any = await manager.acquire("distributed");
@@ -551,33 +570,39 @@ describe("PostgreSQL lock manager", () : any => {
   it("unlocks rather than renewing an elapsed PostgreSQL application lease", async () : Promise<any> => {
     const { manager, pool } = createPostgresManager({ defaultTtlMs: 1000 });
     const handle: any = await manager.acquire("stale-heartbeat");
-    handle.expiresAt = new Date(Date.now() - 1);
+    [...pool.coordinator.locks.values()][0].expiresAt = Date.now() - 1;
     await expect(handle.heartbeat(1000)).rejects.toBeInstanceOf(LockReleasedError);
     expect(handle.released).toBe(true);
-    expect(pool.coordinator.locks.size).toBe(0);
+    expect(await manager.isLocked("stale-heartbeat")).toBe(false);
     expect(manager.getMetrics()).toMatchObject({ totalExpired: 1, currentActive: 0 });
   });
 
   it("fails closed with sanitized backend errors and destroys failed clients", async () : Promise<any> => {
     const { manager, pool } = createPostgresManager();
     const handle: any = await manager.acquire("release-error");
-    pool.clients[0].failUnlock = true;
+    const connect: any = pool.connect.bind(pool);
+    pool.connect = async () : Promise<any> => {
+      const client: any = await connect();
+      client.failUnlock = true;
+      return client;
+    };
     const releaseError: any = await handle.release().catch((error?: any) : any => error);
     expect(releaseError).toEqual(expect.objectContaining({
       name: "PostgresLockBackendError",
       operation: "release"
     }));
     expect(String(releaseError)).not.toContain("sensitive backend detail");
-    expect(pool.clients[0].destroyed).toBe(true);
+    expect(pool.clients.at(-1).destroyed).toBe(true);
   });
 
-  it("invalidates a handle when its PostgreSQL session disconnects", async () : Promise<any> => {
+  it("does not bind a lease handle to a released PostgreSQL session", async () : Promise<any> => {
     const { manager, pool } = createPostgresManager();
     const handle: any = await manager.acquire("disconnect");
-    pool.clients[0].emit("error", new Error("network detail"));
-    expect(handle.released).toBe(true);
-    await expect(handle.heartbeat()).rejects.toBeInstanceOf(LockReleasedError);
-    expect(manager.getMetrics().totalBackendErrors).toBe(1);
+    expect(pool.clients[0].released).toBe(true);
+    expect(pool.clients[0].listenerCount("error")).toBe(0);
+    await handle.heartbeat();
+    expect(handle.released).toBe(false);
+    await handle.release();
   });
 
   it("observes and detaches injected PostgreSQL pool errors", async () : Promise<any> => {
@@ -673,7 +698,7 @@ describe("PostgreSQL lock manager", () : any => {
     });
     class AbortQueryClient extends MockPgClient {
       async query(sql?: any, params: any = []) : Promise<any> {
-        if (sql.includes("pg_try_advisory_lock") && sql.includes("pg_current_xact_id")) {
+        if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
           await queryBarrier;
           if (this.destroyed) throw new Error("destroyed client detail");
         }
@@ -708,7 +733,7 @@ describe("PostgreSQL lock manager", () : any => {
     });
     class BlockingClient extends MockPgClient {
       async query(sql?: any, params: any = []) : Promise<any> {
-        if (sql.includes("pg_try_advisory_lock") && sql.includes("pg_current_xact_id")) {
+        if (sql.includes("INSERT INTO _meshrix_lock_leases")) {
           await acquireBarrier;
           if (this.destroyed) throw new Error("destroyed client");
         }
@@ -788,7 +813,7 @@ describe("PostgreSQL lock manager", () : any => {
     const waitingA: any = manager.acquire("hot-key");
     await vi.waitFor(() : any => {
       expect(manager.getMetrics().currentWaiting).toBe(1);
-      expect(pool.active).toBe(1);
+      expect(pool.active).toBe(0);
     });
 
     const heldB: any = await manager.acquire("independent-key", { waitMs: 100 });
@@ -798,6 +823,47 @@ describe("PostgreSQL lock manager", () : any => {
     const promotedA: any = await waitingA;
     await promotedA.release();
     expect(pool.active).toBe(0);
+  });
+
+  it("bounds simultaneous PostgreSQL checkouts with manager-owned pool credits", async () : Promise<any> => {
+    let releaseQueries: any;
+    const queryBarrier: any = new Promise((resolve?: any) : any => {
+      releaseQueries = resolve;
+    });
+    class CreditClient extends MockPgClient {
+      async query(sql?: any, params: any = []) : Promise<any> {
+        if (sql.includes("INSERT INTO _meshrix_lock_leases")) await queryBarrier;
+        return super.query(sql, params);
+      }
+    }
+    class CreditPool extends MockPgPool {
+      async connect() : Promise<any> {
+        const client: any = new CreditClient(this.coordinator);
+        this.clients.push(client);
+        return client;
+      }
+    }
+    const pool: any = new CreditPool();
+    const { manager } = createPostgresManager({
+      pool,
+      maxPoolCredits: 2,
+      maxWaitMs: 500,
+      queryTimeoutMs: 250
+    });
+    const pending: any[] = ["credit-a", "credit-b", "credit-c"]
+      .map((key?: any) : any => manager.acquire(key));
+    await vi.waitFor(() : any => {
+      expect(pool.clients).toHaveLength(2);
+      expect(manager.getMetrics()).toMatchObject({
+        activePoolCredits: 2,
+        waitingPoolCredits: 1,
+        maxPoolCredits: 2
+      });
+    });
+    releaseQueries();
+    const handles: any[] = await Promise.all(pending);
+    expect(manager.getMetrics().activePoolCredits).toBe(0);
+    await Promise.all(handles.map((handle?: any) : any => handle.release()));
   });
 
   it("bounds PostgreSQL contention per key without rejecting an independent key", async () : Promise<any> => {
@@ -830,13 +896,13 @@ describe("PostgreSQL lock manager", () : any => {
       }
 
       query(sql?: any, params: any = []) : any {
-        if (this.hangAcquire && sql.includes("pg_try_advisory_lock") && sql.includes("pg_current_xact_id")) {
+        if (this.hangAcquire && sql.includes("INSERT INTO _meshrix_lock_leases")) {
           return new Promise(() : any => {});
         }
-        if (this.hangHeartbeat && sql.includes("SELECT 1 AS alive")) {
+        if (this.hangHeartbeat && sql.includes("UPDATE _meshrix_lock_leases")) {
           return new Promise(() : any => {});
         }
-        if (this.hangUnlock && sql.includes("pg_advisory_unlock")) {
+        if (this.hangUnlock && sql.includes("DELETE FROM _meshrix_lock_leases")) {
           return new Promise(() : any => {});
         }
         return super.query(sql, params);
@@ -878,29 +944,29 @@ describe("PostgreSQL lock manager", () : any => {
     });
     resources.push({ manager: heartbeatManager });
     const heartbeatHandle: any = await heartbeatManager.acquire("hung-heartbeat");
-    heartbeatPool.clients[0].hangHeartbeat = true;
+    heartbeatPool.nextMode = "Heartbeat";
     await expect(heartbeatHandle.heartbeat()).rejects.toBeInstanceOf(PostgresLockBackendError);
-    expect(heartbeatPool.clients[0].destroyed).toBe(true);
+    expect(heartbeatPool.clients.at(-1).destroyed).toBe(true);
 
     const releasePool: any = new HangingPool();
     const releaseManager: any = new PostgresLockManager({ pool: releasePool, queryTimeoutMs: 5 });
     resources.push({ manager: releaseManager });
     const releaseHandle: any = await releaseManager.acquire("hung-release");
-    releasePool.clients[0].hangUnlock = true;
+    releasePool.nextMode = "Unlock";
     await expect(releaseHandle.release()).rejects.toBeInstanceOf(PostgresLockBackendError);
-    expect(releasePool.clients[0].destroyed).toBe(true);
+    expect(releasePool.clients.at(-1).destroyed).toBe(true);
 
     const destroyPool: any = new HangingPool();
     const destroyManager: any = new PostgresLockManager({ pool: destroyPool, queryTimeoutMs: 5 });
     resources.push({ manager: destroyManager });
     const destroyHandle: any = await destroyManager.acquire("hung-destroy");
-    destroyPool.clients[0].hangUnlock = true;
+    destroyPool.nextMode = "Unlock";
     await destroyManager.destroy();
     expect(destroyHandle.released).toBe(true);
-    expect(destroyPool.clients[0].destroyed).toBe(true);
+    expect(destroyPool.clients.at(-1).destroyed).toBe(true);
   });
 
-  it("coalesces heartbeat, release, and destroy races on one PostgreSQL session", async () : Promise<any> => {
+  it("coalesces heartbeat, release, and destroy races on one PostgreSQL lease row", async () : Promise<any> => {
     let observeHeartbeat: any;
     const heartbeatStarted: any = new Promise((resolve?: any) : any => {
       observeHeartbeat = resolve;
@@ -919,11 +985,11 @@ describe("PostgreSQL lock manager", () : any => {
       }
 
       async query(sql?: any, params: any = []) : Promise<any> {
-        if (sql.includes("SELECT 1 AS alive")) {
+        if (sql.includes("UPDATE _meshrix_lock_leases")) {
           observeHeartbeat();
           await heartbeatBarrier;
         }
-        if (sql.includes("pg_advisory_unlock")) this.unlockQueries += 1;
+        if (sql.includes("DELETE FROM _meshrix_lock_leases")) this.unlockQueries += 1;
         return super.query(sql, params);
       }
 
@@ -952,8 +1018,8 @@ describe("PostgreSQL lock manager", () : any => {
     await releasing;
     await destroying;
 
-    expect(pool.clients[0].unlockQueries).toBe(1);
-    expect(pool.clients[0].releaseCalls).toBe(1);
+    expect(pool.clients.reduce((total?: any, client?: any) : any => total + client.unlockQueries, 0)).toBe(1);
+    expect(pool.clients.every((client?: any) : any => client.releaseCalls === 1)).toBe(true);
     expect(handle.released).toBe(true);
     expect(manager.getMetrics()).toMatchObject({ currentActive: 0, totalReleased: 1 });
   });
@@ -969,7 +1035,7 @@ describe("PostgreSQL lock manager", () : any => {
     const pending: any = manager.acquire("retry-timer-cleanup");
     for (let index: any = 0; index < 8; index++) await Promise.resolve();
     expect(manager.getMetrics().currentWaiting).toBe(1);
-    expect(vi.getTimerCount()).toBeGreaterThan(1);
+    expect(vi.getTimerCount()).toBe(1);
 
     const destroying: any = manager.destroy();
     await expect(pending).rejects.toBeInstanceOf(LockManagerDestroyedError);

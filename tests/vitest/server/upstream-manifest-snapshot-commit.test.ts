@@ -76,7 +76,7 @@ const BASE_OPERATION: Readonly<Record<string, any>> = Object.freeze({
 
 async function platformHarness() : Promise<any> {
   const userDataPath: any = await temporaryRoot();
-  const platform: any = createOperationPermissionPlatform({
+  const platform: any = await createOperationPermissionPlatform({
     userDataPath,
     operations: [BASE_OPERATION],
     featureRuntime: null,
@@ -141,7 +141,7 @@ describe("upstream manifest snapshot commit", () : any => {
     expect(JSON.stringify(publications[0].event)).not.toContain("credential://vault");
     expect(JSON.stringify(publications[0].event)).not.toContain("service.invalid");
     expect(JSON.stringify(publications[1].event)).not.toContain("credential://vault");
-    platform.close();
+    await platform.close();
   });
 
   it("replays identical snapshots without duplicate catalog publication events", async () : Promise<any> => {
@@ -162,7 +162,7 @@ describe("upstream manifest snapshot commit", () : any => {
       catalogPublication: { emitted: false, replayed: true }
     });
     expect(publications).toHaveLength(2);
-    platform.close();
+    await platform.close();
   });
 
   it("publishes an audience-only revision after a grant projection changes", async () : Promise<any> => {
@@ -226,7 +226,7 @@ describe("upstream manifest snapshot commit", () : any => {
       outcome: "unchanged",
       emitted: false
     });
-    platform.close();
+    await platform.close();
   });
 
   it("preserves the paired upstream catalog when base or plugin operations refresh", async () : Promise<any> => {
@@ -250,7 +250,7 @@ describe("upstream manifest snapshot commit", () : any => {
       pluginId: "fixture-plugin",
       toolsets: ["meshrix.gateway.read"]
     });
-    platform.refreshOperations([BASE_OPERATION, pluginOperation]);
+    await platform.refreshOperations([BASE_OPERATION, pluginOperation]);
     const toolIds: any = new Set<any>(platform.catalog().tools.map((tool?: any) : any => tool.id));
     expect(toolIds.has(pluginOperation.toolId)).toBe(true);
     expect(toolIds.has(projection.operations[0].toolId)).toBe(true);
@@ -259,7 +259,7 @@ describe("upstream manifest snapshot commit", () : any => {
       sourceDigest: candidate.setDigest,
       operationCount: 1
     });
-    platform.close();
+    await platform.close();
   });
 
   it("rolls back the gateway snapshot when Operation Permission refresh fails", async () : Promise<any> => {
@@ -301,7 +301,7 @@ describe("upstream manifest snapshot commit", () : any => {
       sourceDigest: first.setDigest
     });
     expect(registry.listServices().count).toBe(1);
-    platform.close();
+    await platform.close();
   });
 
   it("emits no publication when gateway finalization fails and restores the paired state", async () : Promise<any> => {
@@ -338,7 +338,7 @@ describe("upstream manifest snapshot commit", () : any => {
       sourceRevision: first.setRevision,
       sourceDigest: first.setDigest
     });
-    platform.close();
+    await platform.close();
   });
 
   it("keeps paired state pending and retries durable publication without repeating finalization", async () : Promise<any> => {
@@ -398,7 +398,7 @@ describe("upstream manifest snapshot commit", () : any => {
     expect(publications.filter((item?: any) : any =>
       item.topic === "upstream.catalog_published" && item.revision === 2
     )).toHaveLength(1);
-    platform.close();
+    await platform.close();
   });
 
   it("retries audience admission without duplicating its durable event or finalization", async () : Promise<any> => {
@@ -443,7 +443,7 @@ describe("upstream manifest snapshot commit", () : any => {
     expect(publications.filter((item?: any) : any =>
       item.topic === "upstream.audiences_published" && item.revision === 2
     )).toHaveLength(1);
-    platform.close();
+    await platform.close();
   });
 
   it("ignores stale revisions and does not emit a publication event", async () : Promise<any> => {
@@ -463,7 +463,7 @@ describe("upstream manifest snapshot commit", () : any => {
       catalogPublication: { emitted: false }
     });
     expect(publications).toHaveLength(2);
-    platform.close();
+    await platform.close();
   });
 
   it("forwards projected operations through the same governed path and denies before network side effects", async () : Promise<any> => {
@@ -499,6 +499,6 @@ describe("upstream manifest snapshot commit", () : any => {
       { subjectId: "tester", scopes: ["gateway:read"] }
     );
     expect(pending).toMatchObject({ status: "pending_approval" });
-    platform.close();
+    await platform.close();
   });
 });

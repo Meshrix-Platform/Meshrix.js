@@ -8,7 +8,7 @@ export function asText(value?: any, fallback: any = "") : any {
   return String(value ?? fallback).trim();
 }
 
-export function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+export function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

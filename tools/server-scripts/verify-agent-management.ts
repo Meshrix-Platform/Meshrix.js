@@ -101,7 +101,7 @@ try {
       assert.equal(sourceOperation.readOnly, false);
       assert.equal(sourceOperation.safety.risk, "repair_write");
       assert.deepEqual(sourceOperation.requiredScopes, ["runtime:admin"]);
-      assert.equal(sourceOperation.concurrencyGroup, "agent_management.model_library");
+      assert.equal(sourceOperation.concurrency?.key, "agent_management.model_library");
     }
   }
 

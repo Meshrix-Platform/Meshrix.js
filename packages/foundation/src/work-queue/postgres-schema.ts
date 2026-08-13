@@ -1,4 +1,4 @@
-const POSTGRES_MIGRATION_REVISION: any = 9;
+const POSTGRES_MIGRATION_REVISION: any = 12;
 
 export async function ensurePostgresWorkQueueSchema(pool?: any) : Promise<any> {
   await pool.query(`
@@ -112,19 +112,31 @@ export async function ensurePostgresWorkQueueSchema(pool?: any) : Promise<any> {
     CREATE INDEX IF NOT EXISTS idx_work_queue_pg_retention
       ON work_items(queue_definition_id, state, updated_at_ms, work_item_id);
 
-    CREATE TABLE IF NOT EXISTS work_queue_fairness_cursors (
+    DROP TABLE IF EXISTS work_queue_fairness_cursors;
+
+    CREATE TABLE IF NOT EXISTS work_queue_virtual_finish (
       queue_definition_id TEXT NOT NULL,
       queue_definition_version INTEGER NOT NULL,
       selector_scope_key TEXT NOT NULL,
       priority_class TEXT NOT NULL,
-      level TEXT NOT NULL,
-      parent_key TEXT NOT NULL,
-      cursor_value TEXT NOT NULL DEFAULT '',
+      tenant_id TEXT NOT NULL,
+      workspace_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      virtual_finish BIGINT NOT NULL DEFAULT 0,
       updated_at_ms BIGINT NOT NULL,
       PRIMARY KEY (
         queue_definition_id, queue_definition_version, selector_scope_key,
-        priority_class, level, parent_key
+        priority_class, tenant_id, workspace_id, project_id
       )
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_work_queue_pg_virtual_finish_claim
+      ON work_queue_virtual_finish(queue_definition_id, selector_scope_key, priority_class, virtual_finish);
+
+    CREATE TABLE IF NOT EXISTS work_queue_retention_state (
+      queue_definition_id TEXT PRIMARY KEY,
+      pending_transitions INTEGER NOT NULL DEFAULT 0,
+      updated_at_ms BIGINT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS work_queue_transition_journal (
@@ -223,6 +235,19 @@ export async function ensurePostgresWorkQueueSchema(pool?: any) : Promise<any> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_work_queue_pg_dedupe
       ON work_items(queue_definition_id, scope_key, dedupe_key)
       WHERE dedupe_key <> '';
+
+    CREATE TABLE IF NOT EXISTS work_queue_sink_fences (
+      work_item_id TEXT NOT NULL,
+      generation INTEGER NOT NULL,
+      sink_id TEXT NOT NULL,
+      effect_id TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'settled',
+      settled_at_ms BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (work_item_id, generation, sink_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_work_queue_pg_sink_fence_item
+      ON work_queue_sink_fences(work_item_id, generation);
 
     INSERT INTO work_queue_schema_migrations(version, applied_at_ms)
     VALUES (${POSTGRES_MIGRATION_REVISION}, ${Date.now()})

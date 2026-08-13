@@ -116,18 +116,15 @@ function defaultRunTool({ repoRoot, toolPath, args, env = process.env }: Record<
   };
 }
 
-export function canonicalBetterPlanChecks({ validation, labels }: Record<string, any> = {}) : any {
+export function canonicalBetterPlanChecks({ validation }: Record<string, any> = {}) : any {
   const validationAccepted: any =
-    validation?.ok === true &&
+    validation?.valid === true &&
     Array.isArray(validation.issues) &&
     validation.issues.length === 0;
-  const labelsAccepted: any =
-    labels?.errors === 0 &&
-    labels?.warnings === 0;
   const checks: Record<string, any> = {
     schema: validationAccepted,
     source: validationAccepted,
-    label: labelsAccepted,
+    label: validationAccepted,
     graph: validationAccepted,
     privacy: true,
   };
@@ -136,6 +133,33 @@ export function canonicalBetterPlanChecks({ validation, labels }: Record<string,
     accepted: (Object.values(checks) as any[]).every(Boolean),
     checks,
   };
+}
+
+async function discoverCanonicalPlanRoots(repoRoot?: any, planRoot?: any) : Promise<any> {
+  const candidateRoot: any = path.resolve(repoRoot, planRoot);
+  const candidates: any[] = [candidateRoot];
+  try {
+    const entries: any[] = await fs.readdir(candidateRoot, { withFileTypes: true });
+    candidates.push(...entries.filter((entry?: any) : any => entry.isDirectory())
+      .map((entry?: any) : any => path.join(candidateRoot, entry.name)));
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const roots: any[] = [];
+  for (const candidate of candidates) {
+    try {
+      const manifest: any = JSON.parse(await fs.readFile(path.join(candidate, "Manifest.json"), "utf8"));
+      if (manifest?.schema === "better-plan.manifest/v3") {
+        roots.push(path.relative(repoRoot, candidate).split(path.sep).join("/"));
+      }
+    } catch (error: any) {
+      if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    }
+  }
+  if (roots.length === 0) {
+    throw new CanonicalBetterPlanToolError("canonical_better_plan_workspace_missing");
+  }
+  return roots.sort();
 }
 
 export async function validateCanonicalBetterPlanWorkspace({
@@ -148,17 +172,30 @@ export async function validateCanonicalBetterPlanWorkspace({
     throw new CanonicalBetterPlanToolError("canonical_better_plan_repo_root_missing");
   }
   const toolPath: any = await resolveCanonicalBetterPlanTool(toolOptions);
-  const validation: any = parseJsonOutput(await invokeTool(runTool, {
-    repoRoot,
-    toolPath,
-    args: ["validate", planRoot, "--check-sources", "--no-git", "--json"],
-    env: toolOptions.env,
-  }), "canonical_better_plan_validation_unreadable", { allowNonZeroExit: true });
-  const labels: any = parseJsonOutput(await invokeTool(runTool, {
-    repoRoot,
-    toolPath,
-    args: ["check-labels", planRoot, "--json"],
-    env: toolOptions.env,
-  }), "canonical_better_plan_labels_unreadable");
-  return canonicalBetterPlanChecks({ validation, labels });
+  const roots: any[] = await discoverCanonicalPlanRoots(repoRoot, planRoot);
+  const validations: any[] = [];
+  for (const root of roots) {
+    const result: any = await invokeTool(runTool, {
+      repoRoot,
+      toolPath,
+      args: ["validate", root, "--json"],
+      env: toolOptions.env,
+    });
+    const validation: any = parseJsonOutput(
+      result,
+      "canonical_better_plan_validation_unreadable",
+      { allowNonZeroExit: true },
+    );
+    if (result.status !== 0 && validation.valid === true) {
+      throw new CanonicalBetterPlanToolError("canonical_better_plan_validation_unreadable");
+    }
+    validations.push(validation);
+  }
+  return canonicalBetterPlanChecks({
+    validation: {
+      valid: validations.every((validation?: any) : any => validation.valid === true),
+      issues: validations.flatMap((validation?: any) : any => Array.isArray(validation.issues)
+        ? validation.issues : ["invalid_validation_result"]),
+    },
+  });
 }

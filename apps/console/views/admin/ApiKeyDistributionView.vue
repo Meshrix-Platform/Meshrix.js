@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Check } from "@element-plus/icons-vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, resolveComponent, watch } from "vue";
 import { onBeforeRouteLeave } from "vue-router";
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
@@ -43,6 +44,45 @@ const msg = computed(() => consoleMessages[currentConsoleLocale.value]);
 const RouterLink: any = resolveComponent("RouterLink");
 const revealCopyButton = ref<HTMLButtonElement | null>(null);
 let revealReturnFocus: HTMLElement | null = null;
+
+const setupStep = ref(1);
+const setupSteps = computed(() => [
+  { id: 1, label: t("选择 Agent", "Choose Agent"), hint: t("目标与身份", "Target and identity") },
+  { id: 2, label: t("选择能力", "Choose Access"), hint: t("工具与资源", "Tools and resources") },
+  { id: 3, label: t("确认连接", "Review"), hint: t("检查后生成", "Review and generate") },
+]);
+const agentStepReady = computed(() => Boolean(
+  draft.value.selectedTargetIds.length
+  && draft.value.workloadDisplayName.trim()
+  && draft.value.organizationNodeId
+  && draft.value.expiresAt
+  && Number.isFinite(Date.parse(draft.value.expiresAt))
+  && Date.parse(draft.value.expiresAt) > Date.now()
+));
+const accessStepReady = computed(() => Boolean(
+  draft.value.selectedToolsetIds.length && draft.value.allowedTools.length
+));
+const selectedAgentLabels = computed(() => targetOptions.value
+  .filter((option) => draft.value.selectedTargetIds.includes(option.value))
+  .map((option) => option.label));
+const selectedToolsetLabels = computed(() => toolsetOptions.value
+  .filter((option) => draft.value.selectedToolsetIds.includes(option.value))
+  .map((option) => option.label));
+
+function canOpenSetupStep(step: number): boolean {
+  if (step <= 1) return true;
+  if (step === 2) return agentStepReady.value;
+  return agentStepReady.value && accessStepReady.value;
+}
+
+function openSetupStep(step: number): void {
+  if (canOpenSetupStep(step)) setupStep.value = step;
+}
+
+function selectAgentTarget(event: Event): void {
+  const targetId = event.target instanceof HTMLSelectElement ? event.target.value : "";
+  draft.value.selectedTargetIds = targetId ? [targetId] : [];
+}
 
 // Reveal state machine: revealed -> acknowledged -> dismissed. The
 // acknowledgement is a deliberate click, never a timer.
@@ -191,8 +231,9 @@ usePageRefreshHandler(
   <section class="api-key-distribution-layout">
     <header class="section-header api-key-distribution-header">
       <div>
-        <h2>{{ t("密钥分发", "Key Distribution") }}</h2>
-        <p>{{ t("为明确的工作负载和组织范围创建、轮换与撤销 MCP 密钥。服务端始终负责最终授权。", "Create, rotate, and revoke MCP keys for a named workload and organization scope. The server always makes the final authorization decision.") }}</p>
+        <span class="api-key-page-eyebrow">{{ t("Agent MCP 接入", "Agent MCP access") }}</span>
+        <h2>{{ t("连接一个 Agent", "Connect an Agent") }}</h2>
+        <p>{{ t("选择 Agent、需要的能力和使用范围，Meshrix.js 会生成受限的连接资料。签名、凭据保存与缓存细节由连接器处理。", "Choose an Agent, the access it needs, and its resource scope. Meshrix.js generates bounded connection details while the connector handles signing, credential storage, and cache details.") }}</p>
         <p class="journey-disambiguation" data-testid="journey-disambiguation">
           {{ msg.journey.clientKeyDecision }}
           <RouterLink to="/admin/operation-permission" class="journey-cross-link">
@@ -220,8 +261,9 @@ usePageRefreshHandler(
     <template v-else>
       <section v-if="oneTimeSecret" class="surface-card api-key-reveal" role="region" aria-live="assertive" :aria-label="t('一次性密钥', 'One-time key')">
         <div>
-          <span class="api-key-eyebrow">{{ t("仅显示这一次", "Shown only this time") }}</span>
-          <h3>{{ revealedRecord?.workloadDisplayName }}</h3>
+          <span class="api-key-eyebrow">{{ t("最后一步 · 仅显示这一次", "Final step · shown only this time") }}</span>
+          <h3>{{ t("保存连接资料", "Save the connection details") }}</h3>
+          <p class="api-key-reveal-agent">{{ revealedRecord?.workloadDisplayName }}</p>
           <p>{{ revealedRecord ? processIdentitySummary(revealedRecord) : "" }}</p>
           <p v-if="revealedRecord?.policy.processIdentity.mode === 'optional'">{{ t("这是持有者凭证。若密钥被盗，攻击者可在其权限范围内冒用记录的工作负载身份。", "This is a bearer credential. If stolen, an attacker can impersonate the recorded workload identity within its permissions.") }}</p>
           <p v-else>{{ t("单独窃取密钥不足以通过进程校验；若密钥与受信任进程签名材料同时泄露，攻击者仍可在权限范围内冒用该身份。", "The key alone cannot pass process verification. If both the key and trusted process-signing material are stolen, an attacker can still impersonate the identity within its permissions.") }}</p>
@@ -275,57 +317,68 @@ usePageRefreshHandler(
         </section>
       </section>
 
-      <section class="surface-card api-key-create-card" data-testid="api-key-distribution-workspace">
-        <div class="section-header">
+      <section v-if="!oneTimeSecret" class="surface-card api-key-create-card api-key-setup-card" data-testid="api-key-distribution-workspace">
+        <div class="section-header api-key-setup-header">
           <div>
-            <h3>{{ t("创建密钥", "Create Key") }}</h3>
-            <p>{{ t("名称只帮助管理员识别记录，客户端不能用自报名称改变身份。创建后，身份、组织、权限、资源、到期和使用限制均不可修改。", "The name only helps administrators recognize the record; a client-reported name cannot change identity. Identity, organization, permissions, resources, expiry, and limits are immutable after creation.") }}</p>
+            <span class="api-key-step-kicker">{{ t("快速接入", "Quick setup") }}</span>
+            <h3>{{ t("三步完成 Agent MCP 接入", "Connect Agent MCP in three steps") }}</h3>
+            <p>{{ t("常用选项在主流程中完成；只有需要精细限制时才展开高级设置。", "Complete the common choices in the main flow. Open advanced settings only when you need finer limits.") }}</p>
           </div>
         </div>
 
-        <div class="api-key-import-row">
-          <BrowseSelectButton
-            kind="local-files"
-            accept="application/json,.json"
-            :multiple="false"
-            :disabled="busy"
-            :button-text="t('导入 JSON 文件', 'Import JSON File')"
-            @select="importDraftConfigFiles"
-          />
-        </div>
-        <JsonConfigFileEditor
-          :title="t('从 JSON 配置写入表单', 'Fill form from JSON config')"
-          :subtitle="t('粘贴草稿字段或创建请求形状的 JSON，应用后写入上方表单；不会直接创建密钥。', 'Paste draft fields or create-request shaped JSON. Apply writes the form above; it does not create the key.')"
-          file-key="api-key-distribution:create-draft"
-          :model-value="draftConfigDocument"
-          :rows="12"
-          :cancel-label="t('取消', 'Cancel')"
-          :save-label="t('应用到表单', 'Apply to Form')"
-          :on-save="importDraftConfig"
-          :open="false"
-        />
+        <nav class="api-key-setup-steps" :aria-label="t('Agent 接入步骤', 'Agent setup steps')">
+          <button
+            v-for="step in setupSteps"
+            :key="step.id"
+            type="button"
+            class="api-key-setup-step"
+            :class="{ active: setupStep === step.id, complete: setupStep > step.id }"
+            :disabled="busy || !canOpenSetupStep(step.id)"
+            :aria-current="setupStep === step.id ? 'step' : undefined"
+            :data-testid="`agent-setup-step-${step.id}`"
+            @click="openSetupStep(step.id)"
+          >
+            <span class="api-key-step-number">
+              <Check v-if="setupStep > step.id" class="api-key-step-check" aria-hidden="true" />
+              <template v-else>{{ step.id }}</template>
+            </span>
+            <span><strong>{{ step.label }}</strong><small>{{ step.hint }}</small></span>
+          </button>
+        </nav>
 
-        <div class="api-key-form-grid">
-          <label><span>{{ t("显示名称", "Display Name") }}</span><input v-model.trim="draft.workloadDisplayName" :disabled="busy" autocomplete="off" /></label>
-          <label><span>{{ t("所属层级", "Owning Level") }}</span>
-            <select v-model="draft.organizationNodeId" :disabled="busy">
-              <option value="">{{ t("请选择所属层级", "Select an owning level") }}</option>
-              <option v-for="node in levelOptions" :key="node.nodeId" :value="node.nodeId">{{ levelLabel(node.nodeId, node.name) }}</option>
-            </select>
-          </label>
-          <label><span>{{ t("到期时间", "Expires At") }}</span><input v-model="draft.expiresAt" type="datetime-local" :disabled="busy" /></label>
-          <label><span>{{ t("最高风险级别", "Maximum Risk") }}</span>
-            <select v-model="draft.maximumRisk" :disabled="busy">
-              <option v-for="option in maximumRiskOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </select>
-          </label>
-        </div>
+        <section v-show="setupStep === 1" class="api-key-step-panel" data-testid="agent-setup-agent-step">
+          <div class="api-key-step-intro">
+            <span>01</span>
+            <div><h4>{{ t("这个连接给谁使用？", "Who will use this connection?") }}</h4><p>{{ t("先选择 Agent，再给这条连接一个便于识别的名称。", "Choose the Agent first, then give this connection a recognizable name.") }}</p></div>
+          </div>
+          <div class="api-key-form-grid">
+            <label><span>{{ t("Agent", "Agent") }}</span>
+              <select :value="draft.selectedTargetIds[0] || ''" :disabled="busy" data-testid="agent-target-select" @change="selectAgentTarget">
+                <option value="">{{ t("选择一个 Agent", "Choose an Agent") }}</option>
+                <option v-for="option in targetOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </label>
+            <label><span>{{ t("连接名称", "Connection name") }}</span><input v-model.trim="draft.workloadDisplayName" :disabled="busy" autocomplete="off" :placeholder="t('例如：团队开发 Agent', 'For example: Team development Agent')" /></label>
+            <label><span>{{ t("所属团队或组织", "Owning team or organization") }}</span>
+              <select v-model="draft.organizationNodeId" :disabled="busy">
+                <option value="">{{ t("请选择所属层级", "Select an owning level") }}</option>
+                <option v-for="node in levelOptions" :key="node.nodeId" :value="node.nodeId">{{ levelLabel(node.nodeId, node.name) }}</option>
+              </select>
+            </label>
+            <label><span>{{ t("有效期至", "Expires at") }}</span><input v-model="draft.expiresAt" type="datetime-local" :disabled="busy" /></label>
+          </div>
+          <div class="api-key-step-actions">
+            <button class="primary-action" type="button" :disabled="busy || !agentStepReady" @click="openSetupStep(2)">{{ t("下一步：选择能力", "Next: choose access") }}</button>
+          </div>
+        </section>
 
-        <details open class="api-key-policy-section">
-          <summary>{{ t("服务与工具权限", "Service and Tool Permissions") }}</summary>
-          <p>{{ t("主选工具集即可。权限范围、服务、能力与允许工具会自动带上。", "Choose toolsets as the main step. Scopes, services, capabilities, and allowed tools are filled automatically.") }}</p>
+        <section v-show="setupStep === 2" class="api-key-step-panel" data-testid="agent-setup-access-step">
+          <div class="api-key-step-intro">
+            <span>02</span>
+            <div><h4>{{ t("这个 Agent 可以做什么？", "What can this Agent do?") }}</h4><p>{{ t("选择工具集即可，具体工具、服务与权限范围会自动推导。", "Choose toolsets; tools, services, and scopes are derived automatically.") }}</p></div>
+          </div>
           <div class="api-key-profile-picker">
-            <span>{{ t("权限档案（可选）", "Permission Profile (optional)") }}</span>
+            <span>{{ t("从权限档案开始（可选）", "Start from a permission profile (optional)") }}</span>
             <OptionBar
               :model-value="draft.selectedProfileId"
               :options="profileOptions"
@@ -337,98 +390,121 @@ usePageRefreshHandler(
           <MultiChoiceCardGroup
             v-model="draft.selectedToolsetIds"
             :options="toolsetOptions"
-            :title="t('工具集', 'Toolsets')"
+            :title="t('可用能力', 'Available access')"
             :summary="t('至少选择一个工具集。', 'Select at least one toolset.')"
             :select-all-label="t('允许使用所有工具', 'Allow all tools')"
             :disabled="busy"
             layout="list"
           />
-        </details>
 
-        <details class="api-key-policy-section">
-          <summary>{{ t("连接目标与资源", "Connection Targets and Resources") }}</summary>
-          <MultiChoiceCardGroup
-            v-model="draft.selectedTargetIds"
-            :options="targetOptions"
-            :title="t('客户端目标', 'Client Targets')"
-            :summary="t('至少选择一个客户端目标。', 'Select at least one client target.')"
-            :select-all-label="t('允许全部客户端目标', 'Allow all client targets')"
-            :disabled="busy"
-            layout="list"
-          />
-          <FeatureToggle
-            v-model="draft.resourcesUnrestricted"
-            :disabled="busy"
-            :label="t('允许访问全部资源', 'Allow all resources')"
-            :on-label="t('全部资源', 'All resources')"
-            :off-label="t('限定资源', 'Restricted')"
-          />
-          <div v-if="!draft.resourcesUnrestricted" class="api-key-resource-limits">
-            <MultiChoiceCardGroup
-              v-model="draft.selectedDataClassifications"
-              :options="dataClassificationOptions"
-              :title="t('数据分类', 'Data Classifications')"
-              :summary="t('可选。限制密钥可触及的数据分级。', 'Optional. Limit which data classifications this key may touch.')"
-              :select-all-label="t('允许全部分类', 'Allow all classifications')"
-              :disabled="busy"
-              layout="list"
-            />
-            <label>
-              <span>{{ t("工作空间 ID", "Workspace IDs") }}</span>
-              <textarea
-                v-model="draft.workspaceIds"
+          <details class="api-key-policy-section api-key-advanced-settings">
+            <summary>{{ t("高级设置", "Advanced settings") }} <span>{{ t("资源、风险、调用限制与 JSON", "Resources, risk, call limits, and JSON") }}</span></summary>
+            <div class="api-key-advanced-grid">
+              <FeatureToggle
+                v-model="draft.resourcesUnrestricted"
                 :disabled="busy"
-                :placeholder="t('可选，每行一个', 'Optional, one per line')"
+                :label="t('允许访问全部资源', 'Allow all resources')"
+                :on-label="t('全部资源', 'All resources')"
+                :off-label="t('限定资源', 'Restricted')"
               />
-            </label>
-          </div>
-        </details>
-
-        <details class="api-key-policy-section">
-          <summary>{{ t("调用限制", "Call Limits") }}</summary>
-          <div class="api-key-form-grid">
-            <label>
-              <span>{{ t("每分钟调用次数", "Calls per minute") }}</span>
-              <input
-                v-model.number="draft.requestsPerMinute"
-                type="number"
-                min="1"
-                :disabled="busy"
-                :placeholder="t('留空不限制', 'Empty = unlimited')"
+              <div v-if="!draft.resourcesUnrestricted" class="api-key-resource-limits">
+                <MultiChoiceCardGroup
+                  v-model="draft.selectedDataClassifications"
+                  :options="dataClassificationOptions"
+                  :title="t('数据分类', 'Data Classifications')"
+                  :summary="t('可选。限制密钥可触及的数据分级。', 'Optional. Limit which data classifications this key may touch.')"
+                  :select-all-label="t('允许全部分类', 'Allow all classifications')"
+                  :disabled="busy"
+                  layout="list"
+                />
+                <label>
+                  <span>{{ t("工作空间 ID", "Workspace IDs") }}</span>
+                  <textarea v-model="draft.workspaceIds" :disabled="busy" :placeholder="t('可选，每行一个', 'Optional, one per line')" />
+                </label>
+              </div>
+              <div class="api-key-form-grid">
+                <label><span>{{ t("最高风险级别", "Maximum Risk") }}</span>
+                  <select v-model="draft.maximumRisk" :disabled="busy">
+                    <option v-for="option in maximumRiskOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{{ t("每分钟调用次数", "Calls per minute") }}</span>
+                  <input v-model.number="draft.requestsPerMinute" type="number" min="1" :disabled="busy" :placeholder="t('留空不限制', 'Empty = unlimited')" />
+                </label>
+                <label>
+                  <span>{{ t("最大并发量", "Maximum concurrency") }}</span>
+                  <input v-model.number="draft.maxConcurrentEffects" type="number" min="1" :disabled="busy" :placeholder="t('留空不限制', 'Empty = unlimited')" />
+                </label>
+              </div>
+              <div class="api-key-import-row">
+                <BrowseSelectButton
+                  kind="local-files"
+                  accept="application/json,.json"
+                  :multiple="false"
+                  :disabled="busy"
+                  :button-text="t('导入 JSON 文件', 'Import JSON File')"
+                  @select="importDraftConfigFiles"
+                />
+              </div>
+              <JsonConfigFileEditor
+                :title="t('从 JSON 配置写入表单', 'Fill form from JSON config')"
+                :subtitle="t('粘贴草稿字段或创建请求形状的 JSON，应用后写入表单；不会直接创建连接。', 'Paste draft fields or a create-request shaped JSON. Apply fills the form; it does not create a connection.')"
+                file-key="api-key-distribution:create-draft"
+                :model-value="draftConfigDocument"
+                :rows="12"
+                :cancel-label="t('取消', 'Cancel')"
+                :save-label="t('应用到表单', 'Apply to Form')"
+                :on-save="importDraftConfig"
+                :open="false"
               />
-            </label>
-            <label>
-              <span>{{ t("最大并发量", "Maximum concurrency") }}</span>
-              <input
-                v-model.number="draft.maxConcurrentEffects"
-                type="number"
-                min="1"
-                :disabled="busy"
-                :placeholder="t('留空不限制', 'Empty = unlimited')"
-              />
-            </label>
+            </div>
+          </details>
+          <div class="api-key-step-actions split">
+            <button class="table-action" type="button" :disabled="busy" @click="openSetupStep(1)">{{ t("上一步", "Back") }}</button>
+            <button class="primary-action" type="button" :disabled="busy || !accessStepReady" @click="openSetupStep(3)">{{ t("下一步：确认连接", "Next: review") }}</button>
           </div>
-        </details>
+        </section>
 
-        <div class="api-key-inferred-summary">
-          <strong>{{ t("将随密钥写入（自动推导）", "Written with the key (inferred)") }}</strong>
-          <ConsoleDescriptionList :items="inferredSummaryItems" :columns="2" />
-        </div>
-
-        <div class="api-key-create-actions">
-          <p v-if="!draftValid && draftMissingHints.length" class="api-key-create-missing">
-            {{ t("还需填写：", "Still needed: ") }}{{ draftMissingHints.join(t("、", ", ")) }}
-          </p>
-          <div class="horizontal-action-group">
-            <button class="primary-action" type="button" :disabled="busy || !draftValid" @click="createAndFocusReveal">
-              {{ creating ? t("正在创建…", "Creating…") : t("创建并显示一次", "Create and Show Once") }}
-            </button>
+        <section v-show="setupStep === 3" class="api-key-step-panel" data-testid="agent-setup-review-step">
+          <div class="api-key-step-intro">
+            <span>03</span>
+            <div><h4>{{ t("确认后生成连接资料", "Review and generate connection details") }}</h4><p>{{ t("连接资料只显示一次；Agent 的每次调用仍由服务端权限策略决定。", "Connection details are shown once. Every Agent call remains subject to server-side policy.") }}</p></div>
           </div>
-        </div>
+          <div class="api-key-review-summary">
+            <div><span>{{ t("Agent", "Agent") }}</span><strong>{{ selectedAgentLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
+            <div><span>{{ t("能力", "Access") }}</span><strong>{{ selectedToolsetLabels.join(t("、", ", ")) || t("未选择", "Not selected") }}</strong></div>
+            <div><span>{{ t("资源", "Resources") }}</span><strong>{{ draft.resourcesUnrestricted ? t("全部资源", "All resources") : t("限定资源", "Restricted resources") }}</strong></div>
+          </div>
+          <div class="api-key-trust-summary">
+            <strong>{{ t("接下来由系统处理", "Handled for you") }}</strong>
+            <ul>
+              <li>{{ t("生成仅用于所选 Agent、组织和能力的受限凭据。", "Generate a credential bounded to the selected Agent, organization, and access.") }}</li>
+              <li>{{ t("连接器把凭据保存在私有存储中，Agent 配置不包含明文。", "Store the credential in the connector's private store; Agent configuration contains no plaintext.") }}</li>
+              <li>{{ t("每次调用继续经过 Operation Permission，不因接入而扩大权限。", "Keep every call behind Operation Permission without expanding authority.") }}</li>
+            </ul>
+          </div>
+          <details class="api-key-inferred-summary">
+            <summary>{{ t("查看自动推导的技术范围", "View derived technical scope") }}</summary>
+            <ConsoleDescriptionList :items="inferredSummaryItems" :columns="2" />
+          </details>
+
+          <div class="api-key-create-actions">
+            <p v-if="!draftValid && draftMissingHints.length" class="api-key-create-missing">
+              {{ t("还需填写：", "Still needed: ") }}{{ draftMissingHints.join(t("、", ", ")) }}
+            </p>
+            <div class="api-key-step-actions split">
+              <button class="table-action" type="button" :disabled="busy" @click="openSetupStep(2)">{{ t("上一步", "Back") }}</button>
+              <button class="primary-action" type="button" :disabled="busy || !draftValid" @click="createAndFocusReveal">
+                {{ creating ? t("正在生成…", "Generating…") : t("生成连接资料", "Generate connection details") }}
+              </button>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section class="surface-card api-key-list-card">
-        <div class="section-header"><div><h3>{{ t("已分发密钥", "Distributed Keys") }}</h3><p>{{ t("这里只显示经过遮盖的记录。不存在再次查看、导出、恢复或归档操作。", "Only redacted records appear here. There is no reveal-again, export, restore, or archive action.") }}</p></div></div>
+        <div class="section-header"><div><h3>{{ t("连接管理", "Connection management") }}</h3><p>{{ t("这里管理已生成的 Agent 接入凭据，只显示经过遮盖的记录。不存在再次查看、导出、恢复或归档操作。", "Manage generated Agent access credentials here. Only redacted records appear; there is no reveal-again, export, restore, or archive action.") }}</p></div></div>
         <div v-if="!records.length" class="api-key-empty">{{ t("当前范围内还没有密钥。", "There are no keys in the current scope.") }}</div>
         <article v-for="record in records" :key="record.keyId" class="api-key-record" :data-status="record.status">
           <div class="api-key-record-heading">

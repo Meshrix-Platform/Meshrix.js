@@ -12,20 +12,26 @@ import {
   useConsoleCommandPalette,
   type ConsoleCommandPaletteItem,
 } from "../../composables/console-command-palette-controller";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 
 defineOptions({ name: "ConsoleCommandPalette" });
 
 const {
   canAccessAdminView,
   canAccessView,
-  consoleState,
   isAuthenticated,
-  msg,
+} = useServerConsoleShellContext().access;
+const {
   openAdmin,
   switchView,
+} = useServerConsoleShellContext().navigation;
+const {
+  msg,
   tt,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().preferences;
+const {
+  consoleState,
+} = useServerConsoleShellContext().runtime;
 
 const { paletteOpen, query, activeIndex } = useConsoleCommandPalette();
 

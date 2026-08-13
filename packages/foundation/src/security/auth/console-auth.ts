@@ -963,14 +963,14 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     });
   }
 
-  function evaluateDeferredCurrentAuthority({
+  async function evaluateDeferredCurrentAuthority({
     operation,
     input,
     sessionState
-  }: Record<string, any>) : any {
+  }: Record<string, any>) : Promise<any> {
     const governancePolicyRevision: any =
       authorizationGovernanceStore.getPolicyRevision();
-    const authorizationDecision: any = authorizationEngine.evaluate({
+    const authorizationDecision: any = await authorizationEngine.evaluate({
       operation,
       request: null,
       authSession: sessionState.session,
@@ -1146,7 +1146,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     }
     const sessionState: any = currentDeferredSession(row.session_id);
     const current: any = sessionState
-      ? evaluateDeferredCurrentAuthority({
+      ? await evaluateDeferredCurrentAuthority({
           operation,
           input,
           sessionState
@@ -1589,7 +1589,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     });
   }
 
-  function authorizeOperation({
+  async function authorizeOperation({
     request,
     operation,
     method,
@@ -1597,7 +1597,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     input = {},
     context = {},
     phase = ""
-  }: Record<string, any> = {}) : any {
+  }: Record<string, any> = {}) : Promise<any> {
     const publicAccess: any = operation?.public === true;
     const authorizationPhase: any = String(
       phase || context?.authorizationPhase || ""
@@ -1658,7 +1658,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       authorizationGovernanceStore.getPolicyRevision();
     const policyFactsBefore: any =
       governancePolicyAuthorityFacts(governancePolicyRevisionBefore);
-    const authorizationDecision: any = authorizationEngine.evaluate({
+    const authorizationDecision: any = await authorizationEngine.evaluate({
       operation,
       request,
       authSession: session,

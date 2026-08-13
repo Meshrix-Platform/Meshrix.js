@@ -5,6 +5,7 @@ export * from "./scheduling.ts";
 export * from "./registry.ts";
 export * from "./definitions.ts";
 export * from "./sqlite-store.ts";
+export * from "./sqlite-store-lane.ts";
 export * from "./postgres-store.ts";
 export * from "./worker-runtime.ts";
 export * from "./fallback-coordinator.ts";

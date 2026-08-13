@@ -58,7 +58,7 @@ const FORBIDDEN_PACKAGE_DEPENDENCIES: readonly any[] = Object.freeze([
 ]);
 const APPROVED_PROTOCOL_PORTS: readonly any[] = Object.freeze([
   "configureMcpNotificationBus",
-  "registerConfiguredMcpSseConnection",
+  "registerConfiguredMcpSubscription",
   "broadcastConfiguredMcpNotification",
   "toolSkillManagementProvider.authorizeMcpClientRequest",
   "toolSkillManagementProvider.listVisibleTools"
@@ -251,7 +251,7 @@ async function main() : Promise<any> {
     if (!replies.includes("broadcastConfiguredMcpNotification")) {
       throw new Error("MCP replies must use the configured notification port.");
     }
-    if (!transport.includes("registerConfiguredMcpSseConnection")) {
+    if (!transport.includes("registerConfiguredMcpSubscription")) {
       throw new Error("MCP transport must use the configured SSE registration port.");
     }
     if (!bus.includes("configureMcpNotificationBus")) {

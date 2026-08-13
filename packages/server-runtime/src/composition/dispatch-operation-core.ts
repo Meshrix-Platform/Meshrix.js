@@ -88,8 +88,12 @@ function operationConcurrencyContract(operation: Record<string, any> = {}) : any
   if (operation?._meta?.upstreamProjectedOperation === true) {
     return Object.freeze({
       ...operation,
-      concurrencySafe: true,
-      concurrencyGroup: "gateway.forward"
+      concurrency: Object.freeze({
+        workloadClass: "parallel",
+        key: "gateway.forward",
+        maxParallel: 16,
+        cost: 2
+      })
     });
   }
   return operation;
@@ -271,6 +275,11 @@ export async function dispatchOperation({
       });
       const auditRecord: any = auditOperation({
         ...entry,
+        authorizationDecisionId:
+          entry.authorizationDecisionId ||
+          request?.__meshrixOperationRuntimeAuthorization?.policy?.decisionId ||
+          "",
+        proofId: entry.proofId || request?.__meshrixOperationProof?.ledgerEventId || "",
         riskControlEnvelope
       });
       appendRiskGate({
@@ -669,7 +678,8 @@ export async function dispatchOperation({
 	          input: operationInput,
 	          status: "denied",
 	          statusCode: authorization.status || 403,
-	          error: authorization.error || "authorization denied"
+	          error: authorization.error || "authorization denied",
+	          authorizationDecisionId: authorization.authorizationDecision?.decisionId || ""
 	        });
         logOperation(logger, "warn", operationEventName(transport, "denied"), {
           requestId: requestIdFromRequest(request),
@@ -756,7 +766,7 @@ export async function dispatchOperation({
       });
     } else if (skipAuthorization) {
       const approvedPendingOperation: any = request?.__meshrixToolRuntimeAuthorization?.approvedPendingOperation || null;
-      const authorizationDecision: any = dispatcherAuthorizationEngine.evaluate({
+      const authorizationDecision: any = await dispatcherAuthorizationEngine.evaluate({
         operation,
         request,
         actor: providedActor,
@@ -795,7 +805,8 @@ export async function dispatchOperation({
 	          input: operationInput,
 	          status: "denied",
 	          statusCode: 403,
-	          error
+	          error,
+	          authorizationDecisionId: authorizationDecision.decisionId || ""
 	        });
         logOperation(logger, "warn", operationEventName(transport, "denied"), {
           requestId: requestIdFromRequest(request),
@@ -1075,8 +1086,9 @@ export async function dispatchOperation({
       logOperation(logger, "debug", operationEventName(transport, "started"), {
         requestId: requestIdFromRequest(request),
         operationId: operation.id,
-        concurrencySafe: operation.concurrencySafe === true,
-        concurrencyGroup: operation.concurrencyGroup || operation.id
+        concurrencyClass: operation.concurrency?.workloadClass || "standard",
+        concurrencyKey: operation.concurrency?.key || operation.id,
+        maxParallel: operation.concurrency?.maxParallel || 1
       });
       const executionResult: any = await withOperationLock({
         operation: operationConcurrencyContract(operation),
@@ -1093,11 +1105,20 @@ export async function dispatchOperation({
                 error: "Execution authorization revalidator is not registered."
               });
             }
+            const executionAuthorizationOperation: any =
+              authorizationOperationForPhase("execution");
+            if (!executionAuthorizationOperation) {
+              return executionAuthorizationDenied({
+                status: 403,
+                reasonCode: "operation_authority_revision_changed",
+                error: "Operation authority changed after admission."
+              });
+            }
             let currentAuthorization: any;
             try {
               currentAuthorization = await executionAuthorizationRevalidator({
                 phase: "execution",
-                operation: authorizationOperationForPhase("execution"),
+                operation: executionAuthorizationOperation,
                 request,
                 requestBody,
                 url,
@@ -1179,13 +1200,19 @@ export async function dispatchOperation({
                   }),
                   signal: operationLock?.signal || signal,
                   revalidateCurrentAuthority: async ({ binding }: Record<string, any>) : Promise<any> => {
+                    const finalAuthorizationOperation: any =
+                      authorizationOperationForPhase("final-protected-sink");
+                    if (!finalAuthorizationOperation) {
+                      return Object.freeze({
+                        allowed: false,
+                        revoked: true
+                      });
+                    }
                     let finalAuthorization: any;
                     try {
                       finalAuthorization = await executionAuthorizationRevalidator({
                         phase: "final-protected-sink",
-                        operation: authorizationOperationForPhase(
-                          "final-protected-sink"
-                        ),
+                        operation: finalAuthorizationOperation,
                         request,
                         requestBody,
                         url,
@@ -1282,8 +1309,9 @@ export async function dispatchOperation({
 	            decision: "allow",
 	            reasonCode: "execute_started",
 	            details: {
-	              concurrencySafe: operation.concurrencySafe === true,
-	              concurrencyGroup: operation.concurrencyGroup || operation.id
+	              concurrencyClass: operation.concurrency?.workloadClass || "standard",
+	              concurrencyKey: operation.concurrency?.key || operation.id,
+	              maxParallel: operation.concurrency?.maxParallel || 1
 	            }
 	          });
 	          return invokeRegisteredOperation({
@@ -1323,7 +1351,8 @@ export async function dispatchOperation({
           input: operationInput,
           status: "denied",
           statusCode: executionResult.statusCode,
-          error: executionResult.error
+          error: executionResult.error,
+          authorizationDecisionId: executionResult.authorizationDecision?.decisionId || ""
         });
         logOperation(logger, "warn", operationEventName(transport, "denied"), {
           requestId: requestIdFromRequest(request),

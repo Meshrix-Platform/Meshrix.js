@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { createSkillHubApplication } from "./application.mjs";
 import { createServiceData } from "./service-data.mjs";
+import { createSkillHubEventJournal, isSkillHubMutation } from "./service-events.mjs";
 
 const OPERATION_PATTERN = /^\/v1\/operations\/([a-z][a-z0-9_.]{2,96})$/u;
 
@@ -52,7 +53,9 @@ export async function createSkillHubHttpHandler({
   if (Buffer.byteLength(String(authToken), "utf8") < 32 || Buffer.byteLength(String(authToken), "utf8") > 512) {
     throw new TypeError("Skill Hub HTTP service requires a bounded authentication token.");
   }
-  const application = await createSkillHubApplication({ serviceData: createServiceData(dataRoot) });
+  const serviceData = createServiceData(dataRoot);
+  const application = await createSkillHubApplication({ serviceData });
+  const events = await createSkillHubEventJournal({ serviceData });
   const handler = async (request, response) => {
     try {
       const url = new URL(request.url || "/", "http://skill-hub.invalid");
@@ -64,12 +67,31 @@ export async function createSkillHubHttpHandler({
         writeJson(response, 401, { ok: false, error: { code: "authentication_required" } });
         return;
       }
+      if (request.method === "GET" && url.pathname === "/v1/events") {
+        const headerCursor = Number.parseInt(String(request.headers["last-event-id"] || "0"), 10);
+        const queryCursor = Number.parseInt(String(url.searchParams.get("cursor") || "0"), 10);
+        const cursor = Number.isSafeInteger(headerCursor) && headerCursor >= 0 ? headerCursor : queryCursor;
+        response.writeHead(200, {
+          "cache-control": "no-store, no-transform",
+          "content-type": "text/event-stream; charset=utf-8",
+          connection: "keep-alive",
+          "x-content-type-options": "nosniff"
+        });
+        response.flushHeaders?.();
+        const subscription = events.subscribe({ request, response, cursor });
+        if (!subscription.ok) response.destroy();
+        return;
+      }
       const match = OPERATION_PATTERN.exec(url.pathname);
       if (request.method !== "POST" || !match) {
         writeJson(response, 404, { ok: false, error: { code: "route_not_found" } });
         return;
       }
-      const result = await application.invoke(match[1], await readJson(request, maxRequestBytes));
+      const input = await readJson(request, maxRequestBytes);
+      const result = await application.invoke(match[1], input);
+      if (result?.statusCode >= 200 && result.statusCode < 400 && isSkillHubMutation(match[1], input)) {
+        await events.publish(match[1]);
+      }
       writeJson(response, 200, result);
     } catch (error) {
       writeJson(response, Number(error?.status || 500), {
@@ -78,6 +100,9 @@ export async function createSkillHubHttpHandler({
       });
     }
   };
-  handler.close = () => application.close();
+  handler.close = async () => {
+    await events.close();
+    await application.close();
+  };
   return handler;
 }

@@ -60,7 +60,7 @@ export function listInterfaceCatalog(operations: any = SERVER_API_OPERATIONS) : 
     public: operation.public === true,
     externalAuth: operation.externalAuth === true,
     processIdentity: operation.processIdentity || null,
-    concurrencySafe: operation.concurrencySafe === true,
+    concurrency: operation.concurrency,
     audit: operation.audit || {},
     log: operation.log || {},
     deprecated: operation.deprecated === true,
@@ -181,7 +181,7 @@ export function formatInterfaceCatalogMarkdown(operations: any = SERVER_API_OPER
         row.aliases.length > 0 ? `${row.cli}<br>alias: ${row.aliases.join(", ")}` : row.cli,
         `${row.safety.risk}${row.safety.dynamicRisk ? " (dynamic)" : ""}`,
         row.readOnly ? "yes" : "no",
-        row.concurrencySafe ? "yes" : "no",
+        `${row.concurrency.workloadClass}:${row.concurrency.maxParallel}`,
         row.audit?.enabled === false ? "disabled" : (row.audit?.write ? "write" : "read"),
         row.requiredScopes.join(", ")
       ].map(escapeMarkdownCell).join(" | ")

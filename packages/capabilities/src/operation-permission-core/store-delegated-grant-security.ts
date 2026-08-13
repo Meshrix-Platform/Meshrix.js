@@ -11,16 +11,27 @@ export function createDelegatedGrantSecurity({
   nowIso
 }: Record<string, any>) : any {
   function delegatedParentId(grant: any = null) : any {
-    return String(grant?.metadata?.delegatedMcp?.sourceGrantId || "").trim();
+    return String(grant?.parentGrantId || "").trim();
   }
 
-  function delegatedChildren(parentGrantId?: any) : any {
+  function delegatedDescendants(parentGrantId?: any) : any {
     const resolvedParentGrantId: any = String(parentGrantId || "").trim();
     if (!resolvedParentGrantId) return [];
-    return db.prepare("SELECT * FROM tool_grants WHERE type = 'delegated-mcp-child'")
-      .all()
-      .map(rowToGrant)
-      .filter((grant?: any) : any => delegatedParentId(grant) === resolvedParentGrantId);
+    return db.prepare(`
+      WITH RECURSIVE descendants(id) AS (
+        SELECT id FROM tool_grants
+        WHERE parent_grant_id = ? AND type = 'delegated-mcp-child'
+        UNION
+        SELECT child.id
+        FROM tool_grants AS child
+        JOIN descendants AS parent ON child.parent_grant_id = parent.id
+        WHERE child.type = 'delegated-mcp-child'
+      )
+      SELECT grant.*
+      FROM descendants
+      JOIN tool_grants AS grant ON grant.id = descendants.id
+      ORDER BY grant.id
+    `).all(resolvedParentGrantId).map(rowToGrant);
   }
 
   async function invalidateGrantCredential(grant?: any, reason?: any) : Promise<any> {
@@ -34,38 +45,65 @@ export function createDelegatedGrantSecurity({
   }
 
   async function revokeDelegatedDescendants(parentGrantId?: any, reason?: any) : Promise<any> {
-    const queue: any = [String(parentGrantId || "").trim()].filter(Boolean);
-    const visited: any = new Set<any>(queue);
-    while (queue.length > 0) {
-      const currentParentId: any = queue.shift();
-      for (const child of delegatedChildren(currentParentId)) {
-        if (!visited.has(child.id)) {
-          visited.add(child.id);
-          queue.push(child.id);
+    const rootGrantId: string = String(parentGrantId || "").trim();
+    if (!rootGrantId) return { revokedCount: 0, reachedVertices: 0, reachedEdges: 0 };
+    const descendants: any[] = delegatedDescendants(rootGrantId);
+    const childrenByParent: Map<string, any[]> = new Map();
+    for (const child of descendants) {
+      const list: any[] = childrenByParent.get(child.parentGrantId) || [];
+      list.push(child);
+      childrenByParent.set(child.parentGrantId, list);
+    }
+    const queue: string[] = [rootGrantId];
+    const visited: Set<string> = new Set([rootGrantId]);
+    const ordered: any[] = [];
+    let head: number = 0;
+    while (head < queue.length) {
+      const currentParentId: string = queue[head++];
+      for (const child of childrenByParent.get(currentParentId) || []) {
+        if (visited.has(child.id)) {
+          throw new Error("operation_permission_delegated_parent_cycle");
         }
-        const timestamp: any = nowIso();
-        const updated: Record<string, any> = {
-          ...child,
-          enabled: false,
-          revokedAt: child.revokedAt || timestamp,
-          updatedAt: timestamp,
-          reason: reason || child.reason
-        };
+        visited.add(child.id);
+        queue.push(child.id);
+        ordered.push(child);
+      }
+    }
+    if (ordered.length !== descendants.length) {
+      throw new Error("operation_permission_delegated_parent_graph_incomplete");
+    }
+    const timestamp: any = nowIso();
+    const updatedDescendants: any[] = ordered.map((child?: any) : any => ({
+      ...child,
+      enabled: false,
+      revokedAt: child.revokedAt || timestamp,
+      updatedAt: timestamp,
+      reason: reason || child.reason
+    }));
+    db.transaction(() : any => {
+      for (const updated of updatedDescendants) {
         upsertGrant(updated);
         appendGrantEvent(updated.id, "revoked", {
           reason: updated.reason,
-          parentGrantId: currentParentId
-        });
-        await invalidateGrantCredential(updated, reason || "delegated_parent_grant_changed");
-        await notifyChange({
-          type: "grant_revoked",
-          grantId: updated.id,
-          parentGrantId: currentParentId,
-          reasonCode: "delegated_parent_grant_changed",
-          reason: updated.reason || "delegated_parent_grant_changed"
+          parentGrantId: updated.parentGrantId
         });
       }
+    })();
+    for (const updated of updatedDescendants) {
+      await invalidateGrantCredential(updated, reason || "delegated_parent_grant_changed");
+      await notifyChange({
+        type: "grant_revoked",
+        grantId: updated.id,
+        parentGrantId: updated.parentGrantId,
+        reasonCode: "delegated_parent_grant_changed",
+        reason: updated.reason || "delegated_parent_grant_changed"
+      });
     }
+    return {
+      revokedCount: updatedDescendants.length,
+      reachedVertices: visited.size,
+      reachedEdges: updatedDescendants.length
+    };
   }
 
   function policyIntegrityDenial(grant?: any, { parent = false }: Record<string, any> = {}) : any {

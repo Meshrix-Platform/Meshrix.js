@@ -572,11 +572,11 @@ export const KERNEL_CAPABILITY_PERMISSIONS = Object.freeze([
   ...KERNEL_TOOL_CAPABILITY_PERMISSIONS
 ]);
 
-export function apiCapabilityId(operationId) {
+export function apiCapabilityId(operationId: string) {
   return `cap:api:${String(operationId || "").trim()}`;
 }
 
-export function toolExecuteCapabilityId(toolId) {
+export function toolExecuteCapabilityId(toolId: string) {
   return `cap:tool:${String(toolId || "").trim()}:execute`;
 }
 

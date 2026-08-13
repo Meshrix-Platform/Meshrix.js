@@ -81,11 +81,8 @@ function createMerkleState() : any {
       )),
       prove: vi.fn(async () : Promise<any> => ({ proofHash: "proof-hash" }))
     },
-    lsmIngest: {
-      beginUploadSession: vi.fn(async () : Promise<any> => ({ uploadSessionId: "upload-session-1" })),
-      appendChunkRecord: vi.fn(async () : Promise<any> => ({ offset: 0, byteLength: 5 })),
-      flushMemTable: vi.fn(async () : Promise<any> => ({ segmentId: "segment-1", rootCid: "segment-root", recordCount: 1 })),
-      materializeManifest: vi.fn(async () : Promise<any> => ({ rootCid: "manifest-root" }))
+    uploadManifest: {
+      materialize: vi.fn(async () : Promise<any> => ({ rootCid: "manifest-root", recordCount: 1, nextOffset: 5 }))
     }
   };
 }

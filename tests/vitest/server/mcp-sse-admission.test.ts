@@ -51,7 +51,7 @@ function connectionFixture({
     grantId,
     grant: { id: grantId },
     privateOnly: true,
-    negotiatedCapabilities: ["upstream.catalog.list_changed"],
+    negotiatedCapabilities: ["notifications/tools/list_changed"],
     proxySessionId: "abcdefghijklmnopqrstuvwx"
   });
   return { request, response, registration };
@@ -67,10 +67,29 @@ afterEach(() : any => {
   expect(getMcpSseConnectionState().activeConnectionCount).toBe(0);
 });
 
-describe("MCP SSE admission", () : any => {
-  it("requires authentication before opening a persistent MCP stream", async () : Promise<any> => {
+describe("MCP subscription admission", () : any => {
+  it("rejects the removed GET stream registration path", async () : Promise<any> => {
     const request: any = new EventEmitter();
     request.method = "GET";
+    request.url = "/mcp";
+    request.headers = { authorization: "Bearer redacted" };
+    request.socket = { remoteAddress: "127.0.0.9" };
+    const response: any = responseFixture();
+    await handleMeshrixMcpHttpRequest({
+      request,
+      response,
+      requestBody: Buffer.alloc(0),
+      method: "GET",
+      url: new URL("http://127.0.0.1/mcp"),
+      toolSkillManagementProvider: {}
+    });
+    expect(response.statusCode).toBe(405);
+    expect(response.headers.Allow).toBe("POST");
+  });
+
+  it("requires authentication before opening a persistent MCP stream", async () : Promise<any> => {
+    const request: any = new EventEmitter();
+    request.method = "POST";
     request.url = "/mcp";
     request.headers = {};
     request.socket = { remoteAddress: "127.0.0.1" };
@@ -80,8 +99,8 @@ describe("MCP SSE admission", () : any => {
     await handleMeshrixMcpHttpRequest({
       request,
       response,
-      requestBody: Buffer.alloc(0),
-      method: "GET",
+      requestBody: Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "subscriptions/listen", params: { notifications: ["notifications/tools/list_changed"] } })),
+      method: "POST",
       url: new URL("http://127.0.0.1/mcp"),
       toolSkillManagementProvider: { authorizeMcpClientRequest }
     });
@@ -89,14 +108,14 @@ describe("MCP SSE admission", () : any => {
     expect(response.statusCode).toBe(401);
     expect(authorizeMcpClientRequest).not.toHaveBeenCalled();
     expect(JSON.parse(response.chunks.join(""))?.error?.data?.code)
-      .toBe("mcp_sse_authentication_required");
+      .toBe("mcp_subscription_authentication_required");
   });
 
   it("binds an authenticated stream to its current opaque audience partition", async () : Promise<any> => {
     configureMcpNotificationBus({ registerSseConnection: registerMcpSseConnection });
     const request: any = new EventEmitter();
-    request.method = "GET";
-    request.url = "/mcp?capability=upstream.catalog.list_changed";
+    request.method = "POST";
+    request.url = "/mcp";
     request.headers = {
       authorization: "Bearer redacted",
       "x-meshrix.js-mcp-proxy-session": "abcdefghijklmnopqrstuvwx"
@@ -108,9 +127,9 @@ describe("MCP SSE admission", () : any => {
     await handleMeshrixMcpHttpRequest({
       request,
       response,
-      requestBody: Buffer.alloc(0),
-      method: "GET",
-      url: new URL("http://127.0.0.1/mcp?capability=upstream.catalog.list_changed"),
+      requestBody: Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "subscriptions/listen", params: { notifications: ["notifications/tools/list_changed"] } })),
+      method: "POST",
+      url: new URL("http://127.0.0.1/mcp"),
       toolSkillManagementProvider: {
         authorizeMcpClientRequest: vi.fn(async () : Promise<any> => ({ ok: true, grant: { id: "grant-stream" } })),
         audiencePartitionKeys

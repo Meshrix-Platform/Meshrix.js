@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { useServerConsoleShellContext } from '#meshrix/console/server-console-shell-context';
 import ToolAuditCard from './tools/ToolAuditCard.vue';
 import ToolCatalogDetailPane from './tools/ToolCatalogDetailPane.vue';
 import ToolCatalogIndexPane from './tools/ToolCatalogIndexPane.vue';
@@ -10,8 +10,10 @@ import ToolUsageStatsCard from './tools/ToolUsageStatsCard.vue';
 
 const {
   adminView,
+} = useServerConsoleShellContext().navigation;
+const {
   operationPermissionConsole,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().operationPermission;
 
 const {
   activeOperationPermissionToolCount = computed(() => 0),

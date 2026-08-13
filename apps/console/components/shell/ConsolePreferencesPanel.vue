@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import OptionBar from "@meshrix/ui-console/option-bar";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import type { OptionBarModelValue, OptionBarValue } from "../../types/app";
 
 const {
@@ -19,7 +19,7 @@ const {
   setAppearanceCycleScheme,
   setAppearancePreset,
   setLanguage,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().preferences;
 
 const appearancePresetFileInputRef = ref<HTMLInputElement | null>(null);
 

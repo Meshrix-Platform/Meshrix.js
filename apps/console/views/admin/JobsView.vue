@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { usePageRefreshHandler } from '@meshrix/ui-console/page-refresh';
-import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { useServerConsoleShellContext } from '#meshrix/console/server-console-shell-context';
 import { jobStatusLabels } from '../../composables/console-defaults';
 import { formatCompactDate } from '@meshrix/ui-console/console-format-utils';
 import { jobElapsed } from '../../composables/console-job-display-utils';
@@ -21,15 +21,17 @@ const localizeStatusPillLabel = (value: any) : any =>
   localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
-  isBusy,
-  consoleState,
   cancelJob,
   deleteJob,
   workQueueRows,
   workQueueSummary,
   workQueueObservationState,
   recentJobs,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().jobs;
+const {
+  isBusy,
+  consoleState,
+} = useServerConsoleShellContext().runtime;
 
 const workQueueBusy = ref('');
 const workQueueError = ref('');

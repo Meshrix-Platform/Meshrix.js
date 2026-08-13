@@ -454,7 +454,7 @@ describe("work queue scheduling policy", () : any => {
     fixture.store.close();
   });
 
-  it("reclaims persisted fairness cursors when a queue boundary becomes terminal", async () : Promise<any> => {
+  it("reclaims persisted virtual-finish projections when a queue boundary becomes terminal", async () : Promise<any> => {
     const fixture: any = await createFixture();
     await enqueue(fixture, "cursor-retention", {}, 0);
     const claimed: any = fixture.store.claim({
@@ -464,7 +464,7 @@ describe("work queue scheduling policy", () : any => {
       batchSize: 1
     }).claimed[0];
     expect(fixture.store.database.prepare(
-      "SELECT COUNT(*) AS count FROM work_queue_fairness_cursors"
+      "SELECT COUNT(*) AS count FROM work_queue_virtual_finish"
     ).get().count).toBeGreaterThan(0);
 
     fixture.store.complete({
@@ -473,7 +473,7 @@ describe("work queue scheduling policy", () : any => {
     });
 
     expect(fixture.store.database.prepare(
-      "SELECT COUNT(*) AS count FROM work_queue_fairness_cursors"
+      "SELECT COUNT(*) AS count FROM work_queue_virtual_finish"
     ).get().count).toBe(0);
     fixture.store.close();
   });

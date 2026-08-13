@@ -1,5 +1,5 @@
 import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import {
   maintenanceAgentRiskLabel,
   maintenanceAgentStatusLabel,
@@ -8,32 +8,34 @@ import {
 
 export function useMaintenanceAgentViewConsole() : any {
   const {
-    addMaintenanceAgentSchedule,
-    approveMaintenanceAgentRun,
-    autoApproveRiskOptionBarOptions,
-    isBusy,
-    canAdminMaintenanceAgent,
-    canApproveMaintenanceAgent,
-    canRunMaintenanceAgent,
-    cancelMaintenanceAgentRun,
-    displayedMaintenanceAgentRuns,
-    enabledBooleanOptionBarOptions,
-    latestMaintenanceAgentRun,
-    maintenanceAgentConfig,
-    maintenanceAgentResultJson,
-    maintenanceAgentRunbook,
-    maintenanceAgentRunbookOptionBarOptions,
-    maintenanceAgentRunbooks,
-    maintenanceAgentSummary,
-    nextMaintenanceAgentRunAt,
-    pendingMaintenanceApprovalCount,
-    plannerModeOptionBarOptions,
-    removeMaintenanceAgentSchedule,
-    runMaintenanceAgentGatewayReview,
-    runMaintenanceAgentRunbook,
-    saveMaintenanceAgentConfig,
-    selectedMaintenanceAgentRun,
-  } = useServerConsoleShellContext();
+  addMaintenanceAgentSchedule,
+  approveMaintenanceAgentRun,
+  autoApproveRiskOptionBarOptions,
+  canAdminMaintenanceAgent,
+  canApproveMaintenanceAgent,
+  canRunMaintenanceAgent,
+  cancelMaintenanceAgentRun,
+  displayedMaintenanceAgentRuns,
+  enabledBooleanOptionBarOptions,
+  latestMaintenanceAgentRun,
+  maintenanceAgentConfig,
+  maintenanceAgentResultJson,
+  maintenanceAgentRunbook,
+  maintenanceAgentRunbookOptionBarOptions,
+  maintenanceAgentRunbooks,
+  maintenanceAgentSummary,
+  nextMaintenanceAgentRunAt,
+  pendingMaintenanceApprovalCount,
+  plannerModeOptionBarOptions,
+  removeMaintenanceAgentSchedule,
+  runMaintenanceAgentGatewayReview,
+  runMaintenanceAgentRunbook,
+  saveMaintenanceAgentConfig,
+  selectedMaintenanceAgentRun,
+} = useServerConsoleShellContext().maintenance;
+const {
+  isBusy,
+} = useServerConsoleShellContext().runtime;
 
   return {
     addMaintenanceAgentSchedule,

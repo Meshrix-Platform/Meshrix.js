@@ -1,9 +1,10 @@
 import { createPluginProcessRpcPeer } from "./plugin-process-rpc.ts";
 
 if (typeof process.send !== "function") throw new Error("Plugin process worker requires an IPC channel.");
+const send: any = (message?: any) : any => process.send!(message);
 
 const peer: any = createPluginProcessRpcPeer({
-  send: (message?: any) : any => process.send(message),
+  send: (message?: any) : any => send(message),
   subscribe: (receive?: any) : any => process.on("message", receive),
   onClose: (close?: any) : any => process.once("disconnect", close)
 });
@@ -13,4 +14,4 @@ peer.register("module.load", async (moduleUrl?: any) : Promise<any> => {
   return Object.fromEntries((Object.entries(loaded) as [string, any][]));
 });
 
-process.send({ type: "plugin-process.ready" });
+send({ type: "plugin-process.ready" });

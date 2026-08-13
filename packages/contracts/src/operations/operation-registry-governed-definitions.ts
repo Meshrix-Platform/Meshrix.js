@@ -90,7 +90,7 @@ function upstreamGatewayOperation({
   label,
   scopes,
   risk = "read_only",
-  concurrencySafe = undefined,
+  maxParallel = undefined,
   timeoutMs = 30_000,
   params = [],
   query = [],
@@ -116,7 +116,11 @@ function upstreamGatewayOperation({
     },
     requiredScopes: scopes,
     readOnly: risk === "read_only",
-    concurrencySafe: concurrencySafe === undefined ? risk === "read_only" : concurrencySafe === true,
+    concurrency: {
+      workloadClass: risk === "read_only" ? "light" : "standard",
+      maxParallel: maxParallel === undefined ? (risk === "read_only" ? 64 : 1) : maxParallel,
+      cost: risk === "read_only" ? 1 : 2
+    },
     execution: {
       timeoutMs: Math.max(100, Math.min(Number(timeoutMs || 30_000), 300_000))
     },
@@ -240,7 +244,7 @@ const UPSTREAM_GATEWAY_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
     label: "执行受治理上游转发",
     scopes: ["gateway:write"],
     risk: "safe_write",
-    concurrencySafe: true,
+    maxParallel: 16,
     timeoutMs: 180_000,
     required: ["serviceId", "operationKey"]
   }),
@@ -250,7 +254,7 @@ const UPSTREAM_GATEWAY_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
     label: "Stream a governed upstream operation payload",
     scopes: ["gateway:write"],
     risk: "safe_write",
-    concurrencySafe: true,
+    maxParallel: 16,
     timeoutMs: 300_000,
     params: [
       ...UPSTREAM_GATEWAY_SERVICE_ID_PARAMS,
@@ -320,7 +324,7 @@ const SECURITY_ALERT_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
     cli: { command: ["security", "alerts"], usage: "security alerts [--limit 100]" },
     requiredScopes: ["console:read"],
     readOnly: true,
-    concurrencySafe: true,
+    concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
     aspects: ["security-alerts", "observability", "redaction"],
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
     audit: { recordInput: false, metadataOnly: true },
@@ -372,7 +376,7 @@ const SECURITY_ALERT_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
     cli: { command: ["security", "alerts", "export"], usage: "security alerts export [--limit 100]" },
     requiredScopes: ["console:read"],
     readOnly: true,
-    concurrencySafe: true,
+    concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
     aspects: ["security-alerts", "observability", "redaction"],
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
     audit: { recordInput: false, metadataOnly: true },

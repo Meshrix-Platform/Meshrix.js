@@ -286,7 +286,7 @@ export function normalizeStringList(value?: any) : any {
   return [];
 }
 
-export function normalizePlainObject(value?: any, fallback: Record<string, any> = {}) : any {
+export function normalizePlainObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

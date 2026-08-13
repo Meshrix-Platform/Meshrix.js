@@ -23,10 +23,10 @@ import {
 } from "./lib/sensitive-report-scan.ts";
 
 const REPO_ROOT: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
-const REPORT_PATH: any = path.join(process.cwd(), "build/reports/job-work-queue-capacity.json");
-const VERIFIER: any = "tools/server-scripts/verify-job-work-queue-capacity.ts";
-const COMMAND_ID: any = "job-work-queue-capacity";
-const SCHEMA_VERSION: any = "v0.0.1:workflow:job-work-queue-capacity-report-1";
+const REPORT_PATH: any = path.join(process.cwd(), "build/reports/job-work-queue-ceiling-conformance.json");
+const VERIFIER: any = "tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts";
+const COMMAND_ID: any = "job-work-queue-ceiling-conformance";
+const SCHEMA_VERSION: any = "v0.0.1:workflow:job-work-queue-ceiling-conformance-report-1";
 const SOURCE_FILES: readonly any[] = Object.freeze([
   "packages/foundation/src/work-queue/policies.ts",
   "packages/foundation/src/work-queue/push-dispatcher.ts",
@@ -328,6 +328,19 @@ async function verifyCancellation() : Promise<any> {
     const interrupted: any = await execution;
     assert.equal(interrupted.interrupted, true);
     assert.equal(signalObserved, true);
+    const inDoubtState: any = fixture.store.inspect({
+      workItemId: claimed.workItem.workItemId
+    });
+    assert.equal(inDoubtState.workItem.state, "in_doubt");
+    const takeover: any = fixture.store.claim({
+      queueDefinitionId: fixture.definition.queueDefinitionId,
+      workerId: "cancel-worker-2",
+      batchSize: 1
+    });
+    assert.equal(
+      takeover.claimed.some((entry?: any) : any => entry.workItem.workItemId === claimed.workItem.workItemId),
+      false
+    );
     const runningCancellation: any = fixture.store.cancel({
       workItemId: claimed.workItem.workItemId,
       reason: "capacity_verifier_signal_cancelled"
@@ -380,7 +393,22 @@ async function verifyHandlerDuration() : Promise<any> {
       handler: async () : Promise<any> => new Promise(() : any => {})
     });
     assert.equal(interrupted.interrupted, true);
+    assert.equal(interrupted.inDoubt, true);
     assert.equal(interrupted.error?.code, "queue_handler_timeout");
+    const inDoubtState: any = fixture.store.inspect({
+      workItemId: claimed.workItem.workItemId
+    });
+    assert.equal(inDoubtState.workItem.state, "in_doubt");
+    assert.equal(inDoubtState.workItem.lease?.leaseSeq, claimed.lease.leaseSeq);
+    const takeover: any = fixture.store.claim({
+      queueDefinitionId: fixture.definition.queueDefinitionId,
+      workerId: "handler-timeout-worker-2",
+      batchSize: 1
+    });
+    assert.equal(
+      takeover.claimed.some((entry?: any) : any => entry.workItem.workItemId === claimed.workItem.workItemId),
+      false
+    );
     const cancelled: any = fixture.store.cancel({
       workItemId: claimed.workItem.workItemId,
       reason: "capacity_verifier_timeout_cleanup"
@@ -389,6 +417,7 @@ async function verifyHandlerDuration() : Promise<any> {
     return {
       limitMs: EXERCISED_HANDLER_DURATION_MS,
       cutoffCode: interrupted.error.code,
+      inDoubtBeforeCleanup: true,
       terminalState: "cancelled"
     };
   } finally {
@@ -516,12 +545,12 @@ async function removeRoots() : Promise<any> {
 
 async function writeReport(report?: any) : Promise<any> {
   const provenance: Record<string, any> = {
-    producer: "meshrix-core-job-work-queue-capacity",
+    producer: "meshrix-core-job-work-queue-ceiling-conformance",
     commandId: COMMAND_ID,
     sourceRevision: await computeVerifierSourceRevision(REPO_ROOT, SOURCE_FILES)
   };
   const finalized: any = finalizeSensitiveReport(report, { provenance });
-  assertNoSensitiveReportLeak(finalized, "job work queue capacity report");
+  assertNoSensitiveReportLeak(finalized, "job work queue ceiling conformance report");
   assertReportProvenance(finalized, provenance);
   await fs.mkdir(path.dirname(REPORT_PATH), { recursive: true });
   await fs.writeFile(REPORT_PATH, `${JSON.stringify(finalized, null, 2)}\n`, "utf8");
@@ -609,6 +638,7 @@ async function main() : Promise<any> {
     selectedAdapter: "sqlite",
     summary: {
       verificationPassed: true,
+      capacityCertified: false,
       deterministicCutoffs: true,
       zeroPartialAdmissions: true,
       slowConsumerBounded: true,
@@ -698,12 +728,12 @@ async function main() : Promise<any> {
     }
   });
 
-  process.stdout.write(`${JSON.stringify({ ok: true, report: "build/reports/job-work-queue-capacity.json" })}\n`);
+  process.stdout.write(`${JSON.stringify({ ok: true, report: "build/reports/job-work-queue-ceiling-conformance.json" })}\n`);
 }
 
 main()
   .catch((error?: any) : any => {
-    process.stderr.write(`job work queue capacity verification failed: ${error?.code || "verification_failed"}; stage=${verifierStage}\n`);
+    process.stderr.write(`job work queue ceiling conformance verification failed: ${error?.code || "verification_failed"}; stage=${verifierStage}\n`);
     process.exitCode = 1;
   })
   .finally(removeRoots);

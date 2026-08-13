@@ -42,18 +42,20 @@ describe("operation route index", () : any => {
 
     expect(findHttpOperation({
       operations,
+      routeIndex: index,
       method: "GET",
       pathname: "/api/workspaces/list?ignored=true",
     })?.operation.id).toBe("workspace.list");
     expect(findHttpOperation({
       operations,
+      routeIndex: index,
       method: "GET",
       pathname: "/api/workspaces/team%20alpha",
     })).toMatchObject({
       operation: { id: "workspace.get" },
       pathParams: { workspaceId: "team alpha" },
     });
-    expect(findRpcOperation({ operations, method: "workspace.get" })?.id)
+    expect(findRpcOperation({ operations, routeIndex: index, method: "workspace.get" })?.id)
       .toBe("workspace.get");
     expect(index.getOperationById("workspace.list")?.id).toBe("workspace.list");
     expect(index.findHttpOperation("GET", "/api/workspaces/list"))

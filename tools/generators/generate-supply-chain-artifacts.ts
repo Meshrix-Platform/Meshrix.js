@@ -17,6 +17,7 @@ export const SUPPLY_CHAIN_MANIFEST_SCHEMA_VERSION: any =
 const GENERATOR_ID: any = "tools/generators/generate-supply-chain-artifacts.ts";
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const OFFICIAL_NPM_REGISTRY_ORIGIN: any = "https://registry.npmjs.org";
+const AUTHORIZED_VENDORED_PACKAGE: any = "pactium";
 
 function sha256(value?: any) : any {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -51,6 +52,22 @@ function packageNameFromLockPath(lockPath?: any) : any {
     throw new Error("Production dependency has an empty package name");
   }
   return pathParts[0];
+}
+
+export function isAuthorizedVendoredPackage(
+  lockfile?: any,
+  packagePath?: any,
+  packageEntry?: any
+) : any {
+  if (packagePath !== `node_modules/${AUTHORIZED_VENDORED_PACKAGE}`) return false;
+  const version: any = String(packageEntry?.version || "").trim();
+  const resolved: any = String(packageEntry?.resolved || "").trim();
+  return Boolean(
+    version
+    && packageEntry?.integrity
+    && resolved === `file:vendor/${AUTHORIZED_VENDORED_PACKAGE}-${version}.tgz`
+    && lockfile?.packages?.[""]?.dependencies?.[AUTHORIZED_VENDORED_PACKAGE] === resolved
+  );
 }
 
 function packageCoordinates(packageName?: any) : any {
@@ -129,6 +146,7 @@ function normalizeLockfile(lockfile?: any) : any {
   const packages: any = lockfile.packages;
   for (const [packagePath, packageEntry] of (Object.entries(packages) as [string, any][])) {
     if (!packagePath.startsWith("node_modules/") || packageEntry?.link === true) continue;
+    if (isAuthorizedVendoredPackage(lockfile, packagePath, packageEntry)) continue;
     let resolvedUrl: any;
     try {
       resolvedUrl = new URL(String(packageEntry?.resolved || ""));

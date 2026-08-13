@@ -20,8 +20,10 @@ function mountContext(initialView: AppView = "dashboard") : any {
   const activeRouteView: any = ref<AppView>(initialView);
   const sideNavCollapsed: any = ref(false);
   const shell: any = {
-    activeRouteView,
-    sideNavCollapsed,
+    navigation: {
+      activeRouteView,
+      sideNavCollapsed,
+    },
   } as unknown as ServerConsoleShellContext;
   const Host: any = defineComponent({
     setup() : any {

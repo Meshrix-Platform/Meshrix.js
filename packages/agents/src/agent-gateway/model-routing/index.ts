@@ -1,15 +1,8 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { ServerConfig } from "@meshrix/foundation/config/server-config";
+
 import {
-  appendBoundedJsonLine,
-  readJsonlTail
-} from "@meshrix/foundation/storage/bounded-jsonl";
-import {
-  releaseModelRoutingTrafficSlot,
-  reserveModelRoutingTrafficSlot
-} from "./model-routing-traffic.ts";
+  createModelRoutingAdmissionStore
+} from "./model-routing-admission-store.ts";
 import {
   agentGatewayError,
   normalizeAgentGatewayError
@@ -17,11 +10,8 @@ import {
 
 export const MODEL_ROUTING_PROTOCOL_VERSION: any = "v0.0.1:strategy:model-routing-1";
 
-const DEFAULT_STATE_FILE: any = path.join("state", "model-routing-state.json");
-const DEFAULT_LEDGER_FILE: any = path.join("logs", "model-routing-ledger.jsonl");
-const MODEL_ROUTING_LEDGER_MAX_BYTES: any = 32 * 1024 * 1024;
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
     : fallback;
@@ -73,77 +63,6 @@ function unique(values: any = []) : any {
 function normalizePositiveNumber(value?: any, fallback: any = 0) : any {
   const number: any = Number(value);
   return Number.isFinite(number) && number > 0 ? number : fallback;
-}
-
-function statePath(userDataPath: any = "") : any {
-  return path.join(
-    userDataPath || ServerConfig.getDataDir(),
-    DEFAULT_STATE_FILE,
-  );
-}
-
-function ledgerPath(userDataPath: any = "") : any {
-  return path.join(
-    userDataPath || ServerConfig.getDataDir(),
-    DEFAULT_LEDGER_FILE,
-  );
-}
-
-function stateLockPath(userDataPath: any = "") : any {
-  return `${statePath(userDataPath)}.lock`;
-}
-
-async function readJsonFile(filePath?: any, fallback?: any) : Promise<any> {
-  try {
-    return JSON.parse(await fs.readFile(filePath, "utf8"));
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
-      return fallback;
-    }
-    throw error;
-  }
-}
-
-async function writeJsonFile(filePath?: any, payload?: any) : Promise<any> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
-
-async function appendJsonl(filePath?: any, payload?: any) : Promise<any> {
-  await appendBoundedJsonLine(filePath, payload, {
-    maxBytes: MODEL_ROUTING_LEDGER_MAX_BYTES,
-    retainedBytes: MODEL_ROUTING_LEDGER_MAX_BYTES / 2
-  });
-}
-
-async function readLedger(filePath?: any, limit: any = 200) : Promise<any> {
-  return readJsonlTail(filePath, {
-    limit,
-    maxScanBytes: MODEL_ROUTING_LEDGER_MAX_BYTES / 2
-  });
-}
-
-function normalizeState(value: Record<string, any> = {}) : any {
-  return {
-    schemaVersion: "v0.0.1:schema:definition-1",
-    protocolVersion: MODEL_ROUTING_PROTOCOL_VERSION,
-    updatedAt: String(value.updatedAt || ""),
-    circuits: asObject(value.circuits),
-    inFlight: asObject(value.inFlight),
-  };
-}
-
-export async function readModelRoutingState({ userDataPath = "" }: Record<string, any> = {}) : Promise<any> {
-  return normalizeState(await readJsonFile(statePath(userDataPath), {}));
-}
-
-async function writeModelRoutingState({ userDataPath = "", state }: Record<string, any>) : Promise<any> {
-  const next: any = normalizeState({
-    ...state,
-    updatedAt: nowIso(),
-  });
-  await writeJsonFile(statePath(userDataPath), next);
-  return next;
 }
 
 function routeSource(settings: Record<string, any> = {}, input: Record<string, any> = {}) : any {
@@ -369,83 +288,6 @@ function actualCostFromUsage(usage: Record<string, any> = {}, price: Record<stri
   return Number((inputUsd + outputUsd).toFixed(8));
 }
 
-function circuitForAlias(state: Record<string, any> = {}, alias: any = "") : any {
-  return asObject(state.circuits?.[alias]);
-}
-
-function circuitOpen(circuit: Record<string, any> = {}, nowMs: any = Date.now()) : any {
-  const openUntil: any = Date.parse(circuit.openUntil || "");
-  return (
-    circuit.state === "open" && Number.isFinite(openUntil) && openUntil > nowMs
-  );
-}
-
-function updateCircuitSuccess(state: Record<string, any> = {}, alias: any = "") : any {
-  const circuit: Record<string, any> = {
-    ...circuitForAlias(state, alias),
-    state: "closed",
-    failureCount: 0,
-    lastSuccessAt: nowIso(),
-    openUntil: "",
-    lastError: "",
-  };
-  return {
-    ...state,
-    circuits: {
-      ...asObject(state.circuits),
-      [alias]: circuit,
-    },
-  };
-}
-
-function updateCircuitFailure(state: Record<string, any> = {}, alias: any = "", error?: any, policy: Record<string, any> = {}) : any {
-  const current: any = circuitForAlias(state, alias);
-  const failureCount: any = Number(current.failureCount || 0) + 1;
-  const shouldOpen: any =
-    policy.circuitBreaker.enabled &&
-    failureCount >= policy.circuitBreaker.failureThreshold;
-  const openedAt: any = shouldOpen ? nowIso() : String(current.openedAt || "");
-  const openUntil: any = shouldOpen
-    ? new Date(Date.now() + policy.circuitBreaker.openMs).toISOString()
-    : String(current.openUntil || "");
-  return {
-    ...state,
-    circuits: {
-      ...asObject(state.circuits),
-      [alias]: {
-        ...current,
-        state: shouldOpen ? "open" : "closed",
-        failureCount,
-        openedAt,
-        openUntil,
-        lastFailureAt: nowIso(),
-        lastError: error instanceof Error ? error.message : String(error),
-      },
-    },
-  };
-}
-
-async function recentLedgerCount({
-  userDataPath = "",
-  policy = {},
-  routeId = "",
-}: Record<string, any> = {}) : Promise<any> {
-  if (!policy.rateLimit.maxCalls) {
-    return 0;
-  }
-  const rows: any = await readLedger(ledgerPath(userDataPath), 2000);
-  const since: any = Date.now() - policy.rateLimit.windowMs;
-  return rows.filter((row?: any) : any => {
-    const ts: any = Date.parse(row.ts || "");
-    return (
-      Number.isFinite(ts) &&
-      ts >= since &&
-      row.routeId === routeId &&
-      row.status === "success"
-    );
-  }).length;
-}
-
 function candidateInput(input: Record<string, any> = {}, alias: any = "") : any {
   return {
     ...input,
@@ -467,6 +309,13 @@ function publicAttempt(attempt: Record<string, any> = {}) : any {
     startedAt: attempt.startedAt || "",
     completedAt: attempt.completedAt || "",
   };
+}
+
+function circuitOpen(circuit: Record<string, any> = {}, nowMs: any = Date.now()) : any {
+  const openUntil: any = Date.parse(circuit.openUntil || "");
+  return (
+    circuit.state === "open" && Number.isFinite(openUntil) && openUntil > nowMs
+  );
 }
 
 export async function runModelRouting({
@@ -498,34 +347,19 @@ export async function runModelRouting({
     throw new Error("Enabled model routing circuit breaker requires failureThreshold and openMs.");
   }
   const routeCallId: any = crypto.randomUUID();
-  const trafficReservation: any = await reserveModelRoutingTrafficSlot({
-    userDataPath,
-    policy,
-    routeCallId,
-    lockPath: stateLockPath,
-    readState: readModelRoutingState,
-    writeState: writeModelRoutingState
-  });
-  let state: any = await readModelRoutingState({ userDataPath });
+  const admissionStore: any = createModelRoutingAdmissionStore({ userDataPath });
   const attempts: any[] = [];
+  let admission: any = null;
   try {
-    const rateLimitCount: any = await recentLedgerCount({
-      userDataPath,
-      policy,
+    admission = admissionStore.admitRouteCall({
       routeId: policy.routeId,
+      policy,
+      slotId: routeCallId,
+      nowMs: Date.now(),
     });
-    if (
-      policy.rateLimit.maxCalls &&
-      rateLimitCount >= policy.rateLimit.maxCalls
-    ) {
-      throw new Error(
-        `Model routing rate limit exceeded for ${policy.routeId}.`,
-      );
-    }
-
     for (const alias of policy.candidateChain) {
       const startedAt: any = nowIso();
-      const circuit: any = circuitForAlias(state, alias);
+      const circuit: any = admissionStore.readCircuitState(alias) || {};
       if (circuitOpen(circuit)) {
         attempts.push({
           alias,
@@ -567,7 +401,7 @@ export async function runModelRouting({
             startedAt,
             completedAt: nowIso(),
           });
-          await appendJsonl(ledgerPath(userDataPath), {
+          admissionStore.recordLedgerRow({
             schemaVersion: "v0.0.1:schema:definition-1",
             protocolVersion: MODEL_ROUTING_PROTOCOL_VERSION,
             ts: nowIso(),
@@ -593,10 +427,9 @@ export async function runModelRouting({
         const result: any = executed.result || {};
         const usage: any = usageFromResult(result);
         const actualEstimatedUsd: any = actualCostFromUsage(usage, budget.price);
-        state = updateCircuitSuccess(state, alias);
-        await writeModelRoutingState({ userDataPath, state });
+        admissionStore.recordCircuitSuccess({ alias });
         const ledgerId: any = crypto.randomUUID();
-        await appendJsonl(ledgerPath(userDataPath), {
+        admissionStore.recordLedgerRow({
           schemaVersion: "v0.0.1:schema:definition-1",
           protocolVersion: MODEL_ROUTING_PROTOCOL_VERSION,
           ts: nowIso(),
@@ -640,15 +473,18 @@ export async function runModelRouting({
             secondaryCandidateUsed: attempts.length > 1,
             costLedgerId: ledgerId,
             budget,
-            traffic: trafficReservation.traffic,
+            traffic: admission.traffic,
             attempts: attempts.map(publicAttempt),
           },
         };
       } catch (error: any) {
         const failure: any = normalizeAgentGatewayError(error);
         if (failure.retryable) {
-          state = updateCircuitFailure(state, alias, failure, policy);
-          await writeModelRoutingState({ userDataPath, state });
+          admissionStore.recordCircuitFailure({
+            alias,
+            error: failure,
+            policy,
+          });
         }
         const budgetForLedger: any =
           budget ||
@@ -658,7 +494,7 @@ export async function runModelRouting({
             candidate,
             config: executed?.config || {},
           });
-        await appendJsonl(ledgerPath(userDataPath), {
+        admissionStore.recordLedgerRow({
           schemaVersion: "v0.0.1:schema:definition-1",
           protocolVersion: MODEL_ROUTING_PROTOCOL_VERSION,
           ts: nowIso(),
@@ -694,7 +530,7 @@ export async function runModelRouting({
             routeCallId,
             routeId: policy.routeId,
             promptVersion: policy.promptVersion,
-            traffic: trafficReservation.traffic,
+            traffic: admission.traffic,
             attempts: attempts.map(publicAttempt)
           };
           throw failure;
@@ -708,20 +544,19 @@ export async function runModelRouting({
       routeCallId,
       routeId: policy.routeId,
       promptVersion: policy.promptVersion,
-      traffic: trafficReservation.traffic,
+      traffic: admission.traffic,
       attempts: attempts.map(publicAttempt),
     };
     throw error;
   } finally {
-    await releaseModelRoutingTrafficSlot({
-      userDataPath,
-      policy,
-      routeCallId,
-      reserved: trafficReservation.reserved,
-      lockPath: stateLockPath,
-      readState: readModelRoutingState,
-      writeState: writeModelRoutingState
-    });
+    if (admission) {
+      admissionStore.releaseRouteCall({
+        routeId: policy.routeId,
+        slotId: routeCallId,
+        reserved: admission.reserved,
+      });
+    }
+    admissionStore.close();
   }
 }
 
@@ -729,31 +564,10 @@ export async function inspectModelRouting({
   userDataPath = "",
   limit = 50,
 }: Record<string, any> = {}) : Promise<any> {
-  const state: any = await readModelRoutingState({ userDataPath });
-  const ledger: any = await readLedger(ledgerPath(userDataPath), limit);
-  const byStatus: Record<string, any> = {};
-  const byAlias: Record<string, any> = {};
-  let estimatedUsdTotal: any = 0;
-  for (const row of ledger) {
-    byStatus[row.status] = Number(byStatus[row.status] || 0) + 1;
-    byAlias[row.alias] = Number(byAlias[row.alias] || 0) + 1;
-    estimatedUsdTotal += Number(
-      row.actualEstimatedUsd || row.budget?.estimatedTotalUsd || 0,
-    );
+  const admissionStore: any = createModelRoutingAdmissionStore({ userDataPath });
+  try {
+    return admissionStore.inspect({ limit });
+  } finally {
+    admissionStore.close();
   }
-  return {
-    schemaVersion: "v0.0.1:schema:definition-1",
-    protocolVersion: MODEL_ROUTING_PROTOCOL_VERSION,
-    updatedAt: nowIso(),
-    statePath: DEFAULT_STATE_FILE,
-    ledgerPath: DEFAULT_LEDGER_FILE,
-    state,
-    ledgerSummary: {
-      total: ledger.length,
-      byStatus,
-      byAlias,
-      estimatedUsdTotal: Number(estimatedUsdTotal.toFixed(8)),
-    },
-    recentLedger: ledger,
-  };
 }

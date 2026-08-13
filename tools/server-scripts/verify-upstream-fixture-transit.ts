@@ -610,7 +610,7 @@ try {
   );
 
   operationProofSubstrate = createOperationProofSubstrate({ userDataPath });
-  operationPermissionPlatform = createOperationPermissionPlatform({
+  operationPermissionPlatform = await createOperationPermissionPlatform({
     userDataPath,
     operations: SERVER_API_OPERATIONS,
     controllers: {
@@ -711,8 +711,12 @@ try {
   assert.equal(downstreamIdentityCall.payload?.result?.structuredContent?.upstreamMcp, true);
   assert.equal(downstreamIdentityCall.payload?.result?.structuredContent?.toolName, identityPublicTool);
 
-  const runtimeJson: any = await fs.readFile(path.join(userDataPath, "upstream-gateway", "runtime.json"), "utf8");
-  assertNoSecretLeak(runtimeJson);
+  await registry.flushRuntimeState();
+  const runtimeWal: any = await fs.readFile(
+    path.join(userDataPath, "upstream-gateway", "runtime.json.wal.jsonl"),
+    "utf8"
+  );
+  assertNoSecretLeak(runtimeWal);
 
   const report: Record<string, any> = {
     schemaVersion: UPSTREAM_FIXTURE_TRANSIT_SCHEMA_VERSION,

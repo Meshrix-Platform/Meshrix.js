@@ -19,6 +19,7 @@ import {
   PACTIUM_SCHEMA_VERSION,
   PACTIUM_TRUST_POLICIES,
   protocolHash,
+  toCanonicalSafeValue,
   verifyProofBundle,
   verifyProofEnvelope
 } from "pactium";
@@ -26,8 +27,7 @@ import { serverToken } from "#meshrix/client-strings";
 import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
-} from "../../checkpoint/tree/pactium-substrate-preflight.ts";
-import { toPactiumCanonicalSafeValue } from "../../checkpoint/tree/pactium-canonical-safe.ts";
+} from "../../checkpoint/tree/pactium-runtime.ts";
 
 export const OPERATION_PROOF_SUBSTRATE_PROTOCOL_VERSION: any = "v0.0.1:operation:proof-substrate-2";
 export const OPERATION_PROOF_SUBSTRATE_PROTOCOL: any = PACTIUM_PROTOCOL;
@@ -62,7 +62,7 @@ function text(value?: any, fallback: any = "") : any {
   return normalized || fallback;
 }
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
@@ -220,7 +220,7 @@ export function createMeshrixSignerKeyRing({
 }
 
 function cleanValue(value?: any) : any {
-  return toPactiumCanonicalSafeValue(value);
+  return toCanonicalSafeValue(value);
 }
 
 function normalizeMode(value: any = "") : any {

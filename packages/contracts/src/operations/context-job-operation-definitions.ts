@@ -296,7 +296,7 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
       },
       requiredScopes: ["jobs:write", "storage:write"],
       safety: { risk: "repair_write", requiresConfirmation: true, approvalScope: "workspace:write" },
-      concurrencyGroup: "workspace-materialization"
+      concurrency: { workloadClass: "exclusive", key: "workspace-materialization", maxParallel: 1, cost: 2 }
     },
 {
       id: "jobs.upload_workspace_materialization_cancel",
@@ -319,7 +319,7 @@ export const CONTEXT_JOB_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
       },
       requiredScopes: ["jobs:write", "storage:write"],
       safety: { risk: "safe_write" },
-      concurrencyGroup: "workspace-materialization"
+      concurrency: { workloadClass: "exclusive", key: "workspace-materialization", maxParallel: 1, cost: 2 }
     },
 {
       id: "jobs.list",

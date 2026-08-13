@@ -69,36 +69,28 @@ try {
   assert.equal((await substrate.merkleIndex.prove(indexWithAB.indexRootCid, "missing.txt")).exists, false);
   assert.deepEqual((await substrate.merkleIndex.diff(indexWithA.indexRootCid, indexWithAB.indexRootCid)).map((item?: any) : any => item.action), ["create"]);
 
-  const session: any = await substrate.lsmIngest.beginUploadSession({
+  const uploadManifest: any = await substrate.uploadManifest.materialize({
     scope: "workspace:verify",
-    files: [{ relativePath: "docs/a.txt" }]
+    files: [{ relativePath: "docs/a.txt" }],
+    records: [{
+      fileId: "docs/a.txt",
+      relativePath: "docs/a.txt",
+      chunkIndex: 0,
+      offset: 0,
+      byteLength: chunkA.byteLength,
+      chunkCid: chunkA.cid,
+      chunkHash: chunkA.payloadHash
+    }, {
+      fileId: "docs/a.txt",
+      relativePath: "docs/a.txt",
+      chunkIndex: 1,
+      offset: chunkA.byteLength,
+      byteLength: chunkB.byteLength,
+      chunkCid: chunkB.cid,
+      chunkHash: chunkB.payloadHash
+    }]
   });
-  await substrate.lsmIngest.appendChunkRecord(session.uploadSessionId, {
-    fileId: "docs/a.txt",
-    relativePath: "docs/a.txt",
-    chunkIndex: 0,
-    offset: 0,
-    byteLength: chunkA.byteLength,
-    chunkCid: chunkA.cid,
-    chunkHash: chunkA.payloadHash
-  });
-  await substrate.lsmIngest.appendChunkRecord(session.uploadSessionId, {
-    fileId: "docs/a.txt",
-    relativePath: "docs/a.txt",
-    chunkIndex: 1,
-    offset: chunkA.byteLength,
-    byteLength: chunkB.byteLength,
-    chunkCid: chunkB.cid,
-    chunkHash: chunkB.payloadHash
-  });
-  const recovered: any = await substrate.lsmIngest.recoverSession(session.uploadSessionId);
-  assert.equal(recovered.recordCount, 2, "LSM ingest recovery should replay WAL chunk records");
-  const segment: any = await substrate.lsmIngest.flushMemTable(session.uploadSessionId);
-  assert.equal(segment.recordCount, 2);
-  assert.ok(segment.rootCid);
-  const uploadManifest: any = await substrate.lsmIngest.materializeManifest(session.uploadSessionId);
-  const compacted: any = await substrate.lsmIngest.compactSegments("workspace:verify");
-  assert.equal(compacted.recordCount, 2);
+  assert.equal(uploadManifest.recordCount, 2);
   assert.equal((await substrate.merkleDag.verify(uploadManifest.rootCid)).ok, true);
 
   const commit: any = await substrate.stateCommit.commit({

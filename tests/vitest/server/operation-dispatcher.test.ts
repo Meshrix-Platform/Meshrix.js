@@ -5,6 +5,7 @@ import {
 } from "#meshrix/contracts/operations/operation-decorators";
 import { SERVER_API_OPERATIONS } from "#meshrix/contracts/operations/operation-registry";
 import { createCorePlatformProvider } from "#meshrix/server-runtime/composition/core-platform-provider";
+import { createOperationRouteIndex } from "#meshrix/server-runtime/routing/operation-route-index";
 import {
   dispatchOperation,
   dispatchRpcOperation,
@@ -52,7 +53,7 @@ function baseOperation(overrides: Record<string, any> = {}) : any {
     id: "unit.dispatch",
     target: { controller: "unit", method: "handle" },
     http: { method: "POST", path: "/api/unit/dispatch" },
-    concurrencySafe: true,
+    concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
     readOnly: true,
     safety: { risk: "read_only" },
     audit: { enabled: false },
@@ -270,11 +271,11 @@ describe("operation dispatcher behavior", () : any => {
     });
   });
 
-  it("lets write-capable operations marked concurrencySafe use their own runtime concurrency policy", async () : Promise<any> => {
+  it("lets write-capable operations with bounded parallel metadata use their own runtime concurrency policy", async () : Promise<any> => {
     const operation: any = baseOperation({
       id: "unit.concurrent.write",
       readOnly: false,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "safe_write" },
       requiredScopes: [],
       rpc: { method: "unit.concurrent.write" }
@@ -318,6 +319,9 @@ describe("operation dispatcher behavior", () : any => {
       discoveryState: { mode: "forward", forwardBaseUrl: "https://upstream.local" },
       operations: []
     })).toBe(false);
+    const proxyOperations: any[] = [baseOperation({
+      http: { method: "POST", path: "/api/workspaces/:workspaceId/proxy" }
+    })];
     expect(findProxyRegisteredApiRequest({
       method: "POST",
       pathname: "/api/workspaces/workspace-a/proxy",
@@ -326,9 +330,8 @@ describe("operation dispatcher behavior", () : any => {
         advertisedBaseUrl: "https://local.example",
         forwardBaseUrl: "https://upstream.local"
       },
-      operations: [baseOperation({
-        http: { method: "POST", path: "/api/workspaces/:workspaceId/proxy" }
-      })]
+      operations: proxyOperations,
+      routeIndex: createOperationRouteIndex(proxyOperations, { strict: true })
     })).toMatchObject({
       pathParams: { workspaceId: "workspace-a" },
       targetBaseUrl: "https://upstream.local"
@@ -508,6 +511,7 @@ describe("operation dispatcher behavior", () : any => {
     const encodedResponse: any = createResponse();
     await dispatchRpcOperation({
       operations: [operation],
+      routeIndex: createOperationRouteIndex([operation], { strict: true }),
       controllers: rpcControllers,
       request: {},
       response: encodedResponse,
@@ -539,6 +543,7 @@ describe("operation dispatcher behavior", () : any => {
       const response: any = createResponse();
       await dispatchRpcOperation({
         operations: [operation],
+        routeIndex: createOperationRouteIndex([operation], { strict: true }),
         controllers: rpcControllers,
         request: {},
         response,
@@ -569,6 +574,7 @@ describe("operation dispatcher behavior", () : any => {
     const failedResponse: any = createResponse();
     await dispatchRpcOperation({
       operations: [failingOperation],
+      routeIndex: createOperationRouteIndex([failingOperation], { strict: true }),
       controllers: controllers(({ response }: Record<string, any>) : any => {
         response.writeHead(422, { "Content-Type": "application/json" });
         response.end(JSON.stringify({ error: "bad rpc input", detail: true }));
@@ -601,6 +607,7 @@ describe("operation dispatcher behavior", () : any => {
     const requiredResponse: any = createResponse();
     await dispatchRpcOperation({
       operations: [requiredOperation],
+      routeIndex: createOperationRouteIndex([requiredOperation], { strict: true }),
       controllers: controllers(() : any => {}),
       request: {},
       response: requiredResponse,
@@ -641,6 +648,7 @@ describe("operation dispatcher behavior", () : any => {
 
     await dispatchRpcOperation({
       operations: [operation],
+      routeIndex: createOperationRouteIndex([operation], { strict: true }),
       controllers: controllers(({ requestBody, response: targetResponse }: Record<string, any>) : any => {
         expect(requestBody.toString("utf8")).toContain(marker);
         targetResponse.writeHead(200, { "Content-Type": "application/json" });

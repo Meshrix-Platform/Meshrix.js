@@ -3,6 +3,7 @@ import { computed, defineComponent, nextTick, ref } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useOperationPermissionViewConsole } from "../../../apps/console/composables/console-operation-permission-view-controller";
+import { namespaceServerConsoleShell } from "./console-shell-test-utils";
 
 const authorizationGovernanceClientMock: any = vi.hoisted(() : any => ({
   getAuthorizationGovernance: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("../../../apps/console/lib/authorization-governance-client", () : any =>
   upsertAuthorizationGovernance: authorizationGovernanceClientMock.upsertAuthorizationGovernance,
 }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
+vi.mock("#meshrix/console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: shellContextMock.useServerConsoleShellContext,
 }));
 
@@ -194,7 +195,7 @@ function createOperationPermissionShell() : any {
 function createHarness() : any {
   const operationPermissionConsole: any = createOperationPermissionShell();
   const shell: Record<string, any> = { operationPermissionConsole };
-  shellContextMock.useServerConsoleShellContext.mockReturnValue(shell);
+  shellContextMock.useServerConsoleShellContext.mockReturnValue(namespaceServerConsoleShell(shell));
 
   let controller: ReturnType<typeof useOperationPermissionViewConsole> | null = null;
   const host: any = defineComponent({

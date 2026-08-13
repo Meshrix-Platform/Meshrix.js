@@ -169,27 +169,61 @@ function toolWithDynamicCapability(tool: any = null, context: Record<string, any
     ? context.dynamicCapability
     : null;
   if (!tool || !descriptor) return tool;
-  const staticRisk: any = String(tool.risk || "read_only");
-  const dynamicRisk: any = String(descriptor.risk || "read_only");
-  const risk: any = (RISK_RANK[dynamicRisk] ?? 0) > (RISK_RANK[staticRisk] ?? 0) ? dynamicRisk : staticRisk;
-  const requiredScopes: any[] = [...new Set<any>([
-    ...(Array.isArray(tool.requiredScopes) ? tool.requiredScopes : []),
-    ...(Array.isArray(descriptor.requiredScopes) ? descriptor.requiredScopes : [])
-  ].map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+  const risk: any = Object.hasOwn(RISK_RANK, String(descriptor.risk || ""))
+    ? String(descriptor.risk)
+    : "destructive";
+  const requiredScopes: any[] = [...new Set<any>((Array.isArray(descriptor.requiredScopes)
+    ? descriptor.requiredScopes
+    : []).map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+  const toolsets: any[] = [...new Set<any>((Array.isArray(descriptor.toolsets)
+    ? descriptor.toolsets
+    : []).map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+  const approvalPolicy: any = descriptor.approvalPolicy && typeof descriptor.approvalPolicy === "object" && !Array.isArray(descriptor.approvalPolicy)
+    ? descriptor.approvalPolicy
+    : {};
+  const resourceContext: any = descriptor.resourceContext && typeof descriptor.resourceContext === "object" && !Array.isArray(descriptor.resourceContext)
+    ? descriptor.resourceContext
+    : {};
   return {
     ...tool,
+    serviceId: String(descriptor.serviceId || ""),
+    operationKey: String(descriptor.operationKey || ""),
+    capabilityId: String(descriptor.capabilityId || ""),
+    dynamicCapability: descriptor,
     risk,
     requiredScopes,
-    requiresApproval: tool.requiresApproval === true || descriptor.approvalPolicy?.requiresApproval === true,
-    approvalScope: String(descriptor.approvalPolicy?.approvalScope || tool.approvalScope || ""),
-    requiredApproval: descriptor.approvalPolicy?.requiredApproval && typeof descriptor.approvalPolicy.requiredApproval === "object" && !Array.isArray(descriptor.approvalPolicy.requiredApproval)
-      ? descriptor.approvalPolicy.requiredApproval
-      : tool.requiredApproval || {},
-    resourceContext: {
-      ...(tool.resourceContext || {}),
-      ...(descriptor.resourceContext || {})
-    }
+    toolsets,
+    readOnly: risk === "read_only",
+    destructive: risk === "destructive",
+    requiresApproval: approvalPolicy.requiresApproval === true,
+    approvalScope: String(approvalPolicy.approvalScope || ""),
+    requiredApproval: approvalPolicy.requiredApproval && typeof approvalPolicy.requiredApproval === "object" && !Array.isArray(approvalPolicy.requiredApproval)
+      ? approvalPolicy.requiredApproval
+      : {},
+    resourceContext
   };
+}
+
+function apiKeyOperationForTool(tool: any = null): any {
+  const dynamicCapability: any = tool?.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
+    ? tool.dynamicCapability
+    : null;
+  return {
+    id: tool?.id || "",
+    toolId: tool?.id || "",
+    serviceId: tool?.serviceId || "",
+    capabilityId: dynamicCapability?.capabilityId || "",
+    dynamicCapability: Boolean(dynamicCapability),
+    toolsetIds: tool?.toolsets || [],
+    scopeIds: tool?.requiredScopes || [],
+    risk: tool?.risk || "",
+    resourceContext: tool?.resourceContext || {}
+  };
+}
+
+function dynamicPolicyRestriction(restriction: any = null, tool: any = null): any {
+  if (!restriction || !tool?.dynamicCapability) return restriction;
+  return Object.freeze({ ...restriction, toolAllow: Object.freeze([]), toolDeny: Object.freeze([]) });
 }
 
 export function createToolExecutionRuntime({
@@ -308,10 +342,37 @@ export function createToolExecutionRuntime({
       ? apiKeyAuthorizationEvaluationInput(apiKeyAuthorization)
       : null;
     const apiKeyRestriction: any = apiKeyEvaluation?.restriction || null;
+    const policyRestriction: any = dynamicPolicyRestriction(apiKeyRestriction, tool);
+    const apiKeyOperation: any = apiKeyOperationForTool(tool);
+    let apiKeyAdmissionDenial: any = null;
+    if (apiKeyAuthorization && tool.dynamicCapability) {
+      try {
+        if (typeof apiKeyDistributionProvider?.authorizeOperation !== "function") {
+          throw Object.assign(new Error("API Key operation authority is unavailable."), {
+            code: "api_key_authority_unavailable",
+            statusCode: 503
+          });
+        }
+        await Promise.resolve(apiKeyDistributionProvider.authorizeOperation({
+          authorization: apiKeyAuthorization,
+          operation: apiKeyOperation
+        }));
+      } catch (error: any) {
+        apiKeyAdmissionDenial = {
+          ok: false,
+          status: Number(error?.status || error?.statusCode || 403),
+          reasonCode: String(error?.reasonCode || error?.code || "api_key_policy_denied"),
+          error: String(error?.publicMessage || "API Key policy denied the operation."),
+          restriction: policyRestriction,
+          subject: apiKeyEvaluation.subject,
+          apiKeyAuthorization
+        };
+      }
+    }
     const authorization: any = apiKeyAuthorization
-      ? {
+      ? apiKeyAdmissionDenial || {
           ok: true,
-          restriction: apiKeyRestriction,
+          restriction: policyRestriction,
           subject: apiKeyEvaluation.subject,
           apiKeyAuthorization
         }
@@ -364,7 +425,7 @@ export function createToolExecutionRuntime({
           missingScopes: authorization.missingScopes || []
         });
       } else {
-        store.appendPolicyDecision({
+        await store.appendPolicyDecision({
           ...decision,
           toolExecutionId,
           traceId,
@@ -373,7 +434,7 @@ export function createToolExecutionRuntime({
           missingScopes: authorization.missingScopes || []
         });
       }
-      appendAuthorizationDecision(securityPermissions, {
+      await appendAuthorizationDecision(securityPermissions, {
         ...decision,
         traceId,
         toolExecutionId,
@@ -414,7 +475,7 @@ export function createToolExecutionRuntime({
         startedAt,
         finishedAt: nowIso()
       });
-      store.appendMetric({
+      await store.appendMetric({
         traceId,
         toolId: tool.id,
         grantId: runtimeGrantId,
@@ -555,7 +616,7 @@ export function createToolExecutionRuntime({
           startedAt,
           finishedAt: nowIso()
         });
-        store.appendMetric({
+        await store.appendMetric({
           traceId,
           toolId: tool.id,
           grantId: runtimeGrantId,
@@ -644,7 +705,7 @@ export function createToolExecutionRuntime({
         operationBinding: approvalOperationBinding,
         ...(approvalLayers.length > 0 ? { approvalLayers } : {})
       };
-      const pendingOperation: any = store.createPendingOperation({
+      const pendingOperation: any = await store.createPendingOperation({
         traceId,
         toolExecutionId,
         toolId: tool.id,
@@ -702,7 +763,7 @@ export function createToolExecutionRuntime({
         startedAt,
         finishedAt: nowIso()
       });
-      store.appendMetric({
+      await store.appendMetric({
         traceId,
         toolId: tool.id,
         grantId: runtimeGrantId,
@@ -787,7 +848,7 @@ export function createToolExecutionRuntime({
         startedAt,
         finishedAt: nowIso()
       });
-      store.appendMetric({
+      await store.appendMetric({
         traceId,
         toolId: tool.id,
         grantId: runtimeGrantId,
@@ -870,7 +931,7 @@ export function createToolExecutionRuntime({
           await apiKeyDistributionProvider.revalidateEffect(apiKeyEffectLease);
           currentAuthorization = {
             ok: true,
-            restriction: apiKeyRestriction,
+            restriction: policyRestriction,
             subject: runtimeSubject,
             apiKeyAuthorization
           };
@@ -1100,16 +1161,7 @@ export function createToolExecutionRuntime({
         }
         apiKeyEffectLease = await apiKeyDistributionProvider.reserveEffect({
           authorization: apiKeyAuthorization,
-          operation: {
-            id: tool.id,
-            toolId: tool.id,
-            serviceId: tool.serviceId || context?.dynamicCapability?.serviceId || "",
-            capabilityId: context?.dynamicCapability?.capabilityId || "",
-            toolsetIds: tool.toolsets || [],
-            scopeIds: tool.requiredScopes || [],
-            risk: tool.risk,
-            resourceContext: context.resourceContext || tool.resourceContext || {}
-          }
+          operation: apiKeyOperation
         });
         await apiKeyDistributionProvider.revalidateEffect(apiKeyEffectLease);
       }
@@ -1191,7 +1243,7 @@ export function createToolExecutionRuntime({
           startedAt,
           finishedAt: nowIso()
         });
-        store.appendMetric({
+        await store.appendMetric({
           traceId,
           toolId: tool.id,
           grantId: runtimeGrantId,
@@ -1285,7 +1337,7 @@ export function createToolExecutionRuntime({
         startedAt,
         finishedAt: nowIso()
       });
-      store.appendMetric({
+      await store.appendMetric({
         traceId,
         toolId: tool.id,
         grantId: runtimeGrantId,

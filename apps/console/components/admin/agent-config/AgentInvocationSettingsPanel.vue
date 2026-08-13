@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import JsonConfigFileEditor from "../../JsonConfigFileEditor.vue";
 import AgentConfigInvocationToggle from "./AgentConfigInvocationToggle.vue";
 
 const {
-  isBusy,
   saveSettings,
   settingsDraft,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().settings;
+const {
+  isBusy,
+} = useServerConsoleShellContext().runtime;
 
 async function saveLocalCommandTemplates(value: unknown) {
   if (!Array.isArray(value)) {

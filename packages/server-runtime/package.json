@@ -12,42 +12,326 @@
     "@meshrix/capabilities": "0.0.1",
     "@meshrix/contracts": "0.0.1",
     "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1"
+    "@meshrix/protocols": "0.0.1",
+    "pactium": "0.8.0"
   },
   "imports": {
-    "#meshrix/agents/*": "@meshrix/agents/*",
-    "#meshrix/capabilities/*": "@meshrix/capabilities/*",
+    "#meshrix/agents/agent-configs/config-registry": "@meshrix/agents/agent-configs/config-registry",
+    "#meshrix/agents/agent-configs/credential-binding": "@meshrix/agents/agent-configs/credential-binding",
+    "#meshrix/agents/agent-gateway/external-gateway/index": "@meshrix/agents/agent-gateway/external-gateway/index",
+    "#meshrix/agents/agent-gateway/index": "@meshrix/agents/agent-gateway/index",
+    "#meshrix/agents/agent-gateway/model-probe/index": "@meshrix/agents/agent-gateway/model-probe/index",
+    "#meshrix/agents/agent-memory/index": "@meshrix/agents/agent-memory/index",
+    "#meshrix/agents/agent-runtime-provider": "@meshrix/agents/agent-runtime-provider",
+    "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand": "@meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
+    "#meshrix/agents/agent-workspace/agent-workspace-materialization-port": "@meshrix/agents/agent-workspace/agent-workspace-materialization-port",
+    "#meshrix/agents/agent-workspace/index": "@meshrix/agents/agent-workspace/index",
+    "#meshrix/agents/maintenance/index": "@meshrix/agents/maintenance/index",
+    "#meshrix/agents/maintenance/work-queue-contract": "@meshrix/agents/maintenance/work-queue-contract",
+    "#meshrix/agents/upstream-gateway/index": "@meshrix/agents/upstream-gateway/index",
+    "#meshrix/agents/workspace-asset-registry/index": "@meshrix/agents/workspace-asset-registry/index",
+    "#meshrix/agents/workspace-contribution": "@meshrix/agents/workspace-contribution",
+    "#meshrix/agents/workspace-governance/index": "@meshrix/agents/workspace-governance/index",
+    "#meshrix/capabilities/operation-permission-core/index": "@meshrix/capabilities/operation-permission-core/index",
+    "#meshrix/capabilities/operation-permission-core/runtime-schema": "@meshrix/capabilities/operation-permission-core/runtime-schema",
+    "#meshrix/capabilities/operation-permission-core/store": "@meshrix/capabilities/operation-permission-core/store",
+    "#meshrix/capabilities/skills/tool-skill-management-provider": "@meshrix/capabilities/skills/tool-skill-management-provider",
     "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
-    "#meshrix/contracts/*": "@meshrix/contracts/*",
-    "#meshrix/foundation/*": "@meshrix/foundation/*",
-    "#meshrix/http-response": "@meshrix/foundation/http/http-response",
+    "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
+    "#meshrix/contracts/modules/model-usage": "@meshrix/contracts/modules/model-usage",
+    "#meshrix/contracts/operations/operation-decorators": "@meshrix/contracts/operations/operation-decorators",
+    "#meshrix/contracts/operations/operation-feature-resolution": "@meshrix/contracts/operations/operation-feature-resolution",
+    "#meshrix/contracts/operations/operation-registry": "@meshrix/contracts/operations/operation-registry",
+    "#meshrix/contracts/operations/protocol-operation-definitions": "@meshrix/contracts/operations/protocol-operation-definitions",
+    "#meshrix/contracts/plugins/plugin-bundle-manifest": "@meshrix/contracts/plugins/plugin-bundle-manifest",
+    "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection": "@meshrix/foundation/checkpoint/tree/checkpoint-tree-projection",
+    "#meshrix/foundation/checkpoint/tree/data-structure-substrate": "@meshrix/foundation/checkpoint/tree/data-structure-substrate",
+    "#meshrix/foundation/checkpoint/tree/data-structure-substrate-register": "@meshrix/foundation/checkpoint/tree/data-structure-substrate-register",
+    "#meshrix/foundation/checkpoint/tree/pactium-runtime": "@meshrix/foundation/checkpoint/tree/pactium-runtime",
+    "#meshrix/foundation/concurrency/lock-manager": "@meshrix/foundation/concurrency/lock-manager",
+    "#meshrix/foundation/environment-compatibility/host-services": "@meshrix/foundation/environment-compatibility/host-services",
+    "#meshrix/foundation/execution-sandbox/contracts": "@meshrix/foundation/execution-sandbox/contracts",
+    "#meshrix/foundation/execution-sandbox/custody-contracts": "@meshrix/foundation/execution-sandbox/custody-contracts",
+    "#meshrix/foundation/execution-sandbox/index": "@meshrix/foundation/execution-sandbox/index",
+    "#meshrix/foundation/http/http-response": "@meshrix/foundation/http/http-response",
+    "#meshrix/foundation/module-system/module-management-provider": "@meshrix/foundation/module-system/module-management-provider",
+    "#meshrix/foundation/module-system/mount-config": "@meshrix/foundation/module-system/mount-config",
+    "#meshrix/foundation/module-system/mount-manager": "@meshrix/foundation/module-system/mount-manager",
+    "#meshrix/foundation/module-system/plugin-artifact-authority": "@meshrix/foundation/module-system/plugin-artifact-authority",
+    "#meshrix/foundation/module-system/plugin-artifact-trust": "@meshrix/foundation/module-system/plugin-artifact-trust",
+    "#meshrix/foundation/module-system/plugin-package-artifact-installer": "@meshrix/foundation/module-system/plugin-package-artifact-installer",
+    "#meshrix/foundation/module-system/plugin-registry": "@meshrix/foundation/module-system/plugin-registry",
+    "#meshrix/foundation/module-system/register": "@meshrix/foundation/module-system/register",
+    "#meshrix/foundation/observability/alert-contract": "@meshrix/foundation/observability/alert-contract",
+    "#meshrix/foundation/observability/alert-service": "@meshrix/foundation/observability/alert-service",
+    "#meshrix/foundation/observability/background-process-status": "@meshrix/foundation/observability/background-process-status",
+    "#meshrix/foundation/observability/executive-report": "@meshrix/foundation/observability/executive-report",
+    "#meshrix/foundation/observability/metric-registry": "@meshrix/foundation/observability/metric-registry",
+    "#meshrix/foundation/observability/observability-budgets": "@meshrix/foundation/observability/observability-budgets",
+    "#meshrix/foundation/observability/observability-config": "@meshrix/foundation/observability/observability-config",
+    "#meshrix/foundation/observability/readiness-baseline/baseline-provider": "@meshrix/foundation/observability/readiness-baseline/baseline-provider",
+    "#meshrix/foundation/observability/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/foundation/observability/sample-capability-pack": "@meshrix/foundation/observability/sample-capability-pack",
+    "#meshrix/foundation/observability/sensitive-report-scan": "@meshrix/foundation/observability/sensitive-report-scan",
+    "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
+    "#meshrix/foundation/proof/proof-substrate/index": "@meshrix/foundation/proof/proof-substrate/index",
+    "#meshrix/foundation/proof/proof-substrate/register": "@meshrix/foundation/proof/proof-substrate/register",
+    "#meshrix/foundation/security/auth/console-auth": "@meshrix/foundation/security/auth/console-auth",
+    "#meshrix/foundation/security/authorization/authorization-engine": "@meshrix/foundation/security/authorization/authorization-engine",
+    "#meshrix/foundation/security/authorization/tag-store-provider-registry": "@meshrix/foundation/security/authorization/tag-store-provider-registry",
+    "#meshrix/foundation/security/authorization/tag-store.port": "@meshrix/foundation/security/authorization/tag-store.port",
+    "#meshrix/foundation/security/authorization/tag-tree": "@meshrix/foundation/security/authorization/tag-tree",
+    "#meshrix/foundation/security/final-protected-sink-permit": "@meshrix/foundation/security/final-protected-sink-permit",
+    "#meshrix/foundation/security/governed-execution-permit-authority": "@meshrix/foundation/security/governed-execution-permit-authority",
+    "#meshrix/foundation/security/local-path-boundary": "@meshrix/foundation/security/local-path-boundary",
+    "#meshrix/foundation/security/operation-audit": "@meshrix/foundation/security/operation-audit",
+    "#meshrix/foundation/security/outbound-egress-policy": "@meshrix/foundation/security/outbound-egress-policy",
+    "#meshrix/foundation/security/process-identity/index": "@meshrix/foundation/security/process-identity/index",
+    "#meshrix/foundation/security/register": "@meshrix/foundation/security/register",
+    "#meshrix/foundation/security/risk-control/index": "@meshrix/foundation/security/risk-control/index",
+    "#meshrix/foundation/security/security-alerts": "@meshrix/foundation/security/security-alerts",
+    "#meshrix/foundation/security/security-permissions-provider": "@meshrix/foundation/security/security-permissions-provider",
+    "#meshrix/foundation/storage/artifact-transit-port": "@meshrix/foundation/storage/artifact-transit-port",
+    "#meshrix/foundation/storage/bounded-jsonl": "@meshrix/foundation/storage/bounded-jsonl",
+    "#meshrix/foundation/storage/object-store": "@meshrix/foundation/storage/object-store",
+    "#meshrix/foundation/storage/private-file-atomic": "@meshrix/foundation/storage/private-file-atomic",
+    "#meshrix/foundation/storage/private-sqlite": "@meshrix/foundation/storage/private-sqlite",
+    "#meshrix/foundation/storage/register": "@meshrix/foundation/storage/register",
+    "#meshrix/foundation/storage/state-coordinator": "@meshrix/foundation/storage/state-coordinator",
+    "#meshrix/foundation/storage/storage-kernel": "@meshrix/foundation/storage/storage-kernel",
+    "#meshrix/foundation/storage/storage-provider": "@meshrix/foundation/storage/storage-provider",
+    "#meshrix/foundation/unified-registration-core/unified-registration": "@meshrix/foundation/unified-registration-core/unified-registration",
+    "#meshrix/foundation/workflow/durable-workflow-substrate": "@meshrix/foundation/workflow/durable-workflow-substrate",
+    "#meshrix/foundation/workflow/state-machine/engine/state-machine-core": "@meshrix/foundation/workflow/state-machine/engine/state-machine-core",
     "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
     "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
-    "#meshrix/product-api": {
+    "#meshrix/product-api": "@meshrix/server-runtime/composition/product-api",
+    "#meshrix/protocols/downstream-client-aspect/index": "@meshrix/protocols/downstream-client-aspect/index",
+    "#meshrix/protocols/http/controllers/jobs-controller": "@meshrix/protocols/http/controllers/jobs-controller",
+    "#meshrix/protocols/http/controllers/system-controller": "@meshrix/protocols/http/controllers/system-controller",
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": "@meshrix/protocols/mcp/adapter/http-mcp-adapter",
+    "#meshrix/protocols/mcp/adapter/mcp-notification-bus": "@meshrix/protocols/mcp/adapter/mcp-notification-bus",
+    "#meshrix/protocols/pubsub/event-bus": "@meshrix/protocols/pubsub/event-bus",
+    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
+    "#meshrix/server-config": "@meshrix/foundation/config/server-config",
+    "#meshrix/server-runtime/composition/core-platform-provider": {
+      "types": "./dist/composition/core-platform-provider.d.ts",
+      "source": "./src/composition/core-platform-provider.ts",
+      "default": "./dist/composition/core-platform-provider.js"
+    },
+    "#meshrix/server-runtime/composition/core-platform-register": {
+      "types": "./dist/composition/core-platform-register.d.ts",
+      "source": "./src/composition/core-platform-register.ts",
+      "default": "./dist/composition/core-platform-register.js"
+    },
+    "#meshrix/server-runtime/composition/devops-provider": {
+      "types": "./dist/composition/devops-provider.d.ts",
+      "source": "./src/composition/devops-provider.ts",
+      "default": "./dist/composition/devops-provider.js"
+    },
+    "#meshrix/server-runtime/composition/devops-register": {
+      "types": "./dist/composition/devops-register.d.ts",
+      "source": "./src/composition/devops-register.ts",
+      "default": "./dist/composition/devops-register.js"
+    },
+    "#meshrix/server-runtime/composition/dispatch-operation": {
+      "types": "./dist/composition/dispatch-operation.d.ts",
+      "source": "./src/composition/dispatch-operation.ts",
+      "default": "./dist/composition/dispatch-operation.js"
+    },
+    "#meshrix/server-runtime/composition/maintenance-work-queue-provider": {
+      "types": "./dist/composition/maintenance-work-queue-provider.d.ts",
+      "source": "./src/composition/maintenance-work-queue-provider.ts",
+      "default": "./dist/composition/maintenance-work-queue-provider.js"
+    },
+    "#meshrix/server-runtime/composition/strategy-management-provider": {
+      "types": "./dist/composition/strategy-management-provider.d.ts",
+      "source": "./src/composition/strategy-management-provider.ts",
+      "default": "./dist/composition/strategy-management-provider.js"
+    },
+    "#meshrix/server-runtime/events/protocol-event-runtime": {
+      "types": "./dist/events/protocol-event-runtime.d.ts",
+      "source": "./src/events/protocol-event-runtime.ts",
+      "default": "./dist/events/protocol-event-runtime.js"
+    },
+    "#meshrix/server-runtime/state/interface/index": {
+      "types": "./dist/state/interface/index.d.ts",
+      "source": "./src/state/interface/index.ts",
+      "default": "./dist/state/interface/index.js"
+    },
+    "#meshrix/server-runtime/state/tag-store-adapter": {
+      "types": "./dist/state/tag-store-adapter.d.ts",
+      "source": "./src/state/tag-store-adapter.ts",
+      "default": "./dist/state/tag-store-adapter.js"
+    },
+    "#meshrix/settings": "@meshrix/server-runtime/composition/settings",
+    "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
+  },
+  "exports": {
+    "./composition/composition-root": {
+      "types": "./dist/composition/composition-root.d.ts",
+      "source": "./src/composition/composition-root.ts",
+      "default": "./dist/composition/composition-root.js"
+    },
+    "./composition/console-domain/operation-executor": {
+      "types": "./dist/composition/console-domain/operation-executor.d.ts",
+      "source": "./src/composition/console-domain/operation-executor.ts",
+      "default": "./dist/composition/console-domain/operation-executor.js"
+    },
+    "./composition/console-domain/services": {
+      "types": "./dist/composition/console-domain/services.d.ts",
+      "source": "./src/composition/console-domain/services.ts",
+      "default": "./dist/composition/console-domain/services.js"
+    },
+    "./composition/core-platform-provider": {
+      "types": "./dist/composition/core-platform-provider.d.ts",
+      "source": "./src/composition/core-platform-provider.ts",
+      "default": "./dist/composition/core-platform-provider.js"
+    },
+    "./composition/core-platform-register": {
+      "types": "./dist/composition/core-platform-register.d.ts",
+      "source": "./src/composition/core-platform-register.ts",
+      "default": "./dist/composition/core-platform-register.js"
+    },
+    "./composition/devops-provider": {
+      "types": "./dist/composition/devops-provider.d.ts",
+      "source": "./src/composition/devops-provider.ts",
+      "default": "./dist/composition/devops-provider.js"
+    },
+    "./composition/devops-register": {
+      "types": "./dist/composition/devops-register.d.ts",
+      "source": "./src/composition/devops-register.ts",
+      "default": "./dist/composition/devops-register.js"
+    },
+    "./composition/dispatch-operation": {
+      "types": "./dist/composition/dispatch-operation.d.ts",
+      "source": "./src/composition/dispatch-operation.ts",
+      "default": "./dist/composition/dispatch-operation.js"
+    },
+    "./composition/dispatch-operation-risk-control": {
+      "types": "./dist/composition/dispatch-operation-risk-control.d.ts",
+      "source": "./src/composition/dispatch-operation-risk-control.ts",
+      "default": "./dist/composition/dispatch-operation-risk-control.js"
+    },
+    "./composition/http-application-assembly": {
+      "types": "./dist/composition/http-application-assembly.d.ts",
+      "source": "./src/composition/http-application-assembly.ts",
+      "default": "./dist/composition/http-application-assembly.js"
+    },
+    "./composition/operation-dispatch-lock": {
+      "types": "./dist/composition/operation-dispatch-lock.d.ts",
+      "source": "./src/composition/operation-dispatch-lock.ts",
+      "default": "./dist/composition/operation-dispatch-lock.js"
+    },
+    "./composition/plugin-contribution-transaction": {
+      "types": "./dist/composition/plugin-contribution-transaction.d.ts",
+      "source": "./src/composition/plugin-contribution-transaction.ts",
+      "default": "./dist/composition/plugin-contribution-transaction.js"
+    },
+    "./composition/product-api": {
       "types": "./dist/composition/product-api.d.ts",
       "source": "./src/composition/product-api.ts",
       "default": "./dist/composition/product-api.js"
     },
-    "#meshrix/protocols/*": "@meshrix/protocols/*",
-    "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
-    "#meshrix/server-config": "@meshrix/foundation/config/server-config",
-    "#meshrix/server-runtime/*": {
-      "types": "./dist/*.d.ts",
-      "source": "./src/*.ts",
-      "default": "./dist/*.js"
-    },
-    "#meshrix/settings": {
+    "./composition/settings": {
       "types": "./dist/composition/settings.d.ts",
       "source": "./src/composition/settings.ts",
       "default": "./dist/composition/settings.js"
     },
-    "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
-  },
-  "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "source": "./src/*.ts",
-      "default": "./dist/*.js"
+    "./events/protocol-event-runtime": {
+      "types": "./dist/events/protocol-event-runtime.d.ts",
+      "source": "./src/events/protocol-event-runtime.ts",
+      "default": "./dist/events/protocol-event-runtime.js"
+    },
+    "./execution-sandbox/broker": {
+      "types": "./dist/execution-sandbox/broker.d.ts",
+      "source": "./src/execution-sandbox/broker.ts",
+      "default": "./dist/execution-sandbox/broker.js"
+    },
+    "./execution-sandbox/custody-key-broker": {
+      "types": "./dist/execution-sandbox/custody-key-broker.d.ts",
+      "source": "./src/execution-sandbox/custody-key-broker.ts",
+      "default": "./dist/execution-sandbox/custody-key-broker.js"
+    },
+    "./execution-sandbox/oci-backend": {
+      "types": "./dist/execution-sandbox/oci-backend.d.ts",
+      "source": "./src/execution-sandbox/oci-backend.ts",
+      "default": "./dist/execution-sandbox/oci-backend.js"
+    },
+    "./execution-sandbox/opaque-custody": {
+      "types": "./dist/execution-sandbox/opaque-custody.d.ts",
+      "source": "./src/execution-sandbox/opaque-custody.ts",
+      "default": "./dist/execution-sandbox/opaque-custody.js"
+    },
+    "./execution-sandbox/trusted-oci-provider-adapters": {
+      "types": "./dist/execution-sandbox/trusted-oci-provider-adapters.d.ts",
+      "source": "./src/execution-sandbox/trusted-oci-provider-adapters.ts",
+      "default": "./dist/execution-sandbox/trusted-oci-provider-adapters.js"
+    },
+    "./execution-sandbox/trusted-provider-receipt-store": {
+      "types": "./dist/execution-sandbox/trusted-provider-receipt-store.d.ts",
+      "source": "./src/execution-sandbox/trusted-provider-receipt-store.ts",
+      "default": "./dist/execution-sandbox/trusted-provider-receipt-store.js"
+    },
+    "./execution-sandbox/trusted-provider-resolver": {
+      "types": "./dist/execution-sandbox/trusted-provider-resolver.d.ts",
+      "source": "./src/execution-sandbox/trusted-provider-resolver.ts",
+      "default": "./dist/execution-sandbox/trusted-provider-resolver.js"
+    },
+    "./jobs/batch-deletion-coordinator": {
+      "types": "./dist/jobs/batch-deletion-coordinator.d.ts",
+      "source": "./src/jobs/batch-deletion-coordinator.ts",
+      "default": "./dist/jobs/batch-deletion-coordinator.js"
+    },
+    "./jobs/job-pipeline": {
+      "types": "./dist/jobs/job-pipeline.d.ts",
+      "source": "./src/jobs/job-pipeline.ts",
+      "default": "./dist/jobs/job-pipeline.js"
+    },
+    "./jobs/upload-no-run-custody": {
+      "types": "./dist/jobs/upload-no-run-custody.d.ts",
+      "source": "./src/jobs/upload-no-run-custody.ts",
+      "default": "./dist/jobs/upload-no-run-custody.js"
+    },
+    "./module-runtime/server-runtime": {
+      "types": "./dist/module-runtime/server-runtime.d.ts",
+      "source": "./src/module-runtime/server-runtime.ts",
+      "default": "./dist/module-runtime/server-runtime.js"
+    },
+    "./routing/operation-route-index": {
+      "types": "./dist/routing/operation-route-index.d.ts",
+      "source": "./src/routing/operation-route-index.ts",
+      "default": "./dist/routing/operation-route-index.js"
+    },
+    "./routing/radix-path-trie": {
+      "types": "./dist/routing/radix-path-trie.d.ts",
+      "source": "./src/routing/radix-path-trie.ts",
+      "default": "./dist/routing/radix-path-trie.js"
+    },
+    "./state/interface/index": {
+      "types": "./dist/state/interface/index.d.ts",
+      "source": "./src/state/interface/index.ts",
+      "default": "./dist/state/interface/index.js"
+    },
+    "./state/tag-store-adapter": {
+      "types": "./dist/state/tag-store-adapter.d.ts",
+      "source": "./src/state/tag-store-adapter.ts",
+      "default": "./dist/state/tag-store-adapter.js"
+    },
+    "./state/upload-session-admission": {
+      "types": "./dist/state/upload-session-admission.d.ts",
+      "source": "./src/state/upload-session-admission.ts",
+      "default": "./dist/state/upload-session-admission.js"
+    },
+    "./state/upload-session-store": {
+      "types": "./dist/state/upload-session-store.d.ts",
+      "source": "./src/state/upload-session-store.ts",
+      "default": "./dist/state/upload-session-store.js"
+    },
+    "./state/upload-session-support": {
+      "types": "./dist/state/upload-session-support.d.ts",
+      "source": "./src/state/upload-session-support.ts",
+      "default": "./dist/state/upload-session-support.js"
     }
   },
   "files": [

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { normalizeQueueDedupeKey } from "../../../packages/foundation/src/work-queue/index.ts";
 import { createQueueApplicationPort } from "../../../packages/server-runtime/src/composition/queue-application-port.ts";
@@ -140,9 +140,9 @@ describe("queue application port", () : any => {
       expect(started).toHaveLength(1);
       expect(port.describe().globalExecution).toMatchObject({ inFlight: 1, capacity: 1 });
       releases.shift()();
-      await new Promise((resolve?: any) : any => setImmediate(resolve));
+      await vi.waitFor(() : any => expect(port.describe().globalExecution.inFlight).toBe(0));
       await second.requestDispatch();
-      await new Promise((resolve?: any) : any => setImmediate(resolve));
+      await vi.waitFor(() : any => expect(started).toHaveLength(2));
       expect(new Set<any>(started)).toEqual(new Set<any>(["first", "second"]));
       expect(peakConcurrent).toBe(1);
       releases.shift()();

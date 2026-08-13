@@ -12,7 +12,7 @@ const TEMP_LEAF_PATTERN: any =
   /^\.meshrix-materialization-[A-Za-z0-9_-]{16,128}(?:\.tmp)?$/u;
 
 function requiredOpenFlag(name?: any) : any {
-  const value: any = fsSync.constants[name];
+  const value: any = (fsSync.constants as Record<string, any>)[name];
   if (!Number.isInteger(value)) {
     throw workerError(
       "materialization_platform_unsupported",
@@ -149,11 +149,11 @@ function assertPrivateFile(stat?: any, {
     statMode(stat) !== PRIVATE_FILE_MODE ||
     (
       Number.isInteger(process.geteuid?.()) &&
-      Number(stat.uid) !== process.geteuid()
+      Number(stat.uid) !== process.geteuid?.()
     ) ||
     (
       Number.isInteger(process.getegid?.()) &&
-      Number(stat.gid) !== process.getegid()
+      Number(stat.gid) !== process.getegid?.()
     ) ||
     (identity && !sameIdentity(stat, identity)) ||
     (byteCount !== null && statSize(stat) !== BigInt(byteCount)) ||
@@ -173,11 +173,11 @@ function assertPrivateParent(stat?: any, identity?: any) : any {
     statMode(stat) !== PRIVATE_DIRECTORY_MODE ||
     (
       Number.isInteger(process.geteuid?.()) &&
-      Number(stat.uid) !== process.geteuid()
+      Number(stat.uid) !== process.geteuid?.()
     ) ||
     (
       Number.isInteger(process.getegid?.()) &&
-      Number(stat.gid) !== process.getegid()
+      Number(stat.gid) !== process.getegid?.()
     ) ||
     !sameIdentity(stat, identity)
   ) {

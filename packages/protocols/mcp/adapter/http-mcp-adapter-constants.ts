@@ -10,7 +10,7 @@ export {
   MCP_PRIORITY_INSTALL_TARGETS
 };
 
-export const MCP_PROTOCOL_VERSION: any = "2025-06-18";
+export const MCP_PROTOCOL_VERSION: any = "2026-07-28";
 export const DEFAULT_TIMEOUT_MS: any = 300_000;
 export const MCP_INTERFACE_VERSION: any = "v0.0.1:mcp:interface-1";
 export const MCP_TOOLSET_VERSION: any = "2026-05-25.1";

@@ -42,7 +42,7 @@ export function text(value?: any) : any {
   return String(value || "").trim();
 }
 
-export function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+export function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

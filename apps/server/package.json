@@ -16,22 +16,23 @@
     "@meshrix/ui-console": "0.0.1"
   },
   "imports": {
-    "#meshrix/foundation/*": "@meshrix/foundation/*",
+    "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
+    "#meshrix/foundation/proof/proof-substrate/index": "@meshrix/foundation/proof/proof-substrate/index",
+    "#meshrix/foundation/security/production-ingress-contract": "@meshrix/foundation/security/production-ingress-contract",
+    "#meshrix/foundation/security/secrets/local-secret-key-provider": "@meshrix/foundation/security/secrets/local-secret-key-provider",
+    "#meshrix/foundation/storage/backup-contract": "@meshrix/foundation/storage/backup-contract",
     "#meshrix/http-utils": "@meshrix/protocols/http/http-utils",
     "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
-    "#meshrix/platform-registry": "@meshrix/server-runtime/composition/platform-registry",
-    "#meshrix/protocols/*": "@meshrix/protocols/*",
+    "#meshrix/protocols/http/controllers/upstream-payload-transit-controller": "@meshrix/protocols/http/controllers/upstream-payload-transit-controller",
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": "@meshrix/protocols/mcp/adapter/http-mcp-adapter",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/server-config": "@meshrix/foundation/config/server-config",
-    "#meshrix/server-runtime/*": "@meshrix/server-runtime/*"
+    "#meshrix/server-runtime/composition/console-domain/services": "@meshrix/server-runtime/composition/console-domain/services",
+    "#meshrix/server-runtime/composition/dispatch-operation": "@meshrix/server-runtime/composition/dispatch-operation",
+    "#meshrix/server-runtime/composition/http-application-assembly": "@meshrix/server-runtime/composition/http-application-assembly",
+    "#meshrix/server-runtime/state/upload-session-admission": "@meshrix/server-runtime/state/upload-session-admission"
   },
-  "exports": {
-    "./*": {
-      "types": "./dist/runtime/*.d.ts",
-      "source": "./runtime/*.ts",
-      "default": "./dist/runtime/*.js"
-    }
-  },
+  "exports": {},
   "files": [
     "dist/**/*",
     "LICENSE",

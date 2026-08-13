@@ -15,11 +15,38 @@
  * @module server-runtime/routing/operation-route-index
  */
 
+import crypto from "node:crypto";
 import { RadixPathTrie } from "./radix-path-trie.ts";
 
 const VALID_HTTP_METHODS: any = new Set<any>([
   "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
 ]);
+const ROUTE_INDEX_INSTRUMENTATION_SCHEMA: any = "v0.0.1:server-runtime:operation-route-index-instrumentation-1";
+let routeIndexSnapshotBuildCount: any = 0;
+
+function stableStringify(value: any) : any {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item?: any) : any => stableStringify(item)).join(",")}]`;
+  }
+  const entries: any = Object.keys(value)
+    .sort()
+    .map((key?: any) : any => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+  return `{${entries.join(",")}}`;
+}
+
+export function operationsRevision(operations: any = []) : any {
+  return crypto.createHash("sha256").update(stableStringify(operations)).digest("hex");
+}
+
+export function getRouteIndexRefactorInstrumentation() : any {
+  return {
+    schemaVersion: ROUTE_INDEX_INSTRUMENTATION_SCHEMA,
+    snapshotBuildCount: routeIndexSnapshotBuildCount
+  };
+}
 
 function immutableSnapshot(value?: any, seen: any = new WeakMap<object, any>()) : any {
   if (!value || typeof value !== "object") return value;
@@ -43,6 +70,7 @@ export class OperationRouteIndex {
   conflicts: any;
   operations: any;
   strict: any;
+  revision: any;
   warnings: any;
   #httpIndex = new Map<any, any>();
   #httpRoutes: any = [];
@@ -54,6 +82,7 @@ export class OperationRouteIndex {
    * @param {Array} operations - Array of operation definitions from the registry
    * @param {object} [options]
    * @param {boolean} [options.strict=false] - If true, throw on conflicts
+   * @param {string} [options.revision] - Exact registry revision this snapshot is built from
    */
   constructor(operations: any = [], options: Record<string, any> = {}) {
     if (!Array.isArray(operations)) {
@@ -61,6 +90,9 @@ export class OperationRouteIndex {
     }
     this.operations = immutableSnapshot(operations);
     this.strict = Boolean(options.strict);
+    this.revision = String(
+      options.revision || operationsRevision(operations)
+    );
 
     /** @type {Array<{path: string, conflictPath: string, reason: string}>} */
     this.conflicts = [];
@@ -69,9 +101,24 @@ export class OperationRouteIndex {
     this.warnings = [];
 
     this._build();
+    routeIndexSnapshotBuildCount += 1;
     this.conflicts = Object.freeze([...this.conflicts]);
     this.warnings = Object.freeze([...this.warnings]);
     this.#httpRoutes = Object.freeze(this.#httpRoutes.map((route?: any) : any => Object.freeze(route)));
+  }
+
+  getSnapshot() : any {
+    return Object.freeze({
+      schemaVersion: "v0.0.1:server-runtime:operation-route-snapshot-1",
+      revision: this.revision,
+      size: this.#operationById.size,
+      httpRouteCount: this.#httpRoutes.length,
+      rpcMethodCount: this.#rpcIndex.size
+    });
+  }
+
+  getRefactorInstrumentation() : any {
+    return getRouteIndexRefactorInstrumentation();
   }
 
   /**

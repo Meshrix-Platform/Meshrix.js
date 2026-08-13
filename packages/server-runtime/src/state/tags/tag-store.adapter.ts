@@ -22,7 +22,7 @@ import { createTagManagementStore } from "../tag-management-store.ts";
  *
  * @param {object} options
  * @param {string} options.userDataPath - User data directory path for the SQLite database
- * @returns {import("#meshrix/foundation/security/authorization/tag-store.port.ts").TagStoreProvider}
+ * @returns {import("#meshrix/foundation/security/authorization/tag-store.port").TagStoreProvider}
  */
 export function createTagStoreAdapter({ userDataPath = "" }: Record<string, any> = {}) : any {
   if (!userDataPath) {

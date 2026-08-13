@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 
 import { ensureSchema } from "../../../packages/capabilities/src/operation-permission-core/store-schema.ts";
+import {
+  bindingContextFromRequest,
+  mcpTargetHeaderFromRequest
+} from "../../../packages/capabilities/src/operation-permission-core/store-utils.ts";
 import { authenticateMcpApiKey } from "../../../packages/capabilities/src/skills/mcp-api-key-authentication.ts";
 import { createToolSkillManagementProvider } from "../../../packages/capabilities/src/skills/tool-skill-management-provider.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
@@ -18,7 +22,7 @@ function request(headers: Record<string, any> = {}) : any {
     url: "/mcp",
     headers: {
       host: "meshrix.test",
-      "x-meshrix-mcp-target": "neutral-peer",
+      "x-meshrix.js-mcp-target": "neutral-peer",
       ...headers
     },
     socket: { remoteAddress: "127.0.0.1" }
@@ -126,8 +130,8 @@ describe("direct MCP API key authentication", () : any => {
     const authenticateRuntime: any = vi.fn(async () : Promise<any> => authorizationContext());
     const result: any = await authenticateMcpApiKey({
       request: request({
-        "x-meshrix-api-key": API_KEY,
-        "x-meshrix-connector-package-id": "meshrix-mcp-connector",
+        "x-meshrix.js-api-key": API_KEY,
+        "x-meshrix.js-connector-package-id": "meshrix-mcp-connector",
         "x-meshrix-subject-id": "spoofed-subject",
         "x-meshrix-organization-id": "spoofed-org",
         "x-meshrix-role": "owner",
@@ -161,6 +165,45 @@ describe("direct MCP API key authentication", () : any => {
       processIdentityEvidence: null
     });
     expect(JSON.stringify(authenticateRuntime.mock.calls[0][0])).not.toContain("spoofed");
+  });
+
+  it("rejects retired undotted authentication headers and never binds their audience values", async () : Promise<any> => {
+    const authenticateRuntime: any = vi.fn(async () : Promise<any> => authorizationContext());
+    const retiredOnly: any = await authenticateMcpApiKey({
+      request: request({
+        "x-meshrix-api-key": API_KEY,
+        "x-meshrix-mcp-target": "retired-target",
+        "x-meshrix-connector-package-id": "retired-connector"
+      }),
+      apiKeyDistributionProvider: { authenticateRuntime }
+    });
+    expect(retiredOnly).toEqual({ handled: false });
+    expect(authenticateRuntime).not.toHaveBeenCalled();
+
+    const canonicalCredential: any = await authenticateMcpApiKey({
+      request: {
+        ...request(),
+        headers: {
+          host: "meshrix.test",
+          "x-meshrix.js-api-key": API_KEY,
+          "x-meshrix-mcp-target": "retired-target",
+          "x-meshrix-connector-package-id": "retired-connector"
+        }
+      },
+      apiKeyDistributionProvider: { authenticateRuntime }
+    });
+    expect(canonicalCredential.ok).toBe(true);
+    expect(authenticateRuntime).toHaveBeenCalledWith(expect.objectContaining({
+      targetId: "",
+      connectorPackageId: null
+    }));
+
+    const retiredBindingRequest: any = { headers: { "x-meshrix-mcp-target": "retired-target" }, url: "/mcp" };
+    expect(mcpTargetHeaderFromRequest(retiredBindingRequest)).toBe("");
+    expect(bindingContextFromRequest({ request: retiredBindingRequest }).clientId).toBe("");
+    const canonicalBindingRequest: any = { headers: { "x-meshrix.js-mcp-target": "canonical-target" }, url: "/mcp" };
+    expect(mcpTargetHeaderFromRequest(canonicalBindingRequest)).toBe("canonical-target");
+    expect(bindingContextFromRequest({ request: canonicalBindingRequest }).clientId).toBe("canonical-target");
   });
 
   it("projects only the server workload subject into the MCP envelope", () : any => {
@@ -230,7 +273,7 @@ describe("direct MCP API key authentication", () : any => {
       }
     }));
     await handleMeshrixMcpHttpRequest({
-      request: request({ "x-meshrix-api-key": API_KEY }),
+      request: request({ "x-meshrix.js-api-key": API_KEY }),
       response,
       requestBody: body,
       method: "POST",
@@ -244,7 +287,7 @@ describe("direct MCP API key authentication", () : any => {
       result: { tools: expect.any(Array) }
     });
     expect(authenticateRuntime).toHaveBeenCalledOnce();
-    const authorization: any = await provider.authorizeRequest({ request: request({ "x-meshrix-api-key": API_KEY }) });
+    const authorization: any = await provider.authorizeRequest({ request: request({ "x-meshrix.js-api-key": API_KEY }) });
     expect(provider.listVisibleTools({ authorization }).map((tool: any) : any => tool.id)).toEqual(["system.health"]);
   });
 
@@ -256,7 +299,7 @@ describe("direct MCP API key authentication", () : any => {
         serviceIds: ["service-allowed"],
         capabilityIds: ["cap:upstream:service-allowed:tools-call"],
         toolsetIds: ["meshrix.gateway.read"],
-        allowedTools: ["upstream.service-allowed.echo"],
+        allowedTools: ["system.health"],
         scopeIds: ["gateway:read"],
         maximumRisk: "low",
         resources: {
@@ -304,7 +347,7 @@ describe("direct MCP API key authentication", () : any => {
       evaluateToolAudience: evaluateProjectedOperationAudience
     });
     const authorization: any = await provider.authorizeRequest({
-      request: request({ "x-meshrix-api-key": API_KEY })
+      request: request({ "x-meshrix.js-api-key": API_KEY })
     });
     expect(authorization).toMatchObject({
       ok: true,
@@ -341,7 +384,10 @@ describe("direct MCP API key authentication", () : any => {
                 requiredScopes: ["gateway:read"],
                 toolsets: ["meshrix.gateway.read"],
                 risk: "read_only",
-                dynamicCapability: { credentialBindingIds: ["secret-binding-allowed"] }
+                dynamicCapability: {
+                  capabilityId: "cap:upstream:service-allowed:tools-call",
+                  credentialBindingIds: ["secret-binding-allowed"]
+                }
               }
             },
             {
@@ -400,7 +446,7 @@ describe("direct MCP API key authentication", () : any => {
     const response: any = responseCapture();
     const body: any = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }));
     await handleMeshrixMcpHttpRequest({
-      request: request({ "x-meshrix-api-key": API_KEY }),
+      request: request({ "x-meshrix.js-api-key": API_KEY }),
       response,
       requestBody: body,
       method: "POST",
@@ -418,7 +464,7 @@ describe("direct MCP API key authentication", () : any => {
   ])("rejects %s input before the API-key provider", async (_label?: any, credential?: any, reasonCode?: any) : Promise<any> => {
     const authenticateRuntime: any = vi.fn();
     const result: any = await authenticateMcpApiKey({
-      request: request({ "x-meshrix-api-key": credential }),
+      request: request({ "x-meshrix.js-api-key": credential }),
       apiKeyDistributionProvider: { authenticateRuntime }
     });
     expect(result).toMatchObject({ ok: false, status: 401, reasonCode });
@@ -429,7 +475,7 @@ describe("direct MCP API key authentication", () : any => {
     const authenticateRuntime: any = vi.fn();
     const result: any = await authenticateMcpApiKey({
       request: request({
-        "x-meshrix-api-key": API_KEY,
+        "x-meshrix.js-api-key": API_KEY,
         "x-meshrix-signature": ["first-signature", "second-signature"]
       }),
       securityPermissions: { verifyProcessIdentity: vi.fn() },
@@ -452,7 +498,7 @@ describe("direct MCP API key authentication", () : any => {
   ])("preserves fail-closed domain denial %s before visibility", async (reasonCode?: any) : Promise<any> => {
     const error: any = Object.assign(new Error("private domain detail"), { reasonCode, status: 403 });
     const result: any = await authenticateMcpApiKey({
-      request: request({ "x-meshrix-api-key": API_KEY }),
+      request: request({ "x-meshrix.js-api-key": API_KEY }),
       apiKeyDistributionProvider: { authenticateRuntime: vi.fn(async () : Promise<any> => { throw error; }) }
     });
     expect(result).toEqual({
@@ -467,7 +513,7 @@ describe("direct MCP API key authentication", () : any => {
   it("rejects ambiguous credentials and API keys in Grant headers", async () : Promise<any> => {
     const provider: any = { authenticateRuntime: vi.fn() };
     const ambiguous: any = await authenticateMcpApiKey({
-      request: request({ authorization: "Bearer generic-grant", "x-meshrix-api-key": API_KEY }),
+      request: request({ authorization: "Bearer generic-grant", "x-meshrix.js-api-key": API_KEY }),
       apiKeyDistributionProvider: provider
     });
     const bearer: any = await authenticateMcpApiKey({
@@ -538,7 +584,7 @@ describe("direct MCP API key authentication", () : any => {
     await provider.executeTool({
       toolId: "system.health",
       input: {},
-      request: request({ "x-meshrix-api-key": API_KEY }),
+      request: request({ "x-meshrix.js-api-key": API_KEY }),
       authorization: {
         ok: true,
         credentialKind: "scoped_api_key",
@@ -566,7 +612,7 @@ describe("direct MCP API key authentication", () : any => {
     });
     const result: any = await authenticateMcpApiKey({
       request: request({
-        "x-meshrix-api-key": API_KEY,
+        "x-meshrix.js-api-key": API_KEY,
         "x-meshrix-process-key-id": "admin-provisioned-key",
         "x-meshrix-signature": "signed-evidence"
       }),
@@ -585,7 +631,7 @@ describe("direct MCP API key authentication", () : any => {
     const authenticateRuntime: any = vi.fn();
     const result: any = await authenticateMcpApiKey({
       request: request({
-        "x-meshrix-api-key": API_KEY,
+        "x-meshrix.js-api-key": API_KEY,
         "x-meshrix-process-key-id": "untrusted-key",
         "x-meshrix-signature": "invalid-signature"
       }),

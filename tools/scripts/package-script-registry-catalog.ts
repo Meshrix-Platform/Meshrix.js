@@ -400,6 +400,38 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "build/reports/upstream-service-publishing/screenshots/**"
     ],
   },
+  "verify:runtime-refactor-convergence": {
+    scriptName: "verify:runtime-refactor-convergence", command: "npm run verify:runtime-refactor-convergence", category: "verifier", subsystem: "runtime",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "audit", expectedDurationClass: "standard",
+    inputs: [
+      "package.json",
+      "packages/agents/src/upstream-gateway/registry-runtime.ts",
+      "packages/agents/src/agent-workspace/agent-workspace-file-state.ts",
+      "packages/foundation/src/security/authorization/authorization-engine.ts",
+      "packages/server-runtime/src/routing/operation-route-index.ts",
+      "packages/server-runtime/src/composition/dispatch-operation-proof-lifecycle.ts",
+      "packages/server-runtime/src/composition/console-domain/operation-executor.ts",
+      "tools/server-scripts/verify-runtime-refactor-convergence.ts"
+    ], outputs: ["build/reports/runtime-refactor-convergence/convergence.json"],
+  },
+  "verify:runtime-capacity-convergence": {
+    scriptName: "verify:runtime-capacity-convergence", command: "npm run verify:runtime-capacity-convergence", category: "verifier", subsystem: "runtime",
+    owner: "platform", tier: "integration", sideEffects: "build-output",
+    requiresFreshContainer: false, ciProfile: "audit", expectedDurationClass: "extended",
+    inputs: [
+      "package.json",
+      "docs/plans/runtime-capacity-concurrency-refactor-plan/delivery/Plan.json",
+      "tools/registry/runtime-capacity-profile.registry.json",
+      "tools/registry/runtime-capacity-workload-catalog.registry.json",
+      "tools/registry/sqlite-owner-migration.registry.json",
+      "tools/server-scripts/verify-runtime-capacity-convergence.ts",
+      "tools/verifiers/runtime-capacity-workload-catalog.ts"
+    ], outputs: [
+      "build/reports/runtime-capacity-convergence/convergence.json",
+      "build/reports/runtime-capacity-convergence/stages/*.json"
+    ],
+  },
   "verify:upstream-service-publishing-candidate": {
     scriptName: "verify:upstream-service-publishing-candidate",
     command: "npm run verify:upstream-service-publishing-candidate",

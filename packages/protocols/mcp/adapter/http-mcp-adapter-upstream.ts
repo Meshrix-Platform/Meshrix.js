@@ -83,12 +83,7 @@ function inferredGrantMaxRisk(grant: Record<string, any> = {}, grantScopes: any 
 
 function grantCanSeeUpstreamMcpTool(tool: Record<string, any> = {}, grant: any = null) : any {
   if (!tool || !grant) return false;
-  const toolName: any = String(tool.name || "").trim();
-  if (!isUpstreamMcpToolName(toolName)) return false;
-  const deniedTools: any = new Set<any>(normalizeGrantValues(grant.toolDeny || [], 512));
-  if (deniedTools.has(toolName)) return false;
-  const allowedTools: any = new Set<any>(normalizeGrantValues(grant.toolAllow || [], 512));
-  if (allowedTools.size > 0 && !allowedTools.has(toolName)) return false;
+  if (!isUpstreamMcpToolName(tool.name)) return false;
   const meta: any = upstreamMcpToolMeta(tool);
   const dynamicCapabilities: any = grantDynamicCapabilities(grant);
   const requiredCapabilities: any = normalizeGrantValues(meta.requiredCapabilities || meta.capabilityId || [], 128);
@@ -185,11 +180,6 @@ function restrictionCanDiscoverUpstreamMcpService(service: Record<string, any> =
 function restrictionCanSeeUpstreamMcpTool(tool: Record<string, any> = {}, restriction: any = null) : any {
   if (!tool || !restriction || !isUpstreamMcpToolName(tool.name)) return false;
   const meta: any = upstreamMcpToolMeta(tool);
-  const toolName: any = String(tool.name || "").trim();
-  const deniedTools: any = new Set<any>(normalizeGrantValues(restriction.toolDeny || [], 512));
-  if (deniedTools.has(toolName)) return false;
-  const allowedTools: any = new Set<any>(normalizeGrantValues(restriction.toolAllow || [], 512));
-  if (allowedTools.size > 0 && !allowedTools.has(toolName)) return false;
   const capabilities: any = restrictionCapabilities(restriction);
   const requiredCapabilities: any = normalizeGrantValues(meta.requiredCapabilities || meta.capabilityId || [], 128);
   if (requiredCapabilities.length === 0 || requiredCapabilities.some((capability?: any) : any => !capabilities.has(capability))) return false;
@@ -238,8 +228,24 @@ export async function listVisibleUpstreamMcpTools({
       .map((service?: any) : any => String(service.serviceId || "").trim())
       .filter(Boolean)
       .filter((serviceId?: any) : any => allowedServiceIds.size === 0 || allowedServiceIds.has(serviceId));
-    const responses: any = await Promise.all(candidateServiceIds.map((serviceId?: any) : any =>
-      upstreamGatewayRegistry.listMcpTools({ serviceId }, { signal })
+    const discoveryConcurrency: any = Math.max(1, Math.min(
+      Number(upstreamGatewayRegistry.discoveryConcurrency || 8),
+      64
+    ));
+    const responses: any[] = new Array(candidateServiceIds.length);
+    let cursor: any = 0;
+    await Promise.all(Array.from(
+      { length: Math.min(discoveryConcurrency, candidateServiceIds.length) },
+      async () : Promise<any> => {
+        while (cursor < candidateServiceIds.length) {
+          if (signal?.aborted) throw signal.reason || new Error("Upstream MCP discovery was cancelled.");
+          const index: any = cursor++;
+          responses[index] = await upstreamGatewayRegistry.listMcpTools(
+            { serviceId: candidateServiceIds[index] },
+            { signal }
+          );
+        }
+      }
     ));
     listedItems = responses.flatMap((response?: any) : any => response?.items || []);
   } else if (typeof upstreamGatewayRegistry?.listMcpTools === "function") {

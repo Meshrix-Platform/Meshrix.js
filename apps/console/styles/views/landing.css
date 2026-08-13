@@ -1,14 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Meshrix.js Landing Page — Meshrix.js Crystal Welcome
-   Shares MeshrixUp's black, brilliant-yellow, and cyan palette.
+   Meshrix.js landing page
+   Uses the shared console palette and the Meshrix.js gateway mark.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .landing {
-  /* The parallel --lp-* palette was removed (REQ-022); uses map to the core
-     tokens below: lp-bg->bg-base, lp-text->text-primary, lp-text-dim->
-     text-secondary, lp-text-muted->text-muted, lp-gold->brand,
-     lp-gold-light->brand-strong, lp-gold-deep->brand-muted, lp-ice->info,
-     lp-font->font-display, lp-mono->font-mono. */
   font-family: var(--font-display);
   background: var(--bg-base);
   color: var(--text-primary);
@@ -56,14 +51,14 @@
   z-index: 1;
 }
 
-/* ── Crystal icon ─────────────────────────────────────────────────────── */
-.landing-crystal {
+/* ── Brand mark ───────────────────────────────────────────────────────── */
+.landing-mark {
   width: 128px;
   height: 128px;
   margin-bottom: var(--space-12);
   animation: landing-float 8s ease-in-out infinite;
 }
-.landing-crystal svg {
+.landing-mark svg {
   width: 100%;
   height: 100%;
 }
@@ -74,7 +69,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-crystal { animation: none; }
+  .landing-mark { animation: none; }
 }
 
 /* ── Typography ───────────────────────────────────────────────────────── */
@@ -232,7 +227,7 @@
 
 /* ── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .landing-crystal {
+  .landing-mark {
     width: 100px;
     height: 100px;
     margin-bottom: var(--space-8);

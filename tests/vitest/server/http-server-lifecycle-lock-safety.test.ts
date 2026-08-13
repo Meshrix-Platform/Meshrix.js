@@ -12,7 +12,7 @@ import {
   registerPluginOwnerGrantLifecycle
 } from "../../../packages/server-runtime/src/composition/http-application-assembly.ts";
 
-function createHarness({ openAdmission = true }: Record<string, any> = {}) : any {
+function createHarness({ openAdmission = true, transportLimits = {} }: Record<string, any> = {}) : any {
   const server: any = new EventEmitter();
   server.close = vi.fn((callback?: any) : any => callback?.());
   const runtimeLogger: Record<string, any> = {
@@ -21,7 +21,7 @@ function createHarness({ openAdmission = true }: Record<string, any> = {}) : any
     info: vi.fn(),
     close: vi.fn(async () : Promise<any> => {})
   };
-  const lifecycle: any = createHttpServerLifecycle({ server, runtimeLogger });
+  const lifecycle: any = createHttpServerLifecycle({ server, runtimeLogger, transportLimits });
   if (openAdmission) lifecycle.openAdmission();
   const runtime: Record<string, any> = { close: vi.fn(async () : Promise<any> => {}) };
   const applicationAssembly: Record<string, any> = { close: runtime.close };
@@ -45,6 +45,40 @@ function createHarness({ openAdmission = true }: Record<string, any> = {}) : any
 }
 
 describe("HTTP shutdown lock safety", () : any => {
+  it("bounds active request cost and preserves reserved credit for light control work", () : any => {
+    const harness: any = createHarness({
+      transportLimits: {
+        maxActiveRequests: 3,
+        maxActiveCost: 6,
+        reservedLightCost: 2
+      }
+    });
+    const heavy: any = harness.lifecycle.beginRequest({ workloadClass: "standard", cost: 4 });
+    const rejectedHeavy: any = harness.lifecycle.beginRequest({ workloadClass: "standard", cost: 1 });
+    const light: any = harness.lifecycle.beginRequest({ workloadClass: "light", cost: 2 });
+
+    expect(heavy.signal.aborted).toBe(false);
+    expect(rejectedHeavy.signal.aborted).toBe(true);
+    expect(rejectedHeavy.signal.reason).toMatchObject({
+      code: "http_request_capacity_exceeded",
+      statusCode: 429
+    });
+    expect(light.signal.aborted).toBe(false);
+    expect(harness.lifecycle.getAdmissionUsage()).toMatchObject({
+      inFlightCount: 2,
+      inFlightCost: 6,
+      maxActiveCost: 6,
+      reservedLightCost: 2
+    });
+
+    harness.lifecycle.endRequest(heavy);
+    harness.lifecycle.endRequest(light);
+    expect(harness.lifecycle.getAdmissionUsage()).toMatchObject({
+      inFlightCount: 0,
+      inFlightCost: 0
+    });
+  });
+
   it("keeps startup admission closed until the composition root opens it exactly once", () : any => {
     const harness: any = createHarness({ openAdmission: false });
     const earlyController: any = harness.lifecycle.beginRequest();
@@ -244,7 +278,7 @@ describe("HTTP shutdown lock safety", () : any => {
       refreshOperations: vi.fn(),
       revokeGrantsByPluginOwner: vi.fn(async () : Promise<any> => ({ ok: true, complete: true, cursor: "" }))
     };
-    expect(registerPluginOwnerGrantLifecycle({
+    expect(await registerPluginOwnerGrantLifecycle({
       runtime,
       pluginContributions,
       operationPermissionPlatform

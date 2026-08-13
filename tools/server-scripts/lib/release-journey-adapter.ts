@@ -42,13 +42,87 @@ async function readPackageName(directory?: any) : Promise<any> {
   return { name: String(manifest?.name || ""), version: String(manifest?.version || "") };
 }
 
+function packagePath(root?: any, packageName?: any) : any {
+  return path.join(root, "node_modules", ...String(packageName || "").split("/").filter(Boolean));
+}
+
+async function resolveDependencyPackage(packageName?: any, fromDirectory?: any) : Promise<any> {
+  let current: any = path.resolve(fromDirectory);
+  while (true) {
+    const candidate: any = packagePath(current, packageName);
+    const manifest: any = await readPackageName(candidate).catch(() : any => ({ name: "" }));
+    if (manifest.name === packageName) return fs.realpath(candidate);
+    const parent: any = path.dirname(current);
+    if (parent === current) return "";
+    current = parent;
+  }
+}
+
+async function copyRuntimeDependencyClosure({
+  packageName,
+  packageDir,
+  treeRoot,
+  copied,
+  optional = false
+}: Record<string, any>) : Promise<any> {
+  if (copied.has(packageName)) return;
+  const source: any = packageDir || await resolveDependencyPackage(packageName, packageDir || treeRoot);
+  if (!source) {
+    if (optional) return;
+    throw new Error(`Adapter runtime dependency ${packageName} is unavailable in the supplied source tree.`);
+  }
+  const manifest: any = JSON.parse(await fs.readFile(path.join(source, "package.json"), "utf8"));
+  if (manifest.name !== packageName) {
+    throw new Error(`Adapter runtime dependency ${packageName} has an invalid package identity.`);
+  }
+  copied.add(packageName);
+  const destination: any = packagePath(treeRoot, packageName);
+  await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+  await fs.cp(source, destination, {
+    recursive: true,
+    filter(candidate?: any) {
+      const relative: any = path.relative(source, candidate);
+      return !relative.split(path.sep).includes("node_modules");
+    }
+  });
+  const required: any = Object.keys(manifest.dependencies || {});
+  const optionalDependencies: any = Object.keys(manifest.optionalDependencies || {})
+    .filter((dependency?: any) : any => !required.includes(dependency));
+  for (const dependency of required) {
+    const dependencyDir: any = await resolveDependencyPackage(dependency, source);
+    await copyRuntimeDependencyClosure({
+      packageName: dependency,
+      packageDir: dependencyDir,
+      treeRoot,
+      copied
+    });
+  }
+  for (const dependency of optionalDependencies) {
+    const dependencyDir: any = await resolveDependencyPackage(dependency, source);
+    await copyRuntimeDependencyClosure({
+      packageName: dependency,
+      packageDir: dependencyDir,
+      treeRoot,
+      copied,
+      optional: true
+    });
+  }
+}
+
 async function copyAdapterTree({ adapterDir, kitDir, treeRoot, adapterPackageName }: Record<string, any>) : Promise<any> {
-  const adapterTarget: any = path.join(treeRoot, "node_modules", ...adapterPackageName.split("/"));
-  const kitTarget: any = path.join(treeRoot, "node_modules", ...ADAPTER_KIT_PACKAGE.split("/"));
-  await fs.mkdir(adapterTarget, { recursive: true, mode: 0o700 });
-  await fs.mkdir(kitTarget, { recursive: true, mode: 0o700 });
-  await fs.cp(adapterDir, adapterTarget, { recursive: true });
-  await fs.cp(kitDir, kitTarget, { recursive: true });
+  const copied: any = new Set<any>();
+  await copyRuntimeDependencyClosure({
+    packageName: ADAPTER_KIT_PACKAGE,
+    packageDir: kitDir,
+    treeRoot,
+    copied
+  });
+  await copyRuntimeDependencyClosure({
+    packageName: adapterPackageName,
+    packageDir: adapterDir,
+    treeRoot,
+    copied
+  });
 }
 
 async function extractTarball(tarball?: any, destination?: any) : Promise<any> {

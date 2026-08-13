@@ -35,6 +35,7 @@ import { createUploadSessionStore } from "../../../packages/server-runtime/src/s
 import { createUploadSessionHandlers } from "../../../packages/protocols/http/controllers/jobs-controller-upload-handlers.ts";
 import { apiKeyUploadAuthSession } from "../../../packages/protocols/http/controllers/jobs-controller-access.ts";
 import { dispatchRegisteredHttpOperation } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
+import { createOperationRouteIndex } from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
 import { createSqliteProtocolEventStore } from "../../../packages/server-runtime/src/events/sqlite-protocol-event-store.ts";
 import { createProtocolEventBus } from "../../../packages/protocols/pubsub/event-bus.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
@@ -444,6 +445,7 @@ itPosix("accepts a scoped API key raw PUT through the registered HTTP dispatcher
   }));
   await dispatchRegisteredHttpOperation({
     operations: SERVER_API_OPERATIONS,
+    routeIndex: createOperationRouteIndex(SERVER_API_OPERATIONS, { strict: true }),
     controllers,
     method: "POST",
     url: new URL("/api/upload-sessions", "http://server.invalid"),
@@ -459,6 +461,7 @@ itPosix("accepts a scoped API key raw PUT through the registered HTTP dispatcher
   const request: any = { headers: {}, onNarrowTransition: vi.fn() };
   const dispatched: any = await dispatchRegisteredHttpOperation({
     operations: SERVER_API_OPERATIONS,
+    routeIndex: createOperationRouteIndex(SERVER_API_OPERATIONS, { strict: true }),
     controllers,
     method: "PUT",
     url: new URL(`/api/upload-sessions/${created.sessionId}/files/0?offset=0`, "http://server.invalid"),

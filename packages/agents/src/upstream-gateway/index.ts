@@ -92,21 +92,60 @@ export function createUpstreamGatewayRegistry({
   mcpSessionManager = null,
   artifactTransitPort = null,
   secretKeyProvider = null,
+  publishSkillHubUpdate = null,
   claimProtectedSinkAttempt = claimFinalProtectedSinkAttempt
 }: Record<string, any> = {}) : any {
   const persistenceEnabled: any = Boolean(userDataPath);
   const filePath: any = persistenceEnabled ? runtimePath(userDataPath) : "";
   let services: any = new Map<any, any>();
   let projectedOperationTargets: any = new Map<any, any>();
+  let mcpServicesByPublicPrefix: any = new Map<any, any>();
+  let configuredOperationsByPublicName: any = new Map<any, any>();
   let manifestSnapshotRevision: Readonly<Record<string, any>> = Object.freeze({ sourceRevision: 0, sourceDigest: "" });
   const trafficBuckets: any = new Map<any, any>();
   const endpointCursors: any = new Map<any, any>();
   const endpointCircuits: any = new Map<any, any>();
   const mcpToolCache: any = new Map<any, any>();
+  const skillHubEventSubscriptions: any = new Map<any, any>();
+  let targetedCallMapHits: any = 0;
+  let targetedServiceIndexHits: any = 0;
+  let serviceDiscoveryCount: any = 0;
+
+  function compilePublicToolTargetIndexes(serviceMap: Map<any, any>) : any {
+    const mcpByPrefix: any = new Map<any, any>();
+    const configuredByName: any = new Map<any, any>();
+    for (const service of serviceMap.values()) {
+      if (service.disabled === true) continue;
+      if (service.serviceProtocol === "mcp") {
+        const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
+        if (mcpByPrefix.has(prefix)) {
+          throw new TypeError("Upstream gateway manifest snapshot contains duplicate MCP tool prefixes.");
+        }
+        mcpByPrefix.set(prefix, service);
+        continue;
+      }
+      for (const operation of asArray(service.operations)) {
+        if (!operation?.operationKey) continue;
+        const publicName: any = `upstream.${safePublicToolSegment(service.serviceId)}.${safePublicToolSegment(operation.operationKey)}`;
+        if (configuredByName.has(publicName)) {
+          throw new TypeError("Upstream gateway manifest snapshot contains duplicate public tool names.");
+        }
+        configuredByName.set(publicName, Object.freeze({ service, operation }));
+      }
+    }
+    return Object.freeze({ mcpByPrefix, configuredByName });
+  }
 
   function clearServiceRuntimeState(serviceIds: any = []) : any {
     const prefixes: any = asArray(serviceIds).map((serviceId?: any) : any => `${serviceId}::`);
     if (prefixes.length === 0) return;
+    for (const serviceId of asArray(serviceIds).map(text).filter(Boolean)) {
+      const subscription: any = skillHubEventSubscriptions.get(serviceId);
+      if (subscription) {
+        subscription.controller.abort();
+        skillHubEventSubscriptions.delete(serviceId);
+      }
+    }
     for (const stateMap of [trafficBuckets, endpointCursors, endpointCircuits, mcpToolCache]) {
       for (const key of stateMap.keys()) {
         if (prefixes.some((prefix?: any) : any => String(key).startsWith(prefix))) stateMap.delete(key);
@@ -122,15 +161,7 @@ export function createUpstreamGatewayRegistry({
     tagStore ||
     securityPermissions?.tagManagementStore ||
     null;
-  const {
-    auditEvents,
-    metrics,
-    appendAudit,
-    appendSecurityAlert,
-    recordMetric,
-    refreshRuntimeStateFromDisk,
-    persist
-  } = constructWithOwnedResourceCleanup(
+  const gatewayRuntime: any = constructWithOwnedResourceCleanup(
     securityAlertStore,
     () : any => createGatewayRuntime({
       persistenceEnabled,
@@ -138,6 +169,16 @@ export function createUpstreamGatewayRegistry({
       securityAlertStore
     })
   );
+  const {
+    auditEvents,
+    metrics,
+    appendAudit,
+    appendSecurityAlert,
+    recordMetric,
+    persist,
+    close: closeGatewayRuntime,
+    getRefactorInstrumentation
+  } = gatewayRuntime;
   const {
     endpointsFor,
     publicEndpoint,
@@ -521,6 +562,83 @@ export function createUpstreamGatewayRegistry({
     });
   }
 
+  function eventDelay(milliseconds?: any, signal?: any) : any {
+    return new Promise((resolve?: any) : any => {
+      if (signal?.aborted) return resolve(null);
+      const timer: any = setTimeout(resolve, milliseconds);
+      timer.unref?.();
+      signal?.addEventListener?.("abort", () : any => {
+        clearTimeout(timer);
+        resolve(null);
+      }, { once: true });
+    });
+  }
+
+  async function ensureSkillHubEventSubscription(service?: any, operation: Record<string, any> = {}) : Promise<any> {
+    if (typeof publishSkillHubUpdate !== "function" || skillHubEventSubscriptions.has(service.serviceId)) return;
+    const controller: any = new AbortController();
+    const state: Record<string, any> = { controller, cursor: 0, ready: null, promise: null };
+    skillHubEventSubscriptions.set(service.serviceId, state);
+    let resolveReady: any;
+    state.ready = new Promise((resolve?: any) : any => { resolveReady = resolve; });
+    state.promise = (async () : Promise<any> => {
+      let retryMs: any = 250;
+      let firstAttempt = true;
+      while (!controller.signal.aborted) {
+        let pinnedFetch: any = null;
+        try {
+          const endpoint: any = endpointsFor(service)[0];
+          const targetUrl: any = safeTargetUrl(service, { path: `/v1/events?cursor=${state.cursor}` }, {}, endpoint);
+          const credentials: any = await credentialMaterialFor(service, operation, { targetUrl });
+          pinnedFetch = await fetchConfiguredUpstream(service, targetUrl, {
+            method: "GET",
+            redirect: "manual",
+            signal: controller.signal,
+            headers: { ...configuredHeaders(service), ...credentials.headers }
+          }, `upstream-gateway.${service.serviceId}.events`);
+          const response: any = pinnedFetch.response;
+          if (!response.ok || !response.body) throw new Error("Skill Hub event subscription failed.");
+          if (firstAttempt) { firstAttempt = false; resolveReady(true); }
+          retryMs = 250;
+          let buffer: any = "";
+          const decoder: any = new TextDecoder();
+          for await (const chunk of response.body) {
+            buffer += decoder.decode(chunk, { stream: true });
+            if (Buffer.byteLength(buffer, "utf8") > 64 * 1024) throw new Error("Skill Hub event frame limit exceeded.");
+            let separator: any;
+            while ((separator = /\r?\n\r?\n/u.exec(buffer))) {
+              const boundary: any = separator.index;
+              const frame: any = buffer.slice(0, boundary);
+              buffer = buffer.slice(boundary + separator[0].length);
+              const data: any = frame.split(/\r?\n/u)
+                .filter((line?: any) : any => line.startsWith("data:"))
+                .map((line?: any) : any => line.slice(5).trimStart())
+                .join("\n");
+              if (!data) continue;
+              const event: any = JSON.parse(data);
+              if (event?.eventType !== "skill-hub.catalog.changed" || !Number.isSafeInteger(event?.eventId) ||
+                  event.eventId <= state.cursor || !/^skill_hub\.[a-z][a-z0-9.]*$/u.test(String(event?.operationId || ""))) continue;
+              state.cursor = event.eventId;
+              publishSkillHubUpdate(Object.freeze({
+                schemaVersion: "v0.0.1:meshrix:skill-hub-update-1",
+                revision: event.serviceRevision,
+                operationId: event.operationId
+              }));
+            }
+          }
+        } catch {
+          if (firstAttempt) { firstAttempt = false; resolveReady(false); }
+          if (controller.signal.aborted) break;
+        } finally {
+          await pinnedFetch?.close?.().catch?.(() : any => {});
+        }
+        await eventDelay(retryMs, controller.signal);
+        retryMs = Math.min(retryMs * 2, 10_000);
+      }
+    })();
+    await state.ready;
+  }
+
   function requireArtifactTransitPort() : any {
     if (
       !artifactTransitPort ||
@@ -899,6 +1017,7 @@ export function createUpstreamGatewayRegistry({
     }
     let listed: any;
     try {
+      serviceDiscoveryCount += 1;
       listed = await upstreamMcpSessions.listTools(
         await mcpServiceConfigWithCredentials(service, {
           operationKey: "tools/list",
@@ -925,7 +1044,10 @@ export function createUpstreamGatewayRegistry({
       .map((tool?: any) : any => publicUpstreamMcpTool({ service, tool }));
     mcpToolCache.set(cacheKey, {
       loadedAt: Date.now(),
-      tools
+      tools,
+      byPublicName: new Map<any, any>(
+        tools.map((tool?: any) : any => [tool?.name, tool])
+      )
     });
     return clone(tools);
   }
@@ -933,34 +1055,19 @@ export function createUpstreamGatewayRegistry({
   function serviceForPublicMcpToolName(publicName: any = "") : any {
     const parsed: any = parsePublicUpstreamMcpToolName(publicName);
     if (!parsed) return null;
-    for (const service of services.values()) {
-      if (service.serviceProtocol !== "mcp") continue;
-      const prefix: any = service.mcp?.toolNamePrefix || safePublicToolSegment(service.serviceId);
-      if (prefix === parsed.prefix) {
-        return {
-          service,
-          upstreamToolName: parsed.upstreamToolName
-        };
-      }
-    }
-    return null;
+    const service: any = mcpServicesByPublicPrefix.get(parsed.prefix);
+    if (!service) return null;
+    targetedServiceIndexHits += 1;
+    return {
+      service,
+      upstreamToolName: parsed.upstreamToolName
+    };
   }
 
   function configuredOperationForPublicToolName(publicName: any = "") : any {
-    const parsed: any = parsePublicUpstreamMcpToolName(publicName);
-    if (!parsed) return null;
-    for (const service of services.values()) {
-      if (service.serviceProtocol === "mcp") continue;
-      const prefix: any = safePublicToolSegment(service.serviceId);
-      if (prefix !== parsed.prefix) continue;
-      const operation: any = asArray(service.operations).find((item?: any) : any =>
-        safePublicToolSegment(item.operationKey) === parsed.upstreamToolName
-      );
-      if (operation) {
-        return { service, operation };
-      }
-    }
-    return null;
+    const target: any = configuredOperationsByPublicName.get(String(publicName || "")) || null;
+    if (target) targetedServiceIndexHits += 1;
+    return target;
   }
 
   function configuredOperationToolsForService(service?: any) : any {
@@ -1139,8 +1246,21 @@ export function createUpstreamGatewayRegistry({
         }, subject, options);
       }
       authorizeMcpDiscoverySubject(subject);
-      const tools: any = await listMcpToolsForService(target.service, options);
-      const tool: any = tools.find((item?: any) : any => item.name === publicName);
+      const cacheKey: any = `${target.service.serviceId}::${target.service.updatedAt || ""}`;
+      const ttlMs: any = Number(target.service.mcp?.toolsCacheTtlMs || 0);
+      const cached: any = mcpToolCache.get(cacheKey);
+      let tool: any = null;
+      if (ttlMs > 0 && cached && Date.now() - cached.loadedAt <= ttlMs) {
+        targetedCallMapHits += 1;
+        tool = cached.byPublicName?.get(publicName) || null;
+      } else {
+        await listMcpToolsForService(target.service, {
+          refresh: true,
+          signal: options.signal || null,
+          onNotification: options.onNotification || null
+        });
+        tool = mcpToolCache.get(cacheKey)?.byPublicName?.get(publicName) || null;
+      }
       if (!tool) {
         throw Object.assign(new Error(`Upstream MCP tool not found: ${publicName}`), { status: 404 });
       }
@@ -1253,6 +1373,9 @@ export function createUpstreamGatewayRegistry({
         service,
         operationFor(service, operationRef)
       );
+      if (pluginId === "skill-hub") {
+        await ensureSkillHubEventSubscription(service, configuredOperation);
+      }
       const requestInput: any = object(request.input);
       const timeoutMs: any = Number(request.timeoutMs || 0);
       const forwardOptions: Record<string, any> = {
@@ -1893,7 +2016,6 @@ export function createUpstreamGatewayRegistry({
       });
     },
     listAudit(input: Record<string, any> = {}) : any {
-      refreshRuntimeStateFromDisk();
       const serviceId: any = text(input.serviceId || "");
       const limit: any = Math.max(1, Math.min(Number(input.limit || 100), 500));
       const items: any = auditEvents
@@ -1907,7 +2029,6 @@ export function createUpstreamGatewayRegistry({
       };
     },
     getMetrics() : any {
-      refreshRuntimeStateFromDisk();
       return {
         protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
         ...clone(metrics),
@@ -1918,6 +2039,9 @@ export function createUpstreamGatewayRegistry({
           mcpToolCacheCount: mcpToolCache.size
         }
       };
+    },
+    async flushRuntimeState() : Promise<any> {
+      return persist();
     },
     isClosed() : any {
       return closed;
@@ -1939,6 +2063,9 @@ export function createUpstreamGatewayRegistry({
       }
       services = new Map<any, any>(state.serviceEntries);
       projectedOperationTargets = new Map<any, any>(state.projectedOperationTargets);
+      const restoredTargetIndexes: any = compilePublicToolTargetIndexes(services);
+      mcpServicesByPublicPrefix = restoredTargetIndexes.mcpByPrefix;
+      configuredOperationsByPublicName = restoredTargetIndexes.configuredByName;
       manifestSnapshotRevision = Object.freeze({
         sourceRevision: Number.isSafeInteger(state.setRevision) ? state.setRevision : 0,
         sourceDigest: String(state.setDigest || "")
@@ -1970,6 +2097,7 @@ export function createUpstreamGatewayRegistry({
           nextProjectedTargets.set(operationId, Object.freeze({ serviceId, operationKey: operation.operationKey }));
         }
       }
+      const nextTargetIndexes: any = compilePublicToolTargetIndexes(next);
       const added: any[] = [];
       const updated: any[] = [];
       const removed: any[] = [];
@@ -1983,6 +2111,8 @@ export function createUpstreamGatewayRegistry({
       }
       services = next;
       projectedOperationTargets = nextProjectedTargets;
+      mcpServicesByPublicPrefix = nextTargetIndexes.mcpByPrefix;
+      configuredOperationsByPublicName = nextTargetIndexes.configuredByName;
       manifestSnapshotRevision = Object.freeze({
         sourceRevision: snapshot.setRevision,
         sourceDigest: snapshot.setDigest
@@ -2050,6 +2180,15 @@ export function createUpstreamGatewayRegistry({
       if (closePromise) return closePromise;
       closePromise = (async () : Promise<any> => {
         let closeFailed: any = false;
+        for (const state of skillHubEventSubscriptions.values()) state.controller.abort();
+        const subscriptions: any = [...skillHubEventSubscriptions.values()].map((state?: any) : any => state.promise);
+        skillHubEventSubscriptions.clear();
+        await Promise.allSettled(subscriptions);
+        try {
+          await closeGatewayRuntime?.();
+        } catch {
+          closeFailed = true;
+        }
         try {
           await upstreamMcpSessions.close();
         } catch {
@@ -2071,6 +2210,14 @@ export function createUpstreamGatewayRegistry({
         closePromise = null;
         throw error;
       }
+    },
+    getRefactorInstrumentation() : any {
+      return {
+        ...getRefactorInstrumentation(),
+        targetedCallMapHits,
+        targetedServiceIndexHits,
+        serviceDiscoveryCount
+      };
     }
   };
 }

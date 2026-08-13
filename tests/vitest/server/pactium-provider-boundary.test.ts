@@ -6,14 +6,12 @@ import { promisify } from "node:util";
 import {
   PACTIUM_PROTOCOL,
   PACTIUM_SCHEMA_VERSION,
+  PACTIUM_MANIFEST_FILE,
   createStoragePort
 } from "pactium";
 import { describe, expect, it } from "vitest";
 import { createDataStructureSubstrate } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
-import {
-  createMeshrixPactiumRuntime,
-  PACTIUM_MANIFEST_FILE
-} from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
+import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
 import {
   checkpointTreeId,
   loadCheckpointTree,

@@ -137,7 +137,11 @@ export function createAgentWorkspaceLocalDirectoryApi({
     return {
       rootCid: block.cid,
       contentRefs: [block.cid],
-      metadata: { contentSha256: block.payloadHash, sizeBytes: block.byteLength }
+      metadata: {
+        contentSha256: block.payloadHash,
+        sizeBytes: block.byteLength,
+        contentCid: block.cid
+      }
     };
   }
 

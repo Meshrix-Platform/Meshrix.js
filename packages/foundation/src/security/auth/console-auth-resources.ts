@@ -12,12 +12,12 @@ import {
 import { ensurePrivateDir } from "../../storage/private-file-atomic.ts";
 import { ensureSchema } from "./console-auth-support.ts";
 
-function closeOwnedResources(resources?: any, suppressErrors: any = false) : any {
+async function closeOwnedResources(resources?: any, suppressErrors: any = false) : Promise<any> {
   let firstCloseError: any;
   let hasCloseError: any = false;
   for (let index: any = resources.length - 1; index >= 0; index -= 1) {
     try {
-      resources[index]?.close?.();
+      await resources[index]?.close?.();
     } catch (error: any) {
       if (!hasCloseError) {
         firstCloseError = error;
@@ -27,6 +27,17 @@ function closeOwnedResources(resources?: any, suppressErrors: any = false) : any
   }
   if (!suppressErrors && hasCloseError) {
     throw firstCloseError;
+  }
+}
+
+function closeConstructionResources(resources: any[] = []) : void {
+  for (let index: any = resources.length - 1; index >= 0; index -= 1) {
+    try {
+      resources[index]?.close?.();
+    } catch {
+      // Preserve the synchronous construction failure while closing every
+      // resource that was acquired before the authorization worker starts.
+    }
   }
 }
 
@@ -51,7 +62,7 @@ export function createConsoleAuthResources({
   const rootPath: any = path.join(userDataPath, "auth");
   ensurePrivateDir(rootPath);
   const databasePath: any = ensurePrivateSqliteLocation(path.join(rootPath, "console-auth.sqlite"));
-  const ownedResources: any[] = [];
+  const constructionResources: any[] = [];
   let db: any = null;
   let authorizationStore: any = null;
   let authorizationGovernanceStore: any = null;
@@ -59,21 +70,26 @@ export function createConsoleAuthResources({
   try {
     withPrivateFileCreationMask(() : any => {
       db = openSqliteDatabase(databasePath);
-      ownedResources.push(db);
+      constructionResources.push(db);
       ensureSchema(db);
       ensurePrivateSqliteLocation(databasePath);
     });
 
-    authorizationStore = createAuthorizationStore({ userDataPath });
-    ownedResources.push(authorizationStore);
     authorizationGovernanceStore = createAuthorizationGovernanceStore({
       userDataPath,
       builtinRoles: consoleRoles,
       tagManagementStore
     });
-    ownedResources.push(authorizationGovernanceStore);
+    constructionResources.push(authorizationGovernanceStore);
+    // Build the engine before starting the worker. Its sink delegates only
+    // after this factory has returned, by which point authorizationStore is
+    // guaranteed to be assigned.
     const authorizationEngine: any = createAuthorizationEngine({
-      store: authorizationStore,
+      store: {
+        appendDecision(decision?: any) : Promise<any> {
+          return authorizationStore.appendDecision(decision);
+        }
+      },
       governanceStore: authorizationGovernanceStore
     });
     const csrfSecret: any = loadCsrfSecret(rootPath);
@@ -106,7 +122,12 @@ export function createConsoleAuthResources({
        SET last_seen_at = ?
        WHERE session_id = ? AND token_hash = ? AND last_seen_at = ?`
     );
-    let isClosed: any = false;
+    // The asynchronous authorization worker is deliberately the final
+    // construction step. No synchronous initialization can fail after it is
+    // created, so constructor unwind never needs fire-and-forget worker close.
+    authorizationStore = createAuthorizationStore({ userDataPath });
+    const ownedResources: any[] = [db, authorizationGovernanceStore, authorizationStore];
+    let closePromise: Promise<any> | null = null;
 
     return {
       rootPath,
@@ -123,16 +144,15 @@ export function createConsoleAuthResources({
       deleteSessionByIdStmt,
       deleteSessionByStateStmt,
       touchSessionActivityStmt,
-      close() : any {
-        if (isClosed) {
-          return;
+      close() : Promise<any> {
+        if (!closePromise) {
+          closePromise = closeOwnedResources(ownedResources);
         }
-        isClosed = true;
-        closeOwnedResources(ownedResources);
+        return closePromise;
       }
     };
   } catch (error: any) {
-    closeOwnedResources(ownedResources, true);
+    closeConstructionResources(constructionResources);
     throw error;
   }
 }

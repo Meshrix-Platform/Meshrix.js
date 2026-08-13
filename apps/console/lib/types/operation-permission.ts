@@ -99,7 +99,12 @@ export type OperationPermissionTool = {
   risk: OperationPermissionRisk;
   readOnly: boolean;
   destructive: boolean;
-  concurrencySafe: boolean;
+  concurrency: {
+    workloadClass: string;
+    key?: string;
+    maxParallel: number;
+    cost: number;
+  };
   requiresApproval: boolean;
   approvalScope: string;
   timeoutMs: number;

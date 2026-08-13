@@ -267,17 +267,21 @@ describe("domains.manifest", () : any => {
     for (const packageId of DOMAIN_PACKAGES) {
       const manifest: any = manifestFor(packageId);
       const packageManifest: any = readJson(`packages/${packageId}/package.json`);
-      expect(packageManifest.exports?.["./*"]).toMatchObject({
-        types: "./dist/*.d.ts",
-        source: "./src/*.ts",
-        default: "./dist/*.js"
-      });
+      expect(Object.keys(packageManifest.exports || {}).some((specifier?: any) : any => specifier.includes("*"))).toBe(false);
 
       for (const apiEntry of manifest.publicApi) {
         const alias: any = activeAliases.find((entry?: any) : any => entry.alias === apiEntry);
         expect(alias, `${packageId}:${apiEntry} must be an active exact public alias`).toBeDefined();
         expect(alias.domainPackage).toBe(packageId);
         expect(alias.targetPath).toContain(`packages/${packageId}/src/`);
+        const relativeTarget: any = alias.targetPath
+          .split(`packages/${packageId}/src/`)[1]
+          .replace(/\.ts$/u, "");
+        expect(packageManifest.exports?.[`./${relativeTarget}`]).toMatchObject({
+          types: `./dist/${relativeTarget}.d.ts`,
+          source: `./src/${relativeTarget}.ts`,
+          default: `./dist/${relativeTarget}.js`
+        });
       }
     }
   });

@@ -13,10 +13,25 @@
     "@meshrix/protocols": "0.0.1"
   },
   "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "source": "./src/*.ts",
-      "default": "./dist/*.js"
+    "./operation-permission-core/index": {
+      "types": "./dist/operation-permission-core/index.d.ts",
+      "source": "./src/operation-permission-core/index.ts",
+      "default": "./dist/operation-permission-core/index.js"
+    },
+    "./operation-permission-core/runtime-schema": {
+      "types": "./dist/operation-permission-core/runtime-schema.d.ts",
+      "source": "./src/operation-permission-core/runtime-schema.ts",
+      "default": "./dist/operation-permission-core/runtime-schema.js"
+    },
+    "./operation-permission-core/store": {
+      "types": "./dist/operation-permission-core/store.d.ts",
+      "source": "./src/operation-permission-core/store.ts",
+      "default": "./dist/operation-permission-core/store.js"
+    },
+    "./skills/tool-skill-management-provider": {
+      "types": "./dist/skills/tool-skill-management-provider.d.ts",
+      "source": "./src/skills/tool-skill-management-provider.ts",
+      "default": "./dist/skills/tool-skill-management-provider.js"
     }
   },
   "files": [

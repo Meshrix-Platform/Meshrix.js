@@ -39,7 +39,7 @@ export function hasMcpAuthToken(request: any = null) : any {
   return Boolean(
     /^Bearer\s+.+/i.test(authorization) ||
       String(request?.headers?.["x-meshrix-tool-token"] || "").trim() ||
-      String(request?.headers?.["x-meshrix-api-key"] || "").trim()
+      String(request?.headers?.["x-meshrix.js-api-key"] || "").trim()
   );
 }
 

@@ -74,6 +74,16 @@ describe("execution launcher boundary", () : any => {
         path: "packages/agents/src/agent-workspace/agent-workspace-materialization-file-worker.ts",
         approved: true,
         classification: "workspace_materialization_file_worker"
+      }),
+      expect.objectContaining({
+        path: "packages/foundation/src/storage/sqlite-execution-lane.ts",
+        approved: true,
+        classification: "bounded_internal_worker_lane"
+      }),
+      expect.objectContaining({
+        path: "packages/foundation/src/security/operation-audit-worker.ts",
+        approved: true,
+        classification: "bounded_internal_worker_endpoint"
       })
     ]));
     expect(report.summary.violationCount).toBe(0);

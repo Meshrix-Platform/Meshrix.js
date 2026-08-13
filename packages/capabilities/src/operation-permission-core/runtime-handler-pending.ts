@@ -75,7 +75,7 @@ export async function completeHandlerPendingApproval({
       startedAt,
       finishedAt: nowIso()
     });
-    store.appendMetric({
+    await store.appendMetric({
       traceId,
       toolId: tool.id,
       grantId: authorizationGrantId(authorization),
@@ -113,7 +113,7 @@ export async function completeHandlerPendingApproval({
   };
   const approvalLayers: any = uniqueStrings(requiredApproval.approvalLayers || handlerPending.approvalLayers || []);
   const pendingRisk: any = String(handlerPending.risk || tool.risk || "");
-  const pendingOperation: any = store.createPendingOperation({
+  const pendingOperation: any = await store.createPendingOperation({
     traceId,
     toolExecutionId,
     toolId: tool.id,
@@ -170,7 +170,7 @@ export async function completeHandlerPendingApproval({
     startedAt,
     finishedAt: nowIso()
   });
-  store.appendMetric({
+  await store.appendMetric({
     traceId,
     toolId: tool.id,
     grantId: authorizationGrantId(authorization),

@@ -13,7 +13,7 @@ const SUPPORTED_MODEL_PROVIDERS: any = new Set<any>([
   "local-model"
 ]);
 
-function asPlainObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asPlainObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

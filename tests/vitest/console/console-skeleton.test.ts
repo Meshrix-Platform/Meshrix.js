@@ -20,13 +20,14 @@ vi.mock("vue-router", () : any => ({
 vi.mock("../../../apps/console/composables/useServerConsoleShell", async () : Promise<any> => {
   const vue: any = await import("vue");
   const i18n: any = await import("../../../apps/console/i18n/console");
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
   const consoleState: any = vue.ref(null);
   const isAuthenticated: any = vue.ref(true);
   const canAccess: any = vue.ref(false);
   const route: any = vue.reactive({ path: "/workspaces", fullPath: "/workspaces", meta: {}, query: {} });
   Object.assign(shellHarness, { consoleState, isAuthenticated, canAccess, route });
   return {
-    useServerConsoleShell: () : any => ({
+    useServerConsoleShell: () : any => namespaceServerConsoleShell({
       consoleBootstrapping: vue.ref(false),
       activeConsoleFeatureIds: vue.ref([]),
       canAccessRouteMeta: () : any => canAccess.value,
@@ -54,7 +55,7 @@ vi.mock("../../../apps/console/composables/consoleSideNavContext", async () : Pr
   };
 });
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
+vi.mock("#meshrix/console/server-console-shell-context", () : any => ({
   provideServerConsoleShell: () : any => {},
 }));
 

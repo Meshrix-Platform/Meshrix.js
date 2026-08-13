@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from "vue";
 import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
 import { createConsoleOverlayController } from "../../composables/console-overlay-controller";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import { consoleMessages, currentConsoleLocale } from "../../i18n/console";
 
 const {
@@ -15,7 +15,7 @@ const {
   pathPickerModeLabel,
   refreshServerPathBrowser,
   selectServerPath,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().overlays;
 
 const msg: ComputedRef<any> = computed(() : any => consoleMessages[currentConsoleLocale.value]);
 

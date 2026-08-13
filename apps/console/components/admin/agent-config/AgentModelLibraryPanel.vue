@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import OptionBar from "@meshrix/ui-console/option-bar";
 import AgentModelEntryCard from "./AgentModelEntryCard.vue";
 
 const {
   addModelProvider,
   addableModelProviderOptionBarOptions,
-  isBusy,
-  highlightedConfigTarget,
   saveModelLibrarySettings,
   selectedModelProvider,
   visibleModelEntries,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().models;
+const {
+  highlightedConfigTarget,
+} = useServerConsoleShellContext().settings;
+const {
+  isBusy,
+} = useServerConsoleShellContext().runtime;
 </script>
 
 <template>

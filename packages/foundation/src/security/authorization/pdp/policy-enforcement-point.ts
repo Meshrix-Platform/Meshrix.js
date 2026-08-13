@@ -54,7 +54,7 @@ export function createPolicyEnforcementPoint(options: Record<string, any> = {}) 
       traceId = "",
     } = params;
 
-    const decision: any = authorizationEngine.evaluate({
+    const decision: any = await authorizationEngine.evaluate({
       operation,
       tool,
       subject,

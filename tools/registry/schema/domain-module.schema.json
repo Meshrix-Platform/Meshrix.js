@@ -46,7 +46,7 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^#meshrix/[a-z][a-z0-9-]*/\\*$"
+        "pattern": "^#meshrix/[a-z][a-z0-9-]*/([a-z0-9_.\\-/]+|\\*)$"
       }
     },
     "dependsOn": {
@@ -64,7 +64,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["feature", "path", "fileCount", "testSuites"],
+        "required": [
+          "feature",
+          "path",
+          "fileCount",
+          "testSuites"
+        ],
         "properties": {
           "feature": {
             "type": "string",

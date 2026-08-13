@@ -10,9 +10,12 @@ import { createConsoleBusyController } from "../../../apps/console/composables/c
 const shellContext: any = vi.hoisted(() : any => ({} as any));
 const modelEntryContext: any = vi.hoisted(() : any => ({} as any));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellContext,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellContext),
+  };
+});
 
 vi.mock("../../../apps/console/composables/agentModelEntryCardContext", () : any => ({
   useAgentModelEntryCardContext: () : any => modelEntryContext,

@@ -141,6 +141,23 @@ function mapAuditRow(row?: any) : any {
   };
 }
 
+function mapPolicyDecisionRow(row?: any) : any {
+  return {
+    decisionId: row.decision_id,
+    toolExecutionId: row.tool_execution_id,
+    traceId: row.trace_id,
+    toolId: row.tool_id,
+    grantId: row.grant_id,
+    effect: row.effect,
+    reasonCode: row.reason_code,
+    missingScopes: parseJson(row.missing_scopes_json, []),
+    missingToolsets: parseJson(row.missing_toolsets_json, []),
+    evaluatedLayers: parseJson(row.evaluated_layers_json, []),
+    ledgerEventId: row.ledger_event_id || "",
+    createdAt: row.created_at
+  };
+}
+
 export function createAuditStoreMethods(ctx?: any) : any {
   const { db } = ctx;
   const proofSubstrate: any = ctx.proofSubstrate || null;
@@ -252,7 +269,7 @@ export function createAuditStoreMethods(ctx?: any) : any {
       };
     }
     if (typeof proofSubstrate?.getWorkspaceProjection === "function") {
-      const projection: any = proofSubstrate.getWorkspaceProjection(`operation-permission:${text(workspaceId, "default")}`);
+      const projection: any = await proofSubstrate.getWorkspaceProjection(`operation-permission:${text(workspaceId, "default")}`);
       return {
         ok: Boolean(projection),
         projection,
@@ -294,6 +311,15 @@ export function createAuditStoreMethods(ctx?: any) : any {
       status: "policy_recorded"
     });
     return appendPolicyDecision({ ...entry, ledgerEventId });
+  }
+
+  function listPolicyDecisions({ limit = 100, toolId = "" }: Record<string, any> = {}) : any {
+    const normalizedLimit: any = Math.max(1, Math.min(Number(limit || 100), 500));
+    const rows: any[] = toolId
+      ? db.prepare("SELECT * FROM tool_policy_decisions WHERE tool_id = ? ORDER BY rowid LIMIT ?")
+        .all(String(toolId), normalizedLimit)
+      : db.prepare("SELECT * FROM tool_policy_decisions ORDER BY rowid LIMIT ?").all(normalizedLimit);
+    return rows.map(mapPolicyDecisionRow);
   }
 
   function appendExecution(entry: Record<string, any> = {}) : any {
@@ -487,6 +513,7 @@ export function createAuditStoreMethods(ctx?: any) : any {
     provePermissionAuditInclusion,
     appendPolicyDecision,
     appendPolicyDecisionAnchored,
+    listPolicyDecisions,
     appendExecution,
     appendExecutionAnchored,
     appendMetric,

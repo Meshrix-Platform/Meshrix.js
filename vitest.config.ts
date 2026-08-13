@@ -8,6 +8,9 @@ const serialTestPatterns = [
   "tests/vitest/server/job-manager*.test.ts",
   "tests/vitest/server/upload-custody-workspace-materialization.test.ts",
 ];
+const workerThreadTestPatterns = [
+  "tests/vitest/server/operation-audit-retention.test.ts",
+];
 
 const testFilePatterns = [
   "tests/vitest/**/*.{test,spec}.{ts,tsx}",
@@ -142,7 +145,7 @@ export default defineConfig({
         test: {
           name: "parallel",
           include: testFilePatterns,
-          exclude: [...excludedTestPatterns, ...serialTestPatterns],
+          exclude: [...excludedTestPatterns, ...serialTestPatterns, ...workerThreadTestPatterns],
         },
       },
       {
@@ -151,6 +154,16 @@ export default defineConfig({
           name: "serial",
           include: serialTestPatterns,
           exclude: excludedTestPatterns,
+          fileParallelism: false,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "worker-threads",
+          include: workerThreadTestPatterns,
+          exclude: excludedTestPatterns,
+          pool: "threads",
           fileParallelism: false,
         },
       },

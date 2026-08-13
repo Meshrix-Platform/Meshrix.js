@@ -26,7 +26,14 @@ export function createPluginProcessRpcPeer({ send, subscribe, onClose = () : any
     seen.add(value);
     try {
       if (Array.isArray(value)) return value.map((entry?: any) : any => encode(entry, seen));
-      return Object.fromEntries((Object.entries(value) as [string, any][]).map(([key, entry]: any[]) : any => [key, encode(entry, seen)]));
+      const keys: any = new Set<any>(Object.keys(value));
+      for (const key of Object.getOwnPropertyNames(value)) {
+        const descriptor: any = Object.getOwnPropertyDescriptor(value, key);
+        if (descriptor && Object.hasOwn(descriptor, "value") && typeof descriptor.value === "function") {
+          keys.add(key);
+        }
+      }
+      return Object.fromEntries([...keys].map((key?: any) : any => [key, encode(value[key], seen)]));
     } finally {
       seen.delete(value);
     }

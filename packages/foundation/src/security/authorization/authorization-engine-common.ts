@@ -52,7 +52,7 @@ export function stringsFrom(...values: any[]) : any {
 }
 
 export function deniedOutsideAllowed(values: any = [], allowedValues: any = []) : any {
-  const allowed: any = stringSet(allowedValues);
+  const allowed: any = allowedValues instanceof Set ? allowedValues : stringSet(allowedValues);
   return stringsFrom(...values).find((value?: any) : any => allowed.size > 0 && !allowed.has(value)) || "";
 }
 

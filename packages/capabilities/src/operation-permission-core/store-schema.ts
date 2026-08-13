@@ -21,6 +21,7 @@ export function ensureSchema(db?: any) : any {
       id TEXT PRIMARY KEY,
       label TEXT NOT NULL,
       type TEXT NOT NULL,
+      parent_grant_id TEXT NOT NULL DEFAULT '',
       enabled INTEGER NOT NULL DEFAULT 1,
       toolsets_json TEXT NOT NULL DEFAULT '[]',
       tool_allow_json TEXT NOT NULL DEFAULT '[]',
@@ -651,6 +652,46 @@ export function ensureSchema(db?: any) : any {
       version: 13,
       up: (db?: any) : any => {
         db.exec("DROP TABLE IF EXISTS mcp_authorization_requests;");
+      }
+    },
+    // version 14: make the delegated-grant parent edge explicit and indexed.
+    {
+      version: 14,
+      up: (db?: any) : any => {
+        addColumnIfMissing(db, "tool_grants", "parent_grant_id", "parent_grant_id TEXT NOT NULL DEFAULT ''");
+        db.exec(`
+          UPDATE tool_grants
+          SET parent_grant_id = CASE
+            WHEN type = 'delegated-mcp-child'
+              THEN trim(COALESCE(json_extract(metadata_json, '$.delegatedMcp.sourceGrantId'), ''))
+            ELSE ''
+          END;
+        `);
+        const invalid: any = db.prepare(`
+          SELECT child.id
+          FROM tool_grants AS child
+          LEFT JOIN tool_grants AS parent ON parent.id = child.parent_grant_id
+          WHERE (child.type = 'delegated-mcp-child' AND (child.parent_grant_id = '' OR parent.id IS NULL))
+             OR (child.type <> 'delegated-mcp-child' AND child.parent_grant_id <> '')
+          LIMIT 1
+        `).get();
+        if (invalid) throw new Error("operation_permission_delegated_parent_backfill_invalid");
+        const cycle: any = db.prepare(`
+          WITH RECURSIVE chain(origin_id, current_id) AS (
+            SELECT id, parent_grant_id FROM tool_grants WHERE parent_grant_id <> ''
+            UNION
+            SELECT chain.origin_id, parent.parent_grant_id
+            FROM chain
+            JOIN tool_grants AS parent ON parent.id = chain.current_id
+            WHERE parent.parent_grant_id <> ''
+          )
+          SELECT origin_id FROM chain WHERE origin_id = current_id LIMIT 1
+        `).get();
+        if (cycle) throw new Error("operation_permission_delegated_parent_cycle");
+        db.exec(`
+          CREATE INDEX idx_tool_grants_parent_type
+            ON tool_grants(parent_grant_id, type, id);
+        `);
       }
     }
   ]);

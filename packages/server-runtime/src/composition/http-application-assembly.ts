@@ -163,15 +163,15 @@ export function createHttpApplicationAssemblyCloser({
   };
 }
 
-export function registerPluginOwnerGrantLifecycle({
+export async function registerPluginOwnerGrantLifecycle({
   runtime,
   pluginContributions,
   operationPermissionPlatform
-}: Record<string, any> = {}) : any {
+}: Record<string, any> = {}) : Promise<any> {
   for (const plugin of runtime.plugins.loadedPlugins) {
     const generationDigest: any = runtime.getPluginArtifactGenerationDigest(plugin.id);
     if (!generationDigest) throw new Error("Plugin grant owner artifact generation is unavailable.");
-    operationPermissionPlatform.registerPluginGrantOwner({ pluginId: plugin.id, generationDigest });
+    await operationPermissionPlatform.registerPluginGrantOwner({ pluginId: plugin.id, generationDigest });
   }
   return runtime.onPluginLifecycleTransition({
     prepare({ pluginId, operation, idempotencyKey, artifactGenerationDigest }: Record<string, any>) : any {
@@ -183,11 +183,11 @@ export function registerPluginOwnerGrantLifecycle({
         .update(JSON.stringify([pluginId, artifactGenerationDigest, operation, idempotencyKey]))
         .digest("hex")}`;
       return Object.freeze({
-        commit() : any {
-          operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
+        async commit() : Promise<any> {
+          await operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
         },
-        rollback() : any {
-          operationPermissionPlatform.refreshOperations(previousOperations);
+        async rollback() : Promise<any> {
+          await operationPermissionPlatform.refreshOperations(previousOperations);
         },
         async commitIrreversible() : Promise<any> {
           let cursor: any = "";
@@ -228,11 +228,11 @@ export function registerPluginContributionLifecycle({
     try {
       change.commit();
       pluginContributions.refreshStateMachines(platformRegistry, pluginId);
-      operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
+      await operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
     } catch (error: any) {
       pluginContributions.deactivatePlugin(pluginId);
       platformRegistry.unregisterOwner(pluginId);
-      operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
+      await operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
       throw error;
     }
   });
@@ -530,7 +530,7 @@ export async function createHttpApplicationAssembly({
   });
   const controllers: Record<string, any> = { jobs: jobsController, system: systemController };
   controllersRef = controllers;
-  const operationPermissionPlatform: any = createServerOperationPermissionPlatform({
+  const operationPermissionPlatform: any = await createServerOperationPermissionPlatform({
     userDataPath,
     operations: getActiveApiOperations(),
     featureRuntime: publicFeatures(),
@@ -575,7 +575,7 @@ export async function createHttpApplicationAssembly({
     },
     blocksDependencyShutdown: true
   });
-  pluginLifecycleUnsubscribers.push(registerPluginOwnerGrantLifecycle({
+  pluginLifecycleUnsubscribers.push(await registerPluginOwnerGrantLifecycle({
     runtime,
     pluginContributions,
     operationPermissionPlatform

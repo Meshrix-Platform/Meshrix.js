@@ -61,7 +61,7 @@ export function createToolPolicyEngine({
       "runtime_safety_policy"
     ].filter(Boolean);
     const authorizationDecision: any = (typeof securityPermissions?.evaluatePolicy === "function"
-      ? securityPermissions.evaluatePolicy({
+      ? await securityPermissions.evaluatePolicy({
           tool,
           grant,
           restriction,
@@ -117,7 +117,7 @@ export function createToolPolicyEngine({
       if (typeof store.appendPolicyDecisionAnchored === "function") {
         await store.appendPolicyDecisionAnchored(decision);
       } else {
-        store.appendPolicyDecision(decision);
+        await store.appendPolicyDecision(decision);
       }
     }
     return decision;
@@ -129,7 +129,7 @@ export function createToolPolicyEngine({
 
   async function preview(input: Record<string, any> = {}) : Promise<any> {
     const tool: any = registry.getTool(input.toolId);
-    const grant: any = input.grantId ? store.getRawGrant(input.grantId) : input.grant || null;
+    const grant: any = input.grantId ? await store.getRawGrant(input.grantId) : input.grant || null;
     const profile: any = input.profileId
       ? registry.listProfiles().find((item?: any) : any => item.id === input.profileId)
       : input.profile || null;

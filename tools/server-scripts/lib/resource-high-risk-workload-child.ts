@@ -56,8 +56,9 @@ function memoryPoint() : any {
 
 async function forceGc() : Promise<any> {
   if (typeof globalThis.gc !== "function") fail("high_risk_explicit_gc_unavailable");
+  const gc: any = globalThis.gc;
   for (let pass: any = 0; pass < 3; pass += 1) {
-    globalThis.gc();
+    gc();
     await new Promise((resolve?: any) : any => setImmediate(resolve));
   }
 }
@@ -474,7 +475,7 @@ async function runAuditScenario() : Promise<any> {
     userDataPath: path.join(rootPath, "audit")
   });
   try {
-    store.setRetentionPolicy({
+    await store.setRetentionPolicy({
       retentionDays: 1,
       maxRecords: Math.max(1024, Math.floor(auditWriteCount / 2)),
       maxLogicalBytes: 64 * MIB,
@@ -482,48 +483,41 @@ async function runAuditScenario() : Promise<any> {
       maintenanceEveryAppends: 64
     });
     const old: any = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    for (let index: any = 0; index < auditWriteCount; index += 1) {
-      store.append({
-        operationId: `resource.audit.${index % 8}`,
-        transport: "resource-gate",
-        status: "ok",
-        createdAt: old,
-        input: { bucket: index % 16 }
-      });
-      if ((index + 1) % 1000 === 0) await new Promise((resolve?: any) : any => setImmediate(resolve));
+    const appendConcurrency: any = 256;
+    for (let offset: any = 0; offset < auditWriteCount; offset += appendConcurrency) {
+      const count: any = Math.min(appendConcurrency, auditWriteCount - offset);
+      await Promise.all(Array.from({ length: count }, (_, batchIndex?: any) : any => {
+        const index: any = offset + batchIndex;
+        return store.append({
+          operationId: `resource.audit.${index % 8}`,
+          transport: "resource-gate",
+          status: "ok",
+          createdAt: old,
+          input: { bucket: index % 16 }
+        });
+      }));
+      await new Promise((resolve?: any) : any => setImmediate(resolve));
     }
-    const current: any = store.append({
+    const current: any = await store.append({
       operationId: "resource.audit.current",
       transport: "resource-gate",
       status: "ok",
       input: {}
     });
-    const meta: any = store.db.prepare(`
-      SELECT row_count AS rowCount, logical_bytes AS logicalBytes
-      FROM operation_audit_meta
-      WHERE singleton=1
-    `).get();
+    const meta: any = await store.getCapacityStats();
+    const lane: any = store.getStats();
     assert(meta.rowCount <= 64, "audit_expired_rows_did_not_converge");
     assert(current.maintenance.deletedCount >= 0, "audit_maintenance_missing");
-    const plan: any = store.db.prepare(`
-      EXPLAIN QUERY PLAN
-      SELECT audit_id
-      FROM operation_audit_log
-      WHERE created_at < ?
-      ORDER BY created_at ASC,audit_id ASC
-      LIMIT ?
-    `).all(new Date().toISOString(), 10)
-      .map((entry?: any) : any => String(entry.detail || "")).join(" ");
-    assert(plan.includes("idx_operation_audit_retention"), "audit_retention_index_missing");
+    assert(lane.pending === 0 && lane.writerWorkers === 1, "audit_lane_not_drained");
     return {
       appended: auditWriteCount + 1,
       retainedRecords: meta.rowCount,
       logicalBytes: meta.logicalBytes,
       converged: true,
-      queryIndexUsed: true
+      boundedLane: true
     };
   } finally {
-    store.close();
+    await store.close();
   }
 }
 

@@ -28,5 +28,8 @@
     "build": "vite build --config ../../vite.config.ts",
     "dev": "vite --config ../../vite.config.ts",
     "typecheck": "vue-tsc --noEmit -p ../../tsconfig.json"
+  },
+  "imports": {
+    "#meshrix/console/server-console-shell-context": "./composables/server-console-shell-context.ts"
   }
 }

@@ -8,7 +8,7 @@ import WorkspaceProfilePanel from "./detail/WorkspaceProfilePanel.vue";
 import WorkspaceSharePanel from "./detail/WorkspaceSharePanel.vue";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
 import { useWorkspacesViewContext } from "@meshrix/ui-console/workspaces-view-context";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import {
   canAccessPluginConsoleEntry,
   resolveAccessiblePluginConsoleComponent,
@@ -22,17 +22,17 @@ const {
 } = useWorkspacesViewContext();
 const shell = useServerConsoleShellContext();
 const localDirectoryEntry = computed(() =>
-  (shell.consoleState.value?.features?.plugins?.consoleEntries || []).find(
+  (shell.runtime.consoleState.value?.features?.plugins?.consoleEntries || []).find(
     (entry: any) => entry.slotId === "workspace.local-directory" && canAccessPluginConsoleEntry(
       entry as PluginConsoleEntry,
-      shell.canAccessRouteMeta,
+      shell.access.canAccessRouteMeta,
     ),
   ) as PluginConsoleEntry | undefined,
 );
 const localDirectoryComponent = computed(() => {
   const entry = localDirectoryEntry.value;
   if (!entry) return null;
-  const loader = resolveAccessiblePluginConsoleComponent(entry, shell.canAccessRouteMeta);
+  const loader = resolveAccessiblePluginConsoleComponent(entry, shell.access.canAccessRouteMeta);
   return loader ? defineAsyncComponent(loader) : null;
 });
 </script>

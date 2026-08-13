@@ -506,6 +506,51 @@
       "nonAuthorityBoundaries": [
         "Capability docs may explain the surface, but release inclusion must trace back to the capability matrix and verifier reports."
       ]
+    },
+    {
+      "id": "runtime-refactor-convergence",
+      "factKey": "runtime.refactor-convergence",
+      "domain": "Converged runtime owners, invariants, bounds, canonical migrations, and privacy-safe focused observations for the runtime performance and maintainability refactor.",
+      "authorityPath": "docs/architecture/ARCHITECTURE.md",
+      "authorityRole": "runtime-refactor-convergence-owner",
+      "projectionPaths": [
+        "build/reports/runtime-refactor-convergence/convergence.json"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-runtime-refactor-convergence.ts",
+        "tests/vitest/server/runtime-refactor-workspace-incremental.test.ts",
+        "tests/vitest/server/runtime-refactor-authorization-compiler.test.ts",
+        "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts",
+        "tests/vitest/server/runtime-refactor-governed-evidence.test.ts",
+        "tests/vitest/server/gateway-performance-observation.test.ts"
+      ],
+      "verification": [
+        "npm run verify:runtime-refactor-convergence"
+      ],
+      "nonAuthorityBoundaries": [
+        "Individual runtime modules may document their behavior, but the converged owner set, invariants, and bounds must trace back to the architecture document and the focused verifier report."
+      ]
+    },
+    {
+      "id": "runtime-capacity-convergence",
+      "factKey": "runtime.capacity-convergence",
+      "domain": "Authorized workload catalog, deterministic counters, honest capacity evidence, and migration-removal oracles for the runtime capacity and concurrency refactor.",
+      "authorityPath": "docs/architecture/ARCHITECTURE.md",
+      "authorityRole": "runtime-capacity-convergence-owner",
+      "projectionPaths": [
+        "build/reports/runtime-capacity-convergence/convergence.json"
+      ],
+      "consumerPaths": [
+        "tools/server-scripts/verify-runtime-capacity-convergence.ts",
+        "tools/verifiers/runtime-capacity-workload-catalog.ts",
+        "tests/vitest/server/runtime-capacity-catalog-conformance.test.ts"
+      ],
+      "verification": [
+        "npm run verify:runtime-capacity-convergence"
+      ],
+      "nonAuthorityBoundaries": [
+        "Individual runtime modules may document their behavior, but capacity claims must trace back to the authorized workload catalog and the focused capacity-convergence verifier report."
+      ]
     }
   ]
 }

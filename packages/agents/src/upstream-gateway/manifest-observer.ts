@@ -124,9 +124,9 @@ export function createUpstreamManifestObserver({
   let activeScan: any = null;
   const lifecycleAbort: any = new AbortController();
 
-  function report(error?: any, reasonCode?: any) : any {
+  async function report(error?: any, reasonCode?: any) : Promise<any> {
     try {
-      onError?.(Object.freeze({ reasonCode, errorCode: String(error?.code || "manifest_observation_failed") }));
+      await onError?.(Object.freeze({ reasonCode, errorCode: String(error?.code || "manifest_observation_failed") }));
     } catch {
       // Observation reporting cannot replace the retry path.
     }
@@ -180,7 +180,7 @@ export function createUpstreamManifestObserver({
       });
     } catch (error: any) {
       if (closed) return Object.freeze({ outcome: "closed", setRevision: acceptedSetRevision });
-      report(error, "manifest_candidate_rejected");
+      await report(error, "manifest_candidate_rejected");
       return Object.freeze({ outcome: "rejected", setRevision: acceptedSetRevision });
     }
   }

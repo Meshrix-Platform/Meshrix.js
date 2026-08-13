@@ -63,15 +63,15 @@ async function main() : Promise<any> {
     ]);
     assert.equal(recovered.staleFenceRejected, true);
     assert.equal(recovered.recoveredCount, 1);
-    assert.equal(recovered.recoveryState, "retry_wait");
-    assert.equal(recovered.claimedWorkItemId, seeded.workItemId);
-    assert.equal(recovered.replacementLeaseSeq, seeded.leaseSeq + 1);
+    assert.equal(recovered.recoveryState, "in_doubt");
+    assert.equal(recovered.recoveryLeaseSeq, seeded.leaseSeq);
     assert.equal(seeded.checkpointSeq, 1);
     assert.equal(recovered.checkpointSeq, seeded.checkpointSeq);
     assert.equal(recovered.checkpointDigest, seeded.checkpointDigest);
-    assert.equal(recovered.completed, true);
+    assert.equal(recovered.receiptRecorded, true);
+    assert.equal(recovered.reconciled, true);
     assert.equal(recovered.finalState, "completed");
-    assert.equal(recovered.completedTransitionCount, 1);
+    assert.equal(recovered.terminalTransitionCount, 1);
     assert.equal(recovered.projectionReplayOk, true);
 
     const finishedAt: any = new Date();
@@ -89,21 +89,22 @@ async function main() : Promise<any> {
         processBoundaryCount: 2,
         stableDefinitionReloaded: true,
         staleLeaseFenceRejected: true,
-        leaseSequenceAdvanced: true,
-        durableWorkRecovered: true,
+        inDoubtGenerationRetained: true,
+        durableWorkFenced: true,
         durableCheckpointResumed: true,
-        retryTimingPreserved: true,
+        sinkReceiptReconciled: true,
         duplicateTerminalCount: 0,
         projectionReplayPassed: true,
         finalState: "completed"
       },
       checks: [
         { id: "fresh-process-reload", status: "passed" },
-        { id: "stable-definition-takeover", status: "passed" },
+        { id: "in-doubt-fence-on-crash", status: "passed" },
         { id: "stale-lease-fence", status: "passed" },
-        { id: "replacement-lease-sequence", status: "passed" },
-        { id: "retry-wait-timing", status: "passed" },
+        { id: "generation-retained", status: "passed" },
+        { id: "no-takeover-without-receipt", status: "passed" },
         { id: "durable-checkpoint-resume", status: "passed" },
+        { id: "sink-receipt-reconciliation", status: "passed" },
         { id: "single-completed-terminal", status: "passed" },
         { id: "projection-replay", status: "passed" }
       ]

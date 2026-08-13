@@ -355,7 +355,7 @@ async function readDeepSeekJsonResponse(response?: any) : Promise<any> {
 export function parseDeepSeekStreamText(streamText?: any) : any {
   const answerParts: any[] = [];
   const reasoningParts: any[] = [];
-  const toolCallParts: any = new Map<any, any>();
+  const toolCallParts: Map<number, any> = new Map<number, any>();
   const events: any[] = [];
   let dialogId: any = "";
   let finish: any = false;
@@ -448,8 +448,8 @@ export function parseDeepSeekStreamText(streamText?: any) : any {
       reasoning: reasoningParts
     },
     toolCalls: Array.from(toolCallParts.entries())
-      .sort(([left]: any[], [right]: any[]) : any => left - right)
-      .map(([, call]: any[], index?: any) : any => normalizeGatewayToolCall(call, index))
+      .sort((left: [number, any], right: [number, any]) : any => left[0] - right[0])
+      .map((entry: [number, any], index: number) : any => normalizeGatewayToolCall(entry[1], index))
       .filter(Boolean),
     payload: {
       id: dialogId,

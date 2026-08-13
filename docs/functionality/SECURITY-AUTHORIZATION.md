@@ -15,7 +15,7 @@ Security and authorization provide subject identity, session control, capability
 - Store secrets only through runtime secret references or secure local mechanisms.
 - Redact secrets and private runtime data from logs, audit, metrics, and public responses.
 - Bind local MCP grant use to a signed client process identity package in addition to the bearer token.
-- Keep downstream MCP API Key plaintext only in the one-time Console response, approved transfer channel, and connector process memory. Client configuration stores only the environment-variable name; generic process identity remains independently governed.
+- Keep downstream MCP API Key plaintext only in the one-time Console response, approved transfer channel, connector process memory, and connector-private credential file. Client configuration stores only connector metadata and an optional environment-variable override name; generic process identity remains independently governed.
 - Record governed security alerts for identity mismatch, replay, path escape, unauthorized or malformed upstream publishing attempts, direct runtime/configuration mutation, and unsafe package storage.
 
 ## Security Rules
@@ -223,8 +223,8 @@ surface is removed, disabled, or protected and covered by negative evidence.
 - Redact raw tokens, cookies, private keys, upstream request secrets, local absolute paths, and private runtime state.
 - Use ordinary Grant tokens for their existing Operation Permission HTTP/RPC boundaries. Ordinary downstream MCP clients use only a scoped API Key.
 - Native MCP installation uses a Console-issued scoped API Key. The administrator binds workload, organization, audience, targets, tools, resources, risk, limits, and expiry before transferring plaintext once. The connector validates the strict key before I/O and the server revalidates lifecycle and policy before protected effects.
-- The local connector reads the operator-supplied API Key from the documented environment variable or protected standard input. Client configuration stores only the environment-variable name.
-- Published MCP client installation is connector-managed and local. Multi-target installation reuses the operator-supplied API Key without generating target credentials. Local uninstall performs adapter and configuration cleanup without credential lookup or network access.
+- The local connector accepts the operator-supplied API Key from the documented environment variable or protected standard input, then atomically persists a private (`0600` where supported), target-and-server-scoped credential record. Client configuration stores only connector metadata and an optional environment-variable override name.
+- Published MCP client installation is connector-managed and local. Multi-target installation reuses the operator-supplied API Key without generating target credentials. Local uninstall performs adapter, configuration, and matching credential cleanup without network access.
 - Generic process identity signing remains available to independently governed boundaries but does not authenticate an ordinary downstream MCP client.
 - Accepted process-identity nonces remain recorded for the complete replay window. If the bounded replay store is full, new signed requests fail closed until entries expire; an unexpired nonce is never evicted to admit traffic.
 - One signed MCP HTTP batch consumes process identity once before protected messages are dispatched. Message-level operation policy is still evaluated independently, without replaying the HTTP nonce or allowing an authentication failure after an earlier protected message has executed.
@@ -338,9 +338,9 @@ npm run test:security
 npm test -- --suite security.http-resource-admission
 node tools/server-scripts/verify-authorization-governance.ts
 node tools/server-scripts/verify-process-identity.ts
-npx vitest run tests/vitest/server/process-identity-nonce-capacity.test.ts tests/vitest/server/local-secret-crash-consistency.test.ts tests/vitest/server/plugin-mcp-outlet-visibility.test.ts
+npx vitest run tests/vitest/server/process-identity-nonce-conformance.test.ts tests/vitest/server/local-secret-crash-consistency.test.ts tests/vitest/server/plugin-mcp-outlet-visibility.test.ts
 npx vitest run tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts tests/vitest/server/capability-binding-guard-corruption-and-lock-failures.test.ts tests/vitest/server/authorization-capability-binding-guard.test.ts
-npx vitest run tests/vitest/server/runtime-logger.test.ts tests/vitest/server/console-auth.test.ts tests/vitest/server/client-registry-capacity-recovery.test.ts
+npx vitest run tests/vitest/server/runtime-logger.test.ts tests/vitest/server/console-auth.test.ts tests/vitest/server/client-registry-conformance-recovery.test.ts
 npx vitest run tests/vitest/server/p2-security-boundaries.test.ts tests/vitest/server/mcp-installer-api-key-only.test.ts tests/vitest/server/http-server-middleware-rate-limit.test.ts
 node tools/server-scripts/verify-security-local-stdio-lockdown.ts
 ```

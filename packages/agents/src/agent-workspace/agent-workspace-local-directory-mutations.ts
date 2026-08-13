@@ -197,7 +197,10 @@ export function createAgentWorkspaceLocalDirectoryMutations({
         action: "put",
         key: mountMutationKey(mountRef, entry.relativePath),
         valueRef: archived?.rootCid || "",
-        metadata: filePayloadMetadata(file)
+        metadata: {
+          ...filePayloadMetadata(file),
+          contentCid: archived?.metadata?.contentCid || ""
+        }
       },
       contentRefs: archived?.contentRefs || [],
       file,
@@ -302,15 +305,19 @@ export function createAgentWorkspaceLocalDirectoryMutations({
         rootPath: resolved.root,
         contentBuffer
       });
+      const writeMutations: any[] = [{
+        action: "put",
+        key: mountMutationKey(mountRef, resolved.relativePath),
+        valueRef: postimageArchived.rootCid,
+        metadata: {
+          ...filePayloadMetadata(file),
+          contentCid: postimageArchived?.metadata?.contentCid || ""
+        }
+      }];
       stateCommit = requireStateCommit(await commitWorkspaceFileState({
         workspace: access.workspace,
         operationId,
-        mutations: [{
-          action: "put",
-          key: mountMutationKey(mountRef, resolved.relativePath),
-          valueRef: postimageArchived.rootCid,
-          metadata: filePayloadMetadata(file)
-        }],
+        mutations: writeMutations,
         contentRefs: [
           ...snapshotContentRefs(preimage.snapshot),
           ...(postimageArchived.contentRefs || [])
@@ -330,7 +337,8 @@ export function createAgentWorkspaceLocalDirectoryMutations({
         stateCommit,
         action: "localDir.file.write",
         path: resolved.relativePath,
-        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot)
+        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot),
+        mutations: writeMutations
       }));
       return {
         protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -431,15 +439,16 @@ export function createAgentWorkspaceLocalDirectoryMutations({
       ensureDirectorySafely(resolved.root, resolved.absolutePath, 0o700);
       const stat: any = fs.statSync(resolved.absolutePath);
       updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
+      const mkdirMutations: any[] = [{
+        action: "put",
+        key: mountMutationKey(mountRef, resolved.relativePath),
+        valueRef: "",
+        metadata: directoryEntryMetadata()
+      }];
       stateCommit = requireStateCommit(await commitWorkspaceFileState({
         workspace: access.workspace,
         operationId,
-        mutations: [{
-          action: "put",
-          key: mountMutationKey(mountRef, resolved.relativePath),
-          valueRef: "",
-          metadata: directoryEntryMetadata()
-        }],
+        mutations: mkdirMutations,
         contentRefs: snapshotContentRefs(preimage.snapshot),
         payload: {
           action: "localDir.mkdir",
@@ -453,7 +462,8 @@ export function createAgentWorkspaceLocalDirectoryMutations({
         stateCommit,
         action: "localDir.mkdir",
         path: resolved.relativePath,
-        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot)
+        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot),
+        mutations: mkdirMutations
       }));
       return {
         protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -540,13 +550,14 @@ export function createAgentWorkspaceLocalDirectoryMutations({
       mutated = true;
       removePathSafely(resolved.root, resolved.absolutePath, { recursive: input.recursive === true });
       updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
+      const deleteMutations: any[] = [...entries].reverse().map((entry?: any) : any => ({
+        action: "delete",
+        key: mountMutationKey(mountRef, entry.relativePath)
+      }));
       stateCommit = requireStateCommit(await commitWorkspaceFileState({
         workspace: access.workspace,
         operationId,
-        mutations: [...entries].reverse().map((entry?: any) : any => ({
-          action: "delete",
-          key: mountMutationKey(mountRef, entry.relativePath)
-        })),
+        mutations: deleteMutations,
         contentRefs: snapshotContentRefs(preimage.snapshot),
         payload: {
           action: "localDir.delete",
@@ -563,7 +574,8 @@ export function createAgentWorkspaceLocalDirectoryMutations({
         stateCommit,
         action: "localDir.delete",
         path: resolved.relativePath,
-        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot)
+        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot),
+        mutations: deleteMutations
       }));
       return {
         protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -711,16 +723,17 @@ export function createAgentWorkspaceLocalDirectoryMutations({
       });
       updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
       const deleteEntries: any = snapshotExistingEntries(preimage.snapshot);
+      const moveMutations: any[] = [
+        ...[...deleteEntries].reverse().map((entry?: any) : any => ({
+          action: "delete",
+          key: mountMutationKey(mountRef, entry.relativePath)
+        })),
+        ...targetPostimages.mutations
+      ];
       stateCommit = requireStateCommit(await commitWorkspaceFileState({
         workspace: access.workspace,
         operationId,
-        mutations: [
-          ...[...deleteEntries].reverse().map((entry?: any) : any => ({
-            action: "delete",
-            key: mountMutationKey(mountRef, entry.relativePath)
-          })),
-          ...targetPostimages.mutations
-        ],
+        mutations: moveMutations,
         contentRefs: [
           ...snapshotContentRefs(preimage.snapshot),
           ...targetPostimages.contentRefs
@@ -743,7 +756,8 @@ export function createAgentWorkspaceLocalDirectoryMutations({
         stateCommit,
         action: "localDir.move",
         path: resolvedTarget.relativePath,
-        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot)
+        preimageSnapshot: workspacePreimageSnapshot(preimage.snapshot),
+        mutations: moveMutations
       }));
       return {
         protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,

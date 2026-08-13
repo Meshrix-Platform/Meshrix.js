@@ -1,0 +1,46 @@
+{
+  "$schema": "./schema/sqlite-owner-migration.schema.json",
+  "version": "v0.0.1:registry:sqlite-owner-migration-1",
+  "schemaVersion": "v0.0.1:runtime:sqlite-owner-migration-1",
+  "owners": [
+    {
+      "owner": "work-queue",
+      "result": "migrated",
+      "authority": "typed-worker-lane",
+      "boundedBy": ["pending-operations", "pending-bytes", "deadline"],
+      "fallback": false
+    },
+    {
+      "owner": "mandatory-evidence",
+      "result": "migrated",
+      "authority": "typed-worker-lane",
+      "databases": ["operation-audit"],
+      "boundedBy": ["pending-operations", "pending-bytes", "deadline"],
+      "productionFacade": "packages/foundation/src/security/operation-audit.ts",
+      "workerOwner": "packages/foundation/src/security/operation-audit-worker-store.ts",
+      "fallback": false
+    },
+    {
+      "owner": "authorization",
+      "result": "migrated",
+      "authority": "typed-worker-lane",
+      "databases": ["authorization-evidence", "operation-permission"],
+      "boundedBy": ["pending-operations", "pending-bytes", "deadline"],
+      "productionFacades": [
+        "packages/foundation/src/security/authorization/authorization-store.ts",
+        "packages/capabilities/src/operation-permission-core/store.ts"
+      ],
+      "workerOwners": [
+        "packages/foundation/src/security/authorization/authorization-store-worker-owner.ts",
+        "packages/capabilities/src/operation-permission-core/store-worker-owner.ts"
+      ],
+      "fallback": false
+    },
+    {
+      "owner": "protocol-events",
+      "result": "retained-single-canonical-owner",
+      "reason": "indexed fanout and bounded retention removed the measured request-path amplification",
+      "fallback": false
+    }
+  ]
+}

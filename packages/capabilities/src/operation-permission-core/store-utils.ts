@@ -118,7 +118,7 @@ export function normalizeMcpTarget(value?: any) : any {
 export function mcpTargetHeaderFromRequest(request?: any) : any {
   const headerTarget: any = normalizeMcpTarget(headerValue(
     request,
-    "x-meshrix-mcp-target",
+    "x-meshrix.js-mcp-target",
     "x-meshrix-client-target",
     "x-meshrix-tool-target",
     "x-meshrix-client-id"
@@ -249,10 +249,15 @@ export function normalizeGrantInput(input: Record<string, any> = {}, fallback: R
   const allowedEffectKinds: any = normalizeStringList(input.allowedEffectKinds ?? fallback.allowedEffectKinds ?? metadata.allowedEffectKinds);
   const allowedServiceIds: any = normalizeStringList(input.allowedServiceIds ?? fallback.allowedServiceIds ?? metadata.allowedServiceIds);
   const allowedSecretBindings: any = normalizeStringList(input.allowedSecretBindings ?? fallback.allowedSecretBindings ?? metadata.allowedSecretBindings);
+  const type: string = String(input.type ?? fallback.type ?? "machine").trim() || "machine";
+  const parentGrantId: string = type === "delegated-mcp-child"
+    ? firstString(input.parentGrantId, inputMetadata.delegatedMcp?.sourceGrantId, fallback.parentGrantId)
+    : "";
   return {
     id: String(input.id || fallback.id || randomId("grant")),
     label: String(input.label ?? fallback.label ?? "Agent Tool Grant").trim() || "Agent Tool Grant",
-    type: String(input.type ?? fallback.type ?? "machine").trim() || "machine",
+    type,
+    parentGrantId,
     enabled: input.enabled !== undefined ? input.enabled !== false : fallback.enabled !== false,
     toolsets: normalizedToolsets,
     toolAllow: normalizeStringList(input.toolAllow ?? fallback.toolAllow),
@@ -536,7 +541,7 @@ export function bindingContextFromRequest({ request = null, context = {} }: Reco
     clientId: firstString(
       requestContext.clientId,
       requestContext.clientName,
-      headerValue(request, "x-meshrix-client-id", "x-meshrix-client-name", "x-meshrix-mcp-target", "x-meshrix-client-target"),
+      headerValue(request, "x-meshrix-client-id", "x-meshrix-client-name", "x-meshrix.js-mcp-target", "x-meshrix-client-target"),
       mcpTargetHeaderFromRequest(request)
     )
   };

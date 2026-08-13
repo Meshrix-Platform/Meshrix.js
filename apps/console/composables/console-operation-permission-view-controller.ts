@@ -6,7 +6,7 @@ import {
 } from '../lib/authorization-governance-client';
 import { formatCompactDate } from '@meshrix/ui-console/console-format-utils';
 import { usePageRefreshHandler } from "@meshrix/ui-console/page-refresh";
-import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { useServerConsoleShellContext } from '#meshrix/console/server-console-shell-context';
 
 type GovernanceItem = Record<string, unknown>;
 
@@ -188,7 +188,9 @@ export function useOperationPermissionViewConsole() : any {
     resetAuthorizationGovernanceEditor();
   });
 
-  const { operationPermissionConsole } = useServerConsoleShellContext();
+  const {
+  operationPermissionConsole,
+} = useServerConsoleShellContext().operationPermission;
   const {
     isBusy,
     copyIssuedToolToken,

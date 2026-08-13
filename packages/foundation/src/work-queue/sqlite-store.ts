@@ -117,10 +117,11 @@ function createSqliteWorkQueueStoreFromDatabase({
     expireEligibleLocked,
     materializeDelayedLocked,
     recoverExpiredLeasesLocked,
+    reconcileInDoubtLocked,
     requireLeasedRow
   } = createSqliteWorkQueueRuntime({ statements, timeSource, identityGenerator, resolvedPolicy });
 
-  function cleanupFairnessCursorsIfIdle(row?: any) : any {
+  function cleanupVirtualFinishIfIdle(row?: any) : any {
     if (!row || !isTerminalWorkQueueState(row.state)) return;
     const boundary: Record<string, any> = {
       queue_definition_id: row.queue_definition_id,
@@ -130,13 +131,13 @@ function createSqliteWorkQueueStoreFromDatabase({
       expired_state: WORK_QUEUE_STATES.EXPIRED
     };
     if (Number(statements.countNonterminalByBoundary.get(boundary)?.count || 0) === 0) {
-      statements.deleteFairnessCursorsByBoundary.run(boundary);
+      statements.deleteVirtualFinishByBoundary.run(boundary);
     }
   }
 
   function transitionProjection(input?: any) : any {
     const updated: any = transitionProjectionInternal(input);
-    cleanupFairnessCursorsIfIdle(updated);
+    cleanupVirtualFinishIfIdle(updated);
     return updated;
   }
 
@@ -187,37 +188,29 @@ function createSqliteWorkQueueStoreFromDatabase({
     }
   }
 
-  function cursorKey({ queueDefinitionId, queueDefinitionVersion, selectorScopeKey, priorityClass, level, parentKey }: Record<string, any>) : any {
+  function projectionKey({ queueDefinitionId, queueDefinitionVersion, selectorScopeKey, priorityClass, tenantId, workspaceId, projectId }: Record<string, any>) : any {
     return {
       queue_definition_id: queueDefinitionId,
       queue_definition_version: queueDefinitionVersion,
       selector_scope_key: selectorScopeKey,
       priority_class: priorityClass,
-      level,
-      parent_key: parentKey
+      tenant_id: tenantId,
+      workspace_id: workspaceId,
+      project_id: projectId
     };
   }
 
-  function readCursor(key?: any) : any {
-    return statements.getFairnessCursor.get(key)?.cursor_value || "";
+  function advanceVirtualFinish(key?: any, nowMs?: any) : any {
+    statements.advanceVirtualFinish.run({ ...key, updated_at_ms: nowMs });
   }
 
-  function writeCursor(key?: any, value?: any, nowMs?: any) : any {
-    statements.upsertFairnessCursor.run({
-      ...key,
-      cursor_value: String(value),
-      updated_at_ms: nowMs
-    });
-  }
-
-  function nextPartition(statement?: any, fixedValue?: any, parameters?: any, key?: any, nowMs?: any) : any {
-    if (fixedValue) return fixedValue;
-    const previous: any = readCursor(key);
-    let row: any = statement.get({ ...parameters, cursor: previous, from_start: 0 });
-    if (!row) row = statement.get({ ...parameters, cursor: "", from_start: 1 });
-    if (!row) return null;
-    writeCursor(key, row.value, nowMs);
-    return row.value;
+  function virtualFinishCursor({ queueDefinitionId, queueDefinitionVersion, selectorScopeKey }: Record<string, any>) : any {
+    const total: any = Number(statements.virtualFinishTotal.get({
+      queue_definition_id: queueDefinitionId,
+      queue_definition_version: queueDefinitionVersion,
+      selector_scope_key: selectorScopeKey
+    })?.total || 0);
+    return total % WORK_QUEUE_PRIORITY_CYCLE.length;
   }
 
   function countLeased(queueDefinitionId?: any, hierarchy?: any, limit?: any) : any {
@@ -325,79 +318,44 @@ function createSqliteWorkQueueStoreFromDatabase({
     return rows.length;
   }
 
-  function selectFairCandidate({ queueDefinitionId, queueDefinitionVersion, scope, selectorScopeKey, nowMs }: Record<string, any>) : any {
+  function selectFairCandidate({ queueDefinitionId, queueDefinitionVersion, scope, selectorScopeKey, nowMs, priorityCursor }: Record<string, any>) : any {
     const fixed: any = hierarchicalScopeParts(scope);
-    const priorityKey: any = cursorKey({
-      queueDefinitionId,
-      queueDefinitionVersion,
-      selectorScopeKey,
-      priorityClass: "*",
-      level: "priority",
-      parentKey: ""
-    });
-    let priorityCursor: any = Number(readCursor(priorityKey) || 0);
-    for (let priorityVisit: any = 0; priorityVisit < WORK_QUEUE_PRIORITY_CYCLE.length; priorityVisit += 1) {
-      const priorityClass: any = priorityClassAtCursor(priorityCursor);
-      priorityCursor = nextPriorityCursor(priorityCursor);
-      writeCursor(priorityKey, priorityCursor, nowMs);
-      const base: Record<string, any> = {
-        queue_definition_id: queueDefinitionId,
-        queue_definition_version: queueDefinitionVersion,
-        scope_key: selectorScopeKey,
-        state: WORK_QUEUE_STATES.QUEUED,
-        recovered_state: WORK_QUEUE_STATES.RECOVERED,
-        priority_class: priorityClass,
-        now_ms: nowMs
-      };
-      const tenantId: any = nextPartition(statements.nextFairTenant, fixed.tenantId, base, cursorKey({
-        queueDefinitionId,
-        queueDefinitionVersion,
-        selectorScopeKey,
-        priorityClass,
-        level: "tenant",
-        parentKey: ""
-      }), nowMs);
-      if (tenantId === null) continue;
-      const workspaceId: any = nextPartition(statements.nextFairWorkspace, fixed.workspaceId, {
-        ...base,
-        tenant_id: tenantId
-      }, cursorKey({
-        queueDefinitionId,
-        queueDefinitionVersion,
-        selectorScopeKey,
-        priorityClass,
-        level: "workspace",
-        parentKey: tenantId
-      }), nowMs);
-      if (workspaceId === null) continue;
-      const projectId: any = nextPartition(statements.nextFairProject, fixed.projectId, {
-        ...base,
-        tenant_id: tenantId,
-        workspace_id: workspaceId
-      }, cursorKey({
-        queueDefinitionId,
-        queueDefinitionVersion,
-        selectorScopeKey,
-        priorityClass,
-        level: "project",
-        parentKey: JSON.stringify([tenantId, workspaceId])
-      }), nowMs);
-      if (projectId === null) continue;
-      const hierarchy: Record<string, any> = { tenantId, workspaceId, projectId };
-      const candidate: any = statements.fairLeafCandidate.get({
-        ...base,
-        tenant_id: tenantId,
-        workspace_id: workspaceId,
-        project_id: projectId
-      }) || null;
-      if (!candidate) continue;
-      if (!hasLeaseCapacity(
-        queueDefinitionId,
-        hierarchy,
-        policyForWorkItem(candidate),
-        { scopeKey: selectorScopeKey, nowMs }
-      )) continue;
-      return candidate;
+    let cursor: any = priorityCursor;
+    for (let slot: any = 0; slot < WORK_QUEUE_PRIORITY_CYCLE.length; slot += 1) {
+      const priorityClass: any = priorityClassAtCursor(cursor);
+      cursor = nextPriorityCursor(cursor);
+      const rejected: any[] = [];
+      for (;;) {
+        const candidate: any = statements.fairRankedCandidate.get({
+          queue_definition_id: queueDefinitionId,
+          queue_definition_version: queueDefinitionVersion,
+          selector_scope_key: selectorScopeKey,
+          state: WORK_QUEUE_STATES.QUEUED,
+          recovered_state: WORK_QUEUE_STATES.RECOVERED,
+          priority_class: priorityClass,
+          now_ms: nowMs,
+          tenant_id: fixed.tenantId,
+          workspace_id: fixed.workspaceId,
+          project_id: fixed.projectId,
+          rejected_partitions: JSON.stringify(rejected)
+        }) || null;
+        if (!candidate) break;
+        const hierarchy: Record<string, any> = {
+          tenantId: candidate.tenant_id,
+          workspaceId: candidate.workspace_id,
+          projectId: candidate.project_id
+        };
+        if (!hasLeaseCapacity(
+          queueDefinitionId,
+          hierarchy,
+          policyForWorkItem(candidate),
+          { scopeKey: selectorScopeKey, nowMs }
+        )) {
+          rejected.push([candidate.tenant_id, candidate.workspace_id, candidate.project_id].join("\u001f"));
+          continue;
+        }
+        return { row: candidate, priorityCursor: cursor };
+      }
     }
     return null;
   }
@@ -500,6 +458,16 @@ function createSqliteWorkQueueStoreFromDatabase({
 
     try {
       statements.insertWorkItem.run(row);
+      statements.upsertVirtualFinish.run({
+        queue_definition_id: queueDefinitionId,
+        queue_definition_version: queueDefinitionVersion,
+        selector_scope_key: scopeKey,
+        priority_class: row.priority_class,
+        tenant_id: row.tenant_id,
+        workspace_id: row.workspace_id,
+        project_id: row.project_id,
+        updated_at_ms: nowMs
+      });
     } catch (error: any) {
       if (dedupeKey && /UNIQUE constraint failed/i.test(String(error.message))) {
         const existing: any = statements.getDedupe.get(queueDefinitionId, scopeKey, dedupeKey);
@@ -565,6 +533,12 @@ function createSqliteWorkQueueStoreFromDatabase({
       scopeKey: recoveryScopeKey,
       limit: Math.max(100, batchSize * 8)
     });
+    const reconciled: any = reconcileInDoubtLocked({
+      nowMs,
+      queueDefinitionId,
+      scopeKey: recoveryScopeKey,
+      limit: Math.max(100, batchSize * 8)
+    });
     const control: any = statements.getQueueControl.get({
       queue_definition_id: queueDefinitionId,
       scope_key: scopeKey
@@ -598,20 +572,34 @@ function createSqliteWorkQueueStoreFromDatabase({
 
     const claimed: any[] = [];
     const failed: any[] = [];
-    const maxVisits: any = Math.min(
-      asPositiveInt(resolvedPolicy.fairness.maxVisitsPerClaim, 4096),
-      Math.max(WORK_QUEUE_PRIORITY_CYCLE.length, batchSize * WORK_QUEUE_PRIORITY_CYCLE.length)
-    );
-    for (let visit: any = 0; visit < maxVisits && claimed.length < batchSize; visit += 1) {
-      const row: any = selectFairCandidate({
+    let priorityCursor: any = virtualFinishCursor({
+      queueDefinitionId,
+      queueDefinitionVersion: asInt(queueDefinitionVersion, 0),
+      selectorScopeKey: scopeKey
+    });
+    for (let visit: any = 0; visit < batchSize && claimed.length < batchSize; visit += 1) {
+      const selected: any = selectFairCandidate({
         queueDefinitionId,
         queueDefinitionVersion: asInt(queueDefinitionVersion, 0),
         scope: schedulingScope,
         selectorScopeKey: scopeKey,
-        nowMs
+        nowMs,
+        priorityCursor
       });
-      if (!row) continue;
+      if (!selected) break;
+      priorityCursor = selected.priorityCursor;
+      const row: any = selected.row;
+      const partition: any = projectionKey({
+        queueDefinitionId,
+        queueDefinitionVersion: row.queue_definition_version,
+        selectorScopeKey: scopeKey,
+        priorityClass: row.priority_class,
+        tenantId: row.tenant_id,
+        workspaceId: row.workspace_id,
+        projectId: row.project_id
+      });
       if (row.attempt >= row.max_attempts) {
+        advanceVirtualFinish(partition, nowMs);
         const failedRow: any = transitionProjection({
           row,
           transition: "fail",
@@ -633,6 +621,7 @@ function createSqliteWorkQueueStoreFromDatabase({
         failed.push(rowToWorkItem(failedRow));
         continue;
       }
+      advanceVirtualFinish(partition, nowMs);
       const leaseId: any = identityGenerator.leaseId();
       const leaseSeq: any = row.lease_seq + 1;
       const attempt: any = row.attempt + 1;
@@ -672,6 +661,7 @@ function createSqliteWorkQueueStoreFromDatabase({
       claimed,
       expired,
       recovered,
+      reconciled,
       matured,
       aged,
       failed
@@ -709,7 +699,7 @@ function createSqliteWorkQueueStoreFromDatabase({
     if (row.state === WORK_QUEUE_STATES.EXPIRED) {
       return { expired: true, idempotent: true, workItem: rowToWorkItem(row) };
     }
-    if (![WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RETRY_WAIT, WORK_QUEUE_STATES.RUNNING, WORK_QUEUE_STATES.RECOVERED].includes(row.state)) {
+    if (![WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RETRY_WAIT, WORK_QUEUE_STATES.RUNNING, WORK_QUEUE_STATES.IN_DOUBT, WORK_QUEUE_STATES.RECOVERED].includes(row.state)) {
       return { expired: false, idempotent: true, workItem: rowToWorkItem(row) };
     }
     if (input.force !== true && !isWorkExpired(row, nowMs)) {
@@ -746,6 +736,14 @@ function createSqliteWorkQueueStoreFromDatabase({
       operationId: input.operationId,
       actor: input.actor,
       reason: input.reason || "complete"
+    });
+    statements.insertSinkFence.run({
+      work_item_id: row.work_item_id,
+      generation: Number(row.lease_seq || 0),
+      sink_id: "complete",
+      effect_id: toText(input.effectId),
+      status: "settled",
+      settled_at_ms: nowMs
     });
     return { completed: true, workItem: rowToWorkItem(updated) };
   });
@@ -924,6 +922,7 @@ function createSqliteWorkQueueStoreFromDatabase({
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
+      WORK_QUEUE_STATES.IN_DOUBT,
       WORK_QUEUE_STATES.RECOVERED
     ].includes(row.state)) {
       throw new Error(`Work item ${input.workItemId} cannot be cancelled from state ${row.state}.`);
@@ -980,7 +979,188 @@ function createSqliteWorkQueueStoreFromDatabase({
       actor: input.actor,
       reason: input.reason || "fail"
     });
+    statements.insertSinkFence.run({
+      work_item_id: row.work_item_id,
+      generation: Number(row.lease_seq || 0),
+      sink_id: "fail",
+      effect_id: toText(input.effectId),
+      status: "settled",
+      settled_at_ms: nowMs
+    });
     return { failed: true, fallbackTaskId, workItem: rowToWorkItem(updated) };
+  });
+
+  const markInDoubtTx: any = database.transaction((input: Record<string, any> = {}) : any => {
+    const nowMs: any = nowFrom(timeSource, input.nowMs);
+    const row: any = statements.getWorkItem.get(toText(input.workItemId));
+    if (!row) {
+      throw new Error(`Work item not found: ${input.workItemId}`);
+    }
+    if (row.state === WORK_QUEUE_STATES.IN_DOUBT) {
+      if (toText(input.leaseId) && row.lease_id === toText(input.leaseId)) {
+        return { interrupted: true, idempotent: true, workItem: rowToWorkItem(row) };
+      }
+      return { interrupted: false, idempotent: true, workItem: rowToWorkItem(row) };
+    }
+    if (row.state !== WORK_QUEUE_STATES.RUNNING) {
+      return { interrupted: false, idempotent: true, workItem: rowToWorkItem(row) };
+    }
+    if (toText(input.leaseId) && row.lease_id !== toText(input.leaseId)) {
+      throw new Error(`Lease fence rejected for work item ${input.workItemId}.`);
+    }
+    const updated: any = transitionProjection({
+      row,
+      transition: "interrupt",
+      toState: WORK_QUEUE_STATES.IN_DOUBT,
+      patch: {
+        last_error_json: jsonString(input.error || {
+          type: "handler_unconfirmed",
+          reason: input.reason || "handler_timeout"
+        }, {})
+      },
+      nowMs,
+      operationId: input.operationId,
+      actor: input.actor,
+      reason: input.reason || "handler_timeout_unconfirmed"
+    });
+    return { interrupted: true, idempotent: false, workItem: rowToWorkItem(updated) };
+  });
+
+  const acknowledgeTerminationTx: any = database.transaction((input: Record<string, any> = {}) : any => {
+    const nowMs: any = nowFrom(timeSource, input.nowMs);
+    const row: any = statements.getWorkItem.get(toText(input.workItemId));
+    if (!row) {
+      throw new Error(`Work item not found: ${input.workItemId}`);
+    }
+    if (row.state !== WORK_QUEUE_STATES.IN_DOUBT) {
+      return { acknowledged: false, idempotent: true, workItem: rowToWorkItem(row) };
+    }
+    if (toText(input.leaseId) && row.lease_id !== toText(input.leaseId)) {
+      throw new Error(`Lease fence rejected for work item ${input.workItemId}.`);
+    }
+    const requestedState: any = toText(input.toState || "");
+    const terminalStates: any[] = [
+      WORK_QUEUE_STATES.COMPLETED,
+      WORK_QUEUE_STATES.FAILED
+    ];
+    if (![
+      "retry",
+      WORK_QUEUE_STATES.QUEUED,
+      WORK_QUEUE_STATES.RETRY_WAIT,
+      WORK_QUEUE_STATES.FAILED,
+      WORK_QUEUE_STATES.COMPLETED
+    ].includes(requestedState)) {
+      throw new Error(`Unsupported termination settlement state: ${requestedState}`);
+    }
+    let delayMs: any = 0;
+    let toState: any = requestedState;
+    if (!terminalStates.includes(requestedState)) {
+      const exhausted: any = row.attempt >= row.max_attempts;
+      if (exhausted) {
+        toState = WORK_QUEUE_STATES.FAILED;
+      } else {
+        delayMs = input.delayMs === undefined
+          ? computeDeterministicRetryDelay({
+              queueDefinitionId: row.queue_definition_id,
+              workItemId: row.work_item_id,
+              attempt: row.attempt,
+              ...resolvedPolicy.retryBackoff
+            })
+          : Math.max(0, asInt(input.delayMs, 0));
+        toState = delayMs > 0
+          ? WORK_QUEUE_STATES.RETRY_WAIT
+          : WORK_QUEUE_STATES.QUEUED;
+      }
+    }
+    const updated: any = transitionProjection({
+      row,
+      transition: "termination_acknowledged",
+      toState,
+      patch: {
+        available_at_ms: nowMs + (toState === WORK_QUEUE_STATES.FAILED || toState === WORK_QUEUE_STATES.COMPLETED ? 0 : delayMs),
+        lease_id: "",
+        leased_by_worker_id: "",
+        lease_expires_at_ms: 0,
+        last_error_json: jsonString(input.error || {
+          type: "termination_acknowledged",
+          reason: input.reason || "handler_terminated"
+        }, {})
+      },
+      nowMs,
+      operationId: input.operationId,
+      actor: input.actor,
+      reason: input.reason || "termination_acknowledged"
+    });
+    if (terminalStates.includes(toState)) {
+      statements.insertSinkFence.run({
+        work_item_id: row.work_item_id,
+        generation: Number(row.lease_seq || 0),
+        sink_id: toState === WORK_QUEUE_STATES.COMPLETED ? "complete" : "fail",
+        effect_id: toText(input.effectId),
+        status: "settled",
+        settled_at_ms: nowMs
+      });
+    }
+    return {
+      acknowledged: true,
+      idempotent: false,
+      toState,
+      delayMs,
+      workItem: rowToWorkItem(updated)
+    };
+  });
+
+  const recordSinkReceiptTx: any = database.transaction((input: Record<string, any> = {}) : any => {
+    const nowMs: any = nowFrom(timeSource, input.nowMs);
+    const row: any = statements.getWorkItem.get(toText(input.workItemId));
+    const generation: any = input.generation === undefined
+      ? Number(row?.lease_seq || 0)
+      : asInt(input.generation, 0);
+    const sinkId: any = toText(input.sinkId || "effect");
+    const result: any = statements.insertSinkFence.run({
+      work_item_id: toText(input.workItemId),
+      generation,
+      sink_id: sinkId,
+      effect_id: toText(input.effectId),
+      status: "settled",
+      settled_at_ms: nowMs
+    });
+    return {
+      recorded: result.changes > 0,
+      idempotent: result.changes === 0,
+      generation
+    };
+  });
+
+  const reconcileInDoubtTx: any = database.transaction((input: Record<string, any> = {}) : any => {
+    const nowMs: any = nowFrom(timeSource, input.nowMs);
+    const queueDefinitionId: any = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
+    const scopeKey: any = input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : "");
+    if (input.workItemId) {
+      const reconciled: any = reconcileInDoubtLocked({
+        nowMs,
+        queueDefinitionId,
+        scopeKey,
+        workItemId: toText(input.workItemId),
+        limit: 1
+      });
+      return {
+        ok: true,
+        reconciled,
+        count: reconciled.length
+      };
+    }
+    const reconciled: any = reconcileInDoubtLocked({
+      nowMs,
+      queueDefinitionId,
+      scopeKey,
+      limit: asInt(input.limit, 1000)
+    });
+    return {
+      ok: true,
+      reconciled,
+      count: reconciled.length
+    };
   });
 
   const recoverTx: any = database.transaction((input: Record<string, any> = {}) : any => {
@@ -1235,6 +1415,10 @@ function createSqliteWorkQueueStoreFromDatabase({
     cancelRunning: cancelRunningTx,
     fail: failTx,
     recover: recoverTx,
+    markInDoubt: markInDoubtTx,
+    acknowledgeTermination: acknowledgeTerminationTx,
+    recordSinkReceipt: recordSinkReceiptTx,
+    reconcileInDoubt: reconcileInDoubtTx,
     inspect,
     rebuildProjection: rebuildProjectionTx,
     registerQueueDefinition: registerQueueDefinitionTx,

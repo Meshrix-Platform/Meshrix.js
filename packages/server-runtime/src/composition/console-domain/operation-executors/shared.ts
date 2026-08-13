@@ -382,9 +382,9 @@ export function errorPayload(error?: any, fallbackMessage?: any, extra: Record<s
 }
 
 
-export function appendConsoleLog(context: Record<string, any> = {}, entry: Record<string, any> = {}) : any {
+export async function appendConsoleLog(context: Record<string, any> = {}, entry: Record<string, any> = {}) : Promise<any> {
   if (typeof context.appendConsoleOperationLog === "function") {
-    context.appendConsoleOperationLog(entry);
+    await context.appendConsoleOperationLog(entry);
   }
 }
 

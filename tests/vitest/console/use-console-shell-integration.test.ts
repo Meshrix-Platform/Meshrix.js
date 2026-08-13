@@ -325,7 +325,7 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
     wrapper = mount(Harness, { global: { plugins: [router] } });
 
     await waitForCondition(
-      () : any => shell.consoleState.value?.server.url === initialState.server.url,
+      () : any => shell.runtime.consoleState.value?.server.url === initialState.server.url,
       "console bootstrap did not apply server state",
     );
     await waitForCondition(
@@ -333,16 +333,16 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
       "server event subscription did not start",
     );
 
-    expect(shell.serverAvailable.value).toBe(true);
-    expect(shell.canAccessRouteMeta(router.currentRoute.value.meta)).toBe(false);
-    expect(shell.canAccessAdminView("unregistered-admin-view")).toBe(false);
-    expect(shell.canAccessView("unregistered-view")).toBe(false);
-    expect(shell.firstAccessibleRoutePath()).toBe("/");
+    expect(shell.runtime.serverAvailable.value).toBe(true);
+    expect(shell.access.canAccessRouteMeta(router.currentRoute.value.meta)).toBe(false);
+    expect(shell.access.canAccessAdminView("unregistered-admin-view")).toBe(false);
+    expect(shell.access.canAccessView("unregistered-view")).toBe(false);
+    expect(shell.navigation.firstAccessibleRoutePath()).toBe("/");
 
-    await shell.refreshState({ silent: true, forceDrafts: true });
+    await shell.refresh.refreshState({ silent: true, forceDrafts: true });
     expect(consoleStateClientMock.getServerConsoleState).toHaveBeenCalledTimes(2);
-    expect(shell.consoleState.value?.server.url).toBe(refreshedState.server.url);
-    expect(shell.ruleAuthoringModelOptions.value.map((option?: any) : any => option.value)).toContain("rule-agent");
+    expect(shell.runtime.consoleState.value?.server.url).toBe(refreshedState.server.url);
+    expect(shell.settings.ruleAuthoringModelOptions.value.map((option?: any) : any => option.value)).toContain("rule-agent");
 
     const eventJob: any = makeJob("event-job");
     resolveEventSubscription({
@@ -353,22 +353,22 @@ describe("useConsole to useServerConsoleShell integration", () : any => {
       events: [makeJobEvent(eventJob)],
     });
     await waitForCondition(
-      () : any => shell.consoleState.value?.jobs.items.some((job?: any) : any => job.id === eventJob.id) === true,
+      () : any => shell.runtime.consoleState.value?.jobs.items.some((job?: any) : any => job.id === eventJob.id) === true,
       "job event did not update shell state",
     );
 
-    shell.systemLogFilters.value.fuzzy = eventJob.id;
+    shell.monitoring.systemLogFilters.value.fuzzy = eventJob.id;
     await nextTick();
-    expect(shell.filteredSystemLogRows.value.map((row?: any) : any => row.logId)).toContain(`job:${eventJob.id}`);
+    expect(shell.monitoring.filteredSystemLogRows.value.map((row?: any) : any => row.logId)).toContain(`job:${eventJob.id}`);
 
-    shell.sideNavCollapsed.value = true;
-    shell.sideNavOpen.value = true;
-    expect(shell.sideNavCollapsed.value).toBe(true);
-    expect(shell.sideNavOpen.value).toBe(true);
+    shell.navigation.sideNavCollapsed.value = true;
+    shell.navigation.sideNavOpen.value = true;
+    expect(shell.navigation.sideNavCollapsed.value).toBe(true);
+    expect(shell.navigation.sideNavOpen.value).toBe(true);
 
-    expect(shell.dashboardAlerts.value.every((alert?: any) : any => alert.source === "monitor")).toBe(true);
+    expect(shell.dashboard.dashboardAlerts.value.every((alert?: any) : any => alert.source === "monitor")).toBe(true);
 
-    await expect(shell.openAdmin("modules")).resolves.toBe(false);
+    await expect(shell.navigation.openAdmin("modules")).resolves.toBe(false);
     expect(router.currentRoute.value.fullPath).toBe("/");
   });
 });

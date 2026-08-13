@@ -2,7 +2,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import { createMemoryApiKeyVerifierKeyProvider } from "../../../packages/foundation/src/security/authorization/api-key-verifier-key-provider.ts";
 import {
   API_KEY_MANAGEMENT_ACTION,
@@ -14,16 +13,15 @@ import {
   registerApiKeyOwnerRecoveryAssignmentSync
 } from "../../../packages/capabilities/src/operation-permission-core/api-key-distribution.ts";
 import { createToolCatalog } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
-import { ensureSchema } from "../../../packages/capabilities/src/operation-permission-core/store-schema.ts";
+import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
 import { SERVER_API_OPERATIONS } from "../../../packages/contracts/src/operations/operation-registry.ts";
 import { STRATEGY_PERMISSION_OPERATION_DEFINITIONS } from "../../../packages/contracts/src/operations/strategy-permission-operation-definitions.ts";
 
 const temporaryDirectories: string[] = [];
 
-afterEach(() : any => {
-  while (temporaryDirectories.length) {
-    fs.rmSync(temporaryDirectories.pop()!, { recursive: true, force: true });
-  }
+afterEach(async () : Promise<any> => {
+  await Promise.all(temporaryDirectories.splice(0).map((directory?: any) : any =>
+    fs.promises.rm(directory, { recursive: true, force: true })));
 });
 
 function governanceFixture(): any {
@@ -110,11 +108,9 @@ function policy(catalogFingerprint = "catalog-1", overrides: Record<string, any>
   };
 }
 
-function harness(): any {
+function harness(catalogOverrides: Record<string, any> = {}): any {
   const directory: any = fs.mkdtempSync(path.join(os.tmpdir(), "meshrix-api-key-"));
   temporaryDirectories.push(directory);
-  const db: any = openSqliteDatabase(path.join(directory, "permission.sqlite"));
-  ensureSchema(db);
   const governance: any = governanceFixture();
   let timestamp: any = Date.parse("2026-08-03T00:00:00.000Z");
   let randomCounter: any = 0;
@@ -123,30 +119,94 @@ function harness(): any {
       fingerprint: "catalog-1",
       tools: [{ id: "tools.echo" }],
       toolsets: [],
-      scopes: []
+      scopes: [],
+      ...catalogOverrides
     })
   };
-  const provider: any = createApiKeyDistributionProvider({
-    store: { db },
+  const store: any = createOperationPermissionStore({
+    userDataPath: directory,
     registry,
     securityPermissions: governance.securityPermissions,
-    verifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91)),
-    now: () : any => timestamp,
-    randomBytes(size: number) : any {
+    capabilityBindingGuard: false,
+    apiKeyVerifierKeyProvider: createMemoryApiKeyVerifierKeyProvider(Buffer.alloc(32, 91)),
+    apiKeyClock: () : any => timestamp,
+    apiKeyRandomBytes(size: number) : any {
       randomCounter += 1;
       return Buffer.alloc(size, randomCounter);
     }
   });
+  const provider: any = createApiKeyDistributionProvider({ store });
   return {
-    db,
+    store,
     governance,
     provider,
     advance(ms: number) : any { timestamp += ms; },
-    close() : any { db.close(); }
+    close() : any { return store.close(); }
   };
 }
 
 describe("scoped API Key distribution", () : any => {
+  it("revalidates dynamic MCP effects by exact capability while accepting their non-catalog toolset identity", async () : Promise<any> => {
+    const current: any = harness({
+      toolsets: [{ id: "meshrix.gateway.read" }],
+      scopes: [{ id: "gateway:read" }]
+    });
+    const capabilityId: any = "cap:upstream:opaque-service:tools-call-records-list";
+    try {
+      const created: any = await current.provider.create({
+        subjectId: "admin",
+        workloadDisplayName: "Dynamic MCP worker",
+        organizationNodeId: "child",
+        expiresAt: "2026-08-04T00:00:00.000Z",
+        policy: policy("catalog-1", {
+          serviceIds: ["opaque-service"],
+          capabilityIds: [capabilityId],
+          toolsetIds: ["meshrix.gateway.read"],
+          deniedTools: ["tools.echo"],
+          scopeIds: ["gateway:read"],
+          maximumRisk: "low",
+          resources: {
+            ...policy().resources,
+            workspaceIds: [],
+            secretBindingIds: ["secret-binding-opaque"]
+          }
+        })
+      });
+      const authorization: any = await current.provider.authenticateRuntime({
+        credential: created.apiKey,
+        serverAudience: "https://meshrix.invalid",
+        targetId: "server",
+        connectorPackageId: null,
+        processIdentityEvidence: null
+      });
+      const operation: any = {
+        toolId: "tools.echo",
+        serviceId: "opaque-service",
+        capabilityId,
+        toolsetIds: ["meshrix.gateway.read", "upstream:opaque-service"],
+        scopeIds: ["gateway:read"],
+        risk: "read_only",
+        resourceContext: {
+          secretBindingId: "secret-binding-opaque",
+          capabilityDomain: "upstream-gateway",
+          resourceKind: "upstream-service-operation"
+        }
+      };
+      const lease: any = await current.provider.reserveEffect({ authorization, operation });
+      await current.provider.releaseEffect(lease);
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { ...operation, capabilityId: "", dynamicCapability: true }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+      await expect(current.provider.reserveEffect({
+        authorization,
+        operation: { ...operation, capabilityId: `${capabilityId}-sibling` }
+      })).rejects.toMatchObject({ code: "api_key_policy_denied" });
+    } finally {
+      await current.close();
+    }
+  });
+
   it("grants the enabled owner a server-authored recovery scope when organization governance is published after startup", () : any => {
     let organization: any = { configured: false, revision: 0, nodes: [] };
     let listener: any = null;
@@ -207,7 +267,7 @@ describe("scoped API Key distribution", () : any => {
       items: [],
       nextCursor: ""
     });
-    fixture.close();
+    await fixture.close();
   });
 
   it("catalogs the owner-bound upload operations used by scoped API keys", () : any => {
@@ -317,10 +377,8 @@ describe("scoped API Key distribution", () : any => {
       expect(issuerScopes.eligibleNodes.map((node: any) : any => node.nodeId)).toEqual(["child", "issuer"]);
       expect(parseApiKeyCredential(created.apiKey)?.keyId).toBe(created.record.keyId);
       expect(JSON.stringify(created.record)).not.toContain(created.apiKey);
-      const durable: any = current.db.prepare("SELECT * FROM api_key_records WHERE key_id = ?").get(created.record.keyId);
-      expect(JSON.stringify(durable)).not.toContain(created.apiKey);
-      expect(durable.verifier_digest).toBeInstanceOf(Buffer);
-      expect(current.provider.explainLookupPlan().some((entry: any) : any =>
+      expect(JSON.stringify(await current.provider.list({ subjectId: "admin", limit: 10 }))).not.toContain(created.apiKey);
+      expect((await current.provider.explainLookupPlan()).some((entry: any) : any =>
         /primary key|index/i.test(String(entry.detail || "")))).toBe(true);
       const authorization: any = await current.provider.authenticateRuntime({
         credential: created.apiKey,
@@ -339,7 +397,7 @@ describe("scoped API Key distribution", () : any => {
         processIdentityEvidence: null
       })).rejects.toMatchObject({ code: "api_key_invalid", statusCode: 401 });
     } finally {
-      current.close();
+      await current.close();
     }
   });
 
@@ -397,7 +455,7 @@ describe("scoped API Key distribution", () : any => {
         operation: { toolId: "tools.echo", risk: "low", resourceContext: { workspaceId: "workspace-1" } }
       })).rejects.toMatchObject({ code: "api_key_inactive" });
     } finally {
-      current.close();
+      await current.close();
     }
   });
 
@@ -493,7 +551,7 @@ describe("scoped API Key distribution", () : any => {
         expectedLifecycleRevision: revoked.lifecycleRevision
       })).rejects.toMatchObject({ code: "api_key_inactive" });
     } finally {
-      current.close();
+      await current.close();
     }
   });
 });

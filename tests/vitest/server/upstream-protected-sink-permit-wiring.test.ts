@@ -46,6 +46,9 @@ import {
   dispatchRegisteredHttpOperation
 } from "../../../packages/server-runtime/src/composition/dispatch-operation-http.ts";
 import {
+  createOperationRouteIndex
+} from "../../../packages/server-runtime/src/routing/operation-route-index.ts";
+import {
   dispatchRpcOperation
 } from "../../../packages/server-runtime/src/composition/dispatch-operation-rpc.ts";
 import {
@@ -755,7 +758,8 @@ function startRealAuthorityDispatch({
     },
     operationProofSubstrate,
     request,
-    response
+    response,
+    routeIndex: createOperationRouteIndex(SERVER_API_OPERATIONS, { strict: true })
   };
   const dispatch: any = transport === "rpc"
     ? dispatchRpcOperation({

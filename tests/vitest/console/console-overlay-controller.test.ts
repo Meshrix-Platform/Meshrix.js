@@ -13,9 +13,12 @@ import {
 
 const drawerShell: any = vi.hoisted(() : any => ({ current: null as any }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => drawerShell.current,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(drawerShell.current),
+  };
+});
 // The drawer's N8 URL bridge needs a router; the overlay contract does not.
 vi.mock("../../../apps/console/composables/use-console-url-state", async () : Promise<any> => {
   const { ref } = await import("vue");

@@ -7,6 +7,9 @@
       "description": "Core lightweight platform gate",
       "suites": [
         "runtime.resource-discipline",
+        "runtime.capacity-catalog-conformance",
+        "runtime.capacity-work-queue-dispatch-conformance",
+        "runtime.capacity-execution-fence-conformance",
         "repo.public-boundary",
         "security.secret-hygiene",
         "repo.local-info-hygiene",
@@ -33,6 +36,7 @@
         "release.acceptance-unit",
         "release.acceptance-ledger-anchor",
         "runtime.operation-routing",
+        "runtime.refactor-convergence",
         "runtime.job-work-queue-recovery",
         "runtime.operation-dispatch-lock",
         "execution-sandbox.provider-resolution",
@@ -161,6 +165,66 @@
     }
   },
   "suites": [
+    {
+      "id": "runtime.capacity-catalog-conformance",
+      "label": "Runtime capacity workload catalog conformance suite",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/runtime-capacity-catalog-conformance.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.capacity-work-queue-dispatch-conformance",
+      "label": "Runtime capacity work queue dispatch conformance suite",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/runtime-capacity-work-queue-dispatch-conformance.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.capacity-execution-fence-conformance",
+      "label": "Runtime capacity execution fence conformance suite",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/runtime-capacity-execution-fence-conformance.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
     {
       "id": "runtime.resource-discipline",
       "label": "Priority-zero real-service and high-risk owner-path resource gate",
@@ -525,7 +589,7 @@
         "--",
         "tests/vitest/server/operation-permission-grant-security.test.ts",
         "tests/vitest/server/delegated-mcp-parent-authority.test.ts",
-        "tests/vitest/server/process-identity-nonce-capacity.test.ts",
+        "tests/vitest/server/process-identity-nonce-conformance.test.ts",
         "tests/vitest/server/local-secret-crash-consistency.test.ts",
         "tests/vitest/server/plugin-mcp-outlet-visibility.test.ts",
         "tests/vitest/server/capability-binding-guard-persistence-and-recovery.test.ts",
@@ -562,7 +626,7 @@
         "tests/vitest/server/http-request-body-admission.test.ts",
         "tests/vitest/server/http-server-middleware-rate-limit.test.ts",
         "tests/vitest/server/production-ingress-contract.test.ts",
-        "tests/vitest/server/client-registry-capacity-recovery.test.ts"
+        "tests/vitest/server/client-registry-conformance-recovery.test.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "fast",
@@ -832,6 +896,29 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "runtime.refactor-convergence",
+      "label": "Runtime performance and maintainability refactor convergence suites",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/runtime-refactor-workspace-incremental.test.ts",
+        "tests/vitest/server/runtime-refactor-authorization-compiler.test.ts",
+        "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts",
+        "tests/vitest/server/runtime-refactor-governed-evidence.test.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
       "artifacts": []
     },
     {
@@ -1837,7 +1924,7 @@
       "level": "integration",
       "command": "node",
       "args": [
-        "tools/server-scripts/verify-job-work-queue-capacity.ts"
+        "tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts"
       ],
       "sideEffects": "build-output",
       "timeoutClass": "fast",
@@ -1845,7 +1932,7 @@
       "flakePolicy": "fail",
       "coverageContribution": true,
       "artifacts": [
-        "build/reports/job-work-queue-capacity.json"
+        "build/reports/job-work-queue-ceiling-conformance.json"
       ]
     },
     {

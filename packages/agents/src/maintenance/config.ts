@@ -81,7 +81,7 @@ export function maxRisk(...risks: any[]) : any {
     .sort((left?: any, right?: any) : any => riskRank(right) - riskRank(left))[0] || "read_only";
 }
 
-function asPlainObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asPlainObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

@@ -6,7 +6,23 @@
   "directory": "packages/agents",
   "description": "Agent configuration, gateway, workspace, collaboration, and maintenance features.",
   "publicApi": [
-    "#meshrix/agents/*"
+    "#meshrix/agents/agent-configs/config-registry",
+    "#meshrix/agents/agent-configs/credential-binding",
+    "#meshrix/agents/agent-gateway/external-gateway/index",
+    "#meshrix/agents/agent-gateway/index",
+    "#meshrix/agents/agent-gateway/model-probe/index",
+    "#meshrix/agents/agent-memory/index",
+    "#meshrix/agents/agent-runtime-provider",
+    "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
+    "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
+    "#meshrix/agents/maintenance/index",
+    "#meshrix/agents/maintenance/planner",
+    "#meshrix/agents/maintenance/tool-registry",
+    "#meshrix/agents/maintenance/work-queue-contract",
+    "#meshrix/agents/upstream-gateway/index",
+    "#meshrix/agents/workspace-asset-registry/index",
+    "#meshrix/agents/workspace-contribution",
+    "#meshrix/agents/workspace-governance/index"
   ],
   "dependsOn": [
     "contracts",

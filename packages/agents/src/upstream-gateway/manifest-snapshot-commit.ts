@@ -108,12 +108,12 @@ export function createUpstreamManifestSnapshotCommitter({
     });
   }
 
-  function resolveGrants(platform?: any) : any {
+  async function resolveGrants(platform?: any) : Promise<any> {
     if (typeof getGrants === "function") {
-      return getGrants() || [];
+      return (await getGrants()) || [];
     }
     if (typeof platform?.store?.listGrants === "function") {
-      return platform.store.listGrants({ includeRevoked: false }) || [];
+      return (await platform.store.listGrants({ includeRevoked: false })) || [];
     }
     return [];
   }
@@ -207,20 +207,20 @@ export function createUpstreamManifestSnapshotCommitter({
     return publication;
   }
 
-  function rollbackPair(priorRegistryState?: any, priorPlatformState?: any, priorMergedOperations?: any, priorAudienceProjection?: any) : any {
+  async function rollbackPair(priorRegistryState?: any, priorPlatformState?: any, priorMergedOperations?: any, priorAudienceProjection?: any) : Promise<any> {
     if (priorRegistryState && typeof registry.restoreManifestSnapshotState === "function") {
       registry.restoreManifestSnapshotState(priorRegistryState);
     }
     const platform: any = getOperationPermissionPlatform?.();
     if (priorPlatformState && typeof platform?.restoreOperationLayersState === "function") {
-      platform.restoreOperationLayersState(priorPlatformState);
+      await platform.restoreOperationLayersState(priorPlatformState);
     } else if (typeof platform?.refreshOperations === "function") {
-      platform.refreshOperations(priorMergedOperations);
+      await platform.refreshOperations(priorMergedOperations);
     }
     lastAudienceProjection = priorAudienceProjection;
   }
 
-  function compileCurrentAudience({ snapshot, projection, platform, previousProjection }: Record<string, any>) : any {
+  async function compileCurrentAudience({ snapshot, projection, platform, previousProjection }: Record<string, any>) : Promise<any> {
     const catalogFingerprint: any = String(platform?.catalog?.()?.fingerprint || "");
     const operationLayers: any = platform?.captureOperationLayersState?.() || {};
     const effectiveOperations: any[] = [
@@ -234,7 +234,7 @@ export function createUpstreamManifestSnapshotCommitter({
       catalogRevision: catalogFingerprint,
       snapshot,
       projectedOperations: effectiveOperations,
-      grants: resolveGrants(platform),
+      grants: await resolveGrants(platform),
       tagStore: getTagStore?.() || null,
       previousProjection,
       policyRevision: Number(getPolicyRevision?.() || 0) || 0,
@@ -249,7 +249,7 @@ export function createUpstreamManifestSnapshotCommitter({
       return Object.freeze({ outcome: "unavailable", emitted: false });
     }
     const previousProjection: any = lastAudienceProjection;
-    const audienceProjection: any = compileCurrentAudience({
+    const audienceProjection: any = await compileCurrentAudience({
       snapshot: lastSnapshot,
       projection: lastOperationProjection,
       platform,
@@ -351,27 +351,27 @@ export function createUpstreamManifestSnapshotCommitter({
       throw error;
     }
     if (gatewayDiff.setRevision !== projection.sourceRevision || gatewayDiff.setDigest !== projection.sourceDigest) {
-      rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
+      await rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
       throw new Error("Gateway snapshot revision did not agree with compiled projection.");
     }
 
     if (!platform || (typeof platform.replaceUpstreamOperations !== "function" && typeof platform.refreshOperations !== "function")) {
-      rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
+      await rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
       throw new Error("Operation Permission platform is unavailable for upstream catalog commit.");
     }
 
     let catalogResult: any;
     try {
       catalogResult = typeof platform.replaceUpstreamOperations === "function"
-        ? platform.replaceUpstreamOperations({
+        ? await platform.replaceUpstreamOperations({
             sourceRevision: snapshot.setRevision,
             sourceDigest: snapshot.setDigest,
             operations: projection.operations,
             notify: false
           })
-        : platform.refreshOperations([...nextMergedOperations]);
+        : await platform.refreshOperations([...nextMergedOperations]);
     } catch (error: any) {
-      rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
+      await rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
       throw error;
     }
 
@@ -384,13 +384,13 @@ export function createUpstreamManifestSnapshotCommitter({
     );
     if (catalogOperationIds.size !== projectedOperationIds.size ||
         [...projectedOperationIds].some((operationId?: any) : any => !catalogOperationIds.has(operationId))) {
-      rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
+      await rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
       throw new Error("Operation Permission catalog did not publish every projected upstream operation.");
     }
 
     let audienceProjection: any;
     try {
-      audienceProjection = compileCurrentAudience({
+      audienceProjection = await compileCurrentAudience({
         snapshot,
         projection,
         platform,
@@ -400,14 +400,14 @@ export function createUpstreamManifestSnapshotCommitter({
         throw new Error("Audience projection is not ready after catalog commit.");
       }
     } catch (error: any) {
-      rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
+      await rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
       throw error;
     }
 
     try {
       await registry.finalizeManifestSnapshot?.(gatewayDiff);
     } catch (error: any) {
-      rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
+      await rollbackPair(priorRegistryState, priorPlatformState, priorMergedOperations, priorAudienceProjection);
       throw error;
     }
     pendingPublication = Object.freeze({

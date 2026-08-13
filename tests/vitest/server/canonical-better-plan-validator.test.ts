@@ -17,26 +17,30 @@ afterEach(async () : Promise<any> => {
 });
 
 describe("canonical Better Plan workspace adapter", () : any => {
-  it("requires both zero validation issues and zero label warnings", () : any => {
+  it("requires a valid current-generation workspace with zero issues", () : any => {
     expect(canonicalBetterPlanChecks({
-      validation: { ok: true, issues: [] },
-      labels: { errors: 0, warnings: 0 },
+      validation: { valid: true, issues: [] },
     })).toMatchObject({
       accepted: true,
       checks: { schema: true, source: true, label: true, graph: true, privacy: true },
     });
 
     expect(canonicalBetterPlanChecks({
-      validation: { ok: true, issues: [] },
-      labels: { errors: 0, warnings: 1 },
-    })).toMatchObject({ accepted: false, checks: { label: false } });
+      validation: { valid: false, issues: ["invalid"] },
+    })).toMatchObject({ accepted: false, checks: { schema: false, label: false } });
   });
 
-  it("runs the canonical validate and label commands without projecting the resolved tool path", async () : Promise<any> => {
+  it("discovers and validates every current-generation workspace without projecting the resolved tool path", async () : Promise<any> => {
     const root: any = await fs.mkdtemp(path.join(os.tmpdir(), "canonical-better-plan-"));
     temporaryRoots.push(root);
     const toolPath: any = path.join(root, "manifest_tool.py");
     await fs.writeFile(toolPath, "# synthetic fixture\n", "utf8");
+    await fs.mkdir(path.join(root, "docs/plans/current"), { recursive: true });
+    await fs.mkdir(path.join(root, "docs/plans/next"), { recursive: true });
+    await fs.writeFile(path.join(root, "docs/plans/current/Manifest.json"),
+      JSON.stringify({ schema: "better-plan.manifest/v3" }), "utf8");
+    await fs.writeFile(path.join(root, "docs/plans/next/Manifest.json"),
+      JSON.stringify({ schema: "better-plan.manifest/v3" }), "utf8");
     const calls: any[] = [];
     const result: any = await validateCanonicalBetterPlanWorkspace({
       repoRoot: root,
@@ -45,17 +49,15 @@ describe("canonical Better Plan workspace adapter", () : any => {
         calls.push(args);
         return {
           status: 0,
-          stdout: JSON.stringify(args[0] === "validate"
-            ? { ok: true, issues: [] }
-            : { errors: 0, warnings: 0 }),
+          stdout: JSON.stringify({ valid: true, issues: [] }),
         };
       },
     });
 
     expect(result.accepted).toBe(true);
     expect(calls).toEqual([
-      ["validate", "docs/plans", "--check-sources", "--no-git", "--json"],
-      ["check-labels", "docs/plans", "--json"],
+      ["validate", "docs/plans/current", "--json"],
+      ["validate", "docs/plans/next", "--json"],
     ]);
     expect(JSON.stringify(result)).not.toContain(root);
   });
@@ -84,6 +86,9 @@ describe("canonical Better Plan workspace adapter", () : any => {
     temporaryRoots.push(root);
     const toolPath: any = path.join(root, "manifest_tool.py");
     await fs.writeFile(toolPath, "# synthetic fixture\n", "utf8");
+    await fs.mkdir(path.join(root, "docs/plans/current"), { recursive: true });
+    await fs.writeFile(path.join(root, "docs/plans/current/Manifest.json"),
+      JSON.stringify({ schema: "better-plan.manifest/v3" }), "utf8");
 
     await expect(validateCanonicalBetterPlanWorkspace({
       repoRoot: root,
@@ -97,13 +102,16 @@ describe("canonical Better Plan workspace adapter", () : any => {
     temporaryRoots.push(root);
     const toolPath: any = path.join(root, "manifest_tool.py");
     await fs.writeFile(toolPath, "# synthetic fixture\n", "utf8");
+    await fs.mkdir(path.join(root, "docs/plans/current"), { recursive: true });
+    await fs.writeFile(path.join(root, "docs/plans/current/Manifest.json"),
+      JSON.stringify({ schema: "better-plan.manifest/v3" }), "utf8");
 
     await expect(validateCanonicalBetterPlanWorkspace({
       repoRoot: root,
       manifestToolPath: toolPath,
-      runTool: () : any => ({ status: 1, stdout: JSON.stringify({ ok: true, issues: [] }) }),
+      runTool: () : any => ({ status: 1, stdout: JSON.stringify({ valid: true, issues: [] }) }),
     })).rejects.toEqual(expect.objectContaining({
-      code: "canonical_better_plan_labels_unreadable",
+      code: "canonical_better_plan_validation_unreadable",
     }));
   });
 
@@ -112,10 +120,11 @@ describe("canonical Better Plan workspace adapter", () : any => {
     temporaryRoots.push(root);
     const toolPath: any = path.join(root, "manifest_tool.py");
     await fs.writeFile(toolPath, "# synthetic fixture\n", "utf8");
+    await fs.mkdir(path.join(root, "docs/plans/current"), { recursive: true });
+    await fs.writeFile(path.join(root, "docs/plans/current/Manifest.json"),
+      JSON.stringify({ schema: "better-plan.manifest/v3" }), "utf8");
     const attempts: any[] = [];
-    const passingPayload: any = (command?: any) : any => JSON.stringify(
-      command === "validate" ? { ok: true, issues: [] } : { errors: 0, warnings: 0 },
-    );
+    const passingPayload: any = () : any => JSON.stringify({ valid: true, issues: [] });
 
     const result: any = await validateCanonicalBetterPlanWorkspace({
       repoRoot: root,
@@ -130,6 +139,6 @@ describe("canonical Better Plan workspace adapter", () : any => {
     });
 
     expect(result.accepted).toBe(true);
-    expect(attempts).toEqual(["validate", "validate", "check-labels"]);
+    expect(attempts).toEqual(["validate", "validate"]);
   });
 });

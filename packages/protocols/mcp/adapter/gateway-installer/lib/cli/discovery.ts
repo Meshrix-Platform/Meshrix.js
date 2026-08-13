@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { verifyMcpHandshakeSignature } from "../../mcp-identity.ts";
+import { MCP_PROTOCOL_VERSION } from "../../../http-mcp-adapter-constants.ts";
 import {
   DEFAULT_SCAN_PORTS,
   DEFAULT_TOKEN_ENV,
@@ -301,7 +302,7 @@ export async function ensureService(baseUrl?: any) : Promise<any> {
       id: 1,
       method: "initialize",
       params: {
-        protocolVersion: "2025-06-18",
+        protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: {},
         clientInfo: { name: "meshrix-mcp-connector", version: packageJson.version }
       }
