@@ -52,23 +52,28 @@ export function reduceControlledExecutionConvergence({
   generatedAt,
   plan,
   sourceContext,
-  planReceipt,
+  planCheckpoint,
   leafReports
 }: Record<string, any> = {}) : any {
   requireCondition(
-    plan?.directory === "end-to-end-release/enterprise-single-node" &&
-      plan?.finalNodeId === planReceipt?.finalNodeId,
-    "Enterprise single-node final node is mismatched",
+    plan?.directory === "end-to-end-release" &&
+      plan?.nodeId === planCheckpoint?.nodeId,
+    "Enterprise operations checkpoint is mismatched",
   );
-  requireCondition(plan?.status === "completed", "Controlled execution final node is not completed");
-  requireCondition(Array.isArray(plan.requirements) && plan.requirements.length === 11,
-    "Enterprise single-node requirements are incomplete");
+  requireCondition(plan?.status === "completed", "Controlled execution operations node is not completed");
+  requireCondition(Array.isArray(plan.requirements) && plan.requirements.includes("REQ-BASELINE-CONSOLE-ADMINISTRATION"),
+    "Enterprise operations requirements are incomplete");
   requireCondition(plan.criteriaChecked === true, "Controlled execution acceptance criteria are incomplete");
-  requireCondition(planReceipt?.finalNodeId === plan.finalNodeId && planReceipt?.proofVerified === true, "Controlled execution Plan receipt is not current");
-  requireCondition(planReceipt?.privacySafe === true, "Controlled execution Plan receipt is privacy-unsafe");
   requireCondition(
-    Array.isArray(planReceipt?.profiles) && planReceipt.profiles.includes("enterprise-single-node"),
-    "Enterprise single-node profile receipt is missing",
+    /^[a-f0-9]{64}$/u.test(String(planCheckpoint?.candidateDigest || "")) &&
+      planCheckpoint.candidateDigest === plan.candidateDigest &&
+      planCheckpoint.sourceRevision === plan.sourceRevision,
+    "Controlled execution Plan checkpoint is not current",
+  );
+  requireCondition(planCheckpoint?.privacySafe === true, "Controlled execution Plan checkpoint is privacy-unsafe");
+  requireCondition(
+    Array.isArray(planCheckpoint?.profiles) && planCheckpoint.profiles.includes("enterprise-single-node"),
+    "Enterprise single-node checkpoint profile is missing",
   );
   const leafEvidence: any[] = [];
   for (const spec of CONTROLLED_EXECUTION_LEAF_SPECS) {
@@ -99,11 +104,11 @@ export function reduceControlledExecutionConvergence({
     generatedAt: String(generatedAt || ""),
     sourceContext,
     plan,
-    baselineReceipt: planReceipt,
+    baselineCheckpoint: planCheckpoint,
     leafEvidence,
     summary: {
       controlledExecutionConvergenceReady: true,
-      baselineReceiptProfileCount: planReceipt.profiles.length,
+      baselineCheckpointProfileCount: planCheckpoint.profiles.length,
       leafReportCount: leafEvidence.length,
       reportLeakScan: true
     }

@@ -8,8 +8,8 @@ import {
 const FIXTURE_CANDIDATE: Readonly<Record<string, any>> = Object.freeze({
   candidateDigest:
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  sourceRevision: "candidate-source-revision",
-  repositoryRevision: "candidate-repository-revision",
+  sourceRevision: "b".repeat(40),
+  repositoryRevision: "b".repeat(40),
   repositoryTreeDigest: "candidate-repository-tree",
 });
 
@@ -29,24 +29,24 @@ function dependencyMap() : any {
   return {
     schema_version: 3,
     plans: [
-      provider("end-to-end-release/platform-foundation", "foundation-final"),
-      provider("end-to-end-release/deployment/linux-container", "linux-final"),
+      provider("end-to-end-release/fixture-alpha", "alpha-final"),
+      provider("end-to-end-release/fixture-beta", "beta-final"),
       {
-        directory: "end-to-end-release/functional-release-acceptance",
+        directory: "end-to-end-release",
         parent: null,
         parent_contract_node_id: null,
         parent_integrations: [],
         final_validations: [{ node_id: "release-final", profiles: ["enterprise-single-node"] }],
         prerequisite_receipts: [
           {
-            plan: "end-to-end-release/platform-foundation",
-            node_id: "foundation-final",
+            plan: "end-to-end-release/fixture-alpha",
+            node_id: "alpha-final",
             kind: "final_validation",
             profiles: ["enterprise-single-node"],
           },
           {
-            plan: "end-to-end-release/deployment/linux-container",
-            node_id: "linux-final",
+            plan: "end-to-end-release/fixture-beta",
+            node_id: "beta-final",
             kind: "final_validation",
             profiles: ["enterprise-single-node"],
           },
@@ -61,8 +61,8 @@ function dependencyMap() : any {
 function binding(planDirectory?: any) : any {
   const suffix: any = planDirectory.split("/").at(-1);
   return {
-    finalNodeId: suffix === "platform-foundation" ? "foundation-final" : "linux-final",
-    platform: suffix === "linux-container" ? "linux" : "any",
+    finalNodeId: suffix === "fixture-alpha" ? "alpha-final" : "beta-final",
+    platform: suffix === "fixture-beta" ? "linux" : "any",
     profiles: ["enterprise-single-node"],
     requirements: [`REQ-${suffix}`],
     receiptDigest: `${suffix}-receipt`,
@@ -75,16 +75,126 @@ function binding(planDirectory?: any) : any {
 }
 
 describe("platform acceptance Plan receipt preflight", () : any => {
+  it("accepts the consolidated Plan without cyclic prerequisite receipts", async () : Promise<any> => {
+    const prerequisiteCodes: any[] = ["EFF-7", "EFF-8", "EFF-9", "EFF-10"];
+    const prerequisites: any[] = prerequisiteCodes.map((code?: any) : any => ({
+      id: `${code}-node`,
+      code,
+      role: "implementation",
+      status: "completed",
+      candidate_digest: "a".repeat(64),
+      commit: { delivered: "b".repeat(40) },
+      acceptance_criteria: [{ checked: true, evidence_refs: [{ type: "command" }] }],
+    }));
+    const map: any = {
+      schema_version: 3,
+      plans: [{
+        directory: "end-to-end-release",
+        parent: null,
+        parent_contract_node_id: null,
+        parent_integrations: [],
+        final_validations: [{ node_id: "release-final", profiles: ["enterprise-single-node"] }],
+        prerequisite_receipts: [],
+        children: [],
+        accepted_final_receipts: {},
+      }],
+    };
+    const verifyPlan: any = vi.fn(async () : Promise<any> => ({ accepted: true }));
+    const loadBinding: any = vi.fn();
+
+    expect(requiredPlatformAcceptancePlanReceipts(map)).toEqual([]);
+    await expect(verifyPlatformAcceptancePlanReceipts({
+      repoRoot: "/synthetic-repo",
+      selectedProfile: "enterprise-single-node",
+      dependencyMap: map,
+      verifyPlan,
+      loadBinding,
+      loadCandidate: async () : Promise<any> => ({
+        candidate_digest: "a".repeat(64),
+        source_revision: "b".repeat(40),
+      }),
+      loadCheckpoints: async () : Promise<any> => [
+        ...prerequisites,
+        {
+          id: "release-final",
+          code: "EFF-FINAL",
+          role: "final_validation",
+          status: "pending",
+          prerequisites: prerequisites.map((node?: any) : any => node.id),
+        },
+      ],
+      verifyCheckpointEvidence: async () : Promise<any> => ({ evidenceCount: 1 }),
+    })).resolves.toMatchObject({
+      releaseAcceptancePlan: "end-to-end-release",
+      candidateDigest: "a".repeat(64),
+      requiredReceiptCount: 0,
+      requiredCheckpointCount: 4,
+      bindings: [],
+      checkpointBindings: expect.arrayContaining(
+        prerequisiteCodes.map((code?: any) : any => expect.objectContaining({ code })),
+      ),
+    });
+    expect(verifyPlan).toHaveBeenCalledTimes(2);
+    expect(loadBinding).not.toHaveBeenCalled();
+  });
+
+  it("rejects an incomplete consolidated prerequisite checkpoint", async () : Promise<any> => {
+    const codes: any[] = ["EFF-7", "EFF-8", "EFF-9", "EFF-10"];
+    const prerequisites: any[] = codes.map((code?: any) : any => ({
+      id: `${code}-node`,
+      code,
+      role: "implementation",
+      status: code === "EFF-9" ? "pending" : "completed",
+      candidate_digest: "a".repeat(64),
+      commit: { delivered: "b".repeat(40) },
+      acceptance_criteria: [{ checked: true }],
+    }));
+    const map: any = {
+      schema_version: 3,
+      plans: [{
+        directory: "end-to-end-release",
+        parent: null,
+        parent_contract_node_id: null,
+        parent_integrations: [],
+        final_validations: [{ node_id: "release-final", profiles: ["enterprise-single-node"] }],
+        prerequisite_receipts: [],
+        children: [],
+        accepted_final_receipts: {},
+      }],
+    };
+
+    await expect(verifyPlatformAcceptancePlanReceipts({
+      repoRoot: "/synthetic-repo",
+      selectedProfile: "enterprise-single-node",
+      dependencyMap: map,
+      verifyPlan: async () : Promise<any> => ({ accepted: true }),
+      loadCandidate: async () : Promise<any> => ({
+        candidate_digest: "a".repeat(64),
+        source_revision: "b".repeat(40),
+      }),
+      loadCheckpoints: async () : Promise<any> => [
+        ...prerequisites,
+        {
+          id: "release-final",
+          role: "final_validation",
+          status: "pending",
+          prerequisites: prerequisites.map((node?: any) : any => node.id),
+        },
+      ],
+      verifyCheckpointEvidence: async () : Promise<any> => ({ evidenceCount: 1 }),
+    })).rejects.toThrow("release-prerequisite-incomplete");
+  });
+
   it("requires the exact Release Acceptance prerequisite final receipts", () : any => {
     expect(requiredPlatformAcceptancePlanReceipts(dependencyMap())).toEqual([
-      { plan: "end-to-end-release/platform-foundation", finalNodeId: "foundation-final", planProfile: "enterprise-single-node" },
-      { plan: "end-to-end-release/deployment/linux-container", finalNodeId: "linux-final", planProfile: "enterprise-single-node" },
+      { plan: "end-to-end-release/fixture-alpha", finalNodeId: "alpha-final", planProfile: "enterprise-single-node" },
+      { plan: "end-to-end-release/fixture-beta", finalNodeId: "beta-final", planProfile: "enterprise-single-node" },
     ]);
   });
 
   it("rejects a missing required accepted receipt before command execution", () : any => {
     const map: any = dependencyMap();
-    delete map.plans[0].accepted_final_receipts["foundation-final"];
+    delete map.plans[0].accepted_final_receipts["alpha-final"];
     expect(() : any => requiredPlatformAcceptancePlanReceipts(map)).toThrow("required-plan-receipt-missing");
   });
 
@@ -113,7 +223,7 @@ describe("platform acceptance Plan receipt preflight", () : any => {
     expect(verifyPlan).toHaveBeenNthCalledWith(2, {
       repoRoot: "/synthetic-repo",
       writeReport: false,
-      requireCompletedReceipts: true,
+      requireCompletedReceipts: false,
     });
     expect(loadBinding).toHaveBeenCalledTimes(2);
     expect(loadBinding).toHaveBeenCalledWith(expect.objectContaining({ finalNodeId: expect.any(String) }));
@@ -146,7 +256,7 @@ describe("platform acceptance Plan receipt preflight", () : any => {
       verifyPlan: async () : Promise<any> => ({ accepted: true }),
       loadBinding: async ({ planDirectory }: Record<string, any>) : Promise<any> => ({
         ...binding(planDirectory),
-        ...(planDirectory.endsWith("/linux-container") ? patch : {}),
+        ...(planDirectory.endsWith("/fixture-beta") ? patch : {}),
       }),
     });
 

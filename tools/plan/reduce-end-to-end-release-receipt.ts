@@ -406,7 +406,7 @@ export async function runReceiptReductionMutationTests() : Promise<any> {
       name: "mismatched-plan-identity",
       run: () : any =>
         assertReceiptCurrent(
-          { ...goodReceipt, plan: "end-to-end-release/platform-foundation/authorization" },
+          { ...goodReceipt, plan: "end-to-end-release/mismatched-fixture" },
           assertionContext,
         ),
       expectedSubstring: "digest is stale",

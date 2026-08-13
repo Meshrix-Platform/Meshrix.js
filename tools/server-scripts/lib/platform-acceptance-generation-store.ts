@@ -393,10 +393,18 @@ function requireAggregate(condition?: any, code?: any) : any {
 function validateReceiptPreflight(preflight?: any, selectedProfile?: any) : any {
   requireAggregate(preflight?.selectedProfile === selectedProfile, "receipt-profile-mismatch");
   requireAggregate(SHA256_DIGEST.test(String(preflight?.planReceiptSetDigest || "")), "receipt-set-digest-invalid");
-  requireAggregate(Number.isInteger(preflight?.requiredReceiptCount) && preflight.requiredReceiptCount > 0,
+  requireAggregate(Number.isInteger(preflight?.requiredReceiptCount) && preflight.requiredReceiptCount >= 0,
     "receipt-count-invalid");
+  requireAggregate(/^[a-f0-9]{64}$/u.test(String(preflight?.candidateDigest || "")),
+    "candidate-digest-invalid");
   requireAggregate(Array.isArray(preflight?.bindings) &&
     preflight.bindings.length === preflight.requiredReceiptCount, "receipt-bindings-invalid");
+  requireAggregate(Number.isInteger(preflight?.requiredCheckpointCount) && preflight.requiredCheckpointCount >= 0,
+    "checkpoint-count-invalid");
+  requireAggregate(Array.isArray(preflight?.checkpointBindings) &&
+    preflight.checkpointBindings.length === preflight.requiredCheckpointCount &&
+    preflight.requiredReceiptCount + preflight.requiredCheckpointCount > 0,
+    "checkpoint-bindings-invalid");
 }
 
 function validateCommandAndRequirementEvidence(aggregateReport?: any) : any {

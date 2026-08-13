@@ -116,14 +116,20 @@ async function writeWorkerEvidence(workspace?: any, { includeChild = true, accep
       releaseEvidenceInventoryDigest: reportPayloadDigest({ inventory: RELEASE_EVIDENCE_INVENTORY }),
       planReceiptPreflight: {
         selectedProfile: "enterprise-single-node",
+        candidateDigest: "a".repeat(64),
         requiredReceiptCount: 1,
+        requiredCheckpointCount: 0,
         bindings: [{}],
+        checkpointBindings: [],
         planReceiptSetDigest: `sha256:${"b".repeat(64)}`
       },
       finalPlanReceiptPreflight: {
         selectedProfile: "enterprise-single-node",
+        candidateDigest: "a".repeat(64),
         requiredReceiptCount: 1,
+        requiredCheckpointCount: 0,
         bindings: [{}],
+        checkpointBindings: [],
         planReceiptSetDigest: `sha256:${"b".repeat(64)}`
       },
       reportEvidence: {

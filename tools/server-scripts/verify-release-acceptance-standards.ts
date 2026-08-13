@@ -51,7 +51,7 @@ export function validateReleaseAcceptanceStandards(standards?: any, rootPackage?
     functional?.claim !== EXPECTED_FUNCTIONAL_CLAIM ||
     functional?.requiredForRelease !== true ||
     functional?.command !== "npm run verify:acceptance" ||
-    functional?.plan !== "end-to-end-release/functional-release-acceptance"
+    functional?.plan !== "end-to-end-release"
   ) {
     reasons.push("functional_release_standard_invalid");
   }

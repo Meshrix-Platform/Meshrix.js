@@ -445,7 +445,7 @@
     {
       "id": "controlled-execution-convergence-reducer",
       "factKey": "controlled-execution.convergence-readiness",
-      "domain": "Current Controlled Execution Convergence readiness reduction over exact Plan receipts, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
+      "domain": "Current Controlled Execution Convergence readiness reduction over the exact candidate-bound enterprise-operations Plan checkpoint, sandbox leaf reports, source provenance, privacy, Linux provider conformance, custody, and launcher-boundary evidence.",
       "authorityPath": "tools/server-scripts/lib/controlled-execution-convergence-reducer.ts",
       "authorityRole": "controlled-execution-final-reducer",
       "projectionPaths": [
