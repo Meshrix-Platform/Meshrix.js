@@ -358,7 +358,7 @@ async function assertPactiumImportBoundary() : Promise<any> {
     "packages/foundation/src/checkpoint/tree/checkpoint-tree-projection.ts",
     "packages/foundation/src/checkpoint/tree/data-structure-substrate.ts",
     "packages/foundation/src/checkpoint/tree/merkle-state-substrate.ts",
-    "packages/foundation/src/checkpoint/tree/pactium-substrate-preflight.ts",
+    "packages/foundation/src/checkpoint/tree/pactium-runtime.ts",
     "packages/foundation/src/proof/proof-substrate/index.ts",
     "packages/foundation/src/proof/proof-substrate/transparency-ledger.ts"
   ]);

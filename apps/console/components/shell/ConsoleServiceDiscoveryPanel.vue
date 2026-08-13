@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import {
   normalizeServerAddressUrl,
   probeServerAddressUrl,
@@ -16,13 +16,17 @@ import { createServerAddressRow } from "./service-discovery/server-address-rows"
 import type { ServerAddressRow } from "./service-discovery/types";
 
 const {
+  msg,
+} = useServerConsoleShellContext().preferences;
+const {
+  discoveryDraft,
+} = useServerConsoleShellContext().overlays;
+const {
   isBusy,
   consoleState,
-  discoveryDraft,
   error,
-  msg,
   serverAvailable,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().runtime;
 
 const serviceIdDisplay = computed(() => discoveryDraft.value.serverId || msg.value.drawer.autoDetected);
 const serviceLabelDisplay = computed(() => discoveryDraft.value.serverLabel || msg.value.drawer.autoDetected);

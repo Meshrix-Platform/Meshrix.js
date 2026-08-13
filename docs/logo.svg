@@ -1,57 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-150 -150 300 300" role="img" aria-label="Meshrix.js Logo">
-  <title>Meshrix.js</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="150 0 320 320" fill="none" shape-rendering="geometricPrecision" role="img" aria-labelledby="title desc">
+  <title id="title">Meshrix.js</title>
+  <desc id="desc">Meshrix.js gateway mark</desc>
   <defs>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%"   stop-color="#c9a96e"/>
-      <stop offset="50%"  stop-color="#f0d28c"/>
-      <stop offset="100%" stop-color="#a8893a"/>
-    </linearGradient>
-    <linearGradient id="silver" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0%"   stop-color="#7a8ea8"/>
-      <stop offset="100%" stop-color="#b0c0d4"/>
-    </linearGradient>
+    <mask id="outside-gateway" x="190" y="25" width="240" height="270" maskUnits="userSpaceOnUse" style="mask-type:luminance">
+      <rect x="190" y="25" width="240" height="270" fill="#fff"/>
+      <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="#000"/>
+    </mask>
   </defs>
-
-  <!-- Outermost decorative ring -->
-  <circle r="140" fill="none" stroke="url(#gold)" stroke-width="0.5" opacity="0.3"/>
-
-  <!-- Tick marks — 16 evenly-spaced dashes -->
-  <g fill="none" opacity="0.2" stroke="#c9a96e" stroke-width="0.8">
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(0)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(22.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(45)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(67.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(90)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(112.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(135)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(157.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(180)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(202.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(225)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(247.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(270)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(292.5)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(315)"/>
-    <line x1="0" y1="-134" x2="0" y2="-140" transform="rotate(337.5)"/>
+  <rect x="150" width="320" height="320" fill="#000"/>
+  <g stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <g mask="url(#outside-gateway)">
+      <path d="M216.902 98.75 299.175 51.25M320.825 51.25 403.098 98.75M206.077 117.5V212.5M413.923 117.5V212.5M216.902 231.25 284.019 270M403.098 231.25 335.981 270" stroke-width="3.6"/>
+      <path d="M310 57.5 216.902 218.75M310 57.5 403.098 218.75M216.902 111.25 284.019 270M403.098 111.25 335.981 270" stroke-width="3"/>
+    </g>
+    <path d="M284.019 270V165A25.981 25.981 0 0 1 335.981 165V270" stroke-width="4.4"/>
+    <path d="M310 32.5 320.825 38.75v12.5L310 57.5l-10.825-6.25v-12.5ZM206.077 92.5 216.902 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 92.5 424.748 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM206.077 212.5 216.902 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 212.5 424.748 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5Z" stroke-width="3.6"/>
   </g>
-
-  <!-- Outer octagon -->
-  <polygon fill="none"
-    points="115.5,47.8 47.8,115.5 -47.8,115.5 -115.5,47.8 -115.5,-47.8 -47.8,-115.5 47.8,-115.5 115.5,-47.8"
-    stroke="url(#gold)" stroke-width="1.8" opacity="0.65"/>
-
-  <!-- Ring 1 — concentric -->
-  <circle r="113" fill="none" stroke="#d4c5a0" stroke-width="1.2" opacity="0.45"/>
-
-  <!-- Ring 2 — offset SW -->
-  <circle cx="-16" cy="16" r="89" fill="none" stroke="url(#silver)" stroke-width="1.1" opacity="0.40"/>
-
-  <!-- Ring 3 — offset NE -->
-  <circle cx="13" cy="-10" r="63" fill="none" stroke="#a0b0c4" stroke-width="1.0" opacity="0.45"/>
-
-  <!-- Inner ring -->
-  <circle r="36" fill="none" stroke="url(#gold)" stroke-width="1.2" opacity="0.55"/>
-
-  <!-- Central dot -->
-  <circle r="3" fill="#c9a96e" opacity="0.5"/>
 </svg>

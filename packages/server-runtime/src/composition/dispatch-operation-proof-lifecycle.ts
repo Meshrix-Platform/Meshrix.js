@@ -11,6 +11,19 @@ import {
 } from "./dispatch-operation-support.ts";
 import { proofPolicyEvidence, proofWorkspaceEffect, riskControlSubject } from "./dispatch-operation-risk-control.ts";
 
+let proofLifecycleStartCount: any = 0;
+let proofReceiptCount: any = 0;
+let proofSettlementCount: any = 0;
+
+export function getProofLifecycleRefactorInstrumentation() : any {
+  return {
+    schemaVersion: "v0.0.1:operation:proof-lifecycle-instrumentation-1",
+    proofLifecycleStartCount,
+    proofReceiptCount,
+    proofSettlementCount
+  };
+}
+
 export function createDispatchProofLifecycle({
   operationProofSubstrate = null,
   operation,
@@ -93,6 +106,7 @@ export function createDispatchProofLifecycle({
       causalityRefs: compactStrings([traceContext.traceId, traceContext.requestId])
     });
     rememberProofEntry(started);
+    proofLifecycleStartCount += 1;
     notifyNarrowTransition(request, "operation.proof_start", "proof_started");
     return proofEntry;
   }
@@ -182,6 +196,7 @@ export function createDispatchProofLifecycle({
       changeDigest: change?.changeDigest || ""
     });
     rememberProofEntry(recorded);
+    proofReceiptCount += 1;
     notifyNarrowTransition(request, "operation.proof_receipt", "proof_recorded");
     return proofEntry;
   }
@@ -255,6 +270,7 @@ export function createDispatchProofLifecycle({
       }),
       causalityRefs: compactStrings([traceContext.traceId, traceContext.requestId])
     });
+    proofSettlementCount += 1;
     return rememberProofEntry(completed || entry);
   }
 

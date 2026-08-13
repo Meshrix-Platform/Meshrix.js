@@ -535,7 +535,7 @@ async function main() : Promise<any> {
       batchSize: 1
     })).claimed[0];
     assert.ok(Number((await store.database.query(`
-      SELECT COUNT(*) AS count FROM work_queue_fairness_cursors
+      SELECT COUNT(*) AS count FROM work_queue_virtual_finish
       WHERE queue_definition_id = $1
     `, [cursorRetentionDefinition.queueDefinitionId])).rows[0].count) > 0);
     await store.complete({
@@ -543,7 +543,7 @@ async function main() : Promise<any> {
       leaseId: cursorRetentionClaim.lease.leaseId
     });
     assert.equal(Number((await store.database.query(`
-      SELECT COUNT(*) AS count FROM work_queue_fairness_cursors
+      SELECT COUNT(*) AS count FROM work_queue_virtual_finish
       WHERE queue_definition_id = $1
     `, [cursorRetentionDefinition.queueDefinitionId])).rows[0].count), 0);
 

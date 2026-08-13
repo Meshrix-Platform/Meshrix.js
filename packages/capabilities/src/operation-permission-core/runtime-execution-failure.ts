@@ -70,7 +70,7 @@ export async function completeToolExecutionFailure({
     startedAt,
     finishedAt: nowIso()
   });
-  store.appendMetric({
+  await store.appendMetric({
     traceId,
     toolId: tool.id,
     grantId: authorizationGrantId(authorization),

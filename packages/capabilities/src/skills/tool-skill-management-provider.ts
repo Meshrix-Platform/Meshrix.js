@@ -20,6 +20,18 @@ import { authenticateMcpApiKey } from "./mcp-api-key-authentication.ts";
 import { apiKeyAuthorizationEvaluationInput } from "../operation-permission-core/api-key-distribution.ts";
 
 export const OPERATION_PERMISSION_FACADE_PROTOCOL_VERSION: any = "v0.0.1:operation-permission:facade-1";
+const VISIBLE_TOOL_SNAPSHOT_SCHEMA: any = "v0.0.1:capabilities:visible-tool-snapshot-1";
+const VISIBLE_TOOL_SNAPSHOT_CAPACITY: any = 8;
+let visibleToolSnapshotBuildCount: any = 0;
+let catalogEnumerationCount: any = 0;
+
+export function getRefactorInstrumentation() : any {
+  return {
+    schemaVersion: VISIBLE_TOOL_SNAPSHOT_SCHEMA,
+    snapshotBuildCount: visibleToolSnapshotBuildCount,
+    catalogEnumerationCount: catalogEnumerationCount
+  };
+}
 
 export function createToolSkillManagementProvider({
   operationPermissionPlatform,
@@ -31,6 +43,35 @@ export function createToolSkillManagementProvider({
   logger = null
 }: Record<string, any> = {}) : any {
   const platform: any = operationPermissionPlatform;
+  const visibleToolSnapshots: any = new Map<string, any>();
+
+  function visibleToolSnapshot() : any {
+    const current: any = requirePlatform();
+    const catalog: any = current.catalog?.() || { tools: [] };
+    const fingerprint: any = String(catalog?.fingerprint || "").trim();
+    let snapshot: any = fingerprint ? visibleToolSnapshots.get(fingerprint) : null;
+    if (!snapshot) {
+      const tools: any[] = Array.isArray(catalog?.tools) ? catalog.tools : [];
+      catalogEnumerationCount += 1;
+      const toolsById: any = new Map<any, any>(
+        tools.map((tool?: any) : any => [tool?.id, tool])
+      );
+      const activeTools: any[] = tools.filter((tool?: any) : any => tool?.status === "active");
+      snapshot = Object.freeze({
+        revision: fingerprint,
+        toolsById,
+        activeTools: Object.freeze(activeTools)
+      });
+      visibleToolSnapshotBuildCount += 1;
+      if (fingerprint) {
+        visibleToolSnapshots.set(fingerprint, snapshot);
+        if (visibleToolSnapshots.size > VISIBLE_TOOL_SNAPSHOT_CAPACITY) {
+          visibleToolSnapshots.delete(visibleToolSnapshots.keys().next().value);
+        }
+      }
+    }
+    return snapshot;
+  }
 
   async function loadMcpWorkspaceDirectory({ request, context = {}, signal = null }: Record<string, any>) : Promise<any> {
     const result: any = await executeTool({
@@ -109,7 +150,7 @@ export function createToolSkillManagementProvider({
       method
     });
     if (!authorization.ok && typeof current.securityPermissions?.appendDecision === "function") {
-      current.securityPermissions.appendDecision({
+      await current.securityPermissions.appendDecision({
         decisionId: `authz_mcp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
         traceId: request?.__meshrixTraceContext?.traceId || request?.__meshrixRequestId || "",
         operationId: "mcp.request",
@@ -252,14 +293,12 @@ export function createToolSkillManagementProvider({
   }
 
   function listVisibleTools({ authorization = null }: Record<string, any> = {}) : any {
-    const current: any = requirePlatform();
-    const catalog: any = current.catalog?.() || { tools: [] };
+    const snapshot: any = visibleToolSnapshot();
     const grant: any = authorization?.grant || null;
     const apiKeyAuthorization: any = authorization?.credentialKind === "scoped_api_key"
       ? authorization.apiKeyAuthorization
       : null;
-    return (catalog.tools || [])
-      .filter((tool?: any) : any => tool.status === "active")
+    return snapshot.activeTools
       .filter((tool?: any) : any => apiKeyAuthorization
         ? apiKeyCanSeeTool(tool, apiKeyAuthorization)
         : !grant || grantCanSeeTool(tool, grant))
@@ -289,7 +328,10 @@ export function createToolSkillManagementProvider({
         }
       };
     }
-    const tool: any = current.registry?.getTool?.(toolId) || null;
+    const snapshot: any = visibleToolSnapshot();
+    const tool: any = snapshot.toolsById.get(String(toolId || "")) ||
+      current.registry?.getTool?.(toolId) ||
+      null;
     const contextualCapability: any = context?.dynamicCapability && typeof context.dynamicCapability === "object" && !Array.isArray(context.dynamicCapability)
       ? context.dynamicCapability
       : null;
@@ -301,10 +343,11 @@ export function createToolSkillManagementProvider({
       const audienceTool: any = contextualCapability
         ? {
             ...tool,
-            serviceId: contextualCapability.serviceId || tool.serviceId,
-            requiredScopes: contextualCapability.requiredScopes || context.requestedScopes || tool.requiredScopes,
-            toolsets: contextualCapability.toolsets || tool.toolsets,
-            risk: contextualCapability.risk || tool.risk,
+            serviceId: contextualCapability.serviceId,
+            requiredScopes: contextualCapability.requiredScopes,
+            toolsets: contextualCapability.toolsets,
+            risk: contextualCapability.risk,
+            resourceContext: contextualCapability.resourceContext,
             dynamicCapability: contextualCapability
           }
         : tool;
@@ -345,15 +388,15 @@ export function createToolSkillManagementProvider({
       context: dynamicCapability
         ? {
             ...context,
-            requestedScopes: tool.requiredScopes || context.requestedScopes || [],
+            requestedScopes: dynamicCapability.requiredScopes || [],
             requestedCapabilities: [dynamicCapability.capabilityId],
             dynamicCapability,
-            resourceContext: tool.resourceContext || dynamicCapability.resourceContext || {},
+            resourceContext: dynamicCapability.resourceContext || {},
             upstreamTool: {
-              toolName: tool.id,
-              serviceId: tool.serviceId || dynamicCapability.serviceId || "",
-              operationKey: tool.operationKey || dynamicCapability.operationKey || "",
-              risk: tool.risk || dynamicCapability.risk || "",
+              toolName: dynamicCapability.upstreamToolName || tool.id,
+              serviceId: dynamicCapability.serviceId || "",
+              operationKey: dynamicCapability.operationKey || "",
+              risk: dynamicCapability.risk || "",
               capabilityId: dynamicCapability.capabilityId || ""
             }
           }
@@ -427,7 +470,8 @@ export function createToolSkillManagementProvider({
     publicMcpToolPayload,
     createDelegatedMcpGrant,
     revokeDelegatedMcpGrant,
-    handleOperationPermissionHttpRequest
+    handleOperationPermissionHttpRequest,
+    getRefactorInstrumentation
   });
 }
 
@@ -448,16 +492,20 @@ function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
   const policy: any = authorization?.policy;
   if (!tool || tool.status !== "active" || !policy || policy.protocol !== "mcp") return false;
   const toolId: any = String(tool.id || "");
-  if ((policy.deniedTools || []).includes(toolId)) return false;
-  const requiredScopes: any[] = Array.isArray(tool.requiredScopes) ? tool.requiredScopes : [];
-  const toolsets: any[] = Array.isArray(tool.toolsets) ? tool.toolsets : [];
-  if (requiredScopes.some((scope?: any) : any => !(policy.scopeIds || []).includes(scope)) ||
-      toolsets.some((toolset?: any) : any => !(policy.toolsetIds || []).includes(toolset))) return false;
   const dynamicCapability: any = tool.dynamicCapability && typeof tool.dynamicCapability === "object" && !Array.isArray(tool.dynamicCapability)
     ? tool.dynamicCapability
     : null;
+  if (!dynamicCapability && (policy.deniedTools || []).includes(toolId)) return false;
+  const requiredScopes: any[] = Array.isArray(tool.requiredScopes) ? tool.requiredScopes : [];
+  const toolsets: any[] = Array.isArray(tool.toolsets) ? tool.toolsets : [];
+  const toolsetDenied: any = dynamicCapability
+    ? toolsets.length === 0 || !toolsets.some((toolset?: any) : any => (policy.toolsetIds || []).includes(toolset))
+    : toolsets.some((toolset?: any) : any => !(policy.toolsetIds || []).includes(toolset));
+  if (requiredScopes.some((scope?: any) : any => !(policy.scopeIds || []).includes(scope)) || toolsetDenied) return false;
   const serviceId: any = String(tool.serviceId || dynamicCapability?.serviceId || "");
   const capabilityId: any = String(dynamicCapability?.capabilityId || "");
+  if (dynamicCapability && (!capabilityId || !(policy.capabilityIds || []).includes(capabilityId))) return false;
+  if (serviceId && (policy.serviceIds || []).length > 0 && !(policy.serviceIds || []).includes(serviceId)) return false;
   const positiveAuthority: any = (policy.allowedTools || []).includes(toolId) ||
     (serviceId && (policy.serviceIds || []).includes(serviceId)) ||
     (capabilityId && (policy.capabilityIds || []).includes(capabilityId)) ||
@@ -481,7 +529,11 @@ function apiKeyCanSeeTool(tool: any = null, authorization: any = null) : any {
       [resource.secretBindingId, policy.resources.secretBindingIds],
       [resource.origin, policy.resources.allowedOrigins]
     ];
-    if (checks.some(([fact, allowed]: any[]) : any => fact && !(allowed || []).includes(fact))) return false;
+    const configuredChecks: any[] = checks.filter(([, allowed]: any[]) : any => Array.isArray(allowed) && allowed.length > 0);
+    const suppliedChecks: any[] = configuredChecks.filter(([fact]: any[]) : any => Boolean(fact));
+    if (configuredChecks.length === 0 ||
+        suppliedChecks.some(([fact, allowed]: any[]) : any => !allowed.includes(fact)) ||
+        !suppliedChecks.some(([fact, allowed]: any[]) : any => allowed.includes(fact))) return false;
   }
   return true;
 }

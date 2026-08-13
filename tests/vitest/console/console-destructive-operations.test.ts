@@ -35,9 +35,12 @@ vi.mock("../../../apps/console/lib/agent-settings-client", () : any => ({
 
 const shellContext: any = vi.hoisted(() : any => ({} as any));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellContext,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellContext),
+  };
+});
 
 import ConsoleServiceDiscoveryPanel from "../../../apps/console/components/shell/ConsoleServiceDiscoveryPanel.vue";
 import { createConsoleAuthController } from "../../../apps/console/composables/console-auth-controller";

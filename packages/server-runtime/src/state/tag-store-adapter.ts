@@ -21,7 +21,7 @@ import { validateTagStoreProvider } from "#meshrix/foundation/security/authoriza
  *
  * @param {object} options
  * @param {string} options.userDataPath - User data directory path
- * @returns {Promise<import("#meshrix/foundation/security/authorization/tag-store.port.ts").TagStoreProvider>}
+ * @returns {Promise<import("#meshrix/foundation/security/authorization/tag-store.port").TagStoreProvider>}
  */
 export async function createTagStoreAdapter({ userDataPath }: Record<string, any>) : Promise<any> {
   const mod: any = await import("./tag-management-store.ts");
@@ -43,7 +43,7 @@ export async function createTagStoreAdapter({ userDataPath }: Record<string, any
 /**
  * Registers the tag store provider into the given registry at composition time.
  *
- * @param {import("#meshrix/foundation/security/authorization/tag-store.port.ts").TagStoreProviderRegistry} registry
+ * @param {import("#meshrix/foundation/security/authorization/tag-store.port").TagStoreProviderRegistry} registry
  * @param {object} [options]
  * @param {string} [options.userDataPath] - Optional; provider set via adapter
  */

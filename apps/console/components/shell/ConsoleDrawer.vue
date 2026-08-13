@@ -6,18 +6,24 @@ import ConsoleServiceDiscoveryPanel from "./ConsoleServiceDiscoveryPanel.vue";
 import MeshrixTabs, { type MeshrixTab } from "../MeshrixTabs.vue";
 import { createConsoleDrawerResizeController } from "../../composables/console-drawer-resize-controller";
 import { createConsoleOverlayController } from "../../composables/console-overlay-controller";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import { useConsoleUrlState } from "../../composables/use-console-url-state";
 
+const {
+  isAuthenticated,
+} = useServerConsoleShellContext().access;
+const {
+  msg,
+} = useServerConsoleShellContext().preferences;
 const {
   closeDrawer,
   drawerOpen,
   drawerTab,
-  hasFeature,
-  isAuthenticated,
-  msg,
   openDrawer,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().overlays;
+const {
+  hasFeature,
+} = useServerConsoleShellContext().runtime;
 
 // URL-addressable drawer tab: context tab clicks drive the query, and query
 // changes (mount read, back/forward) drive the context through openDrawer so

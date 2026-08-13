@@ -10,12 +10,16 @@ import { queueStateMutation } from "../../storage/state-coordinator.ts";
 import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
-} from "./pactium-substrate-preflight.ts";
+} from "./pactium-runtime.ts";
 
 export const CHECKPOINT_TREE_PROJECTION_PROTOCOL: any = PACTIUM_PROTOCOL;
 export const CHECKPOINT_TREE_PROJECTION_PROVIDER: any = "pactium.checkpoint-projection";
 
-const TREE_SCOPE: any = "meshrix-checkpoint-tree";
+const TREE_META_SCOPE: any = "meshrix-checkpoint-tree-meta";
+const TREE_NODE_SCOPE: any = "meshrix-checkpoint-tree-node";
+const TREE_CHILD_SCOPE: any = "meshrix-checkpoint-tree-child";
+const TREE_EVENT_SCOPE: any = "meshrix-checkpoint-tree-event";
+const TREE_EVENT_INDEX_SCOPE: any = "meshrix-checkpoint-tree-event-index";
 const INDEX_SCOPE: any = "meshrix-checkpoint-tree-index";
 const INDEX_KEY: any = "tree-ids";
 const TREE_TYPE: any = "meshrix.checkpoint-tree";
@@ -58,7 +62,7 @@ function nowIso() : any {
   return new Date().toISOString();
 }
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
@@ -241,6 +245,16 @@ function shouldResetTree(existing?: any, input: Record<string, any> = {}) : any 
 
 function descendantsFor(tree?: any, nodeId?: any) : any {
   const nodes: any = (Object.values(asObject(tree.nodes)) as any[]);
+  const childrenByParent: any = new Map<any, any>();
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+    let children: any = childrenByParent.get(node.parentId);
+    if (!children) {
+      children = [];
+      childrenByParent.set(node.parentId, children);
+    }
+    children.push(node.nodeId);
+  }
   const selected: any[] = [];
   const visited: any = new Set<any>();
   const queue: any[] = [nodeId];
@@ -251,10 +265,8 @@ function descendantsFor(tree?: any, nodeId?: any) : any {
     if (!node) continue;
     visited.add(current);
     selected.push(node);
-    for (const candidate of nodes) {
-      if (candidate.parentId === current && !visited.has(candidate.nodeId)) {
-        queue.push(candidate.nodeId);
-      }
+    for (const childId of childrenByParent.get(current) || []) {
+      if (!visited.has(childId)) queue.push(childId);
     }
   }
   return selected;
@@ -280,6 +292,70 @@ function byStatus(nodes?: any) : any {
     result[status] = (result[status] || 0) + 1;
     return result;
   }, {});
+}
+
+function projectionDigest(value?: any) : any {
+  return stableJson(value);
+}
+
+function nodeStorageKey(treeId?: any, nodeId?: any) : any {
+  return `${treeId}:${nodeId}`;
+}
+
+function eventStorageKey(treeId?: any, index?: any) : any {
+  return `${treeId}:${String(Number(index)).padStart(12, "0")}`;
+}
+
+function treeMetaProjection(tree?: any) : any {
+  const { nodes: _nodes, events: _events, ...meta } = tree;
+  const nodeIds: any[] = Object.keys(asObject(tree.nodes)).sort();
+  const childrenByParent: any = {};
+  const nodeDigests: any = {};
+  for (const nodeId of nodeIds) {
+    const node: any = tree.nodes[nodeId];
+    nodeDigests[nodeId] = projectionDigest(node);
+    const parentId: any = text(node.parentId);
+    if (parentId) (childrenByParent[parentId] ||= []).push(nodeId);
+  }
+  for (const children of Object.values(childrenByParent) as any[]) children.sort();
+  return {
+    ...meta,
+    storageFormat: "meshrix.checkpoint-tree.normalized",
+    nodeIds,
+    nodeDigests,
+    childrenByParent,
+    eventCount: asArray(tree.events).length,
+    eventDigests: asArray(tree.events).map(projectionDigest),
+    summary: checkpointTreeSummary(tree)
+  };
+}
+
+async function loadNormalizedTree(runtime?: any, treeId?: any) : Promise<any> {
+  const meta: any = await runtime.storage.getProtocolObject(TREE_META_SCOPE, treeId, null);
+  if (!meta || meta.storageFormat !== "meshrix.checkpoint-tree.normalized") return null;
+  const nodes: any = {};
+  for (const nodeId of asArray(meta.nodeIds)) {
+    const node: any = await runtime.storage.getProtocolObject(TREE_NODE_SCOPE, nodeStorageKey(treeId, nodeId), null);
+    if (!node) throw checkpointProjectionError("checkpoint_tree_node_incomplete", "Checkpoint node projection is incomplete.");
+    nodes[nodeId] = node;
+  }
+  const events: any[] = [];
+  for (let index: any = 0; index < Number(meta.eventCount || 0); index += 1) {
+    const event: any = await runtime.storage.getProtocolObject(TREE_EVENT_SCOPE, eventStorageKey(treeId, index), null);
+    if (!event) throw checkpointProjectionError("checkpoint_tree_event_incomplete", "Checkpoint event projection is incomplete.");
+    events.push(event);
+  }
+  const {
+    storageFormat: _storageFormat,
+    nodeIds: _nodeIds,
+    nodeDigests: _nodeDigests,
+    childrenByParent: _childrenByParent,
+    eventCount: _eventCount,
+    eventDigests: _eventDigests,
+    summary: _summary,
+    ...treeMeta
+  } = meta;
+  return { ...treeMeta, nodes, events };
 }
 
 
@@ -325,7 +401,10 @@ function checkpointNodeReplayProjection(node: Record<string, any> = {}) : any {
 
 async function saveTree(runtime?: any, tree?: any, { allowTerminalOverwrite = false }: Record<string, any> = {}) : Promise<any> {
   if (!runtime.storage.inMemory && typeof runtime.storage.clearCache === "function") runtime.storage.clearCache();
-  const current: any = await runtime.storage.getProtocolObject(TREE_SCOPE, tree.treeId, null);
+  const currentMeta: any = await runtime.storage.getProtocolObject(TREE_META_SCOPE, tree.treeId, null);
+  const current: any = currentMeta?.storageFormat === "meshrix.checkpoint-tree.normalized"
+    ? { ...currentMeta, nodes: {} }
+    : null;
   if (
     isCurrentTree(current, tree.treeId) &&
     isTerminalTreeStatus(current.status) &&
@@ -337,7 +416,41 @@ async function saveTree(runtime?: any, tree?: any, { allowTerminalOverwrite = fa
       "A terminal checkpoint tree cannot be replaced by a non-terminal projection."
     );
   }
-  await runtime.storage.putProtocolObject(TREE_SCOPE, tree.treeId, tree);
+  const nextMeta: any = treeMetaProjection(tree);
+  const previousNodeIds: any = new Set<any>(asArray(currentMeta?.nodeIds));
+  for (const nodeId of nextMeta.nodeIds) {
+    if (currentMeta?.nodeDigests?.[nodeId] !== nextMeta.nodeDigests[nodeId]) {
+      await runtime.storage.putProtocolObject(TREE_NODE_SCOPE, nodeStorageKey(tree.treeId, nodeId), tree.nodes[nodeId]);
+    }
+    previousNodeIds.delete(nodeId);
+  }
+  for (const removedNodeId of previousNodeIds) {
+    await runtime.storage.deleteProtocolObject?.(TREE_NODE_SCOPE, nodeStorageKey(tree.treeId, removedNodeId));
+  }
+  const parentIds: any = new Set<any>([
+    ...Object.keys(asObject(currentMeta?.childrenByParent)),
+    ...Object.keys(asObject(nextMeta.childrenByParent))
+  ]);
+  for (const parentId of parentIds) {
+    const before: any = asArray(currentMeta?.childrenByParent?.[parentId]);
+    const after: any = asArray(nextMeta.childrenByParent[parentId]);
+    if (projectionDigest(before) === projectionDigest(after)) continue;
+    if (after.length === 0) await runtime.storage.deleteProtocolObject?.(TREE_CHILD_SCOPE, nodeStorageKey(tree.treeId, parentId));
+    else await runtime.storage.putProtocolObject(TREE_CHILD_SCOPE, nodeStorageKey(tree.treeId, parentId), after);
+  }
+  for (let index: any = 0; index < nextMeta.eventCount; index += 1) {
+    if (currentMeta?.eventDigests?.[index] === nextMeta.eventDigests[index]) continue;
+    const event: any = tree.events[index];
+    await runtime.storage.putProtocolObject(TREE_EVENT_SCOPE, eventStorageKey(tree.treeId, index), event);
+    if (event.nodeId) {
+      const indexKey: any = nodeStorageKey(tree.treeId, event.nodeId);
+      const existingIndexes: any = asArray(await runtime.storage.getProtocolObject(TREE_EVENT_INDEX_SCOPE, indexKey, []));
+      if (!existingIndexes.includes(index)) {
+        await runtime.storage.putProtocolObject(TREE_EVENT_INDEX_SCOPE, indexKey, [...existingIndexes, index]);
+      }
+    }
+  }
+  await runtime.storage.putProtocolObject(TREE_META_SCOPE, tree.treeId, nextMeta);
   const treeIds: any = await loadTreeIds(runtime);
   if (!treeIds.includes(tree.treeId)) {
     treeIds.push(tree.treeId);
@@ -383,7 +496,7 @@ export async function loadCheckpointTree(input: Record<string, any> = {}) : Prom
     } catch {
       return null;
     }
-    const tree: any = await normalized.pactiumRuntime.storage.getProtocolObject(TREE_SCOPE, normalized.treeId, null);
+    const tree: any = await loadNormalizedTree(normalized.pactiumRuntime, normalized.treeId);
     return isCurrentTree(tree, normalized.treeId) ? tree : null;
   });
 }
@@ -393,15 +506,16 @@ export async function listCheckpointTrees(input: Record<string, any> = {}) : Pro
     const treeIds: any = await loadTreeIds(normalized.pactiumRuntime);
     const trees: any[] = [];
     for (const treeId of treeIds) {
-      const tree: any = await normalized.pactiumRuntime.storage.getProtocolObject(TREE_SCOPE, treeId, null);
-      if (!isCurrentTree(tree)) continue;
-      if (normalized.kind && tree.kind !== normalized.kind) continue;
-      if (normalized.ownerId && tree.ownerId !== normalized.ownerId) continue;
-      trees.push(tree);
+      const meta: any = await normalized.pactiumRuntime.storage.getProtocolObject(TREE_META_SCOPE, treeId, null);
+      const summary: any = meta?.summary;
+      if (!summary) continue;
+      if (normalized.kind && summary.kind !== normalized.kind) continue;
+      if (normalized.ownerId && summary.ownerId !== normalized.ownerId) continue;
+      trees.push(summary);
     }
     trees.sort((left?: any, right?: any) : any => String(right.updatedAt || "").localeCompare(String(left.updatedAt || "")));
     const limit: any = Math.max(1, Math.min(Number(normalized.limit || 100), 1000));
-    return trees.slice(0, limit).map(checkpointTreeSummary);
+    return trees.slice(0, limit);
   });
 }
 
@@ -643,19 +757,58 @@ export async function finishCheckpointTree(input: Record<string, any> = {}) : Pr
 
 export async function queryCheckpointScope(input: Record<string, any> = {}) : Promise<any> {
   return withCheckpointProjectionRuntime(input, async (normalized?: any) : Promise<any> => {
-    const tree: any = await loadCheckpointTree(normalized);
-    if (!tree) throw new Error("checkpoint tree is missing");
-    const nodeId: any = normalizeNodeId(normalized.nodeId || tree.rootNodeId || "root");
-    if (!tree.nodes[nodeId]) throw new Error("checkpoint node is missing");
-    const nodes: any = descendantsFor(tree, nodeId);
+    const runtime: any = normalized.pactiumRuntime;
+    const meta: any = await runtime.storage.getProtocolObject(TREE_META_SCOPE, normalized.treeId, null);
+    if (!meta || meta.storageFormat !== "meshrix.checkpoint-tree.normalized") throw new Error("checkpoint tree is missing");
+    const nodeId: any = normalizeNodeId(normalized.nodeId || meta.rootNodeId || "root");
+    const target: any = await runtime.storage.getProtocolObject(TREE_NODE_SCOPE, nodeStorageKey(normalized.treeId, nodeId), null);
+    if (!target) throw new Error("checkpoint node is missing");
+    const nodes: any[] = [];
+    const queue: any[] = [nodeId];
+    const visited: any = new Set<any>();
+    while (queue.length > 0) {
+      const currentId: any = queue.shift();
+      if (visited.has(currentId)) continue;
+      visited.add(currentId);
+      const node: any = currentId === nodeId
+        ? target
+        : await runtime.storage.getProtocolObject(TREE_NODE_SCOPE, nodeStorageKey(normalized.treeId, currentId), null);
+      if (!node) throw checkpointProjectionError("checkpoint_tree_node_incomplete", "Checkpoint node projection is incomplete.");
+      nodes.push(node);
+      const children: any = asArray(await runtime.storage.getProtocolObject(TREE_CHILD_SCOPE, nodeStorageKey(normalized.treeId, currentId), []));
+      queue.push(...children);
+    }
     const nodeIds: any = new Set<any>(nodes.map((node?: any) : any => node.nodeId));
+    const path: any[] = [];
+    let parentId: any = text(target.parentId);
+    const pathVisited: any = new Set<any>();
+    while (parentId && !pathVisited.has(parentId)) {
+      pathVisited.add(parentId);
+      const parent: any = await runtime.storage.getProtocolObject(TREE_NODE_SCOPE, nodeStorageKey(normalized.treeId, parentId), null);
+      if (!parent) break;
+      path.push(parent);
+      parentId = text(parent.parentId);
+    }
+    const eventIndexes: any = new Set<any>();
+    for (const scopedNodeId of nodeIds) {
+      for (const index of asArray(await runtime.storage.getProtocolObject(
+        TREE_EVENT_INDEX_SCOPE,
+        nodeStorageKey(normalized.treeId, scopedNodeId),
+        []
+      ))) eventIndexes.add(Number(index));
+    }
+    const events: any[] = [];
+    for (const index of [...eventIndexes].sort((left?: any, right?: any) : any => left - right)) {
+      const event: any = await runtime.storage.getProtocolObject(TREE_EVENT_SCOPE, eventStorageKey(normalized.treeId, index), null);
+      if (event) events.push(event);
+    }
     return {
-      treeId: tree.treeId,
+      treeId: normalized.treeId,
       nodeId,
-      target: tree.nodes[nodeId],
+      target,
       nodes,
-      path: pathFor(tree, nodeId),
-      events: tree.events.filter((event?: any) : any => !event.nodeId || event.nodeId === nodeId || nodeIds.has(event.nodeId)),
+      path,
+      events,
       affectedNodeCount: nodes.length,
       byStatus: byStatus(nodes)
     };
@@ -802,9 +955,16 @@ async function deleteCheckpointTreeUnlocked(input: Record<string, any> = {}) : P
     });
   }
   if (typeof normalized.pactiumRuntime.storage.deleteProtocolObject === "function") {
-    await normalized.pactiumRuntime.storage.deleteProtocolObject(TREE_SCOPE, normalized.treeId);
-  } else {
-    await normalized.pactiumRuntime.storage.putProtocolObject(TREE_SCOPE, normalized.treeId, null);
+    const meta: any = await normalized.pactiumRuntime.storage.getProtocolObject(TREE_META_SCOPE, normalized.treeId, null);
+    for (const nodeId of asArray(meta?.nodeIds)) {
+      await normalized.pactiumRuntime.storage.deleteProtocolObject(TREE_NODE_SCOPE, nodeStorageKey(normalized.treeId, nodeId));
+      await normalized.pactiumRuntime.storage.deleteProtocolObject(TREE_CHILD_SCOPE, nodeStorageKey(normalized.treeId, nodeId));
+      await normalized.pactiumRuntime.storage.deleteProtocolObject(TREE_EVENT_INDEX_SCOPE, nodeStorageKey(normalized.treeId, nodeId));
+    }
+    for (let index: any = 0; index < Number(meta?.eventCount || 0); index += 1) {
+      await normalized.pactiumRuntime.storage.deleteProtocolObject(TREE_EVENT_SCOPE, eventStorageKey(normalized.treeId, index));
+    }
+    await normalized.pactiumRuntime.storage.deleteProtocolObject(TREE_META_SCOPE, normalized.treeId);
   }
   const treeIds: any = (await loadTreeIds(normalized.pactiumRuntime)).filter((treeId?: any) : any => treeId !== normalized.treeId);
   await saveTreeIds(normalized.pactiumRuntime, treeIds);

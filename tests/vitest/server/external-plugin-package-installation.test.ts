@@ -202,7 +202,7 @@ describe("external plugin package installation", () : any => {
       pluginId: "shared-space",
       implementation: {
         componentId: "shared-space/WorkspaceLocalDirectoryPanel",
-        assetPath: "console/index.ts",
+        assetPath: "console/index.mjs",
         assetExport: "mountPluginConsole"
       }
     });
@@ -240,7 +240,7 @@ describe("external plugin package installation", () : any => {
       pluginId: "skill-hub",
       implementation: {
         componentId: "skill-hub/SkillHubView",
-        assetPath: "console/index.ts",
+        assetPath: "console/index.mjs",
         assetExport: "mountPluginConsole"
       }
     });
@@ -282,7 +282,7 @@ describe("external plugin package installation", () : any => {
       pluginId: "coding-github",
       implementation: {
         componentId: "coding-github/GitHubConnectorPanel",
-        assetPath: "console/index.ts",
+        assetPath: "console/index.mjs",
         assetExport: "mountPluginConsole"
       }
     });

@@ -81,32 +81,42 @@ try {
       leaseTimeoutMs: 5_000
     });
     await new Promise((resolve?: any) : any => setTimeout(resolve, 5));
-    const takeover: any = store.claim({
+    const noTakeover: any = store.claim({
       queueDefinitionId: definitionId,
       scope,
       workerId: "restart-takeover-worker",
       leaseTimeoutMs: 5_000
     });
-    const claimed: any = takeover.claimed[0];
-    if (!claimed) throw new Error("Restart takeover did not claim durable work.");
-    const completion: any = store.complete({
-      workItemId: claimed.workItem.workItemId,
-      leaseId: claimed.lease.leaseId,
-      reason: "restart_takeover_completed"
+    const fenced: any = recovery.recovered[0];
+    if (!fenced) throw new Error("Restart recovery did not fence durable work in_doubt.");
+    if (fenced.state !== "in_doubt") throw new Error("Restart recovery left durable work outside in_doubt.");
+    if (noTakeover.claimed.some((entry?: any) : any => entry.workItem.workItemId === workItemId)) {
+      throw new Error("Restart takeover claimed in_doubt durable work.");
+    }
+    if (noTakeover.reconciled.some((entry?: any) : any => entry.workItemId === workItemId)) {
+      throw new Error("Restart reconciliation settled without a sink receipt.");
+    }
+    const receipt: any = store.recordSinkReceipt({
+      workItemId,
+      generation: fenced.lease?.leaseSeq || 0,
+      sinkId: "complete",
+      effectId: "restart-effect-settled"
     });
+    const reconciled: any = store.reconcileInDoubt({ workItemId });
+    if (reconciled.count !== 1) throw new Error("In-doubt durable work did not reconcile via sink receipt.");
     const replay: any = store.rebuildProjection();
     const inspected: any = store.inspect({ workItemId, includeJournal: true });
     writeResult({
       staleFenceRejected,
-      recoveredCount: recovery.recovered.length + takeover.recovered.length,
-      recoveryState: recovery.recovered[0]?.state || "",
-      claimedWorkItemId: claimed.workItem.workItemId,
-      replacementLeaseSeq: claimed.lease.leaseSeq,
-      checkpointSeq: claimed.workItem.checkpoint?.checkpointSeq || 0,
-      checkpointDigest: claimed.workItem.checkpoint?.checkpointDigest || "",
-      completed: completion.completed === true,
-      finalState: completion.workItem.state,
-      completedTransitionCount: inspected.journal.filter((entry?: any) : any => entry.transition === "complete").length,
+      recoveredCount: recovery.recovered.length + noTakeover.recovered.length,
+      recoveryState: fenced.state,
+      recoveryLeaseSeq: fenced.lease?.leaseSeq || 0,
+      checkpointSeq: fenced.checkpoint?.checkpointSeq || 0,
+      checkpointDigest: fenced.checkpoint?.checkpointDigest || "",
+      receiptRecorded: receipt.recorded === true,
+      reconciled: reconciled.count === 1,
+      finalState: reconciled.reconciled[0]?.state || "",
+      terminalTransitionCount: inspected.journal.filter((entry?: any) : any => entry.transition === "termination_acknowledged").length,
       projectionReplayOk: replay.ok === true
     });
   } else {

@@ -14,18 +14,21 @@
     "vue": "^3.5.32"
   },
   "exports": {
+    "./binary-checkbox": "./src/BinaryCheckbox.vue",
+    "./BinaryCheckbox": "./src/BinaryCheckbox.vue",
     "./bridge-http": "./src/bridge-http.ts",
+    "./browser-downloads": "./src/browser-downloads.ts",
+    "./browser-window": "./src/browser-window.ts",
+    "./console-client-display-utils": "./src/console-client-display-utils.ts",
+    "./console-format-utils": "./src/console-format-utils.ts",
+    "./error-message": "./src/error-message.ts",
+    "./option-bar": "./src/OptionBar.vue",
+    "./OptionBar": "./src/OptionBar.vue",
     "./page-refresh": "./src/page-refresh.ts",
     "./rpc-client": "./src/rpc-client.ts",
-    "./error-message": "./src/error-message.ts",
-    "./binary-checkbox": "./src/BinaryCheckbox.vue",
-    "./workspaces-view-context": "./src/workspaces-view-context.ts",
-    "./server-console-shell-context": "./src/server-console-shell-context.ts",
-    "./console-format-utils": "./src/console-format-utils.ts",
-    "./console-client-display-utils": "./src/console-client-display-utils.ts",
-    "./option-bar": "./src/OptionBar.vue",
     "./status-pill": "./src/StatusPill.vue",
-    "./*": "./src/*.ts"
+    "./StatusPill": "./src/StatusPill.vue",
+    "./workspaces-view-context": "./src/workspaces-view-context.ts"
   },
   "files": [
     "src/**/*",

@@ -3,7 +3,7 @@ import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database"
 import { ensurePrivateDir } from "#meshrix/foundation/storage/private-file-atomic";
 import { ensurePrivateSqliteLocation } from "#meshrix/foundation/storage/private-sqlite";
 
-const STORE_SCHEMA_REVISION: any = 1;
+const STORE_SCHEMA_REVISION: any = 2;
 const DEFAULT_MAX_RECORDS: any = 100_000;
 const DEFAULT_MAX_BYTES: any = 32 * 1024 * 1024;
 const DEFAULT_MAX_AGE_MS: any = 7 * 24 * 60 * 60 * 1000;
@@ -146,7 +146,8 @@ function createSchema(db?: any) : any {
     ["event_bytes", 0],
     ["latest_count", 0],
     ["latest_bytes", 0],
-    ["revision", 0]
+    ["revision", 0],
+    ["retention_pending", 0]
   ];
   if (initializing) {
     const insertMeta: any = prepareCached(db,
@@ -162,6 +163,17 @@ function createSchema(db?: any) : any {
       prepareCached(db, "SELECT key FROM protocol_event_meta").all()
         .map((entry?: any) : any => String(entry.key))
     );
+    const existingRevision: any = Number(
+      prepareCached(db, "SELECT value FROM protocol_event_meta WHERE key='schema_version'").get()?.value
+    );
+    if (existingRevision === 1 && !keys.has("retention_pending")) {
+      db.transaction(() : any => {
+        prepareCached(db, "INSERT INTO protocol_event_meta(key,value) VALUES('retention_pending',0)").run();
+        prepareCached(db, "UPDATE protocol_event_meta SET value=? WHERE key='schema_version'")
+          .run(STORE_SCHEMA_REVISION);
+      })();
+      keys.add("retention_pending");
+    }
     if (initialMeta.some(([key]: any[]) : any => !keys.has(key))) {
       throw storeError(
         "protocol_event_store_meta_incomplete",
@@ -185,7 +197,7 @@ function readCounters(db?: any) : any {
     prepareCached(db, `
       SELECT key,value
       FROM protocol_event_meta
-      WHERE key IN ('event_count','event_bytes','latest_count','latest_bytes','revision')
+      WHERE key IN ('event_count','event_bytes','latest_count','latest_bytes','revision','retention_pending')
     `).all().map((entry?: any) : any => [entry.key, Number(entry.value)])
   );
   return {
@@ -193,7 +205,8 @@ function readCounters(db?: any) : any {
     eventBytes: Number(counters.event_bytes || 0),
     latestCount: Number(counters.latest_count || 0),
     latestBytes: Number(counters.latest_bytes || 0),
-    revision: Number(counters.revision || 0)
+    revision: Number(counters.revision || 0),
+    retentionPending: Number(counters.retention_pending || 0)
   };
 }
 
@@ -204,42 +217,43 @@ function updateCounters(db?: any, counters?: any) : any {
   update.run(counters.latestCount, "latest_count");
   update.run(counters.latestBytes, "latest_bytes");
   update.run(counters.revision, "revision");
+  update.run(counters.retentionPending, "retention_pending");
 }
 
-function removeLatestAtOffset(db?: any, offset?: any, counters?: any) : any {
-  const latest: any = prepareCached(db,
-    "SELECT topic,event_bytes FROM protocol_event_latest WHERE offset=?"
-  ).get(offset);
-  if (!latest) return;
-  prepareCached(db, "DELETE FROM protocol_event_latest WHERE topic=?").run(latest.topic);
-  counters.latestCount -= 1;
-  counters.latestBytes -= Number(latest.event_bytes);
-}
-
-function pruneForAdmission(db?: any, counters?: any, policy?: any, incomingBytes?: any, nowMs?: any) : any {
-  const oldest: any = prepareCached(db, `
+function pruneAtWatermark(db?: any, counters?: any, policy?: any, incomingBytes?: any, nowMs?: any) : any {
+  const expiresBefore: any = nowMs - policy.maxAgeMs;
+  const candidates: any[] = prepareCached(db, `
     SELECT offset,event_bytes,published_at_ms
     FROM protocol_events
     ORDER BY offset ASC
-    LIMIT 1
-  `);
-  const deleteEvent: any = prepareCached(db, "DELETE FROM protocol_events WHERE offset=?");
-  const expiresBefore: any = nowMs - policy.maxAgeMs;
-  let removed: any = 0;
-  while (removed < policy.retentionBatch) {
-    const entry: any = oldest.get();
-    if (!entry) break;
+    LIMIT ?
+  `).all(policy.retentionBatch);
+  let removedCount: any = 0;
+  let removedBytes: any = 0;
+  let watermark: any = 0;
+  for (const entry of candidates) {
     const overCapacity: any =
-      counters.eventCount + 1 > policy.maxRecords ||
-      counters.eventBytes + incomingBytes > policy.maxBytes;
+      counters.eventCount - removedCount + 1 > policy.maxRecords ||
+      counters.eventBytes - removedBytes + incomingBytes > policy.maxBytes;
     if (!overCapacity && Number(entry.published_at_ms) > expiresBefore) break;
-    removeLatestAtOffset(db, entry.offset, counters);
-    deleteEvent.run(entry.offset);
-    counters.eventCount -= 1;
-    counters.eventBytes -= Number(entry.event_bytes);
-    removed += 1;
+    watermark = Number(entry.offset);
+    removedCount += 1;
+    removedBytes += Number(entry.event_bytes);
   }
-  return removed;
+  if (watermark <= 0) return 0;
+  const latestTotals: any = prepareCached(db, `
+    SELECT COUNT(*) AS count,COALESCE(SUM(event_bytes),0) AS bytes
+    FROM protocol_event_latest
+    WHERE offset<=?
+  `).get(watermark);
+  prepareCached(db, "DELETE FROM protocol_event_latest WHERE offset<=?").run(watermark);
+  prepareCached(db, "DELETE FROM protocol_events WHERE offset<=?").run(watermark);
+  counters.eventCount -= removedCount;
+  counters.eventBytes -= removedBytes;
+  counters.latestCount -= Number(latestTotals.count || 0);
+  counters.latestBytes -= Number(latestTotals.bytes || 0);
+  counters.retentionPending = 0;
+  return removedCount;
 }
 
 function upsertLatest(db?: any, event?: any, serialized?: any, eventBytes?: any, counters?: any, policy?: any) : any {
@@ -342,7 +356,13 @@ export function createSqliteProtocolEventStore({
       };
     }
     const counters: any = readCounters(db);
-    pruneForAdmission(db, counters, policy, admissionBytes, now());
+    const maintenanceDue: any = counters.retentionPending >= policy.retentionBatch;
+    const capacityPressure: any =
+      counters.eventCount + 1 > policy.maxRecords ||
+      counters.eventBytes + admissionBytes > policy.maxBytes;
+    if (maintenanceDue || capacityPressure) {
+      pruneAtWatermark(db, counters, policy, admissionBytes, now());
+    }
     if (
       counters.eventCount + 1 > policy.maxRecords ||
       counters.eventBytes + admissionBytes > policy.maxBytes
@@ -385,6 +405,7 @@ export function createSqliteProtocolEventStore({
       .run(eventBytes, event.offset);
     counters.eventCount += 1;
     counters.eventBytes += eventBytes;
+    counters.retentionPending += 1;
     if (retain) {
       upsertLatest(db, event, serialized, eventBytes, counters, policy);
     }

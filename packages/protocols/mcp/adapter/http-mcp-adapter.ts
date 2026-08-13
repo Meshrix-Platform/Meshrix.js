@@ -24,4 +24,4 @@ export {
   broadcastAudienceCatalogInvalidation
 } from "./http-mcp-adapter-replies.ts";
 export { handleMeshrixMcpHttpRequest } from "./http-mcp-adapter-transport.ts";
-export { configureMcpNotificationBus } from "./mcp-notification-bus.ts";
+export { configureMcpNotificationBus, broadcastConfiguredMcpNotification } from "./mcp-notification-bus.ts";

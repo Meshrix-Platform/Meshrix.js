@@ -15,5 +15,5 @@ Only an explicit `client.packageSource` request selects another source.
 
 The extension reads connector metadata from the Core-owned Pi configuration
 file. That file contains no token, private key, provider credential, or backend
-runtime data. The connector retrieves the target-scoped process identity from
-the operating-system credential store.
+runtime data. The connector retrieves the target-and-server-scoped API Key from
+its private credential store, unless the operator supplies a temporary override.

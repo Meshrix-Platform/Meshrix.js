@@ -79,9 +79,28 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     return rows.length;
   }
 
-  function maintainRetentionBeforeAppend(row?: any, nowMs?: any) : any {
+  function retentionMaintenanceThreshold(retention?: any) : any {
+    return Math.max(1, Math.min(
+      asInt(retention.cleanupBatchSize, 1),
+      asInt(retention.maxTransitionsPerWorkItem, 1),
+      asInt(retention.maxJournalEntries, 1)
+    ));
+  }
+
+  function maintainRetentionAfterAppend(row?: any, nowMs?: any) : any {
     const { retention } = policyForRow(row);
     const queueDefinitionId: any = row.queue_definition_id;
+    const threshold: any = retentionMaintenanceThreshold(retention);
+    const pending: any = Number(statements.incrementRetentionState.get({
+      queue_definition_id: queueDefinitionId,
+      updated_at_ms: nowMs
+    })?.pending_transitions || 0);
+    if (pending < threshold) return false;
+    statements.resetRetentionState.run({
+      queue_definition_id: queueDefinitionId,
+      threshold,
+      updated_at_ms: nowMs
+    });
     const terminalCount: any = [
       WORK_QUEUE_STATES.COMPLETED,
       WORK_QUEUE_STATES.CANCELLED,
@@ -130,7 +149,7 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     }
     if (journalCount >= retention.maxJournalEntries) {
       const currentCount: any = Number(statements.countJournalByWorkItem.get(row.work_item_id)?.count || 0);
-      if (currentCount > 0) return true;
+      if (currentCount > 1 && compactWorkJournal(row.work_item_id, nowMs, { force: true })) return true;
       throw new WorkQueueCapacityError("queue_journal_retention", retention.maxJournalEntries);
     }
     return false;
@@ -180,7 +199,6 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     decision = {}
   }: Record<string, any>) : any {
     assertLegalWorkQueueTransition({ transition, fromState: fromState ?? null, toState });
-    const forceCompactCurrent: any = maintainRetentionBeforeAppend(row, nowMs);
     const result: any = statements.insertJournal.run({
       journal_entry_id: identityGenerator.journalEntryId(),
       work_item_id: row.work_item_id,
@@ -201,7 +219,7 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     });
     const seq: any = Number(result.lastInsertRowid);
     statements.updateLastTransitionSeq.run({ seq, work_item_id: row.work_item_id, updated_at_ms: nowMs });
-    return compactWorkJournal(row.work_item_id, nowMs, { force: forceCompactCurrent }) ?
+    return maintainRetentionAfterAppend(row, nowMs) ?
       Number(statements.getWorkItem.get(row.work_item_id)?.last_transition_seq || seq) : seq;
   }
 
@@ -329,27 +347,11 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     });
     const recovered: any[] = [];
     for (const row of rows) {
-      const exhausted: any = row.attempt >= row.max_attempts;
-      const delayMs: any = exhausted ? 0 : computeDeterministicRetryDelay({
-        queueDefinitionId: row.queue_definition_id,
-        workItemId: row.work_item_id,
-        attempt: row.attempt,
-        ...resolvedPolicy.retryBackoff
-      });
-      const toState: any = exhausted
-        ? WORK_QUEUE_STATES.FAILED
-        : delayMs > 0
-          ? WORK_QUEUE_STATES.RETRY_WAIT
-          : WORK_QUEUE_STATES.QUEUED;
       const updated: any = transitionProjection({
         row,
         transition: "lease_expired",
-        toState,
+        toState: WORK_QUEUE_STATES.IN_DOUBT,
         patch: {
-          available_at_ms: nowMs + delayMs,
-          lease_id: "",
-          leased_by_worker_id: "",
-          lease_expires_at_ms: 0,
           last_error_json: jsonString({
             type: "lease_expired",
             leaseId: row.lease_id,
@@ -358,11 +360,60 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
           }, {})
         },
         nowMs,
-        reason: exhausted ? "lease_expired_max_attempts_exhausted" : "lease_expired_retry"
+        reason: "lease_expired_unconfirmed"
       });
       recovered.push(rowToWorkItem(updated));
     }
     return recovered;
+  }
+
+  function reconcileInDoubtLocked({ nowMs, queueDefinitionId = "", scopeKey = "", workItemId = "", limit = 1000 }: Record<string, any> = {}) : any {
+    const rows: any = statements.inDoubtCandidates.all({
+      state: WORK_QUEUE_STATES.IN_DOUBT,
+      now_ms: nowMs,
+      queue_definition_id: toText(queueDefinitionId),
+      scope_key: toText(scopeKey),
+      work_item_id: toText(workItemId),
+      limit: Math.max(1, asInt(limit, 1000))
+    });
+    const reconciled: any[] = [];
+    for (const row of rows) {
+      const receipts: any[] = statements.readSinkFence.all({
+        work_item_id: row.work_item_id,
+        generation: Number(row.lease_seq || 0)
+      });
+      const terminalReceipt: any = receipts.find((receipt?: any) : any =>
+        ["complete", "fail"].includes(String(receipt.sink_id || "")) &&
+        receipt.status === "settled"
+      );
+      if (!terminalReceipt) {
+        continue;
+      }
+      const toState: any = terminalReceipt.sink_id === "complete"
+        ? WORK_QUEUE_STATES.COMPLETED
+        : WORK_QUEUE_STATES.FAILED;
+      const updated: any = transitionProjection({
+        row,
+        transition: "termination_acknowledged",
+        toState,
+        patch: {
+          available_at_ms: nowMs,
+          lease_id: "",
+          leased_by_worker_id: "",
+          lease_expires_at_ms: 0,
+          last_error_json: jsonString({
+            type: "sink_receipt_reconciled",
+            sinkId: terminalReceipt.sink_id,
+            effectId: terminalReceipt.effect_id || "",
+            generation: Number(row.lease_seq || 0)
+          }, {})
+        },
+        nowMs,
+        reason: "sink_receipt_reconciled"
+      });
+      reconciled.push(rowToWorkItem(updated));
+    }
+    return reconciled;
   }
 
   function requireLeasedRow(workItemId?: any, leaseId?: any, nowMs: any = timeSource.nowMs(), { allowExpired = false }: Record<string, any> = {}) : any {
@@ -389,6 +440,7 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     expireEligibleLocked,
     materializeDelayedLocked,
     recoverExpiredLeasesLocked,
+    reconcileInDoubtLocked,
     requireLeasedRow
   };
 }

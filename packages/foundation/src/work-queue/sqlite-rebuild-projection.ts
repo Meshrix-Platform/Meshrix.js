@@ -85,6 +85,18 @@ export function rebuildSqliteProjection({ database, statements, input = {} }: Re
         last_transition_seq: row.last_transition_seq || 0
       });
     }
+    database.prepare("DELETE FROM work_queue_virtual_finish").run();
+    database.prepare(`
+      INSERT OR IGNORE INTO work_queue_virtual_finish (
+        queue_definition_id, queue_definition_version, selector_scope_key,
+        priority_class, tenant_id, workspace_id, project_id, virtual_finish, updated_at_ms
+      )
+      SELECT queue_definition_id, queue_definition_version, scope_key, priority_class,
+             tenant_id, workspace_id, project_id, 0, MAX(updated_at_ms)
+      FROM work_items
+      GROUP BY queue_definition_id, queue_definition_version, scope_key, priority_class,
+               tenant_id, workspace_id, project_id
+    `).run();
     applied = true;
   }
 

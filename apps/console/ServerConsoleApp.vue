@@ -11,7 +11,7 @@ import ConsoleSideNavDirectory from "./components/shell/side-nav/ConsoleSideNavD
 import ConsoleTopbar from "./components/shell/ConsoleTopbar.vue";
 import ServerPathPickerDialog from "./components/shell/ServerPathPickerDialog.vue";
 import { createConsoleSideNavContext, provideConsoleSideNavContext } from "./composables/consoleSideNavContext";
-import { provideServerConsoleShell } from "@meshrix/ui-console/server-console-shell-context";
+import { provideServerConsoleShell } from "#meshrix/console/server-console-shell-context";
 import { useServerConsoleShell } from "./composables/useServerConsoleShell";
 import { currentConsoleLocale, localizeConsoleText, resolveEffectiveConsoleLocale } from "./i18n/console";
 
@@ -29,15 +29,19 @@ void router.isReady().then(() => {
 const {
   consoleBootstrapping,
   activeConsoleFeatureIds,
-  canAccessRouteMeta,
   consoleState,
   error,
-  firstAccessibleRoutePath,
+} = shell.runtime;
+const {
+  canAccessRouteMeta,
   isAuthenticated,
-  msg,
-  sideNavCollapsed,
   currentUserScopes,
-} = shell;
+} = shell.access;
+const {
+  firstAccessibleRoutePath,
+  sideNavCollapsed,
+} = shell.navigation;
+const { msg } = shell.preferences;
 const { activeSideNavDirectory, showSideNavDirectory, sideNavWidth, sideNavDirectoryWidth } = sideNav;
 const dashboardShellStyle = computed(() => ({
   "--sidebar-width": `${sideNavWidth.value}px`,

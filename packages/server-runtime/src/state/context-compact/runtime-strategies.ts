@@ -4,6 +4,7 @@ import {
   buildDeterministicSummary,
   buildModelPrompt,
   compactToBudget,
+  createApiRoundSelectionIndex,
   modelInputForAttempt,
   parseModelSummary,
   prepareWorkbenchMessages,
@@ -30,12 +31,13 @@ export function createBuiltinStrategyAdapters({
     inputForAttempt = null
   }: Record<string, any>) : Promise<any> {
     const attempts: any[] = [];
+    const selectionIndex: any = createApiRoundSelectionIndex(messages);
     const compressionAlias: any = String(profile.modelCompression?.alias || "").trim();
     const maxAttempts: any = Math.max(1, policy.ptlRetryLimit + 1);
     for (let attempt: any = 0; attempt < maxAttempts; attempt += 1) {
       const selected: any = typeof inputForAttempt === "function"
-        ? inputForAttempt(messages, attempt, policy)
-        : modelInputForAttempt(messages, attempt, policy.modelMaxInputTokens);
+        ? inputForAttempt(messages, attempt, policy, selectionIndex)
+        : modelInputForAttempt(messages, attempt, policy.modelMaxInputTokens, selectionIndex);
       const attemptMessages: any = Array.isArray(selected) ? selected : asArray(selected.messages);
       const prompt: any = buildModelPrompt({
         messages: attemptMessages,
@@ -248,8 +250,14 @@ export function createBuiltinStrategyAdapters({
         runtimeState: context.runtimeState,
         targetTokens: context.targetTokens,
         compactedRange: context.compactedRange,
-        inputForAttempt: (messages?: any, attempt?: any, policy?: any) : any =>
-          workbenchInputForAttempt(messages, attempt, policy.modelMaxInputTokens, policy.ptlHeadTrimRatio)
+        inputForAttempt: (messages?: any, attempt?: any, policy?: any, selectionIndex?: any) : any =>
+          workbenchInputForAttempt(
+            messages,
+            attempt,
+            policy.modelMaxInputTokens,
+            policy.ptlHeadTrimRatio,
+            selectionIndex
+          )
       });
       modelEvents.push({
         used: true,

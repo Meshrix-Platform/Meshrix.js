@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createPactiumStateSubstrate,
 } from "#meshrix/foundation/checkpoint/tree/merkle-state-substrate";
-import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
+import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
 
 async function withTempSubstrate(testCase?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-merkle-state-vitest-"));
@@ -244,60 +244,40 @@ describe("merkle state substrate", () : any => {
         code: "state_mutation_idempotency_conflict",
       });
 
-      const session: any = await substrate.lsmIngest.beginUploadSession({
+      await expect(substrate.uploadManifest.materialize({
         scope: "workspace/a",
-        files: [{ relativePath: "docs/a.txt" }],
-      });
-      await expect(substrate.lsmIngest.recoverSession("missing")).resolves.toBeNull();
-      await expect(substrate.lsmIngest.appendChunkRecord("missing", {})).rejects.toThrow("upload session missing");
-      await expect(substrate.lsmIngest.appendChunkRecord(session.uploadSessionId, {
-        relativePath: "docs/a.txt",
-        chunkCid: "cid:sha256:missing",
+        records: [{ relativePath: "docs/a.txt", chunkCid: "cid:sha256:missing" }]
       })).rejects.toThrow("chunkCid must reference an existing CAS block");
 
-      await substrate.lsmIngest.appendChunkRecord(session.uploadSessionId, {
-        fileId: "docs/a.txt",
-        relativePath: "docs/a.txt",
-        chunkIndex: 1,
-        offset: chunkA.byteLength,
-        byteLength: chunkB.byteLength,
-        chunkCid: chunkB.cid,
-        chunkHash: chunkB.payloadHash,
+      const uploadManifest: any = await substrate.uploadManifest.materialize({
+        scope: "workspace/a",
+        files: [{ relativePath: "docs/a.txt" }],
+        records: [{
+          fileId: "docs/a.txt",
+          relativePath: "docs/a.txt",
+          chunkIndex: 1,
+          offset: chunkA.byteLength,
+          byteLength: chunkB.byteLength,
+          chunkCid: chunkB.cid,
+          chunkHash: chunkB.payloadHash,
+        }, {
+          fileId: "docs/a.txt",
+          relativePath: "docs/a.txt",
+          chunkIndex: 0,
+          offset: 0,
+          byteLength: chunkA.byteLength,
+          chunkCid: chunkA.cid,
+          chunkHash: chunkA.payloadHash,
+        }]
       });
-      await substrate.lsmIngest.appendChunkRecord(session.uploadSessionId, {
-        fileId: "docs/a.txt",
-        relativePath: "docs/a.txt",
-        chunkIndex: 0,
-        offset: 0,
-        byteLength: chunkA.byteLength,
-        chunkCid: chunkA.cid,
-        chunkHash: chunkA.payloadHash,
-      });
-
-      const recovered: any = await substrate.lsmIngest.recoverSession(session.uploadSessionId);
-      expect(recovered).toMatchObject({
-        recordCount: 2,
-        nextOffset: chunkA.byteLength + chunkB.byteLength,
-      });
-      expect(recovered.records.map((record?: any) : any => record.chunkIndex)).toEqual([0, 1]);
-      const segment: any = await substrate.lsmIngest.flushMemTable(session.uploadSessionId);
-      expect(segment).toMatchObject({
-        recordCount: 2,
-        level: 0,
-      });
-      await expect(substrate.lsmIngest.flushMemTable("missing")).rejects.toThrow("upload session missing");
-      const uploadManifest: any = await substrate.lsmIngest.materializeManifest(session.uploadSessionId);
       expect(uploadManifest.entries.map((entry?: any) : any => entry.key)).toEqual([
         "docs/a.txt#000000000000",
         "docs/a.txt#000000000001",
       ]);
-      const compacted: any = await substrate.lsmIngest.compactSegments("workspace/a");
-      expect(compacted).toMatchObject({
+      expect(uploadManifest).toMatchObject({
         recordCount: 2,
-        sourceSegmentIds: [segment.segmentId],
+        nextOffset: chunkA.byteLength + chunkB.byteLength,
       });
-      const emptyCompacted: any = await substrate.lsmIngest.compactSegments("missing-scope");
-      expect(emptyCompacted.recordCount).toBe(0);
     });
   });
 
@@ -369,16 +349,13 @@ describe("merkle state substrate", () : any => {
       await expect(substrates[2].merkleIndex.get(currentRoot, "docs/b.txt"))
         .resolves.toMatchObject({ valueRef: "ref:b" });
 
-      const sessions: any = await Promise.all(substrates.map((substrate?: any, index?: any) : any =>
-        substrate.lsmIngest.beginUploadSession({ scope: `workspace/${index}` })
+      const manifests: any = await Promise.all(substrates.map((substrate?: any, index?: any) : any =>
+        substrate.uploadManifest.materialize({ scope: `workspace/${index}`, records: [] })
       )).catch((error?: any) : any => {
-        error.message = `LSM concurrency: ${error.message}`;
+        error.message = `upload manifest concurrency: ${error.message}`;
         throw error;
       });
-      const recovered: any = await Promise.all(sessions.map((session?: any, index?: any) : any =>
-        substrates[(index + 1) % substrates.length].lsmIngest.recoverSession(session.uploadSessionId)
-      ));
-      expect(recovered.filter(Boolean)).toHaveLength(16);
+      expect(manifests.filter((manifest?: any) : any => manifest.rootCid)).toHaveLength(16);
     } finally {
       await Promise.allSettled(substrates.map((substrate?: any) : any => substrate.close()));
       await fs.rm(userDataPath, { recursive: true, force: true });

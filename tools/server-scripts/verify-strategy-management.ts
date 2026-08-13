@@ -11,6 +11,7 @@ import { createOperationPermissionPlatform } from "../../packages/capabilities/s
 import { SERVER_API_OPERATIONS as GENERATED_SERVER_API_OPERATIONS } from "../../packages/contracts/src/generated/operations.generated.ts";
 import { SERVER_API_OPERATIONS } from "../../packages/contracts/src/operations/operation-registry.ts";
 import { KERNEL_API_OPERATION_IDS } from "../../packages/foundation/src/security/authorization/generated-capabilities.ts";
+import { createOperationProofSubstrate } from "../../packages/foundation/src/proof/proof-substrate/index.ts";
 import { createSystemControllerCapabilityEcosystemHandlers } from "../../packages/protocols/http/controllers/system-controller-capability-ecosystem-handlers.ts";
 import {
   STRATEGY_MANAGEMENT_PROTOCOL_VERSION,
@@ -152,13 +153,6 @@ function assertNoPrivateKeys(value?: any, location: any = "report") : any {
   }
 }
 
-function parseArrayMetadata(value?: any, field?: any) : any {
-  const parsed: any = JSON.parse(String(value || "[]"));
-  assert.ok(Array.isArray(parsed), `${field} must be a JSON array`);
-  assert.ok(parsed.every((item?: any) : any => typeof item === "string"), `${field} must contain only strings`);
-  return parsed;
-}
-
 function assertion(id?: any, passed?: any, details: Record<string, any> = {}) : any {
   return Object.freeze({
     id,
@@ -206,8 +200,10 @@ function assertPreviewOnlyDocumentation() : any {
 
 const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-strategy-verifier-"));
 let operationPermissionPlatform: any = null;
+let operationProofSubstrate: any = null;
 
 try {
+  operationProofSubstrate = createOperationProofSubstrate({ userDataPath });
   let decisionSequence: any = 0;
   let strategyAuthorizationCallCount: any = 0;
   let operationPermissionPolicyCallCount: any = 0;
@@ -241,7 +237,7 @@ try {
     },
     appendDecision() : any {}
   };
-  operationPermissionPlatform = createOperationPermissionPlatform({
+  operationPermissionPlatform = await createOperationPermissionPlatform({
     userDataPath,
     operations: SERVER_API_OPERATIONS,
     controllers: {},
@@ -319,6 +315,7 @@ try {
       },
       authSession,
       actor: authSession.user,
+      operationProofSubstrate,
       skipAuthorization: false
     });
     return { status: response.statusCode, payload: parseResponse(response) };
@@ -439,37 +436,39 @@ try {
     "updatedAt"
   ]);
 
-  const policyColumns: any = operationPermissionPlatform.store.db
-    .prepare("PRAGMA table_info(tool_policy_decisions)")
-    .all()
-    .map((column?: any) : any => String(column.name));
-  assert.deepEqual(policyColumns, EXPECTED_POLICY_DECISION_COLUMNS);
-  const previewAuditRows: any = operationPermissionPlatform.store.db.prepare(`
-    SELECT decision_id, tool_execution_id, trace_id, tool_id, grant_id, effect, reason_code,
-           missing_scopes_json, missing_toolsets_json, evaluated_layers_json, ledger_event_id, created_at
-    FROM tool_policy_decisions
-    ORDER BY rowid
-  `).all();
+  assert.deepEqual(EXPECTED_POLICY_DECISION_COLUMNS, [
+    "decision_id", "tool_execution_id", "trace_id", "tool_id", "grant_id", "effect",
+    "reason_code", "missing_scopes_json", "missing_toolsets_json", "evaluated_layers_json",
+    "ledger_event_id", "created_at"
+  ]);
+  const previewAuditRows: any[] = await operationPermissionPlatform.store.listPolicyDecisions({ limit: 100 });
   assert.equal(previewAuditRows.length, toolPreviewCallCount);
-  assert.equal(new Set<any>(previewAuditRows.map((row?: any) : any => row.decision_id)).size, previewAuditRows.length);
-  assert.deepEqual(previewAuditRows.map((row?: any) : any => row.tool_id), [
+  assert.equal(new Set<any>(previewAuditRows.map((row?: any) : any => row.decisionId)).size, previewAuditRows.length);
+  assert.deepEqual(previewAuditRows.map((row?: any) : any => row.toolId), [
     "meshrix.jobs.list",
     "meshrix.jobs.list",
     "meshrix.jobs.get"
   ]);
   for (const row of previewAuditRows) {
-    assert.equal(typeof row.decision_id, "string");
-    assert.ok(row.decision_id.length > 0);
+    assert.equal(typeof row.decisionId, "string");
+    assert.ok(row.decisionId.length > 0);
     assert.equal(row.effect, "deny");
-    assert.equal(row.reason_code, "current_policy_denied");
-    assert.equal(typeof row.created_at, "string");
-    assert.ok(row.created_at.length > 0);
-    parseArrayMetadata(row.missing_scopes_json, "missing_scopes_json");
-    parseArrayMetadata(row.missing_toolsets_json, "missing_toolsets_json");
-    parseArrayMetadata(row.evaluated_layers_json, "evaluated_layers_json");
+    assert.equal(row.reasonCode, "current_policy_denied");
+    assert.equal(typeof row.createdAt, "string");
+    assert.ok(row.createdAt.length > 0);
+    assert.ok(Array.isArray(row.missingScopes));
+    assert.ok(Array.isArray(row.missingToolsets));
+    assert.ok(Array.isArray(row.evaluatedLayers));
   }
 
   const governedPolicyCallsBefore: any = operationPermissionPolicyCallCount;
+  const governedGrant: any = await operationPermissionPlatform.store.createGrant({
+    label: "Strategy verifier current grant",
+    type: "machine",
+    scopes: ["gateway:write"],
+    toolsets: ["meshrix.gateway.write"],
+    maxRisk: "repair_write"
+  });
   const governedFollowUp: any = await operationPermissionPlatform.runtime.executeTool({
     toolId: "meshrix.gateway.forward",
     input: {
@@ -477,12 +476,7 @@ try {
       previewDecision: toolPreview.payload.decision
     },
     request: { headers: {}, socket: { remoteAddress: "127.0.0.1" } },
-    authorizedGrant: {
-      id: "strategy-verifier-current-grant",
-      label: "Strategy verifier current grant",
-      scopes: ["gateway:write"],
-      toolsets: ["meshrix.gateway.write"]
-    }
+    authorizedGrant: governedGrant.grant
   });
   assert.equal(operationPermissionPolicyCallCount - governedPolicyCallsBefore, 1);
   assert.equal(governedFollowUp.ok, false);
@@ -490,10 +484,8 @@ try {
   assert.equal(governedFollowUp.payload.error.code, "current_policy_denied");
   assert.notEqual(governedFollowUp.payload.error.details.decisionId, toolPreview.payload.decision.decisionId);
   assert.equal(governedExecutionCallCount, 0, "a denied current decision must not reach operation execution");
-  const allAuditRowCount: any = operationPermissionPlatform.store.db
-    .prepare("SELECT COUNT(*) AS count FROM tool_policy_decisions")
-    .get().count;
-  assert.equal(allAuditRowCount, toolPreviewCallCount + 1);
+  const allAuditRows: any[] = await operationPermissionPlatform.store.listPolicyDecisions({ limit: 100 });
+  assert.equal(allAuditRows.length, toolPreviewCallCount + 1);
 
   const replayMethod: any = PROVIDER_METHOD_BY_OPERATION["strategy.workflow_policy.evaluate"];
   const providerBeforeReplay: any = providerCallCounts[replayMethod];
@@ -634,7 +626,7 @@ try {
       governedExecutionCount: governedExecutionCallCount,
       toolPreviewCallCount,
       toolPreviewAuditRowCount: previewAuditRows.length,
-      policyDecisionMetadataColumnCount: policyColumns.length,
+      policyDecisionMetadataColumnCount: EXPECTED_POLICY_DECISION_COLUMNS.length,
       namedAssertionCount: namedAssertions.length,
       namedAssertionPassedCount: namedAssertions.filter((item?: any) : any => item.passed).length,
       acceptanceMachineReady: acceptanceReduction.readyForReleaseReduction === true
@@ -652,5 +644,6 @@ try {
   console.log(`[strategy-management] ok: ${REPORT_PATH}`);
 } finally {
   operationPermissionPlatform?.close?.();
+  operationProofSubstrate?.close?.();
   await fs.rm(userDataPath, { recursive: true, force: true });
 }

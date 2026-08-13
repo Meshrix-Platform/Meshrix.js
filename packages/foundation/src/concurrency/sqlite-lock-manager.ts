@@ -14,8 +14,10 @@ import {
   LockManagerDestroyedError,
   LockQueueFullError,
   LockReleasedError,
-  LockTimeoutError
-} from "./lock-manager.ts";
+  LockTimeoutError,
+  DeadlineScheduler,
+  IntrusiveWaitQueue
+} from "./lock-manager-contract.ts";
 
 const TABLE_DDL: any = `
 CREATE TABLE IF NOT EXISTS _meshrix_locks (
@@ -59,6 +61,7 @@ export class SqliteLockManager extends LockManager {
   _queues: any;
   _random: any;
   _retryIntervalMs: any;
+  _scheduler: any;
   _tryAcquire: any;
   db: any;
   /**
@@ -87,6 +90,7 @@ export class SqliteLockManager extends LockManager {
     this._random = typeof config.random === "function" ? config.random : Math.random;
     this._handles = new Map<any, any>();
     this._queues = new Map<any, any>();
+    this._scheduler = new DeadlineScheduler();
     this._pendingAcquires = new Set<any>();
     this._destroyed = false;
     this._destroyPromise = null;
@@ -164,7 +168,7 @@ export class SqliteLockManager extends LockManager {
     const ttlMs: any = positiveDuration(options.ttlMs, this.config.defaultTtlMs, "ttlMs");
     const waitMs: any = nonNegativeDuration(options.waitMs, this.config.maxWaitMs, "waitMs");
     const queue: any = this._queues.get(lockKey);
-    if (!this._handles.has(lockKey) && !queue?.activeCount) {
+    if (!this._handles.has(lockKey) && !queue?.size) {
       const handle: any = this._attemptAcquire(lockKey, ttlMs);
       if (handle) return handle;
     }
@@ -209,7 +213,7 @@ export class SqliteLockManager extends LockManager {
         active: true,
         reject,
         resolve,
-        timer: null,
+        deadlineEntry: null,
         ttlMs,
         signal,
         onAbort: null
@@ -217,25 +221,23 @@ export class SqliteLockManager extends LockManager {
       waiter.onAbort = () : any => {
         if (!waiter.active) return;
         waiter.active = false;
-        queue.activeCount--;
+        queue.remove(waiter);
         this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
-        clearTimeout(waiter.timer);
+        this._scheduler.cancel(waiter.deadlineEntry);
         this._discardQueueIfEmpty(lockKey, queue);
         reject(new LockAcquireAbortedError(lockKey));
       };
-      waiter.timer = setTimeout(() : any => {
+      waiter.deadlineEntry = this._scheduler.schedule(Date.now() + waitMs, () : any => {
         if (!waiter.active) return;
         waiter.active = false;
-        queue.activeCount--;
+        queue.remove(waiter);
         this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
         this._metrics.totalTimedOut++;
         this._discardQueueIfEmpty(lockKey, queue);
         waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
         reject(new LockTimeoutError(lockKey, waitMs));
-      }, waitMs);
-      waiter.timer.unref?.();
-      queue.items.push(waiter);
-      queue.activeCount++;
+      });
+      queue.push(waiter);
       waiter.signal?.addEventListener?.("abort", waiter.onAbort, { once: true });
       if (waiter.signal?.aborted) waiter.onAbort();
       this._schedulePoll(lockKey, 0);
@@ -245,41 +247,29 @@ export class SqliteLockManager extends LockManager {
   _queueFor(lockKey?: any) : any {
     let queue: any = this._queues.get(lockKey);
     if (!queue) {
-      queue = {
-        activeCount: 0,
-        backoffMs: this._retryIntervalMs,
-        head: 0,
-        items: [],
-        pollTimer: null,
-        polling: false
-      };
+      queue = new IntrusiveWaitQueue();
+      queue.backoffMs = this._retryIntervalMs;
+      queue.pollEntry = null;
+      queue.polling = false;
       this._queues.set(lockKey, queue);
     }
     return queue;
   }
 
   _peekWaiter(queue?: any) : any {
-    while (queue.head < queue.items.length && !queue.items[queue.head]?.active) {
-      queue.head++;
-    }
-    if (queue.head > 1024 && queue.head * 2 > queue.items.length) {
-      queue.items = queue.items.slice(queue.head);
-      queue.head = 0;
-    }
-    return queue.items[queue.head] || null;
+    return queue.head || null;
   }
 
   _schedulePoll(lockKey?: any, delayMs?: any) : any {
     const queue: any = this._queues.get(lockKey);
-    if (!queue || queue.activeCount === 0 || queue.polling || queue.pollTimer || this._destroyed) return;
+    if (!queue || queue.size === 0 || queue.polling || queue.pollEntry || this._destroyed) return;
     const jitteredDelay: any = delayMs <= 0
       ? 0
       : Math.max(1, Math.floor(delayMs * (0.5 + Math.min(1, Math.max(0, this._random())) * 0.5)));
-    queue.pollTimer = setTimeout(() : any => {
-      queue.pollTimer = null;
+    queue.pollEntry = this._scheduler.schedule(Date.now() + jitteredDelay, () : any => {
+      queue.pollEntry = null;
       this._pollQueue(lockKey);
-    }, jitteredDelay);
-    queue.pollTimer.unref?.();
+    });
   }
 
   _pollQueue(lockKey?: any) : any {
@@ -305,11 +295,10 @@ export class SqliteLockManager extends LockManager {
 
     if (handle) {
       waiter.active = false;
-      queue.activeCount--;
-      clearTimeout(waiter.timer);
+      queue.remove(waiter);
+      this._scheduler.cancel(waiter.deadlineEntry);
       waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
       this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
-      queue.head++;
       queue.backoffMs = this._retryIntervalMs;
       waiter.resolve(handle);
       this._discardQueueIfEmpty(lockKey, queue);
@@ -322,27 +311,25 @@ export class SqliteLockManager extends LockManager {
   }
 
   _discardQueueIfEmpty(lockKey?: any, queue?: any) : any {
-    if (queue.activeCount > 0) return;
-    if (queue.pollTimer) clearTimeout(queue.pollTimer);
-    queue.pollTimer = null;
+    if (queue.size > 0) return;
+    this._scheduler.cancel(queue.pollEntry);
+    queue.pollEntry = null;
     this._queues.delete(lockKey);
   }
 
   _rejectQueue(lockKey?: any, error?: any) : any {
     const queue: any = this._queues.get(lockKey);
     if (!queue) return;
-    if (queue.pollTimer) clearTimeout(queue.pollTimer);
-    for (let index: any = queue.head; index < queue.items.length; index++) {
-      const waiter: any = queue.items[index];
-      if (!waiter?.active) continue;
+    this._scheduler.cancel(queue.pollEntry);
+    while (queue.size > 0) {
+      const waiter: any = queue.shift();
       waiter.active = false;
-      clearTimeout(waiter.timer);
+      this._scheduler.cancel(waiter.deadlineEntry);
       waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
       this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
       waiter.reject(error);
     }
-    queue.activeCount = 0;
-    queue.pollTimer = null;
+    queue.pollEntry = null;
     this._queues.delete(lockKey);
   }
 
@@ -398,6 +385,14 @@ export class SqliteLockManager extends LockManager {
       this._metrics.totalBackendErrors++;
       throw new SqliteLockBackendError("inspect");
     }
+  }
+
+  getMetrics() : any {
+    return {
+      ...super.getMetrics(),
+      queueKeys: this._queues.size,
+      waiterTimers: this._scheduler.activeTimerCount
+    };
   }
 
   _cleanupKey(key?: any) : any {
@@ -461,7 +456,7 @@ export class SqliteLockManager extends LockManager {
         this._resetExpiryTimer(handle, heartbeatTtlMs);
       },
     };
-    this._handles.set(lockKey, { handle, timer: null });
+    this._handles.set(lockKey, { handle, expiryEntry: null });
     this._resetExpiryTimer(handle, expiresAt.getTime() - Date.now());
     return handle;
   }
@@ -469,8 +464,8 @@ export class SqliteLockManager extends LockManager {
   _resetExpiryTimer(handle?: any, ttlMs?: any) : any {
     const entry: any = this._handles.get(handle.lockKey);
     if (!entry || entry.handle.fencingToken !== handle.fencingToken) return;
-    if (entry.timer) clearTimeout(entry.timer);
-    entry.timer = setTimeout(() : any => {
+    this._scheduler.cancel(entry.expiryEntry);
+    entry.expiryEntry = this._scheduler.schedule(Date.now() + Math.max(1, ttlMs), () : any => {
       try {
         this.db.prepare(
           "DELETE FROM _meshrix_locks WHERE lock_key = ? AND fencing_token = ? AND expires_at <= ?"
@@ -480,14 +475,13 @@ export class SqliteLockManager extends LockManager {
         // The durable row still carries its own expiry and will be reclaimed later.
       }
       this._markExpired(handle);
-    }, Math.max(1, ttlMs));
-    if (entry.timer.unref) entry.timer.unref();
+    });
   }
 
   _clearHandle(handle?: any) : any {
     const entry: any = this._handles.get(handle.lockKey);
     if (!entry || entry.handle.fencingToken !== handle.fencingToken) return false;
-    if (entry.timer) clearTimeout(entry.timer);
+    this._scheduler.cancel(entry.expiryEntry);
     this._handles.delete(handle.lockKey);
     return true;
   }
@@ -515,6 +509,7 @@ export class SqliteLockManager extends LockManager {
     for (const lockKey of [...this._queues.keys()]) {
       this._rejectQueue(lockKey, destroyedError);
     }
+    this._scheduler.close();
 
     this._destroyPromise = this._finishDestroy();
     return this._destroyPromise;

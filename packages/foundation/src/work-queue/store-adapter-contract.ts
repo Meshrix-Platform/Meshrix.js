@@ -10,6 +10,10 @@ export const WORK_QUEUE_STORE_ADAPTER_METHODS: readonly any[] = Object.freeze([
   "cancelRunning",
   "fail",
   "recover",
+  "markInDoubt",
+  "acknowledgeTermination",
+  "recordSinkReceipt",
+  "reconcileInDoubt",
   "inspect",
   "rebuildProjection"
 ]);

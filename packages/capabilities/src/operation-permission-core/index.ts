@@ -10,7 +10,6 @@ import { createToolExecutionRuntime } from "./runtime.ts";
 import { createOperationPermissionHttpRouter } from "./http.ts";
 import { getRuntimeLogger } from "@meshrix/foundation/observability/runtime-logger";
 import { createSecurityPermissionsProvider } from "@meshrix/foundation/security/security-permissions-provider";
-import { createApiKeyVerifierKeyProvider } from "@meshrix/foundation/security/authorization/api-key-verifier-key-provider";
 import {
   createApiKeyDistributionProvider,
   registerApiKeyOwnerRecoveryAssignmentSync
@@ -25,7 +24,7 @@ export {
   getOperationPermissionDatabasePath
 };
 
-export function createOperationPermissionPlatform({
+export async function createOperationPermissionPlatform({
   userDataPath,
   operations,
   operationDispatcher,
@@ -42,7 +41,7 @@ export function createOperationPermissionPlatform({
   apiKeyClock = undefined,
   apiKeyRandomBytes = undefined,
   logger = getRuntimeLogger()
-}: Record<string, any>) : any {
+}: Record<string, any>) : Promise<any> {
   const registeredChangeHandlers: any = new Set<any>(
     (Array.isArray(changeHandlers) ? changeHandlers : [changeHandlers])
       .filter((handler?: any) : any => typeof handler === "function")
@@ -117,7 +116,10 @@ export function createOperationPermissionPlatform({
       securityPermissions: effectiveSecurityPermissions,
       governancePolicyRevisionProvider: () : any => effectiveSecurityPermissions?.getGovernancePolicyRevision?.(),
       changeListener: notifyOperationPermissionChanged,
-      proofSubstrate
+      proofSubstrate,
+      apiKeyVerifierKeyProvider,
+      apiKeyClock,
+      apiKeyRandomBytes
     });
     const authorizationStore: any = effectiveSecurityPermissions?.authorizationStore || null;
     unregisterApiKeyOwnerRecoveryAssignmentSync = registerApiKeyOwnerRecoveryAssignmentSync({
@@ -131,10 +133,7 @@ export function createOperationPermissionPlatform({
     const apiKeyDistributionProvider: any = createApiKeyDistributionProvider({
       store,
       registry,
-      securityPermissions: effectiveSecurityPermissions,
-      verifierKeyProvider: apiKeyVerifierKeyProvider || createApiKeyVerifierKeyProvider({ userDataPath }),
-      ...(apiKeyClock ? { now: apiKeyClock } : {}),
-      ...(apiKeyRandomBytes ? { randomBytes: apiKeyRandomBytes } : {})
+      securityPermissions: effectiveSecurityPermissions
     });
     const runtime: any = createToolExecutionRuntime({
       registry,
@@ -165,14 +164,21 @@ export function createOperationPermissionPlatform({
       securityPermissions: effectiveSecurityPermissions,
       logger
     });
-    store.saveCatalogSnapshot(registry.getCatalog());
+    await store.saveCatalogSnapshot(registry.getCatalog());
+    let operationLayerMutation: Promise<any> = Promise.resolve();
 
-    function applyOperationLayers({
+    function serializeOperationLayerMutation(task?: any) : Promise<any> {
+      const result: Promise<any> = operationLayerMutation.then(task, task);
+      operationLayerMutation = result.catch(() : any => {});
+      return result;
+    }
+
+    async function applyOperationLayersNow({
       nextBaseOperations = baseOperations,
       nextUpstreamOperations = upstreamOperations,
       notify = true,
       reason = "Operation catalog changed; downstream MCP tools list must refresh."
-    }: Record<string, any> = {}) : any {
+    }: Record<string, any> = {}) : Promise<any> {
       const previousOperations: any[] = [...effectiveOperations];
       const previousToolIds: any = new Set<any>(registry.listTools().map((tool?: any) : any => tool.id));
       const nextOperations: any[] = [...nextBaseOperations, ...nextUpstreamOperations];
@@ -180,7 +186,7 @@ export function createOperationPermissionPlatform({
       try {
         catalog = registry.refresh(nextOperations);
         runtime.refreshOperations(nextOperations);
-        store.saveCatalogSnapshot(catalog, { notify: false });
+        await store.saveCatalogSnapshot(catalog, { notify: false });
       } catch (error: any) {
         registry.refresh(previousOperations);
         runtime.refreshOperations(previousOperations);
@@ -197,7 +203,7 @@ export function createOperationPermissionPlatform({
         removed: [...previousToolIds].filter((toolId?: any) : any => !nextToolIds.has(toolId))
       };
       if (notify) {
-        notifyOperationPermissionChanged({
+        await notifyOperationPermissionChanged({
           reasonCode: "catalog_snapshot_saved",
           reason,
           catalogFingerprint: catalog.fingerprint || "",
@@ -255,35 +261,37 @@ export function createOperationPermissionPlatform({
           }
         });
       },
-      replaceUpstreamOperations({ sourceRevision, sourceDigest, operations: nextOperations = [], notify = true }: Record<string, any> = {}) : any {
-        if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0 || typeof sourceDigest !== "string") {
-          throw new TypeError("Upstream operation catalog revision is invalid.");
-        }
-        if (sourceRevision < upstreamSourceRevision) {
-          throw new Error("Upstream operation catalog revision cannot move backward.");
-        }
-        if (sourceRevision === upstreamSourceRevision) {
-          if (sourceDigest !== upstreamSourceDigest) {
-            throw new Error("Upstream operation catalog revision conflicts with its accepted digest.");
+      replaceUpstreamOperations({ sourceRevision, sourceDigest, operations: nextOperations = [], notify = true }: Record<string, any> = {}) : Promise<any> {
+        return serializeOperationLayerMutation(async () : Promise<any> => {
+          if (!Number.isSafeInteger(sourceRevision) || sourceRevision < 0 || typeof sourceDigest !== "string") {
+            throw new TypeError("Upstream operation catalog revision is invalid.");
           }
-          return Object.freeze({
-            ok: true,
-            replayed: true,
-            sourceRevision,
-            sourceDigest,
-            catalogRevision,
-            catalogFingerprint: registry.getCatalog()?.fingerprint || "",
-            invalidation: Object.freeze({ added: Object.freeze([]), updated: Object.freeze([]), removed: Object.freeze([]) })
+          if (sourceRevision < upstreamSourceRevision) {
+            throw new Error("Upstream operation catalog revision cannot move backward.");
+          }
+          if (sourceRevision === upstreamSourceRevision) {
+            if (sourceDigest !== upstreamSourceDigest) {
+              throw new Error("Upstream operation catalog revision conflicts with its accepted digest.");
+            }
+            return Object.freeze({
+              ok: true,
+              replayed: true,
+              sourceRevision,
+              sourceDigest,
+              catalogRevision,
+              catalogFingerprint: registry.getCatalog()?.fingerprint || "",
+              invalidation: Object.freeze({ added: Object.freeze([]), updated: Object.freeze([]), removed: Object.freeze([]) })
+            });
+          }
+          const receipt: any = await applyOperationLayersNow({
+            nextUpstreamOperations: Array.isArray(nextOperations) ? [...nextOperations] : [],
+            notify,
+            reason: "Published upstream operation catalog changed."
           });
-        }
-        const receipt: any = applyOperationLayers({
-          nextUpstreamOperations: Array.isArray(nextOperations) ? [...nextOperations] : [],
-          notify,
-          reason: "Published upstream operation catalog changed."
+          upstreamSourceRevision = sourceRevision;
+          upstreamSourceDigest = sourceDigest;
+          return Object.freeze({ ...receipt, replayed: false, sourceRevision, sourceDigest });
         });
-        upstreamSourceRevision = sourceRevision;
-        upstreamSourceDigest = sourceDigest;
-        return Object.freeze({ ...receipt, replayed: false, sourceRevision, sourceDigest });
       },
       upstreamCatalogState() : any {
         return Object.freeze({
@@ -303,32 +311,36 @@ export function createOperationPermissionPlatform({
           catalogRevision
         });
       },
-      restoreOperationLayersState(state?: any) : any {
-        if (!state || !Array.isArray(state.baseOperations) || !Array.isArray(state.upstreamOperations)) {
-          throw new TypeError("Operation catalog rollback state is invalid.");
-        }
-        const restored: any = applyOperationLayers({
-          nextBaseOperations: state.baseOperations,
-          nextUpstreamOperations: state.upstreamOperations,
-          notify: false
+      restoreOperationLayersState(state?: any) : Promise<any> {
+        return serializeOperationLayerMutation(async () : Promise<any> => {
+          if (!state || !Array.isArray(state.baseOperations) || !Array.isArray(state.upstreamOperations)) {
+            throw new TypeError("Operation catalog rollback state is invalid.");
+          }
+          const restored: any = await applyOperationLayersNow({
+            nextBaseOperations: state.baseOperations,
+            nextUpstreamOperations: state.upstreamOperations,
+            notify: false
+          });
+          upstreamSourceRevision = Number.isSafeInteger(state.upstreamSourceRevision)
+            ? state.upstreamSourceRevision
+            : -1;
+          upstreamSourceDigest = String(state.upstreamSourceDigest || "");
+          catalogRevision = Number.isSafeInteger(state.catalogRevision)
+            ? state.catalogRevision
+            : restored.catalogRevision;
+          return Object.freeze({ ok: true, catalogRevision });
         });
-        upstreamSourceRevision = Number.isSafeInteger(state.upstreamSourceRevision)
-          ? state.upstreamSourceRevision
-          : -1;
-        upstreamSourceDigest = String(state.upstreamSourceDigest || "");
-        catalogRevision = Number.isSafeInteger(state.catalogRevision)
-          ? state.catalogRevision
-          : restored.catalogRevision;
-        return Object.freeze({ ok: true, catalogRevision });
       },
-      refreshOperations(nextOperations: any = []) : any {
+      refreshOperations(nextOperations: any = []) : Promise<any> {
         const normalizedOperations: any = Array.isArray(nextOperations) ? [...nextOperations] : [];
-        return applyOperationLayers({ nextBaseOperations: normalizedOperations });
+        return serializeOperationLayerMutation(() : any =>
+          applyOperationLayersNow({ nextBaseOperations: normalizedOperations }));
       },
-      close() : any {
+      async close() : Promise<any> {
+        await operationLayerMutation;
         unregisterApiKeyOwnerRecoveryAssignmentSync?.();
         unregisterApiKeyOwnerRecoveryAssignmentSync = null;
-        store.close();
+        await store.close();
       }
     };
   } catch (error: any) {
@@ -338,7 +350,7 @@ export function createOperationPermissionPlatform({
       // Preserve the platform construction failure after unwinding the change subscription.
     }
     try {
-      store?.close?.();
+      await store?.close?.();
     } catch {
       // Preserve the platform construction failure after unwinding owned state.
     }

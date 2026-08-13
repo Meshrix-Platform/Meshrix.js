@@ -26,8 +26,8 @@ async function start(dataRoot) {
       return response.json();
     },
     async close() {
-      await new Promise((resolve) => server.close(resolve));
       await handler.close();
+      await new Promise((resolve) => server.close(resolve));
     }
   });
 }
@@ -85,4 +85,44 @@ test("independent Skill Hub service rejects oversized request bodies before doma
   });
   assert.equal(response.status, 413);
   assert.deepEqual(await response.json(), { ok: false, error: { code: "request_too_large" } });
+});
+
+test("Skill Hub publishes a resumable redacted revision event after a successful mutation", async (t) => {
+  const dataRoot = await mkdtemp(path.join(os.tmpdir(), "skill-hub-service-events-"));
+  t.after(() => rm(dataRoot, { recursive: true, force: true }));
+  const service = await start(dataRoot);
+  t.after(() => service.close());
+  const metadata = {
+    actorId: "event-test-contributor",
+    actorKind: "test",
+    tenantRef: "event-test-tenant",
+    authorized: true,
+    current: true
+  };
+  const submitted = await service.invoke("skill_hub.submit", {
+    contributionId: "event-skill",
+    workspaceId: "private-workspace-must-not-be-published",
+    title: "Event skill",
+    license: "Apache-2.0",
+    declaredPermissions: ["read"],
+    skillManifestRef: "event-skill/SKILL.md",
+    payloadRefs: ["event-skill/SKILL.md"],
+    packageBundleBase64: Buffer.from("event-package").toString("base64"),
+    __meshrix: metadata
+  });
+  assert.equal(submitted.statusCode, 201);
+
+  const controller = new AbortController();
+  t.after(() => controller.abort());
+  const response = await fetch(`${service.baseUrl}/v1/events?cursor=0`, {
+    signal: controller.signal,
+    headers: { authorization: `Bearer ${authToken}` }
+  });
+  assert.equal(response.status, 200);
+  const { value } = await response.body.getReader().read();
+  const frame = new TextDecoder().decode(value);
+  assert.match(frame, /event: skill-hub\.catalog\.changed/u);
+  assert.match(frame, /"eventId":1/u);
+  assert.match(frame, /"operationId":"skill_hub\.submit"/u);
+  assert.doesNotMatch(frame, /private-workspace|event-test-contributor|event-test-tenant/u);
 });

@@ -380,7 +380,7 @@ export function createOperationPermissionHttpRouter({
       if (!(await requireConsole(request, response, normalizedMethod, url))) {
         return true;
       }
-      return complete(200, { schemaVersion: "v0.0.1:schema:definition-1", grants: platform.store.listGrants() });
+      return complete(200, { schemaVersion: "v0.0.1:schema:definition-1", grants: await platform.store.listGrants() });
     }
 
     if (normalizedMethod === "POST" && suffix === "/grants") {
@@ -457,7 +457,7 @@ export function createOperationPermissionHttpRouter({
       }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        items: publicOperationPermissionResponse(platform.store.listAudit({
+        items: publicOperationPermissionResponse(await platform.store.listAudit({
           limit: Number(url.searchParams.get("limit") || 100),
           toolId: url.searchParams.get("toolId") || "",
           grantId: url.searchParams.get("grantId") || "",
@@ -471,7 +471,7 @@ export function createOperationPermissionHttpRouter({
         return true;
       }
       const toolExecutionId: any = decodeURIComponent(suffix.slice("/audit/".length));
-      const audit: any = platform.store.getAudit(toolExecutionId);
+      const audit: any = await platform.store.getAudit(toolExecutionId);
       if (!audit) {
         return complete(404, { schemaVersion: "v0.0.1:schema:definition-1", error: { code: "audit_not_found", message: "Audit record not found." } });
       }
@@ -484,7 +484,7 @@ export function createOperationPermissionHttpRouter({
       }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        metrics: publicOperationPermissionResponse(platform.store.metricsSummary({
+        metrics: publicOperationPermissionResponse(await platform.store.metricsSummary({
           limit: Number(url.searchParams.get("limit") || 2000),
           since: url.searchParams.get("since") || "",
           until: url.searchParams.get("until") || "",
@@ -507,7 +507,7 @@ export function createOperationPermissionHttpRouter({
       }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        export: publicOperationPermissionResponse(platform.store.metricsExport({
+        export: publicOperationPermissionResponse(await platform.store.metricsExport({
           limit: Number(url.searchParams.get("limit") || 2000),
           since: url.searchParams.get("since") || "",
           until: url.searchParams.get("until") || "",
@@ -530,7 +530,7 @@ export function createOperationPermissionHttpRouter({
       }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        health: publicOperationPermissionResponse(platform.store.metricsHealth({
+        health: publicOperationPermissionResponse(await platform.store.metricsHealth({
           windowSeconds: Number(url.searchParams.get("windowSeconds") || url.searchParams.get("window-seconds") || 300),
           maxRequestErrorRate: url.searchParams.get("maxRequestErrorRate") ||
             url.searchParams.get("max-request-error-rate") || "",
@@ -549,7 +549,7 @@ export function createOperationPermissionHttpRouter({
       if (!(await requireConsole(request, response, normalizedMethod, url, ["console:read"]))) {
         return true;
       }
-      return completeText(200, platform.store.metricsPrometheus({
+      return completeText(200, await platform.store.metricsPrometheus({
         windowSeconds: Number(url.searchParams.get("windowSeconds") || url.searchParams.get("window-seconds") || 300),
         maxRequestErrorRate: url.searchParams.get("maxRequestErrorRate") ||
           url.searchParams.get("max-request-error-rate") || "",
@@ -569,7 +569,7 @@ export function createOperationPermissionHttpRouter({
       }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        storage: publicOperationPermissionResponse(platform.store.metricsStorageSummary())
+        storage: publicOperationPermissionResponse(await platform.store.metricsStorageSummary())
       });
     }
 
@@ -583,7 +583,7 @@ export function createOperationPermissionHttpRouter({
       const payload: any = parseJsonBody(requestBody);
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        prune: platform.store.pruneMetrics({
+        prune: await platform.store.pruneMetrics({
           olderThan: payload.olderThan || payload.older_than || "",
           retentionDays: payload.retentionDays ?? payload.retention_days ?? 0,
           maxRows: payload.maxRows ?? payload.max_rows ?? 0,
@@ -600,7 +600,7 @@ export function createOperationPermissionHttpRouter({
       }
       return complete(200, {
         schemaVersion: "v0.0.1:schema:definition-1",
-        events: publicOperationPermissionResponse(platform.store.listGrantEvents({
+        events: publicOperationPermissionResponse(await platform.store.listGrantEvents({
           limit: Number(url.searchParams.get("limit") || 100),
           grantId: url.searchParams.get("grantId") || url.searchParams.get("grant-id") || "",
           eventType: url.searchParams.get("eventType") || url.searchParams.get("event-type") || ""
@@ -612,10 +612,10 @@ export function createOperationPermissionHttpRouter({
       if (!(await requireConsole(request, response, normalizedMethod, url, ["console:read"]))) {
         return true;
       }
-      const pendingOperations: any = platform.store.listPendingOperations({
+      const pendingOperations: any = (await platform.store.listPendingOperations({
         status: url.searchParams.get("status") || "pending",
         limit: Number(url.searchParams.get("limit") || 100)
-      }).map((operation?: any) : any => {
+      })).map((operation?: any) : any => {
         const toolLabel: any = String(platform.registry?.getTool?.(operation.toolId)?.label || "").trim();
         return toolLabel ? { ...operation, toolLabel } : operation;
       });

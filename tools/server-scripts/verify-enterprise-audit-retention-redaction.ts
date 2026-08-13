@@ -72,7 +72,7 @@ async function main() : Promise<any> {
   try {
     const traceId: any = "trace_enterprise_audit_static";
     for (const [capability, operationId] of CAPABILITY_OPERATIONS) {
-      store.append({
+      await store.append({
         traceId,
         requestId: `request-${capability}`,
         tenantId: "tenant-a",
@@ -103,7 +103,7 @@ async function main() : Promise<any> {
       });
     }
 
-    store.append({
+    await store.append({
       traceId,
       operationId: "auth.audit.retention.set",
       transport: "http",
@@ -112,7 +112,7 @@ async function main() : Promise<any> {
       status: "ok",
       input: { retentionDays: 1, updatedBy: { authorization: bearerFixture } }
     });
-    const policy: any = store.setRetentionPolicy({
+    const policy: any = await store.setRetentionPolicy({
       retentionDays: 1,
       maxExportItems: 50,
       cleanupBatchSize: 4,
@@ -120,9 +120,11 @@ async function main() : Promise<any> {
       updatedBy: { userId: "auditor", authorization: bearerFixture }
     });
 
-    const listedBeforePrune: any = store.list({ limit: 100 });
-    const exportResult: any = store.exportRedacted({ limit: 100 });
-    const trace: any = store.getTrace(traceId, { limit: 100 });
+    const [listedBeforePrune, exportResult, trace]: any[] = await Promise.all([
+      store.list({ limit: 100 }),
+      store.exportRedacted({ limit: 100 }),
+      store.getTrace(traceId, { limit: 100 })
+    ]);
     assert.equal(listedBeforePrune.length >= CAPABILITY_OPERATIONS.length, true);
     assert.equal(exportResult.manifest.protocolVersion, "v0.0.1:platform:audit-export-1");
     assertReportProvenance(exportResult, {
@@ -148,7 +150,7 @@ async function main() : Promise<any> {
       redactionPolicy: exportResult.manifest.redactionPolicy
     });
 
-    const automaticRetention: any = store.append({
+    const automaticRetention: any = await store.append({
       traceId,
       operationId: "auth.audit.retention.automatic",
       transport: "application",
@@ -159,11 +161,11 @@ async function main() : Promise<any> {
     });
     assert.equal(automaticRetention.maintenance.deletedCount >= 1, true);
     assert.equal(
-      store.list({ limit: 100 }).some((item?: any) : any => item.operationId === "jobs.create"),
+      (await store.list({ limit: 100 })).some((item?: any) : any => item.operationId === "jobs.create"),
       false,
       "append-path retention should remove the expired jobs audit row"
     );
-    store.append({
+    await store.append({
       traceId,
       operationId: "audit.manual-prune.fixture",
       transport: "application",
@@ -174,8 +176,8 @@ async function main() : Promise<any> {
       createdAt: oldIso(3)
     });
 
-    const prune: any = store.pruneExpired({ retentionDays: 1 });
-    store.append({
+    const prune: any = await store.pruneExpired({ retentionDays: 1 });
+    await store.append({
       traceId,
       operationId: "auth.audit.prune",
       transport: "http",
@@ -185,7 +187,7 @@ async function main() : Promise<any> {
       input: prune
     });
     assert.equal(prune.deletedCount >= 1, true);
-    const afterPrune: any = store.list({ limit: 100 });
+    const afterPrune: any = await store.list({ limit: 100 });
     assert.equal(afterPrune.some((item?: any) : any => item.operationId === "jobs.create"), false, "expired jobs audit row should be pruned");
     assert.equal(afterPrune.some((item?: any) : any => item.operationId === "auth.audit.retention.set"), true);
     assert.equal(afterPrune.some((item?: any) : any => item.operationId === "auth.audit.prune"), true);
@@ -228,7 +230,7 @@ async function main() : Promise<any> {
     });
     assertNoSensitiveReportLeak(finalizedReport, "enterprise audit report");
     assertReportProvenance(finalizedReport, provenance);
-    store.close();
+    await store.close();
     await fs.rm(userDataPath, { recursive: true, force: true });
   }
 

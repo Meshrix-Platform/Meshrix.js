@@ -3,14 +3,13 @@ import OptionBar from "@meshrix/ui-console/option-bar";
 import FeatureToggle from "../FeatureToggle.vue";
 import ConsoleEmptyState from "../ConsoleEmptyState.vue";
 import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 
 const {
   authAudit,
   authRoleOptionBarOptions,
   authSessions,
   authUsers,
-  isBusy,
   canAdminAuth,
   oidcAllowedDomainsText,
   oidcDraft,
@@ -19,7 +18,10 @@ const {
   saveOidcConfig,
   updateConsoleUser,
   updateConsoleUserRole,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().access;
+const {
+  isBusy,
+} = useServerConsoleShellContext().runtime;
 </script>
 
 <template>

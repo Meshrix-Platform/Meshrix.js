@@ -23,6 +23,12 @@ import {
 import { createBuiltinStrategyAdapters } from "./runtime-strategies.ts";
 import { publicStrategyConfig } from "./strategies.ts";
 import { appendJsonl, publicRecordFromResult, readJson, readJsonlTail, writeJson } from "./storage.ts";
+import {
+  CONTEXT_COMPACTION_WORKER_THRESHOLD_BYTES,
+  conversationPayload,
+  conversationPayloadBytes,
+  createContextCompactionExecutionLane
+} from "./execution-lane.ts";
 
 export { CONTEXT_COMPACTION_PROTOCOL_VERSION } from "./constants.ts";
 export {
@@ -63,6 +69,14 @@ export function createContextCompactionRuntime({
   const memoryStore: any = assertAgentMemoryPort(agentMemory);
   const sessionMemoryPath: any = memoryStore.sessionMemoryPath;
   const statePath: any = path.join(rootPath, "context-compaction-state.json");
+  let executionLane: any = null;
+
+  async function normalizeAdmittedConversation(input: Record<string, any> = {}) : Promise<any> {
+    const bytes: number = conversationPayloadBytes(input);
+    if (bytes <= CONTEXT_COMPACTION_WORKER_THRESHOLD_BYTES) return normalizeConversationInput(input);
+    executionLane ||= createContextCompactionExecutionLane();
+    return executionLane.normalize(conversationPayload(input), { bytes });
+  }
 
   async function getState() : Promise<any> {
     const state: any = await readJson(statePath, {});
@@ -168,8 +182,11 @@ export function createContextCompactionRuntime({
     const sessionId: any = String(input.sessionId || input.conversationId || input.threadId || "").trim();
     const source: any = String(input.source || input.inputSource || "runtime");
     const createdAt: any = nowIso();
-    const messages: any = normalizeConversationInput(input);
-    const sourceTokens: any = estimateContextTokens(messages.map((message?: any) : any => message.text).join("\n"));
+    const messages: any = await normalizeAdmittedConversation(input);
+    const sourceTokens: any = messages.reduce(
+      (total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0),
+      0
+    );
     const graph: any = buildMessageGraph(messages);
     const triggerReason: any =
       sourceTokens >= budget.hardThresholdTokens
@@ -305,7 +322,10 @@ export function createContextCompactionRuntime({
       const messagesToKeep: any = micro.messages;
       const summary: any = redactText(summaryResult.summary || "");
       const summaryTokens: any = estimateContextTokens(summary);
-      const keptTokens: any = estimateContextTokens(messagesToKeep.map((message?: any) : any => message.text || message.content || "").join("\n"));
+      const keptTokens: any = messagesToKeep.reduce(
+        (total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0),
+        0
+      );
       const reinjectionTokens: any = reinjection.usedTokens;
       const finalTokens: any = summaryTokens + keptTokens + reinjectionTokens;
       const tokenReport: Record<string, any> = {
@@ -314,7 +334,10 @@ export function createContextCompactionRuntime({
         warningThresholdTokens: budget.warningThresholdTokens,
         autoCompactThresholdTokens: budget.autoCompactThresholdTokens,
         hardThresholdTokens: budget.hardThresholdTokens,
-        compactedSourceTokens: estimateContextTokens(compactedMessages.map((message?: any) : any => message.text).join("\n")),
+        compactedSourceTokens: compactedMessages.reduce(
+          (total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0),
+          0
+        ),
         summaryTokens,
         keptTokens,
         reinjectionTokens,
@@ -566,6 +589,10 @@ export function createContextCompactionRuntime({
     clearSessionMemory,
     latestSessionMemory,
     resumeTranscript,
+    async close() : Promise<any> {
+      await executionLane?.close?.();
+      executionLane = null;
+    },
     estimateTokens: estimateContextTokens,
     redactValue: redactCompactionValue
   };

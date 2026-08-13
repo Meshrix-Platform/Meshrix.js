@@ -439,7 +439,7 @@ export function createMaintenanceAgentService({
       state.closed = true;
       scheduler.stopScheduler();
       await executor.prepareClose();
-      operationPermissionStore.close();
+      await operationPermissionStore.close();
       logMaintenance("info", "maintenance.agent.close.completed", {});
     })().catch((error?: any) : any => {
       closePromise = null;

@@ -11,9 +11,12 @@ const contextCompilerClientMock: any = vi.hoisted(() : any => ({
   saveContextProfiles: vi.fn(),
 }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellContextMock.current,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellContextMock.current),
+  };
+});
 vi.mock("../../../apps/console/lib/context-compiler-client", async (importOriginal?: any) : Promise<any> => ({
   ...await importOriginal<typeof import("../../../apps/console/lib/context-compiler-client")>(),
   saveContextProfiles: contextCompilerClientMock.saveContextProfiles,

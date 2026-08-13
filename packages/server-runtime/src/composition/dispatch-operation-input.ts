@@ -58,8 +58,10 @@ export function findHttpOperation({
   pathname,
   routeIndex = null
 }: Record<string, any>) : any {
-  const match: any = (routeIndex || createOperationRouteIndex(operations, { strict: true }))
-    .findHttpOperation(method, pathname);
+  if (!routeIndex) {
+    return null;
+  }
+  const match: any = routeIndex.findHttpOperation(method, pathname);
   return match ? { operation: match.operation, pathParams: match.params } : null;
 }
 
@@ -68,8 +70,7 @@ export function findRpcOperation({
   method,
   routeIndex = null
 }: Record<string, any>) : any {
-  return (routeIndex || createOperationRouteIndex(operations, { strict: true }))
-    .findRpcOperation(method);
+  return routeIndex ? routeIndex.findRpcOperation(method) : null;
 }
 
 export function findProxyRegisteredApiRequest({

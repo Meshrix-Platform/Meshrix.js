@@ -11,9 +11,12 @@ const shellContextMock: any = vi.hoisted(() : any => ({
   current: null as unknown,
 }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellContextMock.current,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellContextMock.current),
+  };
+});
 
 function makeOperationPermissionConsole(overrides: Record<string, unknown> = {}) : any {
   const selectedOperationPermissionToolId: any = ref("repo.status");

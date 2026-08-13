@@ -147,7 +147,7 @@ export const AGENT_SESSION_OPERATION_DEFINITIONS: readonly any[] = Object.freeze
       },
       requiredScopes: ["workspace:read"],
       readOnly: true,
-      concurrencySafe: true
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 }
     },
 {
       id: "agent_sessions.merge_proposal",
@@ -324,7 +324,7 @@ export const AGENT_SESSION_OPERATION_DEFINITIONS: readonly any[] = Object.freeze
       },
       requiredScopes: ["storage:read"],
       readOnly: true,
-      concurrencySafe: true
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 }
     },
 {
       id: "agent_workspaces.file.upload",
@@ -392,7 +392,7 @@ export const AGENT_SESSION_OPERATION_DEFINITIONS: readonly any[] = Object.freeze
       },
       requiredScopes: ["storage:read"],
       readOnly: true,
-      concurrencySafe: true
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 }
     },
 {
       id: "agent_workspaces.file.download",
@@ -426,7 +426,7 @@ export const AGENT_SESSION_OPERATION_DEFINITIONS: readonly any[] = Object.freeze
       },
       requiredScopes: ["storage:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       binary: true
     },
 {

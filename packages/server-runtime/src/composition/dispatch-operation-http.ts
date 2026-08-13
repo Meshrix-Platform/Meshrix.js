@@ -40,6 +40,7 @@ export async function dispatchRegisteredHttpOperation({
   response,
   requestBody,
   authorizeOperation = null,
+  resolveAuthorizationOperation = null,
   verifyProcessIdentity = null,
   operationAuditStore = null,
   operationProofSubstrate = null,
@@ -58,9 +59,11 @@ export async function dispatchRegisteredHttpOperation({
   if (!match) {
     return false;
   }
-  const authorizationOperation: any = Array.isArray(operations)
-    ? operations.find((candidate?: any) : any => candidate?.id === match.operation.id) || null
-    : null;
+  const liveOperationResolver: any = typeof resolveAuthorizationOperation === "function"
+    ? resolveAuthorizationOperation
+    : routeIndex
+      ? ({ operationId }: Record<string, any>) : any => routeIndex.getOperationById(operationId) || null
+      : null;
 
   await dispatchOperation({
     operation: match.operation,
@@ -73,7 +76,7 @@ export async function dispatchRegisteredHttpOperation({
     transport: "http",
     method,
     authorizeOperation,
-    resolveAuthorizationOperation: () : any => authorizationOperation,
+    resolveAuthorizationOperation: liveOperationResolver,
     verifyProcessIdentity,
     operationAuditStore,
     operationProofSubstrate,
@@ -93,7 +96,10 @@ export function createStartupSnapshotPort({
   if (!controllers || typeof controllers !== "object") {
     throw new TypeError("Startup snapshot controllers are required.");
   }
-  const operationIndex: any = routeIndex || createOperationRouteIndex(operations, { strict: true });
+  if (!routeIndex) {
+    throw new TypeError("Startup snapshot port requires a route index snapshot.");
+  }
+  const operationIndex: any = routeIndex;
 
   async function readSnapshot({ operationId, errorMessage }: Record<string, any>) : Promise<any> {
     const operation: any = operationIndex.getOperationById(operationId);

@@ -155,7 +155,7 @@ function createRuntimeFixture(overrides: Record<string, any> = {}) : any {
     risk: "low",
     timeoutMs: 1000,
     maxResultBytes: 1024,
-    concurrencySafe: true,
+    concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
     requiresApproval: false,
     approvalScope: "",
     transport: {}
@@ -505,6 +505,108 @@ describe("operation-permission runtime (behavior)", () : any => {
     expect(result.ok).toBe(true);
     expect(operationDispatcher).toHaveBeenCalledWith(expect.objectContaining({
       operationProofSubstrate
+    }));
+  });
+
+  it("uses the selected dynamic MCP descriptor instead of static dispatcher authority", async () : Promise<any> => {
+    const authorization: any = scopedApiKeyAuthorization();
+    authorization.policy = {
+      ...authorization.policy,
+      serviceIds: ["opaque-service"],
+      capabilityIds: ["cap:upstream:opaque-service:tools-call-records-list"],
+      toolsetIds: ["meshrix.gateway.read", "upstream:opaque-service"],
+      allowedTools: ["catalog.other"],
+      scopeIds: ["gateway:read"],
+      maximumRisk: "low"
+    };
+    const reserveEffect: any = vi.fn(async () : Promise<any> => ({ leaseId: "lease-dynamic-tool" }));
+    const authorizeOperation: any = vi.fn(async () : Promise<any> => authorization);
+    const fixture: any = createRuntimeFixture({
+      tool: {
+        serviceId: "static-dispatcher",
+        operationKey: "tools/call",
+        toolsets: ["meshrix.gateway.write"],
+        requiredScopes: ["gateway:write"],
+        risk: "safe_write",
+        requiresApproval: true
+      },
+      runtime: {
+        apiKeyDistributionProvider: {
+          authorizeOperation,
+          reserveEffect,
+          revalidateEffect: vi.fn(async () : Promise<any> => authorization),
+          releaseEffect: vi.fn(async () : Promise<any> => undefined)
+        }
+      }
+    });
+    const dynamicCapability: any = {
+      capabilityId: "cap:upstream:opaque-service:tools-call-records-list",
+      serviceId: "opaque-service",
+      operationKey: "tools/call",
+      upstreamToolName: "records.list",
+      risk: "read_only",
+      requiredScopes: ["gateway:read"],
+      toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+      approvalPolicy: {
+        requiresApproval: false,
+        approvalScope: "",
+        requiredApproval: {}
+      },
+      resourceContext: {
+        serviceId: "opaque-service",
+        resourceKind: "upstream-service-operation"
+      }
+    };
+
+    const result: any = await fixture.runtime.executeTool({
+      toolId: fixture.tool.id,
+      input: { name: "alpha" },
+      request: createRequest(),
+      apiKeyAuthorization: authorization,
+      context: { dynamicCapability, resourceContext: dynamicCapability.resourceContext }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fixture.policyEngine.evaluate).toHaveBeenCalledWith(expect.objectContaining({
+      restriction: expect.objectContaining({ toolAllow: [], toolDeny: [] }),
+      tool: expect.objectContaining({
+        id: fixture.tool.id,
+        serviceId: "opaque-service",
+        operationKey: "tools/call",
+        risk: "read_only",
+        requiredScopes: ["gateway:read"],
+        toolsets: ["meshrix.gateway.read", "upstream:opaque-service"],
+        requiresApproval: false,
+        resourceContext: dynamicCapability.resourceContext
+      })
+    }));
+    expect(authorizeOperation).toHaveBeenCalledWith(expect.objectContaining({
+      authorization,
+      operation: expect.objectContaining({
+        dynamicCapability: true,
+        serviceId: "opaque-service",
+        capabilityId: dynamicCapability.capabilityId,
+        resourceContext: dynamicCapability.resourceContext
+      })
+    }));
+    expect(reserveEffect).toHaveBeenCalledWith(expect.objectContaining({
+      operation: {
+        id: fixture.tool.id,
+        toolId: fixture.tool.id,
+        serviceId: "opaque-service",
+        capabilityId: dynamicCapability.capabilityId,
+        dynamicCapability: true,
+        toolsetIds: dynamicCapability.toolsets,
+        scopeIds: dynamicCapability.requiredScopes,
+        risk: "read_only",
+        resourceContext: dynamicCapability.resourceContext
+      }
+    }));
+    expect(fixture.store.appendExecution).toHaveBeenCalledWith(expect.objectContaining({
+      grantId: authorization.keyId,
+      toolId: fixture.tool.id,
+      risk: "read_only",
+      toolsetIds: dynamicCapability.toolsets
     }));
   });
 
@@ -1974,9 +2076,9 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           capabilities: ["cap:operation-permission:unknown:test"]
         })).rejects.toThrow("Unknown tool grant capability permission");
       } finally {
-        store.close();
+        await store.close();
         expect(store.isClosed()).toBe(true);
-        expect(() : any => store.close()).not.toThrow();
+        await expect(store.close()).resolves.toBeUndefined();
       }
     });
   });
@@ -1996,7 +2098,7 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           credentialFingerprint: "must-not-persist",
           processIdentity: { executablePath: "must-not-persist" }
         };
-        const pending: any = store.createPendingOperation({
+        const pending: any = await store.createPendingOperation({
           pendingOperationId: "pending-required-source",
           toolId: "tool.alpha",
           operationId: "operation.alpha",
@@ -2005,7 +2107,7 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           credentialAuthorization: apiKeyAuthorization,
           originalInput: { token: "secret" }
         });
-        const projectionOnly: any = store.createPendingOperation({
+        const projectionOnly: any = await store.createPendingOperation({
           pendingOperationId: "pending-projection-source",
           toolId: "tool.alpha",
           operationId: "operation.alpha",
@@ -2013,8 +2115,8 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           approvalLayers: ["department"],
           originalInput: { token: "secret" }
         });
-        const loaded: any = store.getPendingOperation("pending-required-source", { includeOriginalInput: true });
-        const loadedProjectionOnly: any = store.getPendingOperation("pending-projection-source", { includeOriginalInput: true });
+        const loaded: any = await store.getPendingOperation("pending-required-source", { includeOriginalInput: true });
+        const loadedProjectionOnly: any = await store.getPendingOperation("pending-projection-source", { includeOriginalInput: true });
 
         expect(pending.approvalLayers).toEqual(["team"]);
         expect(loaded.requiredApproval.approvalLayers).toEqual(["team"]);
@@ -2027,7 +2129,7 @@ describe("operation-permission store boundaries (behavior)", () : any => {
         expect(loaded.credentialAuthorization).not.toHaveProperty("processIdentity");
         expect(projectionOnly.approvalLayers).toEqual([]);
         expect(loadedProjectionOnly.requiredApproval.approvalLayers).toEqual([]);
-        const approved: any = store.resolvePendingOperation({
+        const approved: any = await store.resolvePendingOperation({
           pendingOperationId: "pending-required-source",
           resolution: "approved",
           resolvedBy: "console-user-1",
@@ -2043,13 +2145,13 @@ describe("operation-permission store boundaries (behavior)", () : any => {
           ...requiredApproval.operationBinding,
           approvalActorId: "console-user-1"
         });
-        expect(store.resolvePendingOperation({
+        expect(await store.resolvePendingOperation({
           pendingOperationId: "pending-required-source",
           resolution: "approved",
           resolvedBy: "console-user-2"
         })).toBeNull();
       } finally {
-        store.close();
+        await store.close();
       }
     });
   });
@@ -2062,14 +2164,14 @@ describe("operation-permission store boundaries (behavior)", () : any => {
         capabilityBindingGuard: false
       });
       try {
-        expect(store.getPendingOperation("missing")).toBeNull();
+        expect(await store.getPendingOperation("missing")).toBeNull();
         await expect(store.deleteGrant("missing")).resolves.toBe(false);
-        expect(() : any => store.resolvePendingOperation({
+        await expect(store.resolvePendingOperation({
           pendingOperationId: "missing",
           resolution: "not-a-valid-state"
-        })).toThrow("Invalid pending operation resolution status.");
+        })).rejects.toThrow("Invalid pending operation resolution status.");
       } finally {
-        store.close();
+        await store.close();
       }
     });
   });

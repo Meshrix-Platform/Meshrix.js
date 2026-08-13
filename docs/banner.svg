@@ -8,20 +8,6 @@
       <stop offset="100%" stop-color="#060610"/>
     </linearGradient>
 
-    <!-- Gold accent gradient -->
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%"   stop-color="#c9a96e"/>
-      <stop offset="50%"  stop-color="#f0d28c"/>
-      <stop offset="100%" stop-color="#a8893a"/>
-    </linearGradient>
-
-    <!-- Ice crystal blue gradient -->
-    <linearGradient id="ice" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%"   stop-color="#4fc3f7"/>
-      <stop offset="50%"  stop-color="#80deea"/>
-      <stop offset="100%" stop-color="#26a8d8"/>
-    </linearGradient>
-
     <!-- Prismatic refraction gradient (horizontal spectrum) -->
     <linearGradient id="prism" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%"    stop-color="#c9a96e" stop-opacity="0.8"/>
@@ -31,19 +17,6 @@
       <stop offset="80%"   stop-color="#a78bfa" stop-opacity="0.5"/>
       <stop offset="100%"  stop-color="#c9a96e" stop-opacity="0.3"/>
     </linearGradient>
-
-    <!-- Crystal facet highlight -->
-    <linearGradient id="facet" x1="0" y1="0" x2="0.5" y2="1">
-      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.08"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-
-    <!-- Glow behind crystal -->
-    <radialGradient id="crystalGlow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0%"   stop-color="#4fc3f7" stop-opacity="0.06"/>
-      <stop offset="60%"  stop-color="#c9a96e" stop-opacity="0.03"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
-    </radialGradient>
 
     <!-- Text area subtle glow -->
     <radialGradient id="textGlow" cx="0.65" cy="0.5" r="0.35">
@@ -56,71 +29,26 @@
   <rect width="1200" height="400" fill="url(#bg)"/>
 
   <!-- Ambient glow layers -->
-  <circle cx="280" cy="200" r="240" fill="url(#crystalGlow)"/>
   <rect width="1200" height="400" fill="url(#textGlow)"/>
 
-  <!-- ── Crystal Icon — centered at (280, 200) ───────────────────────────────── -->
-  <g transform="translate(280,200)">
-
-    <!-- Outer hexagonal frame (crystal form) -->
-    <polygon
-      points="0,-130 112.6,-65 112.6,65 0,130 -112.6,65 -112.6,-65"
-      fill="none" stroke="url(#gold)" stroke-width="0.6" opacity="0.3"/>
-
-    <!-- Second hexagon — rotated 30° (creates 12-pointed star overlay) -->
-    <polygon
-      points="0,-120 103.9,-60 103.9,60 0,120 -103.9,60 -103.9,-60"
-      fill="none" stroke="url(#ice)" stroke-width="0.4" opacity="0.2"
-      transform="rotate(30)"/>
-
-    <!-- Crystal lattice lines — internal structure -->
-    <!-- Vertical axis -->
-    <line x1="0" y1="-95" x2="0" y2="95" stroke="url(#ice)" stroke-width="0.5" opacity="0.25"/>
-    <!-- 60° axes -->
-    <line x1="-82.3" y1="-47.5" x2="82.3" y2="47.5" stroke="url(#ice)" stroke-width="0.5" opacity="0.25"/>
-    <line x1="-82.3" y1="47.5" x2="82.3" y2="-47.5" stroke="url(#ice)" stroke-width="0.5" opacity="0.25"/>
-
-    <!-- Inner hexagon — crystal core -->
-    <polygon
-      points="0,-60 52,-30 52,30 0,60 -52,30 -52,-30"
-      fill="url(#facet)" stroke="url(#gold)" stroke-width="1.2" opacity="0.55"/>
-
-    <!-- Crystal facet highlights (triangular faces) -->
-    <polygon points="0,-60 52,-30 0,0" fill="#ffffff" opacity="0.02"/>
-    <polygon points="52,-30 52,30 0,0" fill="#4fc3f7" opacity="0.02"/>
-    <polygon points="0,60 -52,30 0,0" fill="#ffffff" opacity="0.015"/>
-
-    <!-- Lattice nodes — where channels intersect -->
-    <circle cx="0" cy="-60" r="2.5" fill="#80deea" opacity="0.5"/>
-    <circle cx="52" cy="-30" r="2.5" fill="#c9a96e" opacity="0.5"/>
-    <circle cx="52" cy="30" r="2.5" fill="#80deea" opacity="0.4"/>
-    <circle cx="0" cy="60" r="2.5" fill="#c9a96e" opacity="0.5"/>
-    <circle cx="-52" cy="30" r="2.5" fill="#80deea" opacity="0.4"/>
-    <circle cx="-52" cy="-30" r="2.5" fill="#c9a96e" opacity="0.5"/>
-
-    <!-- Central brilliant — the focused light point -->
-    <circle r="5" fill="url(#gold)" opacity="0.7"/>
-    <circle r="2.5" fill="#ffffff" opacity="0.6"/>
-
-    <!-- Radial beams — extending from vertices along 6-fold axes -->
-    <line x1="0" y1="-65" x2="0" y2="-105" stroke="url(#ice)" stroke-width="0.6" opacity="0.2"/>
-    <line x1="56.3" y1="-32.5" x2="91" y2="-52.5" stroke="#c9a96e" stroke-width="0.6" opacity="0.2"/>
-    <line x1="56.3" y1="32.5" x2="91" y2="52.5" stroke="url(#ice)" stroke-width="0.6" opacity="0.2"/>
-    <line x1="0" y1="65" x2="0" y2="105" stroke="#c9a96e" stroke-width="0.6" opacity="0.2"/>
-    <line x1="-56.3" y1="32.5" x2="-91" y2="52.5" stroke="url(#ice)" stroke-width="0.6" opacity="0.2"/>
-    <line x1="-56.3" y1="-32.5" x2="-91" y2="-52.5" stroke="#c9a96e" stroke-width="0.6" opacity="0.2"/>
-
-    <!-- Outer lattice ring — faint crystal boundary markers -->
-    <g opacity="0.15" stroke="#80deea" stroke-width="0.6">
-      <line x1="0" y1="-126" x2="0" y2="-130"/>
-      <line x1="0" y1="126" x2="0" y2="130"/>
-      <line x1="-109.1" y1="-63" x2="-112.6" y2="-65"/>
-      <line x1="109.1" y1="-63" x2="112.6" y2="-65"/>
-      <line x1="-109.1" y1="63" x2="-112.6" y2="65"/>
-      <line x1="109.1" y1="63" x2="112.6" y2="65"/>
+  <!-- ── Meshrix.js gateway mark ───────────────────────────────────────────── -->
+  <svg x="120" y="40" width="320" height="320" viewBox="150 0 320 320" fill="none" shape-rendering="geometricPrecision">
+    <defs>
+      <mask id="banner-outside-gateway" x="190" y="25" width="240" height="270" maskUnits="userSpaceOnUse" style="mask-type:luminance">
+        <rect x="190" y="25" width="240" height="270" fill="#fff"/>
+        <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="#000"/>
+      </mask>
+    </defs>
+    <rect x="150" width="320" height="320" fill="#000"/>
+    <g stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+      <g mask="url(#banner-outside-gateway)">
+        <path d="M216.902 98.75 299.175 51.25M320.825 51.25 403.098 98.75M206.077 117.5V212.5M413.923 117.5V212.5M216.902 231.25 284.019 270M403.098 231.25 335.981 270" stroke-width="3.6"/>
+        <path d="M310 57.5 216.902 218.75M310 57.5 403.098 218.75M216.902 111.25 284.019 270M403.098 111.25 335.981 270" stroke-width="3"/>
+      </g>
+      <path d="M284.019 270V165A25.981 25.981 0 0 1 335.981 165V270" stroke-width="4.4"/>
+      <path d="M310 32.5 320.825 38.75v12.5L310 57.5l-10.825-6.25v-12.5ZM206.077 92.5 216.902 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 92.5 424.748 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM206.077 212.5 216.902 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 212.5 424.748 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5Z" stroke-width="3.6"/>
     </g>
-
-  </g>
+  </svg>
 
   <!-- ── Prismatic separator line ──────────────────────────────────────────── -->
   <rect x="460" y="158" width="1.5" height="84" fill="url(#prism)" opacity="0.4" rx="0.75"/>

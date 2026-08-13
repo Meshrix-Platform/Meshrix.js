@@ -1,94 +1,983 @@
 {
   "$schema": "./schema/public-api.schema.json",
-  "version": "v0.1.0",
+  "version": "v0.2.0",
   "aliases": [
     {
-      "alias": "#meshrix/contracts/*",
-      "targetPath": "./packages/contracts/src/*.ts",
-      "status": "active",
-      "domainPackage": "contracts",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/contracts/*.ts",
-      "targetPath": "./packages/contracts/src/*.ts",
-      "status": "active",
-      "domainPackage": "contracts",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/foundation/*",
-      "targetPath": "./packages/foundation/src/*.ts",
-      "status": "active",
-      "domainPackage": "foundation",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/foundation/*.ts",
-      "targetPath": "./packages/foundation/src/*.ts",
-      "status": "active",
-      "domainPackage": "foundation",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/*",
-      "targetPath": "./packages/agents/src/*.ts",
+      "alias": "#meshrix/agents/agent-configs/config-registry",
+      "targetPath": "./packages/agents/src/agent-configs/config-registry.ts",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/agents/*.ts",
-      "targetPath": "./packages/agents/src/*.ts",
+      "alias": "#meshrix/agents/agent-configs/credential-binding",
+      "targetPath": "./packages/agents/src/agent-configs/credential-binding.ts",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/capabilities/*",
-      "targetPath": "./packages/capabilities/src/*.ts",
+      "alias": "#meshrix/agents/agent-gateway/external-gateway/index",
+      "targetPath": "./packages/agents/src/agent-gateway/external-gateway/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/agent-gateway/index",
+      "targetPath": "./packages/agents/src/agent-gateway/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/agent-gateway/model-probe/index",
+      "targetPath": "./packages/agents/src/agent-gateway/model-probe/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/agent-memory/index",
+      "targetPath": "./packages/agents/src/agent-memory/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/agent-runtime-provider",
+      "targetPath": "./packages/agents/src/agent-runtime-provider.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
+      "targetPath": "./packages/agents/src/agent-workspace/agent-workspace-materialization-brand.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
+      "targetPath": "./packages/agents/src/agent-workspace/agent-workspace-materialization-port.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/maintenance/index",
+      "targetPath": "./packages/agents/src/maintenance/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/maintenance/planner",
+      "targetPath": "./packages/agents/src/maintenance/planner.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/maintenance/tool-registry",
+      "targetPath": "./packages/agents/src/maintenance/tool-registry.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/maintenance/work-queue-contract",
+      "targetPath": "./packages/agents/src/maintenance/work-queue-contract.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/upstream-gateway/index",
+      "targetPath": "./packages/agents/src/upstream-gateway/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/workspace-asset-registry/index",
+      "targetPath": "./packages/agents/src/workspace-asset-registry/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/workspace-contribution",
+      "targetPath": "./packages/agents/src/workspace-contribution/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/agents/workspace-governance/index",
+      "targetPath": "./packages/agents/src/workspace-governance/index.ts",
+      "status": "active",
+      "domainPackage": "agents",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/capabilities/operation-permission-core/index",
+      "targetPath": "./packages/capabilities/src/operation-permission-core/index.ts",
       "status": "active",
       "domainPackage": "capabilities",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/capabilities/*.ts",
-      "targetPath": "./packages/capabilities/src/*.ts",
+      "alias": "#meshrix/capabilities/operation-permission-core/runtime-schema",
+      "targetPath": "./packages/capabilities/src/operation-permission-core/runtime-schema.ts",
       "status": "active",
       "domainPackage": "capabilities",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/protocols/*",
-      "targetPath": "./packages/protocols/*.ts",
+      "alias": "#meshrix/capabilities/operation-permission-core/store",
+      "targetPath": "./packages/capabilities/src/operation-permission-core/store.ts",
+      "status": "active",
+      "domainPackage": "capabilities",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/capabilities/skills/tool-skill-management-provider",
+      "targetPath": "./packages/capabilities/src/skills/tool-skill-management-provider.ts",
+      "status": "active",
+      "domainPackage": "capabilities",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/mcp-catalog-delivery",
+      "targetPath": "./packages/contracts/src/mcp-catalog-delivery.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/modules/model-usage",
+      "targetPath": "./packages/contracts/src/modules/model-usage.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/operations/operation-decorators",
+      "targetPath": "./packages/contracts/src/operations/operation-decorators.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/operations/operation-feature-resolution",
+      "targetPath": "./packages/contracts/src/operations/operation-feature-resolution.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/operations/operation-registry",
+      "targetPath": "./packages/contracts/src/operations/operation-registry.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/operations/protocol-operation-definitions",
+      "targetPath": "./packages/contracts/src/operations/protocol-operation-definitions.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/operations/static-semantic-family-catalog",
+      "targetPath": "./packages/contracts/src/operations/static-semantic-family-catalog.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/plugins/plugin-bundle-manifest",
+      "targetPath": "./packages/contracts/src/plugins/plugin-bundle-manifest.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/plugins/plugin-package-source",
+      "targetPath": "./packages/contracts/src/plugins/plugin-package-source.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/plugins/plugin-package-state",
+      "targetPath": "./packages/contracts/src/plugins/plugin-package-state.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/contracts/serialization/canonical-json",
+      "targetPath": "./packages/contracts/src/serialization/canonical-json.ts",
+      "status": "active",
+      "domainPackage": "contracts",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection",
+      "targetPath": "./packages/foundation/src/checkpoint/tree/checkpoint-tree-projection.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/checkpoint/tree/data-structure-substrate",
+      "targetPath": "./packages/foundation/src/checkpoint/tree/data-structure-substrate.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/checkpoint/tree/data-structure-substrate-register",
+      "targetPath": "./packages/foundation/src/checkpoint/tree/data-structure-substrate-register.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/checkpoint/tree/merkle-state-substrate",
+      "targetPath": "./packages/foundation/src/checkpoint/tree/merkle-state-substrate.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/checkpoint/tree/pactium-runtime",
+      "targetPath": "./packages/foundation/src/checkpoint/tree/pactium-runtime.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/concurrency/lock-manager",
+      "targetPath": "./packages/foundation/src/concurrency/lock-manager.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/environment-compatibility/host-services",
+      "targetPath": "./packages/foundation/src/environment-compatibility/host-services.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/environment-compatibility/index",
+      "targetPath": "./packages/foundation/src/environment-compatibility/index.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/execution-sandbox/contracts",
+      "targetPath": "./packages/foundation/src/execution-sandbox/contracts.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/execution-sandbox/custody-contracts",
+      "targetPath": "./packages/foundation/src/execution-sandbox/custody-contracts.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/execution-sandbox/index",
+      "targetPath": "./packages/foundation/src/execution-sandbox/index.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/http/http-response",
+      "targetPath": "./packages/foundation/src/http/http-response.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/github-release-plugin-package-source",
+      "targetPath": "./packages/foundation/src/module-system/github-release-plugin-package-source.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/local-plugin-package-source",
+      "targetPath": "./packages/foundation/src/module-system/local-plugin-package-source.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/module-management-provider",
+      "targetPath": "./packages/foundation/src/module-system/module-management-provider.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/mount-config",
+      "targetPath": "./packages/foundation/src/module-system/mount-config.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/mount-manager",
+      "targetPath": "./packages/foundation/src/module-system/mount-manager.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-artifact-authority",
+      "targetPath": "./packages/foundation/src/module-system/plugin-artifact-authority.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-artifact-trust",
+      "targetPath": "./packages/foundation/src/module-system/plugin-artifact-trust.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-acquisition",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-acquisition.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-acquisition-port",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-acquisition-port.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-artifact-installer",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-artifact-installer.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-custody",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-custody.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-lifecycle",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-lifecycle.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-tar",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-tar.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-package-validator",
+      "targetPath": "./packages/foundation/src/module-system/plugin-package-validator.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/plugin-registry",
+      "targetPath": "./packages/foundation/src/module-system/plugin-registry.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/module-system/register",
+      "targetPath": "./packages/foundation/src/module-system/register.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/alert-contract",
+      "targetPath": "./packages/foundation/src/observability/alert-contract.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/alert-service",
+      "targetPath": "./packages/foundation/src/observability/alert-service.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/background-process-status",
+      "targetPath": "./packages/foundation/src/observability/background-process-status.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/executive-report",
+      "targetPath": "./packages/foundation/src/observability/executive-report.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/metric-registry",
+      "targetPath": "./packages/foundation/src/observability/metric-registry.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/observability-budgets",
+      "targetPath": "./packages/foundation/src/observability/observability-budgets.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/observability-config",
+      "targetPath": "./packages/foundation/src/observability/observability-config.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/readiness-baseline/baseline-provider",
+      "targetPath": "./packages/foundation/src/observability/readiness-baseline/baseline-provider.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/runtime-logger",
+      "targetPath": "./packages/foundation/src/observability/runtime-logger.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/sample-capability-pack",
+      "targetPath": "./packages/foundation/src/observability/sample-capability-pack.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/sensitive-report-scan",
+      "targetPath": "./packages/foundation/src/observability/sensitive-report-scan.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/observability/trace-context",
+      "targetPath": "./packages/foundation/src/observability/trace-context.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/proof/proof-substrate/index",
+      "targetPath": "./packages/foundation/src/proof/proof-substrate/index.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/proof/proof-substrate/register",
+      "targetPath": "./packages/foundation/src/proof/proof-substrate/register.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/auth/console-auth",
+      "targetPath": "./packages/foundation/src/security/auth/console-auth.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/authorization/authorization-engine",
+      "targetPath": "./packages/foundation/src/security/authorization/authorization-engine.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/authorization/tag-store-provider-registry",
+      "targetPath": "./packages/foundation/src/security/authorization/tag-store-provider-registry.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/authorization/tag-store.port",
+      "targetPath": "./packages/foundation/src/security/authorization/tag-store.port.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/authorization/tag-tree",
+      "targetPath": "./packages/foundation/src/security/authorization/tag-tree.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/final-protected-sink-permit",
+      "targetPath": "./packages/foundation/src/security/final-protected-sink-permit.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/governed-execution-permit-authority",
+      "targetPath": "./packages/foundation/src/security/governed-execution-permit-authority.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/local-path-boundary",
+      "targetPath": "./packages/foundation/src/security/local-path-boundary.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/operation-audit",
+      "targetPath": "./packages/foundation/src/security/operation-audit.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/outbound-egress-policy",
+      "targetPath": "./packages/foundation/src/security/outbound-egress-policy.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/process-identity/index",
+      "targetPath": "./packages/foundation/src/security/process-identity/index.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/production-ingress-contract",
+      "targetPath": "./packages/foundation/src/security/production-ingress-contract.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/register",
+      "targetPath": "./packages/foundation/src/security/register.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/risk-control/index",
+      "targetPath": "./packages/foundation/src/security/risk-control/index.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/secrets/local-secret-key-provider",
+      "targetPath": "./packages/foundation/src/security/secrets/local-secret-key-provider.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/secrets/local-secret-store",
+      "targetPath": "./packages/foundation/src/security/secrets/local-secret-store.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/security-alerts",
+      "targetPath": "./packages/foundation/src/security/security-alerts.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/security/security-permissions-provider",
+      "targetPath": "./packages/foundation/src/security/security-permissions-provider.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/artifact-transit-port",
+      "targetPath": "./packages/foundation/src/storage/artifact-transit-port.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/backup-contract",
+      "targetPath": "./packages/foundation/src/storage/backup-contract.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/bounded-jsonl",
+      "targetPath": "./packages/foundation/src/storage/bounded-jsonl.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/object-store",
+      "targetPath": "./packages/foundation/src/storage/object-store.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/private-file-atomic",
+      "targetPath": "./packages/foundation/src/storage/private-file-atomic.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/private-sqlite",
+      "targetPath": "./packages/foundation/src/storage/private-sqlite.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/register",
+      "targetPath": "./packages/foundation/src/storage/register.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/state-coordinator",
+      "targetPath": "./packages/foundation/src/storage/state-coordinator.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/storage-kernel",
+      "targetPath": "./packages/foundation/src/storage/storage-kernel.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/storage/storage-provider",
+      "targetPath": "./packages/foundation/src/storage/storage-provider.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/unified-registration-core/unified-registration",
+      "targetPath": "./packages/foundation/src/unified-registration-core/unified-registration.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/workflow/durable-workflow-substrate",
+      "targetPath": "./packages/foundation/src/workflow/durable-workflow-substrate.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/foundation/workflow/state-machine/engine/state-machine-core",
+      "targetPath": "./packages/foundation/src/workflow/state-machine/engine/state-machine-core.ts",
+      "status": "active",
+      "domainPackage": "foundation",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/downstream-client-aspect/index",
+      "targetPath": "./packages/protocols/downstream-client-aspect/index.ts",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/protocols/*.ts",
-      "targetPath": "./packages/protocols/*.ts",
+      "alias": "#meshrix/protocols/http/controllers/jobs-controller",
+      "targetPath": "./packages/protocols/http/controllers/jobs-controller.ts",
       "status": "active",
       "domainPackage": "protocols",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/server-runtime/*",
-      "targetPath": "./packages/server-runtime/src/*.ts",
+      "alias": "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers",
+      "targetPath": "./packages/protocols/http/controllers/jobs-controller-artifact-handlers.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/http/controllers/system-controller",
+      "targetPath": "./packages/protocols/http/controllers/system-controller.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/http/controllers/system-controller-foundation-handlers",
+      "targetPath": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/http/controllers/upstream-payload-transit-controller",
+      "targetPath": "./packages/protocols/http/controllers/upstream-payload-transit-controller.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/mcp/adapter/http-mcp-adapter",
+      "targetPath": "./packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/protocols/pubsub/event-bus",
+      "targetPath": "./packages/protocols/pubsub/event-bus.ts",
+      "status": "active",
+      "domainPackage": "protocols",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/composition-root",
+      "targetPath": "./packages/server-runtime/src/composition/composition-root.ts",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/server-runtime/*.ts",
-      "targetPath": "./packages/server-runtime/src/*.ts",
+      "alias": "#meshrix/server-runtime/composition/console-domain/operation-executor",
+      "targetPath": "./packages/server-runtime/src/composition/console-domain/operation-executor.ts",
       "status": "active",
       "domainPackage": "server-runtime",
       "owner": "platform"
     },
     {
-      "alias": "#meshrix/ui-console/*",
-      "targetPath": "./packages/ui-console/src/*.ts",
+      "alias": "#meshrix/server-runtime/composition/console-domain/services",
+      "targetPath": "./packages/server-runtime/src/composition/console-domain/services.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/core-platform-provider",
+      "targetPath": "./packages/server-runtime/src/composition/core-platform-provider.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/core-platform-register",
+      "targetPath": "./packages/server-runtime/src/composition/core-platform-register.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/devops-provider",
+      "targetPath": "./packages/server-runtime/src/composition/devops-provider.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/devops-register",
+      "targetPath": "./packages/server-runtime/src/composition/devops-register.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/dispatch-operation",
+      "targetPath": "./packages/server-runtime/src/composition/dispatch-operation.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/dispatch-operation-risk-control",
+      "targetPath": "./packages/server-runtime/src/composition/dispatch-operation-risk-control.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/http-application-assembly",
+      "targetPath": "./packages/server-runtime/src/composition/http-application-assembly.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/operation-dispatch-lock",
+      "targetPath": "./packages/server-runtime/src/composition/operation-dispatch-lock.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/composition/plugin-contribution-transaction",
+      "targetPath": "./packages/server-runtime/src/composition/plugin-contribution-transaction.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/events/protocol-event-runtime",
+      "targetPath": "./packages/server-runtime/src/events/protocol-event-runtime.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/execution-sandbox/custody-key-broker",
+      "targetPath": "./packages/server-runtime/src/execution-sandbox/custody-key-broker.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/execution-sandbox/oci-backend",
+      "targetPath": "./packages/server-runtime/src/execution-sandbox/oci-backend.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/jobs/batch-deletion-coordinator",
+      "targetPath": "./packages/server-runtime/src/jobs/batch-deletion-coordinator.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/jobs/job-pipeline",
+      "targetPath": "./packages/server-runtime/src/jobs/job-pipeline.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/jobs/upload-no-run-custody",
+      "targetPath": "./packages/server-runtime/src/jobs/upload-no-run-custody.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/module-runtime/server-runtime",
+      "targetPath": "./packages/server-runtime/src/module-runtime/server-runtime.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/routing/operation-route-index",
+      "targetPath": "./packages/server-runtime/src/routing/operation-route-index.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/routing/radix-path-trie",
+      "targetPath": "./packages/server-runtime/src/routing/radix-path-trie.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/state/interface/index",
+      "targetPath": "./packages/server-runtime/src/state/interface/index.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/state/tag-store-adapter",
+      "targetPath": "./packages/server-runtime/src/state/tag-store-adapter.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/state/upload-session-admission",
+      "targetPath": "./packages/server-runtime/src/state/upload-session-admission.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/state/upload-session-store",
+      "targetPath": "./packages/server-runtime/src/state/upload-session-store.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/server-runtime/state/upload-session-support",
+      "targetPath": "./packages/server-runtime/src/state/upload-session-support.ts",
+      "status": "active",
+      "domainPackage": "server-runtime",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/ui-console/binary-checkbox",
+      "targetPath": "./packages/ui-console/src/BinaryCheckbox.vue",
       "status": "active",
       "domainPackage": "ui-console",
       "owner": "platform"
@@ -98,77 +987,63 @@
       "targetPath": "./packages/ui-console/src/bridge-http.ts",
       "status": "active",
       "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/page-refresh",
-      "targetPath": "./packages/ui-console/src/page-refresh.ts",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/rpc-client",
-      "targetPath": "./packages/ui-console/src/rpc-client.ts",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/error-message",
-      "targetPath": "./packages/ui-console/src/error-message.ts",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/binary-checkbox",
-      "targetPath": "./packages/ui-console/src/BinaryCheckbox.vue",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/workspaces-view-context",
-      "targetPath": "./packages/ui-console/src/workspaces-view-context.ts",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/server-console-shell-context",
-      "targetPath": "./packages/ui-console/src/server-console-shell-context.ts",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
-    },
-    {
-      "alias": "#meshrix/ui-console/console-format-utils",
-      "targetPath": "./packages/ui-console/src/console-format-utils.ts",
-      "status": "active",
-      "domainPackage": "ui-console",
-      "owner": "frontend"
+      "owner": "platform"
     },
     {
       "alias": "#meshrix/ui-console/console-client-display-utils",
       "targetPath": "./packages/ui-console/src/console-client-display-utils.ts",
       "status": "active",
       "domainPackage": "ui-console",
-      "owner": "frontend"
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/ui-console/console-format-utils",
+      "targetPath": "./packages/ui-console/src/console-format-utils.ts",
+      "status": "active",
+      "domainPackage": "ui-console",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/ui-console/error-message",
+      "targetPath": "./packages/ui-console/src/error-message.ts",
+      "status": "active",
+      "domainPackage": "ui-console",
+      "owner": "platform"
     },
     {
       "alias": "#meshrix/ui-console/option-bar",
       "targetPath": "./packages/ui-console/src/OptionBar.vue",
       "status": "active",
       "domainPackage": "ui-console",
-      "owner": "frontend"
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/ui-console/page-refresh",
+      "targetPath": "./packages/ui-console/src/page-refresh.ts",
+      "status": "active",
+      "domainPackage": "ui-console",
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/ui-console/rpc-client",
+      "targetPath": "./packages/ui-console/src/rpc-client.ts",
+      "status": "active",
+      "domainPackage": "ui-console",
+      "owner": "platform"
     },
     {
       "alias": "#meshrix/ui-console/status-pill",
       "targetPath": "./packages/ui-console/src/StatusPill.vue",
       "status": "active",
       "domainPackage": "ui-console",
-      "owner": "frontend"
+      "owner": "platform"
+    },
+    {
+      "alias": "#meshrix/ui-console/workspaces-view-context",
+      "targetPath": "./packages/ui-console/src/workspaces-view-context.ts",
+      "status": "active",
+      "domainPackage": "ui-console",
+      "owner": "platform"
     }
   ],
   "publicResources": []

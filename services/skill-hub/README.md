@@ -20,6 +20,10 @@ operation as successful without that receipt.
   application contract. Transport success is HTTP 200; the response contains
   the application `statusCode` and bounded `body` so Meshrix can preserve
   domain failures across its governed upstream gateway.
+- `GET /v1/events` opens the authenticated Skill Hub change stream. Successful
+  lifecycle mutations append a bounded, persistent revision event. Consumers
+  resume with `Last-Event-ID` or `?cursor=`. Events contain no request input,
+  actor, workspace, package, credential, or command.
 
 Request bodies are bounded to 2 MiB. Skill packages are strict Base64 with a
 decoded limit of 1 MiB. Package bytes and registry state are stored under
@@ -31,6 +35,10 @@ service with `SKILL_HUB_AUTH_TOKEN` (32–512 bytes), store the same value in th
 Meshrix secret store, and add the resulting `secretRef` to the operator-owned
 service publication. The portable example intentionally contains neither the
 token nor a deployment-specific secret reference.
+
+Meshrix Core owns this credentialed event connection. The Skill Hub plugin
+receives only its opaque `serviceRef`; it never receives the service URL or
+token.
 
 ## Run
 

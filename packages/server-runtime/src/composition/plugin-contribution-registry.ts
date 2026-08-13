@@ -39,7 +39,7 @@ function immutableSnapshot(value?: any, label?: any, seen: any = new WeakMap<obj
   ) return value;
   if (typeof value === "function") {
     if (seen.has(value)) return seen.get(value);
-    const callable: any = function (...args: any[]) : any {
+    const callable: any = function (this: any, ...args: any[]) : any {
       return Reflect.apply(value, this, args);
     };
     seen.set(value, callable);
@@ -508,7 +508,7 @@ function normalizeConsoleEntries({ contributions, manifests, artifactIdentityRes
       !claimPattern.test(normalized.viewKey) ||
       (normalized.slotId && !claimPattern.test(normalized.slotId)) ||
       !componentPattern.test(normalized.componentId) ||
-      !/^console\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.ts$/u.test(normalized.assetPath) ||
+      !/^console\/[a-zA-Z0-9][a-zA-Z0-9._/-]*\.mjs$/u.test(normalized.assetPath) ||
       normalized.assetPath.includes("..") || normalized.assetPath.includes("\\") ||
       normalized.assetPath.split("/").some((part?: any) : any => !part) ||
       !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(normalized.assetExport) ||

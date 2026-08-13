@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot: any = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const reportPath: any = path.resolve(String(process.argv[2] || ""));
-const capacityVerifier: any = path.join(repoRoot, "tools/server-scripts/verify-job-work-queue-capacity.ts");
+const capacityVerifier: any = path.join(repoRoot, "tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts");
 
 async function main() : Promise<any> {
   const result: any = spawnSync(process.execPath, [capacityVerifier], {
@@ -22,7 +22,7 @@ async function main() : Promise<any> {
     },
   });
   const childReport: any = JSON.parse(await fs.readFile(
-    path.join(repoRoot, "build/reports/job-work-queue-capacity.json"),
+    path.join(repoRoot, "build/reports/job-work-queue-ceiling-conformance.json"),
     "utf8",
   ));
   const payload: Record<string, any> = {

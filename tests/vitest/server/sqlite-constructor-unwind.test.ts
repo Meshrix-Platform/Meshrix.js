@@ -9,20 +9,38 @@ const DatabaseMock: any = vi.hoisted(() : any => vi.fn(function DatabaseFixture(
   if (!database) throw new Error("missing SQLite fixture");
   return database;
 }));
+const authorizationFacades: any = vi.hoisted(() : any => []);
+const authorizationFactory: any = vi.hoisted(() : any => ({ failure: null }));
 const tempRoots: any[] = [];
 
 vi.mock("better-sqlite3", () : any => ({ default: DatabaseMock }));
+vi.mock("../../../packages/foundation/src/security/authorization/authorization-store.ts", () : any => ({
+  createAuthorizationStore: vi.fn(() : any => {
+    if (authorizationFactory.failure) throw authorizationFactory.failure;
+    let closed: any = false;
+    const facade: Record<string, any> = {
+      appendDecision: vi.fn(async () : Promise<any> => ({ decisionId: "authorization-fixture" })),
+      close: vi.fn(async () : Promise<void> => {
+        closed = true;
+      }),
+      getStats: vi.fn(() : any => ({ closed, writerWorkers: closed ? 0 : 1 }))
+    };
+    authorizationFacades.push(facade);
+    return facade;
+  }),
+  getGlobalAuthorizationStore: vi.fn()
+}));
 
 import { createStorageKernel } from "../../../packages/foundation/src/storage/storage-kernel.ts";
-import { createOperationAuditStore } from "../../../packages/foundation/src/security/operation-audit.ts";
+import { createOperationAuditWorkerStore } from "../../../packages/foundation/src/security/operation-audit-worker-store.ts";
 import { createConsoleAuth } from "../../../packages/foundation/src/security/auth/console-auth.ts";
-import { createAuthorizationStore } from "../../../packages/foundation/src/security/authorization/authorization-store.ts";
+import { createAuthorizationStoreWorkerOwner } from "../../../packages/foundation/src/security/authorization/authorization-store-worker-owner.ts";
 import { createAuthorizationGovernanceStore } from "../../../packages/foundation/src/security/authorization/authorization-governance-store.ts";
 import { createNoopTagStoreProvider } from "../../../packages/foundation/src/security/authorization/tag-store.port.ts";
 import { createClientRegistryService } from "../../../packages/server-runtime/src/state/client-registry-repository.ts";
 import { createAgentWorkspace } from "../../../packages/agents/src/agent-workspace/index.ts";
 import { createWorkspaceAssetRegistry } from "../../../packages/agents/src/workspace-asset-registry/index.ts";
-import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
+import { createOperationPermissionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/store-worker-owner.ts";
 
 function failingDatabase(message?: any) : any {
   return {
@@ -102,6 +120,8 @@ function agentWorkspaceDatabaseWithStatementFailure(message?: any) : any {
 beforeEach(() : any => {
   vi.clearAllMocks();
   databases.length = 0;
+  authorizationFacades.length = 0;
+  authorizationFactory.failure = null;
 });
 
 afterEach(() : any => {
@@ -135,11 +155,11 @@ describe("SQLite constructor unwind", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("closes the operation-audit database when schema initialization fails", () : any => {
+  it("closes the operation-audit worker-owned database when schema initialization fails", () : any => {
     const database: any = failingDatabase("audit schema failed");
     databases.push(database);
 
-    expect(() : any => createOperationAuditStore({ userDataPath: tempUserDataPath() }))
+    expect(() : any => createOperationAuditWorkerStore({ userDataPath: tempUserDataPath() }))
       .toThrow("audit schema failed");
     expect(database.close).toHaveBeenCalledOnce();
   });
@@ -153,11 +173,11 @@ describe("SQLite constructor unwind", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("closes the operation-permission database when schema initialization fails", () : any => {
+  it("closes the operation-permission worker-owned database when schema initialization fails", () : any => {
     const database: any = failingDatabase("operation permission schema failed");
     databases.push(database);
 
-    expect(() : any => createOperationPermissionStore({
+    expect(() : any => createOperationPermissionWorkerOwner({
       userDataPath: tempUserDataPath(),
       capabilityBindingGuard: false
     })).toThrow("operation permission schema failed");
@@ -178,7 +198,7 @@ describe("SQLite constructor unwind", () : any => {
     };
     databases.push(database);
 
-    const thrown: any = captureFailure(() : any => createOperationPermissionStore({
+    const thrown: any = captureFailure(() : any => createOperationPermissionWorkerOwner({
       userDataPath: tempUserDataPath(),
       capabilityKeyProvider: capabilitySecurity,
       capabilityBindingGuard: capabilitySecurity
@@ -212,7 +232,7 @@ describe("SQLite constructor unwind", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("closes the authorization-store database when its schema initialization fails", () : any => {
+  it("closes the authorization worker-owned database when its schema initialization fails", () : any => {
     const failure: any = new Error("authorization schema failed");
     const database: any = databaseFixture({
       execError: failure,
@@ -220,7 +240,7 @@ describe("SQLite constructor unwind", () : any => {
     });
     databases.push(database);
 
-    const thrown: any = captureFailure(() : any => createAuthorizationStore({
+    const thrown: any = captureFailure(() : any => createAuthorizationStoreWorkerOwner({
       userDataPath: tempUserDataPath()
     }));
 
@@ -246,17 +266,14 @@ describe("SQLite constructor unwind", () : any => {
     expect(database.close).toHaveBeenCalledOnce();
   });
 
-  it("unwinds an authorization schema failure through Console Auth", () : any => {
+  it("unwinds an authorization lane construction failure synchronously", () : any => {
     const userDataPath: any = tempUserDataPath();
     const closeOrder: any[] = [];
-    const failure: any = new Error("authorization schema failed");
+    const failure: any = new Error("authorization lane construction failed");
     const consoleDatabase: any = databaseFixture({ name: "console", closeOrder });
-    const authorizationDatabase: any = databaseFixture({
-      name: "authorization",
-      closeOrder,
-      execError: failure
-    });
-    databases.push(consoleDatabase, authorizationDatabase);
+    const governanceDatabase: any = databaseFixture({ name: "governance", closeOrder });
+    databases.push(consoleDatabase, governanceDatabase);
+    authorizationFactory.failure = failure;
 
     const thrown: any = captureFailure(() : any => createConsoleAuth({
       userDataPath,
@@ -264,8 +281,8 @@ describe("SQLite constructor unwind", () : any => {
     }));
 
     expect(thrown).toBe(failure);
-    expect(closeOrder).toEqual(["authorization", "console"]);
-    expect(authorizationDatabase.close).toHaveBeenCalledOnce();
+    expect(closeOrder).toEqual(["governance", "console"]);
+    expect(governanceDatabase.close).toHaveBeenCalledOnce();
     expect(consoleDatabase.close).toHaveBeenCalledOnce();
   });
 
@@ -274,13 +291,12 @@ describe("SQLite constructor unwind", () : any => {
     const closeOrder: any[] = [];
     const failure: any = new Error("governance schema failed");
     const consoleDatabase: any = databaseFixture({ name: "console", closeOrder });
-    const authorizationDatabase: any = databaseFixture({ name: "authorization", closeOrder });
     const governanceDatabase: any = databaseFixture({
       name: "governance",
       closeOrder,
       execError: failure
     });
-    databases.push(consoleDatabase, authorizationDatabase, governanceDatabase);
+    databases.push(consoleDatabase, governanceDatabase);
 
     const thrown: any = captureFailure(() : any => createConsoleAuth({
       userDataPath,
@@ -288,9 +304,8 @@ describe("SQLite constructor unwind", () : any => {
     }));
 
     expect(thrown).toBe(failure);
-    expect(closeOrder).toEqual(["governance", "authorization", "console"]);
+    expect(closeOrder).toEqual(["governance", "console"]);
     expect(governanceDatabase.close).toHaveBeenCalledOnce();
-    expect(authorizationDatabase.close).toHaveBeenCalledOnce();
     expect(consoleDatabase.close).toHaveBeenCalledOnce();
   });
 
@@ -305,13 +320,12 @@ describe("SQLite constructor unwind", () : any => {
       prepareError: constructionFailure,
       migrationVersion: Number.MAX_SAFE_INTEGER
     });
-    const authorizationDatabase: any = databaseFixture({ name: "authorization", closeOrder });
     const governanceDatabase: any = databaseFixture({
       name: "governance",
       closeOrder,
       closeError: closeFailure
     });
-    databases.push(consoleDatabase, authorizationDatabase, governanceDatabase);
+    databases.push(consoleDatabase, governanceDatabase);
 
     const thrown: any = captureFailure(() : any => createConsoleAuth({
       userDataPath,
@@ -319,53 +333,31 @@ describe("SQLite constructor unwind", () : any => {
     }));
 
     expect(thrown).toBe(constructionFailure);
-    expect(closeOrder).toEqual(["governance", "authorization", "console"]);
+    expect(closeOrder).toEqual(["governance", "console"]);
     expect(governanceDatabase.close).toHaveBeenCalledOnce();
-    expect(authorizationDatabase.close).toHaveBeenCalledOnce();
     expect(consoleDatabase.close).toHaveBeenCalledOnce();
   });
 
-  it("closes a successful Console Auth ownership tree only once", () : any => {
+  it("closes a successful Console Auth ownership tree only once", async () : Promise<any> => {
     const userDataPath: any = tempUserDataPath();
     const closeOrder: any[] = [];
     const consoleDatabase: any = databaseFixture({ name: "console", closeOrder });
-    const authorizationDatabase: any = databaseFixture({ name: "authorization", closeOrder });
     const governanceDatabase: any = databaseFixture({ name: "governance", closeOrder });
-    databases.push(consoleDatabase, authorizationDatabase, governanceDatabase);
+    databases.push(consoleDatabase, governanceDatabase);
 
     const auth: any = createConsoleAuth({
       userDataPath,
       tagManagementStore: tagStoreFixture(userDataPath)
     });
     expect(closeOrder).toEqual([]);
+    const authorizationFacade: any = authorizationFacades[0];
 
-    auth.close();
-    auth.close();
+    await Promise.all([auth.close(), auth.close()]);
 
-    expect(closeOrder).toEqual(["governance", "authorization", "console"]);
+    expect(closeOrder).toEqual(["governance", "console"]);
     expect(governanceDatabase.close).toHaveBeenCalledOnce();
-    expect(authorizationDatabase.close).toHaveBeenCalledOnce();
     expect(consoleDatabase.close).toHaveBeenCalledOnce();
-  });
-
-  it("keeps successful authorization-store close operations idempotent", () : any => {
-    const userDataPath: any = tempUserDataPath();
-    const authorizationDatabase: any = databaseFixture();
-    const governanceDatabase: any = databaseFixture();
-    databases.push(authorizationDatabase, governanceDatabase);
-
-    const authorizationStore: any = createAuthorizationStore({ userDataPath });
-    const governanceStore: any = createAuthorizationGovernanceStore({
-      userDataPath,
-      tagManagementStore: tagStoreFixture(userDataPath)
-    });
-
-    authorizationStore.close();
-    authorizationStore.close();
-    governanceStore.close();
-    governanceStore.close();
-
-    expect(authorizationDatabase.close).toHaveBeenCalledOnce();
-    expect(governanceDatabase.close).toHaveBeenCalledOnce();
+    expect(authorizationFacade.close).toHaveBeenCalledOnce();
+    expect(authorizationFacade.getStats()).toMatchObject({ closed: true, writerWorkers: 0 });
   });
 });

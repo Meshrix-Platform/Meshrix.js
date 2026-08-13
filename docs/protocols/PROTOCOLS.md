@@ -99,6 +99,21 @@ Compatible downstream consumers may compare the revision, perform an authenticat
 
 The published protocol is the complete server-client boundary. Core owns only server-side schema, negotiation, authentication, authorization, scoped notification, pull, acknowledgement, disconnect, and reconnect-fence semantics. Core plans, source, tests, gates, and receipts must not depend on a client repository, implementation, build, plan, test, report, or receipt. Server conformance is proven with protocol-owned schemas, frozen wire corpora, and neutral mock peers. Client adoption is independently verified by each client owner and cannot block or promote a server receipt.
 
+### Downstream update subscriptions
+
+Downstream HTTP MCP uses protocol version `2026-07-28`. A connector that has
+explicitly persisted `autoUpdate: true` opens one authenticated
+`subscriptions/listen` POST stream and requests a closed notification set:
+tool-list invalidation, Skill Hub catalog invalidation, and Meshrix connector
+update availability. A false or absent preference opens no stream.
+
+Skill Hub exposes its own authenticated, cursor-resumable event stream. Core's
+external-service gateway owns that connection and credential, reduces each
+event to a revision and operation id, and publishes it to authenticated MCP
+subscriptions. Notifications trigger catalog refresh; neither Core nor the
+connector executes commands carried by a notification. The removed GET `/mcp`
+SSE registration and query-string capability negotiation are not supported.
+
 ## Delegated MCP Child Calls
 
 Targets that call Meshrix.js MCP on behalf of a parent operation use a `delegated-mcp-child` grant. The MCP request carries the canonical child binding in `delegatedMcp.childOperation` or `delegatedChildOperation`, or through the corresponding headers:

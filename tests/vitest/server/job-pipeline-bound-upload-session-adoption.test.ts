@@ -36,13 +36,13 @@ vi.mock("#meshrix/product-api", async (importOriginal?: any) : Promise<any> => (
 import { serverToken } from "#meshrix/client-strings";
 import {
   createServerCompositionRoot
-} from "#meshrix/server-runtime/composition/composition-root.ts";
+} from "#meshrix/server-runtime/composition/composition-root";
 import {
   createJobPipeline
-} from "#meshrix/server-runtime/jobs/job-pipeline.ts";
+} from "#meshrix/server-runtime/jobs/job-pipeline";
 import {
   getSessionMetaPath
-} from "#meshrix/server-runtime/state/upload-session-support.ts";
+} from "#meshrix/server-runtime/state/upload-session-support";
 
 const OWNER: Readonly<Record<string, any>> = Object.freeze({
   subjectId: "bound-adoption-owner",

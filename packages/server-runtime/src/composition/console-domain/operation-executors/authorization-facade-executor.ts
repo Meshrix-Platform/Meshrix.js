@@ -68,7 +68,7 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
     if (!securityPermissions || typeof securityPermissions.evaluatePolicy !== "function") {
       return result(503, { error: "授权策略裁决接口不可用。" });
     }
-    const decision: any = securityPermissions.evaluatePolicy({
+    const decision: any = await securityPermissions.evaluatePolicy({
       operation: input.operation || {
         id: input.operationId || id,
         requiredScopes: input.requiredScopes || [],
@@ -455,7 +455,7 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
     if (!securityPermissions || typeof securityPermissions.listReceipts !== "function") {
       return result(503, { error: "授权回执存储不可用。" });
     }
-    const items: any = securityPermissions.listReceipts({
+    const items: any = await securityPermissions.listReceipts({
       limit: input.limit || 100,
       subjectId: input.subjectId || input["subject-id"] || ""
     });
@@ -466,7 +466,7 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
     if (!securityPermissions || typeof securityPermissions.listLoanRecords !== "function") {
       return result(503, { error: "授权借用记录存储不可用。" });
     }
-    const items: any = securityPermissions.listLoanRecords({
+    const items: any = await securityPermissions.listLoanRecords({
       limit: input.limit || 100,
       subjectId: input.subjectId || input["subject-id"] || ""
     });
@@ -477,7 +477,7 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
     if (!securityPermissions || typeof securityPermissions.listDeniedRequests !== "function") {
       return result(503, { error: "授权拒绝请求存储不可用。" });
     }
-    const items: any = securityPermissions.listDeniedRequests({
+    const items: any = await securityPermissions.listDeniedRequests({
       limit: input.limit || 100,
       subjectId: input.subjectId || input["subject-id"] || "",
       tenantId: input.tenantId || input["tenant-id"] || "",
@@ -504,7 +504,7 @@ export async function executeAuthorizationFacadeOperation({ operationId, input =
     if (!securityPermissions || typeof securityPermissions.checkWorkspaceAssetPermission !== "function") {
       return result(503, { error: "授权策略裁决接口不可用。" });
     }
-    const decision: any = securityPermissions.checkWorkspaceAssetPermission({
+    const decision: any = await securityPermissions.checkWorkspaceAssetPermission({
       ...input,
       request: context.request,
       authSession: context.authSession

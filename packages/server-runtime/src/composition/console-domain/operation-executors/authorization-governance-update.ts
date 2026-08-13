@@ -12,7 +12,7 @@ export function publicActorFromSession(authSession: any = null) : any {
 
 export function governanceEntityId(entityType?: any, entity: Record<string, any> = {}) : any {
   const source: any = entity && typeof entity === "object" && !Array.isArray(entity) ? entity : {};
-  const keys: any = {
+  const keys: any = ({
     role: ["roleId", "id"],
     department: ["departmentId", "id"],
     team: ["teamId", "id"],
@@ -20,7 +20,7 @@ export function governanceEntityId(entityType?: any, entity: Record<string, any>
     "agent-group": ["groupId", "id"],
     "agent-binding": ["agentId", "profileId", "id"],
     approval: ["approvalId", "id"]
-  }[entityType] || ["id"];
+  } as Record<string, string[]>)[entityType] || ["id"];
   for (const key of keys) {
     const value: any = String(source[key] || "").trim();
     if (value) {

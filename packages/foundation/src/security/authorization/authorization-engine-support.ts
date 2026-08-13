@@ -63,24 +63,68 @@ function ipv4ToInt(value?: any) : any {
   return output >>> 0;
 }
 
-export function ipMatchesRule(ip?: any, rule?: any) : any {
+export function compileIpRule(rule?: any) : any {
   const normalizedRule: any = String(rule || "").trim();
-  const normalizedIp: any = normalizeIp(ip);
   if (!normalizedRule) {
-    return false;
+    return { ok: false };
   }
   if (!normalizedRule.includes("/")) {
-    return normalizedIp === normalizeIp(normalizedRule);
+    const normalizedIp: any = normalizeIp(normalizedRule);
+    if (!normalizedIp) {
+      return { ok: false };
+    }
+    return { ok: true, predicate: { kind: "exact", ip: normalizedIp } };
   }
   const [base, bitsText] = normalizedRule.split("/");
   const bits: any = Number(bitsText);
-  const ipInt: any = ipv4ToInt(normalizedIp);
   const baseInt: any = ipv4ToInt(base);
-  if (ipInt === null || baseInt === null || !Number.isInteger(bits) || bits < 0 || bits > 32) {
+  if (baseInt === null || !Number.isInteger(bits) || bits < 0 || bits > 32) {
+    return { ok: false };
+  }
+  return {
+    ok: true,
+    predicate: {
+      kind: "range",
+      base: baseInt,
+      bits,
+      mask: bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0
+    }
+  };
+}
+
+export function ipMatchesRule(ip?: any, rule?: any) : any {
+  const normalizedIp: any = normalizeIp(ip);
+  if (!normalizedIp) {
     return false;
   }
-  const mask: any = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
-  return (ipInt & mask) === (baseInt & mask);
+  const compiled: any = compileIpRule(rule);
+  if (!compiled.ok) {
+    return false;
+  }
+  const predicate: any = compiled.predicate;
+  if (predicate.kind === "exact") {
+    return normalizedIp === predicate.ip;
+  }
+  const ipInt: any = ipv4ToInt(normalizedIp);
+  if (ipInt === null) {
+    return false;
+  }
+  return (ipInt & predicate.mask) === (predicate.base & predicate.mask);
+}
+
+export function ipMatchesPredicate(ip?: any, predicate?: any) : any {
+  const normalizedIp: any = normalizeIp(ip);
+  if (!normalizedIp || !predicate) {
+    return false;
+  }
+  if (predicate.kind === "exact") {
+    return normalizedIp === predicate.ip;
+  }
+  const ipInt: any = ipv4ToInt(normalizedIp);
+  if (ipInt === null) {
+    return false;
+  }
+  return (ipInt & predicate.mask) === (predicate.base & predicate.mask);
 }
 
 export function maxRiskAllowed(profile: any = null, grant: any = null, subject: any = null, fallback: any = "safe_write") : any {
@@ -158,8 +202,14 @@ function subjectHasResourceBoundaryBypass(subject: Record<string, any> = {}) : a
     subject.scopes?.includes("auth:admin");
 }
 
-export function abacDenyDetails({ subject = {}, grant = null, profile = null, resource = {} }: Record<string, any> = {}) : any {
-  const tenantPolicy: any = firstString(subject.tenantId, grant?.tenantId, grant?.metadata?.tenantId, profile?.tenantId);
+export function abacDenyDetails({ subject = {}, grant = null, profile = null, resource = {}, compiled = null }: Record<string, any> = {}) : any {
+  const compiledAbac: any = compiled?.abac || null;
+  const policyString: any = (compiledKey?: any, ...dynamic: any[]) : any =>
+    compiledAbac?.[compiledKey] || firstString(...dynamic);
+  const allowedValues: any = (compiledKey?: any, ...dynamic: any[]) : any =>
+    compiledAbac?.[compiledKey] || stringsFrom(...dynamic);
+  const countOf: any = (value?: any) : any => value?.size ?? value?.length ?? 0;
+  const tenantPolicy: any = policyString("tenantId", subject.tenantId, grant?.tenantId, grant?.metadata?.tenantId, profile?.tenantId);
   if (
     resource.tenantId &&
     tenantPolicy &&
@@ -169,7 +219,8 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "tenant_mismatch", "Requested tenant is outside the subject boundary.");
   }
 
-  const allowedWorkspaceIds: any = stringsFrom(
+  const allowedWorkspaceIds: any = allowedValues(
+    "allowedWorkspaceIds",
     subject.allowedWorkspaceIds,
     grant?.allowedWorkspaceIds,
     grant?.metadata?.allowedWorkspaceIds,
@@ -180,8 +231,9 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
   }
 
   const hasResourceBoundaryBypass: any = subjectHasResourceBoundaryBypass(subject);
-  const accountPolicy: any = firstString(subject.accountId, grant?.accountId, grant?.metadata?.accountId, profile?.accountId);
-  const allowedAccountIds: any = stringsFrom(
+  const accountPolicy: any = policyString("accountId", subject.accountId, grant?.accountId, grant?.metadata?.accountId, profile?.accountId);
+  const allowedAccountIds: any = allowedValues(
+    "allowedAccountIds",
     subject.allowedAccountIds,
     grant?.allowedAccountIds,
     grant?.metadata?.allowedAccountIds,
@@ -190,8 +242,8 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
   if (resource.accountBoundaryRequired && !resource.accountId && !hasResourceBoundaryBypass) {
     return effectDetails("deny", "account_resource_missing", "Requested operation requires an account resource boundary.");
   }
-  if (resource.accountId && (resource.accountBoundaryRequired || accountPolicy || allowedAccountIds.length > 0) && !hasResourceBoundaryBypass) {
-    if (!accountPolicy && allowedAccountIds.length === 0) {
+  if (resource.accountId && (resource.accountBoundaryRequired || accountPolicy || countOf(allowedAccountIds) > 0) && !hasResourceBoundaryBypass) {
+    if (!accountPolicy && countOf(allowedAccountIds) === 0) {
       return effectDetails("deny", "account_boundary_missing", "Subject has no account boundary for this resource.");
     }
     if (accountPolicy && accountPolicy !== resource.accountId) {
@@ -202,8 +254,9 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     }
   }
 
-  const endpointPolicy: any = firstString(subject.endpointId, grant?.endpointId, grant?.metadata?.endpointId, profile?.endpointId);
-  const allowedEndpointIds: any = stringsFrom(
+  const endpointPolicy: any = policyString("endpointId", subject.endpointId, grant?.endpointId, grant?.metadata?.endpointId, profile?.endpointId);
+  const allowedEndpointIds: any = allowedValues(
+    "allowedEndpointIds",
     subject.allowedEndpointIds,
     grant?.allowedEndpointIds,
     grant?.metadata?.allowedEndpointIds,
@@ -213,7 +266,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "endpoint_resource_missing", "Requested operation requires an endpoint resource boundary.");
   }
   if (resource.endpointBoundaryRequired && resource.endpointId && !hasResourceBoundaryBypass) {
-    if (!endpointPolicy && allowedEndpointIds.length === 0) {
+    if (!endpointPolicy && countOf(allowedEndpointIds) === 0) {
       return effectDetails("deny", "endpoint_boundary_missing", "Subject has no endpoint boundary for this resource.");
     }
     if (endpointPolicy && endpointPolicy !== resource.endpointId) {
@@ -224,13 +277,15 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     }
   }
 
-  const mailboxPolicy: any = firstString(
+  const mailboxPolicy: any = policyString(
+    "opaqueMailboxId",
     subject.opaqueMailboxId,
     grant?.opaqueMailboxId,
     grant?.metadata?.opaqueMailboxId,
     profile?.opaqueMailboxId
   );
-  const allowedMailboxIds: any = stringsFrom(
+  const allowedMailboxIds: any = allowedValues(
+    "allowedMailboxIds",
     subject.allowedOpaqueMailboxIds,
     subject.allowedMailboxIds,
     grant?.allowedOpaqueMailboxIds,
@@ -244,7 +299,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "mailbox_resource_missing", "Requested operation requires a mailbox resource boundary.");
   }
   if (resource.mailboxBoundaryRequired && resource.opaqueMailboxId && !hasResourceBoundaryBypass) {
-    if (!mailboxPolicy && allowedMailboxIds.length === 0) {
+    if (!mailboxPolicy && countOf(allowedMailboxIds) === 0) {
       return effectDetails("deny", "mailbox_boundary_missing", "Subject has no mailbox boundary for this resource.");
     }
     if (mailboxPolicy && mailboxPolicy !== resource.opaqueMailboxId) {
@@ -255,7 +310,8 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     }
   }
 
-  const allowedDataClasses: any = stringsFrom(
+  const allowedDataClasses: any = allowedValues(
+    "allowedDataClasses",
     subject.allowedDataClasses,
     grant?.allowedDataClasses,
     grant?.metadata?.allowedDataClasses,
@@ -269,7 +325,8 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "data_class_not_allowed", "Requested semantic data class is outside the allowed data classes.");
   }
 
-  const allowedEgress: any = stringsFrom(
+  const allowedEgress: any = allowedValues(
+    "allowedEgress",
     subject.allowedEgress,
     grant?.allowedEgress,
     grant?.metadata?.allowedEgress,
@@ -289,7 +346,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     ["secretBindingId", "secretBindingIds", "allowedSecretBindings", "secret_binding_not_allowed", "Requested secret binding is outside the allowed secret binding set."]
   ];
   for (const [resourceKey, resourceListKey, allowedKey, reasonCode, reason] of semanticChecks) {
-    const allowed: any = stringsFrom(subject[allowedKey], grant?.[allowedKey], grant?.metadata?.[allowedKey], profile?.[allowedKey]);
+    const allowed: any = allowedValues(allowedKey, subject[allowedKey], grant?.[allowedKey], grant?.metadata?.[allowedKey], profile?.[allowedKey]);
     if (deniedOutsideAllowed([resource[resourceKey], resource[resourceListKey]], allowed)) {
       return effectDetails("deny", reasonCode, reason);
     }

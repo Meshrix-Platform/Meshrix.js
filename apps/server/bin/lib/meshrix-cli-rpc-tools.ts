@@ -458,7 +458,7 @@ async function getActiveCliOperations(args: Record<string, any> = {}) : Promise<
     log: entry.log || {},
     readOnly: entry.readOnly === true,
     destructive: entry.destructive === true,
-    concurrencySafe: entry.concurrencySafe === true,
+    concurrency: entry.concurrency,
     public: entry.public === true,
     externalAuth: entry.externalAuth === true,
     binary: entry.binary === true

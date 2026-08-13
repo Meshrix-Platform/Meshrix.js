@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createOperationPermissionStore } from "../../../packages/capabilities/src/operation-permission-core/store.ts";
+import { createOperationPermissionWorkerOwner } from "../../../packages/capabilities/src/operation-permission-core/store-worker-owner.ts";
 import { createToolCatalogRegistry } from "../../../packages/capabilities/src/operation-permission-core/catalog.ts";
 
 const roots: any[] = [];
@@ -66,7 +67,7 @@ describe("Operation Permission grant security invariants", () : any => {
   it("revalidates an unchanged captured grant and rejects a changed projection", async () : Promise<any> => {
     const { store, issued } = await fixture();
     try {
-      expect(store.authorizeGrantForExecution({
+      expect(await store.authorizeGrantForExecution({
         grantId: issued.grant.id,
         expectedProjectionFingerprint: issued.grant.projectionFingerprint
       })).toMatchObject({
@@ -82,7 +83,7 @@ describe("Operation Permission grant security invariants", () : any => {
         reason: "grant_projection_regression"
       });
       expect(changed.projectionFingerprint).not.toBe(issued.grant.projectionFingerprint);
-      expect(store.authorizeGrantForExecution({
+      expect(await store.authorizeGrantForExecution({
         grantId: issued.grant.id,
         expectedProjectionFingerprint: issued.grant.projectionFingerprint
       })).toMatchObject({
@@ -91,7 +92,7 @@ describe("Operation Permission grant security invariants", () : any => {
         reasonCode: "execution_grant_revision_changed"
       });
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
@@ -109,7 +110,7 @@ describe("Operation Permission grant security invariants", () : any => {
       }
     });
     try {
-      expect(store.appendHttpRequestMetric({
+      expect(await store.appendHttpRequestMetric({
         method: "GET",
         route: "/api/healthz",
         statusCode: 200,
@@ -117,31 +118,30 @@ describe("Operation Permission grant security invariants", () : any => {
       })).toBeNull();
 
       for (let index: any = 0; index < 5; index += 1) {
-        store.appendHttpRequestMetric({
+        await store.appendHttpRequestMetric({
           method: "GET",
           route: "/api/workspaces",
           statusCode: 200,
           completionStatus: "completed",
           createdAt: `2030-01-01T00:00:0${index}.000Z`
         });
-        store.appendMetric({
+        await store.appendMetric({
           toolId: `tool-${index}`,
           status: "completed",
           createdAt: `2030-01-01T00:00:0${index}.000Z`
         });
       }
 
-      expect(store.db.prepare("SELECT count(*) AS count FROM http_request_metric_events").get().count).toBe(3);
-      expect(store.db.prepare("SELECT count(*) AS count FROM tool_metric_events").get().count).toBe(3);
-      expect(store.db.prepare(`
-        SELECT route FROM http_request_metric_events ORDER BY created_at ASC
-      `).all().map((row?: any) : any => row.route)).toEqual([
+      const exported: any = await store.metricsExport({ limit: 100 });
+      expect(exported.counts.httpRequestMetricEvents).toBe(3);
+      expect(exported.counts.toolMetricEvents).toBe(3);
+      expect(exported.httpRequestMetricEvents.map((row?: any) : any => row.route)).toEqual([
         "/api/workspaces",
         "/api/workspaces",
         "/api/workspaces"
       ]);
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
@@ -201,7 +201,7 @@ describe("Operation Permission grant security invariants", () : any => {
     });
 
     let store: any = openStore();
-    expect(store.registerPluginGrantOwner({
+    expect(await store.registerPluginGrantOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration
     })).toMatchObject({ ok: true, state: "active", ownerGenerationDigest: firstGeneration });
@@ -225,7 +225,7 @@ describe("Operation Permission grant security invariants", () : any => {
       ownerGeneration: firstGeneration
     }]);
     expect(child.grant.owners).toEqual(parent.grant.owners);
-    expect(store.listGrantEvents({ grantId: parent.grant.id, eventType: "created" })[0]?.details?.scopes)
+    expect((await store.listGrantEvents({ grantId: parent.grant.id, eventType: "created" }))[0]?.details?.scopes)
       .toEqual(["fixture:execute"]);
     await expect(store.createGrant({
       label: "Spoofed owner",
@@ -257,7 +257,7 @@ describe("Operation Permission grant security invariants", () : any => {
       ok: false,
       reasonCode: "grant_owner_generation_inactive"
     });
-    expect(store.authorizeGrantForExecution({
+    expect(await store.authorizeGrantForExecution({
       grantId: parent.grant.id,
       expectedProjectionFingerprint: parent.grant.projectionFingerprint,
       tool: pluginTool
@@ -278,7 +278,7 @@ describe("Operation Permission grant security invariants", () : any => {
       toolsets: ["fixture.toolset"],
       capabilities: ["cap:tool:*"]
     })).rejects.toMatchObject({ code: "operation_permission_plugin_owner_generation_inactive" });
-    store.close();
+    await store.close();
 
     store = openStore();
     receipt = await store.revokeGrantsByPluginOwner({
@@ -306,8 +306,8 @@ describe("Operation Permission grant security invariants", () : any => {
     });
     expect(receipt.receiptDigest).toMatch(/^[a-f0-9]{64}$/u);
     expect(invalidated.sort()).toEqual(["plugin-child", "plugin-parent"]);
-    expect(store.getGrant(parent.grant.id)).toMatchObject({ enabled: false, revokedAt: expect.any(String) });
-    expect(store.getGrant(child.grant.id)).toMatchObject({ enabled: false, revokedAt: expect.any(String) });
+    expect(await store.getGrant(parent.grant.id)).toMatchObject({ enabled: false, revokedAt: expect.any(String) });
+    expect(await store.getGrant(child.grant.id)).toMatchObject({ enabled: false, revokedAt: expect.any(String) });
     await expect(store.createGrant({
       id: parent.grant.id,
       label: "Reinstalled tool grant",
@@ -326,18 +326,18 @@ describe("Operation Permission grant security invariants", () : any => {
       idempotencyKey: "fixture-disable"
     });
     expect(replay).toEqual(receipt);
-    expect(() : any => store.registerPluginGrantOwner({
+    await expect(store.registerPluginGrantOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration
-    })).toThrow(expect.objectContaining({
+    })).rejects.toMatchObject({
       code: "operation_permission_plugin_owner_generation_retired"
-    }));
+    });
     expect(await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
       idempotencyKey: "fixture-uninstall-after-disable"
     })).toMatchObject({ complete: true, processedCount: 0, revokedCount: 0 });
-    expect(store.registerPluginGrantOwner({
+    expect(await store.registerPluginGrantOwner({
       pluginId: "fixture-plugin",
       generationDigest: nextGeneration
     })).toMatchObject({ state: "active", ownerGenerationDigest: nextGeneration });
@@ -352,19 +352,19 @@ describe("Operation Permission grant security invariants", () : any => {
       ownerId: "fixture-plugin",
       ownerGeneration: nextGeneration
     }]);
-    expect(store.getGrant(reinstalled.grant.id)).toMatchObject({ enabled: true, revokedAt: "" });
+    expect(await store.getGrant(reinstalled.grant.id)).toMatchObject({ enabled: true, revokedAt: "" });
     expect(await store.revokeGrantsByPluginOwner({
       pluginId: "fixture-plugin",
       generationDigest: firstGeneration,
       idempotencyKey: "fixture-disable"
     })).toEqual(receipt);
-    expect(store.getGrant(reinstalled.grant.id)).toMatchObject({ enabled: true, revokedAt: "" });
+    expect(await store.getGrant(reinstalled.grant.id)).toMatchObject({ enabled: true, revokedAt: "" });
     await expect(store.revokeGrantsByPluginOwner({
       pluginId: "unknown-plugin",
       generationDigest: "c".repeat(64),
       idempotencyKey: "unknown-disable"
     })).rejects.toMatchObject({ code: "operation_permission_unknown_plugin_owner" });
-    store.close();
+    await store.close();
   });
 
   it("atomically fences grant consumption when an owner retires during credential verification", async () : Promise<any> => {
@@ -415,7 +415,7 @@ describe("Operation Permission grant security invariants", () : any => {
       async invalidateCredential() : Promise<any> {},
       close() : any {}
     };
-    store = createOperationPermissionStore({
+    store = createOperationPermissionWorkerOwner({
       userDataPath,
       registry,
       capabilityKeyProvider,
@@ -474,9 +474,9 @@ describe("Operation Permission grant security invariants", () : any => {
         code: "operation_permission_inactive_catalog_reference",
         field: "scopes"
       });
-      expect(store.listGrants()).toEqual([]);
+      expect(await store.listGrants()).toEqual([]);
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
@@ -513,9 +513,9 @@ describe("Operation Permission grant security invariants", () : any => {
         toolsets: [],
         capabilities: []
       })).rejects.toThrow("at least one kernel capability");
-      expect(store.listGrants()).toEqual([]);
+      expect(await store.listGrants()).toEqual([]);
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
@@ -531,7 +531,7 @@ describe("Operation Permission grant security invariants", () : any => {
         reasonCode: "tool_denied"
       });
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
@@ -543,14 +543,29 @@ describe("Operation Permission grant security invariants", () : any => {
       );
       expect(decisions.filter((decision?: any) : any => decision.ok)).toHaveLength(1);
       expect(decisions.filter((decision?: any) : any => decision.reasonCode === "grant_max_uses")).toHaveLength(15);
-      expect(store.getRawGrant(issued.grant.id).useCount).toBe(1);
+      expect((await store.getRawGrant(issued.grant.id)).useCount).toBe(1);
     } finally {
-      store.close();
+      await store.close();
     }
   });
 
   it("rejects malformed persisted ACL state and prevents new malformed JSON writes", async () : Promise<any> => {
-    const { store, issued, request } = await fixture({ allowedCidrs: ["10.0.0.0/8"] });
+    const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-malformed-grant-"));
+    roots.push(userDataPath);
+    const store: any = createOperationPermissionWorkerOwner({
+      userDataPath,
+      capabilityBindingGuard: false,
+      capabilityResolver: () : any => ["cap:tool:*"]
+    });
+    const issued: any = await store.createGrant({
+      label: "Malformed persistence grant",
+      capabilities: ["cap:tool:*"],
+      allowedCidrs: ["10.0.0.0/8"]
+    });
+    const request: any = {
+      headers: { authorization: `Bearer ${issued.token}` },
+      socket: { remoteAddress: "127.0.0.1" }
+    };
     try {
       expect(() : any => store.db.prepare("UPDATE tool_grants SET allowed_cidrs_json = ? WHERE id = ?")
         .run("not-json", issued.grant.id)).toThrow("tool_grant_policy_json_invalid");
@@ -580,13 +595,13 @@ describe("Operation Permission grant security invariants", () : any => {
 
       await mutateParent(store, issued.grant.id);
 
-      expect(store.getRawGrant(child.grant.id)).toMatchObject({ enabled: false });
+      expect(await store.getRawGrant(child.grant.id)).toMatchObject({ enabled: false });
       await expect(store.authorizeRequest({ request: childRequest, tool })).resolves.toMatchObject({
         ok: false,
         reasonCode: "invalid_token"
       });
     } finally {
-      store.close();
+      await store.close();
     }
   });
 });

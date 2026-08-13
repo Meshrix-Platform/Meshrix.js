@@ -11,15 +11,15 @@ export function hostPlatformKey({ platform = process.platform, arch = process.ar
 }
 
 export function platformTargetKey({ platform = process.platform, arch = process.arch }: Record<string, any> = {}) : any {
-  const os: any = {
+  const os: any = ({
     darwin: "darwin",
     linux: "linux",
     win32: "windows"
-  }[platform] || platform;
-  const cpu: any = {
+  } as Record<string, any>)[platform] || platform;
+  const cpu: any = ({
     arm64: "aarch64",
     x64: "x86_64"
-  }[arch] || arch;
+  } as Record<string, any>)[arch] || arch;
   return `${os}-${cpu}`;
 }
 

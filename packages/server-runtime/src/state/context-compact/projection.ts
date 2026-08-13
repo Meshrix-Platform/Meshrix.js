@@ -21,19 +21,54 @@ export function selectImportantLines(text?: any, limit: any = 8) : any {
     .split(/\r?\n|(?<=[。！？.!?])\s+/u)
     .map((line?: any) : any => normalizeText(line))
     .filter(Boolean);
-  const scored: any = lines.map((line?: any, index?: any) : any => ({
-    line,
-    index,
-    score:
+  const heap: any[] = [];
+  const boundedLimit: number = Math.max(0, Math.floor(Number(limit) || 0));
+  const betterThan: any = (left?: any, right?: any) : any =>
+    left.score > right.score || (left.score === right.score && left.index < right.index);
+  const worseThan: any = (left?: any, right?: any) : any => betterThan(right, left);
+  const siftUp: any = (start?: any) : any => {
+    let index: number = start;
+    while (index > 0) {
+      const parent: number = Math.floor((index - 1) / 2);
+      if (!worseThan(heap[index], heap[parent])) break;
+      [heap[index], heap[parent]] = [heap[parent], heap[index]];
+      index = parent;
+    }
+  };
+  const siftDown: any = () : any => {
+    let index: number = 0;
+    while (true) {
+      const left: number = index * 2 + 1;
+      const right: number = left + 1;
+      let worst: number = index;
+      if (left < heap.length && worseThan(heap[left], heap[worst])) worst = left;
+      if (right < heap.length && worseThan(heap[right], heap[worst])) worst = right;
+      if (worst === index) break;
+      [heap[index], heap[worst]] = [heap[worst], heap[index]];
+      index = worst;
+    }
+  };
+  for (const [index, line] of lines.entries()) {
+    const item: any = {
+      line,
+      index,
+      score:
       /(must|should|never|cannot|todo|fixme|risk|error|failed|decision|approved|evidence|source|scope|rollback|version|必须|不能|不得|风险|错误|失败|决定|证据|来源|审批|版本|回滚)/i.test(line)
         ? 3
         : /(\/[\w./-]+|[A-Za-z]:\\|[A-Z][A-Za-z0-9_/-]+\.(?:mjs|js|ts|tsx|json|rs|dart|swift|md)|\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b)/.test(line)
           ? 2
           : 1
-  }));
-  return scored
-    .sort((left?: any, right?: any) : any => right.score - left.score || left.index - right.index)
-    .slice(0, limit)
+    };
+    if (boundedLimit === 0) continue;
+    if (heap.length < boundedLimit) {
+      heap.push(item);
+      siftUp(heap.length - 1);
+    } else if (betterThan(item, heap[0])) {
+      heap[0] = item;
+      siftDown();
+    }
+  }
+  return heap
     .sort((left?: any, right?: any) : any => left.index - right.index)
     .map((item?: any) : any => item.line);
 }
@@ -257,78 +292,95 @@ export function parseModelSummary(value?: any) : any {
 export function messagesByApiRound(messages: any = []) : any {
   const groups: any[] = [];
   let current: any = null;
-  for (const message of messages) {
+  for (const [messageIndex, message] of messages.entries()) {
     if (!current || current.apiRoundId !== message.apiRoundId) {
-      current = { apiRoundId: message.apiRoundId, messages: [] };
+      current = {
+        apiRoundId: message.apiRoundId,
+        messages: [],
+        start: messageIndex,
+        end: -1,
+        totalTokens: 0
+      };
       groups.push(current);
     }
     current.messages.push(message);
+    current.end = current.start + current.messages.length;
+    current.totalTokens += Math.max(1, Number(message.tokenEstimate) || estimateContextTokens(message.text || ""));
   }
   return groups;
 }
 
-export function modelInputForAttempt(messages: any = [], attempt: any = 0, maxInputTokens: any = 0) : any {
+export function createApiRoundSelectionIndex(messages: any = []) : any {
+  const groups: any[] = messagesByApiRound(messages);
+  const suffixTokens: number[] = new Array(groups.length + 1).fill(0);
+  for (let index: number = groups.length - 1; index >= 0; index -= 1) {
+    suffixTokens[index] = suffixTokens[index + 1] + Math.max(0, Number(groups[index].totalTokens) || 0);
+  }
+  return Object.freeze({ groups, suffixTokens });
+}
+
+function selectApiRoundSuffix(selectionIndex: any, maxInputTokens: any = 0, minimumGroupIndex: any = 0) : any {
+  const groups: any[] = selectionIndex.groups;
+  const suffixTokens: number[] = selectionIndex.suffixTokens;
+  let low: number = Math.max(0, Math.min(groups.length, Number(minimumGroupIndex) || 0));
+  let high: number = groups.length;
+  while (low < high) {
+    const middle: number = low + Math.floor((high - low) / 2);
+    if (suffixTokens[middle] <= maxInputTokens) high = middle;
+    else low = middle + 1;
+  }
+  return {
+    startGroupIndex: low,
+    totalTokens: suffixTokens[low],
+    messages: low < groups.length ? groups.slice(low).flatMap((group?: any) : any => group.messages) : []
+  };
+}
+
+export function modelInputForAttempt(
+  messages: any = [],
+  attempt: any = 0,
+  maxInputTokens: any = 0,
+  selectionIndex: any = null
+) : any {
   if (!Number.isFinite(Number(maxInputTokens)) || Number(maxInputTokens) <= 0) {
     return [];
   }
-  let groups: any = messagesByApiRound(messages);
-  for (let drop: any = 0; drop < attempt && groups.length > 1; drop += 1) {
-    groups = groups.slice(1);
-  }
-  let candidate: any = groups.flatMap((group?: any) : any => group.messages);
-  while (candidate.length > 1 && estimateContextTokens(candidate.map((message?: any) : any => message.text).join("\n")) > maxInputTokens) {
-    const nextGroups: any = messagesByApiRound(candidate).slice(1);
-    candidate = nextGroups.length ? nextGroups.flatMap((group?: any) : any => group.messages) : candidate.slice(1);
-  }
-  return estimateContextTokens(candidate.map((message?: any) : any => message.text).join("\n")) <= maxInputTokens
-    ? candidate
-    : [];
+  const index: any = selectionIndex || createApiRoundSelectionIndex(messages);
+  const groups: any[] = index.groups;
+  return selectApiRoundSuffix(index, maxInputTokens, Math.min(Math.max(0, Number(attempt) || 0), Math.max(0, groups.length - 1))).messages;
 }
 
-export function workbenchInputForAttempt(messages: any = [], attempt: any = 0, maxInputTokens: any = 0, trimRatio: any = 0) : any {
+export function workbenchInputForAttempt(
+  messages: any = [],
+  attempt: any = 0,
+  maxInputTokens: any = 0,
+  trimRatio: any = 0,
+  selectionIndex: any = null
+) : any {
+  const index: any = selectionIndex || createApiRoundSelectionIndex(messages);
+  const groups: any[] = index.groups;
   if (!Number.isFinite(Number(maxInputTokens)) || Number(maxInputTokens) <= 0) {
     return {
       messages: [],
-      metadata: { droppedGroupCount: messagesByApiRound(messages).length, trimRatio, inputTokens: 0 }
+      metadata: { droppedGroupCount: groups.length, trimRatio, inputTokens: 0 }
     };
   }
-  let groups: any = messagesByApiRound(messages);
   const originalGroupCount: any = groups.length;
+  let minimumGroupIndex: number = 0;
   if (attempt > 0 && groups.length > 1) {
-    const dropCount: any = Math.min(
+    minimumGroupIndex = Math.min(
       groups.length - 1,
       Math.max(1, Math.ceil(groups.length * trimRatio * attempt))
     );
-    groups = groups.slice(dropCount);
   }
-  let droppedGroupCount: any = originalGroupCount - groups.length;
-  let candidate: any = groups.flatMap((group?: any) : any => group.messages);
-  while (
-    candidate.length > 1 &&
-    estimateContextTokens(candidate.map((message?: any) : any => message.text).join("\n")) > maxInputTokens
-  ) {
-    const nextGroups: any = messagesByApiRound(candidate);
-    const dropCount: any = Math.min(
-      nextGroups.length - 1,
-      Math.max(1, Math.ceil(nextGroups.length * trimRatio))
-    );
-    if (dropCount <= 0) {
-      candidate = candidate.slice(1);
-      droppedGroupCount += 1;
-      continue;
-    }
-    groups = nextGroups.slice(dropCount);
-    droppedGroupCount += dropCount;
-    candidate = groups.length ? groups.flatMap((group?: any) : any => group.messages) : candidate.slice(1);
-  }
-  const withinBudget: any = estimateContextTokens(candidate.map((message?: any) : any => message.text).join("\n")) <= maxInputTokens;
-  const selected: any = withinBudget ? candidate : [];
+  const selectedSuffix: any = selectApiRoundSuffix(index, maxInputTokens, minimumGroupIndex);
+  const selected: any = selectedSuffix.messages;
   return {
     messages: selected,
     metadata: {
-      droppedGroupCount,
+      droppedGroupCount: selectedSuffix.startGroupIndex,
       trimRatio,
-      inputTokens: estimateContextTokens(selected.map((message?: any) : any => message.text).join("\n"))
+      inputTokens: selectedSuffix.totalTokens
     }
   };
 }
@@ -530,8 +582,8 @@ export function prepareWorkbenchMessages(messages: any = [], policy?: any) : any
     dehydratedAttachmentCount += result.dehydratedAttachmentCount;
     prepared.push(result.message);
   }
-  const originalTokens: any = estimateContextTokens(messages.map((message?: any) : any => message.text).join("\n"));
-  const preparedTokens: any = estimateContextTokens(prepared.map((message?: any) : any => message.text).join("\n"));
+  const originalTokens: any = messages.reduce((total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0), 0);
+  const preparedTokens: any = prepared.reduce((total?: any, message?: any) : any => total + Math.max(1, Number(message.tokenEstimate) || 0), 0);
   return {
     messages: prepared,
     strippedBlockCount,

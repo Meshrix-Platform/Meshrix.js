@@ -11,6 +11,7 @@ import { createExternalGatewayManagementProvider } from "../../../packages/serve
 import { probeExternalGatewayEndpoint } from "../../../packages/server-runtime/src/composition/external-gateway-endpoint-probe.ts";
 import { signMcpHandshake } from "../../../packages/protocols/mcp/adapter/gateway-installer/mcp-identity.ts";
 import { mcpHandshake } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-discovery.ts";
+import { MCP_PROTOCOL_VERSION } from "../../../packages/protocols/mcp/adapter/http-mcp-adapter-constants.ts";
 
 function createProbeIdentity() : any {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -55,7 +56,7 @@ function createProbeFetch({ identity, adapterId = "caddy", mcpOk = true }: Recor
       return jsonResponse(mcpOk ? {
         jsonrpc: "2.0",
         id: "external-gateway-probe",
-        result: { protocolVersion: "2025-06-18", serverInfo: { name: "Meshrix.js" } },
+        result: { protocolVersion: MCP_PROTOCOL_VERSION, serverInfo: { name: "Meshrix.js" } },
       } : { error: "not mcp" }, { headers: { "Mcp-Session-Id": "probe-session" } });
     }
     if (parsed.pathname === "/mcp" && options.method === "DELETE") {

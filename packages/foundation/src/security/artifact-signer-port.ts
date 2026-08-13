@@ -11,7 +11,7 @@ function text(value: any = "") : any {
   return String(value ?? "").trim();
 }
 
-function record(value?: any, fallback: Record<string, any> = {}) : any {
+function record(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

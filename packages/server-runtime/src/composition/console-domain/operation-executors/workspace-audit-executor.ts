@@ -198,7 +198,7 @@ export async function executeWorkspaceAuditOperation({ operationId, input = {}, 
   }
 
   const items: any = context.operationAuditStore?.list
-    ? context.operationAuditStore.list({
+    ? await context.operationAuditStore.list({
         limit: Number(input.limit || 100),
         operationId: input.operationId || input["operation-id"] || "",
         status: input.status || ""

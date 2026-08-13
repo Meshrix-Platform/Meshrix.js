@@ -9,7 +9,7 @@ import {
   moduleStatusText,
   type RuntimeModuleRow,
 } from "../../composables/console-runtime-module-display-utils";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 
 import { currentConsoleLocale, localizeConsoleText } from "../../i18n/console";
 
@@ -17,9 +17,9 @@ const localizeStatusPillLabel = (value: any) : any =>
   localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const {
-  isBusy,
   canBrowseServerPaths,
-  consoleState,
+} = useServerConsoleShellContext().access;
+const {
   enabledMountCount,
   isMountPathEditing,
   moduleGroups,
@@ -29,7 +29,11 @@ const {
   saveMountModules,
   toggleMountPathEdit,
   totalMountCount,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().modules;
+const {
+  isBusy,
+  consoleState,
+} = useServerConsoleShellContext().runtime;
 
 function moduleDetailItems(item: RuntimeModuleRow) {
   return [

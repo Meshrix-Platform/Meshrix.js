@@ -145,7 +145,7 @@ async function verifyDispatcherAuthorizationInputBinding() : Promise<any> {
     },
     public: false,
     externalAuth: false,
-    concurrencySafe: true,
+    concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
     readOnly: true,
     safety: { risk: "read_only" },
     audit: { enabled: false },

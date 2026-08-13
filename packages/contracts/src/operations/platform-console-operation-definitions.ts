@@ -43,7 +43,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["appearance-presets"], usage: "appearance-presets" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["appearance-presets", "frontend", "display-preference"],
       inputSchema: { type: "object", required: [], properties: {} }
     },
@@ -77,7 +77,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["production", "health"], usage: "production health" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["observability", "production-readiness"]
     },
 {
@@ -90,7 +90,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["architecture", "live-map"], usage: "architecture live-map" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["architecture-live-map", "production-readiness"]
     },
 {
@@ -103,7 +103,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["sample-capability-packs"], usage: "sample-capability-packs" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["sample-capability-pack", "capability-scenarios"]
     },
 {
@@ -116,7 +116,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["sample-capability-packs", "get"], usage: "sample-capability-packs get <packId>" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["sample-capability-pack", "capability-scenarios"]
     },
 {
@@ -141,7 +141,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["executive-report"], usage: "executive-report" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["executive-report", "asset-value"]
     },
 {
@@ -179,7 +179,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["operation-semantics", "static-families"], usage: "operation-semantics static-families" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["operation-semantics", "static-semantic-family"],
       metadata: { staticSemanticFamilyCount: STATIC_SEMANTIC_FAMILY_COUNT }
     },
@@ -193,7 +193,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["operation-semantics", "static-families", "get"], usage: "operation-semantics static-families get --body family.json" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["operation-semantics", "static-semantic-family"],
       safety: { risk: "read_only" }
     },
@@ -207,7 +207,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["workspace-governance"], usage: "workspace-governance" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["workspace-governance", "organization-policy"]
     },
 {
@@ -390,7 +390,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       },
       requiredScopes: ["maintenance:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["maintenance-agent", "runbook"]
     },
 {
@@ -406,7 +406,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       },
       requiredScopes: ["maintenance:admin"],
       safety: { risk: "repair_write" },
-      concurrencyGroup: "maintenance_agent.config",
+      concurrency: { workloadClass: "exclusive", key: "maintenance_agent.config", maxParallel: 1, cost: 2 },
       aspects: ["maintenance-agent", "runbook"]
     },
 {
@@ -471,7 +471,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       },
       requiredScopes: ["maintenance:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["maintenance-agent", "runbook"]
     },
 {
@@ -491,7 +491,7 @@ export const PLATFORM_CONSOLE_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       },
       requiredScopes: ["maintenance:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["maintenance-agent", "runbook"]
     },
 {

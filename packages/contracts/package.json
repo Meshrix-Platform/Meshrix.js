@@ -8,10 +8,80 @@
   },
   "type": "module",
   "exports": {
-    "./*": {
-      "types": "./dist/*.d.ts",
-      "source": "./src/*.ts",
-      "default": "./dist/*.js"
+    "./mcp-catalog-delivery": {
+      "types": "./dist/mcp-catalog-delivery.d.ts",
+      "source": "./src/mcp-catalog-delivery.ts",
+      "default": "./dist/mcp-catalog-delivery.js"
+    },
+    "./modules/manifest": {
+      "types": "./dist/modules/manifest.d.ts",
+      "source": "./src/modules/manifest.ts",
+      "default": "./dist/modules/manifest.js"
+    },
+    "./modules/model-usage": {
+      "types": "./dist/modules/model-usage.d.ts",
+      "source": "./src/modules/model-usage.ts",
+      "default": "./dist/modules/model-usage.js"
+    },
+    "./operations/operation-decorators": {
+      "types": "./dist/operations/operation-decorators.d.ts",
+      "source": "./src/operations/operation-decorators.ts",
+      "default": "./dist/operations/operation-decorators.js"
+    },
+    "./operations/operation-feature-resolution": {
+      "types": "./dist/operations/operation-feature-resolution.d.ts",
+      "source": "./src/operations/operation-feature-resolution.ts",
+      "default": "./dist/operations/operation-feature-resolution.js"
+    },
+    "./operations/operation-registry": {
+      "types": "./dist/operations/operation-registry.d.ts",
+      "source": "./src/operations/operation-registry.ts",
+      "default": "./dist/operations/operation-registry.js"
+    },
+    "./operations/protocol-operation-definitions": {
+      "types": "./dist/operations/protocol-operation-definitions.d.ts",
+      "source": "./src/operations/protocol-operation-definitions.ts",
+      "default": "./dist/operations/protocol-operation-definitions.js"
+    },
+    "./operations/static-semantic-family-catalog": {
+      "types": "./dist/operations/static-semantic-family-catalog.d.ts",
+      "source": "./src/operations/static-semantic-family-catalog.ts",
+      "default": "./dist/operations/static-semantic-family-catalog.js"
+    },
+    "./plugins/plugin-bundle-manifest": {
+      "types": "./dist/plugins/plugin-bundle-manifest.d.ts",
+      "source": "./src/plugins/plugin-bundle-manifest.ts",
+      "default": "./dist/plugins/plugin-bundle-manifest.js"
+    },
+    "./plugins/plugin-package-receipt": {
+      "types": "./dist/plugins/plugin-package-receipt.d.ts",
+      "source": "./src/plugins/plugin-package-receipt.ts",
+      "default": "./dist/plugins/plugin-package-receipt.js"
+    },
+    "./plugins/plugin-package-source": {
+      "types": "./dist/plugins/plugin-package-source.d.ts",
+      "source": "./src/plugins/plugin-package-source.ts",
+      "default": "./dist/plugins/plugin-package-source.js"
+    },
+    "./plugins/plugin-package-state": {
+      "types": "./dist/plugins/plugin-package-state.d.ts",
+      "source": "./src/plugins/plugin-package-state.ts",
+      "default": "./dist/plugins/plugin-package-state.js"
+    },
+    "./plugins/verified-plugin-package": {
+      "types": "./dist/plugins/verified-plugin-package.d.ts",
+      "source": "./src/plugins/verified-plugin-package.ts",
+      "default": "./dist/plugins/verified-plugin-package.js"
+    },
+    "./serialization/canonical-json": {
+      "types": "./dist/serialization/canonical-json.d.ts",
+      "source": "./src/serialization/canonical-json.ts",
+      "default": "./dist/serialization/canonical-json.js"
+    },
+    "./upstream-service-publishing": {
+      "types": "./dist/upstream-service-publishing.d.ts",
+      "source": "./src/upstream-service-publishing.ts",
+      "default": "./dist/upstream-service-publishing.js"
     }
   },
   "files": [

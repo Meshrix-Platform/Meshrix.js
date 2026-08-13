@@ -6,7 +6,7 @@ import { maxRisk } from "./config.ts";
 
 const MAINTENANCE_AGENT_MODULE_ID: any = "maintenance-agent-runbooks";
 
-function asPlainObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asPlainObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

@@ -57,7 +57,7 @@ export function broadcastConfiguredMcpNotification(payload?: any, options: Recor
   return result && typeof result === "object" ? result : { ...EMPTY_DELIVERY };
 }
 
-export function registerConfiguredMcpSseConnection(connection: Record<string, any> = {}) : any {
+export function registerConfiguredMcpSubscription(connection: Record<string, any> = {}) : any {
   if (!sseConnectionRegistrar) {
     return null;
   }

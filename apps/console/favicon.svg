@@ -1,54 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="150 0 320 320" fill="none" shape-rendering="geometricPrecision" role="img" aria-labelledby="title desc">
+  <title id="title">Meshrix.js</title>
+  <desc id="desc">Meshrix.js gateway mark</desc>
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#fef100"/>
-      <stop offset="50%" stop-color="#fff75c"/>
-      <stop offset="100%" stop-color="#6b6117"/>
-    </linearGradient>
-    <linearGradient id="i" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#5ed7f2"/>
-      <stop offset="50%" stop-color="#5ed7f2"/>
-      <stop offset="100%" stop-color="#155c70"/>
-    </linearGradient>
-    <linearGradient id="f" x1="0" y1="0" x2="0.5" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.07"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
+    <mask id="outside-gateway" x="190" y="25" width="240" height="270" maskUnits="userSpaceOnUse" style="mask-type:luminance">
+      <rect x="190" y="25" width="240" height="270" fill="#fff"/>
+      <path d="M281.8 274V165A28.2 28.2 0 0 1 338.2 165V274Z" fill="#000"/>
+    </mask>
   </defs>
-
-  <!-- Dark background circle -->
-  <circle cx="32" cy="32" r="32" fill="#070707"/>
-
-  <!-- Outer hexagon frame -->
-  <polygon fill="none"
-    points="32,6 54.5,19 54.5,45 32,58 9.5,45 9.5,19"
-    stroke="url(#g)" stroke-width="0.5" opacity="0.3"/>
-
-  <!-- Second hexagon rotated 30deg -->
-  <polygon fill="none"
-    points="32,8.5 52,20.25 52,43.75 32,55.5 12,43.75 12,20.25"
-    stroke="url(#i)" stroke-width="0.4" opacity="0.2"
-    transform="rotate(30 32 32)"/>
-
-  <!-- Lattice lines -->
-  <line x1="32" y1="12" x2="32" y2="52" stroke="url(#i)" stroke-width="0.4" opacity="0.2"/>
-  <line x1="14.7" y1="22" x2="49.3" y2="42" stroke="url(#i)" stroke-width="0.4" opacity="0.2"/>
-  <line x1="14.7" y1="42" x2="49.3" y2="22" stroke="url(#i)" stroke-width="0.4" opacity="0.2"/>
-
-  <!-- Inner hexagon — crystal core -->
-  <polygon
-    points="32,20 43,26 43,38 32,44 21,38 21,26"
-    fill="url(#f)" stroke="url(#g)" stroke-width="1" opacity="0.55"/>
-
-  <!-- Lattice nodes -->
-  <circle cx="32" cy="20" r="1.5" fill="#5ed7f2" opacity="0.5"/>
-  <circle cx="43" cy="26" r="1.5" fill="#fef100" opacity="0.5"/>
-  <circle cx="43" cy="38" r="1.5" fill="#5ed7f2" opacity="0.45"/>
-  <circle cx="32" cy="44" r="1.5" fill="#fef100" opacity="0.5"/>
-  <circle cx="21" cy="38" r="1.5" fill="#5ed7f2" opacity="0.45"/>
-  <circle cx="21" cy="26" r="1.5" fill="#fef100" opacity="0.5"/>
-
-  <!-- Central brilliant -->
-  <circle cx="32" cy="32" r="3" fill="url(#g)" opacity="0.65"/>
-  <circle cx="32" cy="32" r="1.5" fill="#ffffff" opacity="0.55"/>
+  <rect x="150" width="320" height="320" fill="#000"/>
+  <g stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <g mask="url(#outside-gateway)">
+      <path d="M216.902 98.75 299.175 51.25M320.825 51.25 403.098 98.75M206.077 117.5V212.5M413.923 117.5V212.5M216.902 231.25 284.019 270M403.098 231.25 335.981 270" stroke-width="3.6"/>
+      <path d="M310 57.5 216.902 218.75M310 57.5 403.098 218.75M216.902 111.25 284.019 270M403.098 111.25 335.981 270" stroke-width="3"/>
+    </g>
+    <path d="M284.019 270V165A25.981 25.981 0 0 1 335.981 165V270" stroke-width="4.4"/>
+    <path d="M310 32.5 320.825 38.75v12.5L310 57.5l-10.825-6.25v-12.5ZM206.077 92.5 216.902 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 92.5 424.748 98.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM206.077 212.5 216.902 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5ZM413.923 212.5 424.748 218.75v12.5l-10.825 6.25-10.825-6.25v-12.5Z" stroke-width="3.6"/>
+  </g>
 </svg>

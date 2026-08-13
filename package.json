@@ -17,133 +17,261 @@
     "apps/console"
   ],
   "imports": {
-    "#meshrix/contracts/*": {
-      "source": "./packages/contracts/src/*.ts",
-      "default": "./packages/contracts/dist/*.js"
+    "#meshrix/agents/agent-memory/index": {
+      "source": "./packages/agents/src/agent-memory/index.ts",
+      "default": "./packages/agents/dist/agent-memory/index.js"
     },
-    "#meshrix/contracts/*.ts": {
-      "source": "./packages/contracts/src/*.ts",
-      "default": "./packages/contracts/dist/*.js"
+    "#meshrix/agents/maintenance/planner": {
+      "source": "./packages/agents/src/maintenance/planner.ts",
+      "default": "./packages/agents/dist/maintenance/planner.js"
     },
-    "#meshrix/foundation/*": {
-      "source": "./packages/foundation/src/*.ts",
-      "default": "./packages/foundation/dist/*.js"
+    "#meshrix/agents/maintenance/tool-registry": {
+      "source": "./packages/agents/src/maintenance/tool-registry.ts",
+      "default": "./packages/agents/dist/maintenance/tool-registry.js"
     },
-    "#meshrix/foundation/*.ts": {
-      "source": "./packages/foundation/src/*.ts",
-      "default": "./packages/foundation/dist/*.js"
-    },
-    "#meshrix/agents/*": {
-      "source": "./packages/agents/src/*.ts",
-      "default": "./packages/agents/dist/*.js"
-    },
-    "#meshrix/agents/*.ts": {
-      "source": "./packages/agents/src/*.ts",
-      "default": "./packages/agents/dist/*.js"
-    },
-    "#meshrix/capabilities/*": {
-      "source": "./packages/capabilities/src/*.ts",
-      "default": "./packages/capabilities/dist/*.js"
-    },
-    "#meshrix/capabilities/*.ts": {
-      "source": "./packages/capabilities/src/*.ts",
-      "default": "./packages/capabilities/dist/*.js"
-    },
-    "#meshrix/protocols/*": {
-      "source": "./packages/protocols/*.ts",
-      "default": "./packages/protocols/dist/*.js"
-    },
-    "#meshrix/protocols/*.ts": {
-      "source": "./packages/protocols/*.ts",
-      "default": "./packages/protocols/dist/*.js"
-    },
-    "#meshrix/server-runtime/*": {
-      "source": "./packages/server-runtime/src/*.ts",
-      "default": "./packages/server-runtime/dist/*.js"
-    },
-    "#meshrix/server-runtime/*.ts": {
-      "source": "./packages/server-runtime/src/*.ts",
-      "default": "./packages/server-runtime/dist/*.js"
-    },
-    "#meshrix/ui-console/*": "./packages/ui-console/src/*.ts",
-    "#meshrix/ui-console/bridge-http": "./packages/ui-console/src/bridge-http.ts",
-    "#meshrix/ui-console/page-refresh": "./packages/ui-console/src/page-refresh.ts",
-    "#meshrix/ui-console/rpc-client": "./packages/ui-console/src/rpc-client.ts",
-    "#meshrix/ui-console/error-message": "./packages/ui-console/src/error-message.ts",
-    "#meshrix/ui-console/binary-checkbox": "./packages/ui-console/src/BinaryCheckbox.vue",
-    "#meshrix/ui-console/workspaces-view-context": "./packages/ui-console/src/workspaces-view-context.ts",
-    "#meshrix/ui-console/server-console-shell-context": "./packages/ui-console/src/server-console-shell-context.ts",
-    "#meshrix/ui-console/console-format-utils": "./packages/ui-console/src/console-format-utils.ts",
-    "#meshrix/ui-console/console-client-display-utils": "./packages/ui-console/src/console-client-display-utils.ts",
-    "#meshrix/ui-console/option-bar": "./packages/ui-console/src/OptionBar.vue",
-    "#meshrix/ui-console/status-pill": "./packages/ui-console/src/StatusPill.vue",
-    "#meshrix/server-config": {
-      "source": "./packages/foundation/src/config/server-config.ts",
-      "default": "./packages/foundation/dist/config/server-config.js"
-    },
-    "#meshrix/server-env": {
-      "source": "./packages/foundation/src/config/server-env.ts",
-      "default": "./packages/foundation/dist/config/server-env.js"
-    },
-    "#meshrix/settings": {
-      "source": "./packages/server-runtime/src/composition/settings.ts",
-      "default": "./packages/server-runtime/dist/composition/settings.js"
-    },
-    "#meshrix/product-api": {
-      "source": "./packages/server-runtime/src/composition/product-api.ts",
-      "default": "./packages/server-runtime/dist/composition/product-api.js"
-    },
-    "#meshrix/state-coordinator": {
-      "source": "./packages/foundation/src/storage/state-coordinator.ts",
-      "default": "./packages/foundation/dist/storage/state-coordinator.js"
-    },
-    "#meshrix/client-strings": {
-      "source": "./packages/foundation/src/security/client-strings.ts",
-      "default": "./packages/foundation/dist/security/client-strings.js"
-    },
-    "#meshrix/platform-registry": {
-      "source": "./packages/server-runtime/src/composition/platform-registry.ts",
-      "default": "./packages/server-runtime/dist/composition/platform-registry.js"
-    },
-    "#meshrix/http-utils": {
-      "source": "./packages/protocols/http/http-utils.ts",
-      "default": "./packages/protocols/dist/http/http-utils.js"
-    },
-    "#meshrix/http-response": {
-      "source": "./packages/foundation/src/http/http-response.ts",
-      "default": "./packages/foundation/dist/http/http-response.js"
-    },
-    "#meshrix/local-path-boundary": {
-      "source": "./packages/foundation/src/security/local-path-boundary.ts",
-      "default": "./packages/foundation/dist/security/local-path-boundary.js"
-    },
-    "#meshrix/runtime-logger": {
-      "source": "./packages/foundation/src/observability/runtime-logger.ts",
-      "default": "./packages/foundation/dist/observability/runtime-logger.js"
+    "#meshrix/agents/upstream-gateway/index": {
+      "source": "./packages/agents/src/upstream-gateway/index.ts",
+      "default": "./packages/agents/dist/upstream-gateway/index.js"
     },
     "#meshrix/authorization-engine": {
       "source": "./packages/foundation/src/security/authorization/authorization-engine.ts",
       "default": "./packages/foundation/dist/security/authorization/authorization-engine.js"
     },
+    "#meshrix/capabilities/operation-permission-core/store": {
+      "source": "./packages/capabilities/src/operation-permission-core/store.ts",
+      "default": "./packages/capabilities/dist/operation-permission-core/store.js"
+    },
+    "#meshrix/client-strings": {
+      "source": "./packages/foundation/src/security/client-strings.ts",
+      "default": "./packages/foundation/dist/security/client-strings.js"
+    },
+    "#meshrix/console/server-console-shell-context": {
+      "source": "./apps/console/composables/server-console-shell-context.ts",
+      "default": "./apps/console/composables/server-console-shell-context.ts"
+    },
+    "#meshrix/contracts/operations/operation-decorators": {
+      "source": "./packages/contracts/src/operations/operation-decorators.ts",
+      "default": "./packages/contracts/dist/operations/operation-decorators.js"
+    },
+    "#meshrix/contracts/operations/operation-feature-resolution": {
+      "source": "./packages/contracts/src/operations/operation-feature-resolution.ts",
+      "default": "./packages/contracts/dist/operations/operation-feature-resolution.js"
+    },
+    "#meshrix/contracts/operations/operation-registry": {
+      "source": "./packages/contracts/src/operations/operation-registry.ts",
+      "default": "./packages/contracts/dist/operations/operation-registry.js"
+    },
+    "#meshrix/contracts/operations/protocol-operation-definitions": {
+      "source": "./packages/contracts/src/operations/protocol-operation-definitions.ts",
+      "default": "./packages/contracts/dist/operations/protocol-operation-definitions.js"
+    },
+    "#meshrix/contracts/plugins/plugin-bundle-manifest": {
+      "source": "./packages/contracts/src/plugins/plugin-bundle-manifest.ts",
+      "default": "./packages/contracts/dist/plugins/plugin-bundle-manifest.js"
+    },
+    "#meshrix/contracts/plugins/plugin-package-source": {
+      "source": "./packages/contracts/src/plugins/plugin-package-source.ts",
+      "default": "./packages/contracts/dist/plugins/plugin-package-source.js"
+    },
+    "#meshrix/contracts/plugins/plugin-package-state": {
+      "source": "./packages/contracts/src/plugins/plugin-package-state.ts",
+      "default": "./packages/contracts/dist/plugins/plugin-package-state.js"
+    },
+    "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection": {
+      "source": "./packages/foundation/src/checkpoint/tree/checkpoint-tree-projection.ts",
+      "default": "./packages/foundation/dist/checkpoint/tree/checkpoint-tree-projection.js"
+    },
+    "#meshrix/foundation/checkpoint/tree/data-structure-substrate": {
+      "source": "./packages/foundation/src/checkpoint/tree/data-structure-substrate.ts",
+      "default": "./packages/foundation/dist/checkpoint/tree/data-structure-substrate.js"
+    },
+    "#meshrix/foundation/checkpoint/tree/merkle-state-substrate": {
+      "source": "./packages/foundation/src/checkpoint/tree/merkle-state-substrate.ts",
+      "default": "./packages/foundation/dist/checkpoint/tree/merkle-state-substrate.js"
+    },
+    "#meshrix/foundation/checkpoint/tree/pactium-runtime": {
+      "source": "./packages/foundation/src/checkpoint/tree/pactium-runtime.ts",
+      "default": "./packages/foundation/dist/checkpoint/tree/pactium-runtime.js"
+    },
+    "#meshrix/foundation/concurrency/lock-manager": {
+      "source": "./packages/foundation/src/concurrency/lock-manager.ts",
+      "default": "./packages/foundation/dist/concurrency/lock-manager.js"
+    },
+    "#meshrix/foundation/module-system/github-release-plugin-package-source": {
+      "source": "./packages/foundation/src/module-system/github-release-plugin-package-source.ts",
+      "default": "./packages/foundation/dist/module-system/github-release-plugin-package-source.js"
+    },
+    "#meshrix/foundation/module-system/local-plugin-package-source": {
+      "source": "./packages/foundation/src/module-system/local-plugin-package-source.ts",
+      "default": "./packages/foundation/dist/module-system/local-plugin-package-source.js"
+    },
+    "#meshrix/foundation/module-system/plugin-package-acquisition": {
+      "source": "./packages/foundation/src/module-system/plugin-package-acquisition.ts",
+      "default": "./packages/foundation/dist/module-system/plugin-package-acquisition.js"
+    },
+    "#meshrix/foundation/module-system/plugin-package-acquisition-port": {
+      "source": "./packages/foundation/src/module-system/plugin-package-acquisition-port.ts",
+      "default": "./packages/foundation/dist/module-system/plugin-package-acquisition-port.js"
+    },
+    "#meshrix/foundation/module-system/plugin-package-custody": {
+      "source": "./packages/foundation/src/module-system/plugin-package-custody.ts",
+      "default": "./packages/foundation/dist/module-system/plugin-package-custody.js"
+    },
+    "#meshrix/foundation/module-system/plugin-package-lifecycle": {
+      "source": "./packages/foundation/src/module-system/plugin-package-lifecycle.ts",
+      "default": "./packages/foundation/dist/module-system/plugin-package-lifecycle.js"
+    },
+    "#meshrix/foundation/module-system/plugin-package-tar": {
+      "source": "./packages/foundation/src/module-system/plugin-package-tar.ts",
+      "default": "./packages/foundation/dist/module-system/plugin-package-tar.js"
+    },
+    "#meshrix/foundation/module-system/plugin-package-validator": {
+      "source": "./packages/foundation/src/module-system/plugin-package-validator.ts",
+      "default": "./packages/foundation/dist/module-system/plugin-package-validator.js"
+    },
+    "#meshrix/foundation/observability/trace-context": {
+      "source": "./packages/foundation/src/observability/trace-context.ts",
+      "default": "./packages/foundation/dist/observability/trace-context.js"
+    },
+    "#meshrix/foundation/proof/proof-substrate/index": {
+      "source": "./packages/foundation/src/proof/proof-substrate/index.ts",
+      "default": "./packages/foundation/dist/proof/proof-substrate/index.js"
+    },
+    "#meshrix/foundation/security/final-protected-sink-permit": {
+      "source": "./packages/foundation/src/security/final-protected-sink-permit.ts",
+      "default": "./packages/foundation/dist/security/final-protected-sink-permit.js"
+    },
+    "#meshrix/foundation/security/governed-execution-permit-authority": {
+      "source": "./packages/foundation/src/security/governed-execution-permit-authority.ts",
+      "default": "./packages/foundation/dist/security/governed-execution-permit-authority.js"
+    },
+    "#meshrix/foundation/security/secrets/local-secret-key-provider": {
+      "source": "./packages/foundation/src/security/secrets/local-secret-key-provider.ts",
+      "default": "./packages/foundation/dist/security/secrets/local-secret-key-provider.js"
+    },
+    "#meshrix/foundation/security/secrets/local-secret-store": {
+      "source": "./packages/foundation/src/security/secrets/local-secret-store.ts",
+      "default": "./packages/foundation/dist/security/secrets/local-secret-store.js"
+    },
+    "#meshrix/foundation/storage/bounded-jsonl": {
+      "source": "./packages/foundation/src/storage/bounded-jsonl.ts",
+      "default": "./packages/foundation/dist/storage/bounded-jsonl.js"
+    },
+    "#meshrix/foundation/storage/storage-kernel": {
+      "source": "./packages/foundation/src/storage/storage-kernel.ts",
+      "default": "./packages/foundation/dist/storage/storage-kernel.js"
+    },
+    "#meshrix/foundation/storage/storage-provider": {
+      "source": "./packages/foundation/src/storage/storage-provider.ts",
+      "default": "./packages/foundation/dist/storage/storage-provider.js"
+    },
     "#meshrix/operation-registry": {
       "source": "./packages/contracts/src/operations/operation-registry.ts",
       "default": "./packages/contracts/dist/operations/operation-registry.js"
     },
-    "#meshrix/trusted-client-ip": {
-      "source": "./packages/foundation/src/security/trusted-client-ip.ts",
-      "default": "./packages/foundation/dist/security/trusted-client-ip.js"
+    "#meshrix/platform-registry": {
+      "source": "./packages/server-runtime/src/composition/platform-registry.ts",
+      "default": "./packages/server-runtime/dist/composition/platform-registry.js"
     },
-    "#meshrix/server-runtime/console-domain-services": {
-      "source": "./packages/server-runtime/src/composition/console-domain/services.ts",
-      "default": "./packages/server-runtime/dist/composition/console-domain/services.js"
+    "#meshrix/product-api": {
+      "source": "./packages/server-runtime/src/composition/product-api.ts",
+      "default": "./packages/server-runtime/dist/composition/product-api.js"
     },
-    "#meshrix/server-runtime/console-domain-operation-executor": {
+    "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers": {
+      "source": "./packages/protocols/http/controllers/jobs-controller-artifact-handlers.ts",
+      "default": "./packages/protocols/dist/http/controllers/jobs-controller-artifact-handlers.js"
+    },
+    "#meshrix/protocols/http/controllers/system-controller-foundation-handlers": {
+      "source": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
+      "default": "./packages/protocols/dist/http/controllers/system-controller-foundation-handlers.js"
+    },
+    "#meshrix/runtime-logger": {
+      "source": "./packages/foundation/src/observability/runtime-logger.ts",
+      "default": "./packages/foundation/dist/observability/runtime-logger.js"
+    },
+    "#meshrix/server-config": {
+      "source": "./packages/foundation/src/config/server-config.ts",
+      "default": "./packages/foundation/dist/config/server-config.js"
+    },
+    "#meshrix/server-runtime/composition/composition-root": {
+      "source": "./packages/server-runtime/src/composition/composition-root.ts",
+      "default": "./packages/server-runtime/dist/composition/composition-root.js"
+    },
+    "#meshrix/server-runtime/composition/console-domain/operation-executor": {
       "source": "./packages/server-runtime/src/composition/console-domain/operation-executor.ts",
       "default": "./packages/server-runtime/dist/composition/console-domain/operation-executor.js"
     },
-    "#meshrix/capabilities/operation-permission-core/index": {
-      "source": "./packages/capabilities/src/operation-permission-core/index.ts",
-      "default": "./packages/capabilities/dist/operation-permission-core/index.js"
+    "#meshrix/server-runtime/composition/core-platform-provider": {
+      "source": "./packages/server-runtime/src/composition/core-platform-provider.ts",
+      "default": "./packages/server-runtime/dist/composition/core-platform-provider.js"
+    },
+    "#meshrix/server-runtime/composition/dispatch-operation": {
+      "source": "./packages/server-runtime/src/composition/dispatch-operation.ts",
+      "default": "./packages/server-runtime/dist/composition/dispatch-operation.js"
+    },
+    "#meshrix/server-runtime/composition/dispatch-operation-risk-control": {
+      "source": "./packages/server-runtime/src/composition/dispatch-operation-risk-control.ts",
+      "default": "./packages/server-runtime/dist/composition/dispatch-operation-risk-control.js"
+    },
+    "#meshrix/server-runtime/composition/operation-dispatch-lock": {
+      "source": "./packages/server-runtime/src/composition/operation-dispatch-lock.ts",
+      "default": "./packages/server-runtime/dist/composition/operation-dispatch-lock.js"
+    },
+    "#meshrix/server-runtime/composition/plugin-contribution-transaction": {
+      "source": "./packages/server-runtime/src/composition/plugin-contribution-transaction.ts",
+      "default": "./packages/server-runtime/dist/composition/plugin-contribution-transaction.js"
+    },
+    "#meshrix/server-runtime/execution-sandbox/custody-key-broker": {
+      "source": "./packages/server-runtime/src/execution-sandbox/custody-key-broker.ts",
+      "default": "./packages/server-runtime/dist/execution-sandbox/custody-key-broker.js"
+    },
+    "#meshrix/server-runtime/execution-sandbox/oci-backend": {
+      "source": "./packages/server-runtime/src/execution-sandbox/oci-backend.ts",
+      "default": "./packages/server-runtime/dist/execution-sandbox/oci-backend.js"
+    },
+    "#meshrix/server-runtime/jobs/batch-deletion-coordinator": {
+      "source": "./packages/server-runtime/src/jobs/batch-deletion-coordinator.ts",
+      "default": "./packages/server-runtime/dist/jobs/batch-deletion-coordinator.js"
+    },
+    "#meshrix/server-runtime/jobs/job-pipeline": {
+      "source": "./packages/server-runtime/src/jobs/job-pipeline.ts",
+      "default": "./packages/server-runtime/dist/jobs/job-pipeline.js"
+    },
+    "#meshrix/server-runtime/jobs/upload-no-run-custody": {
+      "source": "./packages/server-runtime/src/jobs/upload-no-run-custody.ts",
+      "default": "./packages/server-runtime/dist/jobs/upload-no-run-custody.js"
+    },
+    "#meshrix/server-runtime/module-runtime/server-runtime": {
+      "source": "./packages/server-runtime/src/module-runtime/server-runtime.ts",
+      "default": "./packages/server-runtime/dist/module-runtime/server-runtime.js"
+    },
+    "#meshrix/server-runtime/routing/operation-route-index": {
+      "source": "./packages/server-runtime/src/routing/operation-route-index.ts",
+      "default": "./packages/server-runtime/dist/routing/operation-route-index.js"
+    },
+    "#meshrix/server-runtime/routing/radix-path-trie": {
+      "source": "./packages/server-runtime/src/routing/radix-path-trie.ts",
+      "default": "./packages/server-runtime/dist/routing/radix-path-trie.js"
+    },
+    "#meshrix/server-runtime/state/interface/index": {
+      "source": "./packages/server-runtime/src/state/interface/index.ts",
+      "default": "./packages/server-runtime/dist/state/interface/index.js"
+    },
+    "#meshrix/server-runtime/state/upload-session-store": {
+      "source": "./packages/server-runtime/src/state/upload-session-store.ts",
+      "default": "./packages/server-runtime/dist/state/upload-session-store.js"
+    },
+    "#meshrix/server-runtime/state/upload-session-support": {
+      "source": "./packages/server-runtime/src/state/upload-session-support.ts",
+      "default": "./packages/server-runtime/dist/state/upload-session-support.js"
+    },
+    "#meshrix/settings": {
+      "source": "./packages/server-runtime/src/composition/settings.ts",
+      "default": "./packages/server-runtime/dist/composition/settings.js"
+    },
+    "#meshrix/state-coordinator": {
+      "source": "./packages/foundation/src/storage/state-coordinator.ts",
+      "default": "./packages/foundation/dist/storage/state-coordinator.js"
     }
   },
   "files": [
@@ -261,6 +389,7 @@
     "verify:skills": "node tools/validate-skills.mjs",
     "verify:core-platform-surface-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-surface-convergence.ts",
     "verify:core-platform-documentation-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-core-platform-documentation-convergence.ts",
+    "verify:runtime-refactor-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-refactor-convergence.ts",
     "verify:composition-source-package": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-composition-source-package.ts",
     "verify:private-deployment-internal-platform-e2e": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-private-deployment-internal-platform-e2e.ts --reduce-existing",
     "verify:release-authority-baseline": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-release-authority-baseline.ts",
@@ -375,18 +504,11 @@
     "build:web": "npm run build --workspace @meshrix/console",
     "typecheck:node": "tsc -p tsconfig.node.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.tests.json --noEmit",
-    "typecheck:web": "vue-tsc --noEmit -p tsconfig.json"
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.json",
+    "verify:runtime-capacity-convergence": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-capacity-convergence.ts"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
-    "@meshrix/agents": "0.0.1",
-    "@meshrix/capabilities": "0.0.1",
-    "@meshrix/contracts": "0.0.1",
-    "@meshrix/foundation": "0.0.1",
-    "@meshrix/protocols": "0.0.1",
-    "@meshrix/server-runtime": "0.0.1",
-    "@meshrix/ui-console": "0.0.1",
-    "@meshrix/client-adapter-kit": "0.0.1",
     "@meshrix/agent-antigravity-adapter": "0.0.1",
     "@meshrix/agent-claude-code-adapter": "0.0.1",
     "@meshrix/agent-codex-adapter": "0.0.1",
@@ -394,15 +516,22 @@
     "@meshrix/agent-openclaw-adapter": "0.0.1",
     "@meshrix/agent-opencode-adapter": "0.0.1",
     "@meshrix/agent-pi-adapter": "0.0.1",
+    "@meshrix/agents": "0.0.1",
+    "@meshrix/capabilities": "0.0.1",
+    "@meshrix/client-adapter-kit": "0.0.1",
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/foundation": "0.0.1",
+    "@meshrix/protocols": "0.0.1",
+    "@meshrix/server-runtime": "0.0.1",
+    "@meshrix/ui-console": "0.0.1",
     "better-sqlite3": "^12.9.0",
     "element-plus": "^2.13.7",
     "es-module-lexer": "^2.3.1",
     "fflate": "^0.8.2",
     "marked": "^18.0.2",
-    "p-limit": "^7.3.0",
-    "pactium": "0.7.0",
+    "pactium": "file:vendor/pactium-0.8.0.tgz",
     "pg": "^8.22.0",
-    "undici": "^7.28.0",
+    "undici": "^8.8.0",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"
   },
@@ -410,7 +539,9 @@
   "devDependencies": {
     "@datadog/pprof": "^5.16.0",
     "@playwright/test": "^1.60.0",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.0.10",
+    "@types/pg": "^8.21.0",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vitest/coverage-v8": "^4.1.8",
     "@vue/test-utils": "2.4.11",

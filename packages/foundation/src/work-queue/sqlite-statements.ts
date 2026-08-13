@@ -189,6 +189,27 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
       ORDER BY lease_expires_at_ms ASC, created_at_ms ASC
       LIMIT @limit
     `),
+    insertSinkFence: database.prepare(`
+      INSERT OR IGNORE INTO work_queue_sink_fences (
+        work_item_id, generation, sink_id, effect_id, status, settled_at_ms
+      ) VALUES (@work_item_id, @generation, @sink_id, @effect_id, @status, @settled_at_ms)
+    `),
+    readSinkFence: database.prepare(`
+      SELECT *
+      FROM work_queue_sink_fences
+      WHERE work_item_id = @work_item_id AND generation = @generation
+      ORDER BY sink_id
+    `),
+    inDoubtCandidates: database.prepare(`
+      SELECT *
+      FROM work_items
+      WHERE state = @state
+        AND (@queue_definition_id = '' OR queue_definition_id = @queue_definition_id)
+        AND (@scope_key = '' OR scope_key = @scope_key)
+        AND (@work_item_id = '' OR work_item_id = @work_item_id)
+      ORDER BY lease_expires_at_ms ASC, created_at_ms ASC
+      LIMIT @limit
+    `),
     expiredWorkItems: database.prepare(`
       SELECT *
       FROM work_items
@@ -214,28 +235,6 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
           last_error_json = @last_error_json,
           updated_at_ms = @updated_at_ms
       WHERE work_item_id = @work_item_id
-    `),
-    claimCandidatesBase: database.prepare(`
-      SELECT *
-      FROM work_items candidate
-      WHERE candidate.queue_definition_id = @queue_definition_id
-        AND candidate.scope_key = @scope_key
-        AND candidate.state = @state
-        AND candidate.available_at_ms <= @now_ms
-        AND (candidate.expires_at_ms = 0 OR candidate.expires_at_ms > @now_ms)
-        AND (@queue_definition_version = 0 OR candidate.queue_definition_version = @queue_definition_version)
-        AND NOT EXISTS (
-          SELECT 1
-          FROM work_items active
-          WHERE active.queue_definition_id = candidate.queue_definition_id
-            AND active.scope_key = candidate.scope_key
-            AND active.concurrency_key = candidate.concurrency_key
-            AND active.concurrency_key <> ''
-            AND active.state = '${WORK_QUEUE_STATES.RUNNING}'
-            AND active.work_item_id <> candidate.work_item_id
-        )
-      ORDER BY candidate.priority DESC, candidate.available_at_ms ASC, candidate.created_at_ms ASC
-      LIMIT @limit
     `),
     countOutstanding: database.prepare(`
       SELECT COUNT(*) AS count FROM (
@@ -307,30 +306,54 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
       ORDER BY seq ASC
       LIMIT @limit
     `),
-    getFairnessCursor: database.prepare(`
-      SELECT cursor_value
-      FROM work_queue_fairness_cursors
+    incrementRetentionState: database.prepare(`
+      INSERT INTO work_queue_retention_state (
+        queue_definition_id, pending_transitions, updated_at_ms
+      ) VALUES (@queue_definition_id, 1, @updated_at_ms)
+      ON CONFLICT(queue_definition_id) DO UPDATE SET
+        pending_transitions = work_queue_retention_state.pending_transitions + 1,
+        updated_at_ms = excluded.updated_at_ms
+      RETURNING pending_transitions
+    `),
+    resetRetentionState: database.prepare(`
+      UPDATE work_queue_retention_state
+      SET pending_transitions = 0,
+          updated_at_ms = @updated_at_ms
+      WHERE queue_definition_id = @queue_definition_id
+        AND pending_transitions >= @threshold
+    `),
+    upsertVirtualFinish: database.prepare(`
+      INSERT INTO work_queue_virtual_finish (
+        queue_definition_id, queue_definition_version, selector_scope_key,
+        priority_class, tenant_id, workspace_id, project_id, virtual_finish, updated_at_ms
+      ) VALUES (
+        @queue_definition_id, @queue_definition_version, @selector_scope_key,
+        @priority_class, @tenant_id, @workspace_id, @project_id, 0, @updated_at_ms
+      )
+      ON CONFLICT(
+        queue_definition_id, queue_definition_version, selector_scope_key,
+        priority_class, tenant_id, workspace_id, project_id
+      ) DO UPDATE SET
+        updated_at_ms = excluded.updated_at_ms
+    `),
+    advanceVirtualFinish: database.prepare(`
+      UPDATE work_queue_virtual_finish
+      SET virtual_finish = virtual_finish + 1,
+          updated_at_ms = @updated_at_ms
       WHERE queue_definition_id = @queue_definition_id
         AND queue_definition_version = @queue_definition_version
         AND selector_scope_key = @selector_scope_key
         AND priority_class = @priority_class
-        AND level = @level
-        AND parent_key = @parent_key
+        AND tenant_id = @tenant_id
+        AND workspace_id = @workspace_id
+        AND project_id = @project_id
     `),
-    upsertFairnessCursor: database.prepare(`
-      INSERT INTO work_queue_fairness_cursors (
-        queue_definition_id, queue_definition_version, selector_scope_key,
-        priority_class, level, parent_key, cursor_value, updated_at_ms
-      ) VALUES (
-        @queue_definition_id, @queue_definition_version, @selector_scope_key,
-        @priority_class, @level, @parent_key, @cursor_value, @updated_at_ms
-      )
-      ON CONFLICT(
-        queue_definition_id, queue_definition_version, selector_scope_key,
-        priority_class, level, parent_key
-      ) DO UPDATE SET
-        cursor_value = excluded.cursor_value,
-        updated_at_ms = excluded.updated_at_ms
+    virtualFinishTotal: database.prepare(`
+      SELECT COALESCE(SUM(virtual_finish), 0) AS total
+      FROM work_queue_virtual_finish
+      WHERE queue_definition_id = @queue_definition_id
+        AND selector_scope_key = @selector_scope_key
+        AND (@queue_definition_version = 0 OR queue_definition_version = @queue_definition_version)
     `),
     countNonterminalByBoundary: database.prepare(`
       SELECT COUNT(*) AS count
@@ -339,82 +362,103 @@ export function prepareSqliteWorkQueueStatements(database?: any) : any {
         AND scope_key = @scope_key
         AND state NOT IN (@completed_state, @cancelled_state, @expired_state)
     `),
-    deleteFairnessCursorsByBoundary: database.prepare(`
-      DELETE FROM work_queue_fairness_cursors
+    deleteVirtualFinishByBoundary: database.prepare(`
+      DELETE FROM work_queue_virtual_finish
       WHERE queue_definition_id = @queue_definition_id
         AND selector_scope_key = @scope_key
     `),
-    nextFairTenant: database.prepare(`
-      SELECT tenant_id AS value
-      FROM work_items
-      WHERE queue_definition_id = @queue_definition_id
-        AND scope_key = @scope_key
-        AND (@queue_definition_version = 0 OR queue_definition_version = @queue_definition_version)
-        AND state IN (@state, @recovered_state)
-        AND priority_class = @priority_class
-        AND available_at_ms <= @now_ms
-        AND (expires_at_ms = 0 OR expires_at_ms > @now_ms)
-        AND (@from_start = 1 OR tenant_id > @cursor)
-      GROUP BY tenant_id
-      ORDER BY tenant_id ASC
-      LIMIT 1
-    `),
-    nextFairWorkspace: database.prepare(`
-      SELECT workspace_id AS value
-      FROM work_items
-      WHERE queue_definition_id = @queue_definition_id
-        AND scope_key = @scope_key
-        AND (@queue_definition_version = 0 OR queue_definition_version = @queue_definition_version)
-        AND state IN (@state, @recovered_state)
-        AND priority_class = @priority_class
-        AND available_at_ms <= @now_ms
-        AND (expires_at_ms = 0 OR expires_at_ms > @now_ms)
-        AND tenant_id = @tenant_id
-        AND (@from_start = 1 OR workspace_id > @cursor)
-      GROUP BY workspace_id
-      ORDER BY workspace_id ASC
-      LIMIT 1
-    `),
-    nextFairProject: database.prepare(`
-      SELECT project_id AS value
-      FROM work_items
-      WHERE queue_definition_id = @queue_definition_id
-        AND scope_key = @scope_key
-        AND (@queue_definition_version = 0 OR queue_definition_version = @queue_definition_version)
-        AND state IN (@state, @recovered_state)
-        AND priority_class = @priority_class
-        AND available_at_ms <= @now_ms
-        AND (expires_at_ms = 0 OR expires_at_ms > @now_ms)
-        AND tenant_id = @tenant_id
-        AND workspace_id = @workspace_id
-        AND (@from_start = 1 OR project_id > @cursor)
-      GROUP BY project_id
-      ORDER BY project_id ASC
-      LIMIT 1
-    `),
-    fairLeafCandidate: database.prepare(`
-      SELECT *
-      FROM work_items candidate
-      WHERE candidate.queue_definition_id = @queue_definition_id
-        AND candidate.scope_key = @scope_key
-        AND (@queue_definition_version = 0 OR candidate.queue_definition_version = @queue_definition_version)
-        AND candidate.state IN (@state, @recovered_state)
-        AND candidate.priority_class = @priority_class
-        AND candidate.available_at_ms <= @now_ms
-        AND (candidate.expires_at_ms = 0 OR candidate.expires_at_ms > @now_ms)
-        AND candidate.tenant_id = @tenant_id
-        AND candidate.workspace_id = @workspace_id
-        AND candidate.project_id = @project_id
-        AND NOT EXISTS (
-          SELECT 1 FROM work_items active
-          WHERE active.queue_definition_id = candidate.queue_definition_id
-            AND active.scope_key = candidate.scope_key
-            AND active.concurrency_key = candidate.concurrency_key
-            AND active.concurrency_key <> ''
-            AND active.state = '${WORK_QUEUE_STATES.RUNNING}'
-            AND active.work_item_id <> candidate.work_item_id
+    fairRankedCandidate: database.prepare(`
+      WITH all_partitions AS (
+        SELECT projection.queue_definition_version,
+               projection.tenant_id, projection.workspace_id, projection.project_id,
+               projection.virtual_finish
+        FROM work_queue_virtual_finish projection
+        WHERE projection.queue_definition_id = @queue_definition_id
+          AND projection.selector_scope_key = @selector_scope_key
+          AND (@queue_definition_version = 0 OR projection.queue_definition_version = @queue_definition_version)
+          AND projection.priority_class = @priority_class
+          AND (@tenant_id = '' OR projection.tenant_id = @tenant_id)
+          AND (@workspace_id = '' OR projection.workspace_id = @workspace_id)
+          AND (@project_id = '' OR projection.project_id = @project_id)
+          AND NOT EXISTS (
+            SELECT 1 FROM json_each(@rejected_partitions)
+            WHERE json_each.value = projection.tenant_id || char(31) || projection.workspace_id || char(31) || projection.project_id
+          )
+      ),
+      eligible_partitions AS (
+        SELECT all_partitions.*
+        FROM all_partitions
+        WHERE EXISTS (
+          SELECT 1 FROM work_items pending
+          WHERE pending.queue_definition_id = @queue_definition_id
+            AND pending.scope_key = @selector_scope_key
+            AND pending.state IN (@state, @recovered_state)
+            AND pending.priority_class = @priority_class
+            AND pending.available_at_ms <= @now_ms
+            AND (pending.expires_at_ms = 0 OR pending.expires_at_ms > @now_ms)
+            AND pending.tenant_id = all_partitions.tenant_id
+            AND pending.workspace_id = all_partitions.workspace_id
+            AND pending.project_id = all_partitions.project_id
+            AND NOT EXISTS (
+              SELECT 1 FROM work_items active
+              WHERE active.queue_definition_id = pending.queue_definition_id
+                AND active.scope_key = pending.scope_key
+                AND active.concurrency_key = pending.concurrency_key
+                AND active.concurrency_key <> ''
+                AND active.state = '${WORK_QUEUE_STATES.RUNNING}'
+                AND active.work_item_id <> pending.work_item_id
+            )
         )
-      ORDER BY candidate.available_at_ms ASC, candidate.created_at_ms ASC, candidate.work_item_id ASC
+      ),
+      ranked_partitions AS (
+        SELECT ep.*,
+               DENSE_RANK() OVER (ORDER BY ep.tenant_id) - 1 AS tenant_rank,
+               DENSE_RANK() OVER (PARTITION BY ep.tenant_id ORDER BY ep.workspace_id) - 1 AS workspace_rank,
+               DENSE_RANK() OVER (PARTITION BY ep.tenant_id, ep.workspace_id ORDER BY ep.project_id) - 1 AS project_rank,
+               (SELECT SUM(claims.virtual_finish)
+                FROM all_partitions claims
+                WHERE claims.tenant_id = ep.tenant_id) AS tenant_claims,
+               (SELECT SUM(claims.virtual_finish)
+                FROM all_partitions claims
+                WHERE claims.tenant_id = ep.tenant_id
+                  AND claims.workspace_id = ep.workspace_id) AS workspace_claims,
+               (SELECT COUNT(DISTINCT tenants.tenant_id) FROM all_partitions tenants) AS tenant_count,
+               (SELECT COUNT(DISTINCT workspaces.workspace_id)
+                FROM all_partitions workspaces
+                WHERE workspaces.tenant_id = ep.tenant_id) AS workspace_count,
+               (SELECT COUNT(DISTINCT projects.project_id)
+                FROM all_partitions projects
+                WHERE projects.tenant_id = ep.tenant_id
+                  AND projects.workspace_id = ep.workspace_id) AS project_count
+        FROM eligible_partitions ep
+      )
+      SELECT candidate.*
+      FROM ranked_partitions ranked
+      JOIN work_items candidate
+        ON candidate.queue_definition_id = @queue_definition_id
+       AND candidate.scope_key = @selector_scope_key
+       AND (@queue_definition_version = 0 OR candidate.queue_definition_version = @queue_definition_version)
+       AND candidate.state IN (@state, @recovered_state)
+       AND candidate.priority_class = @priority_class
+       AND candidate.available_at_ms <= @now_ms
+       AND (candidate.expires_at_ms = 0 OR candidate.expires_at_ms > @now_ms)
+       AND candidate.queue_definition_version = ranked.queue_definition_version
+       AND candidate.tenant_id = ranked.tenant_id
+       AND candidate.workspace_id = ranked.workspace_id
+       AND candidate.project_id = ranked.project_id
+       AND NOT EXISTS (
+         SELECT 1 FROM work_items active
+         WHERE active.queue_definition_id = candidate.queue_definition_id
+           AND active.scope_key = candidate.scope_key
+           AND active.concurrency_key = candidate.concurrency_key
+           AND active.concurrency_key <> ''
+           AND active.state = '${WORK_QUEUE_STATES.RUNNING}'
+           AND active.work_item_id <> candidate.work_item_id
+       )
+      ORDER BY (ranked.tenant_claims * ranked.tenant_count + ranked.tenant_rank) ASC,
+               (ranked.workspace_claims * ranked.workspace_count + ranked.workspace_rank) ASC,
+               (ranked.virtual_finish * ranked.project_count + ranked.project_rank) ASC,
+               candidate.available_at_ms ASC, candidate.created_at_ms ASC, candidate.work_item_id ASC
       LIMIT 1
     `),
     insertBackgroundWrite: database.prepare(`

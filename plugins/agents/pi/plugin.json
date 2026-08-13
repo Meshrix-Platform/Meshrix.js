@@ -9,7 +9,7 @@
   "group": "agents",
   "integration": {
     "sourceBoundary": "Repository-local optional adapter using only the public Meshrix MCP connector boundary.",
-    "meshrixBoundaries": ["signed MCP connector stdio proxy", "target-scoped process identity"],
+    "meshrixBoundaries": ["signed MCP connector stdio proxy", "target-and-server-scoped API Key custody"],
     "operations": [],
     "toolsets": [],
     "mountNames": [],
@@ -20,7 +20,7 @@
     "risk": "mixed",
     "notes": [
       "The plugin configuration contains connector metadata only.",
-      "Credentials remain in the Core-managed operating-system credential store.",
+      "Credentials remain in the Core-managed private credential store.",
       "The plugin never accepts raw tokens in configuration or process arguments."
     ]
   },

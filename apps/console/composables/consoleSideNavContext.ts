@@ -2,35 +2,36 @@ import { computed, inject, onBeforeUnmount, provide, ref, watch, type ComputedRe
 import type { ServerConsoleShellContext } from "./useServerConsoleShell";
 import type { AppView } from "../types/app";
 
-const consoleSideNavContextKeys: any = [
-  "activeRouteAdminView",
-  "activeRouteView",
-  "appearancePresetId",
-  "appearanceCycleScheme",
-  "appearanceCycleSchemeLabel",
-  "appearancePresetLabel",
-  "approvalFlowConsole",
-  "canAccessAdminView",
-  "canAccessView",
-  "consoleState",
-  "cycleAppearancePreset",
-  "hasAnyFeature",
-  "hasFeature",
-  "isAuthenticated",
-  "languageMode",
-  "msg",
-  "openAdmin",
-  "openDrawer",
-  "sideNavCollapsed",
-  "sideNavOpen",
-  "switchView",
-  "toggleLanguage",
-  "toggleAppearanceCycleScheme",
-  "tt",
-  "workspacesConsole",
+const consoleSideNavContextKeys = [
+  ["navigation", "activeRouteAdminView"],
+  ["navigation", "activeRouteView"],
+  ["preferences", "appearancePresetId"],
+  ["preferences", "appearanceCycleScheme"],
+  ["preferences", "appearanceCycleSchemeLabel"],
+  ["preferences", "appearancePresetLabel"],
+  ["approvals", "approvalFlowConsole"],
+  ["access", "canAccessAdminView"],
+  ["access", "canAccessView"],
+  ["runtime", "consoleState"],
+  ["preferences", "cycleAppearancePreset"],
+  ["runtime", "hasAnyFeature"],
+  ["runtime", "hasFeature"],
+  ["access", "isAuthenticated"],
+  ["preferences", "languageMode"],
+  ["preferences", "msg"],
+  ["navigation", "openAdmin"],
+  ["overlays", "openDrawer"],
+  ["navigation", "sideNavCollapsed"],
+  ["navigation", "sideNavOpen"],
+  ["navigation", "switchView"],
+  ["preferences", "toggleLanguage"],
+  ["preferences", "toggleAppearanceCycleScheme"],
+  ["preferences", "tt"],
+  ["workspaces", "workspacesConsole"],
 ] as const;
 
-type ConsoleSideNavContextKey = (typeof consoleSideNavContextKeys)[number];
+type ConsoleSideNavContextKey = (typeof consoleSideNavContextKeys)[number][1];
+type ConsoleSideNavNamespace = (typeof consoleSideNavContextKeys)[number][0];
 
 type SideNavDirectoryView = "approval" | "workspaces";
 
@@ -40,7 +41,9 @@ function isSideNavDirectoryView(view: unknown): view is SideNavDirectoryView {
   return sideNavDirectoryViews.has(view as AppView);
 }
 
-export type ConsoleSideNavContext = Pick<ServerConsoleShellContext, ConsoleSideNavContextKey> & {
+export type ConsoleSideNavContext = {
+  readonly [Key in ConsoleSideNavContextKey]: any;
+} & {
   activeSideNavDirectory: ComputedRef<SideNavDirectoryView | "">;
   openSideNavDirectory: (view: AppView) => void;
   returnToPrimarySideNav: () => void;
@@ -129,7 +132,7 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
   const sideNavWidth: any = ref(readInitialSideNavWidth());
   const sideNavDirectoryWidth: any = ref(readInitialSideNavDirectoryWidth());
   const activeSideNavDirectory: any = computed<SideNavDirectoryView | "">(() : any => {
-    const view: any = shell.activeRouteView.value;
+    const view: any = shell.navigation.activeRouteView.value;
     return isSideNavDirectoryView(view) ? view : "";
   });
   const showSideNavDirectory: any = computed(() : any => !!activeSideNavDirectory.value && sideNavDirectoryOpen.value);
@@ -138,7 +141,7 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
     if (viewportWidth.value <= SIDE_NAV_OVERLAY_BREAKPOINT) {
       return 0;
     }
-    return shell.sideNavCollapsed.value ? SIDE_NAV_COLLAPSED_WIDTH : sideNavWidth.value;
+    return shell.navigation.sideNavCollapsed.value ? SIDE_NAV_COLLAPSED_WIDTH : sideNavWidth.value;
   }
 
   function maxSideNavWidth(directoryWidth: any = showSideNavDirectory.value ? sideNavDirectoryWidth.value : 0) : any {
@@ -196,13 +199,13 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
   }
 
   watch(
-    [shell.activeRouteView, sideNavDirectoryNarrow],
+    [shell.navigation.activeRouteView, sideNavDirectoryNarrow],
     ([view]: any[]) : any => syncSideNavDirectoryFromRoute(view),
     { immediate: true },
   );
 
   watch(
-    [showSideNavDirectory, shell.sideNavCollapsed],
+    [showSideNavDirectory, shell.navigation.sideNavCollapsed],
     reconcileWidths,
     { immediate: true },
   );
@@ -239,11 +242,13 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
     writeStoredWidth(SIDE_NAV_DIRECTORY_WIDTH_STORAGE_KEY, nextWidth);
   }
 
+  const shellMembers: Record<string, any> = {};
+  for (const [namespace, key] of consoleSideNavContextKeys) {
+    const namespaceMembers: any = shell[namespace];
+    shellMembers[key] = namespaceMembers?.[key];
+  }
   return {
-    ...Object.fromEntries(consoleSideNavContextKeys.map((key?: any) : any => [key, shell[key]])) as Pick<
-      ServerConsoleShellContext,
-      ConsoleSideNavContextKey
-    >,
+    ...shellMembers,
     activeSideNavDirectory,
     openSideNavDirectory,
     returnToPrimarySideNav,
@@ -254,7 +259,7 @@ export function createConsoleSideNavContext(shell: ServerConsoleShellContext): C
     sideNavDirectoryMinWidth: SIDE_NAV_DIRECTORY_MIN_WIDTH,
     sideNavWidth,
     sideNavDirectoryWidth,
-  };
+  } as ConsoleSideNavContext;
 }
 
 const consoleSideNavKey: any = Symbol("console-side-nav") as InjectionKey<ConsoleSideNavContext>;

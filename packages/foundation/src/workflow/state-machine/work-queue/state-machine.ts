@@ -1,6 +1,7 @@
 export const WORK_QUEUE_STATES: Readonly<Record<string, any>> = Object.freeze({
   QUEUED: "queued",
   RUNNING: "running",
+  IN_DOUBT: "in_doubt",
   RETRY_WAIT: "retry_wait",
   COMPLETED: "completed",
   FAILED: "failed",
@@ -43,6 +44,21 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
     to: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     leaseBound: true
   }),
+  interrupt: Object.freeze({
+    from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
+    to: Object.freeze([WORK_QUEUE_STATES.IN_DOUBT]),
+    leaseBound: true
+  }),
+  termination_acknowledged: Object.freeze({
+    from: Object.freeze([WORK_QUEUE_STATES.IN_DOUBT]),
+    to: Object.freeze([
+      WORK_QUEUE_STATES.QUEUED,
+      WORK_QUEUE_STATES.RETRY_WAIT,
+      WORK_QUEUE_STATES.FAILED,
+      WORK_QUEUE_STATES.COMPLETED
+    ]),
+    leaseBound: true
+  }),
   complete: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
     to: Object.freeze([WORK_QUEUE_STATES.COMPLETED]),
@@ -62,6 +78,7 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
+      WORK_QUEUE_STATES.IN_DOUBT,
       WORK_QUEUE_STATES.RECOVERED
     ]),
     to: Object.freeze([WORK_QUEUE_STATES.FAILED])
@@ -76,11 +93,7 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
   }),
   lease_expired: Object.freeze({
     from: Object.freeze([WORK_QUEUE_STATES.RUNNING]),
-    to: Object.freeze([
-      WORK_QUEUE_STATES.RECOVERED,
-      WORK_QUEUE_STATES.RETRY_WAIT,
-      WORK_QUEUE_STATES.FAILED
-    ]),
+    to: Object.freeze([WORK_QUEUE_STATES.IN_DOUBT]),
     fallback: true
   }),
   delay_matured: Object.freeze({
@@ -98,6 +111,7 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
+      WORK_QUEUE_STATES.IN_DOUBT,
       WORK_QUEUE_STATES.RECOVERED
     ]),
     to: Object.freeze([WORK_QUEUE_STATES.CANCELLED])
@@ -107,6 +121,7 @@ export const WORK_QUEUE_TRANSITIONS: Readonly<Record<string, any>> = Object.free
       WORK_QUEUE_STATES.QUEUED,
       WORK_QUEUE_STATES.RETRY_WAIT,
       WORK_QUEUE_STATES.RUNNING,
+      WORK_QUEUE_STATES.IN_DOUBT,
       WORK_QUEUE_STATES.RECOVERED
     ]),
     to: Object.freeze([WORK_QUEUE_STATES.EXPIRED])

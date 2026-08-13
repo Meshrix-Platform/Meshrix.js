@@ -307,13 +307,13 @@ describe("API key one-time reveal guard", () => {
       "utf8",
     );
     expect(source).toContain("不存在再次查看、导出、恢复或归档操作");
-    expect(source).toContain("There is no reveal-again, export, restore, or archive action.");
+    expect(source).toContain("there is no reveal-again, export, restore, or archive action.");
     expect(source).toContain("onBeforeRouteLeave");
     expect(source).not.toMatch(/revealAgain|exportSecret|archiveSecret/i);
 
     const { wrapper } = await mountConsoleView();
     expect(wrapper.find(".api-key-list-card").text()).toContain(
-      "There is no reveal-again, export, restore, or archive action.",
+      "there is no reveal-again, export, restore, or archive action.",
     );
   });
 });

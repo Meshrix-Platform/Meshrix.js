@@ -120,6 +120,42 @@ beforeEach(() : any => {
 });
 
 describe("HTTP request body admission", () : any => {
+  it("holds amplified JSON body credit through dispatch and releases it exactly once", async () : Promise<any> => {
+    const admissionController: any = createRequestBodyAdmissionController({
+      maxInFlightBytes: 24,
+      maxInFlightRequests: 2,
+      maxInFlightBytesPerSubject: 24,
+      maxInFlightRequestsPerSubject: 2
+    });
+    const usageDuringDispatch: any[] = [];
+    const handler: any = createHandler({
+      requestBodyAdmissionController: admissionController,
+      dispatchRegisteredHttpOperation: vi.fn(async ({ response, requestBody }: Record<string, any>) : Promise<any> => {
+        expect(JSON.parse(requestBody.toString("utf8"))).toEqual({});
+        usageDuringDispatch.push(admissionController.getUsage());
+        response.end();
+        return true;
+      })
+    });
+    const request: any = attachHttpRequestMetadata(Readable.from([Buffer.from("{}")]), {
+      contentLength: 2
+    });
+    const response: any = new CapturedResponse();
+
+    await handler(request, response);
+
+    expect(usageDuringDispatch).toEqual([expect.objectContaining({
+      inFlightBytes: 6,
+      inFlightRequests: 1
+    })]);
+    expect(admissionController.getUsage()).toEqual({
+      inFlightBytes: 0,
+      inFlightRequests: 0,
+      activeTenantCount: 0,
+      activeSubjectCount: 0
+    });
+  });
+
   it("rejects an oversized upload chunk before allocating or dispatching its request body", async () : Promise<any> => {
     const dispatchRegisteredHttpOperation: any = vi.fn();
     const handler: any = createHandler({
@@ -177,7 +213,7 @@ describe("HTTP request body admission", () : any => {
     await heldAdmission;
 
     expect(admission.getUsage()).toEqual({
-      inFlightBytes: 1,
+      inFlightBytes: 3,
       inFlightRequests: 1,
       activeTenantCount: 1,
       activeSubjectCount: 1

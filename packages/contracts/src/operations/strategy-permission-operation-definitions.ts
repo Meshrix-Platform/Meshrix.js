@@ -148,7 +148,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["model-routing", "cost-ledger", "circuit-breaker"]
     },
 {
@@ -162,7 +162,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       requiredScopes: ["console:read"],
       inputSchema: closedObject(),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["strategy-management", "workflow-policy", "agent-policy", "queue-policy"]
     },
 {
@@ -182,7 +182,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
         requiresConfirmation: booleanValue
       }, ["workflowId"]),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false },
       aspects: ["strategy-management", "workflow-policy"]
     },
@@ -202,7 +202,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
         modelRouting: closedObject({ routeId: stringValue })
       }, ["roleId"]),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false },
       aspects: ["strategy-management", "agent-policy", "model-routing"]
     },
@@ -242,7 +242,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
         })
       }, ["routeId"]),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false },
       aspects: ["strategy-management", "route-policy", "upstream-service-aspect", "downstream-client-aspect"]
     },
@@ -278,7 +278,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
         payload: closedObject({ kind: stringValue })
       }, ["queueDefinitionId", "operationId"]),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false },
       aspects: ["strategy-management", "queue-policy", "work-queue"]
     },
@@ -300,7 +300,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
         toolExecutionId: stringValue
       }, ["toolId"]),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false },
       aspects: ["strategy-management", "tool-policy", "operation-permission"]
     },
@@ -317,7 +317,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["agent-management", "model-library"]
     },
 {
@@ -348,7 +348,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       },
       requiredScopes: ["runtime:admin"],
       safety: { risk: "repair_write" },
-      concurrencyGroup: "agent_management.model_library",
+      concurrency: { workloadClass: "exclusive", key: "agent_management.model_library", maxParallel: 1, cost: 2 },
       aspects: ["agent-management", "model-library"]
     },
 {
@@ -384,7 +384,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       },
       requiredScopes: ["runtime:admin"],
       safety: { risk: "repair_write" },
-      concurrencyGroup: "agent_management.model_library",
+      concurrency: { workloadClass: "exclusive", key: "agent_management.model_library", maxParallel: 1, cost: 2 },
       aspects: ["agent-management", "model-library"]
     },
 {
@@ -404,7 +404,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       },
       requiredScopes: ["runtime:admin"],
       safety: { risk: "repair_write" },
-      concurrencyGroup: "agent_management.model_library",
+      concurrency: { workloadClass: "exclusive", key: "agent_management.model_library", maxParallel: 1, cost: 2 },
       aspects: ["agent-management", "model-library"]
     },
 {
@@ -417,7 +417,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       requiredScopes: ["console:read"],
       inputSchema: closedObject(),
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false }
     },
 {
@@ -440,7 +440,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       rpc: { method: "operation_permission.api_keys.list", syntheticPath: "/api/operation-permission/v1/api-keys" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false }
     },
 {
@@ -569,7 +569,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       http: { method: "POST", path: "/api/operation-permission/v1/execute", localInForwardMode: true },
       rpc: {method:"operation_permission.execute",syntheticPath:"/api/operation-permission/v1/execute",body:"params"},
       cli: { command: ["tools", "execute"], usage: "tools execute --tool-id TOOL_ID --body input.json" },
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       externalAuth: true,
       externalAuthVerifier: { method: "verifyToolSkillExternalAuth" },
       inputSchema: toolExecutionInput,
@@ -582,7 +582,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       target: { controller: "system", method: "handleOperationPermissionPassthrough" },
       http: { method: "POST", path: "/api/operation-permission/v1/batch", localInForwardMode: true },
       rpc: {method:"operation_permission.batch",syntheticPath:"/api/operation-permission/v1/batch",body:"params"},
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       externalAuth: true,
       externalAuthVerifier: { method: "verifyToolSkillExternalAuth" },
       inputSchema: toolBatchInput,
@@ -596,7 +596,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       http: { method: "POST", path: "/api/operation-permission/v1/dry-run", localInForwardMode: true },
       rpc: {method:"operation_permission.dry_run",syntheticPath:"/api/operation-permission/v1/dry-run",body:"params"},
       cli: { command: ["tools", "dry-run"], usage: "tools dry-run --tool-id TOOL_ID --body input.json" },
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       externalAuth: true,
       externalAuthVerifier: { method: "verifyToolSkillExternalAuth" },
       inputSchema: toolExecutionInput,

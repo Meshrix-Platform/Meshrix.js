@@ -6,6 +6,7 @@ import {
   sharedHubContract
 } from "./constants.ts";
 import { normalizeTarget, option } from "./basic-utils.ts";
+import { loadMcpApiKeyCredential } from "./credential-store.ts";
 import { writeServerConfigProfile, serverConfigCommand } from "./device-config.ts";
 import {
   discardConfiguredApiKeyEnvironment,
@@ -141,11 +142,12 @@ export async function discoverLocalCommand(options?: any) : Promise<any> {
 }
 
 export async function doctorCommand(options?: any) : Promise<any> {
-  const token: any = await resolveApiKey(options, { required: false });
+  const providedToken: any = await resolveApiKey(options, { required: false });
   const resolvedOptions: any = await optionsWithDiscoveredBaseUrl(options);
   const settings: any = installerOptions(resolvedOptions);
   const discovered: any = resolvedOptions.__meshrixDiscovery || null;
   const target: any = normalizeTarget(option(resolvedOptions, "target", process.env.MESHRIX_MCP_TARGET || ""));
+  const token: any = providedToken || await loadMcpApiKeyCredential({ target, baseUrl: settings.baseUrl });
   const deviceManifestPath: any = discoveryRegistryPath(resolvedOptions);
   const discovery: any = await fetchJson(`${settings.baseUrl}/api/mcp/discovery`);
   const initialize: any = await ensureService(settings.baseUrl);
@@ -182,13 +184,13 @@ export async function doctorCommand(options?: any) : Promise<any> {
       skipped: true,
       toolCount: 0,
       stableOutletSet: false,
-      reason: "Set MESHRIX_MCP_TOKEN or use --token-stdin to verify tools/list."
+      reason: "Install a target, set MESHRIX_MCP_TOKEN, or use --token-stdin to verify tools/list."
     },
     systemHealth: {
       ok: false,
       skipped: true,
       healthy: false,
-      reason: "Set MESHRIX_MCP_TOKEN or use --token-stdin to verify tools/call system.health."
+      reason: "Install a target, set MESHRIX_MCP_TOKEN, or use --token-stdin to verify tools/call system.health."
     },
     deviceManifest: {
       ok: false,

@@ -107,6 +107,18 @@ export function resolveHttpTransportLimits(runtimeOptions: Record<string, any> =
     maxHeadersCount: parsePositiveInt(
       runtimeOptions.httpMaxHeadersCount,
       parsePositiveInt(process.env.MESHRIX_HTTP_MAX_HEADERS_COUNT, 100)
+    ),
+    maxActiveRequests: parsePositiveInt(
+      runtimeOptions.httpMaxActiveRequests,
+      parsePositiveInt(process.env.MESHRIX_HTTP_MAX_ACTIVE_REQUESTS, 1_024)
+    ),
+    maxActiveCost: parsePositiveInt(
+      runtimeOptions.httpMaxActiveCost,
+      parsePositiveInt(process.env.MESHRIX_HTTP_MAX_ACTIVE_COST, 2_048)
+    ),
+    reservedLightCost: parsePositiveInt(
+      runtimeOptions.httpReservedLightCost,
+      parsePositiveInt(process.env.MESHRIX_HTTP_RESERVED_LIGHT_COST, 64)
     )
   });
 }

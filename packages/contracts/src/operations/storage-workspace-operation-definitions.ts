@@ -46,7 +46,7 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS: readonly any[] = Object.fr
       cli: { command: ["storage", "backups"], usage: "storage backups" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: true,
+      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       aspects: ["backup-restore", "storage"]
     },
 {
@@ -100,7 +100,7 @@ export const STORAGE_WORKSPACE_OPERATION_DEFINITIONS: readonly any[] = Object.fr
       cli: { command: ["storage", "restore-preview"], usage: "storage restore-preview --body restore.json" },
       requiredScopes: ["console:read"],
       readOnly: true,
-      concurrencySafe: false,
+      concurrency: { workloadClass: "exclusive", maxParallel: 1, cost: 2 },
       aspects: ["backup-restore", "storage"],
       safety: { risk: "read_only" },
       inputSchema: {

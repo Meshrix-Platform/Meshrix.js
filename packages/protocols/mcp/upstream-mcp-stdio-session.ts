@@ -73,6 +73,9 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
   let closed: any = false;
   let hasExited: any = false;
   let activeWrites: any = 0;
+  const maxQueuedWriteBytes: any = Math.max(4096, Math.min(Number(options.maxQueuedWriteBytes || 1024 * 1024), 16 * 1024 * 1024));
+  let queuedWriteBytes: any = 0;
+  let writeChain: any = Promise.resolve();
   let notificationQueueCharacters: any = 0;
   let notificationDispatching: any = false;
   const notificationQueue: any[] = [];
@@ -226,21 +229,42 @@ export async function createStdioMcpSession(config: Record<string, any> = {}, op
     if (closed || !child.stdin?.writable) {
       return Promise.reject(fatalSessionError("Upstream MCP stdio session is closed."));
     }
+    const serialized: any = `${JSON.stringify(payload)}\n`;
+    const bytes: any = Buffer.byteLength(serialized);
+    if (queuedWriteBytes + bytes > maxQueuedWriteBytes) {
+      return Promise.reject(fatalSessionError("Upstream MCP stdio write queue capacity was exceeded."));
+    }
     activeWrites += 1;
+    queuedWriteBytes += bytes;
     updateReferences();
-    return new Promise((resolve?: any, reject?: any) : any => {
+    const write: any = writeChain.then(() : any => new Promise((resolve?: any, reject?: any) : any => {
+      let callbackDone: any = false;
+      let drained: any = false;
+      const complete: any = () : any => {
+        if (callbackDone && drained) resolve();
+      };
       try {
-        child.stdin.write(`${JSON.stringify(payload)}\n`, "utf8", (error?: any) : any => {
-          activeWrites = Math.max(0, activeWrites - 1);
-          updateReferences();
+        const accepted: any = child.stdin.write(serialized, "utf8", (error?: any) : any => {
           if (error) reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
-          else resolve();
+          else {
+            callbackDone = true;
+            complete();
+          }
+        });
+        if (accepted) drained = true;
+        else child.stdin.once("drain", () : any => {
+          drained = true;
+          complete();
         });
       } catch (error: any) {
-        activeWrites = Math.max(0, activeWrites - 1);
-        updateReferences();
         reject(fatalSessionError("Upstream MCP stdio request could not be sent.", error));
       }
+    }));
+    writeChain = write.catch(() : any => {});
+    return write.finally(() : any => {
+        activeWrites = Math.max(0, activeWrites - 1);
+        queuedWriteBytes = Math.max(0, queuedWriteBytes - bytes);
+        updateReferences();
     });
   }
 

@@ -1,5 +1,7 @@
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
 import { resolveWithin } from "#meshrix/client-strings";
 
 // Re-export sendJson from foundation (canonical location)
@@ -148,11 +150,15 @@ export function createRequestBodyAdmissionController({
   let inFlightBytes: any = 0;
   let inFlightRequests: any = 0;
 
-  function acquire({ tenantKey = "", subjectKey = "", contentLength = 0 }: Record<string, any> = {}) : any {
+  function acquire({ tenantKey = "", subjectKey = "", contentLength = 0, retainedMultiplier = 1 }: Record<string, any> = {}) : any {
     const normalizedTenantKey: any = String(tenantKey || "").trim() || "anonymous";
     const normalizedSubjectKey: any = String(subjectKey || "").trim() || "anonymous";
     const subjectBudgetKey: any = `${normalizedTenantKey}\u0000${normalizedSubjectKey}`;
-    const declaredBytes: any = nonNegativeSafeInteger(contentLength);
+    const multiplier: any = Math.max(1, Math.min(8, positiveSafeInteger(retainedMultiplier, 1)));
+    const rawDeclaredBytes: any = nonNegativeSafeInteger(contentLength);
+    const declaredBytes: any = rawDeclaredBytes > Math.floor(Number.MAX_SAFE_INTEGER / multiplier)
+      ? Number.MAX_SAFE_INTEGER
+      : rawDeclaredBytes * multiplier;
     const existingTenant: any = tenants.get(normalizedTenantKey);
     const tenantBytes: any = existingTenant?.bytes || 0;
     const tenantRequests: any = existingTenant?.requests || 0;
@@ -204,7 +210,10 @@ export function createRequestBodyAdmissionController({
         if (!Number.isSafeInteger(nextConsumedBytes)) {
           throw requestBodyAdmissionError("request_body_global_byte_capacity_exceeded");
         }
-        const extraReservation: any = Math.max(0, nextConsumedBytes - reservedBytes);
+        const retainedBytes: any = nextConsumedBytes > Math.floor(Number.MAX_SAFE_INTEGER / multiplier)
+          ? Number.MAX_SAFE_INTEGER
+          : nextConsumedBytes * multiplier;
+        const extraReservation: any = Math.max(0, retainedBytes - reservedBytes);
         if (extraReservation > globalByteLimit - inFlightBytes) {
           throw requestBodyAdmissionError("request_body_global_byte_capacity_exceeded");
         }
@@ -263,7 +272,8 @@ function normalizeReadRequestBodyOptions(maxBytesOrOptions?: any) : any {
       admissionController: maxBytesOrOptions.admissionController || null,
       tenantKey: maxBytesOrOptions.tenantKey || "",
       subjectKey: maxBytesOrOptions.subjectKey || "",
-      contentLength: nonNegativeSafeInteger(maxBytesOrOptions.contentLength)
+      contentLength: nonNegativeSafeInteger(maxBytesOrOptions.contentLength),
+      admissionLease: maxBytesOrOptions.admissionLease || null
     };
   }
   return {
@@ -271,7 +281,8 @@ function normalizeReadRequestBodyOptions(maxBytesOrOptions?: any) : any {
     admissionController: null,
     tenantKey: "",
     subjectKey: "",
-    contentLength: 0
+    contentLength: 0,
+    admissionLease: null
   };
 }
 
@@ -281,17 +292,20 @@ export async function readRequestBody(request?: any, maxBytesOrOptions: any = DE
     admissionController,
     tenantKey,
     subjectKey,
-    contentLength
+    contentLength,
+    admissionLease: suppliedAdmissionLease
   } = normalizeReadRequestBodyOptions(maxBytesOrOptions);
   const chunks: any[] = [];
   let total: any = 0;
   let admissionLease: any = null;
+  let ownsAdmissionLease: any = false;
 
   try {
     if (contentLength > maxBytes) {
       throw requestBodyTooLargeError(maxBytes);
     }
-    admissionLease = admissionController?.acquire?.({ tenantKey, subjectKey, contentLength }) || null;
+    admissionLease = suppliedAdmissionLease || admissionController?.acquire?.({ tenantKey, subjectKey, contentLength }) || null;
+    ownsAdmissionLease = Boolean(admissionLease && !suppliedAdmissionLease);
 
     for await (const incomingChunk of request) {
       const chunk: any = Buffer.isBuffer(incomingChunk)
@@ -312,7 +326,7 @@ export async function readRequestBody(request?: any, maxBytesOrOptions: any = DE
     request.resume?.();
     throw error;
   } finally {
-    admissionLease?.release();
+    if (ownsAdmissionLease) admissionLease?.release();
   }
 }
 
@@ -349,15 +363,18 @@ export async function serveStaticFile(response?: any, distPath?: any, pathname?:
 
     const extension: any = path.extname(filePath).toLowerCase();
     const contentType: any = CONTENT_TYPES.get(extension) || "application/octet-stream";
-    const buffer: any = await fs.readFile(filePath);
-
     response.writeHead(200, {
       "Content-Type": contentType,
+      "Content-Length": String(stats.size),
       "Cache-Control": extension === ".html" ? "no-store" : "public, max-age=31536000"
     });
-    response.end(buffer);
+    await pipeline(createReadStream(filePath), response);
     return true;
-  } catch {
+  } catch (error: any) {
+    if (response.headersSent) {
+      response.destroy?.(error);
+      return true;
+    }
     return false;
   }
 }

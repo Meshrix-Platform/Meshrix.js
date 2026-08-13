@@ -19,6 +19,7 @@ import { createToolSkillManagementProvider } from "#meshrix/capabilities/skills/
 import { createOperationPermissionPlatform } from "#meshrix/capabilities/operation-permission-core/index";
 import { createOperationPermissionStore } from "#meshrix/capabilities/operation-permission-core/store";
 import { broadcastAudienceCatalogInvalidation } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
+import { broadcastConfiguredMcpNotification } from "#meshrix/protocols/mcp/adapter/mcp-notification-bus";
 import { disconnectMcpSseConnectionsByGrant } from "../state/sse-connection-state.ts";
 import {
   buildExecutiveReport,
@@ -123,7 +124,7 @@ function maintenanceOwnershipResource(
   };
 }
 
-export function createServerOperationPermissionPlatform({
+export async function createServerOperationPermissionPlatform({
   userDataPath,
   operations,
   featureRuntime,
@@ -136,12 +137,12 @@ export function createServerOperationPermissionPlatform({
   securityPermissions,
   proofSubstrate = null,
   logger
-}: Record<string, any>) : any {
+}: Record<string, any>) : Promise<any> {
   const operationDispatcher: any = bindOperationDispatcher({
     lockManager: operationLockManager,
     concurrencyScope: operationConcurrencyScope
   });
-  return createOperationPermissionPlatform({
+  return await createOperationPermissionPlatform({
     userDataPath,
     operations,
     operationDispatcher,
@@ -187,7 +188,17 @@ export function createServerUpstreamGatewayRegistry({
     userDataPath,
     securityPermissions,
     artifactTransitPort,
-    tagStore
+    tagStore,
+    publishSkillHubUpdate(event?: any) : any {
+      return broadcastConfiguredMcpNotification({
+        jsonrpc: "2.0",
+        method: "notifications/meshrix/skill_hub/catalog_changed",
+        params: event
+      }, {
+        includePrivate: true,
+        coalesceKey: "skill-hub.catalog.changed"
+      });
+    }
   });
 }
 
@@ -263,9 +274,9 @@ export async function createServerConsoleOperationProviders({
         upstreamGatewayRegistry.replaceFromManifestSnapshot(snapshot);
         gatewayOnlySnapshot = snapshot;
       },
-      onError(event?: any) : any {
+      async onError(event?: any) : Promise<any> {
         try {
-          operationAuditStore?.append?.({
+          await operationAuditStore?.append?.({
             operationId: "external_services.observe",
             transport: "application",
             risk: "read_only",
@@ -365,10 +376,10 @@ export async function createServerConsoleOperationProviders({
           registry: upstreamGatewayRegistry,
           getBaseOperations,
           getOperationPermissionPlatform,
-          getGrants: () : any => {
+          getGrants: async () : Promise<any> => {
             const platform: any = getOperationPermissionPlatform?.();
             return typeof platform?.store?.listGrants === "function"
-              ? platform.store.listGrants({ includeRevoked: false })
+              ? await platform.store.listGrants({ includeRevoked: false })
               : [];
           },
           getTagStore: () : any => securityPermissions?.tagManagementStore || null,

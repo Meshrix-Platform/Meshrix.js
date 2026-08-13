@@ -4,7 +4,7 @@ import type { AgentOption } from "../../../composables/agentModelOptionBarContro
 import type { AgentSelectorUiOption } from "../../../composables/console-agent-selector-controller";
 import type { IntelligentModuleDefinition } from "../../../composables/console-defaults";
 import type { ModuleModelAssignmentSelectOption } from "../../../composables/console-option-bar-controller";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import type { AgentModelConfig, ModelProbeResponse } from "../../../lib/types";
 import type { OptionBarOption } from "../../../types/app";
 
@@ -41,28 +41,34 @@ type CapabilityAssignment = {
 
 export function useAgentAssignmentView() : any {
   const {
-    gatewayAssistantAgentOptions,
-    gatewayAssistantForm,
-    agentSelectorOptions,
-    isBusy,
-    error,
-    highlightedConfigTarget,
-    intelligentModuleDefinitions,
-    modelEntryStatusKey,
-    moduleModelAssignmentSelectOptions,
-    moduleModelAssignmentStats,
-    moduleModelRef,
-    moduleNeedsIntelligence,
-    parseModelRef,
-    ruleAuthoringForm,
-    ruleAuthoringModelOptions,
-    runModelEntryProbe,
-    saveSettings,
-    setModuleModelRef,
-    setModuleNeedsIntelligence,
-    settingsDraft,
-    visibleModelEntries,
-  } = useServerConsoleShellContext();
+  modelEntryStatusKey,
+  parseModelRef,
+  runModelEntryProbe,
+  visibleModelEntries,
+} = useServerConsoleShellContext().models;
+const {
+  intelligentModuleDefinitions,
+  moduleModelAssignmentSelectOptions,
+  moduleModelAssignmentStats,
+  moduleModelRef,
+  moduleNeedsIntelligence,
+  setModuleModelRef,
+  setModuleNeedsIntelligence,
+} = useServerConsoleShellContext().modules;
+const {
+  gatewayAssistantAgentOptions,
+  gatewayAssistantForm,
+  agentSelectorOptions,
+  highlightedConfigTarget,
+  ruleAuthoringForm,
+  ruleAuthoringModelOptions,
+  saveSettings,
+  settingsDraft,
+} = useServerConsoleShellContext().settings;
+const {
+  isBusy,
+  error,
+} = useServerConsoleShellContext().runtime;
   const moduleDefinitions: any = intelligentModuleDefinitions as IntelligentModuleDefinition[];
   const selectOptionsForModule: any = moduleModelAssignmentSelectOptions as (
     moduleId: string,

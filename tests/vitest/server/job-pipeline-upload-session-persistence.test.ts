@@ -19,17 +19,17 @@ vi.mock("#meshrix/product-api", async (importOriginal?: any) : Promise<any> => (
   saveSettings: vi.fn(async (_userDataPath?: any, settings: Record<string, any> = {}) : Promise<any> => settings || {})
 }));
 
-import { createStorageKernel } from "#meshrix/foundation/storage/storage-kernel.ts";
-import { createStorageProvider } from "#meshrix/foundation/storage/storage-provider.ts";
-import { createLocalCustodyKeyBroker } from "#meshrix/server-runtime/execution-sandbox/custody-key-broker.ts";
-import { createUploadNoRunCustody } from "#meshrix/server-runtime/jobs/upload-no-run-custody.ts";
-import { createJobArtifactHandlers } from "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers.ts";
-import { createBatchDeletionCoordinator } from "#meshrix/server-runtime/jobs/batch-deletion-coordinator.ts";
-import { createJobPipeline } from "#meshrix/server-runtime/jobs/job-pipeline.ts";
+import { createStorageKernel } from "#meshrix/foundation/storage/storage-kernel";
+import { createStorageProvider } from "#meshrix/foundation/storage/storage-provider";
+import { createLocalCustodyKeyBroker } from "#meshrix/server-runtime/execution-sandbox/custody-key-broker";
+import { createUploadNoRunCustody } from "#meshrix/server-runtime/jobs/upload-no-run-custody";
+import { createJobArtifactHandlers } from "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers";
+import { createBatchDeletionCoordinator } from "#meshrix/server-runtime/jobs/batch-deletion-coordinator";
+import { createJobPipeline } from "#meshrix/server-runtime/jobs/job-pipeline";
 import {
   createUploadSessionStore
-} from "#meshrix/server-runtime/state/upload-session-store.ts";
-import { getSessionMetaPath } from "#meshrix/server-runtime/state/upload-session-support.ts";
+} from "#meshrix/server-runtime/state/upload-session-store";
+import { getSessionMetaPath } from "#meshrix/server-runtime/state/upload-session-support";
 
 const tempRoots: any[] = [];
 const storageKernels: any[] = [];

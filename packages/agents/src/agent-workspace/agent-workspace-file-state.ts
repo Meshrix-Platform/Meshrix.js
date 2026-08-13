@@ -18,6 +18,25 @@ export function createAgentWorkspaceFileStateApi({
   resolveWorkspacePath,
   listWorkspaceFiles
 }: Record<string, any> = {}) : any {
+  let fullSnapshotBuilds: any = 0;
+  let incrementalCheckpointBuilds: any = 0;
+  let unrelatedEnumerations: any = 0;
+  let unrelatedReads: any = 0;
+  let unrelatedHashes: any = 0;
+  let migratedCheckpointSnapshots: any = 0;
+
+  function getRefactorInstrumentation() : any {
+    return {
+      schemaVersion: "v0.0.1:workspace:file-state-refactor-instrumentation-1",
+      fullSnapshotBuilds,
+      incrementalCheckpointBuilds,
+      unrelatedEnumerations,
+      unrelatedReads,
+      unrelatedHashes,
+      migratedCheckpointSnapshots
+    };
+  }
+
   function decodeWorkspaceFileContent(input: Record<string, any> = {}) : any {
     if (Object.hasOwn(input, "contentBase64")) {
       const raw: any = String(input.contentBase64 || "").trim();
@@ -114,7 +133,8 @@ export function createAgentWorkspaceFileStateApi({
         metadata: {
           type: "file",
           sizeBytes: block.byteLength,
-          contentSha256: block.payloadHash
+          contentSha256: block.payloadHash,
+          contentCid: block.cid
         }
       };
     }
@@ -171,6 +191,7 @@ export function createAgentWorkspaceFileStateApi({
     return {
       rootCid: manifest.rootCid,
       contentRefs: [manifest.rootCid, ...refs],
+      entries: entries.map((entry?: any) : any => ({ ...entry })),
       metadata: {
         type: "directory",
         fileCount: entries.length
@@ -310,7 +331,7 @@ export function createAgentWorkspaceFileStateApi({
     contentBuffer,
     operationId
   }: Record<string, any> = {}) : Promise<any> {
-    if (!merkleState || typeof merkleState.lsmIngest?.beginUploadSession !== "function") {
+    if (!merkleState || typeof merkleState.uploadManifest?.materialize !== "function") {
       return null;
     }
     const content: any = Buffer.isBuffer(contentBuffer) ? contentBuffer : Buffer.from(contentBuffer || "");
@@ -323,16 +344,7 @@ export function createAgentWorkspaceFileStateApi({
         ingest: true
       }
     });
-    const session: any = await merkleState.lsmIngest.beginUploadSession({
-      scope: workspaceStateScope(workspace),
-      workspaceId: workspace.workspaceId,
-      files: [{
-        relativePath,
-        byteLength: content.length,
-        sha256: normalizeSha256(block.payloadHash)
-      }]
-    });
-    const chunkRecord: any = await merkleState.lsmIngest.appendChunkRecord(session.uploadSessionId, {
+    const chunkRecord: any = {
       fileId: relativePath,
       relativePath,
       chunkIndex: 0,
@@ -340,21 +352,25 @@ export function createAgentWorkspaceFileStateApi({
       byteLength: content.length,
       chunkCid: block.cid,
       chunkHash: block.payloadHash
+    };
+    const manifest: any = await merkleState.uploadManifest.materialize({
+      scope: workspaceStateScope(workspace),
+      files: [{
+        relativePath,
+        byteLength: content.length,
+        sha256: normalizeSha256(block.payloadHash)
+      }],
+      records: [chunkRecord]
     });
-    const segment: any = await merkleState.lsmIngest.flushMemTable(session.uploadSessionId);
-    const manifest: any = await merkleState.lsmIngest.materializeManifest(session.uploadSessionId);
     return {
       protocolVersion: merkleState.protocolVersion,
       status: "archived",
-      uploadSessionId: session.uploadSessionId,
-      segmentId: segment.segmentId,
-      segmentRootCid: segment.rootCid,
       manifestRootCid: manifest.rootCid,
       chunkCid: block.cid,
       chunkHash: block.payloadHash,
-      recordCount: segment.recordCount,
-      nextOffset: Number(chunkRecord.offset || 0) + Number(chunkRecord.byteLength || 0),
-      contentRefs: uniqueStrings([manifest.rootCid, segment.rootCid, block.cid])
+      recordCount: manifest.recordCount,
+      nextOffset: manifest.nextOffset,
+      contentRefs: uniqueStrings([manifest.rootCid, block.cid])
     };
   }
 
@@ -468,6 +484,7 @@ export function createAgentWorkspaceFileStateApi({
     if (!merkleState) {
       return null;
     }
+    fullSnapshotBuilds += 1;
     const listed: any = await listWorkspaceFiles({
       workspaceId: workspace.workspaceId,
       path: basePath,
@@ -512,6 +529,250 @@ export function createAgentWorkspaceFileStateApi({
     };
   }
 
+  async function captureWorkspaceFilePreimage(workspace?: any, relativePaths: any[] = []) : Promise<any> {
+    if (!merkleState?.cas?.putBlock) {
+      return null;
+    }
+    const files: any[] = [];
+    const captureFile: any = async (relativePath?: any, absolutePath?: any) : Promise<any> => {
+      const content: any = fs.readFileSync(absolutePath);
+      const block: any = await merkleState.cas.putBlock(content, {
+        codec: "raw",
+        metadata: {
+          workspaceId: workspace.workspaceId,
+          relativePath,
+          preimage: true
+        }
+      });
+      files.push({
+        path: relativePath,
+        exists: true,
+        contentCid: block.cid,
+        contentSha256: normalizeSha256(block.payloadHash),
+        byteLength: block.byteLength,
+        encoding: "base64"
+      });
+    };
+    for (const rawPath of uniqueStrings(asArray(relativePaths).map(String).filter(Boolean))) {
+      const relativePath: any = normalizeWorkspaceRelativePath(rawPath, { allowEmpty: false });
+      const resolved: any = resolveWorkspacePath(workspace, relativePath);
+      let stat: any = null;
+      try {
+        stat = fs.lstatSync(resolved.absolutePath);
+      } catch {
+        stat = null;
+      }
+      if (!stat) {
+        files.push({ path: relativePath, exists: false });
+        continue;
+      }
+      if (stat.isSymbolicLink() || !stat.isFile() && !stat.isDirectory()) {
+        continue;
+      }
+      if (stat.isFile()) {
+        await captureFile(relativePath, resolved.absolutePath);
+        continue;
+      }
+      const collect: any = (absoluteDir?: any, relativeDir?: any) : any => {
+        const entries: any = fs.readdirSync(absoluteDir, { withFileTypes: true })
+          .filter((entry?: any) : any => !entry.name.startsWith("."))
+          .sort((left?: any, right?: any) : any => left.name.localeCompare(right.name));
+        for (const entry of entries) {
+          const childRelativePath: any = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+          const childAbsolutePath: any = path.join(absoluteDir, entry.name);
+          const childStat: any = fs.lstatSync(childAbsolutePath);
+          if (childStat.isSymbolicLink()) {
+            continue;
+          }
+          if (childStat.isDirectory()) {
+            collect(childAbsolutePath, childRelativePath);
+          } else if (childStat.isFile()) {
+            subtreePaths.push(childRelativePath);
+          }
+        }
+      };
+      const subtreePaths: any[] = [];
+      collect(resolved.absolutePath, relativePath);
+      for (const subtreePath of subtreePaths) {
+        const subtreeResolved: any = resolveWorkspacePath(workspace, subtreePath);
+        await captureFile(subtreePath, subtreeResolved.absolutePath);
+      }
+    }
+    const byPath: any = new Map<any, any>();
+    for (const file of files) byPath.set(String(file.path), file);
+    return {
+      workspaceId: workspace.workspaceId,
+      basePath: "",
+      deleteExtraneous: false,
+      incremental: true,
+      files: [...byPath.values()]
+    };
+  }
+
+  async function buildWorkspaceFileSnapshotFromStateRoot(workspace?: any, stateRoot: any = "") : Promise<any> {
+    const root: any = String(stateRoot || "").trim();
+    if (!root || typeof merkleState?.merkleIndex?.prefix !== "function") {
+      throw new Error("Workspace checkpoint state root authority is unavailable.");
+    }
+    const entries: any = await merkleState.merkleIndex.prefix(root, "", { limit: 100_000 });
+    const files: any[] = [];
+    for (const entry of asArray(entries)) {
+      const relativePath: any = String(entry?.key || "");
+      const metadata: any = asObject(entry?.metadata);
+      if (!relativePath || relativePath.startsWith("__mount__/") || metadata.type === "directory") {
+        continue;
+      }
+      const contentCid: any = String(metadata.contentCid || entry?.valueRef || "");
+      if (!contentCid) {
+        throw new Error("Workspace checkpoint state entry has no content authority.");
+      }
+      files.push({
+        path: relativePath,
+        exists: true,
+        contentCid,
+        contentSha256: normalizeSha256(metadata.contentSha256 || ""),
+        byteLength: Number(metadata.sizeBytes ?? 0),
+        encoding: "base64"
+      });
+    }
+    return {
+      schemaVersion: "v0.0.1:workspace:file-root-checkpoint-1",
+      workspaceId: workspace.workspaceId,
+      stateRoot: root,
+      incremental: false,
+      basePath: "",
+      deleteExtraneous: true,
+      files
+    };
+  }
+
+  function buildIncrementalCheckpointSnapshot({
+    workspace,
+    stateCommit,
+    mutations = []
+  }: Record<string, any> = {}) : any {
+    incrementalCheckpointBuilds += 1;
+    const restorePathForKey: any = (key?: any) : any => {
+      const raw: any = String(key || "").trim();
+      if (raw.startsWith("__mount__/")) {
+        const parts: any = raw.split("/");
+        if (parts.length > 2) return parts.slice(2).join("/");
+      }
+      return raw;
+    };
+    const files: any[] = [];
+    for (const mutation of asArray(mutations)) {
+      const rawKey: any = String(mutation?.key || mutation?.path || "").trim();
+      if (!rawKey) continue;
+      const relativePath: any = normalizeWorkspaceRelativePath(restorePathForKey(rawKey), { allowEmpty: false });
+      const exists: any = !["delete", "remove"].includes(String(mutation?.action || ""));
+      if (!exists) {
+        files.push({ path: relativePath, exists: false });
+        continue;
+      }
+      const metadata: any = asObject(mutation.metadata);
+      const contentSha256: any = normalizeSha256(metadata.contentSha256 || mutation?.contentSha256 || "");
+      const contentCid: any = String(metadata.contentCid || "");
+      if (!contentCid) {
+        continue;
+      }
+      files.push({
+        path: relativePath,
+        exists: true,
+        contentCid,
+        contentSha256,
+        byteLength: Number(metadata.sizeBytes ?? mutation?.byteLength ?? 0),
+        encoding: "base64"
+      });
+    }
+    return {
+      schemaVersion: "v0.0.1:workspace:file-incremental-checkpoint-1",
+      workspaceId: workspace.workspaceId,
+      stateRoot: String(stateCommit?.afterRoot || ""),
+      incremental: true,
+      basePath: "",
+      files
+    };
+  }
+
+  function migrateWorkspaceFileCheckpointSnapshot(snapshot: any = null, { stateCommit = null }: Record<string, any> = {}) : any {
+    if (!snapshot || snapshot.incremental === true) {
+      return snapshot;
+    }
+    const files: any[] = asArray(snapshot.files || snapshot.entries)
+      .map((entry?: any) : any => ({
+        path: String(entry?.path || entry?.relativePath || ""),
+        exists: entry?.exists !== false,
+        contentCid: String(entry?.contentCid || entry?.cid || ""),
+        contentSha256: normalizeSha256(entry?.contentSha256 || entry?.sha256 || ""),
+        byteLength: Number(entry?.byteLength ?? entry?.sizeBytes ?? 0),
+        encoding: String(entry?.encoding || "base64")
+      }));
+    return {
+      schemaVersion: "v0.0.1:workspace:file-incremental-checkpoint-1",
+      workspaceId: snapshot.workspaceId || "",
+      stateRoot: String(stateCommit?.afterRoot || snapshot.stateRoot || ""),
+      incremental: true,
+      basePath: String(snapshot.basePath || ""),
+      files
+    };
+  }
+
+  async function migrateCheckpointTreeFileSnapshots({ tree }: Record<string, any> = {}) : Promise<any> {
+    if (!tree || typeof checkpointTreeApi?.upsertCheckpointNode !== "function") {
+      return { ok: false, migrated: 0 };
+    }
+    const nodes: any[] = Object.values(asObject(tree.nodes)) as any[];
+    const pending: any[] = [];
+    for (const node of nodes) {
+      const metadata: any = asObject(node?.metadata);
+      const legacy: any = metadata.workspaceFileSnapshot || metadata.fileSnapshot || null;
+      if (!legacy || legacy.incremental === true) continue;
+      const migrated: any = migrateWorkspaceFileCheckpointSnapshot(legacy, {
+        stateCommit: metadata.stateCommit
+      });
+      pending.push({
+        node,
+        metadata,
+        migrated
+      });
+    }
+    for (const entry of pending) {
+      const legacyFiles: any = asArray(entry.migrated.files);
+      const originalFiles: any = asArray(entry.metadata.workspaceFileSnapshot?.files || entry.metadata.fileSnapshot?.files);
+      if (legacyFiles.length !== originalFiles.length) {
+        return { ok: false, migrated: 0, error: "workspace checkpoint migration file count mismatch." };
+      }
+      for (let index: any = 0; index < legacyFiles.length; index += 1) {
+        if (
+          String(legacyFiles[index].path) !== String(originalFiles[index]?.path || originalFiles[index]?.relativePath || "") ||
+          legacyFiles[index].exists !== (originalFiles[index]?.exists !== false) ||
+          legacyFiles[index].contentSha256 !== normalizeSha256(originalFiles[index]?.contentSha256 || originalFiles[index]?.sha256 || "")
+        ) {
+          return { ok: false, migrated: 0, error: "workspace checkpoint migration restore projection mismatch." };
+        }
+      }
+    }
+    let migrated: any = 0;
+    for (const entry of pending) {
+      const nextMetadata: Record<string, any> = {
+        ...entry.metadata,
+        workspaceFileSnapshot: entry.migrated
+      };
+      if (entry.metadata.fileSnapshot && !entry.metadata.workspaceFileSnapshot) {
+        delete nextMetadata.fileSnapshot;
+        nextMetadata.workspaceFileSnapshot = entry.migrated;
+      }
+      await checkpointTreeApi.upsertCheckpointNode({
+        ...entry.node,
+        metadata: nextMetadata
+      });
+      migrated += 1;
+      migratedCheckpointSnapshots += 1;
+    }
+    return { ok: true, migrated };
+  }
+
   async function recordWorkspaceFileCheckpoint({
     workspace,
     operationId,
@@ -520,7 +781,9 @@ export function createAgentWorkspaceFileStateApi({
     path: relativePath,
     preimageSnapshot = null,
     mutationOrigin = null,
-    workspaceFileSnapshot = null
+    workspaceFileSnapshot = null,
+    mutations = [],
+    fullSnapshot = false
   }: Record<string, any> = {}) : Promise<any> {
     if (!checkpointTreeApi || !stateCommit?.commitId) {
       return null;
@@ -529,19 +792,29 @@ export function createAgentWorkspaceFileStateApi({
     if (!treeId) {
       return null;
     }
-    const snapshot: any = workspaceFileSnapshot || await buildWorkspaceFileSnapshot(
-      workspace,
-      {
-        basePath: "",
-        deleteExtraneous: true
-      }
-    );
+    const snapshot: any = workspaceFileSnapshot ||
+      (fullSnapshot === true
+        ? await buildWorkspaceFileSnapshot(workspace, {
+            basePath: "",
+            deleteExtraneous: true
+          })
+        : buildIncrementalCheckpointSnapshot({
+            workspace,
+            stateCommit,
+            mutations
+          }));
     if (!snapshot) {
       return null;
     }
     const existingTree: any = typeof checkpointTreeApi.loadCheckpointTree === "function"
       ? await checkpointTreeApi.loadCheckpointTree({ treeId })
       : null;
+    if (existingTree) {
+      const migration: any = await migrateCheckpointTreeFileSnapshots({ tree: existingTree });
+      if (migration.ok !== true) {
+        throw new Error(migration.error || "Workspace checkpoint migration failed.");
+      }
+    }
     if (!existingTree && typeof checkpointTreeApi.startCheckpointTree === "function") {
       await checkpointTreeApi.startCheckpointTree({
         treeId,
@@ -621,6 +894,11 @@ export function createAgentWorkspaceFileStateApi({
     workspaceListCacheReceipt,
     commitWorkspaceFileState,
     buildWorkspaceFileSnapshot,
-    recordWorkspaceFileCheckpoint
+    buildWorkspaceFileSnapshotFromStateRoot,
+    recordWorkspaceFileCheckpoint,
+    captureWorkspaceFilePreimage,
+    migrateWorkspaceFileCheckpointSnapshot,
+    migrateCheckpointTreeFileSnapshots,
+    getRefactorInstrumentation
   };
 }

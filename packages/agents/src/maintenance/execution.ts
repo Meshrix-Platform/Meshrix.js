@@ -128,7 +128,7 @@ export function createMaintenanceRunExecutor({
           output: step.output
         }
       });
-      operationPermissionStore.appendExecution({
+      await operationPermissionStore.appendExecution({
         toolExecutionId,
         traceId,
         toolId: `maintenance-agent.${rawStep.toolId}`,
@@ -149,7 +149,7 @@ export function createMaintenanceRunExecutor({
         startedAt: step.startedAt,
         finishedAt: step.completedAt
       });
-      operationPermissionStore.appendMetric({
+      await operationPermissionStore.appendMetric({
         traceId,
         toolId: `maintenance-agent.${rawStep.toolId}`,
         profileId: "maintenance-agent",
@@ -196,7 +196,7 @@ export function createMaintenanceRunExecutor({
           error: step.error
         }
       });
-      operationPermissionStore.appendExecution({
+      await operationPermissionStore.appendExecution({
         toolExecutionId,
         traceId,
         toolId: `maintenance-agent.${rawStep.toolId}`,
@@ -219,7 +219,7 @@ export function createMaintenanceRunExecutor({
         startedAt: step.startedAt,
         finishedAt: step.completedAt
       });
-      operationPermissionStore.appendMetric({
+      await operationPermissionStore.appendMetric({
         traceId,
         toolId: `maintenance-agent.${rawStep.toolId}`,
         profileId: "maintenance-agent",

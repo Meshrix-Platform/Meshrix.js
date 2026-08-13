@@ -11,6 +11,7 @@ const DEFAULT_MAX_BYTES: any = 16 * 1024 * 1024;
 const DEFAULT_RETAINED_BYTES: any = 8 * 1024 * 1024;
 const DEFAULT_MAX_RECORD_BYTES: any = 2 * 1024 * 1024;
 const DEFAULT_MAX_SCAN_BYTES: any = 8 * 1024 * 1024;
+const NO_OVERFLOW_REPLACEMENT: any = Symbol("no-overflow-replacement");
 
 function positiveInteger(value?: any, fallback?: any, maximum: any = Number.MAX_SAFE_INTEGER) : any {
   const parsed: any = Number(value);
@@ -72,7 +73,8 @@ export async function readJsonlTail(filePath?: any, {
 export async function appendBoundedJsonLine(filePath?: any, value?: any, {
   maxBytes = DEFAULT_MAX_BYTES,
   retainedBytes = DEFAULT_RETAINED_BYTES,
-  maxRecordBytes = DEFAULT_MAX_RECORD_BYTES
+  maxRecordBytes = DEFAULT_MAX_RECORD_BYTES,
+  overflowReplacement = NO_OVERFLOW_REPLACEMENT
 }: Record<string, any> = {}) : Promise<any> {
   const byteLimit: any = positiveInteger(maxBytes, DEFAULT_MAX_BYTES, 1024 * 1024 * 1024);
   const retainedByteLimit: any = Math.min(
@@ -85,6 +87,7 @@ export async function appendBoundedJsonLine(filePath?: any, value?: any, {
   );
   const serialized: any = JSON.stringify(value);
   const recordBytes: any = Buffer.byteLength(serialized);
+  const recordLineBytes: any = recordBytes + 1;
   if (recordBytes > recordByteLimit) {
     const error: Error & Record<string, any> = new Error("JSONL record exceeds the configured persistence limit.");
     error.code = "BOUNDED_JSONL_RECORD_TOO_LARGE";
@@ -94,6 +97,31 @@ export async function appendBoundedJsonLine(filePath?: any, value?: any, {
   }
 
   return queueStateMutation(stateFileKey(filePath), async () : Promise<any> => {
+    if (overflowReplacement !== NO_OVERFLOW_REPLACEMENT) {
+      let currentBytes: any = 0;
+      try {
+        currentBytes = (await fs.stat(filePath)).size;
+      } catch (error: any) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      if (currentBytes + recordLineBytes <= byteLimit) {
+        await appendJsonLine(filePath, value);
+        return { replaced: false, value };
+      }
+      const replacementContent: any = `${JSON.stringify(overflowReplacement)}\n`;
+      const replacementBytes: any = Buffer.byteLength(replacementContent);
+      if (replacementBytes > byteLimit) {
+        const error: Error & Record<string, any> = new Error(
+          "JSONL replacement exceeds the configured persistence limit."
+        );
+        error.code = "BOUNDED_JSONL_REPLACEMENT_TOO_LARGE";
+        error.replacementBytes = replacementBytes;
+        error.maxBytes = byteLimit;
+        throw error;
+      }
+      await atomicWriteFile(filePath, replacementContent, "utf8");
+      return { replaced: true, value };
+    }
     await appendJsonLine(filePath, value);
     const stat: any = await fs.stat(filePath);
     if (stat.size <= byteLimit) return value;

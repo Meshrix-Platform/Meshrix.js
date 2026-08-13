@@ -1,6 +1,7 @@
 import { packageJson, PRIORITY_INSTALL_TARGETS } from "./constants.ts";
 import { isAutoTargetRequest, option, parseTargets, targetInstallMode } from "./basic-utils.ts";
 import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
+import { saveMcpApiKeyCredential } from "./credential-store.ts";
 import { writeDeviceDiscovery } from "./device-config.ts";
 import { ensureService, verifyMcpTools } from "./discovery.ts";
 import {
@@ -60,11 +61,18 @@ export async function installTargets({ options, targets, token, tokenInfo = null
         adapterCacheHit: adapterExecution.cache.hit
       };
       const httpVerification: any = verify ? await verifyMcpTools({ baseUrl: settings.baseUrl, token, target }) : null;
+      const credential: any = await saveMcpApiKeyCredential({
+        target,
+        baseUrl: settings.baseUrl,
+        token,
+        autoUpdate: mergedOptions.__meshrixAutoUpdate === true
+      });
       installed[target] = {
         ok: true,
         status: "installed",
         tokenSource: tokenInfo?.source || "provided",
         ...(clientResult || {}),
+        credentialStored: credential.stored === true,
         httpVerification
       };
     } catch (error: any) {
@@ -92,7 +100,8 @@ export async function installTargets({ options, targets, token, tokenInfo = null
       tokenSource: value.tokenSource || tokenInfo?.source || "provided",
       httpVerification: value.httpVerification || null,
       adapterPackage: value.adapterPackage || "",
-      adapterCacheHit: value.adapterCacheHit === true
+      adapterCacheHit: value.adapterCacheHit === true,
+      credentialStored: value.credentialStored === true
     };
   }
 

@@ -31,9 +31,9 @@ let closing = false;
 async function close() {
   if (closing) return;
   closing = true;
+  await handler.close();
   server.closeIdleConnections?.();
   await new Promise((resolve) => server.close(resolve));
-  await handler.close();
 }
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

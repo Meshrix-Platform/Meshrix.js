@@ -18,7 +18,7 @@ import {
   startCheckpointTree,
   upsertCheckpointNode
 } from "#meshrix/foundation/checkpoint/tree/checkpoint-tree-projection";
-import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
+import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
 
 async function withTempUserData(testCase?: any) : Promise<any> {
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-checkpoint-tree-projection-extra-"));
@@ -36,7 +36,7 @@ describe("checkpoint-tree store behavior", () : any => {
       const failingStorage: Record<string, any> = {
         ...baseStorage,
         async putProtocolObject(scope?: any, key?: any, value?: any) : Promise<any> {
-          if (scope === "meshrix-checkpoint-tree") {
+          if (scope === "meshrix-checkpoint-tree-meta") {
             throw new Error("injected checkpoint projection failure");
           }
           return baseStorage.putProtocolObject(scope, key, value);

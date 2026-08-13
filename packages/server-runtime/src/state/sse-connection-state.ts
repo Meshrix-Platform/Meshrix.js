@@ -275,7 +275,7 @@ export function registerMcpSseConnection({
       code: "mcp_sse_registration_invalid"
     };
   }
-  if (normalizedCapabilities.includes("upstream.catalog.list_changed") &&
+  if (normalizedCapabilities.includes("notifications/tools/list_changed") &&
       !normalizedProxySessionId) {
     return {
       ok: false,
@@ -302,7 +302,7 @@ export function registerMcpSseConnection({
   }
 
   const grantIdDigest: any = digestIdentity(normalizedGrantId);
-  if (normalizedCapabilities.includes("upstream.catalog.list_changed") &&
+  if (normalizedCapabilities.includes("notifications/tools/list_changed") &&
       fencedProxySessions.has(proxySessionKey(grantIdDigest, normalizedProxySessionId))) {
     return {
       ok: false,
@@ -409,8 +409,7 @@ export function broadcastMcpNotification(payload?: any, {
         !(partitionKeySet?.size > 0 || grantDigestSet?.size > 0)) {
       continue;
     }
-    if (payload?.method === "notifications/tools/list_changed" &&
-        !connection.negotiatedCapabilities.includes("upstream.catalog.list_changed")) {
+    if (payload?.method && !connection.negotiatedCapabilities.includes(payload.method)) {
       continue;
     }
     let deliveredPayload: any = payload;

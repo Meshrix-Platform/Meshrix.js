@@ -890,7 +890,7 @@ export async function buildCurrentPlanWorkspace({ repoRoot = defaultRepoRoot, ou
     await fs.mkdir(path.dirname(plansRoot), { recursive: true });
     await fs.rename(stagingRoot, plansRoot);
     const nodeCount: any = [...planNodesByDirectory.values()]
-      .reduce((total?: any, nodes?: any[]) : any => total + nodes.length, 0);
+      .reduce((total?: any, nodes?: any[]) : any => total + (nodes?.length ?? 0), 0);
     return { ok: true, profile: PROFILE, plans: PLAN_DEFINITIONS.length, nodes: nodeCount };
   } finally {
     await fs.rm(stagingRoot, { recursive: true, force: true });

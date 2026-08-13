@@ -1,6 +1,7 @@
 import { MCP_SERVER_NAME, packageJson } from "./constants.ts";
 import { option, parseTargets, targetInstallMode } from "./basic-utils.ts";
 import { clientAdapterConnectorRequest, runClientAdapter } from "./client-adapter-runner.ts";
+import { deleteMcpApiKeyCredential } from "./credential-store.ts";
 import { writeDeviceUninstall } from "./device-config.ts";
 import { discardConfiguredApiKeyEnvironment, explicitBaseUrl, registryBaseUrls } from "./discovery.ts";
 import {
@@ -46,6 +47,7 @@ export async function uninstallTargets({ options, targets, optionOverrides = {} 
           client
         })
       });
+      await deleteMcpApiKeyCredential({ target, baseUrl: settings.baseUrl });
       uninstalled[target] = {
         ok: true,
         status: "not-installed",

@@ -13,59 +13,105 @@
   },
   "imports": {
     "#meshrix/client-strings": "@meshrix/foundation/security/client-strings",
-    "#meshrix/contracts/*": "@meshrix/contracts/*",
-    "#meshrix/foundation/*": "@meshrix/foundation/*",
+    "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
+    "#meshrix/contracts/operations/static-semantic-family-catalog": "@meshrix/contracts/operations/static-semantic-family-catalog",
+    "#meshrix/contracts/serialization/canonical-json": "@meshrix/contracts/serialization/canonical-json",
+    "#meshrix/foundation/environment-compatibility/index": "@meshrix/foundation/environment-compatibility/index",
+    "#meshrix/foundation/observability/trace-context": "@meshrix/foundation/observability/trace-context",
     "#meshrix/http-response": "@meshrix/foundation/http/http-response",
     "#meshrix/http-utils": {
       "types": "./dist/http/http-utils.d.ts",
       "source": "./http/http-utils.ts",
       "default": "./dist/http/http-utils.js"
     },
-    "#meshrix/local-path-boundary": "@meshrix/foundation/security/local-path-boundary",
-    "#meshrix/operation-registry": "@meshrix/contracts/operations/operation-registry",
     "#meshrix/runtime-logger": "@meshrix/foundation/observability/runtime-logger",
     "#meshrix/state-coordinator": "@meshrix/foundation/storage/state-coordinator"
   },
   "exports": {
+    "./agent-sync/policy": {
+      "types": "./dist/agent-sync/policy.d.ts",
+      "source": "./agent-sync/policy.ts",
+      "default": "./dist/agent-sync/policy.js"
+    },
+    "./downstream-client-aspect/index": {
+      "types": "./dist/downstream-client-aspect/index.d.ts",
+      "source": "./downstream-client-aspect/index.ts",
+      "default": "./dist/downstream-client-aspect/index.js"
+    },
+    "./http/api-facade": {
+      "types": "./dist/http/api-facade.d.ts",
+      "source": "./http/api-facade.ts",
+      "default": "./dist/http/api-facade.js"
+    },
+    "./http/bootstrap-payload": {
+      "types": "./dist/http/bootstrap-payload.d.ts",
+      "source": "./http/bootstrap-payload.ts",
+      "default": "./dist/http/bootstrap-payload.js"
+    },
+    "./http/client-connection-list": {
+      "types": "./dist/http/client-connection-list.d.ts",
+      "source": "./http/client-connection-list.ts",
+      "default": "./dist/http/client-connection-list.js"
+    },
+    "./http/controllers/jobs-controller": {
+      "types": "./dist/http/controllers/jobs-controller.d.ts",
+      "source": "./http/controllers/jobs-controller.ts",
+      "default": "./dist/http/controllers/jobs-controller.js"
+    },
+    "./http/controllers/jobs-controller-artifact-handlers": {
+      "types": "./dist/http/controllers/jobs-controller-artifact-handlers.d.ts",
+      "source": "./http/controllers/jobs-controller-artifact-handlers.ts",
+      "default": "./dist/http/controllers/jobs-controller-artifact-handlers.js"
+    },
+    "./http/controllers/system-controller": {
+      "types": "./dist/http/controllers/system-controller.d.ts",
+      "source": "./http/controllers/system-controller.ts",
+      "default": "./dist/http/controllers/system-controller.js"
+    },
+    "./http/controllers/system-controller-foundation-handlers": {
+      "types": "./dist/http/controllers/system-controller-foundation-handlers.d.ts",
+      "source": "./http/controllers/system-controller-foundation-handlers.ts",
+      "default": "./dist/http/controllers/system-controller-foundation-handlers.js"
+    },
+    "./http/controllers/upstream-payload-transit-controller": {
+      "types": "./dist/http/controllers/upstream-payload-transit-controller.d.ts",
+      "source": "./http/controllers/upstream-payload-transit-controller.ts",
+      "default": "./dist/http/controllers/upstream-payload-transit-controller.js"
+    },
+    "./http/http-utils": {
+      "types": "./dist/http/http-utils.d.ts",
+      "source": "./http/http-utils.ts",
+      "default": "./dist/http/http-utils.js"
+    },
+    "./mcp/adapter/http-mcp-adapter": {
+      "types": "./dist/mcp/adapter/http-mcp-adapter.d.ts",
+      "source": "./mcp/adapter/http-mcp-adapter.ts",
+      "default": "./dist/mcp/adapter/http-mcp-adapter.js"
+    },
+    "./mcp/adapter/mcp-notification-bus": {
+      "types": "./dist/mcp/adapter/mcp-notification-bus.d.ts",
+      "source": "./mcp/adapter/mcp-notification-bus.ts",
+      "default": "./dist/mcp/adapter/mcp-notification-bus.js"
+    },
+    "./mcp/adapter/http-mcp-adapter-constants": {
+      "types": "./dist/mcp/adapter/http-mcp-adapter-constants.d.ts",
+      "source": "./mcp/adapter/http-mcp-adapter-constants.ts",
+      "default": "./dist/mcp/adapter/http-mcp-adapter-constants.js"
+    },
     "./mcp/adapter/mcp-identity": {
       "types": "./dist/mcp/adapter/gateway-installer/mcp-identity.d.ts",
       "source": "./mcp/adapter/gateway-installer/mcp-identity.ts",
       "default": "./dist/mcp/adapter/gateway-installer/mcp-identity.js"
     },
-    "./mcp/*": {
-      "types": "./dist/mcp/*.d.ts",
-      "source": "./mcp/*.ts",
-      "default": "./dist/mcp/*.js"
+    "./mcp/upstream-mcp-client": {
+      "types": "./dist/mcp/upstream-mcp-client.d.ts",
+      "source": "./mcp/upstream-mcp-client.ts",
+      "default": "./dist/mcp/upstream-mcp-client.js"
     },
-    "./agent-sync/*": {
-      "types": "./dist/agent-sync/*.d.ts",
-      "source": "./agent-sync/*.ts",
-      "default": "./dist/agent-sync/*.js"
-    },
-    "./downstream-client-aspect/*": {
-      "types": "./dist/downstream-client-aspect/*.d.ts",
-      "source": "./downstream-client-aspect/*.ts",
-      "default": "./dist/downstream-client-aspect/*.js"
-    },
-    "./http/*": {
-      "types": "./dist/http/*.d.ts",
-      "source": "./http/*.ts",
-      "default": "./dist/http/*.js"
-    },
-    "./pubsub/*": {
-      "types": "./dist/pubsub/*.d.ts",
-      "source": "./pubsub/*.ts",
-      "default": "./dist/pubsub/*.js"
-    },
-    "./common/*": {
-      "types": "./dist/common/*.d.ts",
-      "source": "./common/*.ts",
-      "default": "./dist/common/*.js"
-    },
-    "./*": {
-      "types": "./dist/common/*.d.ts",
-      "source": "./common/*.ts",
-      "default": "./dist/common/*.js"
+    "./pubsub/event-bus": {
+      "types": "./dist/pubsub/event-bus.d.ts",
+      "source": "./pubsub/event-bus.ts",
+      "default": "./dist/pubsub/event-bus.js"
     }
   },
   "files": [

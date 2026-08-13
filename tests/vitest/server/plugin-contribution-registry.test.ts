@@ -164,7 +164,7 @@ function enabledContributions(operationPatch: Record<string, any> = {}) : any {
         viewKey: "demo",
         routePath: "/admin/demo",
         componentId: "demo/DemoView",
-        assetPath: "console/index.ts",
+        assetPath: "console/index.mjs",
         assetExport: "mountPluginConsole",
         requiredScopes: ["demo:run"]
       })
@@ -226,8 +226,8 @@ describe("plugin contribution registry", () : any => {
 
     const asset: any = await registry.readConsoleAsset(entry.assetUrl);
     expect(asset.entry).toEqual(entry);
-    expect(asset.bytes.toString("utf8")).toContain("console/index.ts");
-    expect(artifactFileReader).toHaveBeenCalledWith(expect.objectContaining({ id: "demo" }), "console/index.ts");
+    expect(asset.bytes.toString("utf8")).toContain("console/index.mjs");
+    expect(artifactFileReader).toHaveBeenCalledWith(expect.objectContaining({ id: "demo" }), "console/index.mjs");
     expect(await registry.readConsoleAsset(`${entry.assetUrl}.unknown`)).toBeNull();
 
     registry.deactivatePlugin("demo");
@@ -237,10 +237,10 @@ describe("plugin contribution registry", () : any => {
 
   it("rejects unsafe or incomplete console artifact declarations", () : any => {
     for (const patch of [
-      { assetPath: "../runtime.ts" },
-      { assetPath: "runtime.ts" },
-      { assetPath: "console\\index.ts" },
-      { assetPath: "console//index.ts" },
+      { assetPath: "../runtime.mjs" },
+      { assetPath: "runtime.mjs" },
+      { assetPath: "console\\index.mjs" },
+      { assetPath: "console//index.mjs" },
       { assetExport: "default export" }
     ]) {
       const contributions: any = enabledContributions();

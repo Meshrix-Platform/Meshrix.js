@@ -14,7 +14,7 @@ import {
   buildGovernedConfirmPayload,
   type GovernedConfirmPayload,
 } from "./console-governed-confirm-payload";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 
 export type ApprovalFlowStatus = "pending" | "resolved" | "rejected" | "all";
 
@@ -769,7 +769,9 @@ export function createApprovalFlowActionGuard() : any {
 }
 
 export function useApprovalFlowViewController() : any {
-  const { approvalFlowConsole } = useServerConsoleShellContext();
+  const {
+  approvalFlowConsole,
+} = useServerConsoleShellContext().approvals;
   const {
     approvalFlowSelectedStatus,
     isBusy,

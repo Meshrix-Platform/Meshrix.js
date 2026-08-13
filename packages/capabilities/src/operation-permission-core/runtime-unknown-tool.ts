@@ -35,8 +35,8 @@ export async function denyUnknownToolExecution({
     startedAt,
     finishedAt: nowIso()
   });
-  store.appendMetric({ traceId, toolId, status: "denied", reasonCode, inputBytes });
-  appendAuthorizationDecision(securityPermissions, {
+  await store.appendMetric({ traceId, toolId, status: "denied", reasonCode, inputBytes });
+  await appendAuthorizationDecision(securityPermissions, {
     decisionId: randomId("authz_decision"),
     traceId,
     toolExecutionId,

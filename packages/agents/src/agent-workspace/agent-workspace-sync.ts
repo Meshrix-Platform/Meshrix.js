@@ -375,7 +375,10 @@ export function createAgentWorkspaceSyncApi({
           action: "put",
           key: target.relativePath,
           valueRef: archived.rootCid,
-          metadata: filePayloadMetadata(file)
+          metadata: {
+            ...filePayloadMetadata(file),
+            contentCid: archived?.metadata?.contentCid || ""
+          }
         });
         contentRefs.push(...(archived.contentRefs || []));
       }
@@ -400,7 +403,8 @@ export function createAgentWorkspaceSyncApi({
       operationId,
       stateCommit,
       action: "sync.apply",
-      path: plan.targetPath || "/"
+      path: plan.targetPath || "/",
+      mutations
     });
     return {
       ...plan,
@@ -420,11 +424,33 @@ export function createAgentWorkspaceSyncApi({
       if (!merkleState) {
         throw new Error("文件快照引用 CAS contentCid，但 Merkle State 基座不可用。");
       }
-      const block: any = await merkleState.cas.getBlock(String(entry.contentCid || entry.cid));
-      if (!block) {
-        throw new Error(`文件快照内容块不存在：${entry.contentCid || entry.cid}`);
-      }
-      return block.bytes;
+      const seen: any = new Set<any>();
+      const decodeCid: any = async (cid?: any) : Promise<any> => {
+        const normalizedCid: any = String(cid || "");
+        if (!normalizedCid || seen.has(normalizedCid) || seen.size >= 100_000) {
+          throw new Error("Workspace snapshot CAS manifest is cyclic or exceeds its bound.");
+        }
+        seen.add(normalizedCid);
+        const block: any = await merkleState.cas.getBlock(normalizedCid);
+        if (!block) {
+          throw new Error(`文件快照内容块不存在：${normalizedCid}`);
+        }
+        if (block.value?.manifestType !== "meshrix.merkle-dag.manifest") {
+          return Buffer.from(block.bytes || []);
+        }
+        const chunks: any[] = [];
+        const manifestEntries: any = asArray(block.value.entries)
+          .slice()
+          .sort((left?: any, right?: any) : any =>
+            Number(left?.metadata?.chunkIndex ?? 0) - Number(right?.metadata?.chunkIndex ?? 0) ||
+            String(left?.key || left?.path || "").localeCompare(String(right?.key || right?.path || ""))
+          );
+        for (const manifestEntry of manifestEntries) {
+          chunks.push(await decodeCid(manifestEntry.valueRef || manifestEntry.cid));
+        }
+        return Buffer.concat(chunks);
+      };
+      return decodeCid(entry.contentCid || entry.cid);
     }
     return decodeWorkspaceFileContent(entry);
   }
@@ -460,7 +486,17 @@ export function createAgentWorkspaceSyncApi({
   }
 
   async function normalizeWorkspaceFileSnapshot(input: Record<string, any> = {}) : Promise<any> {
-    const snapshot: any = asObject(input.snapshot || input.workspaceFileSnapshot || input.fileSnapshot || input);
+    let snapshot: any = asObject(input.snapshot || input.workspaceFileSnapshot || input.fileSnapshot || input);
+    if (
+      snapshot.incremental === true &&
+      snapshot.stateRoot &&
+      asArray(input.stateRootAllowedOperationIds).length > 0
+    ) {
+      snapshot = await fileStateApi.buildWorkspaceFileSnapshotFromStateRoot(
+        workspaceForStorage(input).workspace,
+        snapshot.stateRoot
+      );
+    }
     const basePath: any = normalizeWorkspaceRelativePath(snapshot.basePath || snapshot.rootPath || input.basePath || "", { allowEmpty: true });
     const rawFiles: any = asArray(snapshot.files || snapshot.entries || input.files);
     const localDirectorySnapshots: any = asArray(snapshot.localDirectorySnapshots || snapshot.mountSnapshots);
@@ -895,6 +931,7 @@ export function createAgentWorkspaceSyncApi({
           action: "files.restore",
           path: snapshot.basePath,
           preimageSnapshot: restorePreimageSnapshot,
+          mutations: commitMutations,
           mutationOrigin
         })
         : null;

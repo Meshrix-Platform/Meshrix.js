@@ -1,5 +1,3 @@
-import pLimit from "p-limit";
-
 export function normalizeConcurrency(value?: any, fallback: any = 1, max: any = Number.MAX_SAFE_INTEGER) : any {
   const parsed: any = Number(value);
   const normalized: any = Number.isFinite(parsed) ? Math.trunc(parsed) : Number(fallback || 1);
@@ -16,10 +14,17 @@ export async function mapWithConcurrency(items?: any, concurrency?: any, mapper?
     options.fallbackConcurrency || 1,
     options.maxConcurrency || list.length
   );
-  const limit: any = pLimit(safeConcurrency);
-  return Promise.all(
-    list.map((item?: any, index?: any) : any =>
-      limit(() : any => mapper(item, index))
-    )
+  const output: any[] = new Array(list.length);
+  let cursor: any = 0;
+  const workers: any[] = Array.from(
+    { length: Math.min(safeConcurrency, list.length) },
+    async () : Promise<any> => {
+      while (cursor < list.length) {
+        const index: any = cursor++;
+        output[index] = await mapper(list[index], index);
+      }
+    }
   );
+  await Promise.all(workers);
+  return output;
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Instance Configuration"
+  short_description: "Configure local runtime, plugins, and agent access"
+  default_prompt: "Use $meshrix-js-instance-configuration to configure and verify this Meshrix.js instance without exposing credentials or runtime data."

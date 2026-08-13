@@ -34,7 +34,12 @@ export function workspaceFileSnapshotFromCheckpointPlan(plan: Record<string, any
     : Array.isArray(snapshot.mountSnapshots)
       ? snapshot.mountSnapshots
       : [];
-  if (files.length === 0 && localDirectorySnapshots.length === 0 && snapshot.deleteExtraneous !== true) {
+  if (
+    files.length === 0 &&
+    localDirectorySnapshots.length === 0 &&
+    snapshot.deleteExtraneous !== true &&
+    snapshot.incremental !== true
+  ) {
     return null;
   }
   return {

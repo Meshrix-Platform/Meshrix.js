@@ -14,7 +14,7 @@ const operation: Record<string, any> = {
   id: "fixture.private-read",
   target: { controller: "fixture", method: "handle" },
   http: { method: "GET", path: "/fixture/private" },
-  concurrencySafe: true,
+  concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
   readOnly: true,
   safety: { risk: "read_only" },
   audit: { enabled: false },

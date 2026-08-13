@@ -284,6 +284,19 @@ See [MCP-NATIVE-INSTALLER.md](MCP-NATIVE-INSTALLER.md).
 
 The baseline deployment is self-contained. Optional middleware integrations provide deployment-specific production characteristics through explicit code, configuration, documentation, and verifier coverage.
 
+## Runtime Refactor Convergence
+
+The runtime performance and maintainability refactor converged on one owner per invariant, with no dual readers, writers, or fallback paths.
+
+- Bounded Gateway runtime aggregate owner: `packages/agents/src/upstream-gateway/registry-runtime.ts`. Routine outcomes update bounded in-memory buckets, flush only dirty buckets in bounded batches through the WAL-backed primitive, recover committed buckets at startup, and never synchronously read, merge, sort, serialize, or atomically rewrite the complete runtime state on the request path.
+- Incremental Workspace checkpoints: `packages/agents/src/agent-workspace/agent-workspace-file-state.ts`. Ordinary mutations record changed paths and canonical Merkle or CAS references; full enumeration and content materialization occur only for explicit snapshot or export operations.
+- Revisioned authorization compiler: `packages/foundation/src/security/authorization/authorization-engine.ts`. Immutable normalized facts compile once per exact bounded revision key; dynamic facts, current revision checks, decision persistence, and final sink enforcement stay outside the cache.
+- Unified routing and visible-tool snapshots: `packages/server-runtime/src/routing/operation-route-index.ts`. Dispatch and tool calls use required map indexes, rebuild only on revision change, and re-resolve the current operation before the protected sink.
+- Canonical governed proof and audit lifecycle: `packages/server-runtime/src/operations/dispatch-operation-proof-lifecycle.ts`. One execution has one prepared proof, one unique authorization decision, one terminal settlement, and reference-bound audit projections without duplicated durable request or outcome copies.
+- Explicit module boundaries: strict Node TypeScript (`tsconfig.node.json`) with deliberate exact package subpath imports and an acyclic lock-manager contract (`packages/foundation/src/concurrency/lock-manager-contract.ts`).
+- Typed Console shell: `apps/console/composables/useServerConsoleShell.ts`. Providers and consumers share one readonly compile-time contract with no flat any-typed facade.
+- Focused verifier: `npm run verify:runtime-refactor-convergence` proves stable behavior, lossless canonical migration, absence of legacy paths, safe-write forwarding with zero request-path full-state rewrites, bounded work, and privacy-safe clean-run observations. Its report is projection-only and never certifies capacity.
+
 ## Verification
 
 ```bash

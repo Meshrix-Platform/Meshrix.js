@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["$schema", "version", "schemaVersion", "owners"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "string", "minLength": 1 },
+    "schemaVersion": { "const": "v0.0.1:runtime:sqlite-owner-migration-1" },
+    "owners": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["owner", "result", "fallback"],
+        "properties": {
+          "owner": { "type": "string", "minLength": 1 },
+          "result": { "type": "string", "minLength": 1 },
+          "authority": { "type": "string", "minLength": 1 },
+          "databases": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "boundedBy": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "productionFacade": { "type": "string", "minLength": 1 },
+          "workerOwner": { "type": "string", "minLength": 1 },
+          "productionFacades": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "workerOwners": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+          "reason": { "type": "string", "minLength": 1 },
+          "fallback": { "const": false }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

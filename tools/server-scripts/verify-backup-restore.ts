@@ -14,8 +14,8 @@ import { assertPrivacySafeStorageEvidence } from "../../packages/foundation/src/
 import { createServiceManifestStore } from "../../packages/foundation/src/storage/service-manifest-store.ts";
 import { SERVICE_MANIFEST_SCHEMA_VERSION } from "../../packages/foundation/src/storage/storage-ports.ts";
 import {
-  classifyProtocolSubstrateStorageArtifact,
-  PROTOCOL_SUBSTRATE_STORAGE_CATEGORY
+  classifyProtocolStorageArtifact,
+  PROTOCOL_STORAGE_CATEGORY
 } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
 import { createToolCatalog } from "../../packages/capabilities/src/operation-permission-core/catalog.ts";
 
@@ -36,7 +36,7 @@ async function verifyBackupRestore(tempRoot?: any) : Promise<any> {
   const backup: any = await createStorageBackup({
     userDataPath: tempRoot,
     label: "verify",
-    artifactClassifiers: [classifyProtocolSubstrateStorageArtifact]
+    artifactClassifiers: [classifyProtocolStorageArtifact]
   });
   assert.equal(backup.protocolVersion, BACKUP_RESTORE_PROTOCOL_VERSION);
   assert.ok(backup.backupId.startsWith("backup_"));
@@ -52,7 +52,7 @@ async function verifyBackupRestore(tempRoot?: any) : Promise<any> {
   assert.equal(backup.summary.byCategory["json-state"], 1);
   assert.equal(backup.summary.byCategory.jobs, 1);
   assert.equal(backup.summary.byCategory.object, 1);
-  assert.equal(backup.summary.byCategory[PROTOCOL_SUBSTRATE_STORAGE_CATEGORY], 1);
+  assert.equal(backup.summary.byCategory[PROTOCOL_STORAGE_CATEGORY], 1);
   assert.ok(!backup.files.some((entry?: any) : any => entry.relativePath.startsWith("logs/")));
 
   const listed: any = await listStorageBackups({ userDataPath: tempRoot });

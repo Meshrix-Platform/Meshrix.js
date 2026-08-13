@@ -12,15 +12,15 @@ import {
   PACTIUM_SCHEMA_VERSION,
   protocolHash,
   protocolHashHex,
-  normalizeCanonicalValue
+  normalizeCanonicalValue,
+  toCanonicalSafeValue
 } from "pactium";
 import { serverToken } from "#meshrix/client-strings";
 import { queueStateMutation } from "../../storage/state-coordinator.ts";
 import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
-} from "./pactium-substrate-preflight.ts";
-import { toPactiumCanonicalSafeValue } from "./pactium-canonical-safe.ts";
+} from "./pactium-runtime.ts";
 
 export const MERKLE_STATE_SUBSTRATE_PROTOCOL: any = PACTIUM_PROTOCOL;
 export const MERKLE_STATE_SUBSTRATE_PROVIDER: any = "pactium.verifiable-state-substrate";
@@ -32,7 +32,6 @@ const STATE_COMMIT_EVENT_INDEX_SCOPE: any =
 const STATE_MUTATION_IDEMPOTENCY_SCOPE: any =
   "meshrix-state-mutation-idempotency";
 const EVENT_LOG_SCOPE: any = "meshrix-event-log";
-const LSM_SESSION_SCOPE: any = "meshrix-lsm-session";
 
 function substrateMutationError(code?: any, message?: any) : any {
   const error: Error & Record<string, any> = new Error(message);
@@ -85,7 +84,7 @@ function nowIso() : any {
   return new Date().toISOString();
 }
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
@@ -106,7 +105,7 @@ function normalizePathKey(value?: any) : any {
 }
 
 function normalizeCanonical(value?: any) : any {
-  return normalizeCanonicalValue(toPactiumCanonicalSafeValue(value, {
+  return normalizeCanonicalValue(toCanonicalSafeValue(value, {
     maxDepth: 256,
     maxArrayItems: 100000,
     maxObjectKeys: 100000,
@@ -742,139 +741,46 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     }
   });
 
-  async function loadSessions() : Promise<any> {
-    if (!storage.inMemory) storage.clearCache?.();
-    return asObject(await storage.getProtocolObject(LSM_SESSION_SCOPE, "sessions", {}));
-  }
-
-  async function saveSessions(sessions?: any) : Promise<any> {
-    await storage.putProtocolObject(LSM_SESSION_SCOPE, "sessions", sessions);
-  }
-
-  const lsmIngest: Readonly<Record<string, any>> = Object.freeze({
-    async beginUploadSession(input: Record<string, any> = {}) : Promise<any> {
-      return withSerializedStorageMutation(storage, "meshrix-lsm-sessions", async () : Promise<any> => {
-      const sessions: any = await loadSessions();
-      const uploadSessionId: any = serverToken("upload_session", input.scope || "default", nowIso(), randomUUID());
-      const session: Record<string, any> = {
-        uploadSessionId,
-        scope: text(input.scope, "default"),
-        files: normalizeCanonical(asArray(input.files)),
-        records: [],
-        segments: [],
-        createdAt: nowIso(),
-        updatedAt: nowIso()
-      };
-      sessions[uploadSessionId] = session;
-      await saveSessions(sessions);
-      return session;
-      });
-    },
-    async recoverSession(uploadSessionId?: any) : Promise<any> {
-      const session: any = (await loadSessions())[text(uploadSessionId)];
-      if (!session) return null;
-      const records: any = sortedChunkRecords(asArray(session.records));
-      const nextOffset: any = records.reduce((max?: any, record?: any) : any => Math.max(max, Number(record.offset || 0) + Number(record.byteLength || 0)), 0);
-      return {
-        ...session,
-        records,
-        recordCount: records.length,
-        nextOffset
-      };
-    },
-    async appendChunkRecord(uploadSessionId?: any, record: Record<string, any> = {}) : Promise<any> {
-      return withSerializedStorageMutation(storage, "meshrix-lsm-sessions", async () : Promise<any> => {
-      const sessions: any = await loadSessions();
-      const session: any = sessions[text(uploadSessionId)];
-      if (!session) throw new Error("upload session missing");
-      const chunkCid: any = text(record.chunkCid || record.cid);
-      if (!chunkCid || !(await storage.hasBlock(chunkCid))) {
-        throw new Error("chunkCid must reference an existing CAS block");
+  const uploadManifest: Readonly<Record<string, any>> = Object.freeze({
+    async materialize(input: Record<string, any> = {}) : Promise<any> {
+      const records: any[] = sortedChunkRecords(asArray(input.records));
+      for (const record of records) {
+        const chunkCid: any = text(record.chunkCid || record.cid);
+        if (!chunkCid || !(await storage.hasBlock(chunkCid))) {
+          throw new Error("chunkCid must reference an existing CAS block");
+        }
       }
-      const normalized: Record<string, any> = {
-        fileId: text(record.fileId || record.relativePath),
-        relativePath: normalizePathKey(record.relativePath || record.fileId),
-        chunkIndex: Number(record.chunkIndex || 0),
-        offset: Number(record.offset || 0),
-        byteLength: Number(record.byteLength || 0),
-        chunkCid,
-        chunkHash: text(record.chunkHash),
-        metadata: normalizeCanonical(asObject(record.metadata)),
-        recordedAt: nowIso()
-      };
-      session.records.push(normalized);
-      session.updatedAt = nowIso();
-      await saveSessions(sessions);
-      return normalized;
-      });
-    },
-    async flushMemTable(uploadSessionId?: any) : Promise<any> {
-      return withSerializedStorageMutation(storage, "meshrix-lsm-sessions", async () : Promise<any> => {
-      const sessions: any = await loadSessions();
-      const session: any = sessions[text(uploadSessionId)];
-      if (!session) throw new Error("upload session missing");
-      const records: any = sortedChunkRecords(asArray(session.records));
-      const segment: Record<string, any> = {
-        segmentId: serverToken("lsm_segment", uploadSessionId, records.length, nowIso(), randomUUID()),
-        scope: session.scope,
-        level: 0,
-        recordCount: records.length,
-        records,
-        createdAt: nowIso()
-      };
-      const block: any = await cas.putBlock(segment, {
-        refs: records.map((record?: any) : any => record.chunkCid),
-        kind: "meshrix.lsm-segment"
-      });
-      segment.rootCid = block.cid;
-      session.segments.push(segment);
-      session.updatedAt = nowIso();
-      await saveSessions(sessions);
-      return segment;
-      });
-    },
-    async materializeManifest(uploadSessionId?: any) : Promise<any> {
-      const session: any = (await loadSessions())[text(uploadSessionId)];
-      if (!session) throw new Error("upload session missing");
-      const records: any = sortedChunkRecords(asArray(session.records));
-      return merkleDag.buildManifest("lsm-upload-session", records.map((record?: any) : any => ({
-        key: `${normalizePathKey(record.relativePath || record.fileId)}#${String(Number(record.chunkIndex || 0)).padStart(12, "0")}`,
-        path: `${normalizePathKey(record.relativePath || record.fileId)}#${String(Number(record.chunkIndex || 0)).padStart(12, "0")}`,
-        cid: record.chunkCid,
-        byteLength: record.byteLength,
-        metadata: { offset: record.offset, chunkHash: record.chunkHash }
-      })), {
-        uploadSessionId,
-        scope: session.scope
-      });
-    },
-    async compactSegments(scope: any = "default") : Promise<any> {
-      const normalizedScope: any = text(scope, "default");
-      const sessions: any = (Object.values(await loadSessions()) as any[]).filter((session?: any) : any => session.scope === normalizedScope);
-      const segments: any = sessions.flatMap((session?: any) : any => asArray(session.segments));
-      const records: any = segments.flatMap((segment?: any) : any => asArray(segment.records));
-      if (segments.length === 0) {
-        return {
-          scope: normalizedScope,
-          recordCount: 0,
-          sourceSegmentIds: []
-        };
-      }
-      const compacted: Record<string, any> = {
-        scope: normalizedScope,
-        recordCount: records.length,
-        sourceSegmentIds: segments.map((segment?: any) : any => segment.segmentId),
-        level: 1,
-        records: sortedChunkRecords(records),
-        createdAt: nowIso()
-      };
-      const block: any = await cas.putBlock(compacted, {
-        refs: segments.map((segment?: any) : any => segment.rootCid).filter(Boolean),
-        kind: "meshrix.lsm-compacted-segment"
-      });
+      const manifest: any = await merkleDag.buildManifest(
+        "upload-manifest",
+        records.map((record?: any) : any => {
+          const relativePath: any = normalizePathKey(record.relativePath || record.fileId);
+          const suffix: any = String(Number(record.chunkIndex || 0)).padStart(12, "0");
+          return {
+            key: `${relativePath}#${suffix}`,
+            path: `${relativePath}#${suffix}`,
+            cid: text(record.chunkCid || record.cid),
+            byteLength: Number(record.byteLength || 0),
+            metadata: {
+              offset: Number(record.offset || 0),
+              chunkHash: text(record.chunkHash)
+            }
+          };
+        }),
+        {
+          scope: text(input.scope, "default"),
+          files: normalizeCanonical(asArray(input.files))
+        }
+      );
       return {
-        ...compacted,
-        rootCid: block.cid
+        ...manifest,
+        recordCount: records.length,
+        nextOffset: records.reduce(
+          (maximum?: any, record?: any) : any => Math.max(
+            maximum,
+            Number(record.offset || 0) + Number(record.byteLength || 0)
+          ),
+          0
+        )
       };
     }
   });
@@ -906,7 +812,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
     merkleIndex,
     eventLog,
     stateCommit,
-    lsmIngest,
+    uploadManifest,
     close() : any {
       return ownsPactiumRuntime
         ? (runtime.close?.() || Promise.resolve())
@@ -923,7 +829,7 @@ export function createPactiumStateSubstrate({ userDataPath = "", dataDir = "", p
           "verifiable-index",
           "event-log",
           "state-commit",
-          "lsm-ingest"
+          "upload-manifest"
         ]
       };
     }

@@ -67,7 +67,12 @@ export function authorizationSubjectId(authorization: any = null) : string {
 }
 
 export function authorizationGrantId(authorization: any = null) : string {
-  return String(authorization?.grant?.id || "");
+  return String(
+    authorization?.grant?.id ||
+    authorization?.apiKeyAuthorization?.keyId ||
+    authorization?.restriction?.credentialId ||
+    ""
+  );
 }
 
 export function authorizationSubjectType(authorization: any = null) : string {

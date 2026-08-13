@@ -1,72 +1,65 @@
-import fs from "node:fs";
-import path from "node:path";
-import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
+import { createSqliteExecutionLane } from "@meshrix/foundation/storage/sqlite-execution-lane";
+import {
+  createCapabilityBindingGuard
+} from "@meshrix/foundation/security/authorization/capability-binding-guard";
 import {
   createCommandCapabilitySecurityClient
 } from "@meshrix/foundation/security/authorization/capability-security-helper-client";
 import {
   createOpaqueCapabilityKeyProvider
 } from "@meshrix/foundation/security/authorization/opaque-capability-key";
-import {
-  createCapabilityBindingGuard
-} from "@meshrix/foundation/security/authorization/capability-binding-guard";
-import { createSecurityAlertStore } from "@meshrix/foundation/security/security-alerts";
-import { createAuditStoreMethods } from "./store-audit.ts";
-import { createGrantStoreMethods } from "./store-grants.ts";
-import { createMetricsStoreMethods } from "./store-metrics.ts";
-import { createPendingStoreMethods } from "./store-pending.ts";
-import {
-  getOperationPermissionDatabasePath
-} from "./store-paths.ts";
-import { ensureSchema } from "./store-schema.ts";
-import {
-  isEnabled,
-  normalizePolicyRevisionSnapshot,
-  normalizeStringList,
-  nowIso
-} from "./store-utils.ts";
+import { normalizePolicyRevisionSnapshot } from "./store-utils.ts";
 
-export {
-  getOperationPermissionDatabasePath
-} from "./store-paths.ts";
+export { getOperationPermissionDatabasePath } from "./store-common.ts";
 
-function assertActiveCatalogGrantReferences(registry?: any, input: Record<string, any> = {}) : any {
-  if (!registry || typeof registry.getCatalog !== "function") return;
-  const catalog: any = registry.getCatalog();
-  const activeScopes: any = new Set<any>((catalog.scopes || []).map((scope?: any) : any => scope.id));
-  const activeToolsets: any = new Set<any>((catalog.toolsets || []).map((toolset?: any) : any => toolset.id));
-  const activeTools: any = new Set<any>((catalog.tools || []).map((tool?: any) : any => tool.id));
-  const checks: any[] = [
-    ["scopes", activeScopes],
-    ["toolsets", activeToolsets],
-    ["toolAllow", activeTools],
-    ["toolDeny", activeTools]
-  ];
-  for (const [field, activeIds] of checks) {
-    if (!Object.hasOwn(input, field)) continue;
-    const inactive: any = normalizeStringList(input[field]).filter((id?: any) : any => !activeIds.has(id));
-    if (inactive.length > 0) {
-      const error: Error & Record<string, any> = new Error(`Operation Permission grant references inactive ${field}.`);
-      error.code = "operation_permission_inactive_catalog_reference";
-      error.field = field;
-      throw error;
-    }
+export const OPERATION_PERMISSION_STORE_COMMANDS: readonly string[] = Object.freeze([
+  "listGrants", "getGrant", "getRawGrant", "createGrant", "updateGrant", "deleteGrant",
+  "revokeGrant", "registerPluginGrantOwner", "revokeGrantsByPluginOwner", "rotateGrantToken",
+  "authorizeRequest", "authorizeGrantForExecution", "appendGrantEvent", "listGrantEvents",
+  "appendPolicyDecision", "appendPolicyDecisionAnchored", "listPolicyDecisions", "appendExecution",
+  "appendExecutionAnchored", "anchorPermissionAuditFact", "provePermissionAuditInclusion",
+  "appendMetric", "appendHttpRequestMetric", "saveCatalogSnapshot", "flushChangeNotifications",
+  "listAudit", "getAudit", "metricsSummary", "metricsExport", "metricsHealth",
+  "metricsPrometheus", "metricsStorageSummary", "pruneMetrics", "createPendingOperation",
+  "getPendingOperation", "listPendingOperations", "resolvePendingOperation", "diagnostic", "close"
+]);
+
+export const OPERATION_PERMISSION_API_KEY_COMMANDS: readonly string[] = Object.freeze([
+  "getIssuerScopes", "list", "create", "rotate", "revoke", "authenticateRuntime",
+  "revalidateAuthorization", "authorizeOperation", "reserveEffect", "revalidateEffect",
+  "releaseEffect", "explainLookupPlan"
+]);
+
+function requestProjection(request: any = null) : any {
+  if (!request || typeof request !== "object") return null;
+  const headers: Record<string, any> = {};
+  for (const [key, value] of Object.entries(request.headers || {})) {
+    if (typeof value === "string" || Array.isArray(value)) headers[String(key).toLowerCase()] = value;
   }
+  return {
+    headers,
+    url: String(request.url || ""),
+    method: String(request.method || ""),
+    socket: { remoteAddress: String(request.socket?.remoteAddress || "") },
+    __meshrixRequestId: String(request.__meshrixRequestId || ""),
+    __meshrixTraceContext: request.__meshrixTraceContext && typeof request.__meshrixTraceContext === "object"
+      ? structuredClone(request.__meshrixTraceContext)
+      : null,
+    __meshrixProcessIdentity: request.__meshrixProcessIdentity && typeof request.__meshrixProcessIdentity === "object"
+      ? structuredClone(request.__meshrixProcessIdentity)
+      : null
+  };
 }
 
-function closeDistinctResources(resources: any = []) : any {
-  const failures: any[] = [];
-  const closed: any = new Set<any>();
-  for (const resource of resources) {
-    if (!resource || closed.has(resource) || typeof resource.close !== "function") continue;
-    closed.add(resource);
-    try {
-      resource.close();
-    } catch {
-      failures.push(true);
-    }
-  }
-  return failures;
+function normalizeArguments(kind?: any, args: any[] = []) : any[] {
+  if (!["authorizeRequest", "authorizeGrantForExecution"].includes(String(kind || ""))) return args;
+  const input: any = args[0] && typeof args[0] === "object" ? args[0] : {};
+  return [{
+    ...input,
+    request: requestProjection(input.request),
+    requestBody: Buffer.isBuffer(input.requestBody) ? input.requestBody : Buffer.from(input.requestBody || ""),
+    url: input.url instanceof URL ? input.url.toString() : String(input.url || "")
+  }, ...args.slice(1)];
 }
 
 export function createOperationPermissionStore({
@@ -79,245 +72,139 @@ export function createOperationPermissionStore({
   securityPermissions = null,
   changeListener = null,
   proofSubstrate = null,
-  metricRetention = null
+  apiKeyVerifierKeyProvider = null,
+  apiKeyClock = null,
+  apiKeyRandomBytes = null,
+  metricRetention = null,
+  maxPending = 1024,
+  maxPendingBytes = 16 * 1024 * 1024,
+  defaultDeadlineMs = 30_000
 }: Record<string, any>) : any {
-  const rootPath: any = path.join(userDataPath, "operation-permission");
-  fs.mkdirSync(rootPath, { recursive: true });
-  let db: any = null;
-  let securityHelperClient: any = null;
-  let resolvedCapabilityKeyProvider: any = null;
-  let resolvedCapabilityBindingGuard: any = null;
-  try {
-    db = openSqliteDatabase(getOperationPermissionDatabasePath(userDataPath));
-    ensureSchema(db);
-    securityHelperClient = (!capabilityKeyProvider && !capabilityBindingGuard && isEnabled(
-      process.env.MESHRIX_TOOL_GRANT_CAPABILITY_SECURITY_HELPER ||
-        process.env.MESHRIX_CAPABILITY_SECURITY_HELPER
-    ))
-      ? createCommandCapabilitySecurityClient({
-          dataDir: userDataPath,
-          backend: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
-            process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
-            "auto",
-          alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants",
-          bindingBackend: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
-            process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
-            "auto",
-          bindingAlias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
-        })
-      : null;
-    resolvedCapabilityKeyProvider =
-      capabilityKeyProvider ||
-      securityHelperClient ||
-      createOpaqueCapabilityKeyProvider({
-        dataDir: userDataPath,
-        backend: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
-          process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
-          "auto",
-        alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants"
-      });
-    resolvedCapabilityBindingGuard = capabilityBindingGuard === false
-      ? null
-      : capabilityBindingGuard ||
-        securityHelperClient ||
-        createCapabilityBindingGuard({
-          dataDir: userDataPath,
-          backend: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
-            process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
-            "auto",
-          alias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
-        });
-    return createOperationPermissionStoreFromResources({
-      db,
-      rootPath,
-      userDataPath,
-      registry,
-      capabilityResolver,
-      resolvedCapabilityKeyProvider,
-      resolvedCapabilityBindingGuard,
-      governancePolicyRevisionProvider,
-      securityPermissions,
-      changeListener,
-      proofSubstrate,
-      metricRetention
+  const securityHelperClient: any = (!capabilityKeyProvider && !capabilityBindingGuard && /^(1|true|yes|on|command|helper)$/i.test(String(
+    process.env.MESHRIX_TOOL_GRANT_CAPABILITY_SECURITY_HELPER || process.env.MESHRIX_CAPABILITY_SECURITY_HELPER || ""
+  ))) ? createCommandCapabilitySecurityClient({
+    dataDir: userDataPath,
+    backend: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
+      process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
+      "auto",
+    alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants",
+    bindingBackend: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
+      process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
+      "auto",
+    bindingAlias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
+  }) : null;
+  const resolvedCapabilityKeyProvider: any = capabilityKeyProvider || securityHelperClient || createOpaqueCapabilityKeyProvider({
+    dataDir: userDataPath,
+    backend: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_PROVIDER ||
+      process.env.MESHRIX_OPAQUE_CAPABILITY_KEY_PROVIDER ||
+      "auto",
+    alias: process.env.MESHRIX_TOOL_GRANT_CAPABILITY_KEY_ALIAS || "meshrix-tool-grants"
+  });
+  const resolvedCapabilityBindingGuard: any = capabilityBindingGuard === false
+    ? null
+    : capabilityBindingGuard || securityHelperClient || createCapabilityBindingGuard({
+      dataDir: userDataPath,
+      backend: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_PROVIDER ||
+        process.env.MESHRIX_CAPABILITY_BINDING_GUARD_PROVIDER ||
+        "auto",
+      alias: process.env.MESHRIX_TOOL_GRANT_BINDING_GUARD_ALIAS || "meshrix-tool-bindings"
     });
-  } catch (error: any) {
-    closeDistinctResources([
-      resolvedCapabilityBindingGuard,
-      resolvedCapabilityKeyProvider,
-      securityHelperClient,
-      db
-    ]);
-    throw error;
-  }
-}
 
-function createOperationPermissionStoreFromResources({
-  db,
-  rootPath,
-  userDataPath,
-  registry,
-  capabilityResolver,
-  resolvedCapabilityKeyProvider,
-  resolvedCapabilityBindingGuard,
-  governancePolicyRevisionProvider,
-  securityPermissions,
-  changeListener,
-  proofSubstrate = null,
-  metricRetention = null
-}: Record<string, any>) : any {
-  const pendingChangeNotifications: any = new Set<any>();
-  let securityAlertStore: any = null;
-  let closed: any = false;
-
-  const ctx: Record<string, any> = {
-    db,
-    rootPath,
-    userDataPath,
-    registry,
-    capabilityResolver,
-    resolvedCapabilityKeyProvider,
-    resolvedCapabilityBindingGuard,
-    governancePolicyRevisionProvider,
-    securityPermissions,
-    proofSubstrate,
-    metricRetention,
-    getSecurityAlertStore() : any {
-      if (!securityAlertStore) {
-        securityAlertStore = createSecurityAlertStore({ userDataPath });
-      }
-      return securityAlertStore;
+  const catalogSnapshot: any = () : any => registry?.getCatalog?.() || null;
+  const hostHandlers: Record<string, any> = {
+    "catalog.get": () : any => catalogSnapshot(),
+    "catalog.listTools": () : any => registry?.listTools?.() || catalogSnapshot()?.tools || [],
+    "catalog.resolveToolset": (input?: any) : any => registry?.resolveToolset?.(input || {}) || { toolsets: [], tools: [], requiredScopes: [] },
+    "capability.resolve": (input?: any) : any => typeof capabilityResolver === "function" ? capabilityResolver(input?.grant || {}) : [],
+    "capability.issue": (input?: any) : any => resolvedCapabilityKeyProvider?.issue?.(input || {}),
+    "capability.verify": (input?: any) : any => resolvedCapabilityKeyProvider?.verify?.(input || {}),
+    "capability.invalidate": (input?: any) : any => resolvedCapabilityKeyProvider?.invalidateCredential?.(input || {}),
+    "binding.bind": (input?: any) : any => resolvedCapabilityBindingGuard?.bindCapabilityKey?.(input || {}),
+    "binding.verify": (input?: any) : any => resolvedCapabilityBindingGuard?.verifyCapabilityKeyBinding?.(input || {}),
+    "binding.invalidate": (input?: any) : any => resolvedCapabilityBindingGuard?.invalidateCapabilityKeyBinding?.(input || {}),
+    "governance.revision": () : any => normalizePolicyRevisionSnapshot(governancePolicyRevisionProvider?.()),
+    "governance.organization": () : any => securityPermissions?.getOrganizationGovernance?.() || null,
+    "governance.summary": () : any => securityPermissions?.getGovernanceSummary?.() || null,
+    "processIdentity.verify": (input?: any) : any => securityPermissions?.verifyProcessIdentity?.(input || {}),
+    "proof.record": (input?: any) : any => proofSubstrate?.recordWorkspaceOperation?.(input || {}),
+    "proof.prove": (input?: any) : any => proofSubstrate?.proveWorkspaceMembership?.(input || {}),
+    "proof.project": (input?: any) : any => proofSubstrate?.getWorkspaceProjection?.(String(input?.workspaceId || "")),
+    "apiKey.verifierKey": (input?: any) : any => apiKeyVerifierKeyProvider?.getKey?.(String(input?.generation || "")),
+    "change.notify": (input?: any) : any => typeof changeListener === "function" ? changeListener(input || {}) : null
+  };
+  const lane: any = createSqliteExecutionLane({
+    owner: "authorization-operation-permission",
+    workerUrl: new URL(
+      `./store-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
+      import.meta.url
+    ),
+    workerData: {
+      userDataPath,
+      metricRetention,
+      catalogSnapshot: catalogSnapshot(),
+      hasRegistry: Boolean(registry),
+      hasCapabilityResolver: typeof capabilityResolver === "function",
+      hasCapabilityKeyProvider: Boolean(resolvedCapabilityKeyProvider),
+      hasCapabilityBindingGuard: Boolean(resolvedCapabilityBindingGuard),
+      hasGovernanceRevisionProvider: typeof governancePolicyRevisionProvider === "function",
+      hasSecurityPermissions: Boolean(securityPermissions),
+      hasChangeListener: typeof changeListener === "function",
+      hasProofSubstrate: Boolean(proofSubstrate),
+      hasApiKeyVerifierKeyProvider: Boolean(apiKeyVerifierKeyProvider),
+      apiKeyVerifierGeneration: String(apiKeyVerifierKeyProvider?.currentGeneration || ""),
+      hasApiKeyClock: typeof apiKeyClock === "function",
+      hasApiKeyRandomBytes: typeof apiKeyRandomBytes === "function"
     },
-    notifyChange(event: Record<string, any> = {}) : any {
-      if (typeof changeListener !== "function") {
-        return null;
+    allowedCommands: [
+      ...OPERATION_PERMISSION_STORE_COMMANDS,
+      ...OPERATION_PERMISSION_API_KEY_COMMANDS.map((kind?: any) : any => `apiKey.${kind}`)
+    ],
+    hostHandlers,
+    maxPending,
+    maxPendingBytes,
+    defaultDeadlineMs
+  });
+  const commandContext: any = () : any => ({
+    catalogSnapshot: catalogSnapshot(),
+    governanceRevision: normalizePolicyRevisionSnapshot(governancePolicyRevisionProvider?.()),
+    resolvedCapabilities: []
+  });
+  const execute: any = (kind?: any, args: any[] = []) : Promise<any> => lane.execute(kind, {
+    args: normalizeArguments(kind, args),
+    context: commandContext()
+  });
+  const facade: Record<string, any> = {
+    lane,
+    executeApiKey: (kind?: any, payload: any = {}) : Promise<any> => {
+      const command: any = String(kind || "");
+      const randomMaterial: Record<string, any> = {};
+      if (typeof apiKeyRandomBytes === "function") {
+        if (command === "create") randomMaterial["16"] = Buffer.from(apiKeyRandomBytes(16));
+        if (command === "create" || command === "rotate") randomMaterial["32"] = Buffer.from(apiKeyRandomBytes(32));
       }
-      try {
-        const result: any = changeListener({
-          schemaVersion: "v0.0.1:schema:definition-1",
-          source: "operation-permission-store",
-          at: nowIso(),
-          ...event
-        });
-        if (!result || (typeof result.then !== "function" && typeof result.catch !== "function")) {
-          return result;
+      return lane.execute(`apiKey.${command}`, {
+        args: [payload],
+        context: {
+          ...commandContext(),
+          organizationSnapshot: securityPermissions?.getOrganizationGovernance?.() || null,
+          governanceSummary: securityPermissions?.getGovernanceSummary?.() || null,
+          apiKeyNowMs: typeof apiKeyClock === "function" ? Number(apiKeyClock()) : null,
+          apiKeyRandomMaterial: randomMaterial,
+          apiKeyVerifierGeneration: String(apiKeyVerifierKeyProvider?.currentGeneration || "")
         }
-        let tracked: any;
-        tracked = Promise.resolve(result)
-          .catch(() : any => null)
-          .finally(() : any => {
-            pendingChangeNotifications.delete(tracked);
-          });
-        pendingChangeNotifications.add(tracked);
-        return tracked;
-      } catch {
-        return null;
-      }
+      });
     },
-    currentCatalogFingerprint() : any {
-      try {
-        return String(registry?.getCatalog?.().fingerprint || "").trim();
-      } catch {
-        return "";
-      }
-    },
-    async flushChangeNotifications() : Promise<any> {
-      const pending: any[] = [...pendingChangeNotifications];
-      if (pending.length === 0) {
-        return {
-          ok: true,
-          flushed: 0
-        };
-      }
-      await Promise.allSettled(pending);
-      return {
-        ok: true,
-        flushed: pending.length
-      };
-    },
-    currentGovernancePolicyRevision() : any {
-      if (typeof governancePolicyRevisionProvider !== "function") {
-        return normalizePolicyRevisionSnapshot();
-      }
-      return normalizePolicyRevisionSnapshot(governancePolicyRevisionProvider());
+    getStats: () : any => lane.getStats(),
+    isClosed: () : any => lane.getStats().closed,
+    close: async () : Promise<any> => {
+      await lane.close();
+      const resources: any[] = [...new Set<any>([resolvedCapabilityBindingGuard, resolvedCapabilityKeyProvider, securityHelperClient])];
+      await Promise.allSettled(resources.filter(Boolean).map((resource?: any) : any => Promise.resolve(resource.close?.())));
     }
   };
-
-  Object.assign(ctx, createAuditStoreMethods(ctx));
-  Object.assign(ctx, createGrantStoreMethods(ctx));
-  Object.assign(ctx, createPendingStoreMethods(ctx));
-  Object.assign(ctx, createMetricsStoreMethods(ctx));
-
-  const createGrant: any = async (input: Record<string, any> = {}) : Promise<any> => {
-    assertActiveCatalogGrantReferences(registry, input);
-    return ctx.createGrant(input);
-  };
-  const updateGrant: any = async (grantId?: any, patch: Record<string, any> = {}) : Promise<any> => {
-    assertActiveCatalogGrantReferences(registry, patch);
-    return ctx.updateGrant(grantId, patch);
-  };
-
-  return {
-    db,
-    rootPath,
-    listGrants: ctx.listGrants,
-    getGrant: ctx.getGrant,
-    getRawGrant: ctx.getRawGrant,
-    createGrant,
-    updateGrant,
-    deleteGrant: ctx.deleteGrant,
-    revokeGrant: ctx.revokeGrant,
-    registerPluginGrantOwner: ctx.registerPluginGrantOwner,
-    revokeGrantsByPluginOwner: ctx.revokeGrantsByPluginOwner,
-    rotateGrantToken: ctx.rotateGrantToken,
-    authorizeRequest: ctx.authorizeRequest,
-    authorizeGrantForExecution: ctx.authorizeGrantForExecution,
-    appendGrantEvent: ctx.appendGrantEvent,
-    listGrantEvents: ctx.listGrantEvents,
-    appendPolicyDecision: ctx.appendPolicyDecision,
-    appendPolicyDecisionAnchored: ctx.appendPolicyDecisionAnchored,
-    appendExecution: ctx.appendExecution,
-    appendExecutionAnchored: ctx.appendExecutionAnchored,
-    anchorPermissionAuditFact: ctx.anchorPermissionAuditFact,
-    provePermissionAuditInclusion: ctx.provePermissionAuditInclusion,
-    appendMetric: ctx.appendMetric,
-    appendHttpRequestMetric: ctx.appendHttpRequestMetric,
-    saveCatalogSnapshot: ctx.saveCatalogSnapshot,
-    flushChangeNotifications: ctx.flushChangeNotifications,
-    listAudit: ctx.listAudit,
-    getAudit: ctx.getAudit,
-    metricsSummary: ctx.metricsSummary,
-    metricsExport: ctx.metricsExport,
-    metricsHealth: ctx.metricsHealth,
-    metricsPrometheus: ctx.metricsPrometheus,
-    metricsStorageSummary: ctx.metricsStorageSummary,
-    pruneMetrics: ctx.pruneMetrics,
-    createPendingOperation: ctx.createPendingOperation,
-    getPendingOperation: ctx.getPendingOperation,
-    listPendingOperations: ctx.listPendingOperations,
-    resolvePendingOperation: ctx.resolvePendingOperation,
-    capabilityKeyProvider: resolvedCapabilityKeyProvider,
-    capabilityBindingGuard: resolvedCapabilityBindingGuard,
-    isClosed() : any {
-      return closed || db.open === false;
-    },
-    close() : any {
-      if (closed || db.open === false) return;
-      try {
-        db.pragma("wal_checkpoint(TRUNCATE)");
-      } catch {
-        // Closing must remain best-effort; verification cleanup should not depend on WAL support.
-      }
-      const failures: any = closeDistinctResources([
-        securityAlertStore,
-        resolvedCapabilityBindingGuard,
-        resolvedCapabilityKeyProvider,
-        db
-      ]);
-      if (failures.length > 0) {
-        throw new Error("Operation Permission store did not close cleanly.");
-      }
-      closed = true;
-    }
-  };
+  for (const kind of OPERATION_PERMISSION_STORE_COMMANDS) {
+    if (kind === "close") continue;
+    facade[kind] = (...args: any[]) : Promise<any> => execute(kind, args);
+  }
+  return Object.freeze(facade);
 }

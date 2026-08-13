@@ -115,14 +115,14 @@ function pathIsWithin(parentPath?: any, candidatePath?: any) : any {
 
 function privateDirectoryOpenFlags() : any {
   for (const flag of ["O_DIRECTORY", "O_NOFOLLOW", "O_RDONLY"]) {
-    if (!Number.isInteger(fs.constants[flag])) {
+    if (!Number.isInteger((fs.constants as Record<string, any>)[flag])) {
       throw privateDirectoryError(
         "agent_workspace_platform_unsupported",
         "Agent workspace private directory flags are unavailable."
       );
     }
   }
-  return fs.constants.O_RDONLY |
+  return (fs.constants as Record<string, any>).O_RDONLY |
     fs.constants.O_DIRECTORY |
     fs.constants.O_NOFOLLOW;
 }
@@ -1176,6 +1176,10 @@ export function createAgentWorkspace({
     } : {}),
     restoreWorkspaceFiles,
     getWorkspaceSandboxMutationReceipt,
+    getWorkspaceRefactorInstrumentation: () : any =>
+      fileStateApi.getRefactorInstrumentation
+        ? fileStateApi.getRefactorInstrumentation()
+        : null,
     updateArtifactsStatus,
     createIssue,
     updateIssue,

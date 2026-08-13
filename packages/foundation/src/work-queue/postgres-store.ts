@@ -102,10 +102,11 @@ export async function createPostgresWorkQueueStore({
     expireEligibleLocked,
     materializeDelayedLocked,
     recoverExpiredLeasesLocked,
+    reconcileInDoubtLocked,
     requireLeasedRow
   } = createPostgresWorkQueueRuntime({ timeSource, identityGenerator, resolvedPolicy });
 
-  async function cleanupFairnessCursorsIfIdle(client?: any, row?: any) : Promise<any> {
+  async function cleanupVirtualFinishIfIdle(client?: any, row?: any) : Promise<any> {
     if (!row || !isTerminalWorkQueueState(row.state)) return;
     const remaining: any = await queryOne(client, `
       SELECT 1
@@ -121,7 +122,7 @@ export async function createPostgresWorkQueueStore({
     ]);
     if (!remaining) {
       await client.query(`
-        DELETE FROM work_queue_fairness_cursors
+        DELETE FROM work_queue_virtual_finish
         WHERE queue_definition_id = $1 AND selector_scope_key = $2
       `, [row.queue_definition_id, row.scope_key]);
     }
@@ -129,7 +130,7 @@ export async function createPostgresWorkQueueStore({
 
   async function transitionProjection(client?: any, input?: any) : Promise<any> {
     const updated: any = await transitionProjectionInternal(client, input);
-    await cleanupFairnessCursorsIfIdle(client, updated);
+    await cleanupVirtualFinishIfIdle(client, updated);
     return updated;
   }
 
@@ -199,100 +200,38 @@ export async function createPostgresWorkQueueStore({
     );
   }
 
-  async function lockedCursor(client?: any, key?: any, nowMs?: any) : Promise<any> {
-    const values: any[] = [
-      key.queueDefinitionId,
-      key.queueDefinitionVersion,
-      key.selectorScopeKey,
-      key.priorityClass,
-      key.level,
-      key.parentKey
-    ];
+  async function advanceVirtualFinish(client?: any, key?: any, nowMs?: any) : Promise<any> {
     await client.query(`
-      INSERT INTO work_queue_fairness_cursors (
-        queue_definition_id, queue_definition_version, selector_scope_key,
-        priority_class, level, parent_key, cursor_value, updated_at_ms
-      ) VALUES ($1,$2,$3,$4,$5,$6,'',$7)
-      ON CONFLICT DO NOTHING
-    `, [...values, nowMs]);
-    return queryOne(client, `
-      SELECT cursor_value
-      FROM work_queue_fairness_cursors
+      UPDATE work_queue_virtual_finish
+      SET virtual_finish = virtual_finish + 1, updated_at_ms = $8
       WHERE queue_definition_id = $1
         AND queue_definition_version = $2
         AND selector_scope_key = $3
         AND priority_class = $4
-        AND level = $5
-        AND parent_key = $6
-      FOR UPDATE
-    `, values);
-  }
-
-  async function writeCursor(client?: any, key?: any, value?: any, nowMs?: any) : Promise<any> {
-    await client.query(`
-      UPDATE work_queue_fairness_cursors
-      SET cursor_value = $7, updated_at_ms = $8
-      WHERE queue_definition_id = $1
-        AND queue_definition_version = $2
-        AND selector_scope_key = $3
-        AND priority_class = $4
-        AND level = $5
-        AND parent_key = $6
+        AND tenant_id = $5
+        AND workspace_id = $6
+        AND project_id = $7
     `, [
       key.queueDefinitionId,
       key.queueDefinitionVersion,
       key.selectorScopeKey,
       key.priorityClass,
-      key.level,
-      key.parentKey,
-      String(value),
+      key.tenantId,
+      key.workspaceId,
+      key.projectId,
       nowMs
     ]);
   }
 
-  async function nextPartition(client: any, {
-    column,
-    fixedValue,
-    parentWhere = "",
-    parentValues = [],
-    base,
-    key,
-    nowMs
-  }: Record<string, any>) : Promise<any> {
-    if (fixedValue) return fixedValue;
-    const cursorRow: any = await lockedCursor(client, key, nowMs);
-    const cursor: any = cursorRow?.cursor_value || "";
-    const query: any = async (fromStart?: any) : Promise<any> => queryOne(client, `
-      SELECT ${column} AS value
-      FROM work_items
+  async function virtualFinishCursor(client: any, { queueDefinitionId, queueDefinitionVersion, selectorScopeKey }: Record<string, any>) : Promise<any> {
+    const row: any = await queryOne(client, `
+      SELECT COALESCE(SUM(virtual_finish), 0)::bigint AS total
+      FROM work_queue_virtual_finish
       WHERE queue_definition_id = $1
-        AND ($2::integer = 0 OR queue_definition_version = $2)
-        AND state = ANY($3::text[])
-        AND priority_class = $4
-        AND available_at_ms <= $5
-        AND (expires_at_ms = 0 OR expires_at_ms > $5)
-        AND scope_key = $6
-        ${parentWhere}
-        AND ($7::boolean OR ${column} > $8)
-      GROUP BY ${column}
-      ORDER BY ${column} ASC
-      LIMIT 1
-    `, [
-      base.queueDefinitionId,
-      base.queueDefinitionVersion,
-      [WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RECOVERED],
-      base.priorityClass,
-      base.nowMs,
-      base.scopeKey,
-      fromStart,
-      cursor,
-      ...parentValues
-    ]);
-    let row: any = await query(false);
-    if (!row) row = await query(true);
-    if (!row) return null;
-    await writeCursor(client, key, row.value, nowMs);
-    return row.value;
+        AND selector_scope_key = $2
+        AND ($3::integer = 0 OR queue_definition_version = $3)
+    `, [queueDefinitionId, selectorScopeKey, queueDefinitionVersion]);
+    return Number(row?.total || 0) % WORK_QUEUE_PRIORITY_CYCLE.length;
   }
 
   async function policyForWorkItem(client?: any, row?: any) : Promise<any> {
@@ -482,97 +421,131 @@ export async function createPostgresWorkQueueStore({
     });
   }
 
-  async function selectFairCandidate(client: any, { queueDefinitionId, queueDefinitionVersion, scope, scopeKey, nowMs }: Record<string, any>) : Promise<any> {
+  async function selectFairCandidate(client: any, { queueDefinitionId, queueDefinitionVersion, scope, scopeKey, nowMs, priorityCursor }: Record<string, any>) : Promise<any> {
     const fixed: any = hierarchicalScopeParts(scope);
-    const priorityKey: Record<string, any> = {
-      queueDefinitionId,
-      queueDefinitionVersion,
-      selectorScopeKey: scopeKey,
-      priorityClass: "*",
-      level: "priority",
-      parentKey: ""
-    };
-    const priorityRow: any = await lockedCursor(client, priorityKey, nowMs);
-    let priorityCursor: any = Number(priorityRow?.cursor_value || 0);
-    for (let priorityVisit: any = 0; priorityVisit < WORK_QUEUE_PRIORITY_CYCLE.length; priorityVisit += 1) {
-      const priorityClass: any = priorityClassAtCursor(priorityCursor);
-      priorityCursor = nextPriorityCursor(priorityCursor);
-      await writeCursor(client, priorityKey, priorityCursor, nowMs);
-      const base: Record<string, any> = { queueDefinitionId, queueDefinitionVersion, priorityClass, scopeKey, nowMs };
-      const tenantId: any = await nextPartition(client, {
-        column: "tenant_id",
-        fixedValue: fixed.tenantId,
-        base,
-        key: { ...priorityKey, priorityClass, level: "tenant" },
-        nowMs
-      });
-      if (tenantId === null) continue;
-      const workspaceId: any = await nextPartition(client, {
-        column: "workspace_id",
-        fixedValue: fixed.workspaceId,
-        parentWhere: "AND tenant_id = $9",
-        parentValues: [tenantId],
-        base,
-        key: { ...priorityKey, priorityClass, level: "workspace", parentKey: tenantId },
-        nowMs
-      });
-      if (workspaceId === null) continue;
-      const projectId: any = await nextPartition(client, {
-        column: "project_id",
-        fixedValue: fixed.projectId,
-        parentWhere: "AND tenant_id = $9 AND workspace_id = $10",
-        parentValues: [tenantId, workspaceId],
-        base,
-        key: {
-          ...priorityKey,
+    let cursor: any = priorityCursor;
+    for (let slot: any = 0; slot < WORK_QUEUE_PRIORITY_CYCLE.length; slot += 1) {
+      const priorityClass: any = priorityClassAtCursor(cursor);
+      cursor = nextPriorityCursor(cursor);
+      const rejected: any[] = [];
+      for (;;) {
+        const candidate: any = await queryOne(client, `
+          WITH all_partitions AS (
+            SELECT projection.queue_definition_version,
+                   projection.tenant_id, projection.workspace_id, projection.project_id,
+                   projection.virtual_finish
+            FROM work_queue_virtual_finish projection
+            WHERE projection.queue_definition_id = $1
+              AND projection.selector_scope_key = $2
+              AND ($3::integer = 0 OR projection.queue_definition_version = $3)
+              AND projection.priority_class = $5
+              AND ($7 = '' OR projection.tenant_id = $7)
+              AND ($8 = '' OR projection.workspace_id = $8)
+              AND ($9 = '' OR projection.project_id = $9)
+              AND (projection.tenant_id || chr(31) || projection.workspace_id || chr(31) || projection.project_id) <> ALL($11::text[])
+          ),
+          eligible_partitions AS (
+            SELECT all_partitions.*
+            FROM all_partitions
+            WHERE EXISTS (
+              SELECT 1 FROM work_items pending
+              WHERE pending.queue_definition_id = $1
+                AND pending.scope_key = $2
+                AND pending.state = ANY($4::text[])
+                AND pending.priority_class = $5
+                AND pending.available_at_ms <= $6
+                AND (pending.expires_at_ms = 0 OR pending.expires_at_ms > $6)
+                AND pending.tenant_id = all_partitions.tenant_id
+                AND pending.workspace_id = all_partitions.workspace_id
+                AND pending.project_id = all_partitions.project_id
+                AND NOT EXISTS (
+                  SELECT 1 FROM work_items active
+                  WHERE active.queue_definition_id = pending.queue_definition_id
+                    AND active.scope_key = pending.scope_key
+                    AND active.concurrency_key = pending.concurrency_key
+                    AND active.concurrency_key <> ''
+                    AND active.state = $10
+                    AND active.work_item_id <> pending.work_item_id
+                )
+            )
+          ),
+          ranked_partitions AS (
+            SELECT ep.*,
+                   DENSE_RANK() OVER (ORDER BY ep.tenant_id) - 1 AS tenant_rank,
+                   DENSE_RANK() OVER (PARTITION BY ep.tenant_id ORDER BY ep.workspace_id) - 1 AS workspace_rank,
+                   DENSE_RANK() OVER (PARTITION BY ep.tenant_id, ep.workspace_id ORDER BY ep.project_id) - 1 AS project_rank,
+                   (SELECT SUM(claims.virtual_finish)
+                    FROM all_partitions claims
+                    WHERE claims.tenant_id = ep.tenant_id) AS tenant_claims,
+                   (SELECT SUM(claims.virtual_finish)
+                    FROM all_partitions claims
+                    WHERE claims.tenant_id = ep.tenant_id
+                      AND claims.workspace_id = ep.workspace_id) AS workspace_claims,
+                   (SELECT COUNT(DISTINCT tenants.tenant_id) FROM all_partitions tenants) AS tenant_count,
+                   (SELECT COUNT(DISTINCT workspaces.workspace_id)
+                    FROM all_partitions workspaces
+                    WHERE workspaces.tenant_id = ep.tenant_id) AS workspace_count,
+                   (SELECT COUNT(DISTINCT projects.project_id)
+                    FROM all_partitions projects
+                    WHERE projects.tenant_id = ep.tenant_id
+                      AND projects.workspace_id = ep.workspace_id) AS project_count
+            FROM eligible_partitions ep
+          )
+          SELECT candidate.*
+          FROM ranked_partitions ranked
+          JOIN work_items candidate
+            ON candidate.queue_definition_id = $1
+           AND candidate.scope_key = $2
+           AND ($3::integer = 0 OR candidate.queue_definition_version = $3)
+           AND candidate.state = ANY($4::text[])
+           AND candidate.priority_class = $5
+           AND candidate.available_at_ms <= $6
+           AND (candidate.expires_at_ms = 0 OR candidate.expires_at_ms > $6)
+           AND candidate.queue_definition_version = ranked.queue_definition_version
+           AND candidate.tenant_id = ranked.tenant_id
+           AND candidate.workspace_id = ranked.workspace_id
+           AND candidate.project_id = ranked.project_id
+           AND NOT EXISTS (
+             SELECT 1 FROM work_items active
+             WHERE active.queue_definition_id = candidate.queue_definition_id
+               AND active.scope_key = candidate.scope_key
+               AND active.concurrency_key = candidate.concurrency_key
+               AND active.concurrency_key <> ''
+               AND active.state = $10
+               AND active.work_item_id <> candidate.work_item_id
+           )
+          ORDER BY (ranked.tenant_claims * ranked.tenant_count + ranked.tenant_rank) ASC,
+                   (ranked.workspace_claims * ranked.workspace_count + ranked.workspace_rank) ASC,
+                   (ranked.virtual_finish * ranked.project_count + ranked.project_rank) ASC,
+                   candidate.available_at_ms ASC, candidate.created_at_ms ASC, candidate.work_item_id ASC
+          LIMIT 1
+          FOR UPDATE SKIP LOCKED
+        `, [
+          queueDefinitionId,
+          scopeKey,
+          queueDefinitionVersion,
+          [WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RECOVERED],
           priorityClass,
-          level: "project",
-          parentKey: JSON.stringify([tenantId, workspaceId])
-        },
-        nowMs
-      });
-      if (projectId === null) continue;
-      const hierarchy: Record<string, any> = { tenantId, workspaceId, projectId };
-      const candidate: any = await queryOne(client, `
-      SELECT * FROM work_items candidate
-      WHERE candidate.queue_definition_id = $1
-        AND ($2::integer = 0 OR candidate.queue_definition_version = $2)
-        AND candidate.state = ANY($3::text[])
-        AND candidate.priority_class = $4
-        AND candidate.available_at_ms <= $5
-        AND (candidate.expires_at_ms = 0 OR candidate.expires_at_ms > $5)
-        AND candidate.scope_key = $6
-        AND candidate.tenant_id = $7
-        AND candidate.workspace_id = $8
-        AND candidate.project_id = $9
-        AND NOT EXISTS (
-          SELECT 1 FROM work_items active
-          WHERE active.queue_definition_id = candidate.queue_definition_id
-            AND active.scope_key = candidate.scope_key
-            AND active.concurrency_key = candidate.concurrency_key
-            AND active.concurrency_key <> ''
-            AND active.state = $10
-            AND active.work_item_id <> candidate.work_item_id
-        )
-      ORDER BY candidate.available_at_ms ASC, candidate.created_at_ms ASC, candidate.work_item_id ASC
-      LIMIT 1
-      FOR UPDATE OF candidate SKIP LOCKED
-    `, [
-      queueDefinitionId,
-      queueDefinitionVersion,
-      [WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RECOVERED],
-      priorityClass,
-      nowMs,
-      scopeKey,
-      tenantId,
-      workspaceId,
-      projectId,
-      WORK_QUEUE_STATES.RUNNING
-      ]);
-      if (!candidate) continue;
-      const policy: any = await policyForWorkItem(client, candidate);
-      if (!await hasLeaseCapacity(client, queueDefinitionId, hierarchy, policy, { scopeKey, nowMs })) continue;
-      return candidate;
+          nowMs,
+          fixed.tenantId,
+          fixed.workspaceId,
+          fixed.projectId,
+          WORK_QUEUE_STATES.RUNNING,
+          rejected
+        ]);
+        if (!candidate) break;
+        const hierarchy: Record<string, any> = {
+          tenantId: candidate.tenant_id,
+          workspaceId: candidate.workspace_id,
+          projectId: candidate.project_id
+        };
+        const policy: any = await policyForWorkItem(client, candidate);
+        if (!await hasLeaseCapacity(client, queueDefinitionId, hierarchy, policy, { scopeKey, nowMs })) {
+          rejected.push([candidate.tenant_id, candidate.workspace_id, candidate.project_id].join("\u001f"));
+          continue;
+        }
+        return { row: candidate, priorityCursor: cursor };
+      }
     }
     return null;
   }
@@ -708,6 +681,25 @@ export async function createPostgresWorkQueueStore({
           }
           throw error;
         }
+        await client.query(`
+          INSERT INTO work_queue_virtual_finish (
+            queue_definition_id, queue_definition_version, selector_scope_key,
+            priority_class, tenant_id, workspace_id, project_id, virtual_finish, updated_at_ms
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,0,$8)
+          ON CONFLICT (
+            queue_definition_id, queue_definition_version, selector_scope_key,
+            priority_class, tenant_id, workspace_id, project_id
+          ) DO UPDATE SET updated_at_ms = EXCLUDED.updated_at_ms
+        `, [
+          queueDefinitionId,
+          queueDefinitionVersion,
+          scopeKey,
+          row.priority_class,
+          row.tenant_id,
+          row.workspace_id,
+          row.project_id,
+          nowMs
+        ]);
         const seq: any = await appendTransitionInternal(client, {
           row,
           transition: "enqueue",
@@ -750,6 +742,12 @@ export async function createPostgresWorkQueueStore({
           scopeKey: recoveryScopeKey,
           limit: Math.max(100, batchSize * 8)
         });
+        const reconciled: any = await reconcileInDoubtLocked(client, {
+          nowMs,
+          queueDefinitionId,
+          scopeKey: recoveryScopeKey,
+          limit: Math.max(100, batchSize * 8)
+        });
         const control: any = await queryOne(client, `
           SELECT *
           FROM work_queue_controls
@@ -761,6 +759,7 @@ export async function createPostgresWorkQueueStore({
             claimed: [],
             expired,
             recovered,
+            reconciled,
             matured: [],
             control: {
               mode: control.mode,
@@ -783,20 +782,34 @@ export async function createPostgresWorkQueueStore({
         });
         const claimed: any[] = [];
         const failed: any[] = [];
-        const maxVisits: any = Math.min(
-          asPositiveInt(resolvedPolicy.fairness.maxVisitsPerClaim, 4096),
-          Math.max(WORK_QUEUE_PRIORITY_CYCLE.length, batchSize * WORK_QUEUE_PRIORITY_CYCLE.length)
-        );
-        for (let visit: any = 0; visit < maxVisits && claimed.length < batchSize; visit += 1) {
-          const row: any = await selectFairCandidate(client, {
+        let priorityCursor: any = await virtualFinishCursor(client, {
+          queueDefinitionId,
+          queueDefinitionVersion: asInt(queueDefinitionVersion, 0),
+          selectorScopeKey: scopeKey
+        });
+        for (let visit: any = 0; visit < batchSize && claimed.length < batchSize; visit += 1) {
+          const selected: any = await selectFairCandidate(client, {
             queueDefinitionId,
             queueDefinitionVersion: asInt(queueDefinitionVersion, 0),
             scope: schedulingScope,
             scopeKey,
-            nowMs
+            nowMs,
+            priorityCursor
           });
-          if (!row) continue;
+          if (!selected) break;
+          priorityCursor = selected.priorityCursor;
+          const row: any = selected.row;
+          const partition: Record<string, any> = {
+            queueDefinitionId,
+            queueDefinitionVersion: Number(row.queue_definition_version || 0),
+            selectorScopeKey: scopeKey,
+            priorityClass: row.priority_class,
+            tenantId: row.tenant_id,
+            workspaceId: row.workspace_id,
+            projectId: row.project_id
+          };
           if (Number(row.attempt || 0) >= Number(row.max_attempts || 0)) {
+            await advanceVirtualFinish(client, partition, nowMs);
             const failedRow: any = await transitionProjection(client, {
               row,
               transition: "fail",
@@ -846,7 +859,7 @@ export async function createPostgresWorkQueueStore({
             lease: { leaseId, leaseSeq, workerId, expiresAtMs: leaseExpiresAtMs }
           });
         }
-        return { workerId, claimed, expired, recovered, matured, aged, failed };
+        return { workerId, claimed, expired, recovered, reconciled, matured, aged, failed };
       });
     },
     async expire(input: Record<string, any> = {}) : Promise<any> {
@@ -859,7 +872,7 @@ export async function createPostgresWorkQueueStore({
         if (row.state === WORK_QUEUE_STATES.EXPIRED) {
           return { expired: true, idempotent: true, workItem: rowToWorkItem(row) };
         }
-        if (![WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RETRY_WAIT, WORK_QUEUE_STATES.RUNNING, WORK_QUEUE_STATES.RECOVERED].includes(row.state)) {
+        if (![WORK_QUEUE_STATES.QUEUED, WORK_QUEUE_STATES.RETRY_WAIT, WORK_QUEUE_STATES.RUNNING, WORK_QUEUE_STATES.IN_DOUBT, WORK_QUEUE_STATES.RECOVERED].includes(row.state)) {
           return { expired: false, idempotent: true, workItem: rowToWorkItem(row) };
         }
         if (input.force !== true && !isWorkExpired(row, nowMs)) {
@@ -904,6 +917,12 @@ export async function createPostgresWorkQueueStore({
           actor: input.actor,
           reason: input.reason || "complete"
         });
+        await client.query(`
+          INSERT INTO work_queue_sink_fences (
+            work_item_id, generation, sink_id, effect_id, status, settled_at_ms
+          ) VALUES ($1,$2,'complete',$3,'settled',$4)
+          ON CONFLICT (work_item_id, generation, sink_id) DO NOTHING
+        `, [row.work_item_id, Number(row.lease_seq || 0), toText(input.effectId), nowMs]);
         return { completed: true, workItem: rowToWorkItem(updated) };
       });
     },
@@ -1094,6 +1113,7 @@ export async function createPostgresWorkQueueStore({
           WORK_QUEUE_STATES.QUEUED,
           WORK_QUEUE_STATES.RETRY_WAIT,
           WORK_QUEUE_STATES.RUNNING,
+          WORK_QUEUE_STATES.IN_DOUBT,
           WORK_QUEUE_STATES.RECOVERED
         ].includes(row.state)) {
           throw new Error(`Work item ${input.workItemId} cannot be cancelled from state ${row.state}.`);
@@ -1149,6 +1169,12 @@ export async function createPostgresWorkQueueStore({
           actor: input.actor,
           reason: input.reason || "fail"
         });
+        await client.query(`
+          INSERT INTO work_queue_sink_fences (
+            work_item_id, generation, sink_id, effect_id, status, settled_at_ms
+          ) VALUES ($1,$2,'fail',$3,'settled',$4)
+          ON CONFLICT (work_item_id, generation, sink_id) DO NOTHING
+        `, [row.work_item_id, Number(row.lease_seq || 0), toText(input.effectId), nowMs]);
         return { failed: true, fallbackTaskId, workItem: rowToWorkItem(updated) };
       });
     },
@@ -1202,6 +1228,177 @@ export async function createPostgresWorkQueueStore({
           reason: input.reason || "recover"
         });
         return { recovered: true, workItem: rowToWorkItem(updated) };
+      });
+    },
+    async markInDoubt(input: Record<string, any> = {}) : Promise<any> {
+      return withTransaction(database, async (client?: any) : Promise<any> => {
+        const nowMs: any = nowFrom(timeSource, input.nowMs);
+        const row: any = await queryOne(client, "SELECT * FROM work_items WHERE work_item_id = $1 FOR UPDATE", [toText(input.workItemId)]);
+        if (!row) {
+          throw new Error(`Work item not found: ${input.workItemId}`);
+        }
+        if (row.state === WORK_QUEUE_STATES.IN_DOUBT) {
+          if (toText(input.leaseId) && row.lease_id === toText(input.leaseId)) {
+            return { interrupted: true, idempotent: true, workItem: rowToWorkItem(row) };
+          }
+          return { interrupted: false, idempotent: true, workItem: rowToWorkItem(row) };
+        }
+        if (row.state !== WORK_QUEUE_STATES.RUNNING) {
+          return { interrupted: false, idempotent: true, workItem: rowToWorkItem(row) };
+        }
+        if (toText(input.leaseId) && row.lease_id !== toText(input.leaseId)) {
+          throw new Error(`Lease fence rejected for work item ${input.workItemId}.`);
+        }
+        const updated: any = await transitionProjection(client, {
+          row,
+          transition: "interrupt",
+          toState: WORK_QUEUE_STATES.IN_DOUBT,
+          patch: {
+            last_error_json: input.error || {
+              type: "handler_unconfirmed",
+              reason: input.reason || "handler_timeout"
+            }
+          },
+          nowMs,
+          operationId: input.operationId,
+          actor: input.actor,
+          reason: input.reason || "handler_timeout_unconfirmed"
+        });
+        return { interrupted: true, idempotent: false, workItem: rowToWorkItem(updated) };
+      });
+    },
+    async acknowledgeTermination(input: Record<string, any> = {}) : Promise<any> {
+      return withTransaction(database, async (client?: any) : Promise<any> => {
+        const nowMs: any = nowFrom(timeSource, input.nowMs);
+        const row: any = await queryOne(client, "SELECT * FROM work_items WHERE work_item_id = $1 FOR UPDATE", [toText(input.workItemId)]);
+        if (!row) {
+          throw new Error(`Work item not found: ${input.workItemId}`);
+        }
+        if (row.state !== WORK_QUEUE_STATES.IN_DOUBT) {
+          return { acknowledged: false, idempotent: true, workItem: rowToWorkItem(row) };
+        }
+        if (toText(input.leaseId) && row.lease_id !== toText(input.leaseId)) {
+          throw new Error(`Lease fence rejected for work item ${input.workItemId}.`);
+        }
+        const requestedState: any = toText(input.toState || "");
+        const terminalStates: any[] = [
+          WORK_QUEUE_STATES.COMPLETED,
+          WORK_QUEUE_STATES.FAILED
+        ];
+        if (![
+          "retry",
+          WORK_QUEUE_STATES.QUEUED,
+          WORK_QUEUE_STATES.RETRY_WAIT,
+          WORK_QUEUE_STATES.FAILED,
+          WORK_QUEUE_STATES.COMPLETED
+        ].includes(requestedState)) {
+          throw new Error(`Unsupported termination settlement state: ${requestedState}`);
+        }
+        let delayMs: any = 0;
+        let toState: any = requestedState;
+        if (!terminalStates.includes(requestedState)) {
+          const exhausted: any = Number(row.attempt || 0) >= Number(row.max_attempts || 0);
+          if (exhausted) {
+            toState = WORK_QUEUE_STATES.FAILED;
+          } else {
+            delayMs = input.delayMs === undefined
+              ? computeDeterministicRetryDelay({
+                  queueDefinitionId: row.queue_definition_id,
+                  workItemId: row.work_item_id,
+                  attempt: row.attempt,
+                  ...resolvedPolicy.retryBackoff
+                })
+              : Math.max(0, asInt(input.delayMs, 0));
+            toState = delayMs > 0
+              ? WORK_QUEUE_STATES.RETRY_WAIT
+              : WORK_QUEUE_STATES.QUEUED;
+          }
+        }
+        const updated: any = await transitionProjection(client, {
+          row,
+          transition: "termination_acknowledged",
+          toState,
+          patch: {
+            available_at_ms: nowMs + (terminalStates.includes(toState) ? 0 : delayMs),
+            lease_id: "",
+            leased_by_worker_id: "",
+            lease_expires_at_ms: 0,
+            last_error_json: input.error || {
+              type: "termination_acknowledged",
+              reason: input.reason || "handler_terminated"
+            }
+          },
+          nowMs,
+          operationId: input.operationId,
+          actor: input.actor,
+          reason: input.reason || "termination_acknowledged"
+        });
+        if (terminalStates.includes(toState)) {
+          await client.query(`
+            INSERT INTO work_queue_sink_fences (
+              work_item_id, generation, sink_id, effect_id, status, settled_at_ms
+            ) VALUES ($1,$2,$3,$4,'settled',$5)
+            ON CONFLICT (work_item_id, generation, sink_id) DO NOTHING
+          `, [
+            row.work_item_id,
+            Number(row.lease_seq || 0),
+            toState === WORK_QUEUE_STATES.COMPLETED ? "complete" : "fail",
+            toText(input.effectId),
+            nowMs
+          ]);
+        }
+        return {
+          acknowledged: true,
+          idempotent: false,
+          toState,
+          delayMs,
+          workItem: rowToWorkItem(updated)
+        };
+      });
+    },
+    async recordSinkReceipt(input: Record<string, any> = {}) : Promise<any> {
+      return withTransaction(database, async (client?: any) : Promise<any> => {
+        const nowMs: any = nowFrom(timeSource, input.nowMs);
+        const row: any = await queryOne(client, "SELECT * FROM work_items WHERE work_item_id = $1", [toText(input.workItemId)]);
+        const generation: any = input.generation === undefined
+          ? Number(row?.lease_seq || 0)
+          : asInt(input.generation, 0);
+        const inserted: any = await client.query(`
+          INSERT INTO work_queue_sink_fences (
+            work_item_id, generation, sink_id, effect_id, status, settled_at_ms
+          ) VALUES ($1,$2,$3,$4,'settled',$5)
+          ON CONFLICT (work_item_id, generation, sink_id) DO NOTHING
+        `, [
+          toText(input.workItemId),
+          generation,
+          toText(input.sinkId || "effect"),
+          toText(input.effectId),
+          nowMs
+        ]);
+        return {
+          recorded: Number(inserted.rowCount || 0) > 0,
+          idempotent: Number(inserted.rowCount || 0) === 0,
+          generation
+        };
+      });
+    },
+    async reconcileInDoubt(input: Record<string, any> = {}) : Promise<any> {
+      return withTransaction(database, async (client?: any) : Promise<any> => {
+        const nowMs: any = nowFrom(timeSource, input.nowMs);
+        const queueDefinitionId: any = toText(input.queueDefinitionId || input.queueDefinition?.queueDefinitionId);
+        const scopeKey: any = input.scopeKey || (input.scope ? scopeKeyFromScope(input.scope) : "");
+        const reconciled: any = await reconcileInDoubtLocked(client, {
+          nowMs,
+          queueDefinitionId,
+          scopeKey,
+          workItemId: toText(input.workItemId || ""),
+          limit: input.workItemId ? 1 : Math.max(1, asInt(input.limit, 1000))
+        });
+        return {
+          ok: true,
+          reconciled,
+          count: reconciled.length
+        };
       });
     },
     async inspect(input: Record<string, any> = {}) : Promise<any> {
@@ -1341,6 +1538,18 @@ export async function createPostgresWorkQueueStore({
               VALUES (${placeholders})
             `, sqlValues(values, WORK_ITEM_PROJECTION_COLUMNS));
           }
+          await client.query("DELETE FROM work_queue_virtual_finish");
+          await client.query(`
+            INSERT INTO work_queue_virtual_finish (
+              queue_definition_id, queue_definition_version, selector_scope_key,
+              priority_class, tenant_id, workspace_id, project_id, virtual_finish, updated_at_ms
+            )
+            SELECT queue_definition_id, queue_definition_version, scope_key, priority_class,
+                   tenant_id, workspace_id, project_id, 0, MAX(updated_at_ms)
+            FROM work_items
+            GROUP BY queue_definition_id, queue_definition_version, scope_key, priority_class,
+                     tenant_id, workspace_id, project_id
+          `);
           applied = true;
         }
         return {

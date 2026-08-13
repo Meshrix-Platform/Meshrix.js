@@ -496,7 +496,7 @@ export async function revokeDelegatedMcpGrantForPlatform(current?: any, input: R
   if (!grantId) {
     return null;
   }
-  const grant: any = typeof current.store.getGrant === "function" ? current.store.getGrant(grantId) : null;
+  const grant: any = typeof current.store.getGrant === "function" ? await current.store.getGrant(grantId) : null;
   if (grant) {
     const metadata: any = grantMetadata(grant);
     const existingDelegation: any = asObject(metadata.delegatedMcp);

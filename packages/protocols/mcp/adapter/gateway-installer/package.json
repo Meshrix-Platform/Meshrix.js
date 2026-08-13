@@ -31,6 +31,7 @@
     "@meshrix/contracts": "0.0.1"
   },
   "imports": {
-    "#meshrix/contracts/*": "@meshrix/contracts/*"
+    "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",
+    "#meshrix/contracts/serialization/canonical-json": "@meshrix/contracts/serialization/canonical-json"
   }
 }

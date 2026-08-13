@@ -115,7 +115,7 @@ function parseJsonConfig(value: any = "") : any {
   }
 }
 
-export async function readJson(filePath?: any, fallback: Record<string, any> = {}) : Promise<any> {
+export async function readJson(filePath?: any, fallback: Record<string, any> | null = {}) : Promise<any> {
   try {
     return parseJsonConfig(await fs.readFile(filePath, "utf8"));
   } catch (error: any) {

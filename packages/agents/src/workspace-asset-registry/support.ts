@@ -10,7 +10,7 @@ export function nowIso() : any {
   return new Date().toISOString();
 }
 
-export function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+export function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

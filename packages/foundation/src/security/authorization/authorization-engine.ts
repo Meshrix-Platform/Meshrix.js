@@ -4,13 +4,17 @@ import {
   hasCapability,
   requiredCapabilitiesFor
 } from "./authorization-capabilities.ts";
-import { nowIso, randomId, riskRank, stringSet, uniqueStrings, effectDetails } from "./authorization-engine-common.ts";
+import crypto from "node:crypto";
+import { createWeightedLruCache } from "pactium";
+import { firstString, nowIso, randomId, riskRank, stringSet, stringsFrom, uniqueStrings, effectDetails } from "./authorization-engine-common.ts";
 import { resolveResourceContext } from "./authorization-resource-context.ts";
 import {
   abacDenyDetails,
+  compileIpRule,
   grantHasToolset,
   hasConfirmation,
   inferOperationAction,
+  ipMatchesPredicate,
   ipMatchesRule,
   maxRiskAllowed,
   operationRisk,
@@ -72,6 +76,330 @@ function approvedPendingOperationMatches(context: Record<string, any> = {}, oper
   return !requiredApprovalScope || approvalScope === requiredApprovalScope;
 }
 
+export const AUTHORIZATION_COMPILER_PROTOCOL_VERSION: any = "v0.0.1:risk-control:authorization-compiler-1";
+export const AUTHORIZATION_COMPILER_CACHE_DEFAULT_LIMIT: any = 256;
+export const AUTHORIZATION_COMPILER_CACHE_DEFAULT_WEIGHT_LIMIT: any = 8 * 1024 * 1024;
+
+function compiledFactsStructuralWeight(value: any) : number {
+  const stack: any[] = [value];
+  const visited: Set<object> = new Set();
+  let weight: number = 0;
+  while (stack.length > 0) {
+    const current: any = stack.pop();
+    if (current === null || current === undefined) {
+      weight += 4;
+      continue;
+    }
+    if (typeof current === "string") {
+      weight += 16 + Buffer.byteLength(current, "utf8");
+      continue;
+    }
+    if (typeof current === "number" || typeof current === "bigint") {
+      weight += 8;
+      continue;
+    }
+    if (typeof current === "boolean") {
+      weight += 4;
+      continue;
+    }
+    if ((typeof current !== "object" && typeof current !== "function") || visited.has(current)) {
+      continue;
+    }
+    visited.add(current);
+    if (current instanceof Set) {
+      weight += 48 + current.size * 16;
+      for (const item of current) stack.push(item);
+      continue;
+    }
+    if (Array.isArray(current)) {
+      weight += 32 + current.length * 8;
+      for (const item of current) stack.push(item);
+      continue;
+    }
+    const entries: any[] = Object.entries(current);
+    weight += 48 + entries.length * 16;
+    for (const [key, item] of entries) {
+      weight += Buffer.byteLength(key, "utf8");
+      stack.push(item);
+    }
+  }
+  return Math.max(1, weight);
+}
+
+const COMPILED_FACT_REVISION_KEYS: readonly string[] = Object.freeze([
+  "revision",
+  "version",
+  "generation",
+  "sourceRevision",
+  "catalogRevision",
+  "updatedAt"
+]);
+const COMPILED_FACT_IDENTITY_KEYS: readonly string[] = Object.freeze([
+  "id",
+  "subjectId",
+  "userId",
+  "operationId",
+  "profileId",
+  "username"
+]);
+
+function firstFactField(fact: Record<string, any>, keys: readonly string[]) : string {
+  for (const key of keys) {
+    const value: any = fact[key];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value);
+    }
+  }
+  return "";
+}
+
+function exactFactDescriptor(label: string, fact: any = null) : readonly string[] | null {
+  if (fact === null || fact === undefined) {
+    return Object.freeze([label, "none", "none"]);
+  }
+  if (typeof fact !== "object" || Array.isArray(fact)) {
+    return null;
+  }
+  const identity: string = firstFactField(fact, COMPILED_FACT_IDENTITY_KEYS);
+  const revision: string = firstFactField(fact, COMPILED_FACT_REVISION_KEYS);
+  return identity && revision
+    ? Object.freeze([label, identity, revision])
+    : null;
+}
+
+function exactCompiledFactKey(input: Record<string, any> = {}) : string | null {
+  const descriptors: Array<readonly string[] | null> = [
+    exactFactDescriptor("policy", input.grant || input.restriction || null),
+    exactFactDescriptor("profile", input.profile || null),
+    exactFactDescriptor("subject", input.subject || null),
+    exactFactDescriptor("actor", input.actor || null),
+    exactFactDescriptor("session-user", input.authSession?.user || null),
+    exactFactDescriptor("tool", input.tool || null)
+  ];
+  if (descriptors.some((descriptor) => descriptor === null)) {
+    return null;
+  }
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(descriptors))
+    .digest("hex");
+}
+
+function revisionOf(fact: any = null) : string {
+  return fact && typeof fact === "object"
+    ? firstFactField(fact, COMPILED_FACT_REVISION_KEYS)
+    : "";
+}
+
+function normalizeOriginEntry(value: any) : any {
+  const raw: any = String(value || "").trim().replace(/\/+$/, "");
+  if (!raw) {
+    return "";
+  }
+  let parsed: any;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return "";
+  }
+  if (!["http:", "https:"].includes(parsed.protocol) || !parsed.host) {
+    return "";
+  }
+  return `${parsed.protocol}//${parsed.host}`.replace(/\/+$/, "");
+}
+
+function hasCompiledCapability(capabilitySet: any, capability: any = "") : any {
+  const capabilityId: any = String(capability || "").trim();
+  if (!capabilityId) {
+    return true;
+  }
+  if (capabilitySet.has("cap:*") || capabilitySet.has(capabilityId)) {
+    return true;
+  }
+  if (capabilityId.startsWith("cap:api:") && capabilitySet.has("cap:api:*")) {
+    return true;
+  }
+  if (capabilityId.startsWith("cap:tool:") && capabilitySet.has("cap:tool:*")) {
+    return true;
+  }
+  return false;
+}
+
+function compileAbacFacts(subject: Record<string, any> = {}, grant: any = null, profile: any = null) : any {
+  const abacSet: any = (...values: any[]) : any => stringSet(stringsFrom(...values));
+  return Object.freeze({
+    tenantId: firstString(subject.tenantId, grant?.tenantId, grant?.metadata?.tenantId, profile?.tenantId),
+    accountId: firstString(subject.accountId, grant?.accountId, grant?.metadata?.accountId, profile?.accountId),
+    endpointId: firstString(subject.endpointId, grant?.endpointId, grant?.metadata?.endpointId, profile?.endpointId),
+    opaqueMailboxId: firstString(
+      subject.opaqueMailboxId,
+      grant?.opaqueMailboxId,
+      grant?.metadata?.opaqueMailboxId,
+      profile?.opaqueMailboxId
+    ),
+    allowedWorkspaceIds: abacSet(
+      subject.allowedWorkspaceIds,
+      grant?.allowedWorkspaceIds,
+      grant?.metadata?.allowedWorkspaceIds,
+      profile?.allowedWorkspaceIds
+    ),
+    allowedAccountIds: abacSet(
+      subject.allowedAccountIds,
+      grant?.allowedAccountIds,
+      grant?.metadata?.allowedAccountIds,
+      profile?.allowedAccountIds
+    ),
+    allowedEndpointIds: abacSet(
+      subject.allowedEndpointIds,
+      grant?.allowedEndpointIds,
+      grant?.metadata?.allowedEndpointIds,
+      profile?.allowedEndpointIds
+    ),
+    allowedMailboxIds: abacSet(
+      subject.allowedOpaqueMailboxIds,
+      subject.allowedMailboxIds,
+      grant?.allowedOpaqueMailboxIds,
+      grant?.allowedMailboxIds,
+      grant?.metadata?.allowedOpaqueMailboxIds,
+      grant?.metadata?.allowedMailboxIds,
+      profile?.allowedOpaqueMailboxIds,
+      profile?.allowedMailboxIds
+    ),
+    allowedDataClasses: abacSet(
+      subject.allowedDataClasses,
+      grant?.allowedDataClasses,
+      grant?.metadata?.allowedDataClasses,
+      profile?.allowedDataClasses
+    ),
+    allowedEgress: abacSet(
+      subject.allowedEgress,
+      grant?.allowedEgress,
+      grant?.metadata?.allowedEgress,
+      profile?.allowedEgress
+    ),
+    allowedStaticSemanticFamilies: abacSet(
+      subject.allowedStaticSemanticFamilies,
+      grant?.allowedStaticSemanticFamilies,
+      grant?.metadata?.allowedStaticSemanticFamilies,
+      profile?.allowedStaticSemanticFamilies
+    ),
+    allowedCapabilityDomains: abacSet(
+      subject.allowedCapabilityDomains,
+      grant?.allowedCapabilityDomains,
+      grant?.metadata?.allowedCapabilityDomains,
+      profile?.allowedCapabilityDomains
+    ),
+    allowedCapabilityVerbs: abacSet(
+      subject.allowedCapabilityVerbs,
+      grant?.allowedCapabilityVerbs,
+      grant?.metadata?.allowedCapabilityVerbs,
+      profile?.allowedCapabilityVerbs
+    ),
+    allowedResourceKinds: abacSet(
+      subject.allowedResourceKinds,
+      grant?.allowedResourceKinds,
+      grant?.metadata?.allowedResourceKinds,
+      profile?.allowedResourceKinds
+    ),
+    allowedEffectKinds: abacSet(
+      subject.allowedEffectKinds,
+      grant?.allowedEffectKinds,
+      grant?.metadata?.allowedEffectKinds,
+      profile?.allowedEffectKinds
+    ),
+    allowedServiceIds: abacSet(
+      subject.allowedServiceIds,
+      grant?.allowedServiceIds,
+      grant?.metadata?.allowedServiceIds,
+      profile?.allowedServiceIds
+    ),
+    allowedSecretBindings: abacSet(
+      subject.allowedSecretBindings,
+      grant?.allowedSecretBindings,
+      grant?.metadata?.allowedSecretBindings,
+      profile?.allowedSecretBindings
+    )
+  });
+}
+
+function compileAuthorizationFacts(input: Record<string, any> = {}) : any {
+  const grant: any = input.grant || null;
+  const restriction: any = input.restriction || null;
+  const policy: any = grant || restriction;
+  const resolvedSubject: any = input.resolvedSubject ||
+    resolveAuthorizationSubject({
+      subject: input.subject || null,
+      actor: input.actor || null,
+      authSession: input.authSession || null,
+      grant
+    });
+  const tool: any = input.tool || null;
+  const profile: any = input.profile || null;
+  const grantRequired: any = input.grantRequired === true;
+  const allowedOrigins: any[] = [];
+  const rawOrigins: any = Array.isArray(policy?.allowedOrigins) ? policy.allowedOrigins : [];
+  for (const raw of rawOrigins) {
+    const origin: any = normalizeOriginEntry(raw);
+    if (!origin) {
+      return { ok: false, reasonCode: "malformed_credential_origin", message: "Credential contains a malformed allowed origin." };
+    }
+    allowedOrigins.push(origin);
+  }
+  const allowedCidrs: any[] = [];
+  const rawCidrs: any = Array.isArray(policy?.allowedCidrs) ? policy.allowedCidrs : [];
+  for (const raw of rawCidrs) {
+    const compiled: any = compileIpRule(raw);
+    if (!compiled.ok) {
+      return { ok: false, reasonCode: "malformed_credential_cidr", message: "Credential contains a malformed CIDR rule." };
+    }
+    allowedCidrs.push(compiled.predicate);
+  }
+  let maxUses: any = 0;
+  const rawMaxUses: any = policy?.maxUses;
+  if (rawMaxUses !== undefined && rawMaxUses !== null && String(rawMaxUses).trim() !== "") {
+    maxUses = Number(rawMaxUses);
+    if (!Number.isSafeInteger(maxUses) || maxUses < 0) {
+      return { ok: false, reasonCode: "malformed_credential_max_uses", message: "Credential contains a malformed maximum use count." };
+    }
+  }
+  const grantToolsets: any = stringSet(policy?.toolsets);
+  const toolToolsets: any = uniqueStrings(tool?.toolsets || []);
+  const missingToolsets: any = !policy?.toolsets?.length
+    ? []
+    : toolToolsets.filter((toolset?: any) : any => !grantToolsets.has(toolset));
+  const facts: Record<string, any> = {
+    schemaVersion: AUTHORIZATION_COMPILER_PROTOCOL_VERSION,
+    subject: resolvedSubject,
+    scopeSet: stringSet(resolvedSubject.scopes),
+    capabilitySet: stringSet(effectiveSubjectCapabilities(resolvedSubject)),
+    effectiveCapabilities: effectiveSubjectCapabilities(resolvedSubject),
+    grantToolsets,
+    toolToolsets,
+    missingToolsets,
+    allowedOrigins,
+    allowedCidrs,
+    maxUses,
+    maxRisk: maxRiskAllowed(
+      profile,
+      policy,
+      resolvedSubject,
+      grantRequired || policy || tool ? "safe_write" : "destructive"
+    ),
+    toolDeny: uniqueStrings(policy?.toolDeny || []),
+    toolAllow: uniqueStrings(policy?.toolAllow || []),
+    profileToolDeny: uniqueStrings(profile?.toolDeny || []),
+    profileToolAllow: uniqueStrings(profile?.toolAllow || []),
+    abac: compileAbacFacts(resolvedSubject, policy, profile),
+    key: String(input.compiledFactKey || ""),
+    policyRevision: revisionOf(policy),
+    credentialRevision: revisionOf(restriction || grant),
+    subjectRevision: revisionOf(input.subject || null),
+    profileRevision: revisionOf(profile),
+    catalogRevision: revisionOf(tool)
+  };
+  return { ok: true, facts: Object.freeze(facts) };
+}
+
 export function evaluateAuthorizationPolicy({
   operation = {},
   tool = null,
@@ -89,24 +417,28 @@ export function evaluateAuthorizationPolicy({
   toolExecutionId = "",
   grantRequired = false,
   enforceConfirmation = true,
-  store = null,
   governanceStore = null,
-  governanceRequired = false
+  governanceRequired = false,
+  compiledFacts = null
 }: Record<string, any> = {}) : any {
   const authorizationPolicy: any = grant || restriction;
-  const resolvedSubject: any = resolveAuthorizationSubject({ subject, actor, authSession, grant });
+  const resolvedSubject: any = compiledFacts?.subject || resolveAuthorizationSubject({ subject, actor, authSession, grant });
   const resourceContext: any = resolveResourceContext({ operation, tool, input, context });
   const requiredScopes: any = requiredScopesFor(operation, tool);
   const requiredCapabilities: any = requiredCapabilitiesFor(operation, tool);
-  const scopeSet: any = stringSet(resolvedSubject.scopes);
+  const scopeSet: any = compiledFacts?.scopeSet || stringSet(resolvedSubject.scopes);
   const missingScopes: any = requiredScopes.filter((scope?: any) : any => !scopeSet.has(scope));
   const capabilityMode: any = requiredCapabilities.length > 0 && resolvedSubject.capabilities.length > 0;
-  const subjectCapabilitiesForDecision: any = effectiveSubjectCapabilities(resolvedSubject);
+  const subjectCapabilitiesForDecision: any = compiledFacts
+    ? compiledFacts.effectiveCapabilities
+    : effectiveSubjectCapabilities(resolvedSubject);
   const missingCapabilities: any = capabilityMode
-    ? requiredCapabilities.filter((capability?: any) : any => !hasCapability(subjectCapabilitiesForDecision, capability))
+    ? requiredCapabilities.filter((capability?: any) : any => compiledFacts
+        ? !hasCompiledCapability(compiledFacts.capabilitySet, capability)
+        : !hasCapability(subjectCapabilitiesForDecision, capability))
     : [];
   const effectiveMissingScopes: any = capabilityMode ? [] : missingScopes;
-  const missingToolsets: any = toolsetMisses(authorizationPolicy, tool);
+  const missingToolsets: any = compiledFacts ? compiledFacts.missingToolsets : toolsetMisses(authorizationPolicy, tool);
   const risk: any = operationRisk(operation, tool);
   const evaluatedLayers: any = uniqueStrings([
     "authorization_subject",
@@ -157,7 +489,8 @@ export function evaluateAuthorizationPolicy({
     subject: resolvedSubject,
     grant: authorizationPolicy,
     profile,
-    resource: resourceContext
+    resource: resourceContext,
+    ...(compiledFacts ? { compiled: compiledFacts } : {})
   });
 
   if (governanceDecision?.applicable && governanceDecision.effect === "deny") {
@@ -188,13 +521,15 @@ export function evaluateAuthorizationPolicy({
   } else if (Number(authorizationPolicy?.maxUses || 0) > 0 && Number(authorizationPolicy?.useCount || 0) >= Number(authorizationPolicy?.maxUses || 0)) {
     details = effectDetails("deny", "grant_max_uses", "Grant has exceeded its maximum use count.");
   } else if (
-    authorizationPolicy?.allowedOrigins?.length > 0 &&
-    (!requestOrigin(request) || !authorizationPolicy.allowedOrigins.map((item?: any) : any => String(item || "").replace(/\/+$/, "")).includes(requestOrigin(request)))
+    (compiledFacts ? compiledFacts.allowedOrigins.length : authorizationPolicy?.allowedOrigins?.length || 0) > 0 &&
+    (!requestOrigin(request) || !(compiledFacts ? compiledFacts.allowedOrigins : authorizationPolicy.allowedOrigins.map((item?: any) : any => String(item || "").replace(/\/+$/, ""))).includes(requestOrigin(request)))
   ) {
     details = effectDetails("deny", "origin_not_allowed", "Request origin is not allowed by grant.");
   } else if (
-    authorizationPolicy?.allowedCidrs?.length > 0 &&
-    !authorizationPolicy.allowedCidrs.some((rule?: any) : any => ipMatchesRule(sourceIpFromRequest(request), rule))
+    (compiledFacts ? compiledFacts.allowedCidrs.length : authorizationPolicy?.allowedCidrs?.length || 0) > 0 &&
+    !(compiledFacts ? compiledFacts.allowedCidrs : authorizationPolicy.allowedCidrs).some((rule?: any) : any =>
+      compiledFacts ? ipMatchesPredicate(sourceIpFromRequest(request), rule) : ipMatchesRule(sourceIpFromRequest(request), rule)
+    )
   ) {
     details = effectDetails("deny", "cidr_not_allowed", "Request source address is not allowed by grant.");
   } else if (context?.grantRateLimited === true || context?.rateLimited === true) {
@@ -211,20 +546,23 @@ export function evaluateAuthorizationPolicy({
     details = effectDetails("deny", "missing_scopes", "Subject is missing required scopes.");
   } else if (!grantHasToolset(authorizationPolicy, tool)) {
     details = effectDetails("deny", "missing_toolsets", "Grant is missing a toolset that contains this tool.");
-  } else if (tool?.id && authorizationPolicy?.toolDeny?.includes(tool.id)) {
+  } else if (tool?.id && (compiledFacts ? compiledFacts.toolDeny : authorizationPolicy?.toolDeny || []).includes(tool.id)) {
     details = effectDetails("deny", "tool_denied", "Grant denies this tool.");
-  } else if (tool?.id && authorizationPolicy?.toolAllow?.length > 0 && !authorizationPolicy.toolAllow.includes(tool.id)) {
+  } else if (tool?.id && (compiledFacts ? compiledFacts.toolAllow : authorizationPolicy?.toolAllow || []).length > 0 && !(compiledFacts ? compiledFacts.toolAllow : authorizationPolicy.toolAllow).includes(tool.id)) {
     details = effectDetails("deny", "tool_not_allowed", "Tool is not in the grant allowlist.");
-  } else if (tool?.id && profile?.toolDeny?.includes(tool.id)) {
+  } else if (tool?.id && (compiledFacts ? compiledFacts.profileToolDeny : profile?.toolDeny || []).includes(tool.id)) {
     details = effectDetails("deny", "profile_tool_denied", "Agent profile denies this tool.");
-  } else if (tool?.id && profile?.toolAllow?.length > 0 && !profile.toolAllow.includes(tool.id)) {
+  } else if (tool?.id && (compiledFacts ? compiledFacts.profileToolAllow : profile?.toolAllow || []).length > 0 && !(compiledFacts ? compiledFacts.profileToolAllow : profile.toolAllow).includes(tool.id)) {
     details = effectDetails("deny", "profile_tool_not_allowed", "Tool is not in the profile allowlist.");
-  } else if (riskRank(risk) > riskRank(maxRiskAllowed(
-    profile,
-    authorizationPolicy,
-    resolvedSubject,
-    grantRequired || authorizationPolicy || tool ? "safe_write" : "destructive"
-  ))) {
+  } else if (riskRank(risk) > riskRank(compiledFacts
+    ? compiledFacts.maxRisk
+    : maxRiskAllowed(
+      profile,
+      authorizationPolicy,
+      resolvedSubject,
+      grantRequired || authorizationPolicy || tool ? "safe_write" : "destructive"
+    )
+  )) {
     details = effectDetails("deny", "risk_exceeds_policy", "Requested risk exceeds effective policy.");
   } else if (
     (risk === "destructive" || tool?.destructive || tool?.requiresApproval || operation?.requiresApproval === true || operation?.safety?.requiresApproval === true) &&
@@ -338,18 +676,163 @@ export function evaluateAuthorizationPolicy({
     createdAt: nowIso()
   };
 
-  if (store && typeof store.appendDecision === "function") {
-    store.appendDecision(decision);
-  }
   return decision;
 }
 
-export function createAuthorizationEngine({ store = null, governanceStore = null }: Record<string, any> = {}) : any {
+function malformedFactDecision(reasonCode: any, message: any, input: Record<string, any> = {}) : any {
+  const grant: any = input.grant || null;
+  const subject: any = resolveAuthorizationSubject({
+    subject: input.subject || null,
+    actor: input.actor || null,
+    authSession: input.authSession || null,
+    grant
+  });
+  const decision: Record<string, any> = {
+    protocolVersion: AUTHORIZATION_PROTOCOL_VERSION,
+    decisionId: randomId("authz_decision"),
+    auditId: randomId("authz_audit"),
+    toolExecutionId: input.toolExecutionId || "",
+    traceId: input.traceId || "",
+    operationId: String(input.operation?.id || input.tool?.operationId || ""),
+    toolId: String(input.tool?.id || ""),
+    grantId: String(grant?.id || ""),
+    subject,
+    resource: {
+      operationId: String(input.operation?.id || input.tool?.operationId || ""),
+      toolId: String(input.tool?.id || ""),
+      feature: String(input.operation?.feature || input.tool?.featureId || ""),
+      risk: operationRisk(input.operation || {}, input.tool || null)
+    },
+    action: String(input.input?.requestedAction || input.context?.requestedAction || inferOperationAction(input.operation || {}, input.tool || null)),
+    effect: "deny",
+    allowed: false,
+    reasonCode,
+    redactedReason: message,
+    deniedLayer: "authorization_compiler",
+    effectivePolicySnapshot: null,
+    requiredCapabilities: requiredCapabilitiesFor(input.operation || {}, input.tool || null),
+    subjectCapabilities: subject.capabilities,
+    missingCapabilities: [],
+    requiredScopes: requiredScopesFor(input.operation || {}, input.tool || null),
+    subjectScopes: subject.scopes,
+    missingScopes: [],
+    missingToolsets: [],
+    requiredApproval: null,
+    requiredConfirmation: false,
+    evaluatedLayers: ["authorization_compiler"],
+    tenant: {
+      subjectTenantId: subject.tenantId || "",
+      resourceTenantId: "",
+      orgId: subject.orgId || "",
+      teamIds: subject.teamIds || [],
+      departmentIds: subject.departmentIds || []
+    },
+    abac: {},
+    createdAt: nowIso()
+  };
+  return decision;
+}
+
+export function createAuthorizationEngine({
+  store = null,
+  governanceStore = null,
+  compiledFactsCacheLimit = AUTHORIZATION_COMPILER_CACHE_DEFAULT_LIMIT,
+  compiledFactsCacheWeightLimit = AUTHORIZATION_COMPILER_CACHE_DEFAULT_WEIGHT_LIMIT
+}: Record<string, any> = {}) : any {
+  const cacheLimit: any = Math.max(1, Math.min(Number(compiledFactsCacheLimit) || AUTHORIZATION_COMPILER_CACHE_DEFAULT_LIMIT, 4096));
+  const cacheWeightLimit: any = Math.max(
+    1024,
+    Math.min(Number(compiledFactsCacheWeightLimit) || AUTHORIZATION_COMPILER_CACHE_DEFAULT_WEIGHT_LIMIT, 64 * 1024 * 1024)
+  );
+  const cache: any = createWeightedLruCache({ maxEntries: cacheLimit, maxWeight: cacheWeightLimit });
+  let compiledSnapshotCount: any = 0;
+  let cacheHits: any = 0;
+  let cacheEvictions: any = 0;
+  let cacheOversizeBypasses: any = 0;
+  let cacheFailures: any = 0;
+  let malformedFactDenials: any = 0;
+  let uncachedCompileCount: any = 0;
+
+  function compiledFactsFor(input: Record<string, any> = {}) : any {
+    const grant: any = input.grant || null;
+    const resolvedSubject: any = resolveAuthorizationSubject({
+      subject: input.subject || null,
+      actor: input.actor || null,
+      authSession: input.authSession || null,
+      grant
+    });
+    const candidateKey: string | null = exactCompiledFactKey(input);
+    let cached: any = null;
+    try {
+      cached = candidateKey ? cache.get(candidateKey) : null;
+    } catch {
+      cacheFailures += 1;
+    }
+    if (candidateKey && cached) {
+      cacheHits += 1;
+      return cached;
+    }
+    const compiled: any = compileAuthorizationFacts({
+      ...input,
+      resolvedSubject,
+      compiledFactKey: candidateKey || ""
+    });
+    if (!compiled.ok) {
+      malformedFactDenials += 1;
+      return compiled;
+    }
+    compiledSnapshotCount += 1;
+    if (!candidateKey) {
+      uncachedCompileCount += 1;
+      return { ok: true, facts: compiled.facts };
+    }
+    const cacheEntry: any = { ok: true, facts: compiled.facts };
+    const structuralWeight: number = compiledFactsStructuralWeight(compiled.facts);
+    const sizeBefore: number = cache.size;
+    try {
+      cache.set(candidateKey, cacheEntry, structuralWeight);
+      if (!cache.has(candidateKey)) {
+        cacheOversizeBypasses += 1;
+        uncachedCompileCount += 1;
+      } else {
+        cacheEvictions += Math.max(0, sizeBefore + 1 - cache.size);
+      }
+    } catch {
+      cacheFailures += 1;
+      uncachedCompileCount += 1;
+    }
+    return cacheEntry;
+  }
+
   return {
     protocolVersion: AUTHORIZATION_PROTOCOL_VERSION,
+    compilerProtocolVersion: AUTHORIZATION_COMPILER_PROTOCOL_VERSION,
     capabilityPermissions: KERNEL_CAPABILITY_PERMISSIONS,
     listCapabilityPermissions: listKernelCapabilityPermissions,
     resolveSubject: resolveAuthorizationSubject,
-    evaluate: (input: Record<string, any> = {}) : any => evaluateAuthorizationPolicy({ ...input, store, governanceStore })
+    async evaluate(input: Record<string, any> = {}) : Promise<any> {
+      const compiled: any = compiledFactsFor(input);
+      const decision: any = !compiled.ok
+        ? malformedFactDecision(compiled.reasonCode, compiled.message, input)
+        : evaluateAuthorizationPolicy({ ...input, governanceStore, compiledFacts: compiled.facts });
+      if (store && typeof store.appendDecision === "function") {
+        await store.appendDecision(decision);
+      }
+      return decision;
+    },
+    getRefactorInstrumentation: () : any => ({
+      schemaVersion: "v0.0.1:risk-control:authorization-compiler-instrumentation-1",
+      compiledSnapshotCount,
+      cacheHits,
+      cacheEvictions,
+      cacheOversizeBypasses,
+      cacheFailures,
+      malformedFactDenials,
+      uncachedCompileCount,
+      cacheLimit,
+      cacheWeight: cache.weight,
+      cacheWeightLimit,
+      cacheEntries: cache.size
+    })
   };
 }

@@ -292,7 +292,7 @@
       ],
       "verifierScripts": [
         "tools/server-scripts/verify-job-work-queue.ts",
-        "tools/server-scripts/verify-job-work-queue-capacity.ts",
+        "tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts",
         "tools/server-scripts/verify-work-queue-conformance.ts",
         "tools/server-scripts/verify-work-queue-process-restart.ts",
         "tools/server-scripts/verify-upload-workspace-materialization.ts"

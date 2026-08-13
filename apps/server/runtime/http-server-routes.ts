@@ -257,12 +257,25 @@ export function createHttpServerRequestHandler({
   };
   return async function handleHttpServerRequest(request?: any, response?: any) : Promise<any> {
     const requestOperations: any = getActiveApiOperations();
-    const requestAbortController: any = lifecycle.beginRequest();
+    let admissionUrl: any = null;
+    try {
+      admissionUrl = new URL(request.url || "/", "http://127.0.0.1");
+    } catch {
+      admissionUrl = null;
+    }
+    const admissionMethod: any = String(request.method || "GET").toUpperCase();
+    const admissionIsLight: any = ["GET", "HEAD", "OPTIONS"].includes(admissionMethod);
+    const admissionIsUpload: any = admissionMethod === "PUT" && /^\/api\/upload-sessions\//u.test(admissionUrl?.pathname || "");
+    const requestAbortController: any = lifecycle.beginRequest({
+      workloadClass: admissionIsLight ? "light" : admissionIsUpload ? "stream" : "standard",
+      cost: admissionIsLight ? 1 : admissionIsUpload ? 4 : 2
+    });
     if (requestAbortController.signal.aborted) {
-      response.statusCode = 503;
+      response.statusCode = requestAbortController.signal.reason?.statusCode || 503;
       response.end();
       return;
     }
+    let requestBodyAdmissionLease: any = null;
     Object.defineProperty(request, "__meshrixActiveRequestCount", {
       configurable: false,
       enumerable: false,
@@ -513,16 +526,32 @@ export function createHttpServerRequestHandler({
             return;
           }
 
-          requestBody =
-            method === "GET" || method === "HEAD"
-              ? Buffer.alloc(0)
-              : await readRequestBody(request, {
-                  admissionController: requestBodyAdmission,
-                  contentLength: requestBodyBytes,
-                  maxBytes: requestBodyLimitForRoute(method, url.pathname),
-                  tenantKey,
-                  subjectKey
-                });
+          if (method === "GET" || method === "HEAD") {
+            requestBody = Buffer.alloc(0);
+          } else {
+            const maxBytes: any = requestBodyLimitForRoute(method, url.pathname);
+            const binaryBody: any = method === "PUT" && /^\/api\/upload-sessions\/[^/]+\/files\/[^/]+$/u.test(url.pathname);
+            if (Number.isSafeInteger(maxBytes) && maxBytes > 0 && requestBodyBytes > maxBytes) {
+              throw Object.assign(new Error("HTTP request body exceeds the route limit."), {
+                code: "request_body_too_large",
+                statusCode: 413
+              });
+            }
+            requestBodyAdmissionLease = requestBodyAdmission.acquire({
+              tenantKey,
+              subjectKey,
+              contentLength: requestBodyBytes,
+              retainedMultiplier: binaryBody ? 2 : 3
+            });
+            requestBody = await readRequestBody(request, {
+              admissionController: requestBodyAdmission,
+              admissionLease: requestBodyAdmissionLease,
+              contentLength: requestBodyBytes,
+              maxBytes,
+              tenantKey,
+              subjectKey
+            });
+          }
           requestBodyBytes = requestBody.length;
 
           const uploadOperation: any = apiKeyUploadOperation(method, url.pathname);
@@ -689,6 +718,7 @@ export function createHttpServerRequestHandler({
         }
       });
     } finally {
+      requestBodyAdmissionLease?.release();
       lifecycle.markSocketIdle(request.socket);
       lifecycle.endRequest(requestAbortController);
     }

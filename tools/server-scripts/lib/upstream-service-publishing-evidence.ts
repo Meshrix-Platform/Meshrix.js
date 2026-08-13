@@ -19,7 +19,7 @@ export const UPSTREAM_SERVICE_PUBLISHING_ASSERTIONS: any = Object.freeze(
   UPSTREAM_SERVICE_PUBLISHING_REQUIREMENTS.map((requirement?: any) : any => Object.freeze({
     id: `${requirement.toLowerCase()}.production-proof`,
     requirement,
-    phase: Object.freeze({
+    phase: (Object.freeze({
       "REQ-USP-001": "control-plane",
       "REQ-USP-002": "raw-boundary",
       "REQ-USP-003": "sensitive-material",
@@ -33,7 +33,7 @@ export const UPSTREAM_SERVICE_PUBLISHING_ASSERTIONS: any = Object.freeze(
       "REQ-USP-011": "migration-readiness",
       "REQ-USP-012": "revision-semantics",
       "REQ-USP-013": "resource-bounds"
-    })[requirement]
+    }) as Record<string, string>)[requirement]
   }))
 );
 

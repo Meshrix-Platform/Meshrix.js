@@ -6,15 +6,18 @@ import {
   AGENT_WORKSPACE_PROTOCOL_VERSION,
   applyReplacementHunks,
   applyUnifiedPatchText,
+  asArray,
   asObject,
   assertWorkspaceFileContentPolicy,
   fileMetadataFromStat,
   joinWorkspaceRelativePath,
+  normalizeSha256,
   normalizeWorkspaceRelativePath,
   nowIso,
   sha256Buffer,
   stableHash,
-  stripExecutableMode
+  stripExecutableMode,
+  uniqueStrings
 } from "./agent-workspace-support.ts";
 
 export function createAgentWorkspaceFileWriteApi({
@@ -30,7 +33,8 @@ export function createAgentWorkspaceFileWriteApi({
     archiveWorkspacePath,
     recordWorkspaceUploadIngest,
     commitWorkspaceFileState,
-    recordWorkspaceFileCheckpoint
+    recordWorkspaceFileCheckpoint,
+    captureWorkspaceFilePreimage
   } = fileStateApi;
 
   function assertMovableWorkspaceDirectory(sourceAbsolutePath?: any, targetRelativePath?: any) : any {
@@ -109,6 +113,10 @@ export function createAgentWorkspaceFileWriteApi({
     if (overwritten && input.overwrite === false) {
       return { ok: false, status: 409, error: "文件已存在。" };
     }
+    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+      access.workspace,
+      [resolved.relativePath]
+    );
     fs.mkdirSync(path.dirname(resolved.absolutePath), { recursive: true });
     fs.writeFileSync(resolved.absolutePath, contentBuffer);
     stripExecutableMode(resolved.absolutePath);
@@ -146,17 +154,21 @@ export function createAgentWorkspaceFileWriteApi({
     const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "workspace.file.upload"
     });
+    const uploadMutations: any[] = archived
+      ? [{
+          action: "put",
+          key: resolved.relativePath,
+          valueRef: archived.rootCid,
+          metadata: {
+            ...filePayloadMetadata(file),
+            contentCid: archived?.metadata?.contentCid || ""
+          }
+        }]
+      : [];
     const stateCommit: any = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.upload",
-      mutations: archived
-        ? [{
-            action: "put",
-            key: resolved.relativePath,
-            valueRef: archived.rootCid,
-            metadata: filePayloadMetadata(file)
-          }]
-        : [],
+      mutations: uploadMutations,
       contentRefs: [
         ...(archived?.contentRefs || []),
         ...(ingestReceipt?.contentRefs || [])
@@ -169,8 +181,6 @@ export function createAgentWorkspaceFileWriteApi({
         contentSha256: file.contentSha256 || "",
         ingestReceipt: ingestReceipt
           ? {
-              uploadSessionId: ingestReceipt.uploadSessionId,
-              segmentId: ingestReceipt.segmentId,
               manifestRootCid: ingestReceipt.manifestRootCid,
               status: ingestReceipt.status
             }
@@ -182,7 +192,9 @@ export function createAgentWorkspaceFileWriteApi({
       operationId: input.operationId || "workspace.file.upload",
       stateCommit,
       action: "file.upload",
-      path: resolved.relativePath
+      path: resolved.relativePath,
+      preimageSnapshot,
+      mutations: uploadMutations
     });
     try {
       getRuntimeLogger().info("agent_workspace.file.upload.completed", {
@@ -251,6 +263,10 @@ export function createAgentWorkspaceFileWriteApi({
     } catch (error: any) {
       return { ok: false, status: 400, error: error.message };
     }
+    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+      access.workspace,
+      [resolved.relativePath]
+    );
     fs.writeFileSync(resolved.absolutePath, contentBuffer);
     stripExecutableMode(resolved.absolutePath);
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
@@ -264,17 +280,21 @@ export function createAgentWorkspaceFileWriteApi({
     const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "workspace.file.write"
     });
+    const writeMutations: any[] = archived
+      ? [{
+          action: "put",
+          key: resolved.relativePath,
+          valueRef: archived.rootCid,
+          metadata: {
+            ...filePayloadMetadata(file),
+            contentCid: archived?.metadata?.contentCid || ""
+          }
+        }]
+      : [];
     const stateCommit: any = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.write",
-      mutations: archived
-        ? [{
-            action: "put",
-            key: resolved.relativePath,
-            valueRef: archived.rootCid,
-            metadata: filePayloadMetadata(file)
-          }]
-        : [],
+      mutations: writeMutations,
       contentRefs: archived?.contentRefs || [],
       payload: {
         action: "file.write",
@@ -288,7 +308,9 @@ export function createAgentWorkspaceFileWriteApi({
       operationId: input.operationId || "workspace.file.write",
       stateCommit,
       action: "file.write",
-      path: resolved.relativePath
+      path: resolved.relativePath,
+      preimageSnapshot,
+      mutations: writeMutations
     });
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -364,6 +386,10 @@ export function createAgentWorkspaceFileWriteApi({
     } catch (error: any) {
       return { ok: false, status: 400, error: error.message };
     }
+    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+      access.workspace,
+      [resolved.relativePath]
+    );
     fs.writeFileSync(resolved.absolutePath, nextBuffer);
     stripExecutableMode(resolved.absolutePath);
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
@@ -377,17 +403,21 @@ export function createAgentWorkspaceFileWriteApi({
     const archived: any = await archiveWorkspacePath(access.workspace, resolved.relativePath, {
       operationId: input.operationId || "workspace.file.patch"
     });
+    const patchMutations: any[] = archived
+      ? [{
+          action: "put",
+          key: resolved.relativePath,
+          valueRef: archived.rootCid,
+          metadata: {
+            ...filePayloadMetadata(file),
+            contentCid: archived?.metadata?.contentCid || ""
+          }
+        }]
+      : [];
     const stateCommit: any = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "workspace.file.patch",
-      mutations: archived
-        ? [{
-            action: "put",
-            key: resolved.relativePath,
-            valueRef: archived.rootCid,
-            metadata: filePayloadMetadata(file)
-          }]
-        : [],
+      mutations: patchMutations,
       contentRefs: archived?.contentRefs || [],
       payload: {
         action: "file.patch",
@@ -401,7 +431,9 @@ export function createAgentWorkspaceFileWriteApi({
       operationId: input.operationId || "workspace.file.patch",
       stateCommit,
       action: "file.patch",
-      path: resolved.relativePath
+      path: resolved.relativePath,
+      preimageSnapshot,
+      mutations: patchMutations
     });
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -466,6 +498,10 @@ export function createAgentWorkspaceFileWriteApi({
       }
     }
     deletedPaths.push(resolved.relativePath);
+    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+      access.workspace,
+      deletedPaths
+    );
     const meta: any = fileMetadataFromStat({
       workspaceId: access.workspace.workspaceId,
       relativePath: resolved.relativePath,
@@ -482,13 +518,14 @@ export function createAgentWorkspaceFileWriteApi({
       fs.unlinkSync(resolved.absolutePath);
     }
     updateWorkspaceTimeStmt.run(nowIso(), access.workspace.workspaceId);
+    const deleteMutations: any[] = deletedPaths.map((relativePath?: any) : any => ({
+      action: "delete",
+      key: relativePath
+    }));
     const stateCommit: any = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.file.delete",
-      mutations: deletedPaths.map((relativePath?: any) : any => ({
-        action: "delete",
-        key: relativePath
-      })),
+      mutations: deleteMutations,
       payload: {
         action: "file.delete",
         path: resolved.relativePath,
@@ -501,7 +538,9 @@ export function createAgentWorkspaceFileWriteApi({
       operationId: input.operationId || "agent_workspaces.file.delete",
       stateCommit,
       action: "file.delete",
-      path: resolved.relativePath
+      path: resolved.relativePath,
+      preimageSnapshot,
+      mutations: deleteMutations
     });
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,
@@ -562,6 +601,17 @@ export function createAgentWorkspaceFileWriteApi({
       if (!input.overwrite) {
         return { ok: false, status: 409, error: "目标路径已存在。设置 overwrite: true 以覆盖。" };
       }
+    }
+    const preimageSnapshot: any = await captureWorkspaceFilePreimage(
+      access.workspace,
+      [
+        resolvedSource.relativePath,
+        ...(fs.existsSync(resolvedTarget.absolutePath)
+          ? [resolvedTarget.relativePath]
+          : [])
+      ]
+    );
+    if (fs.existsSync(resolvedTarget.absolutePath)) {
       fs.rmSync(resolvedTarget.absolutePath, { recursive: true, force: true });
     }
     fs.mkdirSync(path.dirname(resolvedTarget.absolutePath), { recursive: true });
@@ -581,23 +631,56 @@ export function createAgentWorkspaceFileWriteApi({
     const archived: any = await archiveWorkspacePath(access.workspace, resolvedTarget.relativePath, {
       operationId: input.operationId || "agent_workspaces.file.move"
     });
+    const sourceSubtreePaths: any[] = [
+      resolvedSource.relativePath,
+      ...asArray(preimageSnapshot?.files)
+        .map((entry?: any) : any => String(entry?.path || ""))
+        .filter((entryPath?: any) : any =>
+          entryPath.startsWith(`${resolvedSource.relativePath}/`)
+        )
+    ];
+    const targetMutations: any[] = sourceStat.isDirectory()
+      ? [
+          {
+            action: "put",
+            key: resolvedTarget.relativePath,
+            valueRef: archived?.rootCid || "",
+            metadata: { ...filePayloadMetadata(file), type: "directory" }
+          },
+          ...asArray(archived?.entries).map((entry?: any) : any => ({
+            action: "put",
+            key: String(entry.path || ""),
+            valueRef: String(entry.cid || ""),
+            metadata: {
+              type: "file",
+              sizeBytes: Number(entry.byteLength || 0),
+              contentSha256: normalizeSha256(entry.metadata?.contentSha256 || ""),
+              contentCid: String(entry.cid || "")
+            }
+          }))
+        ]
+      : archived
+        ? [{
+            action: "put",
+            key: resolvedTarget.relativePath,
+            valueRef: archived.rootCid,
+            metadata: {
+              ...filePayloadMetadata(file),
+              contentCid: archived?.metadata?.contentCid || ""
+            }
+          }]
+        : [];
+    const moveMutations: any[] = [
+      ...uniqueStrings(sourceSubtreePaths).map((entryPath?: any) : any => ({
+        action: "delete",
+        key: entryPath
+      })),
+      ...targetMutations
+    ];
     const stateCommit: any = await commitWorkspaceFileState({
       workspace: access.workspace,
       operationId: input.operationId || "agent_workspaces.file.move",
-      mutations: [
-        {
-          action: "delete",
-          key: resolvedSource.relativePath
-        },
-        ...(archived
-          ? [{
-              action: "put",
-              key: resolvedTarget.relativePath,
-              valueRef: archived.rootCid,
-              metadata: filePayloadMetadata(file)
-            }]
-          : [])
-      ],
+      mutations: moveMutations,
       contentRefs: archived?.contentRefs || [],
       payload: {
         action: "file.move",
@@ -611,7 +694,9 @@ export function createAgentWorkspaceFileWriteApi({
       operationId: input.operationId || "agent_workspaces.file.move",
       stateCommit,
       action: "file.move",
-      path: resolvedTarget.relativePath
+      path: resolvedTarget.relativePath,
+      preimageSnapshot,
+      mutations: moveMutations
     });
     return {
       protocolVersion: AGENT_WORKSPACE_PROTOCOL_VERSION,

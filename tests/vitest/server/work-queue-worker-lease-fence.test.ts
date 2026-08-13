@@ -94,7 +94,7 @@ describe("work queue worker lease fencing", () : any => {
     expect(store.retry).not.toHaveBeenCalled();
   });
 
-  it("returns timed-out work to the durable queue through the active lease", async () : Promise<any> => {
+  it("moves timed-out work to in_doubt until termination is explicitly proven", async () : Promise<any> => {
     const store: Record<string, any> = {
       claim: vi.fn(),
       progress: vi.fn(async () : Promise<any> => ({
@@ -107,7 +107,11 @@ describe("work queue worker lease fencing", () : any => {
         }
       })),
       complete: vi.fn(),
-      retry: vi.fn(async () : Promise<any> => ({ retried: true, workItem: { state: "queued" } }))
+      retry: vi.fn(),
+      markInDoubt: vi.fn(async () : Promise<any> => ({
+        interrupted: true,
+        workItem: { state: "in_doubt" }
+      }))
     };
     const runtime: any = createQueueWorkerRuntime({
       store,
@@ -124,11 +128,11 @@ describe("work queue worker lease fencing", () : any => {
       })
     })).resolves.toMatchObject({ settled: true, interrupted: true });
     expect(store.complete).not.toHaveBeenCalled();
-    expect(store.retry).toHaveBeenCalledWith(expect.objectContaining({
+    expect(store.retry).not.toHaveBeenCalled();
+    expect(store.markInDoubt).toHaveBeenCalledWith(expect.objectContaining({
       workItemId: workItem.workItemId,
       leaseId: lease.leaseId,
-      delayMs: 0,
-      reason: "handler_timeout"
+      reason: "handler_timeout_unconfirmed"
     }));
   });
 

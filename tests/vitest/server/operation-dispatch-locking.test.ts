@@ -85,8 +85,7 @@ function unsafeOperation(overrides: Record<string, any> = {}) : any {
     externalAuth: false,
     requiredScopes: [],
     readOnly: false,
-    concurrencySafe: false,
-    concurrencyGroup: "unit-locked-write",
+    concurrency: { workloadClass: "exclusive", key: "unit-locked-write", maxParallel: 1, cost: 2 },
     safety: { risk: "safe_write" },
     inputSchema: { type: "object", properties: {} },
     audit: { enabled: true, recordInput: false },
@@ -270,13 +269,12 @@ describe("canonical operation dispatcher locking", () : any => {
     const wrapperSource: any = SERVER_API_OPERATIONS.find((operation?: any) : any => operation.id === "operation_permission.execute");
     const wrapper: any = unsafeOperation({
       id: wrapperSource.id,
-      concurrencySafe: wrapperSource.concurrencySafe,
-      concurrencyGroup: "operation-permission-wrapper",
+      concurrency: { ...wrapperSource.concurrency, key: "operation-permission-wrapper" },
       target: { controller: "unit", method: "handle" }
     });
     const target: any = unsafeOperation({
       id: "unit.wrapper.target",
-      concurrencyGroup: "unit-wrapper-target"
+      concurrency: { workloadClass: "exclusive", key: "unit-wrapper-target", maxParallel: 1, cost: 2 }
     });
     let outerInFlight: any = 0;
     let maxOuterInFlight: any = 0;
@@ -302,7 +300,7 @@ describe("canonical operation dispatcher locking", () : any => {
       dispatcher({ ...dispatchInput(wrapper, wrapperHandler), skipAuthorization: true })
     ]);
 
-    expect(wrapperSource?.concurrencySafe).toBe(true);
+    expect(wrapperSource?.concurrency.maxParallel).toBeGreaterThan(1);
     expect(maxOuterInFlight).toBe(2);
     expect(maxTargetInFlight).toBe(1);
     expect(manager.getMetrics()).toMatchObject({ totalAcquired: 2, totalReleased: 2 });
@@ -665,13 +663,20 @@ describe("canonical operation dispatcher locking", () : any => {
   it("reverse-unwinds the runtime lock manager after a real mid-composition startup failure", async () : Promise<any> => {
     const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-composition-init-unwind-"));
     tempRoots.push(userDataPath);
-    await fs.mkdir(path.join(userDataPath, "security", "operation-audit.sqlite"), { recursive: true });
     const operationLockManager: any = new MemoryLockManager();
+    const pluginControlledExecutionAuthority: Record<string, any> = {
+      id: "PluginControlledExecutionAuthority",
+      forOwner: vi.fn(),
+      bind() : never {
+        throw new Error("injected composition failure");
+      }
+    };
 
     await expect(createServerCompositionRoot({
       userDataPath,
       runtimeLogger: { debug() : any {}, info() : any {}, warn() : any {}, error() : any {} },
-      operationLockManager
+      operationLockManager,
+      pluginHostPorts: { pluginControlledExecutionAuthority }
     })).rejects.toThrow();
 
     await expect(operationLockManager.acquire("after-composition-failure"))

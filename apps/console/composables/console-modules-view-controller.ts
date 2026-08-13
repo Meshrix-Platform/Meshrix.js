@@ -1,5 +1,5 @@
 import { onMounted, ref } from "vue";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import { createConsoleExternalGatewayController, type ExternalGatewayState } from "./console-external-gateway-controller";
 import { applyExternalGateway, getExternalGatewayState, switchExternalGatewayDirect } from "../lib/external-gateway-client";
 
@@ -32,19 +32,23 @@ export function useModulesViewConsole() : any {
   });
   onMounted(() : any => void refreshExternalGateway());
   const {
-    isBusy,
-    canBrowseServerPaths,
-    consoleState,
-    disableMountModule,
-    enableMountModule,
-    enabledMountCount,
-    moduleGroups,
-    mountDraft,
-    openMountPathPicker,
-    reloadModules,
-    saveMountModules,
-    totalMountCount,
-  } = useServerConsoleShellContext();
+  canBrowseServerPaths,
+} = useServerConsoleShellContext().access;
+const {
+  disableMountModule,
+  enableMountModule,
+  enabledMountCount,
+  moduleGroups,
+  mountDraft,
+  openMountPathPicker,
+  reloadModules,
+  saveMountModules,
+  totalMountCount,
+} = useServerConsoleShellContext().modules;
+const {
+  isBusy,
+  consoleState,
+} = useServerConsoleShellContext().runtime;
 
   return {
     isBusy,

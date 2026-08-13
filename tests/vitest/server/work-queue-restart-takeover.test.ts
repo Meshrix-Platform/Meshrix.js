@@ -77,10 +77,15 @@ describe("work queue restart takeover", () : any => {
       expect(recovered).toMatchObject({
         staleFenceRejected: true,
         recoveredCount: 1,
-        claimedWorkItemId: seeded.workItemId,
-        replacementLeaseSeq: seeded.leaseSeq + 1,
-        completed: true,
-        finalState: "completed"
+        recoveryState: "in_doubt",
+        recoveryLeaseSeq: seeded.leaseSeq,
+        checkpointSeq: seeded.checkpointSeq,
+        checkpointDigest: seeded.checkpointDigest,
+        receiptRecorded: true,
+        reconciled: true,
+        finalState: "completed",
+        terminalTransitionCount: 1,
+        projectionReplayOk: true
       });
     } finally {
       await fs.rm(userDataPath, { recursive: true, force: true });
@@ -210,6 +215,26 @@ describe("work queue restart takeover", () : any => {
         expect(recovery.claimed).toHaveLength(0);
 
         timeSource.advance(1);
+        const noTakeover: any = secondStore.claim({
+          queueDefinitionId: DEFINITION_ID,
+          scope: SCOPE,
+          workerId: "worker-after-restart",
+          leaseTimeoutMs: 10
+        });
+        expect(noTakeover.claimed).toHaveLength(0);
+
+        const termination: any = secondStore.acknowledgeTermination({
+          workItemId: staleLease.workItem.workItemId,
+          leaseId: staleLease.lease.leaseId,
+          toState: "retry",
+          delayMs: 0,
+          reason: "isolated_worker_terminated"
+        });
+        expect(termination).toMatchObject({
+          acknowledged: true,
+          workItem: { state: "queued", lease: null }
+        });
+
         const takeover: any = secondStore.claim({
           queueDefinitionId: DEFINITION_ID,
           scope: SCOPE,
@@ -334,7 +359,7 @@ describe("work queue restart takeover", () : any => {
 
       ensureSqliteWorkQueueSchema(database);
 
-      expect(database.pragma("user_version", { simple: true })).toBe(9);
+      expect(database.pragma("user_version", { simple: true })).toBe(12);
       expect(database.prepare("SELECT work_item_id, dedupe_key, state FROM work_items ORDER BY created_at_ms").all())
         .toEqual([
           { work_item_id: "terminal-first", dedupe_key: "same-key", state: "completed" },

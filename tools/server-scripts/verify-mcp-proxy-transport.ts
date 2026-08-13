@@ -125,7 +125,7 @@ async function createVerifierApiKey(target?: any) : Promise<any> {
       targets: [target],
       label: `verify-mcp-proxy-transport-${target}`,
       connectorVersion: "verify-mcp-proxy-transport",
-      toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
+      toolsets: ["meshrix.storage.read", "meshrix.gateway.read", "meshrix.gateway.write"],
       maxRisk: "repair_write"
     }
   });

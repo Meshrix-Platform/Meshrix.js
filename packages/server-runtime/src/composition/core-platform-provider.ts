@@ -13,7 +13,7 @@ import {
 import {
   findProxyRegisteredApiRequest as findProxyRegisteredApiRequestThroughDispatcher,
 } from "./dispatch-operation-input.ts";
-import { createOperationRouteIndex } from "../routing/operation-route-index.ts";
+import { createOperationRouteIndex, operationsRevision } from "../routing/operation-route-index.ts";
 
 export const CORE_PLATFORM_PROTOCOL_VERSION: any = "v0.0.1:platform:core-1";
 
@@ -138,9 +138,22 @@ export function createCorePlatformProvider({
   const configuredSourceOperations: any = normalizeOperations(operations);
   const configuredRouteIndex: any = createOperationRouteIndex(configuredSourceOperations, {
     strict: true,
+    revision: operationsRevision(configuredSourceOperations)
   });
   const configuredOperations: any = configuredRouteIndex.operations;
-  const dynamicRouteIndexes: any = new WeakMap<object, any>();
+  const dynamicRouteIndexes: WeakMap<object, any> = new WeakMap<object, any>();
+  dynamicRouteIndexes.set(configuredSourceOperations, configuredRouteIndex);
+  dynamicRouteIndexes.set(configuredOperations, configuredRouteIndex);
+
+  function routeIndexFor(current: any) : any {
+    let routeIndex: any = dynamicRouteIndexes.get(current);
+    if (!routeIndex) {
+      const revision: any = operationsRevision(current);
+      routeIndex = createOperationRouteIndex(current, { strict: true, revision });
+      dynamicRouteIndexes.set(current, routeIndex);
+    }
+    return routeIndex;
+  }
   const boundOperationConcurrencyScope: any = String(operationConcurrencyScope || "default").trim();
 
   function effectiveOperationSelection(input: Record<string, any> = {}) : any {
@@ -151,23 +164,28 @@ export function createCorePlatformProvider({
       input.operations === configuredOperations
     ) {
       if (typeof getOperations !== "function") {
-        return { operations: configuredOperations, routeIndex: configuredRouteIndex };
+        return { operations: configuredOperations, routeIndex: configuredRouteIndex, revision: configuredRouteIndex.revision };
       }
       const current: any = normalizeOperations(getOperations());
-      let routeIndex: any = dynamicRouteIndexes.get(current);
-      if (!routeIndex) {
-        routeIndex = createOperationRouteIndex(current, { strict: true });
-        dynamicRouteIndexes.set(current, routeIndex);
-      }
-      return { operations: routeIndex.operations, routeIndex };
+      const routeIndex: any = routeIndexFor(current);
+      return { operations: routeIndex.operations, routeIndex, revision: routeIndex.revision };
     }
     const current: any = normalizeOperations(input.operations);
-    let routeIndex: any = dynamicRouteIndexes.get(current);
-    if (!routeIndex) {
-      routeIndex = createOperationRouteIndex(current, { strict: true });
-      dynamicRouteIndexes.set(current, routeIndex);
-    }
-    return { operations: routeIndex.operations, routeIndex };
+    const routeIndex: any = routeIndexFor(current);
+    return { operations: routeIndex.operations, routeIndex, revision: routeIndex.revision };
+  }
+
+  function liveOperationResolverFor(input: Record<string, any>, initialSelection: any) : any {
+    const selectionInput: Record<string, any> = Object.hasOwn(input, "operations")
+      ? { operations: input.operations }
+      : {};
+    return ({ operationId }: Record<string, any>) : any => {
+      const currentSelection: any = effectiveOperationSelection(selectionInput);
+      if (currentSelection.revision !== initialSelection.revision) {
+        return null;
+      }
+      return currentSelection.routeIndex.getOperationById(operationId) || null;
+    };
   }
 
   function proofSubstrateForDispatch(input: Record<string, any> = {}) : any {
@@ -316,6 +334,7 @@ export function createCorePlatformProvider({
       return dispatchRegisteredHttpOperationThroughDispatcher({
         ...input,
         ...selection,
+        resolveAuthorizationOperation: liveOperationResolverFor(input, selection),
         lockManager: operationLockManager,
         concurrencyScope: boundOperationConcurrencyScope,
         ...proofSubstrateForDispatch(input),
@@ -326,6 +345,7 @@ export function createCorePlatformProvider({
       return dispatchRpcOperationThroughDispatcher({
         ...input,
         ...selection,
+        resolveAuthorizationOperation: liveOperationResolverFor(input, selection),
         lockManager: operationLockManager,
         concurrencyScope: boundOperationConcurrencyScope,
         ...proofSubstrateForDispatch(input),
@@ -337,6 +357,10 @@ export function createCorePlatformProvider({
         controllers,
         ...selection,
       });
+    },
+    getOperationRouteSnapshot(input: Record<string, any> = {}) : any {
+      const selection: any = effectiveOperationSelection(input);
+      return selection.routeIndex.getSnapshot();
     },
     listCapabilities,
   });

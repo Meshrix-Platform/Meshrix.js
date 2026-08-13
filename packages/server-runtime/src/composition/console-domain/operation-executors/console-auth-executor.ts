@@ -69,7 +69,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
         path: "/api/auth/login",
         status: "ok"
       });
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "auth.login.session",
         event: "console.auth.login.succeeded",
         authSession: login.session,
@@ -101,7 +101,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
         target: inputSummary,
         error: message
       });
-      appendConsoleLog(context, {
+      await appendConsoleLog(context, {
         operationId: "auth.login.session",
         event: "console.auth.login.failed",
         status: "failed",
@@ -121,7 +121,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
       path: "/api/auth/logout",
       status: "ok"
     });
-    appendConsoleLog(context, {
+    await appendConsoleLog(context, {
       operationId: "auth.logout.session",
       event: "console.auth.logout.succeeded",
       authSession,
@@ -213,7 +213,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
     };
     if (context.operationAuditStore) {
       return result(200, {
-        items: context.operationAuditStore.list(query)
+        items: await context.operationAuditStore.list(query)
       });
     }
     return result(200, {
@@ -228,7 +228,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
     if (!context.operationAuditStore?.exportRedacted) {
       return result(503, { error: "系统审计导出接口不可用。" });
     }
-    const exportResult: any = context.operationAuditStore.exportRedacted({
+    const exportResult: any = await context.operationAuditStore.exportRedacted({
       limit: Number(input.limit || 100),
       operationId: input.operationId || input["operation-id"] || "",
       userId: input.userId || input["user-id"] || "",
@@ -259,13 +259,13 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
     if (!context.operationAuditStore?.getRetentionPolicy) {
       return result(503, { error: "系统审计保留策略接口不可用。" });
     }
-    return result(200, { policy: context.operationAuditStore.getRetentionPolicy() });
+    return result(200, { policy: await context.operationAuditStore.getRetentionPolicy() });
   }
   if (id === "auth.audit.retention.set") {
     if (!context.operationAuditStore?.setRetentionPolicy) {
       return result(503, { error: "系统审计保留策略接口不可用。" });
     }
-    const policy: any = context.operationAuditStore.setRetentionPolicy({
+    const policy: any = await context.operationAuditStore.setRetentionPolicy({
       retentionDays: input.retentionDays || input["retention-days"],
       maxExportItems: input.maxExportItems || input["max-export-items"],
       maxRecords: input.maxRecords || input["max-records"],
@@ -290,7 +290,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
     if (!context.operationAuditStore?.pruneExpired) {
       return result(503, { error: "系统审计清理接口不可用。" });
     }
-    const prune: any = context.operationAuditStore.pruneExpired({
+    const prune: any = await context.operationAuditStore.pruneExpired({
       retentionDays: input.retentionDays || input["retention-days"]
     });
     authProvider.audit({
@@ -309,12 +309,12 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
       return result(503, { error: "trace 查询接口不可用。" });
     }
     const traceId: any = String(input.traceId || input["trace-id"] || input.id || "").trim();
-    const trace: any = context.operationAuditStore.getTrace(traceId, {
+    const trace: any = await context.operationAuditStore.getTrace(traceId, {
       limit: Number(input.limit || 200),
       tenantId: input.tenantId || input["tenant-id"] || ""
     });
     const authorizationDecisions: any = authProvider.listDecisions
-      ? authProvider.listDecisions({
+      ? await authProvider.listDecisions({
           traceId,
           limit: Number(input.limit || 200),
           tenantId: input.tenantId || input["tenant-id"] || ""
@@ -346,7 +346,7 @@ export async function executeConsoleAuthOperation({ operationId, input = {}, con
         rotatedAt: operationResult.rotatedAt || ""
       }
     });
-    appendConsoleLog(context, {
+    await appendConsoleLog(context, {
       operationId: "auth.sessions.rotate",
       event: "console.auth.session.rotated",
       authSession: operationResult.session,

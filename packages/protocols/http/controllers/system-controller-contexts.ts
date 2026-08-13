@@ -53,10 +53,10 @@ export function createSystemControllerContexts({
       typeof provider.resolveUploadSessionFiles === "function" &&
       typeof provider.deleteUploadSession === "function"
   );
-  function appendConsoleOperationLog(entry: Record<string, any> = {}) : any {
+  async function appendConsoleOperationLog(entry: Record<string, any> = {}) : Promise<any> {
     if (operationAuditStore) {
       try {
-        operationAuditStore.append({
+        await operationAuditStore.append({
           transport: "http",
           risk: entry.risk || "",
           readOnly: entry.readOnly === true,

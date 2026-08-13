@@ -5,26 +5,41 @@
   "owner": "platform",
   "directory": "packages/capabilities",
   "description": "Communication-service discovery and governed Operation Permission capabilities.",
-  "publicApi": ["#meshrix/capabilities/*"],
-  "dependsOn": ["contracts", "foundation", "protocols"],
+  "publicApi": [
+    "#meshrix/capabilities/operation-permission-core/index",
+    "#meshrix/capabilities/operation-permission-core/runtime-schema",
+    "#meshrix/capabilities/operation-permission-core/store",
+    "#meshrix/capabilities/skills/tool-skill-management-provider"
+  ],
+  "dependsOn": [
+    "contracts",
+    "foundation",
+    "protocols"
+  ],
   "sourceOwnership": [
     {
       "feature": "communication-service",
       "path": "src/communication-service",
       "fileCount": 3,
-      "testSuites": ["communication-service.runtime"]
+      "testSuites": [
+        "communication-service.runtime"
+      ]
     },
     {
       "feature": "operation-permission-core",
       "path": "src/operation-permission-core",
-      "fileCount": 36,
-      "testSuites": ["governance.operation-permission-protocol-consistency"]
+      "fileCount": 42,
+      "testSuites": [
+        "governance.operation-permission-protocol-consistency"
+      ]
     },
     {
       "feature": "skills",
       "path": "src/skills",
       "fileCount": 6,
-      "testSuites": ["downstream-mcp.installer-convergence"]
+      "testSuites": [
+        "downstream-mcp.installer-convergence"
+      ]
     }
   ]
 }

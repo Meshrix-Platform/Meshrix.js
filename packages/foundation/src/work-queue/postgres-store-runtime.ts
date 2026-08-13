@@ -119,9 +119,33 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     return ids.length;
   }
 
-  async function maintainRetentionBeforeAppend(client?: any, row?: any, nowMs?: any) : Promise<any> {
+  function retentionMaintenanceThreshold(retention?: any) : any {
+    return Math.max(1, Math.min(
+      asInt(retention.cleanupBatchSize, 1),
+      asInt(retention.maxTransitionsPerWorkItem, 1),
+      asInt(retention.maxJournalEntries, 1)
+    ));
+  }
+
+  async function maintainRetentionAfterAppend(client?: any, row?: any, nowMs?: any) : Promise<any> {
     const { retention } = await policyForRow(client, row);
+    const threshold: any = retentionMaintenanceThreshold(retention);
+    const state: any = await queryOne(client, `
+      INSERT INTO work_queue_retention_state (
+        queue_definition_id, pending_transitions, updated_at_ms
+      ) VALUES ($1, 1, $2)
+      ON CONFLICT(queue_definition_id) DO UPDATE SET
+        pending_transitions = work_queue_retention_state.pending_transitions + 1,
+        updated_at_ms = EXCLUDED.updated_at_ms
+      RETURNING pending_transitions
+    `, [row.queue_definition_id, nowMs]);
+    if (Number(state?.pending_transitions || 0) < threshold) return false;
     await lockQueueRetention(client, row.queue_definition_id);
+    await client.query(`
+      UPDATE work_queue_retention_state
+      SET pending_transitions = 0, updated_at_ms = $2
+      WHERE queue_definition_id = $1 AND pending_transitions >= $3
+    `, [row.queue_definition_id, nowMs, threshold]);
     const terminalCount: any = await boundedCount(client, `
       SELECT COUNT(*) AS count FROM (
         SELECT 1 FROM work_items
@@ -174,7 +198,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
       const current: any = await queryOne(client, `
         SELECT COUNT(*) AS count FROM work_queue_transition_journal WHERE work_item_id = $1
       `, [row.work_item_id]);
-      if (Number(current?.count || 0) > 0) return true;
+      if (Number(current?.count || 0) > 1 && await compactWorkJournal(client, row.work_item_id, nowMs, { force: true })) return true;
       throw new WorkQueueCapacityError("queue_journal_retention", retention.maxJournalEntries);
     }
     return false;
@@ -230,7 +254,6 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     decision = {}
   }: Record<string, any>) : Promise<any> {
     assertLegalWorkQueueTransition({ transition, fromState: fromState ?? null, toState });
-    const forceCompactCurrent: any = await maintainRetentionBeforeAppend(client, row, nowMs);
     const inserted: any = await queryOne(client, `
       INSERT INTO work_queue_transition_journal (
         journal_entry_id, work_item_id, queue_definition_id, queue_definition_version,
@@ -263,7 +286,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
           updated_at_ms = $2
       WHERE work_item_id = $3
     `, [seq, nowMs, row.work_item_id]);
-    if (await compactWorkJournal(client, row.work_item_id, nowMs, { force: forceCompactCurrent })) {
+    if (await maintainRetentionAfterAppend(client, row, nowMs)) {
       const current: any = await queryOne(client, "SELECT last_transition_seq FROM work_items WHERE work_item_id = $1", [row.work_item_id]);
       return Number(current?.last_transition_seq || seq);
     }
@@ -447,27 +470,11 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     `, [WORK_QUEUE_STATES.RUNNING, nowMs, toText(queueDefinitionId), toText(scopeKey), Math.max(1, asInt(limit, 1000))]);
     const recovered: any[] = [];
     for (const row of result.rows) {
-      const exhausted: any = Number(row.attempt || 0) >= Number(row.max_attempts || 0);
-      const delayMs: any = exhausted ? 0 : computeDeterministicRetryDelay({
-        queueDefinitionId: row.queue_definition_id,
-        workItemId: row.work_item_id,
-        attempt: row.attempt,
-        ...resolvedPolicy.retryBackoff
-      });
-      const toState: any = exhausted
-        ? WORK_QUEUE_STATES.FAILED
-        : delayMs > 0
-          ? WORK_QUEUE_STATES.RETRY_WAIT
-          : WORK_QUEUE_STATES.QUEUED;
       const updated: any = await transitionProjection(client, {
         row,
         transition: "lease_expired",
-        toState,
+        toState: WORK_QUEUE_STATES.IN_DOUBT,
         patch: {
-          available_at_ms: nowMs + delayMs,
-          lease_id: "",
-          leased_by_worker_id: "",
-          lease_expires_at_ms: 0,
           last_error_json: {
             type: "lease_expired",
             leaseId: row.lease_id,
@@ -476,11 +483,65 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
           }
         },
         nowMs,
-        reason: exhausted ? "lease_expired_max_attempts_exhausted" : "lease_expired_retry"
+        reason: "lease_expired_unconfirmed"
       });
       recovered.push(rowToWorkItem(updated));
     }
     return recovered;
+  }
+
+  async function reconcileInDoubtLocked(client?: any, { nowMs, queueDefinitionId = "", scopeKey = "", workItemId = "", limit = 1000 }: Record<string, any> = {}) : Promise<any> {
+    const result: any = await client.query(`
+      SELECT *
+      FROM work_items
+      WHERE state = $1
+        AND ($2 = '' OR queue_definition_id = $2)
+        AND ($3 = '' OR scope_key = $3)
+        AND ($4 = '' OR work_item_id = $4)
+      ORDER BY lease_expires_at_ms ASC, created_at_ms ASC
+      LIMIT $5
+      FOR UPDATE SKIP LOCKED
+    `, [WORK_QUEUE_STATES.IN_DOUBT, toText(queueDefinitionId), toText(scopeKey), toText(workItemId), Math.max(1, asInt(limit, 1000))]);
+    const reconciled: any[] = [];
+    for (const row of result.rows) {
+      const receipts: any = await client.query(`
+        SELECT sink_id, effect_id, status
+        FROM work_queue_sink_fences
+        WHERE work_item_id = $1 AND generation = $2
+        ORDER BY sink_id ASC
+      `, [row.work_item_id, Number(row.lease_seq || 0)]);
+      const terminalReceipt: any = receipts.rows.find((receipt?: any) : any =>
+        ["complete", "fail"].includes(String(receipt.sink_id || "")) &&
+        String(receipt.status || "") === "settled"
+      );
+      if (!terminalReceipt) {
+        continue;
+      }
+      const toState: any = terminalReceipt.sink_id === "complete"
+        ? WORK_QUEUE_STATES.COMPLETED
+        : WORK_QUEUE_STATES.FAILED;
+      const updated: any = await transitionProjection(client, {
+        row,
+        transition: "termination_acknowledged",
+        toState,
+        patch: {
+          available_at_ms: nowMs,
+          lease_id: "",
+          leased_by_worker_id: "",
+          lease_expires_at_ms: 0,
+          last_error_json: {
+            type: "sink_receipt_reconciled",
+            sinkId: terminalReceipt.sink_id,
+            effectId: terminalReceipt.effect_id || "",
+            generation: Number(row.lease_seq || 0)
+          }
+        },
+        nowMs,
+        reason: "sink_receipt_reconciled"
+      });
+      reconciled.push(rowToWorkItem(updated));
+    }
+    return reconciled;
   }
 
   async function requireLeasedRow(client?: any, workItemId?: any, leaseId?: any, nowMs: any = timeSource.nowMs(), { allowExpired = false }: Record<string, any> = {}) : Promise<any> {
@@ -507,6 +568,7 @@ export function createPostgresWorkQueueRuntime({ timeSource, identityGenerator, 
     expireEligibleLocked,
     materializeDelayedLocked,
     recoverExpiredLeasesLocked,
+    reconcileInDoubtLocked,
     requireLeasedRow
   };
 }

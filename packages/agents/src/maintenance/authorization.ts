@@ -131,7 +131,7 @@ export function createMaintenanceAuthorizationAuthority({
         "Maintenance execution requires an authorized current Grant."
       );
     }
-    const grant: any = await Promise.resolve(operationPermissionStore.getGrant(grantId));
+    const grant: any = await operationPermissionStore.getGrant(grantId);
     const scopes: any = requireCurrentGrant(grant, requiredScope);
     if (
       text(authorizedGrant.projectionFingerprint) &&
@@ -221,9 +221,7 @@ export function createMaintenanceAuthorizationAuthority({
         "Maintenance execution authorization has expired."
       );
     }
-    const grant: any = await Promise.resolve(
-      operationPermissionStore.getGrant(text(binding.grant?.grantId))
-    );
+    const grant: any = await operationPermissionStore.getGrant(text(binding.grant?.grantId));
     requireCurrentGrant(grant, requiredScope);
     if (
       text(grant.projectionFingerprint) !== text(binding.grant?.projectionFingerprint) ||

@@ -8,9 +8,12 @@ import { setConsoleLocaleState } from "../../../apps/console/i18n/console";
 const shellContextMock: any = vi.hoisted(() : any => ({ current: null as any }));
 const approvalFlowMock: any = vi.hoisted(() : any => ({ current: null as any }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellContextMock.current,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellContextMock.current),
+  };
+});
 
 vi.mock(
   "../../../apps/console/composables/console-approval-flow-view-controller",

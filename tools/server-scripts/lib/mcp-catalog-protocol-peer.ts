@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import {
   MCP_CATALOG_ACKNOWLEDGE_METHOD,
-  MCP_CATALOG_LIST_CHANGED_CAPABILITY,
   MCP_CATALOG_LIST_CHANGED_METHOD,
   MCP_PROXY_SESSION_HEADER,
   normalizeMcpProxySessionId,
@@ -114,15 +113,22 @@ export function createMcpCatalogProtocolPeer({
     if (stream) throw new Error("Neutral peer stream is already open.");
     const controller: any = new AbortController();
     const events: any[] = [];
-    const url: any = new URL("/mcp", `${origin}/`);
-    url.searchParams.set("capability", MCP_CATALOG_LIST_CHANGED_CAPABILITY);
+    const url: any = `${origin}/mcp`;
+    const body: any = JSON.stringify({
+      jsonrpc: "2.0",
+      id: `peer-subscription-${++sequence}`,
+      method: "subscriptions/listen",
+      params: { notifications: [MCP_CATALOG_LIST_CHANGED_METHOD] }
+    });
     const response: any = await fetchImpl(url, {
-      method: "GET",
+      method: "POST",
       headers: headers({
-        method: "GET",
-        url: url.toString(),
+        method: "POST",
+        url,
+        body,
         extraHeaders: { Accept: "text/event-stream" }
       }),
+      body,
       signal: controller.signal
     });
     if (!response.ok || !response.body) {

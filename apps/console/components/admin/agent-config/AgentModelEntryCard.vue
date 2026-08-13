@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AgentModelConfig } from "../../../lib/types";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import {
   createAgentModelEntryCardContext,
   provideAgentModelEntryCardContext,
@@ -19,7 +19,7 @@ defineProps<{
 const shell = useServerConsoleShellContext();
 const {
   isModelLibraryCardExpanded,
-} = shell;
+} = shell.models;
 
 provideAgentModelEntryCardContext(createAgentModelEntryCardContext(shell));
 </script>

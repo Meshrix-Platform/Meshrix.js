@@ -336,7 +336,7 @@ try {
   });
 
   let token: any = "";
-  await test("create local agent grant with upstream MCP visibility", async () : Promise<any> => {
+  await test("create scoped API key with upstream MCP visibility", async () : Promise<any> => {
     const issuedApiKey: any = await issueVerifierMcpApiKey({
       server,
       access: {
@@ -609,11 +609,11 @@ try {
         WHERE grant_id = ? AND tool_id = ?
         GROUP BY status
       `).all(approvalGrantId, APPROVAL_PROJECTED_TOOL_ID);
-      const grantRow: any = database.prepare("SELECT metadata_json FROM tool_grants WHERE id = ?").get(approvalGrantId);
+      const apiKeyRow: any = database.prepare("SELECT policy_json FROM api_key_records WHERE key_id = ?").get(approvalGrantId);
       return {
         executions: Object.fromEntries(executionRows.map((row?: any) : any => [row.status, Number(row.count)])),
         pending: Object.fromEntries(pendingRows.map((row?: any) : any => [row.status, Number(row.count)])),
-        grantMetadata: JSON.parse(String(grantRow?.metadata_json || "{}"))
+        apiKeyPolicy: JSON.parse(String(apiKeyRow?.policy_json || "{}"))
       };
     });
     assert.equal(storedEvidence.executions.pending_approval, 3);
@@ -622,9 +622,9 @@ try {
     assert.equal(storedEvidence.pending.rejected, 1);
     assert.equal(storedEvidence.pending.expired, 1);
     assert.deepEqual(
-      storedEvidence.grantMetadata.allowedSecretBindings,
+      storedEvidence.apiKeyPolicy.resources?.secretBindingIds,
       approvalCapability.credentialBindingIds,
-      "the resumed audit grant must retain the configured credential binding"
+      "the resumed API Key authority must retain the configured credential binding"
     );
 
     const publicAuditText: any = JSON.stringify({ gateway: gatewayAudit.payload, permission: permissionAudit.payload });

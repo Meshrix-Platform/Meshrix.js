@@ -5,7 +5,7 @@ import ConsoleEmptyState from '../components/ConsoleEmptyState.vue';
 import SplitToggleCard from '../components/SplitToggleCard.vue';
 import WorkspaceDetailPanel from '../components/workspaces/WorkspaceDetailPanel.vue';
 import { provideWorkspacesView } from '@meshrix/ui-console/workspaces-view-context';
-import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { useServerConsoleShellContext } from '#meshrix/console/server-console-shell-context';
 import {
   workspaceContextContract,
   workspaceContextSignature,
@@ -18,12 +18,14 @@ const localizeStatusPillLabel = (value: any) : any =>
   localizeConsoleText(String(value ?? ""), currentConsoleLocale.value);
 
 const shell = useServerConsoleShellContext();
-const { workspacesConsole: workspacesView } = shell;
+const {
+  workspacesConsole: workspacesView,
+} = shell.workspaces;
 const localDirectoryEntry = computed(() =>
-  (shell.consoleState.value?.features?.plugins?.consoleEntries || []).find(
+  (shell.runtime.consoleState.value?.features?.plugins?.consoleEntries || []).find(
     (entry: any) => entry.slotId === 'workspace.local-directory' && canAccessPluginConsoleEntry(
       entry as PluginConsoleEntry,
-      shell.canAccessRouteMeta,
+      shell.access.canAccessRouteMeta,
     ),
   ),
 );

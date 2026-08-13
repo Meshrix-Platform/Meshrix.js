@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-12",
+  "updatedAt": "2026-08-13",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -1128,7 +1128,7 @@
             {
               "evidenceId": "v0-0-1-concurrency-lock-manager-1-0-0-source-1",
               "kind": "other",
-              "uri": "packages/foundation/src/concurrency/lock-manager.ts"
+              "uri": "packages/foundation/src/concurrency/lock-manager-contract.ts"
             }
           ]
         }
@@ -2491,6 +2491,37 @@
               "evidenceId": "maintenance-agent-workload-authorization-source",
               "kind": "other",
               "uri": "packages/agents/src/maintenance/authorization.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.mcp.api-key-credential",
+      "kind": "schema",
+      "description": "Private target-and-server-scoped MCP API Key credential record.",
+      "activeVersion": "v0.0.1:meshrix:mcp-api-key-credential-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:mcp-api-key-credential-1",
+          "ref": "meshrix.mcp.api-key-credential@v0.0.1:meshrix:mcp-api-key-credential-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current connector-private API Key custody record."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-mcp-api-key-credential-1-source",
+              "kind": "other",
+              "uri": "packages/protocols/mcp/adapter/gateway-installer/lib/cli/credential-store.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-meshrix-mcp-api-key-credential-1-test",
+              "kind": "test",
+              "uri": "tests/vitest/server/mcp-installer-api-key-only.test.ts"
             }
           ]
         }
@@ -4223,7 +4254,7 @@
             {
               "evidenceId": "v0-0-1-platform-audit-export-1-source",
               "kind": "other",
-              "uri": "packages/foundation/src/security/operation-audit.ts"
+              "uri": "packages/foundation/src/security/operation-audit-worker-store.ts"
             }
           ]
         }
@@ -4249,7 +4280,7 @@
             {
               "evidenceId": "v0-0-1-platform-audit-retention-1-source",
               "kind": "other",
-              "uri": "packages/foundation/src/security/operation-audit.ts"
+              "uri": "packages/foundation/src/security/operation-audit-worker-store.ts"
             }
           ]
         }
@@ -4898,7 +4929,7 @@
             {
               "evidenceId": "v0-0-1-platform-trace-drilldown-1-source",
               "kind": "other",
-              "uri": "packages/foundation/src/security/operation-audit.ts"
+              "uri": "packages/foundation/src/security/operation-audit-worker-store.ts"
             }
           ]
         }
@@ -6715,6 +6746,234 @@
       ]
     },
     {
+      "artifactId": "meshrix.runtime.refactor-convergence-report",
+      "kind": "runtime_capability",
+      "description": "Governed verification report for the runtime performance and maintainability refactor convergence.",
+      "activeVersion": "v0.0.1:runtime:refactor-convergence-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:runtime:refactor-convergence-report-1",
+          "ref": "meshrix.runtime.refactor-convergence-report@v0.0.1:runtime:refactor-convergence-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current provenance-bearing runtime refactor convergence verifier report."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-runtime-refactor-convergence-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/server-scripts/lib/required-report-validator.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-runtime-refactor-convergence-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-runtime-refactor-convergence.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.capacity.workload-catalog",
+      "kind": "policy",
+      "description": "Governed workload catalog for deterministic runtime capacity evidence.",
+      "activeVersion": "v0.0.1:capacity:workload-catalog-1",
+      "versions": [
+        {
+          "version": "v0.0.1:capacity:workload-catalog-1",
+          "ref": "meshrix.capacity.workload-catalog@v0.0.1:capacity:workload-catalog-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current deterministic workload catalog contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-capacity-workload-catalog-1-source",
+              "kind": "other",
+              "uri": "tools/verifiers/runtime-capacity-workload-catalog.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-capacity-workload-catalog-1-authority",
+              "kind": "other",
+              "uri": "tools/registry/fact-source-authority.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.registry.runtime-capacity-profile",
+      "kind": "schema",
+      "description": "Governed registry envelope for the runtime capacity profile authority.",
+      "activeVersion": "v0.0.1:registry:runtime-capacity-profile-1",
+      "versions": [
+        {
+          "version": "v0.0.1:registry:runtime-capacity-profile-1",
+          "ref": "meshrix.registry.runtime-capacity-profile@v0.0.1:registry:runtime-capacity-profile-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current source-controlled runtime capacity profile registry."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-registry-runtime-capacity-profile-1-source",
+              "kind": "other",
+              "uri": "tools/registry/runtime-capacity-profile.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.registry.sqlite-owner-migration",
+      "kind": "schema",
+      "description": "Governed registry envelope for canonical SQLite owner migrations.",
+      "activeVersion": "v0.0.1:registry:sqlite-owner-migration-1",
+      "versions": [
+        {
+          "version": "v0.0.1:registry:sqlite-owner-migration-1",
+          "ref": "meshrix.registry.sqlite-owner-migration@v0.0.1:registry:sqlite-owner-migration-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current source-controlled SQLite owner migration registry."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-registry-sqlite-owner-migration-1-source",
+              "kind": "other",
+              "uri": "tools/registry/sqlite-owner-migration.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.runtime.capacity-profile-gate",
+      "kind": "policy",
+      "description": "Governed non-certifying runtime capacity profile gate.",
+      "activeVersion": "v0.0.1:runtime:capacity-profile-gate-1",
+      "versions": [
+        {
+          "version": "v0.0.1:runtime:capacity-profile-gate-1",
+          "ref": "meshrix.runtime.capacity-profile-gate@v0.0.1:runtime:capacity-profile-gate-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current owner-authorized capacity profile policy."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-runtime-capacity-profile-gate-1-source",
+              "kind": "other",
+              "uri": "tools/registry/runtime-capacity-profile.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.runtime.capacity-stage-receipt",
+      "kind": "schema",
+      "description": "Governed focused receipt schema for runtime capacity stages.",
+      "activeVersion": "v0.0.1:runtime:capacity-stage-receipt-1",
+      "versions": [
+        {
+          "version": "v0.0.1:runtime:capacity-stage-receipt-1",
+          "ref": "meshrix.runtime.capacity-stage-receipt@v0.0.1:runtime:capacity-stage-receipt-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current provenance-bound focused capacity receipt."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-runtime-capacity-stage-receipt-1-source",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-runtime-capacity-convergence.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-runtime-capacity-stage-receipt-1-authority",
+              "kind": "other",
+              "uri": "tools/registry/fact-source-authority.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.runtime.sqlite-owner-migration",
+      "kind": "runtime_capability",
+      "description": "Governed canonical SQLite owner migration contract.",
+      "activeVersion": "v0.0.1:runtime:sqlite-owner-migration-1",
+      "versions": [
+        {
+          "version": "v0.0.1:runtime:sqlite-owner-migration-1",
+          "ref": "meshrix.runtime.sqlite-owner-migration@v0.0.1:runtime:sqlite-owner-migration-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current one-owner typed worker-lane migration contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-runtime-sqlite-owner-migration-1-source",
+              "kind": "other",
+              "uri": "tools/registry/sqlite-owner-migration.registry.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.runtime.capacity-convergence-report",
+      "kind": "runtime_capability",
+      "description": "Governed verification report for the runtime capacity and concurrency refactor convergence.",
+      "activeVersion": "v0.0.1:runtime:capacity-convergence-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:runtime:capacity-convergence-report-1",
+          "ref": "meshrix.runtime.capacity-convergence-report@v0.0.1:runtime:capacity-convergence-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current provenance-bearing runtime capacity convergence verifier report."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-runtime-capacity-convergence-report-1-source-1",
+              "kind": "other",
+              "uri": "tools/verifiers/runtime-capacity-workload-catalog.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-runtime-capacity-convergence-report-1-source-2",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-runtime-capacity-convergence.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.runtime.roles-elasticity",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.runtime.roles-elasticity.",
@@ -7395,6 +7654,84 @@
               "evidenceId": "v0-0-1-skill-hub-package-handle-1-source",
               "kind": "other",
               "uri": "services/skill-hub/internal/application.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.event",
+      "kind": "schema",
+      "description": "Bounded redacted Skill Hub catalog-change event frame published after successful mutations.",
+      "activeVersion": "v0.0.1:skill-hub:event-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:event-1",
+          "ref": "meshrix.skill-hub.event@v0.0.1:skill-hub:event-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-event-1-source",
+              "kind": "other",
+              "uri": "services/skill-hub/internal/service-events.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub.event-journal",
+      "kind": "schema",
+      "description": "Bounded monotonic Skill Hub event journal persisted beside the authoritative service data.",
+      "activeVersion": "v0.0.1:skill-hub:event-journal-1",
+      "versions": [
+        {
+          "version": "v0.0.1:skill-hub:event-journal-1",
+          "ref": "meshrix.skill-hub.event-journal@v0.0.1:skill-hub:event-journal-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-event-journal-1-source",
+              "kind": "other",
+              "uri": "services/skill-hub/internal/service-events.mjs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.skill-hub-update",
+      "kind": "protocol",
+      "description": "Scoped Skill Hub update fact published by core upstream event ingestion without credentials or package bytes.",
+      "activeVersion": "v0.0.1:meshrix:skill-hub-update-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:skill-hub-update-1",
+          "ref": "meshrix.skill-hub-update@v0.0.1:meshrix:skill-hub-update-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-skill-hub-update-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/upstream-gateway/index.ts"
             }
           ]
         }
@@ -9648,14 +9985,14 @@
       ]
     },
     {
-      "artifactId": "meshrix.workflow.job-work-queue-capacity-report",
+      "artifactId": "meshrix.workflow.job-work-queue-ceiling-conformance-report",
       "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.workflow.job-work-queue-capacity-report.",
-      "activeVersion": "v0.0.1:workflow:job-work-queue-capacity-report-1",
+      "description": "Governed version registry entry for meshrix.workflow.job-work-queue-ceiling-conformance-report.",
+      "activeVersion": "v0.0.1:workflow:job-work-queue-ceiling-conformance-report-1",
       "versions": [
         {
-          "version": "v0.0.1:workflow:job-work-queue-capacity-report-1",
-          "ref": "meshrix.workflow.job-work-queue-capacity-report@v0.0.1:workflow:job-work-queue-capacity-report-1",
+          "version": "v0.0.1:workflow:job-work-queue-ceiling-conformance-report-1",
+          "ref": "meshrix.workflow.job-work-queue-ceiling-conformance-report@v0.0.1:workflow:job-work-queue-ceiling-conformance-report-1",
           "lifecycle": "active",
           "compatibility": {
             "newBindingsAllowed": true,
@@ -9665,14 +10002,14 @@
           "artifactRefs": [],
           "evidenceRefs": [
             {
-              "evidenceId": "v0-0-1-workflow-job-work-queue-capacity-report-1-source-1",
+              "evidenceId": "v0-0-1-workflow-job-work-queue-ceiling-conformance-report-1-source-1",
               "kind": "other",
               "uri": "tools/server-scripts/lib/required-report-validator.ts"
             },
             {
-              "evidenceId": "v0-0-1-workflow-job-work-queue-capacity-report-1-source-2",
+              "evidenceId": "v0-0-1-workflow-job-work-queue-ceiling-conformance-report-1-source-2",
               "kind": "verifier",
-              "uri": "tools/server-scripts/verify-job-work-queue-capacity.ts"
+              "uri": "tools/server-scripts/verify-job-work-queue-ceiling-conformance.ts"
             }
           ]
         }
@@ -10141,6 +10478,32 @@
       ]
     },
     {
+      "artifactId": "meshrix.workspace.file-root-checkpoint",
+      "kind": "schema",
+      "description": "Canonical schema identity for a full workspace file snapshot materialized from a checkpoint state root.",
+      "activeVersion": "v0.0.1:workspace:file-root-checkpoint-1",
+      "versions": [
+        {
+          "version": "v0.0.1:workspace:file-root-checkpoint-1",
+          "ref": "meshrix.workspace.file-root-checkpoint@v0.0.1:workspace:file-root-checkpoint-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current canonical workspace file-root checkpoint schema."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-workspace-file-root-checkpoint-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/agent-workspace/agent-workspace-file-state.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "artifactId": "meshrix.workspace.file-restore-snapshot",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.workspace.file-restore-snapshot.",
@@ -10317,6 +10680,286 @@
               "evidenceId": "workspace-sandbox-mutation-receipt-source",
               "kind": "other",
               "uri": "packages/agents/src/agent-workspace/index.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.workspace.file-state-refactor-instrumentation",
+      "kind": "runtime_capability",
+      "description": "Instrumented workspace file-state layer reporting incremental checkpoint/cache counts.",
+      "activeVersion": "v0.0.1:workspace:file-state-refactor-instrumentation-1",
+      "versions": [
+        {
+          "version": "v0.0.1:workspace:file-state-refactor-instrumentation-1",
+          "ref": "meshrix.workspace.file-state-refactor-instrumentation@v0.0.1:workspace:file-state-refactor-instrumentation-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-workspace-file-state-refactor-instrumentation-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/agent-workspace/agent-workspace-file-state.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-workspace-file-state-refactor-instrumentation-1-test",
+              "kind": "test",
+              "uri": "tests/vitest/server/runtime-refactor-workspace-incremental.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.upstream-gateway.runtime-wal",
+      "kind": "runtime_capability",
+      "description": "Bounded append-only JSONL WAL owned by the upstream gateway runtime.",
+      "activeVersion": "v0.0.1:upstream-gateway:runtime-wal-1",
+      "versions": [
+        {
+          "version": "v0.0.1:upstream-gateway:runtime-wal-1",
+          "ref": "meshrix.upstream-gateway.runtime-wal@v0.0.1:upstream-gateway:runtime-wal-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-upstream-gateway-runtime-wal-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/upstream-gateway/registry-runtime.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.upstream-gateway.runtime-refactor-instrumentation",
+      "kind": "runtime_capability",
+      "description": "Instrumented upstream gateway runtime reporting WAL flush/eviction counters.",
+      "activeVersion": "v0.0.1:upstream-gateway:runtime-refactor-instrumentation-1",
+      "versions": [
+        {
+          "version": "v0.0.1:upstream-gateway:runtime-refactor-instrumentation-1",
+          "ref": "meshrix.upstream-gateway.runtime-refactor-instrumentation@v0.0.1:upstream-gateway:runtime-refactor-instrumentation-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-upstream-gateway-runtime-refactor-instrumentation-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/upstream-gateway/registry-runtime.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.capabilities.visible-tool-snapshot",
+      "kind": "runtime_capability",
+      "description": "Revisioned visible-tool snapshot used by routing and MCP discovery.",
+      "activeVersion": "v0.0.1:capabilities:visible-tool-snapshot-1",
+      "versions": [
+        {
+          "version": "v0.0.1:capabilities:visible-tool-snapshot-1",
+          "ref": "meshrix.capabilities.visible-tool-snapshot@v0.0.1:capabilities:visible-tool-snapshot-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-capabilities-visible-tool-snapshot-1-source",
+              "kind": "other",
+              "uri": "packages/capabilities/src/skills/tool-skill-management-provider.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-capabilities-visible-tool-snapshot-1-test",
+              "kind": "test",
+              "uri": "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.risk-control.authorization-compiler",
+      "kind": "runtime_capability",
+      "description": "Revisioned authorization compiler producing exact per-revision decision plans.",
+      "activeVersion": "v0.0.1:risk-control:authorization-compiler-1",
+      "versions": [
+        {
+          "version": "v0.0.1:risk-control:authorization-compiler-1",
+          "ref": "meshrix.risk-control.authorization-compiler@v0.0.1:risk-control:authorization-compiler-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-risk-control-authorization-compiler-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/authorization/authorization-engine.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.risk-control.authorization-compiler-instrumentation",
+      "kind": "runtime_capability",
+      "description": "Instrumented authorization compiler reporting compile/snapshot counters.",
+      "activeVersion": "v0.0.1:risk-control:authorization-compiler-instrumentation-1",
+      "versions": [
+        {
+          "version": "v0.0.1:risk-control:authorization-compiler-instrumentation-1",
+          "ref": "meshrix.risk-control.authorization-compiler-instrumentation@v0.0.1:risk-control:authorization-compiler-instrumentation-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-risk-control-authorization-compiler-instrumentation-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/authorization/authorization-engine.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-risk-control-authorization-compiler-instrumentation-1-test",
+              "kind": "test",
+              "uri": "tests/vitest/server/runtime-refactor-authorization-compiler.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.risk-control.authorization-denied-reference-store",
+      "kind": "runtime_capability",
+      "description": "Referenced denial store kept separate from canonical authorization state.",
+      "activeVersion": "v0.0.1:risk-control:authorization-denied-reference-store-1",
+      "versions": [
+        {
+          "version": "v0.0.1:risk-control:authorization-denied-reference-store-1",
+          "ref": "meshrix.risk-control.authorization-denied-reference-store@v0.0.1:risk-control:authorization-denied-reference-store-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-risk-control-authorization-denied-reference-store-1-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/security/authorization/authorization-store-worker-owner.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.operation.proof-lifecycle-instrumentation",
+      "kind": "runtime_capability",
+      "description": "Instrumented proof lifecycle reporting proof/decision deduplication counters.",
+      "activeVersion": "v0.0.1:operation:proof-lifecycle-instrumentation-1",
+      "versions": [
+        {
+          "version": "v0.0.1:operation:proof-lifecycle-instrumentation-1",
+          "ref": "meshrix.operation.proof-lifecycle-instrumentation@v0.0.1:operation:proof-lifecycle-instrumentation-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-operation-proof-lifecycle-instrumentation-1-source",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/composition/dispatch-operation-proof-lifecycle.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.server-runtime.operation-route-index-instrumentation",
+      "kind": "runtime_capability",
+      "description": "Instrumented operation route index reporting targeted-lookup counters.",
+      "activeVersion": "v0.0.1:server-runtime:operation-route-index-instrumentation-1",
+      "versions": [
+        {
+          "version": "v0.0.1:server-runtime:operation-route-index-instrumentation-1",
+          "ref": "meshrix.server-runtime.operation-route-index-instrumentation@v0.0.1:server-runtime:operation-route-index-instrumentation-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-server-runtime-operation-route-index-instrumentation-1-source",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/routing/operation-route-index.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.server-runtime.operation-route-snapshot",
+      "kind": "runtime_capability",
+      "description": "Unified route/visible-tool snapshot used by routing and MCP discovery.",
+      "activeVersion": "v0.0.1:server-runtime:operation-route-snapshot-1",
+      "versions": [
+        {
+          "version": "v0.0.1:server-runtime:operation-route-snapshot-1",
+          "ref": "meshrix.server-runtime.operation-route-snapshot@v0.0.1:server-runtime:operation-route-snapshot-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current scanned governed version."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-server-runtime-operation-route-snapshot-1-source",
+              "kind": "other",
+              "uri": "packages/server-runtime/src/routing/operation-route-index.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-server-runtime-operation-route-snapshot-1-test",
+              "kind": "test",
+              "uri": "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts"
             }
           ]
         }

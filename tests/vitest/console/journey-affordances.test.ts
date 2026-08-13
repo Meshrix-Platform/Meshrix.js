@@ -44,9 +44,12 @@ vi.mock("@meshrix/ui-console/page-refresh", async (importOriginal?: any) : Promi
   ...await importOriginal(),
   usePageRefreshHandler: pageRefreshHandler,
 }));
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellContextMock.current,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellContextMock.current),
+  };
+});
 vi.mock("../../../apps/console/lib/authorization-governance-client", () : any => ({
   getAuthorizationGovernance: vi.fn(async () : Promise<any> => ({
     roles: [], departments: [], teams: [], userPolicies: [], agentBindings: [], agentGroups: [], approvals: [],
@@ -97,7 +100,8 @@ function apiKeyCatalog() : any {
     tools: [{
       id: "tool.read", version: "1", label: "Read Tool", description: "", owner: "core", source: "core",
       operationId: "op.read", handlerId: "h", toolsets: ["toolset-a"], requiredScopes: ["scope-a"],
-      risk: "read_only", readOnly: true, destructive: false, concurrencySafe: true, requiresApproval: false,
+      risk: "read_only", readOnly: true, destructive: false,
+      concurrency: { workloadClass: "light", maxParallel: 64, cost: 1 }, requiresApproval: false,
       approvalScope: "", timeoutMs: 1, maxResultBytes: 1, status: "active", tags: [],
       serviceId: "service-a", capabilityId: "capability-a",
     }],
@@ -402,20 +406,26 @@ describe("key-reveal step snippet rendering", () : any => {
     });
     await flushPromises();
 
-    // Fill the create form: display name, owning level, expiry.
-    await wrapper.findAll(".api-key-form-grid input")[0].setValue("Build worker");
-    await wrapper.findAll(".api-key-form-grid select")[0].setValue("organization-a");
-    await wrapper.findAll(".api-key-form-grid input")[1].setValue("2026-09-01T08:00");
-    // Select the toolset and the Codex target via their checkbox buttons.
+    // Step 1: choose the Agent and identify the connection.
     const checkboxByLabel = async (label: string) : Promise<any> => {
       const button: any = wrapper.findAll("button[role=checkbox]").find((candidate?: any) : any => candidate.text().includes(label));
       expect(button).toBeDefined();
       await button.trigger("click");
     };
-    await checkboxByLabel("Toolset A");
-    await checkboxByLabel("Codex");
+    await wrapper.find('[data-testid="agent-target-select"]').setValue("codex");
+    await wrapper.findAll(".api-key-form-grid input")[0].setValue("Build worker");
+    await wrapper.findAll(".api-key-form-grid select")[1].setValue("organization-a");
+    await wrapper.findAll(".api-key-form-grid input")[1].setValue("2026-09-01T08:00");
+    await wrapper.find('[data-testid="agent-setup-agent-step"] .primary-action').trigger("click");
+    expect(wrapper.find('[data-testid="agent-setup-access-step"]').attributes("style") || "").not.toContain("display: none");
 
-    const createButton: any = wrapper.findAll("button.primary-action").find((candidate?: any) : any => candidate.text().includes("创建并显示一次"));
+    // Step 2: choose access, then review the bounded connection.
+    await checkboxByLabel("Toolset A");
+    await wrapper.find('[data-testid="agent-setup-access-step"] .primary-action').trigger("click");
+    expect(wrapper.find('[data-testid="agent-setup-review-step"]').attributes("style") || "").not.toContain("display: none");
+    expect(wrapper.find(".api-key-trust-summary").text()).toContain("Operation Permission");
+
+    const createButton: any = wrapper.findAll("button.primary-action").find((candidate?: any) : any => candidate.text().includes("生成连接资料"));
     await createButton.trigger("click");
     await flushPromises();
     settleConsoleConfirm(true);

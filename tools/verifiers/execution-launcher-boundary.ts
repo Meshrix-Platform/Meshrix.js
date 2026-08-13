@@ -70,6 +70,42 @@ const LAUNCHER_CATALOG: any = new Map<any, any>([
       reason: "owns the bounded no-shell process boundary for configured upstream MCP stdio sessions"
     })
   ],
+  ...[
+    "packages/foundation/src/storage/sqlite-execution-lane.ts",
+    "packages/server-runtime/src/state/context-compact/execution-lane.ts"
+  ].map((sourcePath?: any) : any => [
+    sourcePath,
+    Object.freeze({
+      approved: true,
+      classification: "bounded_internal_worker_lane",
+      authority: sourcePath.includes("context-compact")
+        ? "core.runtime.context-compaction"
+        : "core.storage.sqlite-execution",
+      reason: "owns a typed, bounded worker-thread lane with explicit admission, deadlines, and lifecycle closure"
+    })
+  ]),
+  ...[
+    "packages/capabilities/src/operation-permission-core/store-worker-bridge.ts",
+    "packages/capabilities/src/operation-permission-core/store-worker.ts",
+    "packages/foundation/src/security/authorization/authorization-store-worker.ts",
+    "packages/foundation/src/security/operation-audit-worker.ts",
+    "packages/foundation/src/work-queue/sqlite-store-worker.ts",
+    "packages/server-runtime/src/state/context-compact/execution-worker.ts"
+  ].map((sourcePath?: any) : any => [
+    sourcePath,
+    Object.freeze({
+      approved: true,
+      classification: "bounded_internal_worker_endpoint",
+      authority: sourcePath.includes("operation-permission")
+        ? "core.security.operation-permission"
+        : sourcePath.includes("authorization-store") || sourcePath.includes("operation-audit")
+          ? "core.security.authorization"
+          : sourcePath.includes("work-queue")
+            ? "core.runtime.work-queue"
+            : "core.runtime.context-compaction",
+      reason: "serves one typed internal worker protocol and cannot launch host processes or workloads"
+    })
+  ]),
   [
     "packages/foundation/src/environment-compatibility/host-runtime.ts",
     Object.freeze({

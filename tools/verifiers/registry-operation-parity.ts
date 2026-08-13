@@ -54,7 +54,7 @@ function compareOperationProjection(issues?: any, label?: any, sourceOperations:
     for (const [field, sourceValue, projectedValue] of [
       ["risk", riskOf(source), riskOf(projected)],
       ["readOnly", source.readOnly === true, projected.readOnly === true],
-      ["concurrencySafe", source.concurrencySafe === true, projected.concurrencySafe === true],
+      ["concurrency", JSON.stringify(source.concurrency), JSON.stringify(projected.concurrency)],
       ["http.method", String(source.http?.method || "").toUpperCase(), String(projected.http?.method || "").toUpperCase()],
       ["http.path", String(source.http?.path || ""), String(projected.http?.path || "")],
       ["rpc.method", String(source.rpc?.method || ""), String(projected.rpc?.method || "")]

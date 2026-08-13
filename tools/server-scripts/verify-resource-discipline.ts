@@ -241,6 +241,17 @@ const requiredRuntimeContracts: any[] = [
   {
     file: "packages/foundation/src/security/operation-audit.ts",
     tokens: [
+      "createSqliteExecutionLane",
+      'owner: "mandatory-evidence-operation-audit"',
+      "operation-audit-worker.${import.meta.url.endsWith",
+      "maxPending",
+      "maxPendingBytes",
+      "defaultDeadlineMs"
+    ]
+  },
+  {
+    file: "packages/foundation/src/security/operation-audit-worker-store.ts",
+    tokens: [
       "DEFAULT_MAX_RECORDS",
       "DEFAULT_MAX_LOGICAL_BYTES",
       "DEFAULT_MAX_DATABASE_BYTES",
@@ -331,6 +342,17 @@ const requiredRuntimeContracts: any[] = [
 for (const contract of requiredRuntimeContracts) {
   const source: any = await readRepoFile(contract.file);
   requireTokens(findings, contract.file, source, contract.tokens);
+}
+
+const operationAuditFacade: any = await readRepoFile(
+  "packages/foundation/src/security/operation-audit.ts"
+);
+for (const forbidden of ["openSqliteDatabase", "operation_audit_meta", ".prepare("]) {
+  if (operationAuditFacade.includes(forbidden)) {
+    findings.push(
+      `packages/foundation/src/security/operation-audit.ts:worker-owner-leak:${forbidden}`
+    );
+  }
 }
 
 const runtimeMemoryVerifier: any = await readRepoFile(

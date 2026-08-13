@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useServerConsoleShellContext } from '@meshrix/ui-console/server-console-shell-context';
+import { useServerConsoleShellContext } from '#meshrix/console/server-console-shell-context';
 import { jsonPreview } from '@meshrix/ui-console/console-format-utils';
 import { confirmConsoleAction, notifyConsoleAction } from '../../composables/console-browser-effects';
 import {
@@ -18,7 +18,9 @@ import ContextPresetModal from './context-management/ContextPresetModal.vue';
 import ContextPreviewPanel from './context-management/ContextPreviewPanel.vue';
 
 const {
-  isBusy,
+  refreshContextCompiler,
+} = useServerConsoleShellContext().refresh;
+const {
   contextBuildRecordRows,
   contextEvaluationResult,
   contextPreviewRequiredEvidence,
@@ -27,11 +29,15 @@ const {
   contextProfileRows,
   contextProfilesResponse,
   exportContextBuildRecords,
-  highlightedConfigTarget,
   previewContextCompiler,
-  refreshContextCompiler,
   runContextReplayEvaluation,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().contextCompilation;
+const {
+  highlightedConfigTarget,
+} = useServerConsoleShellContext().settings;
+const {
+  isBusy,
+} = useServerConsoleShellContext().runtime;
 
 type ContextProfileRow = (typeof contextProfileRows.value)[number];
 

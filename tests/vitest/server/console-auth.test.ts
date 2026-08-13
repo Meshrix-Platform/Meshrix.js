@@ -493,7 +493,7 @@ describe("console auth boundary behavior", () : any => {
 
   it("authorizes public, authenticated, denied and CSRF-guarded operations", async () : Promise<any> => {
     await withTempAuth(async (auth?: any) : Promise<any> => {
-      const publicBeforeSetup: any = auth.authorizeOperation({
+      const publicBeforeSetup: any = await auth.authorizeOperation({
         request: makeRequest(),
         operation: { id: "public.status", public: true },
         method: "GET",
@@ -514,7 +514,7 @@ describe("console auth boundary behavior", () : any => {
       }, makeRequest());
       const cookie: any = authCookieHeader(loginResult);
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest(),
         operation: { id: "private.read" },
         method: "GET",
@@ -524,14 +524,14 @@ describe("console auth boundary behavior", () : any => {
         status: 401
       });
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({ cookie }),
         operation: { id: "private.read", requiredScopes: ["console:read"] },
         method: "GET",
         url: new URL("http://console.local/api/private")
       })).toMatchObject({ ok: true });
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({ cookie }),
         operation: { id: "admin.write", requiredScopes: ["auth:admin"] },
         method: "GET",
@@ -541,7 +541,7 @@ describe("console auth boundary behavior", () : any => {
         status: 403
       });
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({ cookie, method: "POST", origin: "http://evil.test" }),
         operation: { id: "private.write", requiredScopes: ["console:read"] },
         method: "POST",
@@ -552,7 +552,7 @@ describe("console auth boundary behavior", () : any => {
         error: "请求来源校验失败。"
       });
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({ cookie, method: "POST", origin: "http://console.local" }),
         operation: { id: "private.write", requiredScopes: ["console:read"] },
         method: "POST",
@@ -563,7 +563,7 @@ describe("console auth boundary behavior", () : any => {
         error: "CSRF 校验失败。"
       });
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({
           cookie,
           csrf: loginResult.csrfToken,
@@ -579,7 +579,7 @@ describe("console auth boundary behavior", () : any => {
         username: "owner",
         password: initial.password
       }, makeRequest());
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({
           cookie: authCookieHeader(ownerLogin),
           method: "POST",
@@ -616,7 +616,7 @@ describe("console auth boundary behavior", () : any => {
         }
       };
 
-      const denied: any = auth.authorizeOperation({
+      const denied: any = await auth.authorizeOperation({
         request: makeRequest({ cookie }),
         operation,
         method: "GET",
@@ -638,7 +638,7 @@ describe("console auth boundary behavior", () : any => {
         }
       });
 
-      expect(auth.authorizeOperation({
+      expect(await auth.authorizeOperation({
         request: makeRequest({ cookie }),
         operation,
         method: "GET",

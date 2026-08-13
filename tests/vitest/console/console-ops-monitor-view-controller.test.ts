@@ -1,6 +1,7 @@
 import { computed, ref } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { useOpsMonitorViewConsole } from "../../../apps/console/composables/console-ops-monitor-view-controller";
+import { namespaceServerConsoleShell } from "./console-shell-test-utils";
 import type { MonitorAlertItem } from "../../../apps/console/lib/types";
 import { monitorAlertSeverityLabel, monitorAlertSeverityTone } from "../../../apps/console/composables/console-status-utils";
 
@@ -8,7 +9,7 @@ const shellContextMock: any = vi.hoisted(() : any => ({
   useServerConsoleShellContext: vi.fn(),
 }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
+vi.mock("#meshrix/console/server-console-shell-context", () : any => ({
   useServerConsoleShellContext: shellContextMock.useServerConsoleShellContext,
 }));
 
@@ -84,9 +85,7 @@ function createFixture(overrides: Record<string, any> = {}) : any {
   ]);
   const shell: Record<string, any> = {
     acknowledgeMonitorAlert: vi.fn(async () : Promise<any> => undefined),
-    backgroundProcessLabel: vi.fn(),
     backgroundProcessStatus,
-    backgroundProcessTone: vi.fn(),
     backgroundProcesses,
     backgroundRunningCount: computed(() : any =>
       backgroundProcesses.value.filter((item?: any) : any => item.alive && !item.stale).length,
@@ -94,7 +93,6 @@ function createFixture(overrides: Record<string, any> = {}) : any {
     backgroundSupervisorLabel: computed(() : any => (backgroundProcessStatus.value?.supervisor.alive ? "正常" : "守护进程离线")),
     isBusy,
     canAdminMaintenanceAgent: ref(false),
-    formatCompactDate: (value: string) : any => `compact:${value}`,
     activeMonitorAlerts,
     monitorAlertConfigText,
     monitorAlertSummary: computed(() : any => ({
@@ -117,14 +115,11 @@ function createFixture(overrides: Record<string, any> = {}) : any {
       activeAlerts: activeMonitorAlerts.value,
       history: recentMonitorAlertHistory.value,
     }),
-    processRelationText: vi.fn(),
-    processTypeLabel: vi.fn(),
     recentMonitorAlertHistory,
     saveMonitorAlertConfig: vi.fn(async () : Promise<any> => undefined),
-    shouldIncludeMonitorAlertLifecycle: vi.fn((alert: MonitorAlertItem) : any => alert.ackRequired || alert.active === false || alert.status === "recovered"),
-  };
+    };
 
-  shellContextMock.useServerConsoleShellContext.mockReturnValue(shell as any);
+  shellContextMock.useServerConsoleShellContext.mockReturnValue(namespaceServerConsoleShell(shell));
   const controller: any = useOpsMonitorViewConsole();
 
   return {

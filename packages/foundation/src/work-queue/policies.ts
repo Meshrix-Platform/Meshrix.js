@@ -56,7 +56,6 @@ export const DEFAULT_QUEUE_POLICY: Readonly<Record<string, any>> = Object.freeze
     cleanupBatchSize: 128
   }),
   fairness: Object.freeze({
-    maxVisitsPerClaim: 4096,
     agingIntervalMs: 60_000,
     agingBatchSize: 128,
     minReservedLeasesPerPartition: 1,

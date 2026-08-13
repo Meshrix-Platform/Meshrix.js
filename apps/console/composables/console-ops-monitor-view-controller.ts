@@ -1,7 +1,7 @@
 import { computed } from "vue";
 import type { MonitorAlertItem } from "../lib/types";
 import { formatCompactDate } from "@meshrix/ui-console/console-format-utils";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import {
   backgroundProcessLabel,
   backgroundProcessTone,
@@ -86,20 +86,26 @@ function uniqueMonitorAlerts(alerts: MonitorAlertItem[]) : any {
 
 export function useOpsMonitorViewConsole() : any {
   const {
-    acknowledgeMonitorAlert,
-    activeMonitorAlerts,
-    backgroundProcessStatus,
-    backgroundProcesses,
-    backgroundRunningCount,
-    backgroundSupervisorLabel,
-    isBusy,
-    canAdminMaintenanceAgent,
-    monitorAlertConfigText,
-    monitorAlertState,
-    monitorAlertSummary,
-    recentMonitorAlertHistory,
-    saveMonitorAlertConfig,
-  } = useServerConsoleShellContext();
+  backgroundProcessStatus,
+  backgroundProcesses,
+  backgroundRunningCount,
+  backgroundSupervisorLabel,
+} = useServerConsoleShellContext().jobs;
+const {
+  canAdminMaintenanceAgent,
+} = useServerConsoleShellContext().maintenance;
+const {
+  acknowledgeMonitorAlert,
+  activeMonitorAlerts,
+  monitorAlertConfigText,
+  monitorAlertState,
+  monitorAlertSummary,
+  recentMonitorAlertHistory,
+  saveMonitorAlertConfig,
+} = useServerConsoleShellContext().monitoring;
+const {
+  isBusy,
+} = useServerConsoleShellContext().runtime;
 
   const monitorAlertRows: any = computed(() : any =>
     uniqueMonitorAlerts([...activeMonitorAlerts.value, ...recentMonitorAlertHistory.value]),

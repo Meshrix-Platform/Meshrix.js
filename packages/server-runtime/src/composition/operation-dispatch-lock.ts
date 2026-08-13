@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 const FALLBACK_TTL_MS: any = 30_000;
 const FALLBACK_HEARTBEAT_MS: any = 10_000;
+const activeOperationSlots: any = new Map<any, any>();
 
 export class OperationLockError extends Error {
   name: any;
@@ -14,13 +15,38 @@ export class OperationLockError extends Error {
 }
 
 export function operationLockKey(operation: Record<string, any> = {}, concurrencyScope: any = "default") : any {
-  const group: any = String(operation.concurrencyGroup || operation.id || "").trim();
+  const group: any = String(operation.concurrency?.key || operation.id || "").trim();
   if (!group) throw new TypeError("Operation concurrency group must be a non-empty string.");
   const scopeDigest: any = createHash("sha256")
     .update(String(concurrencyScope || "default"))
     .digest("hex")
     .slice(0, 24);
   return `operation:${scopeDigest}:${group}`;
+}
+
+function reserveOperationSlot(operation?: any, concurrencyScope?: any) : any {
+  const key: any = operationLockKey(operation, concurrencyScope);
+  const maxParallel: any = Math.max(1, Math.min(
+    4_096,
+    Number.isSafeInteger(Number(operation?.concurrency?.maxParallel))
+      ? Number(operation.concurrency.maxParallel)
+      : 1
+  ));
+  // Exclusive operations use the bounded lock-manager waiter queue so callers
+  // preserve ordered serialization and deadline semantics. Parallel classes
+  // reserve their local slot synchronously because they do not acquire a lock.
+  if (maxParallel === 1) return () : any => {};
+  const active: any = Number(activeOperationSlots.get(key) || 0);
+  if (active >= maxParallel) throw new OperationLockError("capacity");
+  activeOperationSlots.set(key, active + 1);
+  let released: any = false;
+  return () : any => {
+    if (released) return;
+    released = true;
+    const remaining: any = Math.max(0, Number(activeOperationSlots.get(key) || 1) - 1);
+    if (remaining === 0) activeOperationSlots.delete(key);
+    else activeOperationSlots.set(key, remaining);
+  };
 }
 
 function positiveDuration(value?: any, fallback?: any) : any {
@@ -80,10 +106,12 @@ export async function withOperationLock({
     throw new TypeError("Operation lock signal must be an AbortSignal.");
   }
   if (signal?.aborted) throw new OperationLockError("aborted");
-  if (operation?.concurrencySafe === true) {
-    const result: any = await run(null);
+  const releaseOperationSlot: any = reserveOperationSlot(operation, concurrencyScope);
+  try {
+  if (Number(operation?.concurrency?.maxParallel || 1) > 1) {
+    const parallelResult: any = await run(null);
     if (signal?.aborted) throw new OperationLockError("aborted");
-    return result;
+    return parallelResult;
   }
   if (!lockManager || typeof lockManager.acquire !== "function") {
     throw new OperationLockError("unavailable");
@@ -196,4 +224,7 @@ export async function withOperationLock({
   if (releaseFailure) throw releaseFailure;
   if (executionFailure) throw executionFailure;
   return result;
+  } finally {
+    releaseOperationSlot();
+  }
 }

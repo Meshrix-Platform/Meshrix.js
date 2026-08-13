@@ -50,14 +50,15 @@ export function createGrantStoreMethods(ctx?: any) : any {
 
   const upsertGrantStmt: any = db.prepare(`
     INSERT INTO tool_grants (
-      id, label, type, enabled, toolsets_json, tool_allow_json, tool_deny_json, scopes_json,
+      id, label, type, parent_grant_id, enabled, toolsets_json, tool_allow_json, tool_deny_json, scopes_json,
       expires_at, max_uses, rate_limit_json, allowed_origins_json, allowed_cidrs_json,
       metadata_json, reason, token_hash, token_prefix, token_family_id, use_count,
       created_at, updated_at, revoked_at, last_used_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       label = excluded.label,
       type = excluded.type,
+      parent_grant_id = excluded.parent_grant_id,
       enabled = excluded.enabled,
       toolsets_json = excluded.toolsets_json,
       tool_allow_json = excluded.tool_allow_json,
@@ -194,7 +195,7 @@ export function createGrantStoreMethods(ctx?: any) : any {
   }
 
   function resolveGrantOwners(grant?: any) : any {
-    const delegatedParentId: any = String(grant?.metadata?.delegatedMcp?.sourceGrantId || "").trim();
+    const delegatedParentId: any = String(grant?.parentGrantId || "").trim();
     if (String(grant?.type || "") === "delegated-mcp-child") {
       const parent: any = delegatedParentId ? getGrant(delegatedParentId) : null;
       if (!parent?.ownerIntegrity?.valid) {
@@ -304,6 +305,7 @@ export function createGrantStoreMethods(ctx?: any) : any {
       grant.id,
       grant.label,
       grant.type,
+      grant.parentGrantId,
       grant.enabled ? 1 : 0,
       stringifyJson(grant.toolsets),
       stringifyJson(grant.toolAllow),

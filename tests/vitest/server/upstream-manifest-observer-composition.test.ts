@@ -147,7 +147,7 @@ describe("upstream manifest observer composition", () : any => {
 
     const registry: any = createUpstreamGatewayRegistry({});
     const platformRoot: any = await temporaryRoot();
-    const platform: any = createOperationPermissionPlatform({
+    const platform: any = await createOperationPermissionPlatform({
       userDataPath: platformRoot,
       operations: [],
       featureRuntime: null,
@@ -196,6 +196,6 @@ describe("upstream manifest observer composition", () : any => {
 
     await observer.close();
     await registry.close();
-    platform.close();
+    await platform.close();
   });
 });

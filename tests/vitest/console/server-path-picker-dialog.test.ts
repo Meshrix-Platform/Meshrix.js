@@ -7,9 +7,12 @@ const shellState: any = vi.hoisted(() : any => ({
   context: {} as Record<string, unknown>,
 }));
 
-vi.mock("@meshrix/ui-console/server-console-shell-context", () : any => ({
-  useServerConsoleShellContext: () : any => shellState.context,
-}));
+vi.mock("#meshrix/console/server-console-shell-context", async () : Promise<any> => {
+  const { namespaceServerConsoleShell } = await import("../../../tests/vitest/console/console-shell-test-utils");
+  return {
+    useServerConsoleShellContext: () : any => namespaceServerConsoleShell(shellState.context),
+  };
+});
 
 import ServerPathPickerDialog from "../../../apps/console/components/shell/ServerPathPickerDialog.vue";
 

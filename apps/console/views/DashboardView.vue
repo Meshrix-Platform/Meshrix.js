@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import StatusPill from "@meshrix/ui-console/status-pill";
 import DashboardPluginCard from "../components/dashboard/DashboardPluginCard.vue";
 import {
@@ -16,13 +16,15 @@ import {
 import type { DashboardAlert } from "../types/app";
 
 const {
-  isBusy,
-  consoleState,
   dashboardAlertInboxId,
   dashboardAlerts,
   dismissDashboardAlert,
   openDashboardAlert,
-} = useServerConsoleShellContext();
+} = useServerConsoleShellContext().dashboard;
+const {
+  isBusy,
+  consoleState,
+} = useServerConsoleShellContext().runtime;
 
 const approvalFlow = useApprovalFlowViewController();
 const { approvalFlowCards } = approvalFlow;

@@ -23,10 +23,10 @@ import { createStorageProvider } from "../../../packages/foundation/src/storage/
 import { acquireStorageRuntimeLease } from "../../../packages/foundation/src/storage/storage-lifecycle-lock.ts";
 import { executeStorageOperation } from "../../../packages/server-runtime/src/composition/console-domain/operation-executors/storage-client-monitor-executors.ts";
 import {
-  classifyProtocolSubstrateStorageArtifact,
-  PROTOCOL_SUBSTRATE_STORAGE_CATEGORY
+  classifyProtocolStorageArtifact,
+  PROTOCOL_STORAGE_CATEGORY
 } from "#meshrix/foundation/checkpoint/tree/data-structure-substrate";
-import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-substrate-preflight";
+import { createMeshrixPactiumRuntime } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
 
 const tempRoots: any[] = [];
 
@@ -137,7 +137,7 @@ describe("storage backup restore", () : any => {
     const manifest: any = await createStorageBackup({
       userDataPath,
       label: "scope",
-      artifactClassifiers: [classifyProtocolSubstrateStorageArtifact]
+      artifactClassifiers: [classifyProtocolStorageArtifact]
     });
 
     expect(manifest.protocolVersion).toBe(BACKUP_RESTORE_PROTOCOL_VERSION);
@@ -147,7 +147,7 @@ describe("storage backup restore", () : any => {
       auth: 1,
       jobs: 1,
       object: 1,
-      [PROTOCOL_SUBSTRATE_STORAGE_CATEGORY]: 1,
+      [PROTOCOL_STORAGE_CATEGORY]: 1,
       database: 1,
       "json-state": 2,
       config: 1,
@@ -990,7 +990,7 @@ describe("storage backup restore", () : any => {
     const readyPath: any = path.join(userDataPath, "logs", "pactium-runtime-ready");
     const stopPath: any = path.join(userDataPath, "logs", "pactium-runtime-stop");
     const moduleUrl: any = new URL(
-      "../../../packages/foundation/src/checkpoint/tree/pactium-substrate-preflight.ts",
+      "../../../packages/foundation/src/checkpoint/tree/pactium-runtime.ts",
       import.meta.url
     ).href;
     const childSource: any = `

@@ -261,7 +261,9 @@ export function auditOperation({
   startedAt,
   output = undefined,
   error = "",
-  riskControlEnvelope = null
+  riskControlEnvelope = null,
+  authorizationDecisionId = "",
+  proofId = ""
 }: Record<string, any>) : any {
   const disposition: any = auditOperationDisposition({ operationAuditStore, operation, status });
   if (disposition !== "recorded") {
@@ -282,7 +284,9 @@ export function auditOperation({
     input: metadataOnly || operation.audit?.recordInput === false ? {} : input,
     output: !metadataOnly && operation.audit?.recordOutput === true ? output : undefined,
     error,
-    riskControl: riskControlEnvelope
+    riskControl: riskControlEnvelope,
+    decisionId: String(authorizationDecisionId || ""),
+    proofId: String(proofId || "")
   });
 }
 

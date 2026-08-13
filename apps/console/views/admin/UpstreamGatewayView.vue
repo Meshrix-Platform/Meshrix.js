@@ -6,12 +6,14 @@ import {
   readinessStateLabelKey,
   useServiceReadiness,
 } from "./upstream-gateway/useServiceReadiness";
-import { useServerConsoleShellContext } from "@meshrix/ui-console/server-console-shell-context";
+import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
 import ConsoleEmptyState from "../../components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../components/ConsoleInlineAlert.vue";
 import { consoleMessages, currentConsoleLocale } from "../../i18n/console";
 
-const { canAccessAdminView } = useServerConsoleShellContext();
+const {
+  canAccessAdminView,
+} = useServerConsoleShellContext().access;
 
 const {
   audit,

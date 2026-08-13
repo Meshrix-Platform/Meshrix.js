@@ -78,7 +78,9 @@ export function compileUpstreamOperationProjection(snapshot?: any) : any {
         http: { method: "POST", path: `/api/gateway/v1/projected/${operationId.slice("upstream_operation.".length)}`, localInForwardMode: true },
         requiredScopes: Object.freeze([...dynamicCapability.requiredScopes]),
         readOnly: risk === "read_only",
-        concurrencySafe: operation.concurrencySafe === true || risk === "read_only",
+        concurrency: risk === "read_only"
+          ? { workloadClass: "light", maxParallel: 64, cost: 1 }
+          : { workloadClass: "standard", key: `upstream:${serviceId}`, maxParallel: 1, cost: 2 },
         execution: { timeoutMs: operation.timeoutMs || 30_000 },
         safety: {
           risk,

@@ -4,9 +4,9 @@ import {
   createQueueFallbackCoordinator,
   createQueuePushDispatcher,
   createQueueWorkerRuntime,
-  createSqliteWorkQueueStore,
   resolveQueueMaxInFlight
 } from "@meshrix/foundation/work-queue/index";
+import { createSqliteWorkQueueLane } from "@meshrix/foundation/work-queue/sqlite-store-lane";
 
 function toText(value?: any) : any {
   return String(value ?? "").trim();
@@ -143,7 +143,7 @@ async function createDefaultStore({ userDataPath, store = null }: Record<string,
       }
     });
   }
-  return createSqliteWorkQueueStore({ userDataPath });
+  return createSqliteWorkQueueLane({ userDataPath });
 }
 
 export async function createQueueApplicationPort({
@@ -169,19 +169,43 @@ export async function createQueueApplicationPort({
   let timer: any = null;
   let stopped: any = false;
   let dispatchCursor: any = 0;
-  let dispatchChain: any = Promise.resolve();
+  let globalReserved: any = 0;
 
-  async function dispatchRegistration(registration?: any, availableGlobalCredit: any = globalCredit.limit) : Promise<any> {
-    if (stopped || registration.closed || registration.dispatching) return null;
+  function globalInFlight() : any {
+    let total: any = 0;
+    for (const registration of registrations.values()) {
+      total += Number(registration.dispatcher?.status().inFlight || 0);
+    }
+    return total;
+  }
+
+  function reserveGlobalCredit(requested: any = 0) : any {
+    const available: any = Math.max(0, globalCredit.limit - globalReserved - globalInFlight());
+    const grant: any = Math.min(Math.max(0, Math.trunc(Number(requested) || 0)), available);
+    globalReserved += grant;
+    return grant;
+  }
+
+  function releaseGlobalCredit(count: any = 0) : any {
+    globalReserved = Math.max(0, globalReserved - Math.max(0, Math.trunc(Number(count) || 0)));
+  }
+
+  async function dispatchRegistration(registration?: any) : Promise<any> {
+    if (stopped || registration.closed) return null;
     if (!registration.consumerEnabled) {
       return { dispatched: 0, reason: "consumer_not_owned" };
     }
-    registration.dispatching = true;
-    const dispatchPromise: any = (async () : Promise<any> => {
+    const grant: any = reserveGlobalCredit(registration.batchSize);
+    if (grant <= 0) {
+      return {
+        dispatched: 0,
+        reason: "global_credit_exhausted",
+        backpressure: { globalSaturated: true }
+      };
+    }
     try {
-      return await registration.dispatcher.dispatchOnce({
-        batchSize: Math.min(registration.batchSize, Math.max(0, availableGlobalCredit))
-      });
+      const result: any = await registration.dispatcher.dispatchOnce({ batchSize: grant });
+      return result;
     } catch (error: any) {
       const summary: any = summarizeError(error);
       logger?.error?.("work_queue.application.dispatch.failed", {
@@ -190,9 +214,33 @@ export async function createQueueApplicationPort({
       });
       return { dispatched: 0, error: summary };
     } finally {
-      registration.dispatching = false;
-      if (registration.dispatchPromise === dispatchPromise) registration.dispatchPromise = null;
+      releaseGlobalCredit(grant);
     }
+  }
+
+  function triggerRegistration(registration?: any) : any {
+    if (stopped || registration.closed) {
+      return Promise.resolve({ dispatched: 0, reason: "registration_closed" });
+    }
+    if (!registration.consumerEnabled) {
+      return Promise.resolve({ dispatched: 0, reason: "consumer_not_owned" });
+    }
+    if (registration.dispatching) {
+      registration.triggerPending = true;
+      return registration.dispatchPromise || Promise.resolve({ dispatched: 0, coalesced: true });
+    }
+    registration.dispatching = true;
+    const dispatchPromise: any = (async () : Promise<any> => {
+      try {
+        return await dispatchRegistration(registration);
+      } finally {
+        registration.dispatching = false;
+        registration.dispatchPromise = null;
+        if (registration.triggerPending && !stopped && !registration.closed) {
+          registration.triggerPending = false;
+          registration.dispatchPromise = triggerRegistration(registration);
+        }
+      }
     })();
     registration.dispatchPromise = dispatchPromise;
     return dispatchPromise;
@@ -203,7 +251,7 @@ export async function createQueueApplicationPort({
     if (id) {
       const registration: any = registrations.get(id);
       if (!registration) throw new Error(`Queue definition is not registered: ${id}`);
-      if (!registration.consumerEnabled) return dispatchRegistration(registration);
+      return triggerRegistration(registration);
     }
     const cycle: any = async () : Promise<any> => {
       const active: any = [...registrations.values()].filter((entry?: any) : any =>
@@ -213,19 +261,16 @@ export async function createQueueApplicationPort({
       const offset: any = dispatchCursor % active.length;
       dispatchCursor = (offset + 1) % active.length;
       const ordered: any[] = [...active.slice(offset), ...active.slice(0, offset)];
-      const results: any[] = [];
-      for (const registration of ordered) {
-        const inFlight: any = active.reduce((total?: any, entry?: any) : any =>
-          total + Number(entry.dispatcher?.status().inFlight || 0), 0
-        );
-        const available: any = Math.max(0, globalCredit.limit - inFlight);
-        if (available === 0) break;
-        results.push(await dispatchRegistration(registration, available));
-      }
+      const pending: any[] = ordered.map(triggerRegistration);
+      const settled: any = await Promise.allSettled(pending);
+      const results: any[] = settled.map((outcome?: any) : any =>
+        outcome.status === "fulfilled"
+          ? outcome.value
+          : { dispatched: 0, error: summarizeError(outcome.reason) }
+      );
       return { queueCount: ordered.length, results };
     };
-    dispatchChain = dispatchChain.catch(() : any => null).then(cycle);
-    return dispatchChain;
+    return cycle();
   }
 
   async function registerQueue({
@@ -282,6 +327,7 @@ export async function createQueueApplicationPort({
       batchSize: asPositiveInt(batchSize, 1),
       maxInFlight: resolvedMaxInFlight,
       dispatching: false,
+      triggerPending: false,
       dispatchPromise: null,
       closed: false
     };
@@ -397,7 +443,9 @@ export async function createQueueApplicationPort({
         if (registration.closed) return { closed: true, idempotent: true };
         registration.closed = true;
         registrations.delete(definition.queueDefinitionId);
-        await registration.dispatchPromise;
+        while (registration.dispatchPromise) {
+          await registration.dispatchPromise;
+        }
         if (dispatcher) {
           const drained: any = await dispatcher.drain({ timeoutMs });
           if (drained?.drained !== true) {
@@ -427,7 +475,9 @@ export async function createQueueApplicationPort({
       timer = null;
     }
     for (const registration of registrations.values()) {
-      await registration.dispatchPromise;
+      while (registration.dispatchPromise) {
+        await registration.dispatchPromise;
+      }
       if (registration.dispatcher) {
         const drained: any = await registration.dispatcher.drain({ timeoutMs: 30_000 });
         if (drained?.drained !== true) {
@@ -452,6 +502,7 @@ export async function createQueueApplicationPort({
             total + Number(registration.dispatcher?.status().inFlight || 0), 0
           ),
           capacity: globalCredit.limit,
+          reserved: globalReserved,
           configuredCapacity: globalCredit.normalizedRequested,
           capacityClamped: globalCredit.clamped
         },

@@ -6,8 +6,9 @@ import {
 import { createBoundedStdioOutput } from "./bounded-stdio-output.ts";
 import { HTTP_TIMEOUT_MS } from "./constants.ts";
 import { normalizeTarget, option } from "./basic-utils.ts";
+import { loadMcpApiKeyCredential, loadMcpConnectorPreferences } from "./credential-store.ts";
 import { fetchJson } from "./http-json-client.ts";
-import { authHeaders, optionsWithDiscoveredBaseUrl, resolveApiKey } from "./discovery.ts";
+import { authHeaders, optionsWithDiscoveredBaseUrl, registryBaseUrls, resolveApiKey } from "./discovery.ts";
 import { installerOptions } from "./installer-options.ts";
 import { redactSensitiveText } from "./installer-output-safety.ts";
 
@@ -17,6 +18,12 @@ export const MCP_STDIO_MAX_FRAME_BYTES: any = 8 * 1024 * 1024;
 export const MCP_STDIO_MAX_BUFFER_BYTES: any = MCP_STDIO_MAX_FRAME_BYTES + (64 * 1024);
 export const MCP_PROXY_MAX_ACTIVE_REQUESTS: any = 32;
 export const MCP_PROXY_MAX_PENDING_DISPATCHES: any = 96;
+export const MCP_UPDATE_SUBSCRIPTION_MAX_FRAME_BYTES: any = 64 * 1024;
+const MCP_UPDATE_NOTIFICATIONS: any = Object.freeze([
+  "notifications/tools/list_changed",
+  "notifications/meshrix/skill_hub/catalog_changed",
+  "notifications/meshrix/update_available"
+]);
 
 function positiveInteger(value?: any, fallback?: any, name?: any) : any {
   const resolved: any = value ?? fallback;
@@ -544,6 +551,8 @@ export function createProxyStdioTransport(options: Record<string, any> = {}) : a
 
   return {
     push,
+    write: dispatcher.write,
+    stop: dispatcher.stop,
     close: dispatcher.waitForIdle,
     failure: dispatcher.failure,
     get activeRequestCount() : any {
@@ -566,24 +575,112 @@ export function createProxyStdioTransport(options: Record<string, any> = {}) : a
 
 export async function resolveProxyCredentials(options: Record<string, any> = {}) : Promise<any> {
   const target: any = normalizeTarget(option(options, "target", "opencode")) || "opencode";
-  const token: any = await resolveApiKey(options, { required: true });
+  const providedToken: any = await resolveApiKey(options, { required: false });
+  const settings: any = installerOptions(options);
+  const [storedBaseUrl] = settings.baseUrl ? [settings.baseUrl] : await registryBaseUrls(options);
+  const storedToken: any = providedToken ? "" : await loadMcpApiKeyCredential({
+    target,
+    baseUrl: storedBaseUrl
+  });
+  const preferences: any = await loadMcpConnectorPreferences({ target, baseUrl: storedBaseUrl });
+  const token: any = providedToken || storedToken;
+  if (!token) {
+    throw new Error(`Missing API Key. Run meshrix-mcp install --target ${target}, provide --token-stdin, or set the configured token environment variable.`);
+  }
   return {
     target,
     token,
-    tokenSource: "provided"
+    autoUpdate: preferences.autoUpdate === true,
+    tokenSource: providedToken ? "provided" : "credential-store"
   };
+}
+
+function abortableDelay(milliseconds?: any, signal?: any) : any {
+  return new Promise((resolve?: any) : any => {
+    if (signal?.aborted) return resolve(null);
+    const timer: any = setTimeout(resolve, milliseconds);
+    timer.unref?.();
+    signal?.addEventListener?.("abort", () : any => {
+      clearTimeout(timer);
+      resolve(null);
+    }, { once: true });
+  });
+}
+
+export async function subscribeToMcpUpdates({ baseUrl, token, target, proxySessionId, signal, onNotification, fetchImpl = fetch }: Record<string, any>) : Promise<any> {
+  let retryMs: any = 250;
+  while (!signal?.aborted) {
+    try {
+      const response: any = await fetchImpl(`${baseUrl}/mcp`, {
+        method: "POST",
+        signal,
+        headers: {
+          ...authHeaders(token, target),
+          [MCP_PROXY_SESSION_HEADER]: normalizeMcpProxySessionId(proxySessionId),
+          accept: "text/event-stream",
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: "meshrix-auto-update-subscription",
+          method: "subscriptions/listen",
+          params: { notifications: MCP_UPDATE_NOTIFICATIONS }
+        })
+      });
+      if (!response.ok || !response.body) throw new Error(`MCP subscription failed with HTTP ${response.status}`);
+      retryMs = 250;
+      let buffer: any = "";
+      const decoder: any = new TextDecoder();
+      for await (const chunk of response.body) {
+        buffer += decoder.decode(chunk, { stream: true });
+        if (Buffer.byteLength(buffer, "utf8") > MCP_UPDATE_SUBSCRIPTION_MAX_FRAME_BYTES) {
+          throw new Error("MCP subscription frame limit exceeded.");
+        }
+        let separator: any;
+        while ((separator = /\r?\n\r?\n/u.exec(buffer))) {
+          const boundary: any = separator.index;
+          const frame: any = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + separator[0].length);
+          const data: any = frame.split(/\r?\n/u)
+            .filter((line?: any) : any => line.startsWith("data:"))
+            .map((line?: any) : any => line.slice(5).trimStart())
+            .join("\n");
+          if (!data) continue;
+          const payload: any = JSON.parse(data);
+          if (MCP_UPDATE_NOTIFICATIONS.includes(payload?.method)) onNotification(payload);
+        }
+      }
+    } catch (error: any) {
+      if (signal?.aborted || error?.name === "AbortError") break;
+    }
+    await abortableDelay(retryMs, signal);
+    retryMs = Math.min(retryMs * 2, 10_000);
+  }
 }
 
 export async function proxyCommand(options: Record<string, any> = {}) : Promise<any> {
   const credentials: any = await resolveProxyCredentials(options);
   const resolved: any = await optionsWithDiscoveredBaseUrl(options);
   const settings: any = installerOptions(resolved);
-  const { target, token } = credentials;
+  const { target, token, autoUpdate } = credentials;
+  const proxySessionId: any = createMcpProxySessionId();
   const transport: any = createProxyStdioTransport({
     baseUrl: settings.baseUrl,
     token,
-    target
+    target,
+    proxySessionId
   });
+  const subscriptionController: any = new AbortController();
+  const subscription: any = autoUpdate
+    ? subscribeToMcpUpdates({
+        baseUrl: settings.baseUrl,
+        token,
+        target,
+        proxySessionId,
+        signal: subscriptionController.signal,
+        onNotification: (notification?: any) : any => transport.write(notification)
+      })
+    : Promise.resolve();
 
   const onData: any = (chunk?: any) : any => {
     transport.push(chunk);
@@ -600,6 +697,8 @@ export async function proxyCommand(options: Record<string, any> = {}) : Promise<
     process.stdin.removeListener("end", onEnd);
     process.stdin.pause();
   }
+  subscriptionController.abort();
   await transport.close();
+  await subscription;
   return { ok: true, proxy: "closed" };
 }

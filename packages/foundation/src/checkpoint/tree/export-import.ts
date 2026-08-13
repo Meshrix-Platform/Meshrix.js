@@ -13,7 +13,7 @@ import {
 import {
   normalizeMeshrixPactiumRuntime,
   resolveMeshrixPactiumDataDir
-} from "./pactium-substrate-preflight.ts";
+} from "./pactium-runtime.ts";
 
 function text(value?: any, fallback: any = "") : any {
   const normalized: any = String(value ?? "").trim();
@@ -24,7 +24,7 @@ function asArray(value?: any) : any {
   return Array.isArray(value) ? value : [];
 }
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

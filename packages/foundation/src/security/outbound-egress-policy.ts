@@ -19,7 +19,7 @@ const CLOUD_METADATA_IPV4_ADDRESSES: any = new Set<any>([
 ]);
 const AWS_METADATA_IPV6: any = 0xfd000ec2000000000000000000000254n;
 
-function asObject(value?: any, fallback: Record<string, any> = {}) : any {
+function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 

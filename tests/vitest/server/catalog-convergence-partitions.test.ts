@@ -46,7 +46,7 @@ function connectionFixture({
   grantId,
   remoteAddress,
   partitionKeys = [],
-  negotiatedCapabilities = ["upstream.catalog.list_changed"],
+  negotiatedCapabilities = ["notifications/tools/list_changed"],
   proxySessionId = "abcdefghijklmnopqrstuvwx",
   writeResult = true
 }: Record<string, any>) : any {

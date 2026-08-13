@@ -1,121 +1,40 @@
 /**
- * LockManager — Interface and factory for durable locking.
+ * LockManager factory — memory backend plus backend selection.
  *
- * Supports:
- *  - Memory-lock (unit test only)
- *  - SQLite advisory lock (local mode)
- *  - PostgreSQL advisory lock (optional distributed backend)
- *
- * Each lock acquisition returns an opaque fencing token. Durable writers need
- * an explicit atomic fencing contract before that token rejects stale writes.
- * TTL, heartbeat, timeout, queue, and backend-health metrics are built in.
- *
- * Replaces the dispatcher's process-in Map+Promise-chain locks.
+ * The shared interface, base class, and typed errors live in the acyclic
+ * contract module lock-manager-contract.ts. SQLite and PostgreSQL backends
+ * import only the contract and never this factory module.
  *
  * @module foundation/concurrency/lock-manager
  */
+import {
+  LOCK_MANAGER_PROTOCOL,
+  LockAcquireAbortedError,
+  LockFencingError,
+  LockManager,
+  LockManagerDestroyedError,
+  LockQueueFullError,
+  LockReleasedError,
+  LockTimeoutError,
+  DeadlineScheduler,
+  IntrusiveWaitQueue,
+  normalizeLockKey,
+  positiveDuration,
+  positiveInteger,
+  nonNegativeDuration,
+  throwIfAcquireAborted
+} from "./lock-manager-contract.ts";
 
-let memoryFenceSequence: any = BigInt(Date.now()) * 1_000_000n;
-
-export const LOCK_MANAGER_PROTOCOL: any = "v0.0.1:concurrency:lock-manager-1.0.0";
-
-/**
- * @typedef {object} LockHandle
- * @property {string} lockKey
- * @property {string} fencingToken
- * @property {Date} acquiredAt
- * @property {Date} expiresAt
- * @property {Function} release - Release the lock
- * @property {Function} heartbeat - Extend the lock TTL
- * @property {boolean} released
- */
-
-/**
- * @typedef {object} LockManagerConfig
- * @property {string} backend - 'memory' | 'sqlite' | 'postgres'
- * @property {number} [defaultTtlMs=30000] - Default TTL in ms
- * @property {number} [maxWaitMs=60000] - Maximum wait time in ms
- * @property {number} [heartbeatIntervalMs=10000] - Heartbeat interval
- * @property {number} [maxQueueDepth=1000] - Maximum queue depth
- */
-
-/**
- * Abstract LockManager interface.
- * Concrete implementations: MemoryLockManager, SqliteLockManager, PostgresLockManager.
- */
-export class LockManager {
-  _metrics: any;
-  config: any;
-  /**
-   * @param {LockManagerConfig} config
-   */
-  constructor(config: Record<string, any> = {}) {
-    this.config = {
-      backend: config.backend || "memory",
-      defaultTtlMs: positiveDuration(config.defaultTtlMs, 30000, "defaultTtlMs"),
-      maxWaitMs: nonNegativeDuration(config.maxWaitMs, 60000, "maxWaitMs"),
-      heartbeatIntervalMs: positiveDuration(config.heartbeatIntervalMs, 10000, "heartbeatIntervalMs"),
-      maxQueueDepth: positiveInteger(config.maxQueueDepth, 1000, "maxQueueDepth"),
-    };
-    this._metrics = {
-      totalAcquired: 0,
-      totalReleased: 0,
-      totalTimedOut: 0,
-      totalExpired: 0,
-      totalBackendErrors: 0,
-      currentActive: 0,
-      currentWaiting: 0,
-    };
-  }
-
-  /**
-   * Acquire a lock.
-   * @param {string} key - Lock key
-   * @param {object} [options]
-   * @param {number} [options.ttlMs] - TTL override
-   * @param {number} [options.waitMs] - Wait override
-   * @param {AbortSignal} [options.signal] - Cancels an acquisition that has not completed
-   * @returns {Promise<LockHandle>}
-   */
-  async acquire(key?: any, options: Record<string, any> = {}) : Promise<any> {
-    throw new Error("LockManager.acquire() must be implemented by subclass");
-  }
-
-  /**
-   * Release a lock by its handle.
-   * @param {LockHandle} handle
-   * @returns {Promise<void>}
-   */
-  async release(handle?: any) : Promise<any> {
-    throw new Error("LockManager.release() must be implemented by subclass");
-  }
-
-  /**
-   * Check if a lock is held.
-   * @param {string} key
-   * @returns {Promise<boolean>}
-   */
-  async isLocked(key?: any) : Promise<any> {
-    throw new Error("LockManager.isLocked() must be implemented by subclass");
-  }
-
-  /**
-   * Get current metrics.
-   * @returns {object}
-   */
-  getMetrics() : any {
-    return { ...this._metrics };
-  }
-
-  /**
-   * Generate a fencing token.
-   * @returns {string}
-   */
-  static fencingToken() : any {
-    memoryFenceSequence += 1n;
-    return `fence_memory_${memoryFenceSequence}`;
-  }
-}
+export {
+  LOCK_MANAGER_PROTOCOL,
+  LockAcquireAbortedError,
+  LockFencingError,
+  LockManager,
+  LockManagerDestroyedError,
+  LockQueueFullError,
+  LockReleasedError,
+  LockTimeoutError
+} from "./lock-manager-contract.ts";
 
 /**
  * Memory-based LockManager — unit test use ONLY.
@@ -125,12 +44,14 @@ export class MemoryLockManager extends LockManager {
   _destroyed: any;
   _locks: any;
   _queues: any;
+  _waiterScheduler: any;
   constructor(config: Record<string, any> = {}) {
     super({ ...config, backend: "memory" });
     /** @type {Map<string, { handle: LockHandle, timer: NodeJS.Timeout }>} */
     this._locks = new Map<any, any>();
-    /** @type {Map<string, { items: Array<object>, head: number, activeCount: number }>} */
+    /** @type {Map<string, IntrusiveWaitQueue>} */
     this._queues = new Map<any, any>();
+    this._waiterScheduler = new DeadlineScheduler();
     this._destroyed = false;
   }
 
@@ -162,7 +83,7 @@ export class MemoryLockManager extends LockManager {
         const waiter: Record<string, any> = {
           resolve,
           reject,
-          timer: null,
+          deadlineEntry: null,
           active: true,
           ttlMs,
           signal: options.signal,
@@ -171,26 +92,23 @@ export class MemoryLockManager extends LockManager {
         waiter.onAbort = () : any => {
           if (!waiter.active) return;
           waiter.active = false;
-          queue.activeCount--;
+          queue.remove(waiter);
           this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
-          if (queue.activeCount === 0) this._queues.delete(lockKey);
-          clearTimeout(waiter.timer);
+          if (queue.size === 0) this._queues.delete(lockKey);
+          this._waiterScheduler.cancel(waiter.deadlineEntry);
           reject(new LockAcquireAbortedError(lockKey));
         };
-        const timer: any = setTimeout(() : any => {
+        waiter.deadlineEntry = this._waiterScheduler.schedule(Date.now() + waitMs, () : any => {
           if (!waiter.active) return;
           waiter.active = false;
-          queue.activeCount--;
+          queue.remove(waiter);
           this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
           this._metrics.totalTimedOut++;
-          if (queue.activeCount === 0) this._queues.delete(lockKey);
+          if (queue.size === 0) this._queues.delete(lockKey);
           waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
           reject(new LockTimeoutError(lockKey, waitMs));
-        }, waitMs);
-
-        waiter.timer = timer;
-        queue.items.push(waiter);
-        queue.activeCount++;
+        });
+        queue.push(waiter);
         waiter.signal?.addEventListener?.("abort", waiter.onAbort, { once: true });
         if (waiter.signal?.aborted) waiter.onAbort();
       });
@@ -231,6 +149,14 @@ export class MemoryLockManager extends LockManager {
     return this._locks.has(lockKey);
   }
 
+  getMetrics() : any {
+    return {
+      ...super.getMetrics(),
+      queueKeys: this._queues.size,
+      waiterTimers: this._waiterScheduler.activeTimerCount
+    };
+  }
+
   destroy() : any {
     if (this._destroyed) return;
     this._destroyed = true;
@@ -246,17 +172,17 @@ export class MemoryLockManager extends LockManager {
     this._metrics.currentActive = 0;
 
     for (const [key, queue] of this._queues) {
-      for (let index: any = queue.head; index < queue.items.length; index += 1) {
-        const waiter: any = queue.items[index];
-        if (!waiter?.active) continue;
+      while (queue.size > 0) {
+        const waiter: any = queue.shift();
         waiter.active = false;
-        clearTimeout(waiter.timer);
+        this._waiterScheduler.cancel(waiter.deadlineEntry);
         waiter.signal?.removeEventListener?.("abort", waiter.onAbort);
         waiter.reject(new LockManagerDestroyedError(this.config.backend));
       }
       this._queues.delete(key);
     }
     this._metrics.currentWaiting = 0;
+    this._waiterScheduler.close();
   }
 
   _createLockHandle(key?: any, ttlMs: any = this.config.defaultTtlMs) : any {
@@ -301,7 +227,7 @@ export class MemoryLockManager extends LockManager {
   _queueFor(key?: any) : any {
     let queue: any = this._queues.get(key);
     if (!queue) {
-      queue = { items: [], head: 0, activeCount: 0 };
+      queue = new IntrusiveWaitQueue();
       this._queues.set(key, queue);
     }
     return queue;
@@ -310,15 +236,14 @@ export class MemoryLockManager extends LockManager {
   _promoteNext(key?: any) : any {
     const queue: any = this._queues.get(key);
     if (!queue) return;
-    while (queue.head < queue.items.length) {
-      const next: any = queue.items[queue.head++];
-      if (!next.active) continue;
+    while (queue.size > 0) {
+      const next: any = queue.shift();
+      if (!next?.active) continue;
       next.active = false;
-      queue.activeCount--;
-      clearTimeout(next.timer);
+      this._waiterScheduler.cancel(next.deadlineEntry);
       next.signal?.removeEventListener?.("abort", next.onAbort);
       this._metrics.currentWaiting = Math.max(0, this._metrics.currentWaiting - 1);
-      if (queue.activeCount === 0) this._queues.delete(key);
+      if (queue.size === 0) this._queues.delete(key);
       next.resolve(this._createLockHandle(key, next.ttlMs));
       return;
     }
@@ -350,101 +275,6 @@ export class MemoryLockManager extends LockManager {
   }
 }
 
-function normalizeLockKey(key?: any) : any {
-  const normalized: any = String(key ?? "").trim();
-  if (!normalized) throw new TypeError("Lock key must be a non-empty string.");
-  return normalized;
-}
-
-function positiveDuration(value?: any, fallback?: any, label?: any) : any {
-  const normalized: any = value ?? fallback;
-  if (!Number.isFinite(normalized) || normalized <= 0) {
-    throw new TypeError(`${label} must be a positive finite number.`);
-  }
-  return normalized;
-}
-
-function nonNegativeDuration(value?: any, fallback?: any, label?: any) : any {
-  const normalized: any = value ?? fallback;
-  if (!Number.isFinite(normalized) || normalized < 0) {
-    throw new TypeError(`${label} must be a non-negative finite number.`);
-  }
-  return normalized;
-}
-
-function positiveInteger(value?: any, fallback?: any, label?: any) : any {
-  const normalized: any = value ?? fallback;
-  if (!Number.isSafeInteger(normalized) || normalized <= 0) {
-    throw new TypeError(`${label} must be a positive safe integer.`);
-  }
-  return normalized;
-}
-
-function throwIfAcquireAborted(signal?: any, key?: any) : any {
-  if (signal?.aborted) throw new LockAcquireAbortedError(key);
-}
-
-// --- Error types ---
-
-export class LockTimeoutError extends Error {
-  name: any;
-  waitMs: any;
-  constructor(key?: any, waitMs?: any) {
-    super(`Lock acquisition timed out after ${waitMs}ms.`);
-    this.name = "LockTimeoutError";
-    this.waitMs = waitMs;
-  }
-}
-
-export class LockAcquireAbortedError extends Error {
-  name: any;
-  constructor(key?: any) {
-    super("Lock acquisition was cancelled.");
-    this.name = "LockAcquireAbortedError";
-  }
-}
-
-export class LockQueueFullError extends Error {
-  maxDepth: any;
-  name: any;
-  constructor(key?: any, maxDepth?: any) {
-    super(`Lock queue is full (max ${maxDepth}).`);
-    this.name = "LockQueueFullError";
-    this.maxDepth = maxDepth;
-  }
-}
-
-export class LockFencingError extends Error {
-  name: any;
-  constructor(key?: any, token?: any) {
-    super("Lock fencing token mismatch.");
-    this.name = "LockFencingError";
-  }
-}
-
-export class LockReleasedError extends Error {
-  name: any;
-  constructor(key?: any) {
-    super("Lock handle has already been released.");
-    this.name = "LockReleasedError";
-  }
-}
-
-export class LockManagerDestroyedError extends Error {
-  backend: any;
-  name: any;
-  constructor(backend: any = "lock") {
-    super(`${backend} lock manager has been destroyed.`);
-    this.name = "LockManagerDestroyedError";
-    this.backend = backend;
-  }
-}
-
-/**
- * Create a LockManager from configuration.
- * @param {LockManagerConfig} config
- * @returns {LockManager}
- */
 export function createLockManager(config: Record<string, any> = {}) : any {
   switch (requiredBackend(config)) {
     case "memory":

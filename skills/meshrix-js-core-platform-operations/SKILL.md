@@ -25,6 +25,7 @@ Run `git status --short` and inspect the core source that owns the behavior. Avo
 
 Route specialized work to:
 
+- `$meshrix-js-instance-configuration` for local instance startup, runtime configuration, signed plugin enablement, service restart, health diagnosis, or agent connector setup.
 - `$meshrix-js-upstream-service-publishing` for developer-to-client upstream service publication.
 - `$meshrix-js-downstream-mcp-client-access` for local MCP installer, authorization, proxy access, refresh, or uninstall.
 - `$meshrix-js-ingestion-job-processing` for upload, queue, job, result, cancellation, or deletion recovery.

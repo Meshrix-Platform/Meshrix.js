@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:31c07b414e693a15
+ * Hash: sha256:07ebb979094716a3
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:31c07b414e693a15";
+export const GENERATED_OPERATIONS_HASH = "sha256:07ebb979094716a3";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -101,7 +101,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "readiness.baseline.status",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -229,7 +234,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.subject.resolve",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -380,7 +390,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.policy.evaluate",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -501,7 +516,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.governance.summary",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -624,7 +644,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.organization_governance.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -789,7 +814,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.organization_governance.import",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "aspectOptions": {
       "dispatch": {},
       "authorization": {},
@@ -1105,7 +1135,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.organization_governance.preview",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "aspectOptions": {
       "dispatch": {},
       "authorization": {},
@@ -1433,7 +1468,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.organization_governance.publish",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspectOptions": {
       "dispatch": {},
       "authorization": {},
@@ -1615,7 +1655,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "tag_management.tags.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -1752,7 +1797,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "tag_management.tags.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -1919,7 +1969,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "tag_management.tags.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -2062,7 +2117,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "tag_management.tags.archive",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -2205,7 +2265,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "tag_management.tags.restore",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -2386,7 +2451,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "tag_management.projections.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -2514,7 +2584,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "tag_management.projections.rebuild",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -2687,7 +2762,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "tag_management.audit.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -2808,7 +2888,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.roles.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -2936,7 +3021,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.roles.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -3057,7 +3147,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.departments.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -3185,7 +3280,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.departments.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -3306,7 +3406,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.teams.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -3434,7 +3539,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.teams.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -3556,7 +3666,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.users.policies.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -3685,7 +3800,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.users.policy.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -3806,7 +3926,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.agent_groups.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -3934,7 +4059,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.agent_groups.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -4056,7 +4186,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.agents.bindings.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -4185,7 +4320,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.agents.binding.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -4360,7 +4500,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.approvals.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -4488,7 +4633,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.approvals.upsert",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -4630,7 +4780,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "authorization.approvals.revoke",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -4786,7 +4941,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.receipts.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -4942,7 +5102,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.loan_records.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -5098,7 +5263,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "authorization.denied_requests.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -5250,7 +5420,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.info",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -5400,7 +5575,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.file.upload",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -5602,7 +5782,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.file.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -5804,7 +5989,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.file.download",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -6006,7 +6196,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.file.read",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -6157,7 +6352,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.file.write",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -6308,7 +6508,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.file.patch",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -6436,7 +6641,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.submit",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -6589,7 +6799,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.contribution.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -6742,7 +6957,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.contribution.leaderboard",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -6895,7 +7115,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.contribution.stats",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -7016,7 +7241,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.contribution.report",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -7170,7 +7400,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.contribution.assets.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -7313,7 +7548,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.permission.request",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -7456,7 +7696,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.permission.grant",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -7598,7 +7843,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.scan",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -7740,7 +7990,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.review",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -7882,7 +8137,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.preview",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8024,7 +8284,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.publish",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8166,7 +8431,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.adopt",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8308,7 +8578,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.reject",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8450,7 +8725,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.request_changes",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8592,7 +8872,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.contribution.revoke",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8749,7 +9034,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.proposal.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -8906,7 +9196,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.proposal.apply",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -9035,7 +9330,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.policy.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -9157,7 +9457,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.asset.permission.check",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -9386,7 +9691,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.target.connect",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -9656,7 +9966,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.asset.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -9956,7 +10271,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.asset.read",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -10184,7 +10504,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.submit",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -10412,7 +10737,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.mutate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -10638,7 +10968,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.asset.sync.plan",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -10867,7 +11202,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.sync.apply",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -11095,7 +11435,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.import",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -11323,7 +11668,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.export",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -11552,7 +11902,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.review.comment",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -11781,7 +12136,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.review.requestChanges",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -12010,7 +12370,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.review.approve",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -12238,7 +12603,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.checkpoint",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -12463,7 +12833,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.asset.lineage",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -12689,7 +13064,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.asset.receipt.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -12917,7 +13297,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.asset.backfill",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -13073,7 +13458,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.audit.query",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -13229,7 +13619,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.operation.history",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -13409,7 +13804,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.checkpoint.tree.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -13546,7 +13946,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.checkpoint.node.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -13683,7 +14088,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.checkpoint.diff",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -13838,7 +14248,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.checkpoint.restore.preview",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -13992,7 +14407,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.checkpoint.restore",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -14124,7 +14544,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "workspace.checkpoint.scope.query",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -14291,7 +14716,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.operation.revert.scope",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -14458,7 +14888,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace.operation.revert.apply",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -14524,7 +14959,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "external_services.publications.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -14721,7 +15161,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "external_services.publications.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -14914,7 +15359,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:write"
     ],
     "readOnly": false,
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "external_services.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -15117,7 +15567,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:maintain"
     ],
     "readOnly": false,
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "external_services.replace",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -15328,7 +15783,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:maintain"
     ],
     "readOnly": false,
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "external_services.disable",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -15539,7 +15999,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:maintain"
     ],
     "readOnly": false,
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "external_services.remove",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -15750,7 +16215,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:maintain"
     ],
     "readOnly": false,
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "external_services.republish",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -15962,7 +16432,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "external_services.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -16158,7 +16633,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "external_services.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -16362,7 +16842,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "external_services.health",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -16555,7 +17040,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "gateway.policy.preview",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -16739,7 +17229,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:write"
     ],
     "readOnly": false,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "gateway.forward",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 180000
     },
@@ -16953,7 +17448,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:write"
     ],
     "readOnly": false,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "gateway.payload.transit",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "execution": {
       "timeoutMs": 300000
     },
@@ -17162,7 +17662,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "gateway.artifacts.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -17376,7 +17881,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "gateway.audit",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -17562,7 +18072,12 @@ export const SERVER_API_OPERATIONS: any = [
       "gateway:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "gateway.metrics",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "execution": {
       "timeoutMs": 30000
     },
@@ -17814,7 +18329,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "security_alerts.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "security-alerts",
       "observability",
@@ -18038,7 +18558,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "security_alerts.ack",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspectOptions": {
       "dispatch": {},
       "authorization": {},
@@ -18118,7 +18643,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "security_alerts.export",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "security-alerts",
       "observability",
@@ -18320,7 +18850,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "security_alerts.prune",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspectOptions": {
       "dispatch": {},
       "authorization": {},
@@ -18399,7 +18934,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "health"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.health",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -18504,7 +19044,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "bootstrap"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.bootstrap",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -18611,7 +19156,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "static-discovery"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.interfaces",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -18685,7 +19235,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "appearance_presets.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "appearance-presets",
       "frontend",
@@ -18862,7 +19417,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "appearance_presets.import",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -18924,7 +19484,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "production.health",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "observability",
       "production-readiness",
@@ -19034,7 +19599,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "architecture.live_map",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "architecture-live-map",
       "production-readiness",
@@ -19143,7 +19713,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "sample_capability_pack.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "sample-capability-pack",
       "capability-scenarios",
@@ -19253,7 +19828,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "sample_capability_pack.get",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "sample-capability-pack",
       "capability-scenarios",
@@ -19409,7 +19989,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "sample_capability_pack.materialize",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -19483,7 +20068,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "executive_report.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "executive-report",
       "asset-value",
@@ -19642,7 +20232,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "executive_report.preview",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -19756,7 +20351,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "executive_report.generate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -19831,7 +20431,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_semantics.static_families.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "operation-semantics",
       "static-semantic-family",
@@ -19949,7 +20554,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_semantics.static_families.get",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "operation-semantics",
       "static-semantic-family",
@@ -20061,7 +20671,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "workspace_governance.describe",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "workspace-governance",
       "organization-policy",
@@ -20221,7 +20836,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace_governance.policy.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -20342,7 +20962,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace_governance.evaluate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -20463,7 +21088,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "workspace_governance.share_grant",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -20656,7 +21286,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "events.subscribe",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -20783,7 +21418,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_sync.config.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -20870,8 +21510,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "agent_sync.config",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "agent_sync.config",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -21022,7 +21666,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_sync.publish",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -21222,7 +21871,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_sync.subscribe",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -21355,7 +22009,12 @@ export const SERVER_API_OPERATIONS: any = [
       "effectKind": "read",
       "fieldMap": {}
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.console_state",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -21422,7 +22081,12 @@ export const SERVER_API_OPERATIONS: any = [
       "maintenance:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "maintenance_agent.config.get",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "maintenance-agent",
       "runbook",
@@ -21547,7 +22211,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencyGroup": "maintenance_agent.config",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "maintenance_agent.config",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "maintenance-agent",
       "runbook",
@@ -21557,7 +22226,6 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
-    "concurrencySafe": false,
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -21737,7 +22405,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "maintenance_agent.chat",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -21868,7 +22541,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "maintenance_agent.runs.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -21968,7 +22646,12 @@ export const SERVER_API_OPERATIONS: any = [
       "maintenance:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "maintenance_agent.runs.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "maintenance-agent",
       "runbook",
@@ -22104,7 +22787,12 @@ export const SERVER_API_OPERATIONS: any = [
       "maintenance:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "maintenance_agent.runs.get",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "maintenance-agent",
       "runbook",
@@ -22305,7 +22993,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "maintenance_agent.runs.approve",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -22464,7 +23157,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "maintenance_agent.runs.cancel",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -22578,7 +23276,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "session-discovery"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.session",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -22724,7 +23427,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "bootstrap-auth"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.login",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "dispatch",
       "authorization",
@@ -22812,7 +23520,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "session-discovery"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.logout",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -22930,7 +23643,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.users",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23043,7 +23761,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.users.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23179,7 +23902,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.users.update",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23319,7 +24047,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.roles.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23436,7 +24169,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.oidc.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23549,7 +24287,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.oidc.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23750,7 +24493,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.audit",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -23975,7 +24723,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.audit.export",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24106,7 +24859,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.audit.retention.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24220,7 +24978,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.audit.retention.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24340,7 +25103,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.audit.prune",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24518,7 +25286,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "observability.trace.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24641,7 +25414,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "auth.sessions",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24753,7 +25531,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.sessions.rotate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -24888,7 +25671,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "auth.sessions.revoke",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -25090,7 +25878,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "process_identity.bootstrap_claim",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -25234,7 +26027,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "process_identity.package.rotate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -25386,7 +26184,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "process_identity.package.revoke",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -25474,7 +26277,12 @@ export const SERVER_API_OPERATIONS: any = [
       "profile": "excluded",
       "exclusionReason": "client-discovery"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "discovery.check_in",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -25592,7 +26400,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "discovery.clients",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -25721,7 +26534,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "discovery.clients.alignment_command",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -25843,7 +26661,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "discovery.get_config",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -25928,8 +26751,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "discovery.config",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "discovery.config",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -26071,7 +26898,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "runtime.info",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -26188,8 +27020,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "runtime.assembly",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "runtime.assembly",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -26321,7 +27157,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "runtime.path_browse",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -26438,7 +27279,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "runtime.mounts",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -26548,7 +27394,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "runtime.external_gateway",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -26660,7 +27511,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "runtime.external_gateway.validate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -26753,8 +27609,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "runtime.external_gateway",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "runtime.external_gateway",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -26873,8 +27733,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "runtime.external_gateway",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "runtime.external_gateway",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -26992,8 +27856,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "runtime.mounts",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "runtime.mounts",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -27111,8 +27979,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "runtime.mounts",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "runtime.mounts",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -27255,7 +28127,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "settings.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -27340,8 +28217,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "settings",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "settings",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -27495,7 +28376,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "settings.model_probe",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -27796,7 +28682,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_gateway.call",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "dispatch",
       "authorization",
@@ -27861,7 +28752,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "model_routing.health",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "model-routing",
       "cost-ledger",
@@ -27984,7 +28880,12 @@ export const SERVER_API_OPERATIONS: any = [
       "properties": {}
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "strategy.describe",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "strategy-management",
       "workflow-policy",
@@ -28164,7 +29065,12 @@ export const SERVER_API_OPERATIONS: any = [
       }
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "strategy.workflow_policy.evaluate",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -28308,7 +29214,12 @@ export const SERVER_API_OPERATIONS: any = [
       }
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "strategy.agent_policy.evaluate",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -28534,7 +29445,12 @@ export const SERVER_API_OPERATIONS: any = [
       }
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "strategy.route_policy.evaluate",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -28805,7 +29721,12 @@ export const SERVER_API_OPERATIONS: any = [
       }
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "strategy.queue_policy.evaluate",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -28951,7 +29872,12 @@ export const SERVER_API_OPERATIONS: any = [
       }
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "strategy.tool_policy.preview",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -29058,7 +29984,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "agents.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "agent-management",
       "model-library",
@@ -29284,7 +30215,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencyGroup": "agent_management.model_library",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "agent_management.model_library",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "agent-management",
       "model-library",
@@ -29294,7 +30230,6 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
-    "concurrencySafe": false,
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29575,7 +30510,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencyGroup": "agent_management.model_library",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "agent_management.model_library",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "agent-management",
       "model-library",
@@ -29585,7 +30525,6 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
-    "concurrencySafe": false,
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29766,7 +30705,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencyGroup": "agent_management.model_library",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "agent_management.model_library",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "agent-management",
       "model-library",
@@ -29776,7 +30720,6 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
-    "concurrencySafe": false,
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29882,7 +30825,12 @@ export const SERVER_API_OPERATIONS: any = [
       "properties": {}
     },
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_permission.api_keys.issuer_scopes",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -30011,7 +30959,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_permission.api_keys.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -30494,7 +31447,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.api_keys.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -30627,7 +31585,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.api_keys.rotate",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -30766,7 +31729,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.api_keys.revoke",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -30872,7 +31840,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.catalog",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -30988,7 +31961,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.catalog_item",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -31106,7 +32084,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.toolsets",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -31220,7 +32203,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.toolsets_resolve",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -31332,7 +32320,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.profiles",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -31438,7 +32431,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.policy_evaluate",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -31583,7 +32581,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.policy_preview",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -31650,7 +32653,12 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "tools execute --tool-id TOOL_ID --body input.json"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_permission.execute",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "externalAuth": true,
     "externalAuthVerifier": {
       "method": "verifyToolSkillExternalAuth"
@@ -31779,7 +32787,12 @@ export const SERVER_API_OPERATIONS: any = [
       "syntheticPath": "/api/operation-permission/v1/batch",
       "body": "params"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_permission.batch",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "externalAuth": true,
     "externalAuthVerifier": {
       "method": "verifyToolSkillExternalAuth"
@@ -31935,7 +32948,12 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "tools dry-run --tool-id TOOL_ID --body input.json"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "operation_permission.dry_run",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "externalAuth": true,
     "externalAuthVerifier": {
       "method": "verifyToolSkillExternalAuth"
@@ -32107,7 +33125,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.grants",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -32469,7 +33492,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.create_grant",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -32830,7 +33858,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.update_grant",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -32949,7 +33982,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.rotate_grant",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -33111,7 +34149,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.revoke_grant",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -33276,7 +34319,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.audit",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -33405,7 +34453,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.audit_item",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -33660,7 +34713,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.metrics_summary",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -33946,7 +35004,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.metrics_export",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -34171,7 +35234,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.metrics_health",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -34381,7 +35449,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.metrics_prometheus",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -34510,7 +35583,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.metrics_storage",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -34624,7 +35702,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.metrics_prune",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -34755,7 +35838,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.events",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -34903,7 +35991,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "operation_permission.pending_operations.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -35069,7 +36162,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "operation_permission.pending_operations.resolve",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -35172,7 +36270,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "storage.summary",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -35282,7 +36385,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "storage.doctor",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -35410,7 +36518,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "storage.reconcile",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -35497,7 +36610,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "storage.backups.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "aspects": [
       "backup-restore",
       "storage",
@@ -35671,7 +36789,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "storage.backups.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -35811,7 +36934,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "storage.backups.retention",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspectOptions": {
       "dispatch": {},
       "authorization": {},
@@ -35859,7 +36987,12 @@ export const SERVER_API_OPERATIONS: any = [
       "console:read"
     ],
     "readOnly": true,
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "storage.backups.restore_preview",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "aspects": [
       "backup-restore",
       "storage",
@@ -36053,7 +37186,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "storage.backups.restore",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -36151,7 +37289,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.background_processes",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -36262,7 +37405,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.checkpoint_trees.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -36389,7 +37537,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.checkpoint_trees.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -36506,7 +37659,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "system.monitor_alerts.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -36619,7 +37777,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "system.monitor_alerts.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -36754,7 +37917,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "system.monitor_alerts.ack",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -36878,7 +38046,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "system.background_supervisor.recover",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -37031,7 +38204,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -37180,7 +38358,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_workspaces.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -37339,7 +38522,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_workspaces.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -37494,7 +38682,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.delete",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -37681,7 +38874,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.folder.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -37847,7 +39045,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_sessions.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -38020,7 +39223,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_sessions.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -38171,7 +39379,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_sessions.context.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -38318,7 +39531,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_sessions.events.append",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -38470,7 +39688,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_sessions.fork",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -38586,7 +39809,12 @@ export const SERVER_API_OPERATIONS: any = [
       "workspace:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "agent_sessions.compare",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -38768,7 +39996,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_sessions.merge_proposal",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -38920,7 +40153,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_sessions.archive",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -39084,7 +40322,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.submissions.resolve",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -39252,7 +40495,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.issues.resolve",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -39440,7 +40688,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_workspaces.locks.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -39591,7 +40844,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.locks.write",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -39784,7 +41042,12 @@ export const SERVER_API_OPERATIONS: any = [
       "storage:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "agent_workspaces.files.list",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -40035,7 +41298,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.file.upload",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -40170,7 +41438,12 @@ export const SERVER_API_OPERATIONS: any = [
       "storage:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "agent_workspaces.file.stat",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -40381,7 +41654,12 @@ export const SERVER_API_OPERATIONS: any = [
       "storage:read"
     ],
     "readOnly": true,
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "parallel",
+      "key": "agent_workspaces.file.download",
+      "maxParallel": 16,
+      "cost": 2
+    },
     "binary": true,
     "safety": {
       "risk": "read_only",
@@ -40625,7 +41903,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.file.write",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -40801,7 +42084,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.file.delete",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -41006,7 +42294,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.file.move",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -41138,7 +42431,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_workspaces.context.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -41387,7 +42685,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_workspaces.context_bundle.export",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -41562,7 +42865,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.context_bundle.restore",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -41712,7 +43020,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "agent_workspaces.chain.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -41842,7 +43155,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.parent.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -41992,7 +43310,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.profile.hotswap",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42128,7 +43451,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.sources.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42273,7 +43601,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.share",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42411,7 +43744,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "agent_workspaces.unshare",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42526,7 +43864,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "context.profiles.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42638,7 +43981,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "context.profiles.set",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42756,7 +44104,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "context.preview",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -42900,7 +44253,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "context.compaction.preview",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "audit": {
       "enabled": true,
       "recordInput": false,
@@ -43014,8 +44372,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "context.compaction",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "context.compaction",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -43158,7 +44520,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "context.compaction.records",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -43298,7 +44665,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "context.session_memory.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -43416,8 +44788,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencySafe": false,
-    "concurrencyGroup": "agent.memory",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "agent.memory",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -43559,7 +44935,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "context.build_records",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -43675,7 +45056,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "context.evaluation.runs.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -43832,7 +45218,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "uploads.create_session",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -43961,7 +45352,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "uploads.get_session",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -44133,7 +45529,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "uploads.upload_chunk",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -44354,7 +45755,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.create",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -44473,7 +45879,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencyGroup": "workspace-materialization",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "workspace-materialization",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -44508,7 +45919,6 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -44604,7 +46014,12 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
-    "concurrencyGroup": "workspace-materialization",
+    "concurrency": {
+      "workloadClass": "exclusive",
+      "key": "workspace-materialization",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -44631,7 +46046,6 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -44774,7 +46188,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.list",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -44908,7 +46327,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.failed_review",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -45043,7 +46467,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.work_queue.inspect",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -45176,7 +46605,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.work_queue.pause",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -45299,7 +46733,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.work_queue.resume",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -45422,7 +46861,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.work_queue.drain",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "audit": {
       "enabled": true,
       "recordInput": true,
@@ -45529,7 +46973,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.work_queue.recover_failed",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -45649,7 +47098,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.work_queue.rebuild",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -45783,7 +47237,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -45917,7 +47376,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.reparse",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -46056,7 +47520,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.cancel",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -46195,7 +47664,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "two-stage",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": false,
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "jobs.delete",
+      "maxParallel": 1,
+      "cost": 2
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -46334,7 +47808,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.result",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -46467,7 +47946,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.normalized_documents",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -46611,7 +48095,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "jobs.normalized_document.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -46747,7 +48236,12 @@ export const SERVER_API_OPERATIONS: any = [
       "lifecycle": "terminal-receipt",
       "substrate": "operation-proof-substrate"
     },
-    "concurrencySafe": true,
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "raw_objects.get",
+      "maxParallel": 64,
+      "cost": 1
+    },
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,

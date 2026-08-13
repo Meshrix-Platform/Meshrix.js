@@ -49,6 +49,7 @@ export function createQueuePushDispatcher({
   });
   const creditLimit: any = creditLimitConfig.limit;
   const terminalStates: any = new Set<any>(["completed", "failed", "cancelled", "expired"]);
+  let reserved: any = 0;
 
   async function notifyTerminal(workItem?: any, source?: any) : Promise<any> {
     if (typeof onTerminal !== "function" || !terminalStates.has(workItem?.state)) return;
@@ -60,11 +61,12 @@ export function createQueuePushDispatcher({
       queueDefinitionId: dispatcherQueueDefinitionId,
       workerId: dispatcherWorkerId,
       inFlight: inFlight.size,
+      reserved,
       creditLimit,
       requestedCreditLimit: creditLimitConfig.normalizedRequested,
       hardCreditLimit: creditLimitConfig.hardLimit,
       creditLimitClamped: creditLimitConfig.clamped,
-      availableCredit: Math.max(0, creditLimit - inFlight.size)
+      availableCredit: Math.max(0, creditLimit - reserved - inFlight.size)
     };
   }
 
@@ -98,19 +100,20 @@ export function createQueuePushDispatcher({
         dispatched: 0,
         claimed: [],
         inFlight: inFlight.size,
+        reserved,
         cancelled: true,
         reason: "dispatch_signal_aborted"
       };
     }
-    const currentStatus: any = status();
     const requestedBatch: any = Math.max(1, asInt(input.batchSize ?? input.batch ?? 1, 1));
-    const batchSize: any = Math.min(requestedBatch, currentStatus.availableCredit);
+    const batchSize: any = Math.min(requestedBatch, Math.max(0, creditLimit - reserved - inFlight.size));
     if (batchSize <= 0) {
       const peer: any = await handoffToPeer(input);
       return {
         dispatched: 0,
         claimed: [],
         inFlight: inFlight.size,
+        reserved,
         backpressure: {
           localSaturated: true,
           peer
@@ -118,14 +121,25 @@ export function createQueuePushDispatcher({
       };
     }
 
-    const claim: any = await store.claim({
-      ...input,
-      queueDefinitionId: input.queueDefinitionId || dispatcherQueueDefinitionId,
-      scope: input.scope || scope,
-      schedulingScope: input.schedulingScope || {},
-      workerId: input.workerId || dispatcherWorkerId,
-      batchSize
-    });
+    // Reserve credit synchronously before the first await so that
+    // reserved + inFlight never exceeds the credit limit.
+    reserved += batchSize;
+    let claim: any;
+    try {
+      claim = await store.claim({
+        ...input,
+        queueDefinitionId: input.queueDefinitionId || dispatcherQueueDefinitionId,
+        scope: input.scope || scope,
+        schedulingScope: input.schedulingScope || {},
+        workerId: input.workerId || dispatcherWorkerId,
+        batchSize
+      });
+    } catch (error: any) {
+      reserved = Math.max(0, reserved - batchSize);
+      throw error;
+    }
+    // Convert only returned leases to in-flight and release the remainder.
+    reserved = Math.max(0, reserved - batchSize);
     for (const workItem of [...(claim.failed || []), ...(claim.expired || [])]) {
       await notifyTerminal(workItem, "claim");
     }
@@ -181,7 +195,8 @@ export function createQueuePushDispatcher({
       failed: claim.failed || [],
       control: claim.control || null,
       started,
-      inFlight: inFlight.size
+      inFlight: inFlight.size,
+      reserved
     };
   }
 
