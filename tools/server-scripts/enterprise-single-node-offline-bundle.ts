@@ -2927,6 +2927,15 @@ async function buildFixture(root?: any) : Promise<any> {
   };
 }
 
+export async function createEnterpriseOfflineBundleFixture(
+  ociLayoutPath?: any,
+) : Promise<any> {
+  const root: any = typeof ociLayoutPath === "string" && ociLayoutPath.trim() !== ""
+    ? ociLayoutPath
+    : await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-offline-bundle-fixture-"));
+  return buildFixture(root);
+}
+
 export async function runEnterpriseOfflineBundleFixture({
   sourceCandidate,
   releaseImageAuthority,

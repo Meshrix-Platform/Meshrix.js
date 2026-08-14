@@ -169,9 +169,22 @@ commercial or governance risk:
 
 ## Local Startup
 
+One-click start, stop, and restart:
+
+| Command | Mode |
+| --- | --- |
+| `npm run start:dev` / `npm run stop:dev` / `npm run restart:dev` | Source development server |
+| `npm run start:server` / `npm run stop:server` / `npm run restart:server` | Source non-development server |
+| `npm run start:console` / `npm run stop:console` / `npm run restart:console` | Source Server + Web Console |
+| `npm run start:compose` / `npm run stop:compose` / `npm run restart:compose` | Source-checkout container, API-only |
+| `npm run start:compose:ui` / `npm run stop:compose:ui` / `npm run restart:compose:ui` | Source-checkout container, Server + Web Console |
+| `npm run start:offline` / `npm run stop:offline` / `npm run restart:offline` | Offline Linux VM bundle, Server + Web Console |
+
+These commands reuse a healthy instance of the same mode, refuse an occupied default port or a different stack on the `meshrix-server` container name, and do not wipe volumes on stop. Restart of the same mode stops then starts that stack; a different running mode fails closed. A published, offline, or `--with-ui` instance has one public origin: the Web Console at `/` and the Server API at `/api/`. External services and agents connect to that same origin; source development may add a Vite console port, and that port is not the published integration address. The developer handbook owns that address contract; the user handbook owns how operators and external systems use it. `npm run pack:offline` writes the signed Server + Web Console dual-arch bundle to `build/offline-delivery-bundle` and does not start, stop, or clean up a running instance. `node tools/server-scripts/offline-delivery-closure.ts` remains the offline acceptance oracle and is not a start or pack command.
+
 ```bash
 npm install
-npm run dev
+npm run start:dev
 ```
 
 Default local server URL:
@@ -223,14 +236,21 @@ IPC and do not publish it as verification evidence.
 ## Container Startup
 
 The source checkout Compose file builds the API-only `runtime` target for local
-deployment verification:
+deployment verification. Prefer the one-click commands:
+
+```bash
+npm run start:compose
+npm run stop:compose
+npm run restart:compose
+```
 
 ```bash
 docker compose up -d
 ```
 
 For a local deployment that also serves the Web Console, select the UI image
-target explicitly:
+target explicitly, or use `npm run start:compose:ui` / `npm run stop:compose:ui` /
+`npm run restart:compose:ui`:
 
 ```bash
 MESHRIX_BUILD_TARGET=runtime-ui MESHRIX_SERVER_WITH_UI=1 docker compose up -d --build
@@ -364,9 +384,32 @@ commit. An operator-facing governed command and external KMS/HSM custody remain
 separate release work.
 
 Offline activation itself has no registry dependency after the exact image is
-loaded and addressable by digest. The repository does not currently produce a
-signed multi-architecture OCI archive, so transfer to a disconnected new host
-is not yet a closed release artifact path.
+loaded and addressable by digest. Candidate-bound Linux amd64 and arm64 OCI
+layouts, inventory, SBOM, provenance, signatures, and activation instructions
+are assembled by composing
+`tools/server-scripts/enterprise-single-node-offline-bundle.ts`. Prove exact
+byte transfer and the disconnected lifecycle contract with:
+
+```bash
+node tools/server-scripts/offline-delivery-closure.ts
+```
+
+The closure writes `build/reports/offline-delivery-closure.json`. Operator
+steps are in `docker/offline-delivery-instructions.md`. The offline images are
+Server + Web Console (`runtime-ui`); API-only `runtime` images do not satisfy
+the bundle. Import, start, Console-root load, the first governed
+`system.health` call, stop, and cleanup must run on a Linux operating system
+inside a virtual machine without network access or rebuild.
+Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when
+that Linux VM is reachable. When a Linux VM target or a dual-architecture
+builder is unavailable, the oracle fails closed with `blocked_by_environment`
+and a finite reason. Contract-fixture bytes do not satisfy acceptance and do
+not create a native Linux, Ubuntu, or Debian support, capacity, or publication
+claim. To write the signed Server + Web Console dual-arch bundle without
+starting or stopping an instance, run `npm run pack:offline`. To import and
+start that bundle without the closure's stop and cleanup steps, run
+`npm run start:offline`. Stop it with `npm run stop:offline`. Restart the same
+offline stack with `npm run restart:offline`.
 
 Before an upgrade, invoke the governed `storage.backups.create` operation and
 retain its successful receipt; backups are written to the independent

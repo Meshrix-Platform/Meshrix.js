@@ -10,8 +10,12 @@ implementation, verification, release, and support result.
 - A passing focused check is verification for its exact scope, not a release.
 - A Functional Release Gate receipt applies only to its immutable candidate.
 - Functional candidate acceptance, including Linux amd64 and arm64 offline
-  artifacts, does not automatically establish Linux real-machine, cloud,
-  macOS, Windows, connector, cross-host, or recovery-environment support.
+  artifacts delivered onto a Linux virtual machine reachable from a macOS
+  operator host, does not automatically establish Linux real-machine, Ubuntu,
+  Debian, cloud, macOS, Windows, connector, cross-host, or recovery-environment
+  support. A Linux OS inside the VM is enough to close offline delivery and the
+  current plan receipt. Ubuntu is preferred; Debian is accepted. This is not a
+  native Linux, Ubuntu, or Debian support claim.
 - A source tag, npm package, container manifest, GitHub Release, and hosted
   deployment are separate release or operation facts.
 - Environment support requires the same accepted candidate to pass the named
@@ -27,7 +31,7 @@ implementation, verification, release, and support result.
 | Enterprise single-node profile | `enterprise-single-node` private-deployment release profile | Pre-release target; release publication and environment support are currently unclaimed. |
 | Node.js runtime | Version range declared by `package.json` | Implemented target; no operating-system support claim is asserted here. |
 | Local source startup | Repository npm scripts and local server entry point | Development path; not a release or production-support claim. |
-| Server and Web Console container | Linux amd64 and arm64 OCI artifacts | Assembly and functional-verification target; native environment support remains unclaimed until its exact workflow passes. |
+| Server and Web Console container | Linux amd64 and arm64 OCI artifacts on a Linux VM | Assembly and functional-verification target; Ubuntu preferred, Debian accepted; native Linux or distribution support remains unclaimed until its exact workflow passes. |
 | Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Target contract only. Current verified Console code still executes as trusted same-origin code; third-party browser isolation is unclaimed until migration and browser escape verification pass. |
 | npm release set | Manifests named by the release definition | Publication target only; package publication must be proved independently for the immutable accepted candidate. |
 | MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact requires its own publication and environment receipt. |

@@ -32,7 +32,10 @@ The [Runbook release contract](RUNBOOK.md#release-definition-and-publication)
 separates the mandatory Functional Release Gate from optional Real-Machine
 Verification Workflows and their Environment Support Claims. Functional
 acceptance is a prerequisite for every real-machine workflow. A real-machine
-receipt never blocks, promotes, or changes functional acceptance.
+receipt never blocks, promotes, or changes functional acceptance. Offline
+delivery and the current plan receipt may close on Linux inside a virtual
+machine; Ubuntu is preferred and Debian is accepted. That path is not a native
+Linux, Ubuntu, or Debian support claim.
 
 Governance evidence and ordinary telemetry have different value. Protected
 access and side effects require the minimum bounded lifecycle proof. Routine
