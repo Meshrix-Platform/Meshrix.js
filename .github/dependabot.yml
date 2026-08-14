@@ -1,0 +1,40 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      safe-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      review-required-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - major
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      safe-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      review-required-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - major
