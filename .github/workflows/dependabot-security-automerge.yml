@@ -1,0 +1,124 @@
+name: Dependabot security auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    name: Classify security update
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.ref == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Remove stale auto-merge eligibility
+        env:
+          AUTOMERGE_LABEL: dependabot-automerge
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if gh pr view "$PR_URL" --json labels --jq '.labels[].name' | grep -Fxq "$AUTOMERGE_LABEL"; then
+            gh pr edit "$PR_URL" --remove-label "$AUTOMERGE_LABEL"
+          fi
+
+      - name: Confirm routine version updates remain disabled
+        id: policy
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          response=$(gh api --include \
+            "repos/${GITHUB_REPOSITORY}/contents/.github/dependabot.yml?ref=${BASE_SHA}" \
+            2>/dev/null)
+          request_status=$?
+          set -e
+          http_status=$(printf '%s\n' "$response" | awk 'NR == 1 { print $2 }')
+
+          case "$http_status" in
+            200)
+              echo "routine-updates-disabled=false" >> "$GITHUB_OUTPUT"
+              ;;
+            404)
+              echo "routine-updates-disabled=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unable to determine the Dependabot version-update policy (HTTP ${http_status:-unknown}, CLI ${request_status})."
+              exit 1
+              ;;
+          esac
+
+      - name: Read verified Dependabot metadata
+        if: steps.policy.outputs.routine-updates-disabled == 'true'
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
+
+      - name: Mark patch and minor updates for auto-merge
+        if: >-
+          steps.policy.outputs.routine-updates-disabled == 'true' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor')
+        env:
+          AUTOMERGE_LABEL: dependabot-automerge
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr edit "$PR_URL" --add-label "$AUTOMERGE_LABEL"
+
+  merge:
+    name: Merge eligible security update
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the exact CI-verified Dependabot revision
+        env:
+          AUTOMERGE_LABEL: dependabot-automerge
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          pr_number=$(jq -r \
+            '.workflow_run.pull_requests | if length == 1 then .[0].number else empty end' \
+            "$GITHUB_EVENT_PATH")
+          if [ -z "$pr_number" ]; then
+            exit 0
+          fi
+
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}")
+          author=$(printf '%s' "$pr" | jq -r '.user.login')
+          base=$(printf '%s' "$pr" | jq -r '.base.ref')
+          head_sha=$(printf '%s' "$pr" | jq -r '.head.sha')
+          state=$(printf '%s' "$pr" | jq -r '.state')
+          eligible=$(printf '%s' "$pr" | jq -r \
+            --arg label "$AUTOMERGE_LABEL" \
+            '[.labels[].name] | index($label) != null')
+
+          if [ "$author" != 'dependabot[bot]' ] || \
+             [ "$base" != 'nightly' ] || \
+             [ "$state" != 'open' ] || \
+             [ "$eligible" != 'true' ] || \
+             [ "$head_sha" != "$VERIFIED_HEAD_SHA" ]; then
+            exit 0
+          fi
+
+          gh pr merge "https://github.com/${GITHUB_REPOSITORY}/pull/${pr_number}" \
+            --squash \
+            --delete-branch
