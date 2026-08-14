@@ -88,6 +88,9 @@ const SCRIPT_CLASSIFICATION_PATTERNS: readonly any[] = Object.freeze([
   { prefix: "docs:",                 category: "maintenance",   subsystem: "docs",      owner: "platform",  tier: "hygiene",      sideEffects: "none" },
   { prefix: "vitest",                category: "test",          subsystem: "tests",     owner: "platform",  tier: "unit",         sideEffects: "none" },
   { prefix: "setup",                 category: "maintenance",   subsystem: "runtime",   owner: "platform",  tier: "integration",  sideEffects: "runtime-data" },
+  { prefix: "start:",                category: "startup",       subsystem: "server",    owner: "platform",  tier: "integration",  sideEffects: "runtime-data" },
+  { prefix: "stop:",                 category: "startup",       subsystem: "server",    owner: "platform",  tier: "integration",  sideEffects: "runtime-data" },
+  { prefix: "restart:",              category: "startup",       subsystem: "server",    owner: "platform",  tier: "integration",  sideEffects: "runtime-data" },
   { prefix: "dev",                   category: "startup",       subsystem: "tools",     owner: "platform",  tier: "integration",  sideEffects: "runtime-data" },
   { prefix: "build",                 category: "packaging",     subsystem: "tools",     owner: "platform",  tier: "release",      sideEffects: "build-output" },
 ]);

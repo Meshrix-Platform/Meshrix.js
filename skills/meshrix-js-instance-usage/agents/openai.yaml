@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Instance Usage"
+  short_description: "Use one public origin for console, API, and external bridges"
+  default_prompt: "Use $meshrix-js-instance-usage to operate this instance and connect external services or agents through its single public origin."

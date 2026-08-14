@@ -1,9 +1,14 @@
 ---
 name: meshrix-js-release-engineering-workflow
-description: Plan, implement, and verify substantial Meshrix.js delivery against the private repository release contract.
+description: Plan, implement, and verify substantial Meshrix.js delivery against the private repository release contract. This chapter belongs to $meshrix-js-developer-handbook. Published artifact shape belongs to $meshrix-js-release-artifact-contract.
 ---
 
 # Meshrix.js Release Engineering Workflow
+
+This chapter belongs to `$meshrix-js-developer-handbook`. It owns delivery
+workflow. The published artifact shape and public address contract belong to
+`$meshrix-js-release-artifact-contract`. Operating a running instance belongs
+to `$meshrix-js-user-handbook`.
 
 ## Establish the candidate
 
@@ -34,6 +39,10 @@ git diff --check
 Do not rerun the full regression between individual subchanges. A protected
 resource, runtime-data probe, publication, or external effect requires explicit
 authorization and exact scope.
+
+Offline delivery and the current plan receipt may close on Linux inside a
+virtual machine. Prefer Ubuntu; accept Debian. Do not treat that path as native
+Linux support or as `npm run verify:acceptance`.
 
 ## Release boundary
 

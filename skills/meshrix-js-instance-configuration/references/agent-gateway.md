@@ -10,7 +10,9 @@
 
 Do not copy a host credential into a container merely to make a host-owned
 command reachable. Keep the command and its credential custody on the host and
-publish only the governed stdio service through Meshrix.js.
+publish only the governed stdio service through Meshrix.js. External agents
+and clients connect to `<server-url>`, not to a second backend port. See
+`$meshrix-js-instance-usage`.
 
 ## Publish a host stdio service
 

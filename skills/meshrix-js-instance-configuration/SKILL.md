@@ -1,9 +1,14 @@
 ---
 name: meshrix-js-instance-configuration
-description: Configure and operate a Meshrix.js local or container instance through canonical runtime configuration, signed plugin installation and enablement, service reuse or restart, health checks, upstream stdio publication, and supported Agent MCP integration. Use when starting, configuring, repairing, or verifying an instance; enabling Skill Hub or another optional plugin; exposing a host command such as gh through Meshrix.js; or connecting a supported agent without rediscovering configuration paths.
+description: Configure and repair a Meshrix.js local or container instance through canonical runtime configuration, signed plugin installation and enablement, service reuse or restart, and health checks. This chapter belongs to $meshrix-js-user-handbook. Everyday use and external connection belong to $meshrix-js-instance-usage.
 ---
 
 # Meshrix.js Instance Configuration
+
+This chapter belongs to `$meshrix-js-user-handbook`. Everyday use and
+external connection through the one public origin belong to
+`$meshrix-js-instance-usage`. The published address contract belongs to
+`$meshrix-js-developer-handbook`.
 
 Apply `$meshrix-js-repository` first. Preserve the current worktree, existing
 runtime data, and unrelated processes. Keep credentials, account data, private
@@ -14,7 +19,8 @@ commands, output, reports, screenshots, and skill files.
 
 | Requested outcome | Use |
 | --- | --- |
-| Start, reuse, restart, or diagnose one instance | This skill and `docs/RUNBOOK.md#local-startup` |
+| Use the instance or connect an external service or agent | `$meshrix-js-instance-usage` |
+| Start, reuse, restart, or diagnose one instance | `$meshrix-js-instance-usage`, this skill, and `docs/RUNBOOK.md#local-startup` |
 | Select, install, trust, or configure a runtime plugin | Read [runtime-plugins.md](references/runtime-plugins.md) completely |
 | Enable Skill Hub for one deployment | Read [runtime-plugins.md](references/runtime-plugins.md), then apply `$meshrix-js-skill-hub-lifecycle` only for its business lifecycle |
 | Publish a host stdio command or bridge host `gh` | Read [agent-gateway.md](references/agent-gateway.md), then apply `$meshrix-js-upstream-service-publishing` |
@@ -30,8 +36,10 @@ separate transactions. Do not let success in one imply success in another.
 1. Run `git status --short` before changing repository files.
 2. Resolve the effective data directory from the same startup contract used by
    the running server. Do not print it or replace it with a temporary root.
-3. Probe the default backend and console ports and identify their owners
-   without dumping process environments or complete argument lists.
+3. Probe the public origin. A published, offline, or `--with-ui` instance
+   serves Console at `<server-url>/` and API at `<server-url>/api/` on one
+   port. Identify the owner without dumping process environments or complete
+   argument lists. A separate Vite console port is source-development only.
 4. Reuse a healthy server and console belonging to the same instance. If a
    default port belongs to an unrelated or unidentified process, stop and
    report the conflict instead of choosing another port.
@@ -60,16 +68,18 @@ separate transactions. Do not let success in one imply success in another.
 2. Stop only the exact server or console process that owns the target port and
    wait for graceful termination.
 3. Restart one server against the same data directory and explicit runtime
-   configuration. Start one console only when the server does not already
-   serve it.
+   configuration. Start a separate console process only for source
+   development when the server does not already serve the Web Console.
 4. Require a controlled restart after changing plugin selection,
    configuration, artifact trust, or deployment profile. Do not claim a hot
    reload.
 
 ## Verify the outcome
 
-1. Require HTTP `200` from `GET /api/healthz` on the backend.
-2. Require the console root to load when a separate console is in scope.
+1. Require HTTP `200` from `GET <server-url>/api/healthz`.
+2. Require `<server-url>/` to load the Web Console when the instance is
+   `runtime-ui` or `--with-ui`. A separate Vite console is source-development
+   only.
 3. Probe one selected plugin route without credentials. An authentication or
    authorization response such as `401` or `403` proves the route is mounted;
    `404` does not. Do not treat protected content as health evidence.

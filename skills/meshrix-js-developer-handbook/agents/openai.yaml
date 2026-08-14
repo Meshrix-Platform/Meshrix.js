@@ -1,0 +1,4 @@
+interface:
+  display_name: "Meshrix.js Developer Handbook"
+  short_description: "Build, package, and address Meshrix.js"
+  default_prompt: "Use $meshrix-js-developer-handbook to change the product, release artifact, or public address contract. Do not operate a running instance from this package."

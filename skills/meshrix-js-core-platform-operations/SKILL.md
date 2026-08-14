@@ -25,7 +25,11 @@ Run `git status --short` and inspect the core source that owns the behavior. Avo
 
 Route specialized work to:
 
-- `$meshrix-js-instance-configuration` for local instance startup, runtime configuration, signed plugin enablement, service restart, health diagnosis, or agent connector setup.
+- `$meshrix-js-developer-handbook` for product, packaging, and published address-contract work.
+- `$meshrix-js-user-handbook` for operating a published instance and connecting external services or agents.
+- `$meshrix-js-release-artifact-contract` for the `runtime-ui` one-origin `/` plus `/api` address chapter.
+- `$meshrix-js-instance-usage` for the operator connection chapter.
+- `$meshrix-js-instance-configuration` for local instance configuration, signed plugin enablement, service restart, or health diagnosis.
 - `$meshrix-js-upstream-service-publishing` for developer-to-client upstream service publication.
 - `$meshrix-js-downstream-mcp-client-access` for local MCP installer, authorization, proxy access, refresh, or uninstall.
 - `$meshrix-js-ingestion-job-processing` for upload, queue, job, result, cancellation, or deletion recovery.
@@ -41,5 +45,10 @@ Route specialized work to:
 - `$meshrix-js-security-authorization` for identity, authorization, secrets, or audit.
 - `$meshrix-js-storage-operations` for storage, uploads, checkpoints, or repair.
 - `$meshrix-js-platform-acceptance-workflow` for final readiness reduction.
+
+Offline delivery and the current plan receipt may close on Linux inside a
+virtual machine. Prefer Ubuntu; accept Debian. That path is not a native Linux
+or distribution support claim, and it is not the project-level Functional
+Release Gate.
 
 Plan verification with `npm test` or the changed-file profile.

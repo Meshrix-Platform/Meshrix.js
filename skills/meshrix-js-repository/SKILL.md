@@ -59,6 +59,8 @@ Apply these rules to every task inside the Meshrix.js product repository.
 - 安全、授权、风险控制或本地 stdio 边界任务从 `packages/foundation/src/security/` 开始，再查阅 `docs/functionality/SECURITY-AUTHORIZATION.md`；授权实现使用 `$meshrix-js-security-authorization`，新增外部或不可信输入面、漏洞修复和可突破性审查使用 `$meshrix-js-security-boundary-audit`。
 - MCP 用户设备安装任务从 `packages/protocols/mcp/adapter/native-installer/` 开始；MCP stdio proxy 或 process identity runtime 任务从 `packages/protocols/mcp/adapter/gateway-installer/` 开始。客户端实现细节不进入本仓库技能；Meshrix.js 安装契约仍是签名发现与连接器配置变更的权威。
 - 架构、策略或治理类任务先看 `tools/registry/`，再打开与主题对应的核心文档。
+- 开发者手册是 `$meshrix-js-developer-handbook`。用户手册是 `$meshrix-js-user-handbook`。不要把两份手册混在一次收口里。
+- 发布制品形状和对外地址规范使用 `$meshrix-js-release-artifact-contract`。运行中的实例使用和外部对接使用 `$meshrix-js-instance-usage`。
 - 测试任务先从失败测试或 verifier 本身开始；只有测试契约不清楚时再查阅 `docs/RUNBOOK.md`。
 - Operation Permission 或网关操作任务从 `docs/functionality/GATEWAY.md` 和 `docs/functionality/OPERATION-PERMISSION.md` 开始；分别使用共享的 `$meshrix-js-operation-permission` 或 `$meshrix-js-protocol-gateway` 技能。
 - 子系统规则见本技能的 Console、Server、Agents Domain、Capabilities Domain、Protocol Adapters 和 MCP Gateway Connector Runtime 小节；公开文档入口是 `docs/README.md`。
@@ -66,16 +68,18 @@ Apply these rules to every task inside the Meshrix.js product repository.
 ## 任务启动流程
 
 - 开始工作时建议说明当前 worktree、目标子系统和计划写入范围；先应用本技能的仓库级规则，再查看目标子系统对应小节，没有对应小节时再读取最近的 README。
-- 本仓库的跨计划执行选择只使用 `npm run plan:next`。主智能体应先按用户意图校正相关计划；该命令只授权执行叶子，不限制主智能体修复计划或计划工具。`planning_repair_required` 禁止派遣执行者，但不终止用户任务，控制权应返回主智能体。通用 Better Plan `next` 只理解单个 `Checkpoints.json` 的本地依赖，不能作为执行授权；不得启动缺少子计划最终回执、与当前主机平台不匹配或不属于 Meshrix.js `.git` 目标的节点。平台节点必须在对应平台上执行，macOS 智能体不得把待完成的 Windows/Linux 节点、缺少平台回执或工具链解释为本机实现任务或全局阻断。
+- 本仓库的跨计划执行选择只使用 `npm run plan:next`。主智能体应先按用户意图校正相关计划；该命令只授权执行叶子，不限制主智能体修复计划或计划工具。`planning_repair_required` 禁止派遣执行者，但不终止用户任务，控制权应返回主智能体。通用 Better Plan `next` 只理解单个 `Checkpoints.json` 的本地依赖，不能作为执行授权；不得启动缺少子计划最终回执、与当前主机平台不匹配或不属于 Meshrix.js `.git` 目标的节点。原生 Windows 主机资格节点仍须在对应主机上执行。离线交付和当前计划闭环只要虚拟机内是 Linux 即可完成：优先 Ubuntu，Debian 也可；macOS 操作主机在能到达该 Linux 虚拟机时可以闭环。这不是原生 Linux、Ubuntu、Debian 或环境支持声明，也不是 `npm run verify:acceptance`。
 - 如果任务需要跨子系统修改，建议切换到集成 worktree 或明确唯一负责人，再开始编辑。
 - 涉及入口文件或文档索引调整时，运行 `npm test` 或对应的入口健康检查。
 
 ## 本地服务启动与实例复用
 
-- 启动普通本地服务前，先解析有效的默认数据目录，并检查默认后端和前端端口。
+- 启动普通本地服务前，先解析有效的默认数据目录，并检查默认对外源 `<server-url>`。
+- 发布、离线和 `--with-ui` 实例只有一个对外源：控制台是 `<server-url>/`，API 是 `<server-url>/api/`。开发者手册见 `$meshrix-js-developer-handbook`，用户手册见 `$meshrix-js-user-handbook`。
+- 源码开发可以另起 Vite 控制台端口做热更新；那不是发布地址，也不给外部服务对接。
 - 默认数据目录已有 Meshrix.js 运行数据时，复用该目录；不要改用隔离目录或临时目录。
-- 已有属于同一本地实例且健康的服务和控制台时，直接复用；不要重复启动进程。
-- 数据目录存在但服务未运行时，只启动一个指向该目录的服务端和一个连接该服务端的控制台。
+- 已有属于同一本地实例且健康的服务时，直接复用；不要重复启动进程。服务已带控制台时不要再起一个控制台进程。
+- 数据目录存在但服务未运行时，只启动一个指向该目录的服务端；仅在服务不提供控制台的源码开发中再启动一个连接该服务端的控制台。
 - 默认端口被无关或无法确认的进程占用时，停止并报告冲突；不要静默改用其它端口或创建另一数据目录。
 - 只有用户明确要求，或仓库测试、验证器明确要求隔离并负责清理时，才使用隔离数据目录。
 - 认证和运维命令必须使用与运行中服务完全相同的数据目录；命令在其它目录成功不代表当前实例已更新。
@@ -130,6 +134,11 @@ Apply these rules to every task inside the Meshrix.js product repository.
 - 不记录未验证的背景说明、来源解释、内部讨论过程、夸张表述或未落实承诺。
 - 开源平台文档以企业私有化部署为前提，默认能力必须自包含；外部中间件只能写成可选增强或集成目标，不能写成基础运行依赖，除非代码和部署清单已经强制依赖。
 - 能力缺口必须以可验证事实描述，并指向计划、代码路径或验证命令；不能用愿景描述替代实现状态。
+
+## Linux VM closure
+
+- A Linux operating system inside a virtual machine can close Meshrix.js offline delivery and the current plan receipt. Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when that Linux VM is reachable.
+- This path does not create native Linux, Ubuntu, Debian, or environment-support claims, and it is not `npm run verify:acceptance`.
 
 ## 验证范围
 

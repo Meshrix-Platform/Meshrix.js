@@ -49,6 +49,70 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
     requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
     inputs: ["tools/scripts/restart-dev.ts", "tools/scripts/start-all.ts", "tools/scripts/clean-existing-service.ts"], outputs: [],
   },
+  "start:compose": {
+    scriptName: "start:compose", command: "npm run start:compose", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "docker-compose.yml"], outputs: [],
+  },
+  "stop:compose": {
+    scriptName: "stop:compose", command: "npm run stop:compose", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "docker-compose.yml"], outputs: [],
+  },
+  "start:compose:ui": {
+    scriptName: "start:compose:ui", command: "npm run start:compose:ui", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "docker-compose.yml"], outputs: [],
+  },
+  "stop:compose:ui": {
+    scriptName: "stop:compose:ui", command: "npm run stop:compose:ui", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "docker-compose.yml"], outputs: [],
+  },
+  "start:offline": {
+    scriptName: "start:offline", command: "npm run start:offline", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "tools/server-scripts/offline-delivery-local-up.ts"], outputs: [],
+  },
+  "stop:offline": {
+    scriptName: "stop:offline", command: "npm run stop:offline", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "standard",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts"], outputs: [],
+  },
+  "restart:compose": {
+    scriptName: "restart:compose", command: "npm run restart:compose", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "docker-compose.yml"], outputs: [],
+  },
+  "restart:compose:ui": {
+    scriptName: "restart:compose:ui", command: "npm run restart:compose:ui", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts", "docker-compose.yml"], outputs: [],
+  },
+  "restart:offline": {
+    scriptName: "restart:offline", command: "npm run restart:offline", category: "startup", subsystem: "server",
+    owner: "platform", tier: "integration", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: ["tools/server-scripts/instance-lifecycle.ts"], outputs: [],
+  },
+  "pack:offline": {
+    scriptName: "pack:offline", command: "npm run pack:offline", category: "packaging", subsystem: "server",
+    owner: "platform", tier: "release", sideEffects: "docker",
+    requiresFreshContainer: false, ciProfile: "none", expectedDurationClass: "extended",
+    inputs: [
+      "tools/server-scripts/offline-delivery-pack.ts",
+      "tools/server-scripts/offline-delivery-producer.ts",
+      "tools/server-scripts/offline-delivery-vm-target.ts"
+    ], outputs: ["build/offline-delivery-bundle"],
+  },
 
   // ── Build / packaging ──────────────────────────────────────────────────────
 

@@ -37,6 +37,12 @@ retention and crash boundaries; routine telemetry has zero unbounded
 per-request growth; and optional telemetry sheds safely under pressure. A child
 report may establish only its scoped evidence readiness.
 
+Plan-scoped offline delivery and the current plan receipt may close on a Linux
+operating system inside a virtual machine. Prefer Ubuntu; accept Debian. A
+macOS operator host is allowed when that Linux VM is reachable. This path is
+not `npm run verify:acceptance` and does not create native Linux, Ubuntu,
+Debian, or environment-support claims.
+
 ## Handle evidence
 
 Keep planning read-only. Write reducer-owned reports only during an explicit workflow run. Do not let plan mode overwrite acceptance evidence.
