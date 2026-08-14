@@ -34,47 +34,14 @@ jobs:
             gh pr edit "$PR_URL" --remove-label "$AUTOMERGE_LABEL"
           fi
 
-      - name: Confirm routine version updates remain disabled
-        id: policy
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for config_path in .github/dependabot.yml .github/dependabot.yaml; do
-            set +e
-            response=$(gh api --include \
-              "repos/${GITHUB_REPOSITORY}/contents/${config_path}?ref=${BASE_SHA}" \
-              2>/dev/null)
-            request_status=$?
-            set -e
-            http_status=$(printf '%s\n' "$response" | awk 'NR == 1 { print $2 }')
-
-            case "$http_status" in
-              200)
-                echo "routine-updates-disabled=false" >> "$GITHUB_OUTPUT"
-                exit 0
-                ;;
-              404)
-                ;;
-              *)
-                echo "::error::Unable to determine the Dependabot version-update policy (HTTP ${http_status:-unknown}, CLI ${request_status})."
-                exit 1
-                ;;
-            esac
-          done
-
-          echo "routine-updates-disabled=true" >> "$GITHUB_OUTPUT"
-
       - name: Read verified Dependabot metadata
-        if: steps.policy.outputs.routine-updates-disabled == 'true'
         id: metadata
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
 
       - name: Mark patch and minor updates for auto-merge
         if: >-
-          steps.policy.outputs.routine-updates-disabled == 'true' &&
-          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-minor')
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
         env:
           AUTOMERGE_LABEL: dependabot-automerge
           GH_TOKEN: ${{ github.token }}
@@ -85,11 +52,11 @@ jobs:
     name: Merge eligible security update
     if: >-
       github.event_name == 'workflow_run' &&
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success'
+      github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       contents: write
       pull-requests: write
     steps:
@@ -97,6 +64,7 @@ jobs:
         env:
           AUTOMERGE_LABEL: dependabot-automerge
           GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           VERIFIED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           pr_number=$(jq -r \
@@ -122,6 +90,20 @@ jobs:
              [ "$head_sha" != "$VERIFIED_HEAD_SHA" ]; then
             exit 0
           fi
+
+          jobs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
+          for required_job in \
+            'Public platform gate' \
+            'Supported Node 22 compatibility' \
+            'Supply-chain evidence' \
+            'Dependency review'; do
+            conclusion=$(printf '%s' "$jobs" | jq -r \
+              --arg name "$required_job" \
+              '[.jobs[] | select(.name == $name)] | if length == 1 then .[0].conclusion else "missing" end')
+            if [ "$conclusion" != 'success' ]; then
+              exit 0
+            fi
+          done
 
           gh pr merge "https://github.com/${GITHUB_REPOSITORY}/pull/${pr_number}" \
             --squash \
