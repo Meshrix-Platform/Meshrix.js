@@ -2,14 +2,39 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
-    target-branch: nightly
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
-    versioning-strategy: increase-if-necessary
+    open-pull-requests-limit: 0
+    groups:
+      safe-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      review-required-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - major
   - package-ecosystem: github-actions
     directory: /
-    target-branch: nightly
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
+    groups:
+      safe-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - patch
+          - minor
+      review-required-security-updates:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - major
