@@ -1,0 +1,110 @@
+name: Dependabot security auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  classify:
+    name: Classify security update
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.base.ref == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Remove stale auto-merge eligibility
+        env:
+          AUTOMERGE_LABEL: dependabot-automerge
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          if gh pr view "$PR_URL" --json labels --jq '.labels[].name' | grep -Fxq "$AUTOMERGE_LABEL"; then
+            gh pr edit "$PR_URL" --remove-label "$AUTOMERGE_LABEL"
+          fi
+
+      - name: Read verified Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3
+
+      - name: Mark patch and minor updates for auto-merge
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          AUTOMERGE_LABEL: dependabot-automerge
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr edit "$PR_URL" --add-label "$AUTOMERGE_LABEL"
+
+  merge:
+    name: Merge eligible security update
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the exact CI-verified Dependabot revision
+        env:
+          AUTOMERGE_LABEL: dependabot-automerge
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          VERIFIED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          pr_number=$(jq -r \
+            '.workflow_run.pull_requests | if length == 1 then .[0].number else empty end' \
+            "$GITHUB_EVENT_PATH")
+          if [ -z "$pr_number" ]; then
+            exit 0
+          fi
+
+          pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}")
+          author=$(printf '%s' "$pr" | jq -r '.user.login')
+          base=$(printf '%s' "$pr" | jq -r '.base.ref')
+          head_sha=$(printf '%s' "$pr" | jq -r '.head.sha')
+          state=$(printf '%s' "$pr" | jq -r '.state')
+          eligible=$(printf '%s' "$pr" | jq -r \
+            --arg label "$AUTOMERGE_LABEL" \
+            '[.labels[].name] | index($label) != null')
+
+          if [ "$author" != 'dependabot[bot]' ] || \
+             [ "$base" != 'nightly' ] || \
+             [ "$state" != 'open' ] || \
+             [ "$eligible" != 'true' ] || \
+             [ "$head_sha" != "$VERIFIED_HEAD_SHA" ]; then
+            exit 0
+          fi
+
+          jobs=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
+          for required_job in \
+            'Public platform gate' \
+            'Supported Node 22 compatibility' \
+            'Supply-chain evidence' \
+            'Dependency review'; do
+            conclusion=$(printf '%s' "$jobs" | jq -r \
+              --arg name "$required_job" \
+              '[.jobs[] | select(.name == $name)] | if length == 1 then .[0].conclusion else "missing" end')
+            if [ "$conclusion" != 'success' ]; then
+              exit 0
+            fi
+          done
+
+          gh pr merge "https://github.com/${GITHUB_REPOSITORY}/pull/${pr_number}" \
+            --squash \
+            --delete-branch
