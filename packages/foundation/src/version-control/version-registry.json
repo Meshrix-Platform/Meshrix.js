@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-16",
+  "updatedAt": "2026-08-17",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -225,37 +225,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.agent.config-registry-pointer",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.agent.config-registry-pointer.",
-      "activeVersion": "v0.0.1:agent:config-registry-pointer-1",
-      "versions": [
-        {
-          "version": "v0.0.1:agent:config-registry-pointer-1",
-          "ref": "meshrix.agent.config-registry-pointer@v0.0.1:agent:config-registry-pointer-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-agent-config-registry-pointer-1-source-1",
-              "kind": "other",
-              "uri": "packages/agents/src/agent-configs/config-registry.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-agent-config-registry-pointer-1-source-2",
-              "kind": "other",
-              "uri": "packages/server-runtime/src/composition/platform-core/settings-persistence.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.agent.context",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.agent.context.",
@@ -360,32 +329,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.agent.external-gateway",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.agent.external-gateway.",
-      "activeVersion": "v0.0.1:agent:external-gateway-1",
-      "versions": [
-        {
-          "version": "v0.0.1:agent:external-gateway-1",
-          "ref": "meshrix.agent.external-gateway@v0.0.1:agent:external-gateway-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-external-gateway-1-source",
-              "kind": "other",
-              "uri": "packages/agents/src/agent-gateway/external-gateway/index.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.agent.memory",
       "kind": "runtime_capability",
       "description": "Governed version registry entry for meshrix.agent.memory.",
@@ -406,84 +349,6 @@
               "evidenceId": "v0-0-1-agent-memory-1-source",
               "kind": "other",
               "uri": "packages/agents/src/agent-memory/index.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.agent.model-config",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.agent.model-config.",
-      "activeVersion": "v0.0.1:agent:model-config-1",
-      "versions": [
-        {
-          "version": "v0.0.1:agent:model-config-1",
-          "ref": "meshrix.agent.model-config@v0.0.1:agent:model-config-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-agent-model-config-1-source",
-              "kind": "other",
-              "uri": "apps/console/composables/console-model-library-controller.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.agent.model-credential-envelope",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.agent.model-credential-envelope.",
-      "activeVersion": "v0.0.1:agent:model-credential-envelope-1",
-      "versions": [
-        {
-          "version": "v0.0.1:agent:model-credential-envelope-1",
-          "ref": "meshrix.agent.model-credential-envelope@v0.0.1:agent:model-credential-envelope-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-agent-model-credential-envelope-1-source-1",
-              "kind": "other",
-              "uri": "packages/agents/src/agent-configs/model-credential-store.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.agent.runtime",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.agent.runtime.",
-      "activeVersion": "v0.0.1:agent:runtime-1",
-      "versions": [
-        {
-          "version": "v0.0.1:agent:runtime-1",
-          "ref": "meshrix.agent.runtime@v0.0.1:agent:runtime-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-agent-runtime-1-source",
-              "kind": "other",
-              "uri": "packages/agents/src/agent-runtime-provider.ts"
             }
           ]
         }
@@ -2465,32 +2330,6 @@
               "evidenceId": "v0-0-1-meshrix-m7-scale-memory-report-1-source",
               "kind": "other",
               "uri": "packages/foundation/src/scale/m7-scale-discipline.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.maintenance-agent.workload-authorization",
-      "kind": "protocol",
-      "description": "Governed current-Grant and governance-revision binding for queued maintenance workloads.",
-      "activeVersion": "v0.0.1:maintenance-agent:workload-authorization-1",
-      "versions": [
-        {
-          "version": "v0.0.1:maintenance-agent:workload-authorization-1",
-          "ref": "meshrix.maintenance-agent.workload-authorization@v0.0.1:maintenance-agent:workload-authorization-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current maintenance workload authorization binding."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "maintenance-agent-workload-authorization-source",
-              "kind": "other",
-              "uri": "packages/agents/src/maintenance/authorization.ts"
             }
           ]
         }
@@ -4582,58 +4421,6 @@
               "evidenceId": "v0-0-1-platform-interactive-interface-1-source",
               "kind": "other",
               "uri": "packages/server-runtime/src/composition/interface-manifest.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.platform.maintenance-agent",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.platform.maintenance-agent.",
-      "activeVersion": "v0.0.1:platform:maintenance-agent-1",
-      "versions": [
-        {
-          "version": "v0.0.1:platform:maintenance-agent-1",
-          "ref": "meshrix.platform.maintenance-agent@v0.0.1:platform:maintenance-agent-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-platform-maintenance-agent-1-source",
-              "kind": "other",
-              "uri": "packages/agents/src/maintenance/execution.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.platform.maintenance-agent-schema",
-      "kind": "platform",
-      "description": "Governed version registry entry for meshrix.platform.maintenance-agent-schema.",
-      "activeVersion": "v0.0.1:platform:maintenance-agent-schema-1",
-      "versions": [
-        {
-          "version": "v0.0.1:platform:maintenance-agent-schema-1",
-          "ref": "meshrix.platform.maintenance-agent-schema@v0.0.1:platform:maintenance-agent-schema-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-platform-maintenance-agent-schema-1-source",
-              "kind": "other",
-              "uri": "packages/agents/src/maintenance/config.ts"
             }
           ]
         }
@@ -7764,32 +7551,6 @@
       ]
     },
     {
-      "artifactId": "meshrix.state-machine.capability-acceptance-agent-gateway-model-routing",
-      "kind": "state_machine",
-      "description": "Governed version registry entry for meshrix.state-machine.capability-acceptance-agent-gateway-model-routing.",
-      "activeVersion": "v0.0.1:state-machine:capability-acceptance-agent-gateway-model-routing-3",
-      "versions": [
-        {
-          "version": "v0.0.1:state-machine:capability-acceptance-agent-gateway-model-routing-3",
-          "ref": "meshrix.state-machine.capability-acceptance-agent-gateway-model-routing@v0.0.1:state-machine:capability-acceptance-agent-gateway-model-routing-3",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-state-machine-capability-acceptance-agent-gateway-model-routing-3-source",
-              "kind": "manifest",
-              "uri": "packages/foundation/src/workflow/state-machine/definitions/acceptance/agent-gateway-model-routing.json"
-            }
-          ]
-        }
-      ]
-    },
-    {
       "artifactId": "meshrix.state-machine.capability-acceptance-approval-governance",
       "kind": "state_machine",
       "description": "Governed version registry entry for meshrix.state-machine.capability-acceptance-approval-governance.",
@@ -7966,32 +7727,6 @@
               "evidenceId": "v0-0-1-state-machine-capability-acceptance-jobs-work-queue-runtime-3-source",
               "kind": "manifest",
               "uri": "packages/foundation/src/workflow/state-machine/definitions/acceptance/jobs-work-queue-runtime.json"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.state-machine.capability-acceptance-maintenance-agent-collaboration",
-      "kind": "state_machine",
-      "description": "Governed version registry entry for meshrix.state-machine.capability-acceptance-maintenance-agent-collaboration.",
-      "activeVersion": "v0.0.1:state-machine:capability-acceptance-maintenance-agent-collaboration-3",
-      "versions": [
-        {
-          "version": "v0.0.1:state-machine:capability-acceptance-maintenance-agent-collaboration-3",
-          "ref": "meshrix.state-machine.capability-acceptance-maintenance-agent-collaboration@v0.0.1:state-machine:capability-acceptance-maintenance-agent-collaboration-3",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-state-machine-capability-acceptance-maintenance-agent-collaboration-3-source",
-              "kind": "manifest",
-              "uri": "packages/foundation/src/workflow/state-machine/definitions/acceptance/maintenance-agent-collaboration.json"
             }
           ]
         }
@@ -8926,32 +8661,6 @@
               "evidenceId": "v0-0-1-storage-upload-consumption-receipt-1-source",
               "kind": "other",
               "uri": "packages/foundation/src/storage/storage-provider.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.strategy.model-routing",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.strategy.model-routing.",
-      "activeVersion": "v0.0.1:strategy:model-routing-1",
-      "versions": [
-        {
-          "version": "v0.0.1:strategy:model-routing-1",
-          "ref": "meshrix.strategy.model-routing@v0.0.1:strategy:model-routing-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-strategy-model-routing-1-source",
-              "kind": "other",
-              "uri": "packages/agents/src/agent-gateway/model-routing/index.ts"
             }
           ]
         }
@@ -10093,37 +9802,6 @@
               "evidenceId": "v0-0-1-workflow-job-workflow-work-queue-1-source",
               "kind": "other",
               "uri": "packages/server-runtime/src/composition/queued-job-workflow-provider.ts"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "artifactId": "meshrix.workflow.maintenance-work-queue",
-      "kind": "runtime_capability",
-      "description": "Governed version registry entry for meshrix.workflow.maintenance-work-queue.",
-      "activeVersion": "v0.0.1:workflow:maintenance-work-queue-1",
-      "versions": [
-        {
-          "version": "v0.0.1:workflow:maintenance-work-queue-1",
-          "ref": "meshrix.workflow.maintenance-work-queue@v0.0.1:workflow:maintenance-work-queue-1",
-          "lifecycle": "active",
-          "compatibility": {
-            "newBindingsAllowed": true,
-            "historicalResolutionAllowed": true,
-            "notes": "Current scanned governed version."
-          },
-          "artifactRefs": [],
-          "evidenceRefs": [
-            {
-              "evidenceId": "v0-0-1-workflow-maintenance-work-queue-1-source",
-              "kind": "other",
-              "uri": "packages/server-runtime/src/composition/maintenance-work-queue-provider.ts"
-            },
-            {
-              "evidenceId": "v0-0-1-workflow-maintenance-work-queue-1-test",
-              "kind": "test",
-              "uri": "tests/vitest/server/maintenance-work-queue-provider.test.ts"
             }
           ]
         }
@@ -11461,7 +11139,371 @@
           ]
         }
       ]
-    }
+    },
+    {
+        "artifactId": "meshrix.agent-mcp-traffic.gateway-envelope",
+        "kind": "schema",
+        "description": "Governed version registry entry for meshrix.agent-mcp-traffic.gateway-envelope.",
+        "activeVersion": "v0.0.1:agent-mcp-traffic:gateway-envelope-1",
+        "versions": [
+          {
+            "version": "v0.0.1:agent-mcp-traffic:gateway-envelope-1",
+            "ref": "meshrix.agent-mcp-traffic.gateway-envelope@v0.0.1:agent-mcp-traffic:gateway-envelope-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-agent-mcp-traffic-gateway-envelope-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/agent-mcp-traffic/agent-mcp-gateway-envelopes.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.agent-mcp-traffic.pipeline",
+        "kind": "protocol",
+        "description": "Governed version registry entry for meshrix.agent-mcp-traffic.pipeline.",
+        "activeVersion": "v0.0.1:agent-mcp-traffic:pipeline-1",
+        "versions": [
+          {
+            "version": "v0.0.1:agent-mcp-traffic:pipeline-1",
+            "ref": "meshrix.agent-mcp-traffic.pipeline@v0.0.1:agent-mcp-traffic:pipeline-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-agent-mcp-traffic-pipeline-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/agent-mcp-traffic/pipeline-contract.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.agent-mcp-traffic.descriptor",
+        "kind": "schema",
+        "description": "Governed version registry entry for meshrix.agent-mcp-traffic.descriptor.",
+        "activeVersion": "v0.0.1:agent-mcp-traffic:descriptor-1",
+        "versions": [
+          {
+            "version": "v0.0.1:agent-mcp-traffic:descriptor-1",
+            "ref": "meshrix.agent-mcp-traffic.descriptor@v0.0.1:agent-mcp-traffic:descriptor-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-agent-mcp-traffic-descriptor-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/agent-mcp-traffic/pipeline-contract.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.agent-mcp-traffic.traffic-model",
+        "kind": "schema",
+        "description": "Governed version registry entry for meshrix.agent-mcp-traffic.traffic-model.",
+        "activeVersion": "v0.0.1:agent-mcp-traffic:traffic-model-1",
+        "versions": [
+          {
+            "version": "v0.0.1:agent-mcp-traffic:traffic-model-1",
+            "ref": "meshrix.agent-mcp-traffic.traffic-model@v0.0.1:agent-mcp-traffic:traffic-model-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-agent-mcp-traffic-traffic-model-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/agent-mcp-traffic/traffic-model.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.gateway-transit.direct",
+        "kind": "protocol",
+        "description": "Governed version registry entry for meshrix.gateway-transit.direct.",
+        "activeVersion": "v0.0.1:gateway-transit:direct-1",
+        "versions": [
+          {
+            "version": "v0.0.1:gateway-transit:direct-1",
+            "ref": "meshrix.gateway-transit.direct@v0.0.1:gateway-transit:direct-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-gateway-transit-direct-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/gateway-transit/direct-transit-contract.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.model-gateway.adapter-config",
+        "kind": "schema",
+        "description": "Governed version registry entry for meshrix.model-gateway.adapter-config.",
+        "activeVersion": "v0.0.1:model-gateway:adapter-config-1",
+        "versions": [
+          {
+            "version": "v0.0.1:model-gateway:adapter-config-1",
+            "ref": "meshrix.model-gateway.adapter-config@v0.0.1:model-gateway:adapter-config-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-model-gateway-adapter-config-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/model-gateway/model-gateway-adapter-config.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.plugin.confinement",
+        "kind": "protocol",
+        "description": "Governed version registry entry for meshrix.plugin.confinement.",
+        "activeVersion": "v0.0.1:plugin:confinement-1",
+        "versions": [
+          {
+            "version": "v0.0.1:plugin:confinement-1",
+            "ref": "meshrix.plugin.confinement@v0.0.1:plugin:confinement-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-plugin-confinement-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/plugins/plugin-confinement-contract.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.state-machine.capability-acceptance-model-gateway-service",
+        "kind": "state_machine",
+        "description": "Governed version registry entry for meshrix.state-machine.capability-acceptance-model-gateway-service.",
+        "activeVersion": "v0.0.1:state-machine:capability-acceptance-model-gateway-service-3",
+        "versions": [
+          {
+            "version": "v0.0.1:state-machine:capability-acceptance-model-gateway-service-3",
+            "ref": "meshrix.state-machine.capability-acceptance-model-gateway-service@v0.0.1:state-machine:capability-acceptance-model-gateway-service-3",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-state-machine-capability-acceptance-model-gateway-service-3-source",
+                "kind": "other",
+                "uri": "packages/foundation/src/workflow/state-machine/definitions/acceptance/model-gateway-service.json"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.gateway.channel-selection",
+        "kind": "runtime_capability",
+        "description": "Governed version registry entry for meshrix.gateway.channel-selection.",
+        "activeVersion": "v0.0.1:meshrix:gateway-channel-selection-1",
+        "versions": [
+          {
+            "version": "v0.0.1:meshrix:gateway-channel-selection-1",
+            "ref": "meshrix.gateway.channel-selection@v0.0.1:meshrix:gateway-channel-selection-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-meshrix-gateway-channel-selection-1-source",
+                "kind": "other",
+                "uri": "packages/server-runtime/src/composition/gateway-channel-router.ts"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.self-maintenance.local-config",
+        "kind": "schema",
+        "description": "Governed version registry entry for meshrix.self-maintenance.local-config.",
+        "activeVersion": "v0.0.1:meshrix-self-maintenance:local-config-1",
+        "versions": [
+          {
+            "version": "v0.0.1:meshrix-self-maintenance:local-config-1",
+            "ref": "meshrix.self-maintenance.local-config@v0.0.1:meshrix-self-maintenance:local-config-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-meshrix-self-maintenance-local-config-1-source",
+                "kind": "other",
+                "uri": "plugins/agents/meshrix-self-maintenance/contracts/local-config.schema.json"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.plugin.gateway-channels",
+        "kind": "protocol",
+        "description": "Governed version registry entry for meshrix.plugin.gateway-channels.",
+        "activeVersion": "v0.0.1:plugin:gateway-channels-1",
+        "versions": [
+          {
+            "version": "v0.0.1:plugin:gateway-channels-1",
+            "ref": "meshrix.plugin.gateway-channels@v0.0.1:plugin:gateway-channels-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-plugin-gateway-channels-1-source",
+                "kind": "other",
+                "uri": "plugins/external-gateway/src/external-gateway-runtime.mjs"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.model-gateway.service",
+        "kind": "protocol",
+        "description": "Governed version registry entry for meshrix.model-gateway.service.",
+        "activeVersion": "v0.0.1:model-gateway:service-1",
+        "versions": [
+          {
+            "version": "v0.0.1:model-gateway:service-1",
+            "ref": "meshrix.model-gateway.service@v0.0.1:model-gateway:service-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-model-gateway-service-1-source",
+                "kind": "other",
+                "uri": "services/model-gateway/contracts/service-contract.v1.json"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.model-gateway.state",
+        "kind": "store",
+        "description": "Governed version registry entry for meshrix.model-gateway.state.",
+        "activeVersion": "v0.0.1:model-gateway:state-1",
+        "versions": [
+          {
+            "version": "v0.0.1:model-gateway:state-1",
+            "ref": "meshrix.model-gateway.state@v0.0.1:model-gateway:state-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-model-gateway-state-1-source",
+                "kind": "other",
+                "uri": "services/model-gateway/internal/application.mjs"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "artifactId": "meshrix.gateway.channel-contract",
+        "kind": "protocol",
+        "description": "Governed version registry entry for meshrix.gateway.channel-contract.",
+        "activeVersion": "v0.0.1:gateway:channel-contract-1",
+        "versions": [
+          {
+            "version": "v0.0.1:gateway:channel-contract-1",
+            "ref": "meshrix.gateway.channel-contract@v0.0.1:gateway:channel-contract-1",
+            "lifecycle": "active",
+            "compatibility": {
+              "newBindingsAllowed": true,
+              "historicalResolutionAllowed": true,
+              "notes": "Current canonical Gateway split authority."
+            },
+            "artifactRefs": [],
+            "evidenceRefs": [
+              {
+                "evidenceId": "v0-0-1-gateway-channel-contract-1-source",
+                "kind": "other",
+                "uri": "packages/contracts/src/plugins/gateway-channel-contract.ts"
+              }
+            ]
+          }
+        ]
+      }
   ],
   "compatibilityTable": [],
   "transitions": [],

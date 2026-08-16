@@ -1,6 +1,6 @@
-export const PLUGIN_PACKAGE_SOURCE_KINDS: readonly any[] = Object.freeze(["github_release", "local_package", "bytes"]);
+export const PLUGIN_PACKAGE_SOURCE_KINDS = Object.freeze(["github_release", "local_package", "bytes"]);
 
-function requireNonEmptyString(value?: any, label?: any) : any {
+function requireNonEmptyString(value: unknown, label: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`PLUGIN_PACKAGE_SOURCE_DENIED: ${label} is required`);
   }
@@ -13,8 +13,8 @@ export function createGitHubReleasePluginPackageSource({
   asset,
   credentialRef = null,
   expectedDigest = null
-}: Record<string, any> = {}) : any {
-  const repositoryValue: any = requireNonEmptyString(repository, "repository");
+}: Record<string, unknown> = {}) {
+  const repositoryValue = requireNonEmptyString(repository, "repository");
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repositoryValue)) {
     throw new Error("PLUGIN_PACKAGE_SOURCE_DENIED: repository must be owner/name");
   }
@@ -36,7 +36,7 @@ export function createLocalPluginPackageSource({
   importRootId,
   relativePath,
   expectedDigest = null
-}: Record<string, any> = {}) : any {
+}: Record<string, unknown> = {}) {
   return Object.freeze({
     kind: "local_package",
     importRootId: requireNonEmptyString(importRootId, "importRootId"),
@@ -52,7 +52,7 @@ export function createBytesPluginPackageSource({
   bytes,
   expectedDigest = null,
   label = "bytes"
-}: Record<string, any> = {}) : any {
+}: Record<string, unknown> = {}) {
   if (!Buffer.isBuffer(bytes) && !(bytes instanceof Uint8Array)) {
     throw new Error("PLUGIN_PACKAGE_SOURCE_DENIED: bytes source requires a byte buffer");
   }
@@ -66,18 +66,19 @@ export function createBytesPluginPackageSource({
   });
 }
 
-export function assertPluginPackageSource(source?: any) : any {
+export function assertPluginPackageSource(source?: unknown) {
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     throw new Error("PLUGIN_PACKAGE_SOURCE_DENIED: source descriptor is required");
   }
-  if (!PLUGIN_PACKAGE_SOURCE_KINDS.includes(source.kind)) {
+  const descriptor = source as Record<string, unknown>;
+  if (typeof descriptor.kind !== "string" || !PLUGIN_PACKAGE_SOURCE_KINDS.includes(descriptor.kind)) {
     throw new Error("PLUGIN_PACKAGE_SOURCE_DENIED: unsupported source kind");
   }
-  if (source.kind === "github_release") {
-    return createGitHubReleasePluginPackageSource(source);
+  if (descriptor.kind === "github_release") {
+    return createGitHubReleasePluginPackageSource(descriptor);
   }
-  if (source.kind === "local_package") {
-    return createLocalPluginPackageSource(source);
+  if (descriptor.kind === "local_package") {
+    return createLocalPluginPackageSource(descriptor);
   }
-  return createBytesPluginPackageSource(source);
+  return createBytesPluginPackageSource(descriptor);
 }

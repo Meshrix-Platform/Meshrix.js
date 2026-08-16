@@ -8,21 +8,16 @@ import {
 } from "../lib/ops-monitor-client";
 import type {
   BackgroundProcessStatus,
-  MaintenanceAgentRun,
   MonitorAlertState,
   ServerConsoleState,
 } from "../lib/types";
 import type { WorkQueueRow } from "../types/app";
 import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
-import {
-  maintenanceAgentRiskLabel,
-  queueLifecycleTone,
-} from "./console-status-utils";
+import { queueLifecycleTone } from "./console-status-utils";
 
 type ConsoleOpsMonitorControllerOptions = {
-  allMaintenanceAgentRuns: ComputedRef<MaintenanceAgentRun[]>;
-  canAdminMaintenanceAgent: ComputedRef<boolean>;
-  canReadMaintenanceAgent: ComputedRef<boolean>;
+  canAdminOperations: ComputedRef<boolean>;
+  canReadOperations: ComputedRef<boolean>;
   clearBusy: (key: string) => void;
   consoleState: Ref<ServerConsoleState | null>;
   error: Ref<string>;
@@ -90,31 +85,6 @@ export function createConsoleOpsMonitorController(
       });
     }
 
-    for (const run of options.allMaintenanceAgentRuns.value) {
-      const registration: any = run.unifiedRegistration;
-      const relations: any = registration?.relations || {};
-      const attributes: any = registration?.attributes || {};
-      rows.push({
-        rowId: registration?.registrationId || `maintenance-agent:${run.runId}`,
-        queueId: String(relations.queueId || `maintenance:${run.runId}`),
-        kind: String(attributes.taskType || "maintenance_agent_run"),
-        label: registration?.label || run.summary || run.intent || `智能巡检任务 ${run.runId}`,
-        ownerId: run.runId,
-        source: "maintenance-agent",
-        sourceLabel: registration?.source === "maintenance-agent" ? "智能巡检" : registration?.source || "智能巡检",
-        lifecycleStatus: registration?.status || run.status,
-        status: run.status,
-        phase: String(attributes.stage || run.status),
-        tone: registration?.tone || queueLifecycleTone(run.status),
-        startedAt: run.startedAt || run.createdAt || "",
-        updatedAt: run.completedAt || registration?.registeredAt || run.updatedAt || "",
-        lastHeartbeatAt: run.updatedAt || "",
-        checkpointTreeId: "",
-        detail: `${maintenanceAgentRiskLabel(run.risk)} · ${run.plan?.summary || run.intent || "智能巡检"}`,
-        registration,
-      });
-    }
-
     const activeRank: any = (row: WorkQueueRow) : any =>
       ["interrupted", "failed"].includes(row.status) || row.lifecycleStatus === "interrupted"
         ? 0
@@ -141,7 +111,7 @@ export function createConsoleOpsMonitorController(
   }));
 
   async function acknowledgeMonitorAlert(alertId: string) : Promise<any> {
-    if (!options.canAdminMaintenanceAgent.value) {
+    if (!options.canAdminOperations.value) {
       options.error.value = "当前账号没有维护配置权限。";
       return;
     }
@@ -160,7 +130,7 @@ export function createConsoleOpsMonitorController(
   }
 
   async function recoverBackgroundSupervisor() : Promise<any> {
-    if (!options.canAdminMaintenanceAgent.value) {
+    if (!options.canAdminOperations.value) {
       options.error.value = "当前账号没有维护配置权限。";
       return;
     }
@@ -194,7 +164,7 @@ export function createConsoleOpsMonitorController(
   }
 
   async function refreshBackgroundProcesses(refreshOptions: { silent?: boolean } = {}) : Promise<any> {
-    if (!options.canReadMaintenanceAgent.value) {
+    if (!options.canReadOperations.value) {
       return;
     }
     if (!refreshOptions.silent) {
@@ -214,7 +184,7 @@ export function createConsoleOpsMonitorController(
   }
 
   async function refreshMonitorAlerts(refreshOptions: { silent?: boolean } = {}) : Promise<any> {
-    if (!options.canReadMaintenanceAgent.value) {
+    if (!options.canReadOperations.value) {
       return;
     }
     if (!refreshOptions.silent) {
@@ -236,7 +206,7 @@ export function createConsoleOpsMonitorController(
   }
 
   async function saveMonitorAlertConfig() : Promise<any> {
-    if (!options.canAdminMaintenanceAgent.value) {
+    if (!options.canAdminOperations.value) {
       options.error.value = "当前账号没有维护配置权限。";
       return;
     }

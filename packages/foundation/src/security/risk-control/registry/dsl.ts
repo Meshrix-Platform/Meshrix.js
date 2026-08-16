@@ -13,28 +13,55 @@ import {
   activeCatalogRef,
   riskControlDigest
 } from "../catalogs/index.ts";
+import type {
+  CatalogKind,
+  CatalogRef,
+  RiskControlGateRecord,
+  RiskControlOperationEnvelope,
+  RiskControlPath,
+  RiskControlPoint
+} from "../types.ts";
 
-const DEFINITION_VERSION_PATTERN: any = /^v1:m\d+\.d\d+\.l\d+\.c\d+\.r\d+$/;
-const CONTROL_ID_PATTERN: any = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+const DEFINITION_VERSION_PATTERN = /^v1:m\d+\.d\d+\.l\d+\.c\d+\.r\d+$/;
+const CONTROL_ID_PATTERN = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
+interface RiskControlPointInput {
+  controlId: string;
+  definitionVersion?: string;
+  lifecycleState?: string;
+  owner: RiskControlPoint["owner"];
+  gate: string;
+  enforcedBy: CatalogRef;
+  factSource: CatalogRef;
+  binds?: unknown;
+  decision?: Partial<RiskControlPoint["decision"]>;
+  failsClosed?: Partial<RiskControlPoint["failsClosed"]>;
+  evidence?: Partial<RiskControlPoint["evidence"]>;
+  verifiedBy?: CatalogRef[];
+  displayName?: string;
+  description?: string;
+  docsUrl?: string;
+  sortOrder?: number;
+  definitionDigest?: string;
+}
 
-export function canonicalRiskControlJson(value?: any) : any {
+export function canonicalRiskControlJson(value: unknown = null): string {
   return canonicalJson(value);
 }
 
-export function digestRiskControlValue(prefix?: any, value?: any) : any {
+export function digestRiskControlValue(prefix = "", value: unknown = null): string {
   return riskControlDigest(prefix, value);
 }
 
-function clone(value?: any) : any {
-  return JSON.parse(JSON.stringify(value));
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function strings(value?: any) : any {
-  return Array.isArray(value) ? value.map((item?: any) : any => String(item || "").trim()).filter(Boolean) : [];
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter(Boolean) : [];
 }
 
-function evidenceDefaults(input: Record<string, any> = {}) : any {
+function evidenceDefaults(input: Partial<RiskControlPoint["evidence"]> = {}): RiskControlPoint["evidence"] {
   return {
     store: input.store || activeCatalogRef("evidenceStore", "store.operation-audit"),
     classificationProfile: input.classificationProfile || activeCatalogRef("evidenceProfile", "profile.classification.internal"),
@@ -45,7 +72,7 @@ function evidenceDefaults(input: Record<string, any> = {}) : any {
   };
 }
 
-function normalizedControlBody(input: Record<string, any> = {}) : any {
+function normalizedControlBody(input: RiskControlPointInput): Omit<RiskControlPoint, "displayName" | "description" | "docsUrl" | "sortOrder" | "definitionDigest"> {
   return {
     controlId: String(input.controlId || "").trim(),
     definitionVersion: String(input.definitionVersion || RISK_CONTROL_MODEL_VERSION).trim(),
@@ -74,7 +101,7 @@ function normalizedControlBody(input: Record<string, any> = {}) : any {
   };
 }
 
-export function definitionDigestInput(control: Record<string, any> = {}) : any {
+export function definitionDigestInput(control: Partial<RiskControlPoint> = {}) {
   const {
     displayName: _displayName,
     description: _description,
@@ -86,26 +113,27 @@ export function definitionDigestInput(control: Record<string, any> = {}) : any {
   return body;
 }
 
-export function computeDefinitionDigest(control: Record<string, any> = {}) : any {
+export function computeDefinitionDigest(control: Partial<RiskControlPoint> = {}): string {
   return digestRiskControlValue("v0.0.1:strategy:risk-control-definition-2", definitionDigestInput(control));
 }
 
-export function defineRiskControlPoint(input: Record<string, any> = {}) : any {
-  const body: any = normalizedControlBody(input);
-  const control: Record<string, any> = {
+export function defineRiskControlPoint(input: RiskControlPointInput): RiskControlPoint {
+  const body = normalizedControlBody(input);
+  const control: RiskControlPoint = {
     ...body,
     displayName: String(input.displayName || body.controlId).trim(),
     description: String(input.description || "").trim(),
     docsUrl: String(input.docsUrl || "").trim(),
-    sortOrder: Number(input.sortOrder || 0)
+    sortOrder: Number(input.sortOrder || 0),
+    definitionDigest: ""
   };
   control.definitionDigest = computeDefinitionDigest(control);
   return Object.freeze(control);
 }
 
-function assertRef(kind?: any, ref?: any, errors?: any, controlId?: any) : any {
-  const entry: any = RISK_CONTROL_CATALOG_INDEXES[kind]?.get(ref?.id);
-  if (!entry) {
+function assertRef(kind: CatalogKind, ref: CatalogRef | undefined, errors: string[], controlId: string): void {
+  const entry = ref ? RISK_CONTROL_CATALOG_INDEXES[kind].get(ref.id) : undefined;
+  if (!ref || !entry) {
     errors.push(`${controlId} references unknown ${kind}: ${ref?.id || "(missing)"}`);
     return;
   }
@@ -117,17 +145,17 @@ function assertRef(kind?: any, ref?: any, errors?: any, controlId?: any) : any {
   }
 }
 
-export function validateRiskControlRegistry({ controls = [], paths = [] }: Record<string, any> = {}) : any {
-  const errors: any[] = [];
-  const boundaryIds: any = knownRiskControlBoundaryIds();
-  const environmentIds: any = knownRiskControlEnvironmentIds();
-  const objectIds: any = knownRiskControlObjectIds();
-  const gates: any = new Set<any>(RISK_CONTROL_GATES);
-  const states: any = new Set<any>(RISK_CONTROL_DEFINITION_STATES);
-  const ids: any = new Map<any, any>();
+export function validateRiskControlRegistry({ controls = [], paths = [] }: { controls?: readonly RiskControlPoint[]; paths?: readonly RiskControlPath[] } = {}): true {
+  const errors: string[] = [];
+  const boundaryIds = knownRiskControlBoundaryIds();
+  const environmentIds = knownRiskControlEnvironmentIds();
+  const objectIds = knownRiskControlObjectIds();
+  const gates = new Set(RISK_CONTROL_GATES);
+  const states = new Set(RISK_CONTROL_DEFINITION_STATES);
+  const ids = new Map<string, RiskControlPoint>();
 
   for (const control of controls) {
-    const id: any = control.controlId || "";
+    const id = control.controlId || "";
     if (!CONTROL_ID_PATTERN.test(id)) {
       errors.push(`Invalid Risk Control controlId: ${id || "(missing)"}`);
     }
@@ -172,13 +200,13 @@ export function validateRiskControlRegistry({ controls = [], paths = [] }: Recor
         assertRef("verifiedBy", verifierRef, errors, id);
       }
     }
-    const expectedDigest: any = computeDefinitionDigest(control);
+    const expectedDigest = computeDefinitionDigest(control);
     if (control.definitionDigest !== expectedDigest) {
       errors.push(`${id} definitionDigest mismatch`);
     }
   }
 
-  const activeIds: any = new Set<any>(controls.filter((control?: any) : any => control.lifecycleState === "active").map((control?: any) : any => control.controlId));
+  const activeIds = new Set(controls.filter((control) => control.lifecycleState === "active").map((control) => control.controlId));
   for (const path of paths) {
     if (!path.pathId || !Array.isArray(path.controls) || path.controls.length === 0) {
       errors.push(`Invalid Risk Control path ${path.pathId || "(missing)"}`);
@@ -192,9 +220,24 @@ export function validateRiskControlRegistry({ controls = [], paths = [] }: Recor
   }
 
   if (errors.length > 0) {
-    throw new Error(`Risk Control Registry is invalid:\n${errors.map((error?: any) : any => `- ${error}`).join("\n")}`);
+    throw new Error(`Risk Control Registry is invalid:\n${errors.map((error) => `- ${error}`).join("\n")}`);
   }
   return true;
+}
+
+interface RiskControlGateRecordInput {
+  envelopeId?: string;
+  previousRecordDigest?: string;
+  control?: RiskControlPoint;
+  gate?: string;
+  decision?: string;
+  reasonCode?: string;
+  subject?: unknown;
+  intent?: string;
+  resource?: unknown;
+  environment?: unknown;
+  evidence?: unknown;
+  occurredAt?: string;
 }
 
 export function createRiskControlGateRecord({
@@ -210,11 +253,11 @@ export function createRiskControlGateRecord({
   environment = {},
   evidence = [],
   occurredAt = new Date().toISOString()
-}: Record<string, any> = {}) : any {
+}: RiskControlGateRecordInput = {}): RiskControlGateRecord {
   if (!control?.controlId) {
     throw new Error("Risk Control Gate Record requires a registered control.");
   }
-  const body: Record<string, any> = {
+  const body: Omit<RiskControlGateRecord, "recordDigest"> = {
     recordVersion: "v0.0.1:strategy:risk-control-gate-record-1",
     envelopeId: String(envelopeId || "").trim(),
     previousRecordDigest: String(previousRecordDigest || "").trim(),
@@ -235,15 +278,15 @@ export function createRiskControlGateRecord({
     evidence: clone(evidence),
     occurredAt
   };
-  const recordDigest: any = digestRiskControlValue("v0.0.1:strategy:risk-control-gate-record-1", body);
+  const recordDigest = digestRiskControlValue("v0.0.1:strategy:risk-control-gate-record-1", body);
   return Object.freeze({
     ...body,
     recordDigest
   });
 }
 
-export function createRiskControlOperationEnvelope({ operationId = "", traceId = "", inputHash = "" }: Record<string, any> = {}) : any {
-  const anchor: Record<string, any> = {
+export function createRiskControlOperationEnvelope({ operationId = "", traceId = "", inputHash = "" }: { operationId?: string; traceId?: string; inputHash?: string } = {}): RiskControlOperationEnvelope {
+  const anchor = {
     envelopeVersion: "v0.0.1:strategy:risk-control-operation-envelope-1",
     operationId: String(operationId || "").trim(),
     traceId: String(traceId || "").trim(),
@@ -256,12 +299,12 @@ export function createRiskControlOperationEnvelope({ operationId = "", traceId =
   };
 }
 
-export function appendRiskControlGateRecord(envelope?: any, recordInput: Record<string, any> = {}) : any {
+export function appendRiskControlGateRecord(envelope: RiskControlOperationEnvelope | undefined, recordInput: RiskControlGateRecordInput = {}): RiskControlGateRecord {
   if (!envelope || typeof envelope !== "object" || !Array.isArray(envelope.gateRecords)) {
     throw new Error("appendRiskControlGateRecord requires a Risk Control operation envelope.");
   }
-  const previousRecordDigest: any = envelope.gateRecords.at(-1)?.recordDigest || envelope.operationAnchorDigest || "";
-  const record: any = createRiskControlGateRecord({
+  const previousRecordDigest = envelope.gateRecords.at(-1)?.recordDigest || envelope.operationAnchorDigest || "";
+  const record = createRiskControlGateRecord({
     ...recordInput,
     envelopeId: envelope.operationAnchorDigest,
     previousRecordDigest

@@ -6,13 +6,14 @@ import {
 } from "../model/index.ts";
 import { activeCatalogRef } from "../catalogs/index.ts";
 import { defineRiskControlPoint } from "../registry/dsl.ts";
+import type { CatalogRef, RiskControlPoint } from "../types.ts";
 
-const DEFAULT_VERIFIERS: readonly any[] = Object.freeze([
+const DEFAULT_VERIFIERS: readonly Readonly<CatalogRef>[] = Object.freeze([
   activeCatalogRef("verifiedBy", "verifier.risk-control.registry-integrity"),
   activeCatalogRef("verifiedBy", "verifier.risk-control.evidence-locator")
 ]);
 
-const SPECIFIC_VERIFIERS: Readonly<Record<string, any>> = Object.freeze({
+const SPECIFIC_VERIFIERS: Readonly<Record<string, Readonly<CatalogRef>>> = Object.freeze({
   "verifier.security.authorization-capabilities": activeCatalogRef("verifiedBy", "verifier.security.authorization-capabilities"),
   "verifier.security.console-auth": activeCatalogRef("verifiedBy", "verifier.security.console-auth"),
   "verifier.security.operation-permission": activeCatalogRef("verifiedBy", "verifier.security.operation-permission"),
@@ -21,7 +22,7 @@ const SPECIFIC_VERIFIERS: Readonly<Record<string, any>> = Object.freeze({
   "verifier.risk-control.operation-envelope": activeCatalogRef("verifiedBy", "verifier.risk-control.operation-envelope")
 });
 
-function owner(boundaryId?: any, objectId?: any) : any {
+function owner(boundaryId: string, objectId: string) {
   return {
     boundaryId,
     environmentId: RISK_CONTROL_ENVIRONMENT_IDS.PLATFORM_RUNTIME,
@@ -29,18 +30,35 @@ function owner(boundaryId?: any, objectId?: any) : any {
   };
 }
 
-function refs({ enforcedBy, factSource, verifiedBy = [] }: Record<string, any>) : any {
+interface ControlSpec {
+  boundaryId: string;
+  objectId: string;
+  gate: string;
+  controlId: string;
+  displayName: string;
+  enforcedBy: string;
+  factSource: string;
+  verifiedBy?: string[];
+  binds?: string[];
+  description?: string;
+  degraded?: boolean;
+  reasonCode?: string;
+  status?: number;
+  evidenceFields?: string[];
+}
+
+function refs({ enforcedBy, factSource, verifiedBy = [] }: ControlSpec) {
   return {
     enforcedBy: activeCatalogRef("enforcedBy", enforcedBy),
     factSource: activeCatalogRef("factSource", factSource),
     verifiedBy: [
       ...DEFAULT_VERIFIERS,
-      ...verifiedBy.map((id?: any) : any => SPECIFIC_VERIFIERS[id] || activeCatalogRef("verifiedBy", id))
+      ...verifiedBy.map((id) => SPECIFIC_VERIFIERS[id] || activeCatalogRef("verifiedBy", id))
     ]
   };
 }
 
-function control(spec?: any) : any {
+function control(spec: ControlSpec): RiskControlPoint {
   return defineRiskControlPoint({
     definitionVersion: RISK_CONTROL_MODEL_VERSION,
     lifecycleState: "active",
@@ -67,16 +85,16 @@ function control(spec?: any) : any {
   });
 }
 
-const CLIENT: any = RISK_CONTROL_BOUNDARY_IDS.CLIENT_MCP_INGRESS;
-const SERVER: any = RISK_CONTROL_BOUNDARY_IDS.SERVER_API_EGRESS;
-const PLATFORM: any = RISK_CONTROL_BOUNDARY_IDS.PLATFORM_SELF;
-const IDENTITY: any = RISK_CONTROL_OBJECT_IDS.IDENTITY_ADMISSION_AUTHENTICATION;
-const POLICY: any = RISK_CONTROL_OBJECT_IDS.PERMISSION_BEHAVIOR_POLICY;
-const DATA: any = RISK_CONTROL_OBJECT_IDS.DATA_STATE_SEMANTICS;
-const TRAFFIC: any = RISK_CONTROL_OBJECT_IDS.TRAFFIC_RESOURCE_MANAGEMENT;
-const AUDIT: any = RISK_CONTROL_OBJECT_IDS.AUDIT_FACT_VERIFICATION;
+const CLIENT = RISK_CONTROL_BOUNDARY_IDS.CLIENT_MCP_INGRESS;
+const SERVER = RISK_CONTROL_BOUNDARY_IDS.SERVER_API_EGRESS;
+const PLATFORM = RISK_CONTROL_BOUNDARY_IDS.PLATFORM_SELF;
+const IDENTITY = RISK_CONTROL_OBJECT_IDS.IDENTITY_ADMISSION_AUTHENTICATION;
+const POLICY = RISK_CONTROL_OBJECT_IDS.PERMISSION_BEHAVIOR_POLICY;
+const DATA = RISK_CONTROL_OBJECT_IDS.DATA_STATE_SEMANTICS;
+const TRAFFIC = RISK_CONTROL_OBJECT_IDS.TRAFFIC_RESOURCE_MANAGEMENT;
+const AUDIT = RISK_CONTROL_OBJECT_IDS.AUDIT_FACT_VERIFICATION;
 
-export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
+export const RISK_CONTROL_POINTS: readonly RiskControlPoint[] = Object.freeze([
   control({
     boundaryId: CLIENT,
     objectId: IDENTITY,
@@ -263,7 +281,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["client.asset-lifecycle.execute", "asset lifecycle"],
     ["client.lifecycle-state.execute", "client lifecycle state"],
     ["client.local-bridge-transport.execute", "local bridge transport semantics"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: CLIENT,
     objectId: DATA,
     gate: "execute",
@@ -283,7 +301,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["client.context-quota.execute", "context quota"],
     ["client.runtime-distribution.execute", "runtime distribution"],
     ["client.retry-backoff.execute", "retry/backoff"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: CLIENT,
     objectId: TRAFFIC,
     gate: "execute",
@@ -302,7 +320,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["client.trace-log-redaction.audit", "trace/log redaction"],
     ["client.checkpoint-node.audit", "checkpoint node"],
     ["client.recovery-evidence.audit", "recovery evidence"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: CLIENT,
     objectId: AUDIT,
     gate: "audit-recover",
@@ -318,7 +336,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["server.upstream-service.admit", "upstream service admission", "component.connector-governance", "fact.operation-registry", "admit"],
     ["server.provider-credential.bind", "provider credential binding", "component.secret-store", "fact.secret-store", "bind"],
     ["server.provider-receipt.audit", "provider receipt audit", "component.audit-store", "fact.provider-receipt", "audit-recover"]
-  ].map(([controlId, displayName, enforcedBy, factSource, gate]: any[]) : any => control({
+  ].map(([controlId, displayName, enforcedBy, factSource, gate]) => control({
     boundaryId: SERVER,
     objectId: IDENTITY,
     gate,
@@ -333,7 +351,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
   ...[
     ["server.egress-policy.authorize", "server egress policy", "component.operation-policy", "fact.egress-policy"],
     ["server.capability-route.authorize", "capability route authorization", "component.capability-kernel", "fact.capability-kernel"]
-  ].map(([controlId, displayName, enforcedBy, factSource]: any[]) : any => control({
+  ].map(([controlId, displayName, enforcedBy, factSource]) => control({
     boundaryId: SERVER,
     objectId: POLICY,
     gate: "authorize",
@@ -348,7 +366,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
   ...[
     ["server.response-normalization.execute", "response normalization"],
     ["server.provider-state-semantics.execute", "provider state semantics"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: SERVER,
     objectId: DATA,
     gate: "execute",
@@ -363,7 +381,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
   ...[
     ["server.rate-limit.execute", "provider rate limit"],
     ["server.timeout-retry.execute", "provider timeout and retry"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: SERVER,
     objectId: TRAFFIC,
     gate: "execute",
@@ -378,7 +396,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
   ...[
     ["server.egress-audit.audit", "server egress audit"],
     ["server.redacted-provider-log.audit", "redacted provider log"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: SERVER,
     objectId: AUDIT,
     gate: "audit-recover",
@@ -396,7 +414,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["platform.binding-guard.bind", "Binding Guard", "component.binding-guard", "fact.binding-ledger", "bind"],
     ["platform.capability-kernel.authorize", "Capability Kernel", "component.capability-kernel", "fact.capability-kernel", "authorize"],
     ["platform.credential-redaction.audit", "credential redaction", "component.audit-store", "fact.audit-store", "audit-recover"]
-  ].map(([controlId, displayName, enforcedBy, factSource, gate]: any[]) : any => control({
+  ].map(([controlId, displayName, enforcedBy, factSource, gate]) => control({
     boundaryId: PLATFORM,
     objectId: IDENTITY,
     gate,
@@ -415,7 +433,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["platform.operation-policy.authorize", "Operation Policy", "component.operation-policy", "fact.authorization-policy"],
     ["platform.operation-permission.authorize", "Operation Permission", "component.operation-permission", "fact.tool-grant-store"],
     ["platform.risk-policy.approve", "risk policy", "component.operation-policy", "fact.operation-proof"]
-  ].map(([controlId, displayName, enforcedBy, factSource]: any[]) : any => control({
+  ].map(([controlId, displayName, enforcedBy, factSource]) => control({
     boundaryId: PLATFORM,
     objectId: POLICY,
     gate: controlId.endsWith(".approve") ? "approve" : "authorize",
@@ -435,7 +453,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["platform.checkpoint-tree.execute", "Checkpoint Tree"],
     ["platform.state-vocabulary.execute", "state vocabulary"],
     ["platform.security-recovery-lifecycle.execute", "security recovery lifecycle"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: PLATFORM,
     objectId: DATA,
     gate: "execute",
@@ -453,7 +471,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["platform.durable-workflow.execute", "durable workflow"],
     ["platform.performance-capacity.execute", "performance capacity gate"],
     ["platform.idempotency.execute", "idempotency"]
-  ].map(([controlId, displayName]: any[]) : any => control({
+  ].map(([controlId, displayName]) => control({
     boundaryId: PLATFORM,
     objectId: TRAFFIC,
     gate: "execute",
@@ -472,7 +490,7 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
     ["platform.runtime-logger.audit", "runtime logger", "component.audit-store", "fact.audit-store"],
     ["platform.production-readiness-report.audit", "production readiness report", "component.audit-store", "fact.audit-store"],
     ["platform.security-recovery-package.audit", "security recovery package", "component.recovery-package", "fact.checkpoint-tree"]
-  ].map(([controlId, displayName, enforcedBy, factSource]: any[]) : any => control({
+  ].map(([controlId, displayName, enforcedBy, factSource]) => control({
     boundaryId: PLATFORM,
     objectId: AUDIT,
     gate: "audit-recover",
@@ -485,6 +503,6 @@ export const RISK_CONTROL_POINTS: readonly any[] = Object.freeze([
   }))
 ]);
 
-export function riskControlById() : any {
-  return new Map<any, any>(RISK_CONTROL_POINTS.map((controlPoint?: any) : any => [controlPoint.controlId, controlPoint]));
+export function riskControlById(): Map<string, RiskControlPoint> {
+  return new Map(RISK_CONTROL_POINTS.map((controlPoint) => [controlPoint.controlId, controlPoint]));
 }

@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "description": "Meshrix.js operation/api/event/receipt/schema/protocol contracts",
   "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
   "engines": {
     "node": "^22.0.0 || ^24.0.0"
   },
@@ -17,6 +20,46 @@
       "types": "./dist/service-collaboration-contract.d.ts",
       "source": "./src/service-collaboration-contract.ts",
       "default": "./dist/service-collaboration-contract.js"
+    },
+    "./model-gateway/client-port": {
+      "types": "./dist/model-gateway/model-gateway-client-port.d.ts",
+      "source": "./src/model-gateway/model-gateway-client-port.ts",
+      "default": "./dist/model-gateway/model-gateway-client-port.js"
+    },
+    "./model-gateway/adapter-config": {
+      "types": "./dist/model-gateway/model-gateway-adapter-config.d.ts",
+      "source": "./src/model-gateway/model-gateway-adapter-config.ts",
+      "default": "./dist/model-gateway/model-gateway-adapter-config.js"
+    },
+    "./model-gateway": {
+      "types": "./dist/model-gateway/index.d.ts",
+      "source": "./src/model-gateway/index.ts",
+      "default": "./dist/model-gateway/index.js"
+    },
+    "./agent-mcp-traffic": {
+      "types": "./dist/agent-mcp-traffic/index.d.ts",
+      "source": "./src/agent-mcp-traffic/index.ts",
+      "default": "./dist/agent-mcp-traffic/index.js"
+    },
+    "./agent-mcp-traffic/pipeline-contract": {
+      "types": "./dist/agent-mcp-traffic/pipeline-contract.d.ts",
+      "source": "./src/agent-mcp-traffic/pipeline-contract.ts",
+      "default": "./dist/agent-mcp-traffic/pipeline-contract.js"
+    },
+    "./agent-mcp-traffic/traffic-model": {
+      "types": "./dist/agent-mcp-traffic/traffic-model.d.ts",
+      "source": "./src/agent-mcp-traffic/traffic-model.ts",
+      "default": "./dist/agent-mcp-traffic/traffic-model.js"
+    },
+    "./gateway-transit": {
+      "types": "./dist/gateway-transit/index.d.ts",
+      "source": "./src/gateway-transit/index.ts",
+      "default": "./dist/gateway-transit/index.js"
+    },
+    "./gateway-transit/direct-transit-contract": {
+      "types": "./dist/gateway-transit/direct-transit-contract.d.ts",
+      "source": "./src/gateway-transit/direct-transit-contract.ts",
+      "default": "./dist/gateway-transit/direct-transit-contract.js"
     },
     "./modules/manifest": {
       "types": "./dist/modules/manifest.d.ts",
@@ -52,6 +95,16 @@
       "types": "./dist/operations/static-semantic-family-catalog.d.ts",
       "source": "./src/operations/static-semantic-family-catalog.ts",
       "default": "./dist/operations/static-semantic-family-catalog.js"
+    },
+    "./plugins/gateway-channel-contract": {
+      "types": "./dist/plugins/gateway-channel-contract.d.ts",
+      "source": "./src/plugins/gateway-channel-contract.ts",
+      "default": "./dist/plugins/gateway-channel-contract.js"
+    },
+    "./plugins/plugin-confinement-contract": {
+      "types": "./dist/plugins/plugin-confinement-contract.d.ts",
+      "source": "./src/plugins/plugin-confinement-contract.ts",
+      "default": "./dist/plugins/plugin-confinement-contract.js"
     },
     "./plugins/plugin-bundle-manifest": {
       "types": "./dist/plugins/plugin-bundle-manifest.d.ts",

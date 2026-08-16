@@ -131,27 +131,6 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
 
 
 {
-      id: "model_routing.health",
-      feature: "agent_gateway",
-      label: "读取模型路由健康和成本台账",
-      target: { controller: "system", method: "handleModelRoutingHealth" },
-      http: {
-        method: "GET",
-        path: "/api/model-routing/health",
-        query: [{ name: "limit", aliases: ["limit"] }],
-        coerce: { limit: "number" }
-      },
-      rpc: { method: "model_routing.health" },
-      cli: {
-        command: ["model-routing", "health"],
-        usage: "model-routing health [--limit 50]"
-      },
-      requiredScopes: ["console:read"],
-      readOnly: true,
-      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
-      aspects: ["model-routing", "cost-ledger", "circuit-breaker"]
-    },
-{
       id: "strategy.describe",
       feature: "strategy_management",
       label: "读取策略管理协议能力",
@@ -198,13 +177,12 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       inputSchema: closedObject({
         roleId: stringValue,
         routeId: stringValue,
-        agentId: stringValue,
-        modelRouting: closedObject({ routeId: stringValue })
+        agentId: stringValue
       }, ["roleId"]),
       readOnly: true,
       concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
       safety: { risk: "read_only", requiresConfirmation: false },
-      aspects: ["strategy-management", "agent-policy", "model-routing"]
+      aspects: ["strategy-management", "agent-policy"]
     },
 {
       id: "strategy.route_policy.evaluate",
@@ -305,109 +283,6 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       aspects: ["strategy-management", "tool-policy", "operation-permission"]
     },
 {
-      id: "agents.list",
-      feature: "agent_management",
-      label: "列出可用智能体模型接入点",
-      target: { controller: "system", method: "handleAgentRegistry" },
-      http: { method: "GET", path: "/api/agents" },
-      rpc: { method: "agents.list" },
-      cli: {
-        command: ["agents", "list"],
-        usage: "agents list"
-      },
-      requiredScopes: ["console:read"],
-      readOnly: true,
-      concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },
-      aspects: ["agent-management", "model-library"]
-    },
-{
-      id: "agents.create",
-      feature: "agent_management",
-      label: "创建智能体模型配置",
-      target: { controller: "system", method: "handleCreateAgent" },
-      http: { method: "POST", path: "/api/agents" },
-      rpc: { method: "agents.create", body: "params" },
-      cli: {
-        command: ["agents", "create"],
-        usage: "agents create --name NAME --model MODEL [--provider PROVIDER] [--api-key KEY]",
-        bodyParams: [
-          { name: "provider", aliases: ["provider", "model-provider"] },
-    { name: "name", aliases: ["name", "agent-name", "agentName", "label"] },
-    { name: "model", aliases: ["model", "model-id", "modelId", "engine"], required: true },
-    { name: "baseUrl", aliases: ["base-url", "baseUrl"] },
-    { name: "url", aliases: ["url", "endpoint"] },
-    { name: "apiKey", aliases: ["api-key", "apiKey", "key"] },
-    { name: "token", aliases: ["token"] },
-    { name: "tokenHeader", aliases: ["token-header", "tokenHeader"] },
-    { name: "tokenPrefix", aliases: ["token-prefix", "tokenPrefix"] },
-    { name: "systemPrompt", aliases: ["system-prompt", "systemPrompt", "prompt"] },
-    { name: "parameters", aliases: ["parameters", "params"], type: "json" },
-    { name: "pluginList", aliases: ["plugin-list", "pluginList", "plugins"], type: "string-list" },
-    { name: "timeoutMs", aliases: ["timeout-ms", "timeoutMs"], type: "number" }
-        ]
-      },
-      requiredScopes: ["runtime:admin"],
-      safety: { risk: "repair_write" },
-      concurrency: { workloadClass: "exclusive", key: "agent_management.model_library", maxParallel: 1, cost: 2 },
-      aspects: ["agent-management", "model-library"]
-    },
-{
-      id: "agents.update",
-      feature: "agent_management",
-      label: "更新智能体模型配置",
-      target: { controller: "system", method: "handleUpdateAgent" },
-      http: { method: "POST", path: "/api/agents/:agentId" },
-      rpc: {
-        method: "agents.update",
-        body: "params",
-        params: [{ name: "agentId", aliases: ["agent-id", "agentId", "id"], required: true }]
-      },
-      cli: {
-        command: ["agents", "update"],
-        usage: "agents update --id AGENT_UID [--name NAME] [--model MODEL] [--body patch.json]",
-        pathParams: { agentId: ["agent-id", "agentId", "id"] },
-        bodyParams: [
-          { name: "provider", aliases: ["provider", "model-provider"] },
-    { name: "name", aliases: ["name", "agent-name", "agentName", "label"] },
-    { name: "model", aliases: ["model", "model-id", "modelId", "engine"] },
-    { name: "baseUrl", aliases: ["base-url", "baseUrl"] },
-    { name: "url", aliases: ["url", "endpoint"] },
-    { name: "apiKey", aliases: ["api-key", "apiKey", "key"] },
-    { name: "token", aliases: ["token"] },
-    { name: "tokenHeader", aliases: ["token-header", "tokenHeader"] },
-    { name: "tokenPrefix", aliases: ["token-prefix", "tokenPrefix"] },
-    { name: "systemPrompt", aliases: ["system-prompt", "systemPrompt", "prompt"] },
-    { name: "parameters", aliases: ["parameters", "params"], type: "json" },
-    { name: "pluginList", aliases: ["plugin-list", "pluginList", "plugins"], type: "string-list" },
-    { name: "timeoutMs", aliases: ["timeout-ms", "timeoutMs"], type: "number" }
-        ]
-      },
-      requiredScopes: ["runtime:admin"],
-      safety: { risk: "repair_write" },
-      concurrency: { workloadClass: "exclusive", key: "agent_management.model_library", maxParallel: 1, cost: 2 },
-      aspects: ["agent-management", "model-library"]
-    },
-{
-      id: "agents.delete",
-      feature: "agent_management",
-      label: "删除智能体模型配置",
-      target: { controller: "system", method: "handleDeleteAgent" },
-      http: { method: "DELETE", path: "/api/agents/:agentId" },
-      rpc: {
-        method: "agents.delete",
-        params: [{ name: "agentId", aliases: ["agent-id", "agentId", "id"], required: true }]
-      },
-      cli: {
-        command: ["agents", "delete"],
-        usage: "agents delete --id AGENT_UID",
-        pathParams: { agentId: ["agent-id", "agentId", "id"] }
-      },
-      requiredScopes: ["runtime:admin"],
-      safety: { risk: "repair_write" },
-      concurrency: { workloadClass: "exclusive", key: "agent_management.model_library", maxParallel: 1, cost: 2 },
-      aspects: ["agent-management", "model-library"]
-    },
-{
       id: "operation_permission.api_keys.issuer_scopes",
       feature: "operation_permission",
       label: "读取 API Key 签发范围",
@@ -450,7 +325,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       target: { controller: "system", method: "handleOperationPermissionPassthrough" },
       http: { method: "POST", path: "/api/operation-permission/v1/api-keys", localInForwardMode: true },
       rpc: { method: "operation_permission.api_keys.create", syntheticPath: "/api/operation-permission/v1/api-keys", body: "params" },
-      requiredScopes: ["console:read"],
+      requiredScopes: ["auth:admin"],
       inputSchema: apiKeyCreateInput,
       safety: { risk: "repair_write" }
     },
@@ -461,7 +336,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       target: { controller: "system", method: "handleOperationPermissionPassthrough" },
       http: { method: "POST", path: "/api/operation-permission/v1/api-keys/:keyId/rotate", localInForwardMode: true },
       rpc: { method: "operation_permission.api_keys.rotate", syntheticPath: "/api/operation-permission/v1/api-keys/:keyId/rotate", params: [{ name: "keyId", aliases: ["keyId", "key-id", "id"], required: true }], body: "params" },
-      requiredScopes: ["console:read"],
+      requiredScopes: ["auth:admin"],
       inputSchema: apiKeyRevisionInput,
       safety: { risk: "repair_write" }
     },
@@ -472,7 +347,7 @@ export const STRATEGY_PERMISSION_OPERATION_DEFINITIONS: readonly any[] = Object.
       target: { controller: "system", method: "handleOperationPermissionPassthrough" },
       http: { method: "POST", path: "/api/operation-permission/v1/api-keys/:keyId/revoke", localInForwardMode: true },
       rpc: { method: "operation_permission.api_keys.revoke", syntheticPath: "/api/operation-permission/v1/api-keys/:keyId/revoke", params: [{ name: "keyId", aliases: ["keyId", "key-id", "id"], required: true }], body: "params" },
-      requiredScopes: ["console:read"],
+      requiredScopes: ["auth:admin"],
       inputSchema: apiKeyRevokeInput,
       safety: { risk: "repair_write" }
     },

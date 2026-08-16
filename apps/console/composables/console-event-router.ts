@@ -14,14 +14,6 @@ export const CONSOLE_EVENT_TOPICS: readonly any[] = Object.freeze([
   "discovery.clients",
   "jobs.job",
   "jobs.deleted",
-  "maintenance.agent.config",
-  "maintenance.agent.plan.created",
-  "maintenance.agent.approval.required",
-  "maintenance.agent.run.started",
-  "maintenance.agent.tool.started",
-  "maintenance.agent.tool.completed",
-  "maintenance.agent.tool.failed",
-  "maintenance.agent.run.completed",
   "permissions.updated",
 ]);
 
@@ -48,9 +40,7 @@ function serverConsoleStateValue(value: unknown): ServerConsoleState | null {
 
 export interface ConsoleEventRouterOptions {
   applyConsoleState: (state: ServerConsoleState) => void;
-  applyMaintenanceConfig: (config: unknown) => boolean;
   getConsoleState: () => ServerConsoleState | null;
-  refreshMaintenanceSilently: () => void;
   removeJob: (jobId: string) => boolean;
   upsertJob: (job: SplitJob) => boolean;
 }
@@ -84,13 +74,6 @@ export function createConsoleEventRouter(options: ConsoleEventRouterOptions) : a
           value: settings as unknown as AgentSettings,
         },
       });
-      return true;
-    }
-    if (event.topic === "maintenance.agent.config") {
-      return options.applyMaintenanceConfig(payload.config);
-    }
-    if (event.topic.startsWith("maintenance.agent.") && objectValue(payload.run)) {
-      options.refreshMaintenanceSilently();
       return true;
     }
     return false;

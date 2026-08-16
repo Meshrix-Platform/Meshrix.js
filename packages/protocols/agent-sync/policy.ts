@@ -6,10 +6,39 @@ import {
   waitForStateIdle
 } from "#meshrix/state-coordinator";
 
-export const AGENT_SYNC_SCHEMA_VERSION: any = "v0.0.1:agent:sync-schema-1";
-export const AGENT_SYNC_PREFIX: any = "agent.sync.";
+export const AGENT_SYNC_SCHEMA_VERSION = "v0.0.1:agent:sync-schema-1";
+export const AGENT_SYNC_PREFIX = "agent.sync.";
 
-const DEFAULT_TOPICS: any[] = [
+export interface AgentSyncTopicRule {
+  topic: string;
+  label: string;
+  description: string;
+  enabled: boolean;
+  retain: boolean;
+}
+
+export interface AgentSyncConfig {
+  schemaVersion: typeof AGENT_SYNC_SCHEMA_VERSION;
+  enabled: boolean;
+  defaultTopicEnabled: boolean;
+  updatedAt: string;
+  topics: AgentSyncTopicRule[];
+}
+
+type UnknownRecord = Record<string, unknown>;
+
+interface ProtocolEventBus {
+  publish(topic: string, payload: UnknownRecord, options: UnknownRecord): Promise<unknown>;
+}
+
+interface PublishAgentSyncOptions {
+  userDataPath?: string;
+  protocolEventBus?: ProtocolEventBus | null;
+  input?: UnknownRecord;
+  grant?: { id?: string } | null;
+}
+
+const DEFAULT_TOPICS: AgentSyncTopicRule[] = [
   {
     topic: "agent.sync.answer",
     label: "智能体回答",
@@ -47,48 +76,49 @@ const DEFAULT_TOPICS: any[] = [
   }
 ];
 
-function nowIso() : any {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function getAgentSyncConfigPath(userDataPath?: any) : any {
+export function getAgentSyncConfigPath(userDataPath = ""): string {
   return path.join(userDataPath, "agent-sync.json");
 }
 
-function agentSyncConfigStateKey(userDataPath?: any) : any {
+function agentSyncConfigStateKey(userDataPath = ""): string {
   return `agent-sync-config:${path.resolve(userDataPath)}`;
 }
 
-export function isAgentSyncTopic(topic?: any) : any {
+export function isAgentSyncTopic(topic?: unknown): boolean {
   return String(topic || "").trim().startsWith(AGENT_SYNC_PREFIX);
 }
 
-export function normalizeAgentSyncTopic(value?: any) : any {
-  const raw: any = String(value || "").trim();
-  const topic: any = raw.startsWith(AGENT_SYNC_PREFIX) ? raw : `${AGENT_SYNC_PREFIX}${raw}`;
+export function normalizeAgentSyncTopic(value?: unknown): string {
+  const raw = String(value || "").trim();
+  const topic = raw.startsWith(AGENT_SYNC_PREFIX) ? raw : `${AGENT_SYNC_PREFIX}${raw}`;
   if (!/^agent\.sync\.[A-Za-z0-9_.:-]{1,160}$/.test(topic)) {
     throw new Error(`非法智能体同步 topic：${raw || "(empty)"}`);
   }
   return topic;
 }
 
-function normalizeTopicRule(input: Record<string, any> = {}) : any {
-  const defaults: any = DEFAULT_TOPICS.find((item?: any) : any => item.topic === input.topic) || {};
-  const topic: any = normalizeAgentSyncTopic(input.topic || defaults.topic || "");
+function normalizeTopicRule(input: UnknownRecord = {}): AgentSyncTopicRule {
+  const defaults = DEFAULT_TOPICS.find((item) => item.topic === input.topic);
+  const topic = normalizeAgentSyncTopic(input.topic || defaults?.topic || "");
   return {
     topic,
-    label: String(input.label || defaults.label || topic).trim(),
-    description: String(input.description || defaults.description || "").trim(),
-    enabled: input.enabled === undefined ? defaults.enabled !== false : input.enabled !== false,
-    retain: input.retain === undefined ? defaults.retain === true : input.retain === true
+    label: String(input.label || defaults?.label || topic).trim(),
+    description: String(input.description || defaults?.description || "").trim(),
+    enabled: input.enabled === undefined ? defaults?.enabled !== false : input.enabled !== false,
+    retain: input.retain === undefined ? defaults?.retain === true : input.retain === true
   };
 }
 
-export function normalizeAgentSyncConfig(input: Record<string, any> = {}) : any {
-  const incomingTopics: any = Array.isArray(input.topics) ? input.topics : [];
-  const byTopic: any = new Map<any, any>(DEFAULT_TOPICS.map((item?: any) : any => [item.topic, normalizeTopicRule(item)]));
+export function normalizeAgentSyncConfig(input: UnknownRecord = {}): AgentSyncConfig {
+  const incomingTopics = Array.isArray(input.topics) ? input.topics : [];
+  const byTopic = new Map<string, AgentSyncTopicRule>(DEFAULT_TOPICS.map((item) => [item.topic, normalizeTopicRule({ ...item })]));
   for (const item of incomingTopics) {
-    const normalized: any = normalizeTopicRule(item);
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const normalized = normalizeTopicRule(item as UnknownRecord);
     byTopic.set(normalized.topic, normalized);
   }
 
@@ -96,31 +126,32 @@ export function normalizeAgentSyncConfig(input: Record<string, any> = {}) : any 
     schemaVersion: AGENT_SYNC_SCHEMA_VERSION,
     enabled: input.enabled === undefined ? true : input.enabled !== false,
     defaultTopicEnabled: input.defaultTopicEnabled === true,
-    updatedAt: input.updatedAt || nowIso(),
-    topics: [...byTopic.values()].sort((left?: any, right?: any) : any => left.topic.localeCompare(right.topic))
+    updatedAt: typeof input.updatedAt === "string" && input.updatedAt ? input.updatedAt : nowIso(),
+    topics: [...byTopic.values()].sort((left, right) => left.topic.localeCompare(right.topic))
   };
 }
 
-async function loadAgentSyncConfigUnlocked(userDataPath?: any) : Promise<any> {
+async function loadAgentSyncConfigUnlocked(userDataPath = ""): Promise<AgentSyncConfig> {
   try {
-    const raw: any = await fs.readFile(getAgentSyncConfigPath(userDataPath), "utf8");
-    return normalizeAgentSyncConfig(JSON.parse(raw));
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+    const raw = await fs.readFile(getAgentSyncConfigPath(userDataPath), "utf8");
+    const parsed: unknown = JSON.parse(raw);
+    return normalizeAgentSyncConfig(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as UnknownRecord : {});
+  } catch (error: unknown) {
+    if (error && typeof error === "object" && Reflect.get(error, "code") === "ENOENT") {
       return normalizeAgentSyncConfig();
     }
     throw error;
   }
 }
 
-export async function loadAgentSyncConfig(userDataPath?: any) : Promise<any> {
+export async function loadAgentSyncConfig(userDataPath = ""): Promise<AgentSyncConfig> {
   await waitForStateIdle(agentSyncConfigStateKey(userDataPath));
   return loadAgentSyncConfigUnlocked(userDataPath);
 }
 
-async function saveAgentSyncConfigUnlocked(userDataPath?: any, input: Record<string, any> = {}) : Promise<any> {
-  const configPath: any = getAgentSyncConfigPath(userDataPath);
-  const normalized: any = normalizeAgentSyncConfig({
+async function saveAgentSyncConfigUnlocked(userDataPath = "", input: UnknownRecord = {}): Promise<AgentSyncConfig> {
+  const configPath = getAgentSyncConfigPath(userDataPath);
+  const normalized = normalizeAgentSyncConfig({
     ...input,
     updatedAt: nowIso()
   });
@@ -128,15 +159,15 @@ async function saveAgentSyncConfigUnlocked(userDataPath?: any, input: Record<str
   return normalized;
 }
 
-export async function saveAgentSyncConfig(userDataPath?: any, input: Record<string, any> = {}) : Promise<any> {
-  return queueStateMutation(agentSyncConfigStateKey(userDataPath), () : any =>
+export async function saveAgentSyncConfig(userDataPath = "", input: UnknownRecord = {}): Promise<AgentSyncConfig> {
+  return queueStateMutation(agentSyncConfigStateKey(userDataPath), () =>
     saveAgentSyncConfigUnlocked(userDataPath, input)
   );
 }
 
-export function getAgentSyncRule(config?: any, topic?: any) : any {
-  const normalizedTopic: any = normalizeAgentSyncTopic(topic);
-  return config.topics.find((item?: any) : any => item.topic === normalizedTopic) || {
+export function getAgentSyncRule(config: AgentSyncConfig, topic?: unknown): AgentSyncTopicRule {
+  const normalizedTopic = normalizeAgentSyncTopic(topic);
+  return config.topics.find((item) => item.topic === normalizedTopic) || {
     topic: normalizedTopic,
     label: normalizedTopic,
     description: "",
@@ -145,15 +176,15 @@ export function getAgentSyncRule(config?: any, topic?: any) : any {
   };
 }
 
-export function isAgentSyncTopicEnabled(config?: any, topic?: any) : any {
+export function isAgentSyncTopicEnabled(config: AgentSyncConfig, topic?: unknown): boolean {
   if (!config.enabled) {
     return false;
   }
   return getAgentSyncRule(config, topic).enabled === true;
 }
 
-export function filterAgentSyncEvents(config?: any, events: any = []) : any {
-  return events.filter((event?: any) : any => {
+export function filterAgentSyncEvents<T extends { topic?: unknown }>(config: AgentSyncConfig, events: readonly T[] = []): T[] {
+  return events.filter((event) => {
     if (!isAgentSyncTopic(event.topic)) {
       return true;
     }
@@ -161,8 +192,8 @@ export function filterAgentSyncEvents(config?: any, events: any = []) : any {
   });
 }
 
-export function filterRequestedSubscriptionTopics(config?: any, topics: any = []) : any {
-  const requested: any[] = [...new Set<any>((topics || []).map((item?: any) : any => String(item || "").trim()).filter(Boolean))];
+export function filterRequestedSubscriptionTopics(config: AgentSyncConfig, topics: readonly unknown[] = []) {
+  const requested = [...new Set(topics.map((item) => String(item || "").trim()).filter(Boolean))];
   if (requested.length === 0) {
     return {
       requested,
@@ -170,7 +201,7 @@ export function filterRequestedSubscriptionTopics(config?: any, topics: any = []
       denyAll: false
     };
   }
-  const allowed: any = requested.filter((topic?: any) : any => {
+  const allowed = requested.filter((topic) => {
     if (!isAgentSyncTopic(topic)) {
       return true;
     }
@@ -183,7 +214,10 @@ export function filterRequestedSubscriptionTopics(config?: any, topics: any = []
   };
 }
 
-export function filterAgentSyncSubscriptionResult(config?: any, result: Record<string, any> = {}) : any {
+export function filterAgentSyncSubscriptionResult<T extends { events?: Array<{ topic?: unknown }>; snapshots?: Array<{ topic?: unknown }> }>(
+  config: AgentSyncConfig,
+  result: T
+) {
   return {
     ...result,
     events: filterAgentSyncEvents(config, result.events || []),
@@ -193,9 +227,9 @@ export function filterAgentSyncSubscriptionResult(config?: any, result: Record<s
   };
 }
 
-export function normalizeAgentSyncPublishInput(input: Record<string, any> = {}) : any {
-  const topic: any = normalizeAgentSyncTopic(input.topic || input.syncTopic || "");
-  const payload: any =
+export function normalizeAgentSyncPublishInput(input: UnknownRecord = {}) {
+  const topic = normalizeAgentSyncTopic(input.topic || input.syncTopic || "");
+  const payload =
     input.payload !== undefined
       ? input.payload
       : input.data !== undefined
@@ -219,16 +253,16 @@ export async function publishAgentSyncEvent({
   protocolEventBus,
   input = {},
   grant = null
-}: Record<string, any> = {}) : Promise<any> {
+}: PublishAgentSyncOptions = {}) {
   if (!protocolEventBus || typeof protocolEventBus.publish !== "function") {
     return { ok: false, status: 503, error: "事件总线不可用。" };
   }
-  const config: any = await loadAgentSyncConfig(userDataPath);
+  const config = await loadAgentSyncConfig(userDataPath);
   if (!config.enabled) {
     return { ok: false, status: 403, error: "智能体同步已关闭。" };
   }
-  const publishInput: any = normalizeAgentSyncPublishInput(input);
-  const rule: any = getAgentSyncRule(config, publishInput.topic);
+  const publishInput = normalizeAgentSyncPublishInput(input);
+  const rule = getAgentSyncRule(config, publishInput.topic);
   if (rule.enabled !== true) {
     return {
       ok: false,
@@ -237,7 +271,7 @@ export async function publishAgentSyncEvent({
     };
   }
 
-  const event: any = await protocolEventBus.publish(
+  const event = await protocolEventBus.publish(
     publishInput.topic,
     {
       schemaVersion: AGENT_SYNC_SCHEMA_VERSION,

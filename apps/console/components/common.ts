@@ -1,5 +1,4 @@
 import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
-import AgentModelOptionBar from "./AgentModelOptionBar.vue";
 import BridgeDownloadButton from "./BridgeDownloadButton.vue";
 import BrowseSelectButton from "./BrowseSelectButton.vue";
 import ConfigFloatingPanel from "./ConfigFloatingPanel.vue";
@@ -28,7 +27,7 @@ import StatusPill from "@meshrix/ui-console/status-pill";
 import UploadFileListCard from "./UploadFileListCard.vue";
 import WorkspaceFileTree from "./WorkspaceFileTree.vue";
 
-export { AgentModelOptionBar, BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleSkeleton, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
+export { BinaryCheckbox, BridgeDownloadButton, BrowseSelectButton, ConfigFloatingPanel, ConfigFoldCard, ConfigListSummaryBubble, ConsoleConfirmDialog, ConsoleDescriptionList, ConsoleEmptyState, ConsoleInlineAlert, ConsoleSkeleton, ConsoleToastHost, DataTable, FeatureToggle, HelpTooltip, HistorySessionPanel, JsonConfigFileEditor, MeshrixTabs, MultiChoiceCardGroup, OptionBar, SafeHtmlBlock, ScopeSelector, SegmentedProgressBar, SegmentedToggle, SplitToggleCard, StatusPill, UploadFileListCard, WorkspaceFileTree };
 
 export type CommonComponentRegistration = {
   name: string;
@@ -62,14 +61,6 @@ export const commonComponentRegistry: CommonComponentRegistration[] = [
     category: "choice",
     description: "选项栏的标准选择控件外壳。",
     usageRule: "页面需要下拉选项栏时使用；选项列表和值必须由调用方传入，组件不得写默认功能值。",
-  },
-  {
-    name: "AgentModelOptionBar",
-    file: "apps/console/components/AgentModelOptionBar.vue",
-    tier: "2",
-    category: "picker",
-    description: "智能体选择的标准选项框，统一候选项、空模型库入口、空值和禁用原因展示。",
-    usageRule: "页面需要选择已有智能体时使用；功能页面只提供候选源，不重复实现智能体选项渲染或空库跳转。",
   },
   {
     name: "FeatureToggle",

@@ -4,7 +4,28 @@ import {
   commandAvailable
 } from "./host-runtime.ts";
 
-function text(value?: any) : any {
+type CommandAvailable = (command: string) => boolean;
+type HostEnvironment = Readonly<Record<string, string | undefined>>;
+
+interface LinuxSecretBackendOptions {
+  platform?: NodeJS.Platform | string;
+  includeSystemdCredentials?: boolean;
+  commandAvailableFn?: CommandAvailable;
+}
+
+interface ResolveSecretBackendOptions extends LinuxSecretBackendOptions {
+  backend?: string;
+  linuxCandidates?: (options?: LinuxSecretBackendOptions) => string[];
+  darwinBackend?: string;
+  windowsBackend?: string;
+}
+
+interface WindowsDpapiOptions {
+  env?: HostEnvironment;
+  commandAvailableFn?: CommandAvailable;
+}
+
+function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
@@ -12,11 +33,11 @@ export function linuxSecretBackendCandidates({
   platform = process.platform,
   includeSystemdCredentials = false,
   commandAvailableFn = commandAvailable
-}: Record<string, any> = {}) : any {
+}: LinuxSecretBackendOptions = {}): string[] {
   if (platform !== "linux") {
     return [];
   }
-  const candidates: any[] = [];
+  const candidates: string[] = [];
   if (includeSystemdCredentials && (commandAvailableFn("systemd-creds") || commandAvailableFn("systemd-cryptenroll"))) {
     candidates.push("systemd-credentials");
   }
@@ -40,8 +61,8 @@ export function resolveAutoHostSecretBackend({
   commandAvailableFn = commandAvailable,
   darwinBackend = "macos-keychain",
   windowsBackend = "windows-dpapi"
-}: Record<string, any> = {}) : any {
-  const normalized: any = text(backend || "auto");
+}: ResolveSecretBackendOptions = {}): string {
+  const normalized = text(backend || "auto");
   if (normalized !== "auto") {
     return normalized;
   }
@@ -60,8 +81,8 @@ export function resolveAutoHostSecretBackend({
 export function windowsDpapiCommand({
   env = process.env,
   commandAvailableFn = commandAvailable
-}: Record<string, any> = {}) : any {
-  const configured: any = text(env.MESHRIX_WINDOWS_DPAPI_COMMAND);
+}: WindowsDpapiOptions = {}): string {
+  const configured = text(env.MESHRIX_WINDOWS_DPAPI_COMMAND);
   if (configured) {
     return configured;
   }
@@ -74,12 +95,12 @@ export function windowsDpapiCommand({
   return "";
 }
 
-export function commandExistsInPath(command: any = "", { env = process.env }: Record<string, any> = {}) : any {
-  const executable: any = text(command);
+export function commandExistsInPath(command: unknown = "", { env = process.env }: { env?: HostEnvironment } = {}): boolean {
+  const executable = text(command);
   if (!executable) {
     return false;
   }
-  const suffixes: any = process.platform === "win32" && !/\.(?:exe|cmd|bat)$/i.test(executable)
+  const suffixes = process.platform === "win32" && !/\.(?:exe|cmd|bat)$/i.test(executable)
     ? ["", ".exe", ".cmd", ".bat"]
     : [""];
   for (const dir of text(env.PATH).split(path.delimiter).map(text).filter(Boolean)) {

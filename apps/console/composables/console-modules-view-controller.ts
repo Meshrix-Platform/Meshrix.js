@@ -1,36 +1,31 @@
 import { onMounted, ref } from "vue";
 import { useServerConsoleShellContext } from "#meshrix/console/server-console-shell-context";
-import { createConsoleExternalGatewayController, type ExternalGatewayState } from "./console-external-gateway-controller";
-import { applyExternalGateway, getExternalGatewayState, switchExternalGatewayDirect } from "../lib/external-gateway-client";
+import { createConsoleGatewayChannelController } from "./console-gateway-channel-controller";
+import {
+  getGatewayChannels,
+  selectGatewayChannel,
+  type GatewayChannelState
+} from "../lib/gateway-channel-client";
 
-export function useModulesViewConsole() : any {
-  const externalGatewayState: any = ref<ExternalGatewayState | null>(null);
-  const externalGatewayBusy: any = ref(false);
-  async function refreshExternalGateway() : Promise<any> {
-    externalGatewayState.value = await getExternalGatewayState();
+export function useModulesViewConsole() {
+  const gatewayChannelState = ref<GatewayChannelState | null>(null);
+  const gatewayChannelBusy = ref(false);
+  async function refreshGatewayChannels(): Promise<void> {
+    gatewayChannelState.value = await getGatewayChannels();
   }
-  const externalGateway: any = createConsoleExternalGatewayController(externalGatewayState, {
-    refresh: refreshExternalGateway,
-    async apply(input?: any) : Promise<any> {
-      externalGatewayBusy.value = true;
+  const gatewayChannels = createConsoleGatewayChannelController(gatewayChannelState, {
+    refresh: refreshGatewayChannels,
+    async select(input): Promise<void> {
+      gatewayChannelBusy.value = true;
       try {
-        await applyExternalGateway(input);
-        await refreshExternalGateway();
+        await selectGatewayChannel(input);
+        await refreshGatewayChannels();
       } finally {
-        externalGatewayBusy.value = false;
+        gatewayChannelBusy.value = false;
       }
-    },
-    async switchDirect(expectedGeneration?: any) : Promise<any> {
-      externalGatewayBusy.value = true;
-      try {
-        await switchExternalGatewayDirect(expectedGeneration);
-        await refreshExternalGateway();
-      } finally {
-        externalGatewayBusy.value = false;
-      }
-    },
+    }
   });
-  onMounted(() : any => void refreshExternalGateway());
+  onMounted(() => void refreshGatewayChannels());
   const {
   canBrowseServerPaths,
 } = useServerConsoleShellContext().access;
@@ -57,8 +52,8 @@ const {
     disableMountModule,
     enableMountModule,
     enabledMountCount,
-    externalGateway,
-    externalGatewayBusy,
+    gatewayChannels,
+    gatewayChannelBusy,
     moduleGroups,
     mountDraft,
     openMountPathPicker,

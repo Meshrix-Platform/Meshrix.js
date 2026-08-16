@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "v0.0.1:schema:meshrix-plugin-manifest-1",
+  "kind": "meshrix.plugin.manifest",
+  "id": "agent-self-maintenance",
+  "name": "Agent Self-Maintenance",
+  "status": "experimental",
+  "types": [
+    "client-peer-plugin"
+  ],
+  "summary": "Independent local maintenance client controlled only by an atomically replaced configuration file.",
+  "group": "agents",
+  "integration": {
+    "sourceBoundary": "Separately started Node.js artifact using only external HTTP contracts.",
+    "meshrixBoundaries": [
+      "ordinary governed Operation Permission HTTP client"
+    ],
+    "operations": [],
+    "toolsets": [],
+    "mountNames": [],
+    "coveredCapabilities": [
+      "bounded scheduled maintenance through independently authorized operations"
+    ]
+  },
+  "security": {
+    "secrets": [
+      "model-gateway-client credential reference",
+      "meshrix-client credential reference"
+    ],
+    "risk": "mixed",
+    "notes": [
+      "The local configuration contains credential references only.",
+      "Model proposals are untrusted and are checked against the pinned runbook and allowlists.",
+      "The artifact exposes no inbound control surface or Meshrix runtime contribution."
+    ]
+  },
+  "artifacts": {
+    "externalServiceConfigs": [],
+    "capabilityPackages": [],
+    "docs": [
+      "README.md"
+    ]
+  }
+}

@@ -28,7 +28,8 @@
     "node": "^22.0.0 || ^24.0.0"
   },
   "dependencies": {
-    "@meshrix/contracts": "0.0.1"
+    "@meshrix/contracts": "0.0.1",
+    "@meshrix/protocols": "0.0.1"
   },
   "imports": {
     "#meshrix/contracts/mcp-catalog-delivery": "@meshrix/contracts/mcp-catalog-delivery",

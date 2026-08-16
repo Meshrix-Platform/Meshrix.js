@@ -1,14 +1,14 @@
-export const MCP_CATALOG_DELIVERY_SCHEMA_VERSION: any = "v0.0.1:mcp-catalog-delivery:wire-1";
-export const MCP_CATALOG_LIST_CHANGED_METHOD: any = "notifications/tools/list_changed";
-export const MCP_CATALOG_ACKNOWLEDGE_METHOD: any = "meshrix/catalog/acknowledge";
-export const MCP_PROXY_SESSION_HEADER: any = "X-Meshrix.js-Mcp-Proxy-Session";
-export const MCP_PROXY_SESSION_HEADER_LOWER: any = MCP_PROXY_SESSION_HEADER.toLowerCase();
-export const MCP_PROXY_SESSION_MAX_BYTES: any = 64;
+export const MCP_CATALOG_DELIVERY_SCHEMA_VERSION = "v0.0.1:mcp-catalog-delivery:wire-1";
+export const MCP_CATALOG_LIST_CHANGED_METHOD = "notifications/tools/list_changed";
+export const MCP_CATALOG_ACKNOWLEDGE_METHOD = "meshrix/catalog/acknowledge";
+export const MCP_PROXY_SESSION_HEADER = "X-Meshrix.js-Mcp-Proxy-Session";
+export const MCP_PROXY_SESSION_HEADER_LOWER = MCP_PROXY_SESSION_HEADER.toLowerCase();
+export const MCP_PROXY_SESSION_MAX_BYTES = 64;
 
-const PROXY_SESSION_PATTERN: any = /^[A-Za-z0-9_-]+$/u;
-const MAX_REVISION_TEXT_BYTES: any = 256;
-const MAX_PARTITION_COUNT: any = 256;
-const ALLOWED_INVALIDATION_KEYS: readonly any[] = Object.freeze([
+const PROXY_SESSION_PATTERN = /^[A-Za-z0-9_-]+$/u;
+const MAX_REVISION_TEXT_BYTES = 256;
+const MAX_PARTITION_COUNT = 256;
+const ALLOWED_INVALIDATION_KEYS = Object.freeze([
   "schemaVersion",
   "reasonCode",
   "sourceRevision",
@@ -16,64 +16,80 @@ const ALLOWED_INVALIDATION_KEYS: readonly any[] = Object.freeze([
   "audienceRevision",
   "affectedPartitions"
 ]);
-const ALLOWED_CATALOG_FACT_KEYS: readonly any[] = Object.freeze([
+const ALLOWED_CATALOG_FACT_KEYS = Object.freeze([
   "sourceRevision",
   "catalogRevision",
   "audienceRevision",
   "partitionKeys"
 ]);
-const ALLOWED_ACKNOWLEDGEMENT_KEYS: any = ALLOWED_CATALOG_FACT_KEYS;
+const ALLOWED_ACKNOWLEDGEMENT_KEYS = ALLOWED_CATALOG_FACT_KEYS;
 
-function isPlainObject(value?: any) : any {
+export interface McpCatalogRevisionFacts {
+  sourceRevision: number;
+  catalogRevision: string;
+  audienceRevision: number;
+  partitionKeys: readonly string[];
+}
+
+export interface McpCatalogInvalidation {
+  schemaVersion: typeof MCP_CATALOG_DELIVERY_SCHEMA_VERSION;
+  reasonCode: string;
+  sourceRevision: number;
+  catalogRevision: string;
+  audienceRevision: number;
+  affectedPartitions: readonly string[];
+}
+
+function isPlainObject(value?: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function hasExactKeys(value?: any, expected?: any) : any {
+function hasExactKeys(value: unknown, expected: readonly string[]): value is Record<string, unknown> {
   if (!isPlainObject(value)) return false;
-  const keys: any = Object.keys(value).sort();
-  return keys.length === expected.length && expected.every((key?: any, index?: any) : any => key === keys[index]);
+  const keys = Object.keys(value).sort();
+  return keys.length === expected.length && expected.every((key, index) => key === keys[index]);
 }
 
-function boundedText(value?: any, maxBytes: any = MAX_REVISION_TEXT_BYTES) : any {
+function boundedText(value: unknown, maxBytes: number = MAX_REVISION_TEXT_BYTES): string {
   if (typeof value !== "string") return "";
-  const normalized: any = value.trim();
+  const normalized = value.trim();
   return normalized && Buffer.byteLength(normalized, "utf8") <= maxBytes ? normalized : "";
 }
 
-function revision(value?: any) : any {
-  return Number.isSafeInteger(value) && value >= 0 ? value : null;
+function revision(value?: unknown): number | null {
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
 }
 
-function opaquePartitionKeys(value?: any) : any {
+function opaquePartitionKeys(value?: unknown): readonly string[] | null {
   if (!Array.isArray(value) || value.length === 0 || value.length > MAX_PARTITION_COUNT) return null;
-  const keys: any = value.map((entry?: any) : any => boundedText(entry));
-  if (keys.some((entry?: any) : any => !entry) || new Set<any>(keys).size !== keys.length) return null;
-  const sorted: any = [...keys].sort();
-  return keys.every((entry?: any, index?: any) : any => entry === sorted[index]) ? Object.freeze(keys) : null;
+  const keys = value.map((entry) => boundedText(entry));
+  if (keys.some((entry) => !entry) || new Set(keys).size !== keys.length) return null;
+  const sorted = [...keys].sort();
+  return keys.every((entry, index) => entry === sorted[index]) ? Object.freeze(keys) : null;
 }
 
-export function normalizeMcpProxySessionId(value?: any) : any {
+export function normalizeMcpProxySessionId(value?: unknown): string {
   if (Array.isArray(value) || typeof value !== "string") return "";
-  const normalized: any = value.trim();
+  const normalized = value.trim();
   if (normalized.length < 20 ||
       Buffer.byteLength(normalized, "utf8") > MCP_PROXY_SESSION_MAX_BYTES ||
       !PROXY_SESSION_PATTERN.test(normalized)) return "";
   return normalized;
 }
 
-export function parseMcpCatalogInvalidation(value?: any) : any {
-  const expected: any = [...ALLOWED_INVALIDATION_KEYS].sort();
+export function parseMcpCatalogInvalidation(value?: unknown): McpCatalogInvalidation | null {
+  const expected = [...ALLOWED_INVALIDATION_KEYS].sort();
   if (!hasExactKeys(value, expected) ||
       value.schemaVersion !== MCP_CATALOG_DELIVERY_SCHEMA_VERSION) return null;
-  const sourceRevision: any = revision(value.sourceRevision);
-  const audienceRevision: any = revision(value.audienceRevision);
-  const catalogRevision: any = boundedText(value.catalogRevision);
-  const reasonCode: any = boundedText(value.reasonCode, 128);
+  const sourceRevision = revision(value.sourceRevision);
+  const audienceRevision = revision(value.audienceRevision);
+  const catalogRevision = boundedText(value.catalogRevision);
+  const reasonCode = boundedText(value.reasonCode, 128);
   // An empty affectedPartitions list is a valid global catalog invalidation
   // (key-only deployments have zero grants, so no audience partitions exist).
-  const affectedPartitions: any = opaquePartitionKeys(value.affectedPartitions) || (
+  const affectedPartitions = opaquePartitionKeys(value.affectedPartitions) || (
     Array.isArray(value.affectedPartitions) && value.affectedPartitions.length === 0
       ? Object.freeze([])
       : null
@@ -90,19 +106,19 @@ export function parseMcpCatalogInvalidation(value?: any) : any {
   });
 }
 
-export function parseMcpCatalogFacts(value?: any) : any {
-  const expected: any = [...ALLOWED_CATALOG_FACT_KEYS].sort();
+export function parseMcpCatalogFacts(value?: unknown): McpCatalogRevisionFacts | null {
+  const expected = [...ALLOWED_CATALOG_FACT_KEYS].sort();
   if (!hasExactKeys(value, expected)) return null;
-  const sourceRevision: any = revision(value.sourceRevision);
-  const audienceRevision: any = revision(value.audienceRevision);
-  const catalogRevision: any = boundedText(value.catalogRevision);
-  const partitionKeys: any = opaquePartitionKeys(value.partitionKeys);
+  const sourceRevision = revision(value.sourceRevision);
+  const audienceRevision = revision(value.audienceRevision);
+  const catalogRevision = boundedText(value.catalogRevision);
+  const partitionKeys = opaquePartitionKeys(value.partitionKeys);
   if (sourceRevision === null || audienceRevision === null || !catalogRevision || !partitionKeys) return null;
   return Object.freeze({ sourceRevision, catalogRevision, audienceRevision, partitionKeys });
 }
 
-export function parseMcpCatalogAcknowledgement(value?: any) : any {
-  const expected: any = [...ALLOWED_ACKNOWLEDGEMENT_KEYS].sort();
+export function parseMcpCatalogAcknowledgement(value?: unknown): McpCatalogRevisionFacts | null {
+  const expected = [...ALLOWED_ACKNOWLEDGEMENT_KEYS].sort();
   if (!hasExactKeys(value, expected)) return null;
   return parseMcpCatalogFacts(value);
 }
@@ -113,14 +129,20 @@ export function createMcpCatalogInvalidation({
   catalogRevision,
   audienceRevision,
   affectedPartitions
-}: Record<string, any> = {}) : any {
-  const parsed: any = parseMcpCatalogInvalidation({
+}: {
+  reasonCode?: unknown;
+  sourceRevision?: unknown;
+  catalogRevision?: unknown;
+  audienceRevision?: unknown;
+  affectedPartitions?: unknown;
+} = {}): McpCatalogInvalidation {
+  const parsed = parseMcpCatalogInvalidation({
     schemaVersion: MCP_CATALOG_DELIVERY_SCHEMA_VERSION,
     reasonCode,
     sourceRevision,
     catalogRevision,
     audienceRevision,
-    affectedPartitions: [...new Set<any>(Array.isArray(affectedPartitions) ? affectedPartitions : [])].sort()
+    affectedPartitions: [...new Set(Array.isArray(affectedPartitions) ? affectedPartitions : [])].sort()
   });
   if (!parsed) throw new TypeError("MCP catalog invalidation does not satisfy the wire contract.");
   return parsed;

@@ -46,7 +46,55 @@
  * @layer foundation/security
  */
 
-export const TAG_STORE_PORT_VERSION: any = "v0.0.1:authorization:tag-store-port-0.5.0";
+export const TAG_STORE_PORT_VERSION = "v0.0.1:authorization:tag-store-port-0.5.0";
+
+export type TagStoreRecord = Record<string, unknown>;
+export interface TagStoreProviderDiagnostic {
+  status: "registered" | "not_registered" | "provider_not_registered" | "errored";
+  providerId?: string;
+  error?: string;
+  timestamp: string;
+  interfaceVersion: string;
+}
+export interface TagStoreProvider {
+  createTagManagementStore?(userDataPath: string): TagStoreProvider;
+  getPolicyRevision(): TagStoreRecord | string | null;
+  listTags(input?: TagStoreRecord): TagStoreRecord[];
+  getTag(tagId: string): TagStoreRecord | null;
+  upsertTag(input: TagStoreRecord): TagStoreRecord;
+  archiveTag(tagId: string, input?: TagStoreRecord): TagStoreRecord;
+  restoreTag(tagId: string): TagStoreRecord;
+  listProjections(input?: TagStoreRecord): TagStoreRecord[];
+  rebuildProjections(): TagStoreRecord;
+  listEvents(input?: TagStoreRecord): TagStoreRecord[];
+  listToolProfiles(input?: TagStoreRecord): TagStoreRecord[];
+  seedToolProfiles(profiles: TagStoreRecord[]): { created: number };
+  upsertAuthorizationRole(role: TagStoreRecord, opts?: TagStoreRecord): TagStoreRecord;
+  getAuthorizationRole(roleId: string): TagStoreRecord | null;
+  listAuthorizationRoles(opts?: { includeDisabled?: boolean }): TagStoreRecord[];
+  upsertAuthorizationTeam(team: TagStoreRecord): TagStoreRecord;
+  getAuthorizationTeam(teamId: string): TagStoreRecord | null;
+  listAuthorizationTeams(opts?: { includeDisabled?: boolean }): TagStoreRecord[];
+  upsertAuthorizationDepartment(department: TagStoreRecord): TagStoreRecord;
+  getAuthorizationDepartment(departmentId: string): TagStoreRecord | null;
+  listAuthorizationDepartments(opts?: { includeDisabled?: boolean }): TagStoreRecord[];
+  upsertAuthorizationAgentGroup(group: TagStoreRecord): TagStoreRecord;
+  getAuthorizationAgentGroup(groupId: string): TagStoreRecord | null;
+  listAuthorizationAgentGroups(opts?: { includeDisabled?: boolean }): TagStoreRecord[];
+  upsertAuthorizationAgentBinding(binding: TagStoreRecord): TagStoreRecord;
+  getAuthorizationAgentBinding(agentId: string): TagStoreRecord | null;
+  listAuthorizationAgentBindings(): TagStoreRecord[];
+  hasProjection(projectionKind: string, id: string): boolean;
+  getOrganizationGovernance(): TagStoreRecord;
+  publishOrganizationGovernance(draft: TagStoreRecord, expectedRevision: number): TagStoreRecord;
+  close(): void;
+}
+export interface TagStoreProviderRegistry {
+  getProvider(): TagStoreProvider | null;
+  setProvider(provider: TagStoreProvider): void;
+  hasProvider(): boolean;
+  getProviderDiagnostic(): TagStoreProviderDiagnostic;
+}
 
 /**
  * @typedef {object} TagStoreProviderDiagnostic
@@ -106,23 +154,23 @@ export const TAG_STORE_PORT_VERSION: any = "v0.0.1:authorization:tag-store-port-
  *
  * @returns {TagStoreProviderRegistry}
  */
-export function createTagStoreProviderRegistry() : any {
+export function createTagStoreProviderRegistry(): TagStoreProviderRegistry {
   /** @type {TagStoreProvider | null} */
-  let provider: any = null;
-  let registeredAt: any = null;
+  let provider: TagStoreProvider | null = null;
+  let registeredAt: string | null = null;
 
   return {
-    getProvider() : any {
+    getProvider() {
       return provider;
     },
-    setProvider(newProvider?: any) : any {
+    setProvider(newProvider: TagStoreProvider): void {
       provider = newProvider;
       registeredAt = new Date().toISOString();
     },
-    hasProvider() : any {
+    hasProvider() {
       return provider !== null;
     },
-    getProviderDiagnostic() : any {
+    getProviderDiagnostic(): TagStoreProviderDiagnostic {
       if (provider) {
         return {
           status: "registered",
@@ -148,8 +196,8 @@ export function createTagStoreProviderRegistry() : any {
  * @param {TagStoreProvider} store
  * @returns {{ valid: boolean, missing: string[] }}
  */
-export function validateTagStoreProvider(store?: any) : any {
-  const required: any[] = [
+export function validateTagStoreProvider(store?: unknown): { valid: boolean; missing: string[] } {
+  const required: string[] = [
     "getPolicyRevision",
     "listTags", "getTag", "upsertTag", "archiveTag", "restoreTag",
     "listProjections", "rebuildProjections",
@@ -162,7 +210,8 @@ export function validateTagStoreProvider(store?: any) : any {
     "upsertAuthorizationAgentBinding", "getAuthorizationAgentBinding", "listAuthorizationAgentBindings",
     "hasProjection", "getOrganizationGovernance", "publishOrganizationGovernance",
   ];
-  const missing: any = required.filter((method?: any) : any => typeof store?.[method] !== "function");
+  const candidate = store && typeof store === "object" ? store as Record<string, unknown> : {};
+  const missing = required.filter((method) => typeof candidate[method] !== "function");
   return { valid: missing.length === 0, missing };
 }
 
@@ -176,10 +225,9 @@ export function validateTagStoreProvider(store?: any) : any {
  *
  * @returns {TagStoreProvider}
  */
-export function createNoopTagStoreProvider() : any {
-  const failClosed: any = (method?: any) : any => {
-    const fn: any = () : any => {
-      const diagnostic: Record<string, any> = {
+export function createNoopTagStoreProvider(): TagStoreProvider {
+  const failClosed = (method: string) => (..._args: unknown[]): never => {
+      const diagnostic: TagStoreProviderDiagnostic & { method: string; provider: string; hint: string } = {
         method,
         provider: "noop",
         status: "provider_not_registered",
@@ -187,15 +235,13 @@ export function createNoopTagStoreProvider() : any {
         timestamp: new Date().toISOString(),
         hint: "Ensure tag-store adapter is wired via registerTagStoreProvider() at composition time."
       };
-      const error: Error & Record<string, any> = new Error(
+      const error: Error & { diagnostic?: typeof diagnostic } = new Error(
         `TagStoreProvider.${method}() called but no provider is registered. ` +
         "Ensure tag-store adapter is wired via registerTagStoreProvider() at composition time."
       );
       error.diagnostic = diagnostic;
       throw error;
     };
-    return fn;
-  };
 
   return {
     getPolicyRevision: failClosed("getPolicyRevision"),
@@ -227,6 +273,6 @@ export function createNoopTagStoreProvider() : any {
     hasProjection: failClosed("hasProjection"),
     getOrganizationGovernance: failClosed("getOrganizationGovernance"),
     publishOrganizationGovernance: failClosed("publishOrganizationGovernance"),
-    close: () : any => {}
+    close: () => {}
   };
 }

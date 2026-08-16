@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createAuthorizationEngine } from "#meshrix/authorization-engine";
+import type { AuthorizationStore } from "./authorization/authorization-store.ts";
+import type { TagStoreProvider, TagStoreRecord } from "./authorization/tag-store.port.ts";
 import {
   buildConsoleOperationAuthorizationContext,
   buildConsoleOperationAuthorizationInput
@@ -12,58 +14,294 @@ import {
 // Tag management store is injected by composition root; no static import from server-runtime.
 // If no store is provided, tag operations will throw "Tag management store is unavailable." (fail-closed).
 
-export const SECURITY_PERMISSIONS_PROTOCOL_VERSION: any = "v0.0.1:risk-control:permissions-1";
+export type ProviderRecord = Record<string, unknown>;
+type AuthorizationEngine = ReturnType<typeof createAuthorizationEngine>;
 
-const PROTECTED_SINK_AUTHORITY_SUBJECT_KEYS: readonly any[] = Object.freeze([
+export interface AuthorizationStoreFacade {
+  appendDecision(decision?: ProviderRecord): Promise<unknown> | unknown;
+  appendReceipt?(record?: ProviderRecord, metadata?: ProviderRecord): Promise<unknown> | unknown;
+  appendLoanRecord?(record?: ProviderRecord, metadata?: ProviderRecord): Promise<unknown> | unknown;
+  appendDeniedRequest?(record?: ProviderRecord): Promise<unknown> | unknown;
+  listDecisions?(input?: ProviderRecord): Promise<unknown> | unknown;
+  listReceipts?(input?: ProviderRecord): Promise<unknown> | unknown;
+  listLoanRecords?(input?: ProviderRecord): Promise<unknown> | unknown;
+  listDeniedRequests?(input?: ProviderRecord): Promise<unknown> | unknown;
+}
+
+export interface AuthorizationGovernanceStoreFacade extends ProviderRecord {
+  evaluateGovernance(input?: ProviderRecord): ProviderRecord;
+  tagManagementStore?: TagStoreProvider | null;
+  getPolicyRevision?(): unknown;
+  listRoles?(input?: ProviderRecord): unknown;
+  upsertRole?(input: ProviderRecord): unknown;
+  listDepartments?(input?: ProviderRecord): unknown;
+  upsertDepartment?(input: ProviderRecord): unknown;
+  listTeams?(input?: ProviderRecord): unknown;
+  upsertTeam?(input: ProviderRecord): unknown;
+  listUserPolicies?(): unknown;
+  upsertUserPolicy?(input: ProviderRecord): unknown;
+  listAgentGroups?(input?: ProviderRecord): unknown;
+  upsertAgentGroup?(input: ProviderRecord): unknown;
+  listAgentBindings?(): unknown;
+  upsertAgentBinding?(input: ProviderRecord): unknown;
+  listApprovals?(input?: ProviderRecord): unknown;
+  getApproval?(approvalId: string): unknown;
+  upsertApproval?(input: ProviderRecord): unknown;
+  revokeApproval?(approvalId: string, reason: string): unknown;
+  listApiKeyRecoveryAssignments?(): unknown;
+}
+
+interface OrganizationGovernanceServiceFacade {
+  getOrganizationGovernance(): unknown;
+  listOrganizationGovernanceTemplates(): unknown;
+  importOrganizationGovernance(input?: unknown): unknown;
+  previewOrganizationGovernance(input?: unknown): unknown;
+  publishOrganizationGovernance(input?: ProviderRecord): unknown;
+}
+
+interface ProcessIdentityVerification extends ProviderRecord {
+  ok?: boolean;
+}
+
+export interface ProcessIdentityServiceFacade {
+  verifySignedRequest(input?: ProviderRecord): Promise<ProcessIdentityVerification>;
+  revalidateVerifiedRequest?(input?: ProviderRecord): Promise<unknown>;
+}
+
+interface ConsoleAuthorizationResult extends ProviderRecord {
+  ok?: boolean;
+  session?: unknown;
+  authorizationDecision?: unknown;
+  protectedSinkAuthority?: unknown;
+}
+
+interface ConsoleAuthFacade {
+  authorizationStore?: AuthorizationStoreFacade | null;
+  authorizationGovernanceStore?: AuthorizationGovernanceStoreFacade | null;
+  tagManagementStore?: TagStoreProvider | null;
+  authorizationEngine?: AuthorizationEngine | null;
+  captureDeferredProtectedSinkAuthority?(input?: ProviderRecord): Promise<DeferredAuthorityDecision>;
+  revalidateDeferredProtectedSinkAuthority?(input?: ProviderRecord): Promise<DeferredAuthorityDecision>;
+  revokeDeferredProtectedSinkAuthority?(input?: ProviderRecord): Promise<ProviderRecord>;
+  authorizeOperation?(input?: ProviderRecord): Promise<ConsoleAuthorizationResult>;
+  getSummary?(request?: object | null): unknown;
+  login?(input?: ProviderRecord, request?: object | null): unknown;
+  logout?(request?: object | null): unknown;
+  rotateSession?(request?: object | null): unknown;
+  audit?(entry?: ProviderRecord): unknown;
+  roleList?(): unknown;
+  listUsers?(): unknown;
+  updateUser?(userId?: string, input?: ProviderRecord): unknown;
+  getOidcConfig?(): unknown;
+  setOidcConfig?(input?: ProviderRecord): unknown;
+  listAudit?(input?: ProviderRecord): unknown;
+  listSessions?(): unknown;
+  revokeSession?(sessionId?: string): unknown;
+}
+
+interface PermissionsProviderOptions {
+  consoleAuth?: ConsoleAuthFacade | null;
+  authorizationEngine?: AuthorizationEngine | null;
+  authorizationStore?: Readonly<AuthorizationStore> | AuthorizationStoreFacade | null;
+  authorizationGovernanceStore?: AuthorizationGovernanceStoreFacade | null;
+  organizationGovernanceService?: OrganizationGovernanceServiceFacade | null;
+  tagManagementStore?: TagStoreProvider | null;
+  userDataPath?: string;
+  processIdentity?: ProcessIdentityServiceFacade | null;
+}
+
+export interface SecurityPermissionsProvider {
+  readonly protocolVersion: typeof SECURITY_PERMISSIONS_PROTOCOL_VERSION;
+  readonly deferredProtectedSinkAuthorityPort: Readonly<{
+    capture(input?: PermissionInput): Promise<unknown>;
+    revalidate(input?: PermissionInput): Promise<unknown>;
+    revoke(input?: PermissionInput): Promise<unknown>;
+    reauthorizeCustodyRead(input?: PermissionInput): Promise<unknown>;
+  }>;
+  readonly authorizationEngine: AuthorizationEngine | null;
+  readonly authorizationStore: AuthorizationStoreFacade | null;
+  readonly authorizationGovernanceStore: AuthorizationGovernanceStoreFacade | null;
+  readonly tagManagementStore: TagStoreProvider | null;
+  readonly processIdentity: ProcessIdentityServiceFacade | null;
+  authorizeOperation(input?: PermissionInput): Promise<unknown>;
+  verifyProcessIdentity(input?: PermissionInput): Promise<unknown>;
+  getConsoleSummary(request?: object | null): unknown;
+  getSummary(request?: object | null): unknown;
+  login(input?: ProviderRecord, request?: object | null): unknown;
+  logout(request?: object | null): unknown;
+  rotateSession(request?: object | null): unknown;
+  audit(entry?: ProviderRecord): unknown;
+  roleList(): unknown;
+  listUsers(): unknown;
+  updateUser(userId?: string, input?: ProviderRecord): unknown;
+  getOidcConfig(): unknown;
+  setOidcConfig(input?: ProviderRecord): unknown;
+  listAudit(input?: ProviderRecord): unknown;
+  listSessions(): unknown;
+  revokeSession(sessionId?: string): unknown;
+  resolveSubject(input?: ProviderRecord): unknown;
+  evaluatePolicy(input?: PermissionInput): Promise<unknown>;
+  getGovernancePolicyRevision(): unknown;
+  getGovernanceSummary(): unknown;
+  getOrganizationGovernance(): unknown;
+  listOrganizationGovernanceTemplates(): unknown;
+  importOrganizationGovernance(input?: ProviderRecord): unknown;
+  previewOrganizationGovernance(input?: ProviderRecord): unknown;
+  publishOrganizationGovernance(input?: ProviderRecord): unknown;
+  listGovernanceRoles(input?: ProviderRecord): unknown;
+  upsertGovernanceRole(input?: ProviderRecord): unknown;
+  listGovernanceDepartments(input?: ProviderRecord): unknown;
+  upsertGovernanceDepartment(input?: ProviderRecord): unknown;
+  listGovernanceTeams(input?: ProviderRecord): unknown;
+  upsertGovernanceTeam(input?: ProviderRecord): unknown;
+  listGovernanceUserPolicies(): unknown;
+  upsertGovernanceUserPolicy(input?: ProviderRecord): unknown;
+  listGovernanceAgentGroups(input?: ProviderRecord): unknown;
+  upsertGovernanceAgentGroup(input?: ProviderRecord): unknown;
+  listGovernanceAgentBindings(): unknown;
+  upsertGovernanceAgentBinding(input?: ProviderRecord): unknown;
+  listTags(input?: TagStoreRecord): unknown;
+  getTag(tagId?: string): unknown;
+  upsertTag(input?: TagStoreRecord): unknown;
+  archiveTag(tagId?: string, input?: TagStoreRecord): unknown;
+  restoreTag(tagId?: string): unknown;
+  listTagProjections(input?: TagStoreRecord): unknown;
+  rebuildTagProjections(): unknown;
+  listTagEvents(input?: TagStoreRecord): unknown;
+  listToolProfileTags(input?: TagStoreRecord): unknown;
+  seedToolProfileTags(profiles?: TagStoreRecord[]): unknown;
+  listGovernanceApprovals(input?: ProviderRecord): unknown;
+  getGovernanceApproval(approvalId?: string): unknown;
+  upsertGovernanceApproval(input?: ProviderRecord): unknown;
+  revokeGovernanceApproval(approvalId?: string, reason?: string): unknown;
+  listReceipts(input?: ProviderRecord): unknown;
+  listLoanRecords(input?: ProviderRecord): unknown;
+  listDeniedRequests(input?: ProviderRecord): unknown;
+  listDecisions(input?: ProviderRecord): unknown;
+  appendReceipt(receipt?: ProviderRecord, metadata?: ProviderRecord): unknown;
+  appendLoanRecord(record?: ProviderRecord, metadata?: ProviderRecord): unknown;
+  appendDeniedRequest(request?: ProviderRecord): unknown;
+  appendDecision(decision?: ProviderRecord): unknown;
+  setWorkspaceAssetPolicy(input?: ProviderRecord): ProviderRecord;
+  getWorkspaceAssetPolicy(input?: ProviderRecord): ProviderRecord | null;
+  checkWorkspaceAssetPermission(input?: PermissionInput): Promise<unknown>;
+}
+
+export interface PermissionInput extends ProviderRecord {
+  operation?: ProviderRecord;
+  context?: ProviderRecord;
+  input?: ProviderRecord;
+  operationInput?: ProviderRecord;
+  request?: ProviderRecord | null;
+  authSession?: ProviderRecord | null;
+  phase?: unknown;
+  method?: unknown;
+  url?: URL | null;
+  transport?: unknown;
+  tagPolicy?: ProviderRecord | null;
+  resourceBinding?: ProviderRecord;
+  authorizationReceipt?: CustodyAuthorizationReceipt;
+}
+
+interface AuthorizationDecision extends ProviderRecord {
+  effect?: unknown;
+  allowed?: unknown;
+  reasonCode?: unknown;
+  redactedReason?: unknown;
+  deniedLayer?: unknown;
+  evaluatedLayers?: unknown;
+  effectivePolicySnapshot?: unknown;
+  missingCapabilities?: unknown;
+  missingScopes?: unknown;
+}
+
+interface ProtectedSinkAuthority extends ProviderRecord {
+  subject: Record<string, string>;
+  context: Record<string, string>;
+}
+
+export interface DeferredAuthorityDecision extends ProviderRecord {
+  allowed?: boolean;
+  revoked?: boolean;
+  reasonCode?: string;
+  authorityBindingDigest?: string;
+  subject?: Record<string, string>;
+  context?: Record<string, string>;
+}
+
+interface CustodyAuthorizationState {
+  authorityBindingDigest: unknown;
+  authorityRef: unknown;
+  input: Readonly<ProviderRecord>;
+  operation?: ProviderRecord;
+  requestDigest: unknown;
+  resourceBinding: ProviderRecord;
+  resourceBindingDigest: string;
+}
+
+interface CustodyAuthorizationReceipt extends ProviderRecord {
+  decisionRef: string;
+  grantRevision: unknown;
+  policyRevision: unknown;
+  resourceBindingDigest: string;
+}
+
+export const SECURITY_PERMISSIONS_PROTOCOL_VERSION = "v0.0.1:risk-control:permissions-1";
+
+const PROTECTED_SINK_AUTHORITY_SUBJECT_KEYS = Object.freeze([
   "generation",
   "subjectId",
   "tenantId",
   "type"
 ]);
-const PROTECTED_SINK_AUTHORITY_CONTEXT_KEYS: readonly any[] = Object.freeze([
+const PROTECTED_SINK_AUTHORITY_CONTEXT_KEYS = Object.freeze([
   "approvalRevision",
   "grantRevision",
   "policyRevision",
   "riskRevision",
   "workloadGeneration"
 ]);
-const PROTECTED_SINK_AUTHORITY_PHASES: any = new Set<any>([
+const PROTECTED_SINK_AUTHORITY_PHASES = new Set<string>([
   "admission",
   "execution",
   "final-protected-sink"
 ]);
 
-function securityDigest(value?: any) : any {
+function securityDigest(value?: unknown): string {
   return crypto
     .createHash("sha256")
     .update(canonicalJson(value))
     .digest("hex");
 }
 
-function hasExactKeys(value?: any, keys?: any) : any {
-  return Boolean(value) &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
+function isRecord(value: unknown): value is ProviderRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasExactKeys(value: unknown, keys: readonly string[]): value is ProviderRecord {
+  return isRecord(value) &&
     Object.keys(value).sort().join("\0") === [...keys].sort().join("\0");
 }
 
-function hasExactProtectedSinkAuthority(value?: any) : any {
+function hasExactProtectedSinkAuthority(value: unknown): value is ProtectedSinkAuthority {
+  if (!hasExactKeys(value, ["context", "subject"])) return false;
+  const subject = value.subject;
+  const context = value.context;
   return (
-    hasExactKeys(value, ["context", "subject"]) &&
-    hasExactKeys(value.subject, PROTECTED_SINK_AUTHORITY_SUBJECT_KEYS) &&
-    hasExactKeys(value.context, PROTECTED_SINK_AUTHORITY_CONTEXT_KEYS) &&
+    hasExactKeys(subject, PROTECTED_SINK_AUTHORITY_SUBJECT_KEYS) &&
+    hasExactKeys(context, PROTECTED_SINK_AUTHORITY_CONTEXT_KEYS) &&
     [...PROTECTED_SINK_AUTHORITY_SUBJECT_KEYS].every(
-      (key?: any) : any => typeof value.subject[key] === "string" && value.subject[key].trim()
+      (key) => typeof subject[key] === "string" && subject[key].trim()
     ) &&
     [...PROTECTED_SINK_AUTHORITY_CONTEXT_KEYS].every(
-      (key?: any) : any => typeof value.context[key] === "string" && value.context[key].trim()
+      (key) => typeof context[key] === "string" && context[key].trim()
     )
   );
 }
 
-function requiresProtectedSinkAuthority(input: Record<string, any> = {}) : any {
-  const operationId: any = String(input.operation?.id || "").trim();
-  const phase: any = String(
+function requiresProtectedSinkAuthority(input: PermissionInput = {}): boolean {
+  const operationId = String(input.operation?.id || "").trim();
+  const phase = String(
     input.phase || input.context?.authorizationPhase || ""
   ).trim();
   return (
@@ -76,7 +314,7 @@ function requiresProtectedSinkAuthority(input: Record<string, any> = {}) : any {
   );
 }
 
-function defaultSummary() : any {
+function defaultSummary() {
   return {
     enabled: false,
     bootstrap: {},
@@ -91,11 +329,11 @@ function defaultSummary() : any {
   };
 }
 
-function workspaceAssetPolicyKey(workspaceId?: any, policyId?: any) : any {
+function workspaceAssetPolicyKey(workspaceId?: unknown, policyId?: unknown): string {
   return `${String(workspaceId || "default").trim() || "default"}:${String(policyId || "").trim()}`;
 }
 
-function defaultGovernancePolicyRevision() : any {
+function defaultGovernancePolicyRevision() {
   return {
     protocolVersion: "v0.0.1:risk-control:governance-policy-revision-1",
     revision: 0,
@@ -112,25 +350,26 @@ export function createSecurityPermissionsProvider({
   tagManagementStore = null,
   userDataPath = "",
   processIdentity = null
-}: Record<string, any> = {}) : any {
-  const workspaceAssetPolicies: any = new Map<any, any>();
-  const resolvedAuthorizationStore: any =
+}: PermissionsProviderOptions = {}): Readonly<SecurityPermissionsProvider> {
+  void userDataPath;
+  const workspaceAssetPolicies = new Map<string, ProviderRecord>();
+  const resolvedAuthorizationStore =
     authorizationStore ||
     consoleAuth?.authorizationStore ||
     null;
-  const resolvedAuthorizationGovernanceStore: any =
+  const resolvedAuthorizationGovernanceStore =
     authorizationGovernanceStore ||
     consoleAuth?.authorizationGovernanceStore ||
     null;
-  const resolvedOrganizationGovernanceService: any = organizationGovernanceService || null;
+  const resolvedOrganizationGovernanceService = organizationGovernanceService || null;
   // Tag store is injected by composition root via server-runtime adapter.
   // No default factory is used — missing store = fail-closed.
-  const resolvedTagManagementStore: any =
+  const resolvedTagManagementStore =
     tagManagementStore ||
     resolvedAuthorizationGovernanceStore?.tagManagementStore ||
     consoleAuth?.tagManagementStore ||
     null;
-  const resolvedAuthorizationEngine: any =
+  const resolvedAuthorizationEngine =
     authorizationEngine ||
     consoleAuth?.authorizationEngine ||
     (resolvedAuthorizationStore
@@ -139,15 +378,17 @@ export function createSecurityPermissionsProvider({
           governanceStore: resolvedAuthorizationGovernanceStore
         })
       : null);
-  const custodyAuthorizationReceipts: any = new WeakMap<object, any>();
-  const hasDeferredConsoleAuthority: any =
-    typeof consoleAuth?.captureDeferredProtectedSinkAuthority === "function" &&
-    typeof consoleAuth?.revalidateDeferredProtectedSinkAuthority === "function" &&
-    typeof consoleAuth?.revokeDeferredProtectedSinkAuthority === "function";
+  const custodyAuthorizationReceipts = new WeakMap<object, CustodyAuthorizationState>();
+  const captureDeferredAuthority = consoleAuth?.captureDeferredProtectedSinkAuthority?.bind(consoleAuth) || null;
+  const revalidateDeferredAuthority = consoleAuth?.revalidateDeferredProtectedSinkAuthority?.bind(consoleAuth) || null;
+  const revokeDeferredAuthority = consoleAuth?.revokeDeferredProtectedSinkAuthority?.bind(consoleAuth) || null;
+  const hasDeferredConsoleAuthority = Boolean(
+    captureDeferredAuthority && revalidateDeferredAuthority && revokeDeferredAuthority
+  );
 
   function denyDeferredAuthority(
-    reasonCode: any = "deferred_protected_sink_authority_unavailable"
-  ) : any {
+    reasonCode = "deferred_protected_sink_authority_unavailable"
+  ) {
     return Object.freeze({
       allowed: false,
       reasonCode,
@@ -155,24 +396,24 @@ export function createSecurityPermissionsProvider({
     });
   }
 
-  function closedResourceBinding(value?: any) : any {
-    if (!value || typeof value !== "object" || Array.isArray(value)) {
+  function closedResourceBinding(value?: unknown): ProviderRecord | null {
+    if (!isRecord(value)) {
       return null;
     }
     try {
-      const normalized: any = JSON.parse(JSON.stringify(value));
-      return Object.freeze(normalized);
+      const normalized: unknown = JSON.parse(JSON.stringify(value));
+      return isRecord(normalized) ? Object.freeze(normalized) : null;
     } catch {
       return null;
     }
   }
 
-  async function revalidateDeferred(input: Record<string, any> = {}) : Promise<any> {
-    if (!hasDeferredConsoleAuthority) {
+  async function revalidateDeferred(input: PermissionInput = {}): Promise<DeferredAuthorityDecision> {
+    if (!hasDeferredConsoleAuthority || !revalidateDeferredAuthority) {
       return denyDeferredAuthority();
     }
-    const current: any =
-      await consoleAuth.revalidateDeferredProtectedSinkAuthority(input);
+    const current =
+      await revalidateDeferredAuthority(input);
     if (current?.allowed !== true || current?.revoked === true) {
       return Object.freeze({
         allowed: false,
@@ -182,12 +423,15 @@ export function createSecurityPermissionsProvider({
         revoked: current?.revoked === true
       });
     }
-    const requestedResourceBinding: any =
+    const requestedResourceBinding =
       closedResourceBinding(input.resourceBinding);
     if (!requestedResourceBinding) {
       return Object.freeze({ ...current });
     }
-    const resourceBinding: any = closedResourceBinding({
+    if (!current.subject || !current.context) {
+      return denyDeferredAuthority("deferred_protected_sink_authority_denied");
+    }
+    const resourceBinding = closedResourceBinding({
       ...requestedResourceBinding,
       ownerBindingDigest: securityDigest({
         subjectId: current.subject.subjectId,
@@ -200,15 +444,15 @@ export function createSecurityPermissionsProvider({
         "deferred_protected_sink_authority_denied"
       );
     }
-    const resourceBindingDigest: any = securityDigest(resourceBinding);
-    const decisionRef: any = securityDigest({
+    const resourceBindingDigest = securityDigest(resourceBinding);
+    const decisionRef = securityDigest({
       authorityBindingDigest: current.authorityBindingDigest,
       authorityRef: input.authorityRef,
       context: current.context,
       requestDigest: input.requestDigest,
       resourceBindingDigest
     });
-    const custodyAuthorizationReceipt: Readonly<Record<string, any>> = Object.freeze({
+    const custodyAuthorizationReceipt: Readonly<CustodyAuthorizationReceipt> = Object.freeze({
       decisionRef,
       grantRevision: current.context.grantRevision,
       policyRevision: current.context.policyRevision,
@@ -219,7 +463,7 @@ export function createSecurityPermissionsProvider({
       Object.freeze({
         authorityBindingDigest: input.authorityBindingDigest,
         authorityRef: input.authorityRef,
-        input: Object.freeze({ ...(input.input || {}) }),
+        input: Object.freeze({ ...input.input }),
         operation: input.operation,
         requestDigest: input.requestDigest,
         resourceBinding,
@@ -232,9 +476,9 @@ export function createSecurityPermissionsProvider({
     });
   }
 
-  const deferredProtectedSinkAuthorityPort: Readonly<Record<string, any>> = Object.freeze({
-    async capture(input: Record<string, any> = {}) : Promise<any> {
-      if (!hasDeferredConsoleAuthority) {
+  const deferredProtectedSinkAuthorityPort = Object.freeze({
+    async capture(input: PermissionInput = {}) {
+      if (!hasDeferredConsoleAuthority || !captureDeferredAuthority) {
         throw Object.assign(
           new Error("Durable protected sink authority source is unavailable."),
           {
@@ -243,30 +487,30 @@ export function createSecurityPermissionsProvider({
           }
         );
       }
-      return consoleAuth.captureDeferredProtectedSinkAuthority(input);
+      return captureDeferredAuthority(input);
     },
     revalidate: revalidateDeferred,
-    async revoke(input: Record<string, any> = {}) : Promise<any> {
-      if (!hasDeferredConsoleAuthority) {
+    async revoke(input: PermissionInput = {}) {
+      if (!hasDeferredConsoleAuthority || !revokeDeferredAuthority) {
         return Object.freeze({ revoked: false });
       }
-      return consoleAuth.revokeDeferredProtectedSinkAuthority(input);
+      return revokeDeferredAuthority(input);
     },
-    async reauthorizeCustodyRead(input: Record<string, any> = {}) : Promise<any> {
-      const receipt: any = input.authorizationReceipt;
+    async reauthorizeCustodyRead(input: PermissionInput = {}) {
+      const receipt = input.authorizationReceipt;
       if (
         !receipt ||
         (typeof receipt !== "object" && typeof receipt !== "function")
       ) {
         return denyDeferredAuthority("upload_custody_read_denied");
       }
-      const state: any = custodyAuthorizationReceipts.get(receipt);
+      const state = custodyAuthorizationReceipts.get(receipt);
       custodyAuthorizationReceipts.delete(receipt);
       if (!state) {
         return denyDeferredAuthority("upload_custody_read_denied");
       }
-      const descriptor: any = state.resourceBinding?.descriptor;
-      const observedResourceBinding: any = closedResourceBinding({
+      const descriptor = state.resourceBinding.descriptor;
+      const observedResourceBinding = closedResourceBinding({
         descriptor: {
           byteCount: Number(input.byteCount),
           contentDigest: String(input.contentDigest || ""),
@@ -294,7 +538,7 @@ export function createSecurityPermissionsProvider({
       ) {
         return denyDeferredAuthority("upload_custody_read_denied");
       }
-      const current: any = await revalidateDeferred({
+      const current = await revalidateDeferred({
         authorityBindingDigest: state.authorityBindingDigest,
         authorityRef: state.authorityRef,
         input: state.input,
@@ -302,7 +546,8 @@ export function createSecurityPermissionsProvider({
         requestDigest: state.requestDigest
       });
       if (
-        current?.allowed !== true ||
+        current.allowed !== true ||
+        !current.context ||
         current.context?.policyRevision !== receipt.policyRevision ||
         current.context?.grantRevision !== receipt.grantRevision
       ) {
@@ -322,30 +567,29 @@ export function createSecurityPermissionsProvider({
     }
   });
 
-  function tagPolicyFromInput(input: Record<string, any> = {}) : any {
-    const nestedInput: any = input.input && typeof input.input === "object" && !Array.isArray(input.input)
-      ? input.input
-      : {};
-    const policy: any =
+  function tagPolicyFromInput(input: PermissionInput = {}): ProviderRecord | null {
+    const nestedInput = isRecord(input.input) ? input.input : {};
+    const nestedContext = isRecord(nestedInput.context) ? nestedInput.context : {};
+    const policy =
       input.tagPolicy ||
-      input.context?.tagPolicy ||
-      nestedInput.tagPolicy ||
-      nestedInput.context?.tagPolicy ||
+      (isRecord(input.context?.tagPolicy) ? input.context.tagPolicy : null) ||
+      (isRecord(nestedInput.tagPolicy) ? nestedInput.tagPolicy : null) ||
+      (isRecord(nestedContext.tagPolicy) ? nestedContext.tagPolicy : null) ||
       null;
     return hasUniversalTagPolicyRules(policy || {}) ? policy : null;
   }
 
-  function evaluateTagPolicy(input: Record<string, any> = {}, authorizationDecision: any = null) : any {
-    const tagPolicy: any = tagPolicyFromInput(input);
+  function evaluateTagPolicy(input: PermissionInput = {}, authorizationDecision: AuthorizationDecision | null = null): AuthorizationDecision | null {
+    const tagPolicy = tagPolicyFromInput(input);
     if (!tagPolicy) {
       return authorizationDecision;
     }
-    const tagDecision: any = evaluateUniversalTagPolicy({
+    const tagDecision = evaluateUniversalTagPolicy({
       tagStore: resolvedTagManagementStore,
       ...tagPolicy
     });
-    const effectivePolicySnapshot: Record<string, any> = {
-      ...(authorizationDecision?.effectivePolicySnapshot || {}),
+    const effectivePolicySnapshot: ProviderRecord = {
+      ...(isRecord(authorizationDecision?.effectivePolicySnapshot) ? authorizationDecision.effectivePolicySnapshot : {}),
       tagPolicy: {
         protocolVersion: tagDecision.protocolVersion,
         reasonCode: tagDecision.reasonCode,
@@ -361,7 +605,7 @@ export function createSecurityPermissionsProvider({
     };
     if (!tagDecision.allowed) {
       return {
-        ...(authorizationDecision || {}),
+        ...authorizationDecision,
         effect: "deny",
         allowed: false,
         reasonCode: tagDecision.reasonCode,
@@ -369,20 +613,20 @@ export function createSecurityPermissionsProvider({
         deniedLayer: "tag_policy",
         tagPolicyDecision: tagDecision,
         effectivePolicySnapshot,
-        evaluatedLayers: [...new Set<any>([...(authorizationDecision?.evaluatedLayers || []), "tag_policy"])]
+        evaluatedLayers: [...new Set([...(Array.isArray(authorizationDecision?.evaluatedLayers) ? authorizationDecision.evaluatedLayers : []), "tag_policy"])]
       };
     }
     return {
-      ...(authorizationDecision || {}),
+      ...authorizationDecision,
       tagPolicyDecision: tagDecision,
       effectivePolicySnapshot,
-      evaluatedLayers: [...new Set<any>([...(authorizationDecision?.evaluatedLayers || []), "tag_policy"])]
+      evaluatedLayers: [...new Set([...(Array.isArray(authorizationDecision?.evaluatedLayers) ? authorizationDecision.evaluatedLayers : []), "tag_policy"])]
     };
   }
 
-  async function authorizeOperation(input: Record<string, any> = {}) : Promise<any> {
+  async function authorizeOperation(input: PermissionInput = {}) {
     if (typeof consoleAuth?.authorizeOperation === "function") {
-      const authorization: any = await consoleAuth.authorizeOperation(input);
+      const authorization = await consoleAuth.authorizeOperation(input);
       if (
         authorization?.ok === true &&
         requiresProtectedSinkAuthority(input) &&
@@ -412,24 +656,23 @@ export function createSecurityPermissionsProvider({
         bootstrap: { authorizationEngineAvailable: false }
       };
     }
-    const operationInput: any =
-      input.input && typeof input.input === "object" && !Array.isArray(input.input)
-        ? input.input
-        : input.operationInput && typeof input.operationInput === "object" && !Array.isArray(input.operationInput)
-          ? input.operationInput
-          : {};
-    const decision: any = await resolvedAuthorizationEngine.evaluate({
+    const operationInput = isRecord(input.input)
+      ? input.input
+      : isRecord(input.operationInput)
+        ? input.operationInput
+        : {};
+    const decision = await resolvedAuthorizationEngine.evaluate({
       operation: input.operation || {},
       request: input.request || null,
       authSession: input.authSession || null,
       input: buildConsoleOperationAuthorizationInput({
         input: operationInput,
-        method: input.method || "",
+        method: String(input.method || ""),
         url: input.url || null
       }),
       context: buildConsoleOperationAuthorizationContext({
         context: input.context || {},
-        transport: input.transport || "security-permissions-provider"
+        transport: String(input.transport || "security-permissions-provider")
       }),
       enforceConfirmation: false
     });
@@ -451,9 +694,9 @@ export function createSecurityPermissionsProvider({
       : {
           ok: false,
           status: 403,
-          error: decision.missingCapabilities?.length
+          error: Array.isArray(decision.missingCapabilities) && decision.missingCapabilities.length > 0
             ? `权限不足：${decision.missingCapabilities.join(", ")}。`
-            : decision.missingScopes?.length
+            : Array.isArray(decision.missingScopes) && decision.missingScopes.length > 0
             ? `权限不足：${decision.missingScopes.join(", ")}。`
             : `权限不足：${decision.reasonCode || "authorization_denied"}。`,
           session: input.authSession || null,
@@ -461,7 +704,7 @@ export function createSecurityPermissionsProvider({
         };
   }
 
-  async function verifyProcessIdentity(input: Record<string, any> = {}) : Promise<any> {
+  async function verifyProcessIdentity(input: PermissionInput = {}) {
     if (!processIdentity || typeof processIdentity.verifySignedRequest !== "function") {
       return {
         ok: false,
@@ -470,16 +713,17 @@ export function createSecurityPermissionsProvider({
         error: "Process identity verifier is unavailable."
       };
     }
-    const verification: any = await processIdentity.verifySignedRequest(input);
+    const verification = await processIdentity.verifySignedRequest(input);
+    const revalidateVerifiedRequest = processIdentity.revalidateVerifiedRequest;
     if (
       verification?.ok !== true ||
-      typeof processIdentity.revalidateVerifiedRequest !== "function"
+      typeof revalidateVerifiedRequest !== "function"
     ) {
       return verification;
     }
     return {
       ...verification,
-      revalidateAuthorization: () : any => processIdentity.revalidateVerifiedRequest({
+      revalidateAuthorization: () => revalidateVerifiedRequest({
         verification,
         operation: input.operation || {}
       })
@@ -496,76 +740,76 @@ export function createSecurityPermissionsProvider({
     processIdentity,
     authorizeOperation,
     verifyProcessIdentity,
-    getConsoleSummary(request: any = null) : any {
+    getConsoleSummary(request: object | null = null) {
       return typeof consoleAuth?.getSummary === "function"
         ? consoleAuth.getSummary(request)
         : defaultSummary();
     },
-    getSummary(request: any = null) : any {
+    getSummary(request: object | null = null) {
       return typeof consoleAuth?.getSummary === "function"
         ? consoleAuth.getSummary(request)
         : defaultSummary();
     },
-    login(input: Record<string, any> = {}, request: any = null) : any {
+    login(input: ProviderRecord = {}, request: object | null = null) {
       if (typeof consoleAuth?.login !== "function") {
         throw new Error("Console authentication login provider is unavailable.");
       }
       return consoleAuth.login(input, request);
     },
-    logout(request: any = null) : any {
+    logout(request: object | null = null) {
       if (typeof consoleAuth?.logout !== "function") {
         return { ok: true, cookies: [] };
       }
       return consoleAuth.logout(request);
     },
-    rotateSession(request: any = null) : any {
+    rotateSession(request: object | null = null) {
       if (typeof consoleAuth?.rotateSession !== "function") {
         return { ok: false, status: 503, error: "Console session rotation provider is unavailable." };
       }
       return consoleAuth.rotateSession(request);
     },
-    audit(entry: Record<string, any> = {}) : any {
+    audit(entry: ProviderRecord = {}) {
       return typeof consoleAuth?.audit === "function" ? consoleAuth.audit(entry) : null;
     },
-    roleList() : any {
+    roleList() {
       return typeof consoleAuth?.roleList === "function" ? consoleAuth.roleList() : [];
     },
-    listUsers() : any {
+    listUsers() {
       return typeof consoleAuth?.listUsers === "function" ? consoleAuth.listUsers() : [];
     },
-    updateUser(userId?: any, input: Record<string, any> = {}) : any {
+    updateUser(userId?: string, input: ProviderRecord = {}) {
       if (typeof consoleAuth?.updateUser !== "function") {
         return null;
       }
       return consoleAuth.updateUser(userId, input);
     },
-    getOidcConfig() : any {
+    getOidcConfig() {
       return typeof consoleAuth?.getOidcConfig === "function" ? consoleAuth.getOidcConfig() : {};
     },
-    setOidcConfig(input: Record<string, any> = {}) : any {
+    setOidcConfig(input: ProviderRecord = {}) {
       if (typeof consoleAuth?.setOidcConfig !== "function") {
         throw new Error("Console OIDC provider is unavailable.");
       }
       return consoleAuth.setOidcConfig(input);
     },
-    listAudit(input: Record<string, any> = {}) : any {
+    listAudit(input: ProviderRecord = {}) {
       return typeof consoleAuth?.listAudit === "function" ? consoleAuth.listAudit(input) : [];
     },
-    listSessions() : any {
+    listSessions() {
       return typeof consoleAuth?.listSessions === "function" ? consoleAuth.listSessions() : [];
     },
-    revokeSession(sessionId?: any) : any {
+    revokeSession(sessionId?: string) {
       if (typeof consoleAuth?.revokeSession !== "function") {
         return { ok: false };
       }
       return consoleAuth.revokeSession(sessionId);
     },
-    resolveSubject(input: Record<string, any> = {}) : any {
+    resolveSubject(input: ProviderRecord = {}) {
       return resolvedAuthorizationEngine?.resolveSubject
         ? resolvedAuthorizationEngine.resolveSubject(input)
         : null;
     },
-    async evaluatePolicy(input: Record<string, any> = {}) : Promise<any> {
+    async evaluatePolicy(input: PermissionInput = {}) {
       if (!resolvedAuthorizationEngine || typeof resolvedAuthorizationEngine.evaluate !== "function") {
         return {
           effect: "deny",
@@ -578,15 +822,15 @@ export function createSecurityPermissionsProvider({
           createdAt: new Date().toISOString()
         };
       }
-      const authorizationDecision: any = await resolvedAuthorizationEngine.evaluate(input);
+      const authorizationDecision = await resolvedAuthorizationEngine.evaluate(input);
       return evaluateTagPolicy(input, authorizationDecision);
     },
-    getGovernancePolicyRevision() : any {
+    getGovernancePolicyRevision() {
       return resolvedAuthorizationGovernanceStore?.getPolicyRevision?.() ||
         resolvedTagManagementStore?.getPolicyRevision?.() ||
         defaultGovernancePolicyRevision();
     },
-    getGovernanceSummary() : any {
+    getGovernanceSummary() {
       if (!resolvedAuthorizationGovernanceStore) {
         return {
           policyRevision: defaultGovernancePolicyRevision(),
@@ -612,7 +856,7 @@ export function createSecurityPermissionsProvider({
         apiKeyRecoveryAssignments: resolvedAuthorizationGovernanceStore.listApiKeyRecoveryAssignments?.() || []
       };
     },
-    getOrganizationGovernance() : any {
+    getOrganizationGovernance() {
       if (!resolvedOrganizationGovernanceService?.getOrganizationGovernance) {
         throw Object.assign(
           new Error("Organization governance store is unavailable."),
@@ -621,7 +865,7 @@ export function createSecurityPermissionsProvider({
       }
       return resolvedOrganizationGovernanceService.getOrganizationGovernance();
     },
-    listOrganizationGovernanceTemplates() : any {
+    listOrganizationGovernanceTemplates() {
       if (!resolvedOrganizationGovernanceService?.listOrganizationGovernanceTemplates) {
         throw Object.assign(
           new Error("Organization governance store is unavailable."),
@@ -630,7 +874,7 @@ export function createSecurityPermissionsProvider({
       }
       return resolvedOrganizationGovernanceService.listOrganizationGovernanceTemplates();
     },
-    importOrganizationGovernance(input: Record<string, any> = {}) : any {
+    importOrganizationGovernance(input: ProviderRecord = {}) {
       if (!resolvedOrganizationGovernanceService?.importOrganizationGovernance) {
         throw Object.assign(
           new Error("Organization governance store is unavailable."),
@@ -639,7 +883,7 @@ export function createSecurityPermissionsProvider({
       }
       return resolvedOrganizationGovernanceService.importOrganizationGovernance(input);
     },
-    previewOrganizationGovernance(input: Record<string, any> = {}) : any {
+    previewOrganizationGovernance(input: ProviderRecord = {}) {
       if (!resolvedOrganizationGovernanceService?.previewOrganizationGovernance) {
         throw Object.assign(
           new Error("Organization governance store is unavailable."),
@@ -648,7 +892,7 @@ export function createSecurityPermissionsProvider({
       }
       return resolvedOrganizationGovernanceService.previewOrganizationGovernance(input);
     },
-    publishOrganizationGovernance(input: Record<string, any> = {}) : any {
+    publishOrganizationGovernance(input: ProviderRecord = {}) {
       if (!resolvedOrganizationGovernanceService?.publishOrganizationGovernance) {
         throw Object.assign(
           new Error("Organization governance store is unavailable."),
@@ -657,168 +901,168 @@ export function createSecurityPermissionsProvider({
       }
       return resolvedOrganizationGovernanceService.publishOrganizationGovernance(input);
     },
-    listGovernanceRoles(input: Record<string, any> = {}) : any {
+    listGovernanceRoles(input: ProviderRecord = {}) {
       return resolvedAuthorizationGovernanceStore?.listRoles?.(input) || [];
     },
-    upsertGovernanceRole(input: Record<string, any> = {}) : any {
+    upsertGovernanceRole(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertRole) {
         throw new Error("Authorization governance role store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertRole(input);
     },
-    listGovernanceDepartments(input: Record<string, any> = {}) : any {
+    listGovernanceDepartments(input: ProviderRecord = {}) {
       return resolvedAuthorizationGovernanceStore?.listDepartments?.(input) || [];
     },
-    upsertGovernanceDepartment(input: Record<string, any> = {}) : any {
+    upsertGovernanceDepartment(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertDepartment) {
         throw new Error("Authorization governance department store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertDepartment(input);
     },
-    listGovernanceTeams(input: Record<string, any> = {}) : any {
+    listGovernanceTeams(input: ProviderRecord = {}) {
       return resolvedAuthorizationGovernanceStore?.listTeams?.(input) || [];
     },
-    upsertGovernanceTeam(input: Record<string, any> = {}) : any {
+    upsertGovernanceTeam(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertTeam) {
         throw new Error("Authorization governance team store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertTeam(input);
     },
-    listGovernanceUserPolicies() : any {
+    listGovernanceUserPolicies() {
       return resolvedAuthorizationGovernanceStore?.listUserPolicies?.() || [];
     },
-    upsertGovernanceUserPolicy(input: Record<string, any> = {}) : any {
+    upsertGovernanceUserPolicy(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertUserPolicy) {
         throw new Error("Authorization governance user policy store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertUserPolicy(input);
     },
-    listGovernanceAgentGroups(input: Record<string, any> = {}) : any {
+    listGovernanceAgentGroups(input: ProviderRecord = {}) {
       return resolvedAuthorizationGovernanceStore?.listAgentGroups?.(input) || [];
     },
-    upsertGovernanceAgentGroup(input: Record<string, any> = {}) : any {
+    upsertGovernanceAgentGroup(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertAgentGroup) {
         throw new Error("Authorization governance agent group store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertAgentGroup(input);
     },
-    listGovernanceAgentBindings() : any {
+    listGovernanceAgentBindings() {
       return resolvedAuthorizationGovernanceStore?.listAgentBindings?.() || [];
     },
-    upsertGovernanceAgentBinding(input: Record<string, any> = {}) : any {
+    upsertGovernanceAgentBinding(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertAgentBinding) {
         throw new Error("Authorization governance agent binding store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertAgentBinding(input);
     },
-    listTags(input: Record<string, any> = {}) : any {
+    listTags(input: TagStoreRecord = {}) {
       return resolvedTagManagementStore?.listTags?.(input) || [];
     },
-    getTag(tagId?: any) : any {
+    getTag(tagId = "") {
       return resolvedTagManagementStore?.getTag?.(tagId) || null;
     },
-    upsertTag(input: Record<string, any> = {}) : any {
+    upsertTag(input: TagStoreRecord = {}) {
       if (!resolvedTagManagementStore?.upsertTag) {
         throw new Error("Tag management store is unavailable.");
       }
       return resolvedTagManagementStore.upsertTag(input);
     },
-    archiveTag(tagId?: any, input: Record<string, any> = {}) : any {
+    archiveTag(tagId = "", input: TagStoreRecord = {}) {
       if (!resolvedTagManagementStore?.archiveTag) {
         throw new Error("Tag management store is unavailable.");
       }
       return resolvedTagManagementStore.archiveTag(tagId, input);
     },
-    restoreTag(tagId?: any) : any {
+    restoreTag(tagId = "") {
       if (!resolvedTagManagementStore?.restoreTag) {
         throw new Error("Tag management store is unavailable.");
       }
       return resolvedTagManagementStore.restoreTag(tagId);
     },
-    listTagProjections(input: Record<string, any> = {}) : any {
+    listTagProjections(input: TagStoreRecord = {}) {
       return resolvedTagManagementStore?.listProjections?.(input) || [];
     },
-    rebuildTagProjections() : any {
+    rebuildTagProjections() {
       if (!resolvedTagManagementStore?.rebuildProjections) {
         throw new Error("Tag management store is unavailable.");
       }
       return resolvedTagManagementStore.rebuildProjections();
     },
-    listTagEvents(input: Record<string, any> = {}) : any {
+    listTagEvents(input: TagStoreRecord = {}) {
       return resolvedTagManagementStore?.listEvents?.(input) || [];
     },
-    listToolProfileTags(input: Record<string, any> = {}) : any {
+    listToolProfileTags(input: TagStoreRecord = {}) {
       return resolvedTagManagementStore?.listToolProfiles?.(input) || [];
     },
-    seedToolProfileTags(profiles: any = []) : any {
+    seedToolProfileTags(profiles: TagStoreRecord[] = []) {
       return resolvedTagManagementStore?.seedToolProfiles?.(profiles) || { created: 0 };
     },
-    listGovernanceApprovals(input: Record<string, any> = {}) : any {
+    listGovernanceApprovals(input: ProviderRecord = {}) {
       return resolvedAuthorizationGovernanceStore?.listApprovals?.(input) || [];
     },
-    getGovernanceApproval(approvalId?: any) : any {
+    getGovernanceApproval(approvalId = "") {
       return resolvedAuthorizationGovernanceStore?.getApproval?.(approvalId) || null;
     },
-    upsertGovernanceApproval(input: Record<string, any> = {}) : any {
+    upsertGovernanceApproval(input: ProviderRecord = {}) {
       if (!resolvedAuthorizationGovernanceStore?.upsertApproval) {
         throw new Error("Authorization governance approval store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.upsertApproval(input);
     },
-    revokeGovernanceApproval(approvalId?: any, reason: any = "") : any {
+    revokeGovernanceApproval(approvalId = "", reason = "") {
       if (!resolvedAuthorizationGovernanceStore?.revokeApproval) {
         throw new Error("Authorization governance approval store is unavailable.");
       }
       return resolvedAuthorizationGovernanceStore.revokeApproval(approvalId, reason);
     },
-    listReceipts(input: Record<string, any> = {}) : any {
+    listReceipts(input: ProviderRecord = {}) {
       return resolvedAuthorizationStore?.listReceipts
         ? resolvedAuthorizationStore.listReceipts(input)
         : [];
     },
-    listLoanRecords(input: Record<string, any> = {}) : any {
+    listLoanRecords(input: ProviderRecord = {}) {
       return resolvedAuthorizationStore?.listLoanRecords
         ? resolvedAuthorizationStore.listLoanRecords(input)
         : [];
     },
-    listDeniedRequests(input: Record<string, any> = {}) : any {
+    listDeniedRequests(input: ProviderRecord = {}) {
       return resolvedAuthorizationStore?.listDeniedRequests
         ? resolvedAuthorizationStore.listDeniedRequests(input)
         : [];
     },
-    listDecisions(input: Record<string, any> = {}) : any {
+    listDecisions(input: ProviderRecord = {}) {
       return resolvedAuthorizationStore?.listDecisions
         ? resolvedAuthorizationStore.listDecisions(input)
         : [];
     },
-    appendReceipt(receipt?: any, metadata: Record<string, any> = {}) : any {
+    appendReceipt(receipt?: ProviderRecord, metadata: ProviderRecord = {}) {
       if (!receipt || typeof resolvedAuthorizationStore?.appendReceipt !== "function") {
         return null;
       }
       return resolvedAuthorizationStore.appendReceipt(receipt, metadata);
     },
-    appendLoanRecord(record?: any, metadata: Record<string, any> = {}) : any {
+    appendLoanRecord(record?: ProviderRecord, metadata: ProviderRecord = {}) {
       if (!record || typeof resolvedAuthorizationStore?.appendLoanRecord !== "function") {
         return null;
       }
       return resolvedAuthorizationStore.appendLoanRecord(record, metadata);
     },
-    appendDeniedRequest(request: Record<string, any> = {}) : any {
+    appendDeniedRequest(request: ProviderRecord = {}) {
       if (!request || typeof resolvedAuthorizationStore?.appendDeniedRequest !== "function") {
         return null;
       }
       return resolvedAuthorizationStore.appendDeniedRequest(request);
     },
-    appendDecision(decision: Record<string, any> = {}) : any {
+    appendDecision(decision: ProviderRecord = {}) {
       if (!decision || typeof resolvedAuthorizationStore?.appendDecision !== "function") {
         return null;
       }
       return resolvedAuthorizationStore.appendDecision(decision);
     },
-    setWorkspaceAssetPolicy(input: Record<string, any> = {}) : any {
-      const workspaceId: any = String(input.workspaceId || input.workspace || "default").trim() || "default";
-      const policyId: any = String(input.policyId || input["policy-id"] || "").trim() || `workspace_asset_policy_${crypto.randomUUID()}`;
-      const policy: Record<string, any> = {
+    setWorkspaceAssetPolicy(input: ProviderRecord = {}) {
+      const workspaceId = String(input.workspaceId || input.workspace || "default").trim() || "default";
+      const policyId = String(input.policyId || input["policy-id"] || "").trim() || `workspace_asset_policy_${crypto.randomUUID()}`;
+      const policy: ProviderRecord = {
         ...input,
         policyId,
         workspaceId,
@@ -827,15 +1071,15 @@ export function createSecurityPermissionsProvider({
       workspaceAssetPolicies.set(workspaceAssetPolicyKey(workspaceId, policyId), policy);
       return policy;
     },
-    getWorkspaceAssetPolicy(input: Record<string, any> = {}) : any {
-      const workspaceId: any = String(input.workspaceId || input.workspace || "default").trim() || "default";
-      const policyId: any = String(input.policyId || input["policy-id"] || input.id || "").trim();
+    getWorkspaceAssetPolicy(input: ProviderRecord = {}) {
+      const workspaceId = String(input.workspaceId || input.workspace || "default").trim() || "default";
+      const policyId = String(input.policyId || input["policy-id"] || input.id || "").trim();
       if (!policyId) {
         return null;
       }
       return workspaceAssetPolicies.get(workspaceAssetPolicyKey(workspaceId, policyId)) || null;
     },
-    async checkWorkspaceAssetPermission(input: Record<string, any> = {}) : Promise<any> {
+    async checkWorkspaceAssetPermission(input: PermissionInput = {}) {
       if (!resolvedAuthorizationEngine || typeof resolvedAuthorizationEngine.evaluate !== "function") {
         return null;
       }

@@ -301,7 +301,7 @@ export function createUpstreamGatewayE2eServices({
       baseUrl: fixtureUrl,
       healthPath: "/health",
       credentialRefs: [secretRef],
-      trafficPolicy: { perMinute: 100, burst: 50 },
+      trafficPolicy: { perMinute: 1_000, burst: 128 },
       operations: [
         { operationKey: "echo", method: "POST", path: "/echo", risk: "safe_write", requiredScopes: ["gateway:write"] },
         {

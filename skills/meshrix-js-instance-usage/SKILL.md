@@ -41,7 +41,7 @@ merely to make a command reachable, and do not publish a second Meshrix.js
 listen address for that service.
 
 Use `$meshrix-js-upstream-service-publishing` for the publishing transaction
-and `$meshrix-js-instance-configuration` plus its agent-gateway reference for
+and `$meshrix-js-instance-configuration` plus its Agent connectivity reference for
 host stdio or `gh` bridges.
 
 ## Connect an external agent or client to Meshrix.js

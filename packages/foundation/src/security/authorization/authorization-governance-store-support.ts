@@ -1,40 +1,78 @@
 import crypto from "node:crypto";
 
-export const DEFAULT_ROLES: Readonly<Record<string, any>> = Object.freeze({
+export interface GovernanceRecord extends Record<string, unknown> {
+  id?: string; userId?: string; subjectId?: string; roleId?: string; teamId?: string;
+  departmentId?: string; approvalId?: string; agentId?: string;
+  enabled?: boolean; system?: boolean; effect?: string; boundUserId?: string;
+  memberUserIds?: string[]; groupIds?: string[]; roleIds?: string[];
+  metadata?: GovernanceRecord;
+  resource?: GovernanceRecord;
+  policies?: unknown[];
+  resourcePolicies?: GovernanceRecord[];
+  scopes?: string[];
+  teamIds?: string[];
+  departmentIds?: string[];
+}
+export interface UserPolicyRecord extends GovernanceRecord {
+  userId: string; enabled: boolean; roleIds: string[]; teamIds: string[];
+  departmentIds: string[]; resourcePolicies: GovernanceRecord[];
+  createdAt: string; updatedAt: string;
+}
+export interface ApprovalRecord extends GovernanceRecord {
+  approvalId: string; userId: string; agentId: string; resourceType: string;
+  resourceId: string; actions: string[]; targetProviders: string[];
+  teamIds: string[]; departmentIds: string[]; approvalLayers: string[];
+  grantKind: string; effect: string; expiresAt: string; revokedAt: string;
+  reason: string; createdAt: string; updatedAt: string;
+}
+interface GovernanceRequestInput extends GovernanceRecord {
+  operation?: GovernanceRecord; tool?: GovernanceRecord | null; input?: GovernanceRecord;
+  context?: GovernanceRecord; subject?: GovernanceRecord; grant?: GovernanceRecord | null;
+}
+interface SqliteStatement { all(...params: unknown[]): GovernanceRecord[]; run(...params: unknown[]): unknown }
+interface SqliteDatabase {
+  exec(sql: string): unknown;
+  pragma(sql: string, options?: { simple?: boolean }): unknown;
+  prepare(sql: string): SqliteStatement;
+  transaction<T>(action: (database?: SqliteDatabase) => T): () => T;
+}
+
+export const DEFAULT_ROLES: Readonly<Record<string, GovernanceRecord>> = Object.freeze({
   owner: { roleId: "owner", label: "Owner", scopes: [] },
   maintainer: { roleId: "maintainer", label: "Maintainer", scopes: [] },
   viewer: { roleId: "viewer", label: "Viewer", scopes: [] }
 });
 
-const WRITE_ACTION_RE: any = /\.(prepare|upload|write|create|update|delete|move|push|approve|requestChanges|comment|submit|maintain|rebase|merge|abandon|restore|review)\b|:write|:maintain|:approve|:review|:admin/;
+const WRITE_ACTION_RE = /\.(prepare|upload|write|create|update|delete|move|push|approve|requestChanges|comment|submit|maintain|rebase|merge|abandon|restore|review)\b|:write|:maintain|:approve|:review|:admin/;
 
-export function nowIso() : any {
+export function nowIso() {
   return new Date().toISOString();
 }
 
-export function randomId(prefix?: any) : any {
+export function randomId(prefix?: unknown): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-export function parseJson(value?: any, fallback?: any) : any {
+export function parseJson<T>(value: unknown, fallback: T): unknown | T {
   try {
-    const parsed: any = JSON.parse(value || "");
+    const parsed: unknown = JSON.parse(String(value || ""));
     return parsed === undefined || parsed === null ? fallback : parsed;
   } catch {
     return fallback;
   }
 }
 
-export function stringifyJson(value?: any, fallback: any = null) : any {
+export function stringifyJson(value?: unknown, fallback: unknown = null): string {
   return JSON.stringify(value ?? fallback);
 }
 
-export function uniqueStrings(values: any = []) : any {
-  return [...new Set<any>(values.map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+export function uniqueStrings(values: unknown = []): string[] {
+  const entries = Array.isArray(values) ? values : [];
+  return [...new Set(entries.map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
-export function stringsFrom(...values: any[]) : any {
-  const output: any[] = [];
+export function stringsFrom(...values: unknown[]): string[] {
+  const output: unknown[] = [];
   for (const value of values) {
     if (Array.isArray(value)) {
       output.push(...value);
@@ -47,13 +85,15 @@ export function stringsFrom(...values: any[]) : any {
   return uniqueStrings(output);
 }
 
-export function objectOrNull(value?: any) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+export function objectOrNull(value?: unknown): GovernanceRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as GovernanceRecord
+    : null;
 }
 
-export function firstString(...values: any[]) : any {
+export function firstString(...values: unknown[]): string {
   for (const value of values) {
-    const text: any = String(value || "").trim();
+    const text = String(value || "").trim();
     if (text) {
       return text;
     }
@@ -61,18 +101,20 @@ export function firstString(...values: any[]) : any {
   return "";
 }
 
-export function normalizeId(value?: any, fallbackPrefix?: any) : any {
-  const text: any = String(value || "").trim();
+export function normalizeId(value?: unknown, fallbackPrefix?: unknown): string {
+  const text = String(value || "").trim();
   if (text) {
     return text.replace(/[^A-Za-z0-9_.:-]+/g, "-").slice(0, 160);
   }
   return randomId(fallbackPrefix);
 }
 
-export function normalizePolicyList(value: any = []) : any {
-  const input: any = Array.isArray(value) ? value : value?.policies || value?.resourcePolicies || [];
-  return (Array.isArray(input) ? input : []).map((entry?: any) : any => {
-    const resource: any = objectOrNull(entry.resource) || {};
+export function normalizePolicyList(value: unknown = []) {
+  const source = objectOrNull(value);
+  const input = Array.isArray(value) ? value : source?.policies || source?.resourcePolicies || [];
+  return (Array.isArray(input) ? input : []).map((value: unknown) => {
+    const entry = objectOrNull(value) || {};
+    const resource = objectOrNull(entry.resource) || {};
     return {
       resourceType: String(entry.resourceType || entry.type || resource.type || "*").trim() || "*",
       resourceId: String(entry.resourceId || entry.id || entry.repoId || entry.repositoryRef || resource.id || "*").trim() || "*",
@@ -80,12 +122,12 @@ export function normalizePolicyList(value: any = []) : any {
       targetProviders: uniqueStrings(entry.targetProviders || entry.providers || entry.provider || entry.targets || []),
       label: String(entry.label || "").trim()
     };
-  }).filter((entry?: any) : any => entry.actions.length > 0);
+  }).filter((entry) => entry.actions.length > 0);
 }
 
-export function normalizeUserPolicy(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const userId: any = normalizeId(input.userId || input.subjectId || input.id || fallback.userId, "user");
-  const timestamp: any = nowIso();
+export function normalizeUserPolicy(input: GovernanceRecord = {}, fallback: GovernanceRecord = {}): UserPolicyRecord {
+  const userId = normalizeId(input.userId || input.subjectId || input.id || fallback.userId, "user");
+  const timestamp = nowIso();
   return {
     userId,
     roleIds: uniqueStrings(input.roleIds || input.roles || fallback.roleIds || []),
@@ -98,9 +140,9 @@ export function normalizeUserPolicy(input: Record<string, any> = {}, fallback: R
   };
 }
 
-export function normalizeApproval(input: Record<string, any> = {}, fallback: Record<string, any> = {}) : any {
-  const approvalId: any = normalizeId(input.approvalId || input.id || fallback.approvalId, "approval");
-  const timestamp: any = nowIso();
+export function normalizeApproval(input: GovernanceRecord = {}, fallback: GovernanceRecord = {}): ApprovalRecord {
+  const approvalId = normalizeId(input.approvalId || input.id || fallback.approvalId, "approval");
+  const timestamp = nowIso();
   return {
     approvalId,
     userId: String(input.userId || input.subjectId || fallback.userId || "").trim(),
@@ -122,7 +164,7 @@ export function normalizeApproval(input: Record<string, any> = {}, fallback: Rec
   };
 }
 
-export function ensureSchema(db?: any) : any {
+export function ensureSchema(db: SqliteDatabase): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -184,22 +226,22 @@ export function ensureSchema(db?: any) : any {
     CREATE INDEX IF NOT EXISTS idx_authorization_approvals_agent ON authorization_approval_grants(agent_id);
   `);
 
-  const migrationVersion: any = Number(db.pragma("user_version", { simple: true }) || 0);
+  const migrationVersion = Number(db.pragma("user_version", { simple: true }) || 0);
   if (migrationVersion < 1) {
-    db.transaction(() : any => {
-      const rows: any[] = db.prepare(`
+    db.transaction(() => {
+      const rows = db.prepare(`
         SELECT user_id, role_ids_json
         FROM authorization_user_policies
       `).all();
-      const updateRoles: any = db.prepare(`
+      const updateRoles = db.prepare(`
         UPDATE authorization_user_policies
         SET role_ids_json = ?
         WHERE user_id = ?
       `);
       for (const row of rows) {
-        const roleIds: any[] = parseJson(row.role_ids_json, []);
+        const roleIds = parseJson(row.role_ids_json, []);
         if (!Array.isArray(roleIds)) continue;
-        const migrated: any[] = uniqueStrings(roleIds.map((roleId?: any) : any =>
+        const migrated = uniqueStrings(roleIds.map((roleId) =>
           ["admin", "operator"].includes(String(roleId || "")) ? "maintainer" : roleId));
         if (JSON.stringify(migrated) !== JSON.stringify(roleIds)) {
           updateRoles.run(stringifyJson(migrated, []), row.user_id);
@@ -210,87 +252,92 @@ export function ensureSchema(db?: any) : any {
   }
 }
 
-export function userPolicyFromRow(row?: any) : any {
+export function userPolicyFromRow(row?: GovernanceRecord | null): UserPolicyRecord | null {
   if (!row) return null;
   return {
-    userId: row.user_id,
+    userId: String(row.user_id || ""),
     enabled: Boolean(row.enabled),
-    roleIds: parseJson(row.role_ids_json, []),
-    teamIds: parseJson(row.team_ids_json, []),
-    departmentIds: parseJson(row.department_ids_json, []),
-    resourcePolicies: parseJson(row.resource_policies_json, []),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    roleIds: uniqueStrings(parseJson(row.role_ids_json, [])),
+    teamIds: uniqueStrings(parseJson(row.team_ids_json, [])),
+    departmentIds: uniqueStrings(parseJson(row.department_ids_json, [])),
+    resourcePolicies: normalizePolicyList(parseJson(row.resource_policies_json, [])),
+    createdAt: String(row.created_at || ""),
+    updatedAt: String(row.updated_at || "")
   };
 }
 
-export function approvalFromRow(row?: any) : any {
+export function approvalFromRow(row?: GovernanceRecord | null): ApprovalRecord | null {
   if (!row) return null;
   return {
-    approvalId: row.approval_id,
-    userId: row.user_id || "",
-    agentId: row.agent_id || "",
-    resourceType: row.resource_type || "*",
-    resourceId: row.resource_id || "*",
-    actions: parseJson(row.actions_json, []),
-    targetProviders: parseJson(row.target_providers_json, []),
-    teamIds: parseJson(row.team_ids_json, []),
-    departmentIds: parseJson(row.department_ids_json, []),
-    approvalLayers: parseJson(row.approval_layers_json, []),
-    grantKind: row.grant_kind || "once",
-    effect: row.effect || "allow",
-    expiresAt: row.expires_at || "",
-    revokedAt: row.revoked_at || "",
-    reason: row.reason || "",
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    approvalId: String(row.approval_id || ""),
+    userId: String(row.user_id || ""),
+    agentId: String(row.agent_id || ""),
+    resourceType: String(row.resource_type || "*"),
+    resourceId: String(row.resource_id || "*"),
+    actions: uniqueStrings(parseJson(row.actions_json, [])),
+    targetProviders: uniqueStrings(parseJson(row.target_providers_json, [])),
+    teamIds: uniqueStrings(parseJson(row.team_ids_json, [])),
+    departmentIds: uniqueStrings(parseJson(row.department_ids_json, [])),
+    approvalLayers: uniqueStrings(parseJson(row.approval_layers_json, [])),
+    grantKind: String(row.grant_kind || "once"),
+    effect: String(row.effect || "allow"),
+    expiresAt: String(row.expires_at || ""),
+    revokedAt: String(row.revoked_at || ""),
+    reason: String(row.reason || ""),
+    createdAt: String(row.created_at || ""),
+    updatedAt: String(row.updated_at || "")
   };
 }
 
-export function policyMatches(policy: Record<string, any> = {}, request: Record<string, any> = {}) : any {
-  const resourceType: any = String(request.resourceType || "").trim();
-  const resourceId: any = String(request.resourceId || "").trim();
-  const action: any = String(request.action || "").trim();
-  const targetProvider: any = String(request.targetProvider || "").trim();
-  const policyType: any = String(policy.resourceType || "*");
-  const policyId: any = String(policy.resourceId || "*");
-  const actions: any = uniqueStrings(policy.actions || []);
-  const targetProviders: any = uniqueStrings(policy.targetProviders || []);
+export function policyMatches(policy: GovernanceRecord = {}, request: GovernanceRecord = {}) {
+  const resourceType = String(request.resourceType || "").trim();
+  const resourceId = String(request.resourceId || "").trim();
+  const action = String(request.action || "").trim();
+  const targetProvider = String(request.targetProvider || "").trim();
+  const policyType = String(policy.resourceType || "*");
+  const policyId = String(policy.resourceId || "*");
+  const actions = uniqueStrings(policy.actions || []);
+  const targetProviders = uniqueStrings(policy.targetProviders || []);
   return (
     (policyType === "*" || policyType === resourceType) &&
     (policyId === "*" || policyId === resourceId) &&
-    (actions.includes("*") || actions.includes(action) || actions.includes(request.scopeAction)) &&
+    (actions.includes("*") || actions.includes(action) || actions.includes(String(request.scopeAction || ""))) &&
     (targetProviders.length === 0 || targetProviders.includes("*") || targetProviders.includes(targetProvider))
   );
 }
 
-export function policiesMatch(policies: any = [], request: Record<string, any> = {}) : any {
-  return normalizePolicyList(policies).some((policy?: any) : any => policyMatches(policy, request));
+export function policiesMatch(policies: unknown = [], request: GovernanceRecord = {}) {
+  return normalizePolicyList(policies).some((policy) => policyMatches(policy, request));
 }
 
-export function activeRolePolicies(roleIds: any = [], getRole: any = () : any => null) : any {
-  return uniqueStrings(roleIds).flatMap((roleId?: any) : any => {
-    const role: any = getRole(roleId);
+export function activeRolePolicies(
+  roleIds: unknown = [],
+  getRole: (roleId: string) => GovernanceRecord | null = () => null
+) {
+  return uniqueStrings(roleIds).flatMap((roleId) => {
+    const role = getRole(roleId);
     return role?.enabled ? role.resourcePolicies || [] : [];
   });
 }
 
-export function inferScopeAction(operationId: any = "", action: any = "") : any {
-  if (action.startsWith("repo:")) return action;
-  if (/approve/i.test(operationId)) return "repo:approve";
-  if (/review\.(comment|requestChanges)/.test(operationId)) return "repo:review";
-  if (/(upload|git_upload|submit|maintain|abandon|rebase|merge|revert)/.test(operationId)) return "repo:maintain";
-  if (/(prepare|write|create|update|delete|push|link)/.test(operationId)) return "repo:write";
+export function inferScopeAction(operationId: unknown = "", action: unknown = "") {
+  const operation = String(operationId || "");
+  const requestedAction = String(action || "");
+  if (requestedAction.startsWith("repo:")) return requestedAction;
+  if (/approve/i.test(operation)) return "repo:approve";
+  if (/review\.(comment|requestChanges)/.test(operation)) return "repo:review";
+  if (/(upload|git_upload|submit|maintain|abandon|rebase|merge|revert)/.test(operation)) return "repo:maintain";
+  if (/(prepare|write|create|update|delete|push|link)/.test(operation)) return "repo:write";
   return "repo:read";
 }
 
-export function inferGovernanceRequest({ operation = {}, tool = null, input = {}, context = {}, subject = {}, grant = null }: Record<string, any> = {}) : any {
-  const inputResource: any = objectOrNull(input.resource) || {};
-  const contextResource: any = objectOrNull(context.resource) || {};
-  const operationId: any = String(operation.id || tool?.operationId || input.operationId || "").trim();
-  const rawAction: any = firstString(input.requestedAction, context.requestedAction, input.action, operationId);
-  const action: any = rawAction || operationId || "read";
-  const resourceType: any = firstString(
+export function inferGovernanceRequest({ operation = {}, tool = null, input = {}, context = {}, subject = {}, grant = null }: GovernanceRequestInput = {}) {
+  const inputResource = objectOrNull(input.resource) || {};
+  const contextResource = objectOrNull(context.resource) || {};
+  const operationId = String(operation.id || tool?.operationId || input.operationId || "").trim();
+  const rawAction = firstString(input.requestedAction, context.requestedAction, input.action, operationId);
+  const action = rawAction || operationId || "read";
+  const resourceType = firstString(
     input.resourceType,
     input["resource-type"],
     inputResource.resourceType,
@@ -298,7 +345,7 @@ export function inferGovernanceRequest({ operation = {}, tool = null, input = {}
     context.resourceType,
     contextResource.resourceType
   );
-  const resourceId: any = firstString(
+  const resourceId = firstString(
     input.resourceId,
     inputResource.resourceId,
     inputResource.id,
@@ -306,14 +353,14 @@ export function inferGovernanceRequest({ operation = {}, tool = null, input = {}
     contextResource.resourceId,
     "*"
   );
-  const targetProvider: any = firstString(
+  const targetProvider = firstString(
     input.targetProvider,
     input.provider,
     inputResource.targetProvider,
     context.targetProvider,
     contextResource.targetProvider
   );
-  const agentId: any = firstString(
+  const agentId = firstString(
     input.agentId,
     input.agentProfileId,
     context.agentId,
@@ -323,7 +370,7 @@ export function inferGovernanceRequest({ operation = {}, tool = null, input = {}
     grant?.metadata?.agentProfileId,
     subject.agentProfileId
   );
-  const boundUserId: any = firstString(
+  const boundUserId = firstString(
     input.boundUserId,
     input.userId,
     context.boundUserId,
@@ -355,18 +402,21 @@ export function inferGovernanceRequest({ operation = {}, tool = null, input = {}
   };
 }
 
-export function isActiveApproval(approval: Record<string, any> = {}, request: Record<string, any> = {}, { userId = "", agentId = "", approvalLayer = "" }: Record<string, any> = {}) : any {
+export function isActiveApproval(
+  approval: GovernanceRecord = {}, request: GovernanceRecord = {},
+  { userId = "", agentId = "", approvalLayer = "" }: { userId?: string; agentId?: string; approvalLayer?: string } = {}
+) {
   if (!approval || approval.effect === "deny" || approval.revokedAt) return false;
-  if (approval.expiresAt && Date.parse(approval.expiresAt) <= Date.now()) return false;
+  if (approval.expiresAt && Date.parse(String(approval.expiresAt)) <= Date.now()) return false;
   if (approval.userId && userId && approval.userId !== userId) return false;
   if (approval.agentId && agentId && approval.agentId !== agentId) return false;
-  const approvalTeamIds: any = uniqueStrings(approval.teamIds || []);
-  const requestTeamIds: any = uniqueStrings(request.teamIds || []);
-  if (approvalTeamIds.length > 0 && !approvalTeamIds.some((teamId?: any) : any => requestTeamIds.includes(teamId))) return false;
-  const approvalDepartmentIds: any = uniqueStrings(approval.departmentIds || []);
-  const requestDepartmentIds: any = uniqueStrings(request.departmentIds || []);
-  if (approvalDepartmentIds.length > 0 && !approvalDepartmentIds.some((departmentId?: any) : any => requestDepartmentIds.includes(departmentId))) return false;
-  const approvalLayers: any = uniqueStrings(approval.approvalLayers || []);
+  const approvalTeamIds = uniqueStrings(approval.teamIds || []);
+  const requestTeamIds = uniqueStrings(request.teamIds || []);
+  if (approvalTeamIds.length > 0 && !approvalTeamIds.some((teamId) => requestTeamIds.includes(teamId))) return false;
+  const approvalDepartmentIds = uniqueStrings(approval.departmentIds || []);
+  const requestDepartmentIds = uniqueStrings(request.departmentIds || []);
+  if (approvalDepartmentIds.length > 0 && !approvalDepartmentIds.some((departmentId) => requestDepartmentIds.includes(departmentId))) return false;
+  const approvalLayers = uniqueStrings(approval.approvalLayers || []);
   if (approvalLayers.length > 0 && approvalLayer && !approvalLayers.includes("*") && !approvalLayers.includes(approvalLayer)) return false;
   return policyMatches({
     resourceType: approval.resourceType,

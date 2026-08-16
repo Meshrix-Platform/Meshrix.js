@@ -35,6 +35,7 @@ export const PLUGIN_CONTRIBUTION_KINDS: readonly any[] = Object.freeze([
   "operations",
   "routes",
   "mcpTools",
+  "gatewayChannels",
   "consoleEntries",
   "stateMachines",
   "verifierHooks"
@@ -122,7 +123,7 @@ function assertRuntimeResultShape(pluginId?: any, result?: any) : any {
     throw new Error(`Plugin ${pluginId} activation must return an object.`);
   }
   for (const field of Object.keys(result)) {
-    if (!new Set<any>(["id", "mounts", "contributions", "lifecycle", "subscribeContributionChanges", "close"]).has(field)) {
+    if (!new Set<any>(["id", "mounts", "contributions", "lifecycle", "subscribeContributionChanges", "close", "activation", "confinement", "snapshot"]).has(field)) {
       throw new Error(`Plugin ${pluginId} activation returned unsupported field ${field}.`);
     }
   }
@@ -184,11 +185,15 @@ function normalizeRuntimeContributions(manifest?: any, value?: any, { hostVerifi
   }
   const output: Record<string, any> = {};
   for (const kind of PLUGIN_CONTRIBUTION_KINDS) {
-    const implementations: any = source[kind] === undefined ? {} : source[kind];
+    const declaredIds: any = declaredContributionIds(manifest, kind);
+    const rawImplementations: any = source[kind] === undefined ? {} : source[kind];
+    const implementations: any = kind === "gatewayChannels" && rawImplementations?.kind === "gatewayChannels"
+      && declaredIds.length === 1
+      ? { [declaredIds[0]]: rawImplementations }
+      : rawImplementations;
     if (!isPlainObject(implementations)) {
       throw new Error(`Plugin ${manifest.id} ${kind} contributions must be an object.`);
     }
-    const declaredIds: any = declaredContributionIds(manifest, kind);
     const returnedIds: any = Object.keys(implementations).sort();
     const returnedSet: any = new Set<any>(returnedIds);
     const invented: any = returnedIds.some((id?: any) : any => !declaredIds.includes(id));

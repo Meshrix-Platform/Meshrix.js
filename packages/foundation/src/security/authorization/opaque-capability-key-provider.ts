@@ -2,8 +2,11 @@ import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import { resolveAutoCapabilityKernelBackend } from "./opaque-capability-key-backends.ts";
 import {
+  type CapabilityKeyRecord,
+  type UnknownRecord,
   DEFAULT_ALIAS,
   OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
+  asObject,
   canonicalOpaqueCapabilities,
   capabilityKeyHash,
   capabilityPermissionHash,
@@ -22,54 +25,102 @@ import {
   unknownKernelCapabilities
 } from "#meshrix/authorization-engine";
 import {
+  type CapabilityKeyBindingStore,
+  type LookupKeySource,
   createMemoryCapabilityKeyBindingStore,
   createSealedCapabilityKernelStore
 } from "./opaque-capability-key-store.ts";
+import { stringsFrom } from "./authorization-engine-common.ts";
 
-function runCommandJson({ command, args = [], env = {}, input = {}, timeoutMs = 15000 }: Record<string, any> = {}) : any {
-  return new Promise((resolve?: any, reject?: any) : any => {
-    const child: any = spawn(command, args, {
+interface CommandRequestOptions {
+  command: string;
+  args?: string[];
+  env?: NodeJS.ProcessEnv;
+  input?: UnknownRecord;
+  timeoutMs?: number;
+}
+interface LookupSourceOptions {
+  alias?: string;
+  backend?: string;
+  dataDir?: string;
+  command?: string;
+  args?: string[];
+  env?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}
+interface ProviderOptions extends LookupSourceOptions {
+  bindingStore?: CapabilityKeyBindingStore | null;
+  lookupKeySource?: LookupKeySource | null;
+}
+interface IssueOptions extends Partial<CapabilityKeyRecord> {
+  capabilityKey?: string;
+  key?: string;
+  capabilities?: unknown;
+  trustedCapabilityPermissions?: unknown;
+  replaceCredential?: boolean;
+  replacementReason?: string;
+}
+interface VerifyOptions {
+  capabilityKey?: string;
+  key?: string;
+  requiredCapability?: string;
+  requiredCapabilities?: unknown;
+  now?: string;
+  minGrantVersion?: number;
+  includeRecordDetails?: boolean;
+}
+interface InvalidateOptions { capabilityKey?: string; key?: string; reason?: string }
+interface InvalidateCredentialOptions { credentialId?: string; reason?: string }
+interface RotateOptions extends IssueOptions { reason?: string }
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function runCommandJson({ command, args = [], env = {}, input = {}, timeoutMs = 15000 }: CommandRequestOptions): Promise<UnknownRecord> {
+  return new Promise<UnknownRecord>((resolve, reject) => {
+    const child = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...env }
     });
-    let stdout: any = "";
-    let stderr: any = "";
-    const timeout: any = setTimeout(() : any => {
+    let stdout = "";
+    let stderr = "";
+    const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       reject(new Error(`Opaque capability key helper timed out: ${command}`));
     }, timeoutMs);
-    child.stdout.on("data", (chunk?: any) : any => {
+    child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
     });
-    child.stderr.on("data", (chunk?: any) : any => {
+    child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
-    child.on("error", (error?: any) : any => {
+    child.on("error", (error) => {
       clearTimeout(timeout);
       reject(error);
     });
-    child.stdin.on("error", (error?: any) : any => {
+    child.stdin.on("error", (error) => {
       if (isClosedPipeError(error)) {
         return;
       }
       clearTimeout(timeout);
       reject(error);
     });
-    child.on("close", (code?: any) : any => {
+    child.on("close", (code) => {
       clearTimeout(timeout);
       if (code !== 0) {
         reject(new Error(stderr.trim() || `Opaque capability key helper failed with exit code ${code}.`));
         return;
       }
       try {
-        resolve(JSON.parse(stdout.trim() || "{}"));
-      } catch (error: any) {
-        reject(new Error(`Opaque capability key helper returned invalid JSON: ${error.message}`));
+        resolve(asObject(JSON.parse(stdout.trim() || "{}")));
+      } catch (error) {
+        reject(new Error(`Opaque capability key helper returned invalid JSON: ${errorMessage(error)}`));
       }
     });
     try {
       child.stdin.end(`${JSON.stringify(input)}\n`);
-    } catch (error: any) {
+    } catch (error) {
       if (!isClosedPipeError(error)) {
         clearTimeout(timeout);
         reject(error);
@@ -78,12 +129,12 @@ function runCommandJson({ command, args = [], env = {}, input = {}, timeoutMs = 
   });
 }
 
-function createMemoryLookupKeySource() : any {
-  let generation: any = 1;
-  let runtimeLookupKeyBase64: any = crypto.randomBytes(32).toString("base64");
-  let loadCount: any = 0;
+function createMemoryLookupKeySource() {
+  let generation = 1;
+  let runtimeLookupKeyBase64 = crypto.randomBytes(32).toString("base64");
+  let loadCount = 0;
   return {
-    async loadRuntimeLookupKey() : Promise<any> {
+    async loadRuntimeLookupKey() {
       loadCount += 1;
       return {
         protocolVersion: OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
@@ -92,7 +143,7 @@ function createMemoryLookupKeySource() : any {
         runtimeLookupKeyBase64
       };
     },
-    async rotateRuntimeLookupKey() : Promise<any> {
+    async rotateRuntimeLookupKey() {
       generation += 1;
       runtimeLookupKeyBase64 = crypto.randomBytes(32).toString("base64");
       return {
@@ -101,7 +152,7 @@ function createMemoryLookupKeySource() : any {
         generation
       };
     },
-    describe() : any {
+    describe() {
       return {
         protocolVersion: OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
         provider: "memory",
@@ -120,8 +171,8 @@ function createCommandLookupKeySource({
   args = [helperScriptPath()],
   env = {},
   timeoutMs = 15000
-}: Record<string, any> = {}) : any {
-  async function request(action?: any, input: Record<string, any> = {}) : Promise<any> {
+}: LookupSourceOptions = {}): LookupKeySource {
+  async function request(action = "", input: UnknownRecord = {}) {
     return runCommandJson({
       command,
       args,
@@ -138,9 +189,9 @@ function createCommandLookupKeySource({
     });
   }
   return {
-    loadRuntimeLookupKey: () : any => request("loadRuntimeLookupKey"),
-    rotateRuntimeLookupKey: () : any => request("rotateRuntimeLookupKey"),
-    describe: () : any => request("describe")
+    loadRuntimeLookupKey: () => request("loadRuntimeLookupKey"),
+    rotateRuntimeLookupKey: () => request("rotateRuntimeLookupKey"),
+    describe: () => request("describe")
   };
 }
 
@@ -153,16 +204,16 @@ export function createOpaqueCapabilityKeyProvider({
   command = "",
   args = [],
   env = {}
-}: Record<string, any> = {}) : any {
-  const resolvedBackend: any = resolveAutoCapabilityKernelBackend(backend);
-  const storageBackend: any = backend === "auto" ? "auto" : resolvedBackend;
-  const sealedKernel: any = !bindingStore && resolvedBackend !== "memory"
+}: ProviderOptions = {}) {
+  const resolvedBackend = resolveAutoCapabilityKernelBackend(backend);
+  const storageBackend = backend === "auto" ? "auto" : resolvedBackend;
+  const sealedKernel = !bindingStore && resolvedBackend !== "memory"
     ? createSealedCapabilityKernelStore({ backend: storageBackend, dataDir, alias })
     : null;
-  const store: any = bindingStore ||
+  const store: CapabilityKeyBindingStore = bindingStore ||
     sealedKernel ||
     createMemoryCapabilityKeyBindingStore();
-  const keySource: any = lookupKeySource ||
+  const keySource: LookupKeySource = lookupKeySource ||
     sealedKernel?.keySource ||
     (resolvedBackend === "memory"
       ? createMemoryLookupKeySource()
@@ -178,24 +229,24 @@ export function createOpaqueCapabilityKeyProvider({
             : [helperScriptPath()],
           env
         }));
-  let runtimeLookupKey: any = null;
-  let runtimeLookupGeneration: any = 0;
-  let runtimeLookupLoadCount: any = 0;
-  let providerMutationQueue: any = Promise.resolve();
+  let runtimeLookupKey: Buffer | null = null;
+  let runtimeLookupGeneration = 0;
+  let runtimeLookupLoadCount = 0;
+  let providerMutationQueue = Promise.resolve();
 
-  function enqueueProviderMutation(action?: any) : any {
-    const run: any = providerMutationQueue.catch(() : any => {}).then(action);
-    providerMutationQueue = run.then(() : any => undefined, () : any => undefined);
+  function enqueueProviderMutation<T>(action: () => T | Promise<T>): Promise<T> {
+    const run = providerMutationQueue.catch(() => {}).then(action);
+    providerMutationQueue = run.then(() => undefined, () => undefined);
     return run;
   }
 
-  async function waitForProviderMutations() : Promise<any> {
-    await providerMutationQueue.catch(() : any => {});
+  async function waitForProviderMutations() {
+    await providerMutationQueue.catch(() => {});
   }
 
-  async function getRuntimeLookupKey() : Promise<any> {
+  async function getRuntimeLookupKey() {
     if (!runtimeLookupKey) {
-      const loaded: any = await keySource.loadRuntimeLookupKey();
+      const loaded = await keySource.loadRuntimeLookupKey();
       runtimeLookupKey = Buffer.from(String(loaded.runtimeLookupKeyBase64 || ""), "base64");
       runtimeLookupGeneration = Number(loaded.generation || 0);
       runtimeLookupLoadCount += 1;
@@ -214,20 +265,20 @@ export function createOpaqueCapabilityKeyProvider({
     replaceCredential = false,
     replacementReason = "credential_replaced",
     ...input
-  }: Record<string, any> = {}) : Promise<any> {
-    return enqueueProviderMutation(async () : Promise<any> => {
-      const rawKey: any = text(key || capabilityKey);
+  }: IssueOptions = {}) {
+    return enqueueProviderMutation(async () => {
+      const rawKey = text(key || capabilityKey);
       rejectUnknownOpaqueCapabilities(capabilities, trustedCapabilityPermissions);
-      const lookupKey: any = await getRuntimeLookupKey();
-      const keyHash: any = capabilityKeyHash(lookupKey, rawKey);
-      const normalizedCapabilities: any = canonicalOpaqueCapabilities(capabilities, trustedCapabilityPermissions);
-      const record: any = createKeyRecord({
+      const lookupKey = await getRuntimeLookupKey();
+      const keyHash = capabilityKeyHash(lookupKey, rawKey);
+      const normalizedCapabilities = canonicalOpaqueCapabilities(capabilities, trustedCapabilityPermissions);
+      const record = createKeyRecord({
         ...input,
         keyHash,
         capabilities: normalizedCapabilities,
         trustedCapabilityPermissions: normalizedCapabilities
       });
-      const capabilityHashes: any = normalizedCapabilities.map((capability?: any) : any => capabilityPermissionHash(lookupKey, capability));
+      const capabilityHashes = normalizedCapabilities.map((capability) => capabilityPermissionHash(lookupKey, capability));
       if (replaceCredential === true) {
         if (typeof store.replaceCredential !== "function") {
           throw new Error("Capability key store does not support atomic credential replacement.");
@@ -257,17 +308,17 @@ export function createOpaqueCapabilityKeyProvider({
     now = nowIso(),
     minGrantVersion = 0,
     includeRecordDetails = false
-  }: Record<string, any> = {}) : Promise<any> {
-    const rawKey: any = text(key || capabilityKey);
+  }: VerifyOptions = {}) {
+    const rawKey = text(key || capabilityKey);
     if (!rawKey) {
       return { ok: false, reasonCode: "capability_key_missing" };
     }
     await waitForProviderMutations();
-    const requestedCapabilities: any = requiredCapability ? [requiredCapability] : requiredCapabilities;
-    const registeredToolCapabilities: any = normalizeRegisteredToolCapabilities(requestedCapabilities);
-    const trustedRegisteredToolCapabilities: any = new Set<any>(registeredToolCapabilities);
-    const unknownRequired: any = unknownKernelCapabilities(requestedCapabilities)
-      .filter((capability?: any) : any => !trustedRegisteredToolCapabilities.has(capability));
+    const requestedCapabilities = requiredCapability ? [requiredCapability] : stringsFrom(requiredCapabilities);
+    const registeredToolCapabilities = normalizeRegisteredToolCapabilities(requestedCapabilities);
+    const trustedRegisteredToolCapabilities = new Set(registeredToolCapabilities);
+    const unknownRequired = unknownKernelCapabilities(requestedCapabilities)
+      .filter((capability: string) => !trustedRegisteredToolCapabilities.has(capability));
     if (unknownRequired.length > 0) {
       return {
         ok: false,
@@ -277,20 +328,20 @@ export function createOpaqueCapabilityKeyProvider({
         runtimeLookupGeneration
       };
     }
-    const required: any = canonicalOpaqueCapabilities(requestedCapabilities, registeredToolCapabilities);
+    const required = canonicalOpaqueCapabilities(requestedCapabilities, registeredToolCapabilities);
     if (required.length === 0) {
       return { ok: false, reasonCode: "capability_required" };
     }
-    const lookupKey: any = await getRuntimeLookupKey();
-    const keyHash: any = capabilityKeyHash(lookupKey, rawKey);
-    const recordCheck: any = validateKeyRecord(await store.get(keyHash), { now, minGrantVersion });
+    const lookupKey = await getRuntimeLookupKey();
+    const keyHash = capabilityKeyHash(lookupKey, rawKey);
+    const recordCheck = validateKeyRecord(await store.get(keyHash), { now, minGrantVersion });
     if (!recordCheck.ok) {
       return { ...recordCheck, keyHash: "", runtimeLookupGeneration };
     }
-    const missingCapabilities: any[] = [];
+    const missingCapabilities: string[] = [];
     for (const capability of required) {
-      const candidateHashes: any = candidateCapabilitiesFor(capability)
-        .map((candidate?: any) : any => capabilityPermissionHash(lookupKey, candidate));
+      const candidateHashes = candidateCapabilitiesFor(capability)
+        .map((candidate) => capabilityPermissionHash(lookupKey, candidate));
       if (!(await store.hasCapability(keyHash, candidateHashes))) {
         missingCapabilities.push(capability);
       }
@@ -305,7 +356,7 @@ export function createOpaqueCapabilityKeyProvider({
         runtimeLookupGeneration
       };
     }
-    const decision: Record<string, any> = {
+    const decision = {
       ok: true,
       reasonCode: "capability_key_valid",
       credentialId: recordCheck.record.credentialId,
@@ -328,31 +379,31 @@ export function createOpaqueCapabilityKeyProvider({
     return decision;
   }
 
-  async function invalidate({ capabilityKey = "", key = "", reason = "" }: Record<string, any> = {}) : Promise<any> {
-    return enqueueProviderMutation(async () : Promise<any> => {
-      const rawKey: any = text(key || capabilityKey);
+  async function invalidate({ capabilityKey = "", key = "", reason = "" }: InvalidateOptions = {}) {
+    return enqueueProviderMutation(async () => {
+      const rawKey = text(key || capabilityKey);
       if (!rawKey) {
         return null;
       }
-      const lookupKey: any = await getRuntimeLookupKey();
-      const keyHash: any = capabilityKeyHash(lookupKey, rawKey);
+      const lookupKey = await getRuntimeLookupKey();
+      const keyHash = capabilityKeyHash(lookupKey, rawKey);
       return store.invalidate(keyHash, reason);
     });
   }
 
-  async function invalidateCredential({ credentialId = "", reason = "" }: Record<string, any> = {}) : Promise<any> {
-    return enqueueProviderMutation(async () : Promise<any> => {
-      const resolvedCredentialId: any = text(credentialId);
+  async function invalidateCredential({ credentialId = "", reason = "" }: InvalidateCredentialOptions = {}) {
+    return enqueueProviderMutation(async () => {
+      const resolvedCredentialId = text(credentialId);
       if (!resolvedCredentialId) {
         return [];
       }
-      const records: any = await store.list({ includeInvalid: false });
-      const invalidated: any[] = [];
+      const records = await store.list({ includeInvalid: false });
+      const invalidated: unknown[] = [];
       for (const record of records) {
         if (record.credentialId !== resolvedCredentialId) {
           continue;
         }
-        const updated: any = await store.invalidate(record.keyHash, reason);
+        const updated = await store.invalidate(record.keyHash, reason);
         if (updated) {
           invalidated.push(updated);
         }
@@ -361,24 +412,24 @@ export function createOpaqueCapabilityKeyProvider({
     });
   }
 
-  async function rotateCapabilityKey({ capabilityKey = "", key = "", capabilities = [], trustedCapabilityPermissions = [], reason = "rotated", ...input }: Record<string, any> = {}) : Promise<any> {
-    return enqueueProviderMutation(async () : Promise<any> => {
-      const rawKey: any = text(key || capabilityKey);
-      const lookupKey: any = await getRuntimeLookupKey();
-      const oldHash: any = capabilityKeyHash(lookupKey, rawKey);
-      const existing: any = await store.get(oldHash);
+  async function rotateCapabilityKey({ capabilityKey = "", key = "", capabilities = [], trustedCapabilityPermissions = [], reason = "rotated", ...input }: RotateOptions = {}) {
+    return enqueueProviderMutation(async () => {
+      const rawKey = text(key || capabilityKey);
+      const lookupKey = await getRuntimeLookupKey();
+      const oldHash = capabilityKeyHash(lookupKey, rawKey);
+      const existing = await store.get(oldHash);
       if (!existing || existing.status !== "valid") {
         return { ok: false, reasonCode: "capability_key_invalid" };
       }
       rejectUnknownOpaqueCapabilities(capabilities, trustedCapabilityPermissions);
-      const normalizedCapabilities: any = canonicalOpaqueCapabilities(capabilities, trustedCapabilityPermissions);
+      const normalizedCapabilities = canonicalOpaqueCapabilities(capabilities, trustedCapabilityPermissions);
       if (normalizedCapabilities.length === 0) {
         return { ok: false, reasonCode: "capabilities_required_for_rotation" };
       }
       await store.invalidate(oldHash, reason);
-      const newCapabilityKey: any = createCapabilityKey();
-      const newHash: any = capabilityKeyHash(lookupKey, newCapabilityKey);
-      const newRecord: any = createKeyRecord({
+      const newCapabilityKey = createCapabilityKey();
+      const newHash = capabilityKeyHash(lookupKey, newCapabilityKey);
+      const newRecord = createKeyRecord({
         ...existing,
         ...input,
         keyHash: newHash,
@@ -387,7 +438,7 @@ export function createOpaqueCapabilityKeyProvider({
         status: "valid",
         issuedAt: nowIso()
       });
-      await store.put(newRecord, normalizedCapabilities.map((capability?: any) : any => capabilityPermissionHash(lookupKey, capability)));
+      await store.put(newRecord, normalizedCapabilities.map((capability) => capabilityPermissionHash(lookupKey, capability)));
       return {
         ok: true,
         protocolVersion: OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
@@ -400,11 +451,9 @@ export function createOpaqueCapabilityKeyProvider({
     });
   }
 
-  async function describe() : Promise<any> {
+  async function describe() {
     await waitForProviderMutations();
-    const keySourceDescription: any = typeof keySource.describe === "function"
-      ? await keySource.describe()
-      : {};
+    const keySourceDescription = asObject(await keySource.describe());
     return {
       protocolVersion: OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
       provider: resolvedBackend,
@@ -433,7 +482,7 @@ export function createOpaqueCapabilityKeyProvider({
     };
   }
 
-  async function exportRecoveryPackage(input: Record<string, any> = {}) : Promise<any> {
+  async function exportRecoveryPackage(input: { passphrase?: string; reason?: string } = {}) {
     await waitForProviderMutations();
     if (typeof store.exportRecoveryPackage !== "function") {
       throw new Error("Capability key provider backend does not support recovery export.");
@@ -441,14 +490,15 @@ export function createOpaqueCapabilityKeyProvider({
     return store.exportRecoveryPackage(input);
   }
 
-  async function importRecoveryPackage(input: Record<string, any> = {}) : Promise<any> {
-    if (typeof store.importRecoveryPackage !== "function") {
+  async function importRecoveryPackage(input: { recoveryPackage?: unknown; passphrase?: string } = {}) {
+    const importPackage = store.importRecoveryPackage;
+    if (typeof importPackage !== "function") {
       throw new Error("Capability key provider backend does not support recovery import.");
     }
-    return enqueueProviderMutation(async () : Promise<any> => {
+    return enqueueProviderMutation(async () => {
       runtimeLookupKey = null;
       runtimeLookupGeneration = 0;
-      return store.importRecoveryPackage(input);
+      return importPackage(input);
     });
   }
 
@@ -465,17 +515,17 @@ export function createOpaqueCapabilityKeyProvider({
     importRecoveryPackage,
     describe,
     store,
-    close() : any {
+    close() {
       store.close?.();
     }
   });
 }
 
-export function createMemoryOpaqueCapabilityKeyProvider(input: Record<string, any> = {}) : any {
+export function createMemoryOpaqueCapabilityKeyProvider(input: ProviderOptions = {}) {
   return createOpaqueCapabilityKeyProvider({ ...input, backend: "memory" });
 }
 
-export function createCommandOpaqueCapabilityKeyProvider(input: Record<string, any> = {}) : any {
+export function createCommandOpaqueCapabilityKeyProvider(input: ProviderOptions = {}) {
   return createOpaqueCapabilityKeyProvider({
     ...input,
     backend: input.backend || (process.platform === "darwin" ? "macos-keychain" : "local-file")

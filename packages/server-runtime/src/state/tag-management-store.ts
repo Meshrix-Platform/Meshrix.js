@@ -29,6 +29,17 @@ import { ensureTagManagementSchema } from "./tag-management-schema.ts";
 
 export { TAG_MANAGEMENT_PROTOCOL_VERSION } from "./tag-management-codec.ts";
 
+const changeHandlersByRoot: Map<string, Set<(event: Readonly<{ eventType: string }>) => void>> = new Map();
+
+function sharedChangeHandlers(rootPath: string): Set<(event: Readonly<{ eventType: string }>) => void> {
+  let handlers = changeHandlersByRoot.get(rootPath);
+  if (!handlers) {
+    handlers = new Set();
+    changeHandlersByRoot.set(rootPath, handlers);
+  }
+  return handlers;
+}
+
 function roleTagId(roleId?: any) : any {
   return `role:${normalizeIdSegment(roleId, "role")}`;
 }
@@ -189,7 +200,8 @@ function createTagManagementStoreFromDatabase({
   resolvedRoot
 }: Record<string, any>) : any {
   let closed: any = false;
-  const changeHandlers: any = new Set<any>();
+  const changeHandlers = sharedChangeHandlers(String(resolvedRoot));
+  const ownedChangeHandlers = new Set<(event: Readonly<{ eventType: string }>) => void>();
   ensureTagManagementSchema(db);
 
   const tagUpsert: any = db.prepare(`
@@ -412,6 +424,12 @@ function createTagManagementStoreFromDatabase({
       nowIso()
     );
     rememberProjectionOnTag(normalizedTagId, {
+      entityType: normalizedEntityType,
+      entityId: normalizedEntityId,
+      payload
+    });
+    appendEvent("projection-upserted", {
+      tagId: normalizedTagId,
       entityType: normalizedEntityType,
       entityId: normalizedEntityId,
       payload
@@ -1014,11 +1032,11 @@ function createTagManagementStoreFromDatabase({
       return closed || db.open === false;
     },
     close() : any {
-      if (closed || (ownsDatabase && db.open === false)) {
-        closed = true;
-        return;
-      }
-      if (ownsDatabase) db.close();
+      if (closed) return;
+      for (const handler of ownedChangeHandlers) changeHandlers.delete(handler);
+      ownedChangeHandlers.clear();
+      if (changeHandlers.size === 0) changeHandlersByRoot.delete(String(resolvedRoot));
+      if (ownsDatabase && db.open !== false) db.close();
       closed = true;
     },
     archiveTag,
@@ -1032,7 +1050,11 @@ function createTagManagementStoreFromDatabase({
     registerChangeHandler(handler?: any) : any {
       if (typeof handler !== "function") return () : any => {};
       changeHandlers.add(handler);
-      return () : any => changeHandlers.delete(handler);
+      ownedChangeHandlers.add(handler);
+      return () : any => {
+        ownedChangeHandlers.delete(handler);
+        return changeHandlers.delete(handler);
+      };
     },
     getProjection,
     getEffectiveScopePrerequisites,

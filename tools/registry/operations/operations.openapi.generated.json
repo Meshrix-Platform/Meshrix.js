@@ -7135,336 +7135,6 @@
         }
       }
     },
-    "/api/maintenance-agent/config": {
-      "get": {
-        "operationId": "maintenance_agent.config.get",
-        "summary": "读取维护智能体配置",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      },
-      "post": {
-        "operationId": "maintenance_agent.config.set",
-        "summary": "保存维护智能体配置",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/maintenance-agent/chat": {
-      "post": {
-        "operationId": "maintenance_agent.chat",
-        "summary": "维护智能体对话规划",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "message"
-                ],
-                "properties": {
-                  "message": {
-                    "type": "string"
-                  },
-                  "wait": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/maintenance-agent/runs": {
-      "post": {
-        "operationId": "maintenance_agent.runs.create",
-        "summary": "创建维护智能体运行",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {
-                  "runbook": {
-                    "type": "string"
-                  },
-                  "wait": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      },
-      "get": {
-        "operationId": "maintenance_agent.runs.list",
-        "summary": "维护智能体运行列表",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/maintenance-agent/runs/:runId": {
-      "get": {
-        "operationId": "maintenance_agent.runs.get",
-        "summary": "维护智能体运行详情",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/maintenance-agent/runs/:runId/approve": {
-      "post": {
-        "operationId": "maintenance_agent.runs.approve",
-        "summary": "批准维护智能体运行",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "runId",
-                  "planHash"
-                ],
-                "properties": {
-                  "runId": {
-                    "type": "string"
-                  },
-                  "planHash": {
-                    "type": "string"
-                  },
-                  "wait": {
-                    "type": "boolean"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/maintenance-agent/runs/:runId/cancel": {
-      "post": {
-        "operationId": "maintenance_agent.runs.cancel",
-        "summary": "取消维护智能体运行",
-        "tags": [
-          "maintenance_agent"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "runId"
-                ],
-                "properties": {
-                  "runId": {
-                    "type": "string"
-                  },
-                  "reason": {
-                    "type": "string"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
     "/api/auth/session": {
       "get": {
         "operationId": "auth.session",
@@ -8603,6 +8273,95 @@
         }
       }
     },
+    "/api/runtime/gateway-channels": {
+      "get": {
+        "operationId": "runtime.gateway_channels",
+        "summary": "Read Gateway channel selections",
+        "tags": [
+          "runtime"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/runtime/gateway-channels/select": {
+      "post": {
+        "operationId": "runtime.gateway_channels.select",
+        "summary": "Select one Gateway direction",
+        "tags": [
+          "runtime"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "direction",
+                  "channelId",
+                  "expectedGeneration"
+                ],
+                "properties": {
+                  "confirm": {
+                    "type": "boolean"
+                  },
+                  "safetyConfirm": {
+                    "type": "boolean"
+                  },
+                  "direction": {
+                    "enum": [
+                      "downstream",
+                      "upstream"
+                    ]
+                  },
+                  "channelId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "expectedGeneration": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
     "/api/runtime/path-browse": {
       "post": {
         "operationId": "runtime.path_browse",
@@ -8675,166 +8434,6 @@
       "post": {
         "operationId": "runtime.set_mounts",
         "summary": "保存挂载配置",
-        "tags": [
-          "runtime"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/runtime/external-gateway": {
-      "get": {
-        "operationId": "runtime.external_gateway",
-        "summary": "读取外置网关配置",
-        "tags": [
-          "runtime"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/runtime/external-gateway/validate": {
-      "post": {
-        "operationId": "runtime.external_gateway.validate",
-        "summary": "校验外置网关配置",
-        "tags": [
-          "runtime"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/runtime/external-gateway/apply": {
-      "post": {
-        "operationId": "runtime.external_gateway.apply",
-        "summary": "启用外置网关配置",
-        "tags": [
-          "runtime"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [],
-                "properties": {
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/runtime/external-gateway/direct": {
-      "post": {
-        "operationId": "runtime.external_gateway.switch_direct",
-        "summary": "切换为内置网关流控",
         "tags": [
           "runtime"
         ],
@@ -8976,167 +8575,6 @@
             }
           }
         },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/settings/model-probe": {
-      "post": {
-        "operationId": "settings.model_probe",
-        "summary": "探测模型连通性",
-        "tags": [
-          "settings"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "provider"
-                ],
-                "properties": {
-                  "provider": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/agent-gateway/call": {
-      "post": {
-        "operationId": "agent_gateway.call",
-        "summary": "调用智能体模型接入点",
-        "tags": [
-          "agent_gateway"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "question"
-                ],
-                "properties": {
-                  "agentName": {
-                    "type": "string"
-                  },
-                  "pluginList": {
-                    "type": "string"
-                  },
-                  "question": {
-                    "type": "string"
-                  },
-                  "sessionId": {
-                    "type": "string"
-                  },
-                  "agentSessionId": {
-                    "type": "string"
-                  },
-                  "clientUid": {
-                    "type": "string"
-                  },
-                  "modelAlias": {
-                    "type": "string"
-                  },
-                  "contextProfileId": {
-                    "type": "string"
-                  },
-                  "toolGrantId": {
-                    "type": "string"
-                  },
-                  "workspaceId": {
-                    "type": "string"
-                  },
-                  "userId": {
-                    "type": "string"
-                  },
-                  "projectId": {
-                    "type": "string"
-                  },
-                  "engine": {
-                    "type": "string"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  },
-                  "query": {
-                    "type": "string"
-                  },
-                  "messages": {
-                    "type": "array"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/model-routing/health": {
-      "get": {
-        "operationId": "model_routing.health",
-        "summary": "读取模型路由健康和成本台账",
-        "tags": [
-          "agent_gateway"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
         "responses": {
           "200": {
             "description": "Success"
@@ -9314,18 +8752,6 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 512
-                  },
-                  "modelRouting": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": [],
-                    "properties": {
-                      "routeId": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 512
-                      }
-                    }
                   }
                 }
               }
@@ -9737,254 +9163,6 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 512
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/agents": {
-      "get": {
-        "operationId": "agents.list",
-        "summary": "列出可用智能体模型接入点",
-        "tags": [
-          "agent_management"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      },
-      "post": {
-        "operationId": "agents.create",
-        "summary": "创建智能体模型配置",
-        "tags": [
-          "agent_management"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "model"
-                ],
-                "properties": {
-                  "provider": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "model": {
-                    "type": "string"
-                  },
-                  "baseUrl": {
-                    "type": "string"
-                  },
-                  "url": {
-                    "type": "string"
-                  },
-                  "apiKey": {
-                    "type": "string"
-                  },
-                  "token": {
-                    "type": "string"
-                  },
-                  "tokenHeader": {
-                    "type": "string"
-                  },
-                  "tokenPrefix": {
-                    "type": "string"
-                  },
-                  "systemPrompt": {
-                    "type": "string"
-                  },
-                  "parameters": {},
-                  "pluginList": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "timeoutMs": {
-                    "type": "number"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      }
-    },
-    "/api/agents/:agentId": {
-      "post": {
-        "operationId": "agents.update",
-        "summary": "更新智能体模型配置",
-        "tags": [
-          "agent_management"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "agentId"
-                ],
-                "properties": {
-                  "agentId": {
-                    "type": "string"
-                  },
-                  "provider": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "model": {
-                    "type": "string"
-                  },
-                  "baseUrl": {
-                    "type": "string"
-                  },
-                  "url": {
-                    "type": "string"
-                  },
-                  "apiKey": {
-                    "type": "string"
-                  },
-                  "token": {
-                    "type": "string"
-                  },
-                  "tokenHeader": {
-                    "type": "string"
-                  },
-                  "tokenPrefix": {
-                    "type": "string"
-                  },
-                  "systemPrompt": {
-                    "type": "string"
-                  },
-                  "parameters": {},
-                  "pluginList": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "timeoutMs": {
-                    "type": "number"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success"
-          },
-          "400": {
-            "description": "Invalid input"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        }
-      },
-      "delete": {
-        "operationId": "agents.delete",
-        "summary": "删除智能体模型配置",
-        "tags": [
-          "agent_management"
-        ],
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "agentId"
-                ],
-                "properties": {
-                  "agentId": {
-                    "type": "string"
-                  },
-                  "confirm": {
-                    "type": "boolean"
-                  },
-                  "safetyConfirm": {
-                    "type": "boolean"
                   }
                 }
               }

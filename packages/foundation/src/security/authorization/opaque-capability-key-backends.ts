@@ -9,42 +9,63 @@ import {
 } from "../../environment-compatibility/index.ts";
 import { writePrivateFileAtomic } from "../../storage/private-file-atomic.ts";
 import {
+  type CapabilityKernelRecord,
   DEFAULT_ALIAS,
-  asObject,
   capabilityKernelLocalSealingKeyPath,
   capabilityKernelStatePath,
   createKernelRecord,
   isClosedPipeError,
   keychainService,
+  kernelRecordFromUnknown,
   markNeedsInitialWrite,
   nowIso,
   parseJson,
-  publicKernelRecord,
   resolveDataDir,
   safeAlias,
   stateFromKernelRecord,
   text
 } from "./opaque-capability-key-core.ts";
 
-export async function runText(command?: any, args: any = [], { input = "" }: Record<string, any> = {}) : Promise<any> {
-  return new Promise((resolve?: any, reject?: any) : any => {
-    const child: any = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
-    let stdout: any = "";
-    let stderr: any = "";
-    child.stdout.on("data", (chunk?: any) : any => {
+interface KernelLocation { dataDir?: string; alias?: string }
+interface KernelBackendLocation extends KernelLocation { backend?: string }
+interface LocalKernelReadOptions extends KernelLocation { provider?: string; securityMode?: string }
+interface TextCommandOptions { input?: string }
+interface DpapiOptions { action?: "protect" | "unprotect"; input?: string }
+interface KernelProviderOptions { alias?: string; provider?: string }
+
+function parseKernelRecordJson(raw: string): CapabilityKernelRecord {
+  const record = kernelRecordFromUnknown(parseJson(raw, null));
+  if (!record) throw new Error("Capability kernel backend returned an invalid record.");
+  return record;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorCode(error: unknown): string {
+  return error && typeof error === "object" && "code" in error ? String(error.code) : "";
+}
+
+export async function runText(command = "", args: string[] = [], { input = "" }: TextCommandOptions = {}): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
     });
-    child.stderr.on("data", (chunk?: any) : any => {
+    child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString();
     });
     child.on("error", reject);
-    child.stdin.on("error", (error?: any) : any => {
+    child.stdin.on("error", (error: Error) => {
       if (isClosedPipeError(error)) {
         return;
       }
       reject(error);
     });
-    child.on("close", (code?: any) : any => {
+    child.on("close", (code) => {
       if (code !== 0) {
         reject(new Error(stderr.trim() || `${command} failed with exit code ${code}`));
         return;
@@ -53,7 +74,7 @@ export async function runText(command?: any, args: any = [], { input = "" }: Rec
     });
     try {
       child.stdin.end(input);
-    } catch (error: any) {
+    } catch (error) {
       if (!isClosedPipeError(error)) {
         reject(error);
       }
@@ -61,11 +82,11 @@ export async function runText(command?: any, args: any = [], { input = "" }: Rec
   });
 }
 
-export function commandExists(command?: any) : any {
+export function commandExists(command = ""): boolean {
   return hostCommandExists(command);
 }
 
-export function detectLinuxCapabilityKernelBackends() : any {
+export function detectLinuxCapabilityKernelBackends() {
   return linuxSecretBackendCandidates({
     platform: process.platform,
     includeSystemdCredentials: true,
@@ -73,15 +94,15 @@ export function detectLinuxCapabilityKernelBackends() : any {
   });
 }
 
-export function linuxCapabilityKernelBackendCandidates() : any {
+export function linuxCapabilityKernelBackendCandidates() {
   return linuxSecretBackendCandidates({ platform: process.platform, commandAvailableFn: commandExists });
 }
 
-export function firstUsableLinuxCapabilityKernelBackend() : any {
+export function firstUsableLinuxCapabilityKernelBackend() {
   return linuxCapabilityKernelBackendCandidates()[0] || "local-file";
 }
 
-export function resolveAutoCapabilityKernelBackend(backend: any = "auto") : any {
+export function resolveAutoCapabilityKernelBackend(backend = "auto") {
   return resolveAutoHostSecretBackend({
     backend,
     platform: process.platform,
@@ -90,20 +111,20 @@ export function resolveAutoCapabilityKernelBackend(backend: any = "auto") : any 
   });
 }
 
-export function windowsDpapiCommand() : any {
+export function windowsDpapiCommand() {
   return hostWindowsDpapiCommand({ env: process.env, commandAvailableFn: commandExists });
 }
 
-export function windowsDpapiProtectedPath({ dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}) : any {
+export function windowsDpapiProtectedPath({ dataDir = "", alias = DEFAULT_ALIAS }: KernelLocation = {}) {
   return path.join(resolveDataDir(dataDir), "security", "capability-kernel", `${safeAlias(alias)}.dpapi`);
 }
 
-export async function runWindowsDpapi({ action = "protect", input = "" }: Record<string, any> = {}) : Promise<any> {
-  const command: any = windowsDpapiCommand();
+export async function runWindowsDpapi({ action = "protect", input = "" }: DpapiOptions = {}) {
+  const command = windowsDpapiCommand();
   if (!command) {
     throw new Error("Windows DPAPI backend requires powershell.exe or pwsh.");
   }
-  const protectScript: any = `
+  const protectScript = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
 $plain = [Console]::In.ReadToEnd()
@@ -111,7 +132,7 @@ $bytes = [System.Text.Encoding]::UTF8.GetBytes($plain)
 $protected = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)
 [Console]::Out.Write([Convert]::ToBase64String($protected))
 `;
-  const unprotectScript: any = `
+  const unprotectScript = `
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Security
 $cipher = [Console]::In.ReadToEnd().Trim()
@@ -129,11 +150,11 @@ $plainBytes = [System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $n
   ], { input });
 }
 
-export function linuxKeyringDescription(alias: any = DEFAULT_ALIAS) : any {
+export function linuxKeyringDescription(alias = DEFAULT_ALIAS) {
   return `meshrix:capability-kernel:${safeAlias(alias)}`;
 }
 
-export function secretToolAttributes(alias: any = DEFAULT_ALIAS) : any {
+export function secretToolAttributes(alias = DEFAULT_ALIAS) {
   return [
     "application",
     "meshrix",
@@ -144,14 +165,14 @@ export function secretToolAttributes(alias: any = DEFAULT_ALIAS) : any {
   ];
 }
 
-export function passEntryName(alias: any = DEFAULT_ALIAS) : any {
+export function passEntryName(alias = DEFAULT_ALIAS) {
   return `meshrix/capability-kernel/${safeAlias(alias)}`;
 }
 
-export async function readLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS, provider = "local-file", securityMode = "degraded_file_fallback" }: Record<string, any> = {}) : Promise<any> {
-  const filePath: any = capabilityKernelStatePath({ dataDir, alias });
+export async function readLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS, provider = "local-file", securityMode = "degraded_file_fallback" }: LocalKernelReadOptions = {}): Promise<CapabilityKernelRecord> {
+  const filePath = capabilityKernelStatePath({ dataDir, alias });
   try {
-    const record: any = parseJson(await fs.promises.readFile(filePath, "utf8"), null);
+    const record = parseKernelRecordJson(await fs.promises.readFile(filePath, "utf8"));
     if (record && !record.sealingKeyBase64) {
       record.sealingKeyBase64 = text(await fs.promises.readFile(
         capabilityKernelLocalSealingKeyPath({ dataDir, alias }),
@@ -159,17 +180,17 @@ export async function readLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALIA
       ));
     }
     return record;
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") {
       return markNeedsInitialWrite(createKernelRecord({ alias, provider, securityMode }));
     }
     throw error;
   }
 }
 
-export async function writeLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
-  const filePath: any = capabilityKernelStatePath({ dataDir, alias });
-  const sealingKey: any = text(record.sealingKeyBase64);
+export async function writeLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
+  const filePath = capabilityKernelStatePath({ dataDir, alias });
+  const sealingKey = text(record.sealingKeyBase64);
   if (!sealingKey) {
     throw new Error("Local capability kernel fallback requires a sealing key sidecar.");
   }
@@ -180,12 +201,12 @@ export async function writeLocalKernelRecord({ dataDir = "", alias = DEFAULT_ALI
   return record;
 }
 
-export async function readMacosKernelRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
+export async function readMacosKernelRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}): Promise<CapabilityKernelRecord> {
   if (process.platform !== "darwin") {
     throw new Error("macos-keychain capability kernel backend is only available on macOS.");
   }
   try {
-    const raw: any = await runText("security", [
+    const raw = await runText("security", [
       "find-generic-password",
       "-w",
       "-a",
@@ -193,16 +214,16 @@ export async function readMacosKernelRecord({ alias = DEFAULT_ALIAS }: Record<st
       "-s",
       keychainService(alias)
     ]);
-    return parseJson(raw.trim(), null);
-  } catch (error: any) {
-    if (/could not be found|The specified item could not be found/i.test(error.message)) {
+    return parseKernelRecordJson(raw.trim());
+  } catch (error) {
+    if (/could not be found|The specified item could not be found/i.test(errorMessage(error))) {
       return markNeedsInitialWrite(createKernelRecord({ alias, provider: "macos-keychain", securityMode: "keyring" }));
     }
     throw error;
   }
 }
 
-export async function writeMacosKernelRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
+export async function writeMacosKernelRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
   if (process.platform !== "darwin") {
     throw new Error("macos-keychain capability kernel backend is only available on macOS.");
   }
@@ -219,13 +240,13 @@ export async function writeMacosKernelRecord({ alias = DEFAULT_ALIAS }: Record<s
   return record;
 }
 
-export async function readLinuxKernelKeyringRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
-  const description: any = linuxKeyringDescription(alias);
-  let serial: any = "";
+export async function readLinuxKernelKeyringRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}): Promise<CapabilityKernelRecord> {
+  const description = linuxKeyringDescription(alias);
+  let serial = "";
   try {
     serial = (await runText("keyctl", ["search", "@u", "user", description])).trim();
-  } catch (error: any) {
-    if (/not found|cannot find|requested key not available|key has been revoked/i.test(error.message)) {
+  } catch (error) {
+    if (/not found|cannot find|requested key not available|key has been revoked/i.test(errorMessage(error))) {
       return markNeedsInitialWrite(createKernelRecord({ alias, provider: "linux-kernel-keyring", securityMode: "keyring" }));
     }
     throw error;
@@ -233,16 +254,16 @@ export async function readLinuxKernelKeyringRecord({ alias = DEFAULT_ALIAS }: Re
   if (!serial) {
     return markNeedsInitialWrite(createKernelRecord({ alias, provider: "linux-kernel-keyring", securityMode: "keyring" }));
   }
-  const raw: any = await runText("keyctl", ["pipe", serial]);
-  return parseJson(raw.trim(), null);
+  const raw = await runText("keyctl", ["pipe", serial]);
+  return parseKernelRecordJson(raw.trim());
 }
 
-export async function writeLinuxKernelKeyringRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
-  const description: any = linuxKeyringDescription(alias);
+export async function writeLinuxKernelKeyringRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
+  const description = linuxKeyringDescription(alias);
   try {
-    const serial: any = (await runText("keyctl", ["search", "@u", "user", description])).trim();
+    const serial = (await runText("keyctl", ["search", "@u", "user", description])).trim();
     if (serial) {
-      await runText("keyctl", ["unlink", serial, "@u"]).catch(() : any => {});
+      await runText("keyctl", ["unlink", serial, "@u"]).catch(() => {});
     }
   } catch {
     // Missing existing key is expected on first write.
@@ -251,19 +272,19 @@ export async function writeLinuxKernelKeyringRecord({ alias = DEFAULT_ALIAS }: R
   return record;
 }
 
-export async function readSecretServiceKernelRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
+export async function readSecretServiceKernelRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}): Promise<CapabilityKernelRecord> {
   try {
-    const raw: any = await runText("secret-tool", ["lookup", ...secretToolAttributes(alias)]);
-    return parseJson(raw.trim(), null);
-  } catch (error: any) {
-    if (/no such object|not found|couldn't find|cannot autolaunch/i.test(error.message)) {
+    const raw = await runText("secret-tool", ["lookup", ...secretToolAttributes(alias)]);
+    return parseKernelRecordJson(raw.trim());
+  } catch (error) {
+    if (/no such object|not found|couldn't find|cannot autolaunch/i.test(errorMessage(error))) {
       return markNeedsInitialWrite(createKernelRecord({ alias, provider: "secret-service", securityMode: "keyring" }));
     }
     throw error;
   }
 }
 
-export async function writeSecretServiceKernelRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
+export async function writeSecretServiceKernelRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
   await runText("secret-tool", [
     "store",
     "--label",
@@ -273,46 +294,46 @@ export async function writeSecretServiceKernelRecord({ alias = DEFAULT_ALIAS }: 
   return record;
 }
 
-export async function readPassKernelRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
+export async function readPassKernelRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}): Promise<CapabilityKernelRecord> {
   try {
-    const raw: any = await runText("pass", ["show", passEntryName(alias)]);
-    return parseJson(raw.trim(), null);
-  } catch (error: any) {
-    if (/not in the password store|is not in the password store|No such file|not found/i.test(error.message)) {
+    const raw = await runText("pass", ["show", passEntryName(alias)]);
+    return parseKernelRecordJson(raw.trim());
+  } catch (error) {
+    if (/not in the password store|is not in the password store|No such file|not found/i.test(errorMessage(error))) {
       return markNeedsInitialWrite(createKernelRecord({ alias, provider: "pass-gpg", securityMode: "user_keyring" }));
     }
     throw error;
   }
 }
 
-export async function writePassKernelRecord({ alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
+export async function writePassKernelRecord({ alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
   await runText("pass", ["insert", "-m", "-f", passEntryName(alias)], { input: JSON.stringify(record) });
   return record;
 }
 
-export async function readWindowsDpapiKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
-  const filePath: any = windowsDpapiProtectedPath({ dataDir, alias });
+export async function readWindowsDpapiKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: KernelLocation = {}): Promise<CapabilityKernelRecord> {
+  const filePath = windowsDpapiProtectedPath({ dataDir, alias });
   try {
-    const protectedPayload: any = await fs.promises.readFile(filePath, "utf8");
-    const raw: any = await runWindowsDpapi({ action: "unprotect", input: protectedPayload });
-    return parseJson(raw.trim(), null);
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
+    const protectedPayload = await fs.promises.readFile(filePath, "utf8");
+    const raw = await runWindowsDpapi({ action: "unprotect", input: protectedPayload });
+    return parseKernelRecordJson(raw.trim());
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") {
       return markNeedsInitialWrite(createKernelRecord({ alias, provider: "windows-dpapi", securityMode: "dpapi" }));
     }
     throw error;
   }
 }
 
-export async function writeWindowsDpapiKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
-  const filePath: any = windowsDpapiProtectedPath({ dataDir, alias });
-  const protectedPayload: any = await runWindowsDpapi({ action: "protect", input: JSON.stringify(record) });
+export async function writeWindowsDpapiKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
+  const filePath = windowsDpapiProtectedPath({ dataDir, alias });
+  const protectedPayload = await runWindowsDpapi({ action: "protect", input: JSON.stringify(record) });
   await writePrivateFileAtomic(filePath, protectedPayload);
   return record;
 }
 
-export function degradedLocalKernelRecord(record: Record<string, any> = {}, { alias = DEFAULT_ALIAS }: Record<string, any> = {}) : any {
-  const state: any = stateFromKernelRecord(record);
+export function degradedLocalKernelRecord(record: CapabilityKernelRecord, { alias = DEFAULT_ALIAS }: KernelLocation = {}): CapabilityKernelRecord {
+  const state = stateFromKernelRecord(record);
   return {
     ...createKernelRecord({
       alias,
@@ -329,7 +350,7 @@ export function degradedLocalKernelRecord(record: Record<string, any> = {}, { al
   };
 }
 
-export function capabilityKernelSecurityModeForProvider(provider: any = "") : any {
+export function capabilityKernelSecurityModeForProvider(provider = "") {
   if (provider === "linux-kernel-keyring" || provider === "secret-service" || provider === "macos-keychain") {
     return "keyring";
   }
@@ -342,12 +363,12 @@ export function capabilityKernelSecurityModeForProvider(provider: any = "") : an
   return "degraded_file_fallback";
 }
 
-export function rewrapKernelRecordForProvider(record: Record<string, any> = {}, { alias = DEFAULT_ALIAS, provider = "local-file" }: Record<string, any> = {}) : any {
+export function rewrapKernelRecordForProvider(record: CapabilityKernelRecord, { alias = DEFAULT_ALIAS, provider = "local-file" }: KernelProviderOptions = {}): CapabilityKernelRecord {
   if (provider === "local-file") {
     return degradedLocalKernelRecord(record, { alias });
   }
-  const securityMode: any = capabilityKernelSecurityModeForProvider(provider);
-  const state: any = stateFromKernelRecord(record);
+  const securityMode = capabilityKernelSecurityModeForProvider(provider);
+  const state = stateFromKernelRecord(record);
   return {
     ...createKernelRecord({
       alias,
@@ -364,7 +385,7 @@ export function rewrapKernelRecordForProvider(record: Record<string, any> = {}, 
   };
 }
 
-export async function readLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
+export async function readLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: KernelLocation = {}): Promise<CapabilityKernelRecord> {
   for (const candidate of linuxCapabilityKernelBackendCandidates()) {
     try {
       if (candidate === "linux-kernel-keyring") {
@@ -394,13 +415,13 @@ export async function readLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT_
   });
 }
 
-export async function writeLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
-  const candidates: any = linuxCapabilityKernelBackendCandidates();
-  const startIndex: any = Math.max(0, candidates.indexOf(record.provider));
-  const orderedCandidates: any = candidates.slice(startIndex);
-  let lastError: any = null;
+export async function writeLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT_ALIAS }: KernelLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
+  const candidates = linuxCapabilityKernelBackendCandidates();
+  const startIndex = Math.max(0, candidates.indexOf(record.provider));
+  const orderedCandidates = candidates.slice(startIndex);
+  let lastError = null;
   for (const candidate of orderedCandidates) {
-    const candidateRecord: any = candidate === record.provider
+    const candidateRecord = candidate === record.provider
       ? record
       : rewrapKernelRecordForProvider(record, { alias, provider: candidate });
     try {
@@ -414,7 +435,7 @@ export async function writeLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT
         return await writePassKernelRecord({ alias }, candidateRecord);
       }
       return await writeLocalKernelRecord({ dataDir, alias }, candidateRecord);
-    } catch (error: any) {
+    } catch (error) {
       lastError = error;
     }
   }
@@ -424,11 +445,11 @@ export async function writeLinuxAutoKernelRecord({ dataDir = "", alias = DEFAULT
   return writeLocalKernelRecord({ dataDir, alias }, degradedLocalKernelRecord(record, { alias }));
 }
 
-export async function readKernelRecord({ backend = "auto", dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}) : Promise<any> {
+export async function readKernelRecord({ backend = "auto", dataDir = "", alias = DEFAULT_ALIAS }: KernelBackendLocation = {}): Promise<CapabilityKernelRecord> {
   if ((backend === "auto" || backend === "macos-keychain") && process.platform === "darwin") {
     try {
       return await readMacosKernelRecord({ alias });
-    } catch (error: any) {
+    } catch (error) {
       if (backend === "macos-keychain") {
         throw error;
       }
@@ -437,11 +458,11 @@ export async function readKernelRecord({ backend = "auto", dataDir = "", alias =
   if (backend === "auto" && process.platform === "linux") {
     return readLinuxAutoKernelRecord({ dataDir, alias });
   }
-  const resolvedBackend: any = resolveAutoCapabilityKernelBackend(backend);
+  const resolvedBackend = resolveAutoCapabilityKernelBackend(backend);
   if (resolvedBackend === "linux-kernel-keyring") {
     try {
       return await readLinuxKernelKeyringRecord({ alias });
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -450,7 +471,7 @@ export async function readKernelRecord({ backend = "auto", dataDir = "", alias =
   if (resolvedBackend === "secret-service") {
     try {
       return await readSecretServiceKernelRecord({ alias });
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -459,7 +480,7 @@ export async function readKernelRecord({ backend = "auto", dataDir = "", alias =
   if (resolvedBackend === "pass-gpg") {
     try {
       return await readPassKernelRecord({ alias });
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -468,7 +489,7 @@ export async function readKernelRecord({ backend = "auto", dataDir = "", alias =
   if (resolvedBackend === "windows-dpapi") {
     try {
       return await readWindowsDpapiKernelRecord({ dataDir, alias });
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -482,14 +503,14 @@ export async function readKernelRecord({ backend = "auto", dataDir = "", alias =
   });
 }
 
-export async function writeKernelRecord({ backend = "auto", dataDir = "", alias = DEFAULT_ALIAS }: Record<string, any> = {}, record: Record<string, any> = {}) : Promise<any> {
+export async function writeKernelRecord({ backend = "auto", dataDir = "", alias = DEFAULT_ALIAS }: KernelBackendLocation = {}, record: CapabilityKernelRecord): Promise<CapabilityKernelRecord> {
   if (backend === "auto" && process.platform === "linux") {
     return writeLinuxAutoKernelRecord({ dataDir, alias }, record);
   }
   if (record.provider === "macos-keychain" && process.platform === "darwin") {
     try {
       return await writeMacosKernelRecord({ alias }, record);
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -499,7 +520,7 @@ export async function writeKernelRecord({ backend = "auto", dataDir = "", alias 
   if (record.provider === "linux-kernel-keyring") {
     try {
       return await writeLinuxKernelKeyringRecord({ alias }, record);
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -509,7 +530,7 @@ export async function writeKernelRecord({ backend = "auto", dataDir = "", alias 
   if (record.provider === "secret-service") {
     try {
       return await writeSecretServiceKernelRecord({ alias }, record);
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -519,7 +540,7 @@ export async function writeKernelRecord({ backend = "auto", dataDir = "", alias 
   if (record.provider === "pass-gpg") {
     try {
       return await writePassKernelRecord({ alias }, record);
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }
@@ -529,7 +550,7 @@ export async function writeKernelRecord({ backend = "auto", dataDir = "", alias 
   if (record.provider === "windows-dpapi") {
     try {
       return await writeWindowsDpapiKernelRecord({ dataDir, alias }, record);
-    } catch (error: any) {
+    } catch (error) {
       if (backend !== "auto") {
         throw error;
       }

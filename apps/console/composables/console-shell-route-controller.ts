@@ -28,18 +28,10 @@ function adminRouteTitle(adminView: string, messages: ConsoleShellRouteMessages)
       return messages.nav.toolGovernance;
     case "toolStats":
       return messages.nav.toolStats;
-    case "agentConfig":
-      return messages.nav.agentConfig;
-    case "agentAssignment":
-      return messages.nav.agentAssignment;
-    case "contextManagement":
-      return messages.nav.contextManagement;
     case "upstreamServices":
       return messages.nav.upstreamServices;
     case "upstreamServicePublish":
       return messages.nav.upstreamServicePublish;
-    case "maintenanceAgent":
-      return messages.nav.maintenanceAgent;
     case "jobs":
       return messages.nav.jobs;
     case "logs":

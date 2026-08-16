@@ -2,37 +2,114 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-function text(value?: any) : any {
+type HostEnvironment = NodeJS.ProcessEnv;
+type CommandPathFn = (commandName: string, options?: CommandOptions) => string;
+
+interface PlatformOptions {
+  platform?: NodeJS.Platform | string;
+  arch?: string;
+}
+
+interface CommandOptions extends PlatformOptions {
+  spawnSync?: typeof spawnSync;
+  timeoutMs?: number;
+  cwd?: string;
+  env?: HostEnvironment;
+  maxBuffer?: number;
+  localBinDirs?: string[];
+  includeDefaultLocalBin?: boolean;
+  executableExistsFn?: (targetPath: string) => boolean;
+}
+
+export interface CommandCandidate {
+  found: boolean;
+  command: string;
+  path: string;
+}
+
+export interface VersionInfo {
+  major: number;
+  minor: number;
+  patch: number;
+}
+
+export interface InstallCommand {
+  command: string;
+  args: string[];
+}
+
+export interface InstallPlan {
+  label: string;
+  command?: string;
+  args?: string[];
+  commands?: InstallCommand[];
+}
+
+interface NativeHostPackageOptions extends NativeInstallOptions {
+  packageName?: string;
+  darwinPackageName?: string;
+  aptPackageName?: string;
+  dnfPackageName?: string;
+  yumPackageName?: string;
+  apkPackageName?: string;
+  pacmanPackageName?: string;
+  zypperPackageName?: string;
+  wingetId?: string;
+  chocoPackageName?: string;
+  scoopPackageName?: string;
+  labelPrefix?: string;
+}
+
+export interface MacosVersionInfo {
+  productName: string;
+  productVersion: string;
+  buildVersion: string;
+  label: string;
+}
+
+interface MacosVersionOptions extends CommandOptions {
+  pathExistsFn?: (targetPath: string) => boolean;
+  commandPathFn?: CommandPathFn;
+  runCommandFn?: typeof runCommand;
+}
+
+interface NativeInstallOptions extends CommandOptions {
+  disableNativeRuntimeInstall?: boolean;
+  commandPathFn?: CommandPathFn;
+  getuid?: () => number;
+}
+
+function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-export function hostPlatformKey({ platform = process.platform, arch = process.arch }: Record<string, any> = {}) : any {
+export function hostPlatformKey({ platform = process.platform, arch = process.arch }: PlatformOptions = {}): string {
   return `${platform}-${arch}`;
 }
 
-export function platformTargetKey({ platform = process.platform, arch = process.arch }: Record<string, any> = {}) : any {
-  const os: any = ({
+export function platformTargetKey({ platform = process.platform, arch = process.arch }: PlatformOptions = {}): string {
+  const os = ({
     darwin: "darwin",
     linux: "linux",
     win32: "windows"
-  } as Record<string, any>)[platform] || platform;
-  const cpu: any = ({
+  } as Record<string, string>)[platform] || platform;
+  const cpu = ({
     arm64: "aarch64",
     x64: "x86_64"
-  } as Record<string, any>)[arch] || arch;
+  } as Record<string, string>)[arch] || arch;
   return `${os}-${cpu}`;
 }
 
-export function windowsExecutableSuffix({ platform = process.platform }: Record<string, any> = {}) : any {
+export function windowsExecutableSuffix({ platform = process.platform }: PlatformOptions = {}): string {
   return platform === "win32" ? ".exe" : "";
 }
 
-export function safePath(value: any = "") : any {
-  const candidate: any = text(value);
+export function safePath(value: unknown = ""): string {
+  const candidate = text(value);
   return candidate ? path.resolve(candidate) : "";
 }
 
-export function pathExists(targetPath: any = "") : any {
+export function pathExists(targetPath = ""): boolean {
   if (!targetPath) return false;
   try {
     fsSync.accessSync(targetPath);
@@ -42,7 +119,7 @@ export function pathExists(targetPath: any = "") : any {
   }
 }
 
-export function executableExists(targetPath: any = "") : any {
+export function executableExists(targetPath = ""): boolean {
   if (!targetPath) return false;
   try {
     fsSync.accessSync(targetPath, fsSync.constants.X_OK);
@@ -52,14 +129,14 @@ export function executableExists(targetPath: any = "") : any {
   }
 }
 
-export function shellQuote(value: any = "") : any {
+export function shellQuote(value: unknown = ""): string {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
-export function pathEntries(env: any = process.env) : any {
+export function pathEntries(env: HostEnvironment = process.env): string[] {
   return text(env.PATH)
     .split(path.delimiter)
-    .map((entry?: any) : any => entry.trim())
+    .map((entry) => entry.trim())
     .filter(Boolean);
 }
 
@@ -67,20 +144,20 @@ export function defaultLocalBinEntries({
   cwd = process.cwd(),
   localBinDirs = [],
   includeDefaultLocalBin = true
-}: Record<string, any> = {}) : any {
-  const entries: any[] = [
+}: CommandOptions = {}): string[] {
+  const entries: string[] = [
     ...(Array.isArray(localBinDirs) ? localBinDirs : []),
     ...(includeDefaultLocalBin === false ? [] : [path.join(text(cwd) || process.cwd(), "node_modules", ".bin")])
   ];
-  return [...new Set<any>(entries.map(text).filter(Boolean))];
+  return [...new Set(entries.map(text).filter(Boolean))];
 }
 
-export function commandPath(commandName: any = "", options: Record<string, any> = {}) : any {
-  const command: any = text(commandName);
+export function commandPath(commandName: unknown = "", options: CommandOptions = {}): string {
+  const command = text(commandName);
   if (!command) return "";
-  const platform: any = options.platform || process.platform;
-  const spawnSyncFn: any = options.spawnSync || spawnSync;
-  const result: any = platform === "win32"
+  const platform = options.platform || process.platform;
+  const spawnSyncFn = options.spawnSync || spawnSync;
+  const result = platform === "win32"
     ? spawnSyncFn("where", [command], {
         encoding: "utf8",
         timeout: options.timeoutMs || 3000
@@ -95,14 +172,14 @@ export function commandPath(commandName: any = "", options: Record<string, any> 
   return text(result.stdout).split(/\r?\n/).map(text).find(Boolean) || "";
 }
 
-export function commandAvailable(commandName: any = "", options: Record<string, any> = {}) : any {
+export function commandAvailable(commandName: unknown = "", options: CommandOptions = {}): boolean {
   return Boolean(commandPath(commandName, options));
 }
 
-export function resolveCommandCandidate(commandNames: any = [], options: Record<string, any> = {}) : any {
-  const names: any[] = [...new Set<any>((Array.isArray(commandNames) ? commandNames : [commandNames]).map(text).filter(Boolean))];
-  const platform: any = options.platform || process.platform;
-  const executableExistsFn: any = options.executableExistsFn || executableExists;
+export function resolveCommandCandidate(commandNames: unknown = [], options: CommandOptions = {}): CommandCandidate {
+  const names = [...new Set((Array.isArray(commandNames) ? commandNames : [commandNames]).map(text).filter(Boolean))];
+  const platform = options.platform || process.platform;
+  const executableExistsFn = options.executableExistsFn || executableExists;
   for (const name of names) {
     if (path.isAbsolute(name) || name.includes(path.sep)) {
       if (executableExistsFn(name)) {
@@ -110,14 +187,14 @@ export function resolveCommandCandidate(commandNames: any = [], options: Record<
       }
       continue;
     }
-    const suffixes: any = platform === "win32" ? ["", ".cmd", ".exe", ".bat"] : [""];
-    const searchDirs: any[] = [...new Set<any>([
+    const suffixes = platform === "win32" ? ["", ".cmd", ".exe", ".bat"] : [""];
+    const searchDirs = [...new Set([
       ...pathEntries(options.env || process.env),
       ...defaultLocalBinEntries(options)
     ])];
     for (const dir of searchDirs) {
       for (const suffix of suffixes) {
-        const candidate: any = path.join(dir, `${name}${suffix}`);
+        const candidate = path.join(dir, `${name}${suffix}`);
         if (executableExistsFn(candidate)) {
           return { found: true, command: name, path: candidate };
         }
@@ -127,62 +204,62 @@ export function resolveCommandCandidate(commandNames: any = [], options: Record<
   return { found: false, command: names[0] || "", path: "" };
 }
 
-export function runCommand(command?: any, args: any = [], options: Record<string, any> = {}) : any {
-  const spawnSyncFn: any = options.spawnSync || spawnSync;
+export function runCommand(command: string, args: string[] = [], options: CommandOptions = {}) {
+  const spawnSyncFn = options.spawnSync || spawnSync;
   return spawnSyncFn(command, args, {
     cwd: options.cwd || process.cwd(),
-    env: { ...process.env, ...(options.env || {}) },
+    env: { ...process.env, ...options.env },
     encoding: "utf8",
     maxBuffer: options.maxBuffer || 1024 * 1024 * 12,
     timeout: options.timeoutMs || 600000
   });
 }
 
-function firstOutputLine(result: Record<string, any> = {}) : any {
+function firstOutputLine(result: { stdout?: unknown; stderr?: unknown } = {}): string {
   return text([result.stdout, result.stderr].filter(Boolean).join("\n")).split(/\r?\n/)[0] || "";
 }
 
-export function commandVersion(command?: any, args: any = ["--version"], options: Record<string, any> = {}) : any {
-  const executablePath: any = commandPath(command, options);
+export function commandVersion(command: string, args: string[] = ["--version"], options: CommandOptions = {}): string {
+  const executablePath = commandPath(command, options);
   if (!executablePath) {
     return "";
   }
   return firstOutputLine(runCommand(executablePath, args, { ...options, timeoutMs: options.timeoutMs || 5000 }));
 }
 
-export function executableCommandVersion(executablePath: any = "", args: any = ["--version"], options: Record<string, any> = {}) : any {
-  const candidate: any = text(executablePath);
+export function executableCommandVersion(executablePath: unknown = "", args: string[] = ["--version"], options: CommandOptions = {}): string {
+  const candidate = text(executablePath);
   if (!candidate || !(executableExists(candidate) || pathExists(candidate))) {
     return "";
   }
   return firstOutputLine(runCommand(candidate, args, { ...options, timeoutMs: options.timeoutMs || 5000 }));
 }
 
-export function executableVersion(executablePath: any = "", args: any = ["--version"], options: Record<string, any> = {}) : any {
-  const candidate: any = text(executablePath);
+export function executableVersion(executablePath: unknown = "", args: string[] = ["--version"], options: CommandOptions = {}): string {
+  const candidate = text(executablePath);
   if (!candidate || !executableExists(candidate)) return "";
   return firstOutputLine(runCommand(candidate, args, { ...options, timeoutMs: options.timeoutMs || 5000 }));
 }
 
-export function parseJavaMajor(versionOutput: any = "") : any {
-  const output: any = String(versionOutput || "");
-  const quoted: any = output.match(/version\s+"([^"]+)"/i)?.[1] || "";
-  const version: any = quoted || output.match(/(?:openjdk|java)\s+([0-9][^\s"]*)/i)?.[1] || "";
-  const majorText: any = version.startsWith("1.")
+export function parseJavaMajor(versionOutput: unknown = ""): number {
+  const output = String(versionOutput || "");
+  const quoted = output.match(/version\s+"([^"]+)"/i)?.[1] || "";
+  const version = quoted || output.match(/(?:openjdk|java)\s+([0-9][^\s"]*)/i)?.[1] || "";
+  const majorText = version.startsWith("1.")
     ? version.split(".")[1]
     : version.split(/[._+-]/)[0];
-  const major: any = Number(majorText || 0);
+  const major = Number(majorText || 0);
   return Number.isFinite(major) ? major : 0;
 }
 
-export function parseNodeMajor(versionOutput: any = "") : any {
-  const match: any = String(versionOutput || "").match(/v?(\d+)(?:\.|$)/);
-  const major: any = Number(match?.[1] || 0);
+export function parseNodeMajor(versionOutput: unknown = ""): number {
+  const match = String(versionOutput || "").match(/v?(\d+)(?:\.|$)/);
+  const major = Number(match?.[1] || 0);
   return Number.isFinite(major) ? major : 0;
 }
 
-export function parsePythonVersion(versionOutput: any = "") : any {
-  const match: any = String(versionOutput || "").match(/Python\s+(\d+)\.(\d+)(?:\.(\d+))?/i);
+export function parsePythonVersion(versionOutput: unknown = ""): VersionInfo {
+  const match = String(versionOutput || "").match(/Python\s+(\d+)\.(\d+)(?:\.(\d+))?/i);
   return {
     major: Number(match?.[1] || 0),
     minor: Number(match?.[2] || 0),
@@ -190,54 +267,54 @@ export function parsePythonVersion(versionOutput: any = "") : any {
   };
 }
 
-export function pythonVersionMeets(versionOutput: any = "", { minMajor = 3, minMinor = 10 }: Record<string, any> = {}) : any {
-  const version: any = parsePythonVersion(versionOutput);
+export function pythonVersionMeets(versionOutput: unknown = "", { minMajor = 3, minMinor = 10 }: { minMajor?: number; minMinor?: number } = {}): boolean {
+  const version = parsePythonVersion(versionOutput);
   return version.major > minMajor ||
     (version.major === minMajor && version.minor >= minMinor);
 }
 
-export function nodeVersionMeets(versionOutput: any = "", { minMajor = 22 }: Record<string, any> = {}) : any {
+export function nodeVersionMeets(versionOutput: unknown = "", { minMajor = 22 }: { minMajor?: number } = {}): boolean {
   return parseNodeMajor(versionOutput) >= minMajor;
 }
 
-export function javaVersionMeets(versionOutput: any = "", { minMajor = 21 }: Record<string, any> = {}) : any {
+export function javaVersionMeets(versionOutput: unknown = "", { minMajor = 21 }: { minMajor?: number } = {}): boolean {
   return parseJavaMajor(versionOutput) >= minMajor;
 }
 
-export function runtimeExecutable(root: any = "", executableName: any = "", { platform = process.platform }: Record<string, any> = {}) : any {
+export function runtimeExecutable(root = "", executableName = "", { platform = process.platform }: PlatformOptions = {}): string {
   return platform === "win32"
     ? path.join(root, "Scripts", `${executableName}.exe`)
     : path.join(root, "bin", executableName);
 }
 
-export function privilegedCommand(command?: any, args: any = [], options: Record<string, any> = {}) : any {
-  const platform: any = options.platform || process.platform;
+export function privilegedCommand(command: string, args: string[] = [], options: NativeInstallOptions = {}): InstallCommand {
+  const platform = options.platform || process.platform;
   if (platform === "win32") {
     return { command, args };
   }
-  const getuid: any = options.getuid || (typeof process.getuid === "function" ? process.getuid.bind(process) : null);
+  const getuid = options.getuid || (typeof process.getuid === "function" ? process.getuid.bind(process) : null);
   if (typeof getuid === "function" && getuid() === 0) {
     return { command, args };
   }
-  const commandPathFn: any = options.commandPathFn || commandPath;
+  const commandPathFn = options.commandPathFn || commandPath;
   if (commandPathFn("sudo")) {
     return { command: "sudo", args: ["-n", command, ...args] };
   }
   return { command, args };
 }
 
-export function nativePythonInstallPlans(options: Record<string, any> = {}) : any {
-  const platform: any = options.platform || process.platform;
+export function nativePythonInstallPlans(options: NativeInstallOptions = {}): InstallPlan[] {
+  const platform = options.platform || process.platform;
   if (options.disableNativeRuntimeInstall === true || process.env.MESHRIX_DISABLE_NATIVE_RUNTIME_INSTALL === "1") {
     return [];
   }
-  const commandPathFn: any = options.commandPathFn || commandPath;
-  const privileged: any = (command?: any, args?: any) : any => privilegedCommand(command, args, { ...options, commandPathFn, platform });
+  const commandPathFn = options.commandPathFn || commandPath;
+  const privileged = (command: string, args: string[]): InstallCommand => privilegedCommand(command, args, { ...options, commandPathFn, platform });
   if (platform === "darwin" && commandPathFn("brew")) {
     return [{ label: "Homebrew python@3.12", commands: [{ command: "brew", args: ["install", "python@3.12"] }] }];
   }
   if (platform === "linux") {
-    const plans: any[] = [];
+    const plans: InstallPlan[] = [];
     if (commandPathFn("apt-get")) {
       plans.push({
         label: "apt python3-venv",
@@ -259,26 +336,26 @@ export function nativePythonInstallPlans(options: Record<string, any> = {}) : an
       commandPathFn("winget") ? { label: "winget Python 3.12", commands: [{ command: "winget", args: ["install", "--id", "Python.Python.3.12", "-e", "--accept-package-agreements", "--accept-source-agreements"] }] } : null,
       commandPathFn("choco") ? { label: "Chocolatey python", commands: [{ command: "choco", args: ["install", "-y", "python"] }] } : null,
       commandPathFn("scoop") ? { label: "Scoop python", commands: [{ command: "scoop", args: ["install", "python"] }] } : null
-    ].filter(Boolean);
+    ].filter((plan) => plan !== null);
   }
   return [];
 }
 
-export function nativeNodeInstallerToolPlans(options: Record<string, any> = {}) : any {
-  const platform: any = options.platform || process.platform;
+export function nativeNodeInstallerToolPlans(options: NativeInstallOptions = {}): InstallPlan[] {
+  const platform = options.platform || process.platform;
   if (options.disableNativeRuntimeInstall === true || process.env.MESHRIX_DISABLE_NATIVE_RUNTIME_INSTALL === "1") {
     return [];
   }
-  const commandPathFn: any = options.commandPathFn || commandPath;
+  const commandPathFn = options.commandPathFn || commandPath;
   if (commandPathFn("curl") || commandPathFn("wget") || commandPathFn("git")) {
     return [];
   }
-  const privileged: any = (command?: any, args?: any) : any => privilegedCommand(command, args, { ...options, commandPathFn, platform });
+  const privileged = (command: string, args: string[]): InstallCommand => privilegedCommand(command, args, { ...options, commandPathFn, platform });
   if (platform === "darwin" && commandPathFn("brew")) {
     return [{ label: "Homebrew curl", commands: [{ command: "brew", args: ["install", "curl"] }] }];
   }
   if (platform === "linux") {
-    const plans: any[] = [];
+    const plans: InstallPlan[] = [];
     if (commandPathFn("apt-get")) {
       plans.push({
         label: "apt curl",
@@ -300,7 +377,7 @@ export function nativeNodeInstallerToolPlans(options: Record<string, any> = {}) 
       commandPathFn("winget") ? { label: "winget Git", commands: [{ command: "winget", args: ["install", "--id", "Git.Git", "-e", "--accept-package-agreements", "--accept-source-agreements"] }] } : null,
       commandPathFn("choco") ? { label: "Chocolatey curl", commands: [{ command: "choco", args: ["install", "-y", "curl"] }] } : null,
       commandPathFn("scoop") ? { label: "Scoop curl", commands: [{ command: "scoop", args: ["install", "curl"] }] } : null
-    ].filter(Boolean);
+    ].filter((plan) => plan !== null);
   }
   return [];
 }
@@ -321,20 +398,20 @@ export function nativeHostPackageInstallPlans({
   chocoPackageName = packageName,
   scoopPackageName = packageName,
   labelPrefix = ""
-}: Record<string, any> = {}) : any {
-  const normalizedPackageName: any = text(packageName);
-  const labelName: any = text(labelPrefix || normalizedPackageName);
+}: NativeHostPackageOptions = {}): InstallPlan[] {
+  const normalizedPackageName = text(packageName);
+  const labelName = text(labelPrefix || normalizedPackageName);
   if (!normalizedPackageName || disableNativeRuntimeInstall) {
     return [];
   }
-  const privileged: any = (command?: any, args?: any) : any => privilegedCommand(command, args, { platform, commandPathFn });
+  const privileged = (command: string, args: string[]): InstallCommand => privilegedCommand(command, args, { platform, commandPathFn });
   if (platform === "darwin") {
     return commandPathFn("brew")
       ? [{ label: `Homebrew ${labelName}`, command: "brew", args: ["install", text(darwinPackageName || normalizedPackageName)] }]
       : [];
   }
   if (platform === "linux") {
-    const plans: any[] = [];
+    const plans: InstallPlan[] = [];
     if (commandPathFn("apt-get")) {
       plans.push({
         label: `apt ${labelName}`,
@@ -362,13 +439,13 @@ export function nativeHostPackageInstallPlans({
       commandPathFn("scoop")
         ? { label: `Scoop ${labelName}`, command: "scoop", args: ["install", text(scoopPackageName || normalizedPackageName)] }
         : null
-    ].filter(Boolean);
+    ].filter((plan) => plan !== null);
   }
   return [];
 }
 
-export function macosVersionInfo(options: Record<string, any> = {}) : any {
-  const platform: any = options.platform || process.platform;
+export function macosVersionInfo(options: MacosVersionOptions = {}): MacosVersionInfo {
+  const platform = options.platform || process.platform;
   if (platform !== "darwin") {
     return {
       productName: "",
@@ -377,10 +454,9 @@ export function macosVersionInfo(options: Record<string, any> = {}) : any {
       label: ""
     };
   }
-  const pathExistsFn: any = options.pathExistsFn || pathExists;
-  const commandPathFn: any = options.commandPathFn || commandPath;
-  const runCommandFn: any = options.runCommandFn || runCommand;
-  const swVersPath: any = commandPathFn("sw_vers");
+  const commandPathFn = options.commandPathFn || commandPath;
+  const runCommandFn = options.runCommandFn || runCommand;
+  const swVersPath = commandPathFn("sw_vers");
   if (!swVersPath) {
     return {
       productName: "macOS",
@@ -389,7 +465,7 @@ export function macosVersionInfo(options: Record<string, any> = {}) : any {
       label: "macOS"
     };
   }
-  const result: any = runCommandFn(swVersPath, [], { timeoutMs: 3000 });
+  const result = runCommandFn(swVersPath, [], { timeoutMs: 3000 });
   if (result.status !== 0) {
     return {
       productName: "macOS",
@@ -398,20 +474,20 @@ export function macosVersionInfo(options: Record<string, any> = {}) : any {
       label: "macOS"
     };
   }
-  const fields: any = new Map<any, any>(
+  const fields = new Map<string, string>(
     text(result.stdout)
       .split(/\r?\n/)
-      .map((line?: any) : any => {
-        const separator: any = line.indexOf(":");
+      .map((line) => {
+        const separator = line.indexOf(":");
         return separator >= 0
           ? [text(line.slice(0, separator)), text(line.slice(separator + 1))]
           : ["", ""];
       })
-      .filter(([key]: any[]) : any => key)
+      .filter(([key]) => Boolean(key)) as Array<[string, string]>
   );
-  const productName: any = fields.get("ProductName") || "macOS";
-  const productVersion: any = fields.get("ProductVersion") || "";
-  const buildVersion: any = fields.get("BuildVersion") || "";
+  const productName = fields.get("ProductName") || "macOS";
+  const productVersion = fields.get("ProductVersion") || "";
+  const buildVersion = fields.get("BuildVersion") || "";
   return {
     productName,
     productVersion,

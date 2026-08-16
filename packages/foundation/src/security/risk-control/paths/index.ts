@@ -1,4 +1,6 @@
-export const RISK_CONTROL_PATHS: readonly any[] = Object.freeze([
+import type { RiskControlPath } from "../types.ts";
+
+export const RISK_CONTROL_PATHS: readonly RiskControlPath[] = Object.freeze([
   {
     pathId: "client-mcp-ingress-request",
     label: "Client MCP ingress request",

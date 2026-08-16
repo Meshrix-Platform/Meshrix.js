@@ -182,7 +182,7 @@ async function callMcpCapabilitiesList({ catalog }: Record<string, any>) : Promi
     }
   }));
   const provider: Record<string, any> = {
-    async authorizeRequest() : Promise<any> {
+    async authorizeMcpClientRequest() : Promise<any> {
       return {
         ok: true,
         status: 200,

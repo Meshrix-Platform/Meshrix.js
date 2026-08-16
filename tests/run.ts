@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url";
 
 import { assertNoLeak } from "../tools/server-scripts/lib/report-evidence-safety.ts";
 import {
+  applyVitestShard,
+  mergeCompatibleSuiteProcesses,
+  parseTestShard,
   resolveExecutionTimeout,
   runSuiteProcess,
   timeoutMsForSuite
@@ -79,6 +82,7 @@ function resolveProfiles(profiles?: any) : any {
       extends: def.extends || null,
       dynamic: def.dynamic || false,
       timeoutMs: def.timeoutMs,
+      execution: def.execution || {},
     };
   }
   return resolved;
@@ -121,7 +125,8 @@ function parseArgs(argv?: any) : any {
     continueOnFailure: false,
     strictPlatform: false,
     report: null,
-    changedBase: null
+    changedBase: null,
+    shard: null
   };
 
   for (let index: any = 0; index < argv.length; index += 1) {
@@ -164,6 +169,14 @@ function parseArgs(argv?: any) : any {
     }
     if (arg.startsWith("--report=")) {
       options.report = arg.slice("--report=".length);
+      continue;
+    }
+    if (arg === "--shard") {
+      options.shard = takeValue(argv, ++index, arg);
+      continue;
+    }
+    if (arg.startsWith("--shard=")) {
+      options.shard = arg.slice("--shard=".length);
       continue;
     }
     if (arg === "--list") {
@@ -218,6 +231,7 @@ Options:
   --continue-on-failure   Run remaining suites after a failure.
   --strict-platform       Treat platform-incompatible suites as failures.
   --report <path>         Write report JSON to an explicit path.
+  --shard <index/count>   Shard merged Vitest processes (for example 1/4).
   --changed-base <ref>    Base ref for the changed profile. Defaults to HEAD.
 `);
 }
@@ -342,6 +356,28 @@ function commandLine(entry?: any) : any {
   return [entry.command, ...entry.args].join(" ");
 }
 
+function cleanSourceRevision() : string | null {
+  const status = spawnSync("git", ["status", "--porcelain"], { cwd: repoRoot, encoding: "utf8" });
+  if (status.status !== 0 || status.stdout.trim() !== "") return null;
+  const revision = spawnSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8" });
+  return revision.status === 0 ? revision.stdout.trim() || null : null;
+}
+
+function passedResultCache(profile: string, sourceRevision: string | null): Map<string, any> {
+  if (!sourceRevision) return new Map();
+  const reportPath = path.join(defaultReportDir, "latest.json");
+  if (!existsSync(reportPath)) return new Map();
+  try {
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    if (report.profile !== profile || report.sourceRevision !== sourceRevision) return new Map();
+    return new Map((Array.isArray(report.suites) ? report.suites : [])
+      .filter((result: any) => result?.status === "passed" && typeof result.command === "string")
+      .map((result: any) => [result.command, result]));
+  } catch {
+    return new Map();
+  }
+}
+
 function displayReportPath(filePath?: any) : any {
   const relativePath: any = path.relative(repoRoot, filePath).split(path.sep).join("/");
   return relativePath && !relativePath.startsWith("../") && relativePath !== ".."
@@ -375,6 +411,14 @@ async function main() : Promise<any> {
   }
 
   const selectedIds: any = resolveSuiteIds(options);
+  const profileExecution: any = profileConfigs[options.profile]?.execution || {};
+  const shardEnvironment: string = String(profileExecution.shardEnvironment || "").trim();
+  const shard = parseTestShard(options.shard || (shardEnvironment ? process.env[shardEnvironment] : null));
+  const selectedEntries: any[] = selectedIds.map((id: string) => suiteById.get(id));
+  const mergedEntries: any[] = profileExecution.mergeVitestProcesses === true
+    ? mergeCompatibleSuiteProcesses(selectedEntries)
+    : selectedEntries;
+  const executionEntries: any[] = mergedEntries.map((entry: any) => applyVitestShard(entry, shard));
   const startedAt: any = new Date();
   const results: any[] = [];
   const selectedByProfile: any = options.suites.length === 0 && options.tags.length === 0;
@@ -387,8 +431,10 @@ async function main() : Promise<any> {
   const profileDeadlineMs: any = profileTimeoutMs
     ? startedAt.getTime() + profileTimeoutMs
     : null;
+  const sourceRevision = profileExecution.cachePassedResults === true ? cleanSourceRevision() : null;
+  const resultCache = passedResultCache(options.profile, sourceRevision);
 
-  console.log(`Meshrix.js test runner: profile=${options.profile} suites=${selectedIds.length}`);
+  console.log(`Meshrix.js test runner: profile=${options.profile} suites=${selectedIds.length} processes=${executionEntries.length}`);
   console.log(`Report directory: ${displayReportPath(defaultReportDir)}`);
   printFeatureConsistencyGate();
 
@@ -396,8 +442,7 @@ async function main() : Promise<any> {
     throw new Error(`Profile "${options.profile}" selected zero suites.`);
   }
 
-  for (const id of selectedIds) {
-    const entry: any = suiteById.get(id);
+  for (const entry of executionEntries) {
     const compatible: any = isPlatformCompatible(entry);
     if (!compatible) {
       const status: any = options.strictPlatform ? "failed" : "skipped";
@@ -438,6 +483,22 @@ async function main() : Promise<any> {
 
     console.log(`\nRUN ${entry.id}: ${entry.label || entry.id}`);
     console.log(commandLine(entry));
+    const cached = resultCache.get(commandLine(entry));
+    if (cached) {
+      const now = new Date().toISOString();
+      results.push({
+        ...cached,
+        id: entry.id,
+        label: entry.label || entry.id,
+        childSuiteIds: entry.childSuiteIds,
+        cached: true,
+        startedAt: now,
+        finishedAt: now,
+        durationMs: 0
+      });
+      console.log(`PASSED ${entry.id} (cached)`);
+      continue;
+    }
     const declaredSuiteTimeoutMs: any = timeoutMsForSuite(entry);
     const profileRemainingMs: any = profileDeadlineMs === null
       ? null
@@ -472,6 +533,8 @@ async function main() : Promise<any> {
     });
     result.timeoutClass = entry.timeoutClass;
     result.declaredSuiteTimeoutMs = declaredSuiteTimeoutMs;
+    result.childSuiteIds = entry.childSuiteIds;
+    result.cached = false;
     results.push(result);
     console.log(`${result.status.toUpperCase()} ${entry.id} (${result.durationMs}ms)`);
     if (result.timedOut === true && result.timeoutScope === "profile") {
@@ -504,6 +567,12 @@ async function main() : Promise<any> {
     runner: "meshrix-unified-test-runner",
     profile: options.profile,
     selectedSuites: selectedIds,
+    executionProcesses: executionEntries.map((entry: any) => ({
+      id: entry.id,
+      childSuiteIds: entry.childSuiteIds || [entry.id],
+      command: commandLine(entry)
+    })),
+    sourceRevision,
     options: {
       tags: options.tags,
       explicitSuites: options.suites,
@@ -511,6 +580,9 @@ async function main() : Promise<any> {
       continueOnFailure: options.continueOnFailure,
       strictPlatform: options.strictPlatform,
       changedBase: options.changedBase,
+      shard,
+      mergeVitestProcesses: profileExecution.mergeVitestProcesses === true,
+      cachePassedResults: profileExecution.cachePassedResults === true,
       profileTimeoutMs
     },
     environment: {

@@ -9,15 +9,13 @@ const {
   activeRouteAdminView,
   activeRouteView,
   canAccessAdminView,
-  hasFeature,
   msg,
   openAdmin,
 } = useConsoleSideNavContext();
 
 const showOperationsSection = computed(() =>
   canAccessAdminView("jobs") ||
-  canAccessAdminView("opsMonitor") ||
-  canAccessAdminView("maintenanceAgent")
+  canAccessAdminView("opsMonitor")
 );
 </script>
 
@@ -39,14 +37,6 @@ const showOperationsSection = computed(() =>
       href="#/admin/ops-monitor"
       subtle
       @activate="openAdmin('opsMonitor')"
-    />
-    <ConsoleSideNavLink
-      v-if="hasFeature('maintenance-agent-runbooks') && canAccessAdminView('maintenanceAgent')"
-      :active="activeRouteView === 'admin' && activeRouteAdminView === 'maintenanceAgent'"
-      :label="msg.nav.maintenanceAgent"
-      href="#/admin/maintenance-agent"
-      subtle
-      @activate="openAdmin('maintenanceAgent')"
     />
   </section>
 </template>

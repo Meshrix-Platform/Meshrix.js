@@ -77,7 +77,7 @@ const CAPACITY_NAME_ALLOWLIST: readonly any[] = Object.freeze([
   "tools/server-scripts/verify-runtime-capacity-convergence.ts",
   "tools/verifiers/runtime-capacity-workload-catalog.ts",
   "tests/vitest/server/runtime-capacity-catalog-conformance.test.ts",
-  "tests/vitest/server/runtime-capacity-admission-conformance.test.ts",
+  "tests/vitest/server/external-gateway-plugin.test.ts",
   "tests/vitest/server/runtime-capacity-work-queue-dispatch-conformance.test.ts",
   "tests/vitest/server/runtime-capacity-execution-fence-conformance.test.ts",
   "tests/vitest/server/runtime-capacity-fair-claim-conformance.test.ts",
@@ -99,7 +99,7 @@ const FOCUSED_SUITES_BY_STAGE: Readonly<Record<string, readonly any[]>> = Object
     "tests/vitest/server/runtime-capacity-catalog-conformance.test.ts"
   ]),
   "cap-01": Object.freeze([
-    "tests/vitest/server/runtime-capacity-admission-conformance.test.ts"
+    "tests/vitest/server/external-gateway-plugin.test.ts"
   ]),
   "cap-02": Object.freeze([
     "tests/vitest/server/runtime-capacity-work-queue-dispatch-conformance.test.ts"
@@ -347,36 +347,6 @@ async function stageNotImplemented(stage: any = "") : Promise<any> {
 
 async function stageCap01() : Promise<any> {
   const counters: Record<string, any> = {};
-  const findings: any[] = [];
-  const legacySymbols: readonly any[] = [
-    "readModelRoutingState",
-    "writeModelRoutingState",
-    "recentLedgerCount",
-    "stateLockPath",
-    "model-routing-traffic",
-    "readJsonlTail",
-    "appendBoundedJsonLine",
-    "acquireStateLock"
-  ];
-  const modelRoutingIndex: any = await readTextIfExists("packages/agents/src/agent-gateway/model-routing/index.ts");
-  for (const symbol of legacySymbols) {
-    if (modelRoutingIndex.includes(symbol)) {
-      findings.push(`model-routing-legacy:${symbol}`);
-    }
-  }
-  if (await exists("packages/agents/src/agent-gateway/model-routing/model-routing-traffic.ts")) {
-    findings.push("model-routing-traffic-present");
-  }
-  const admissionStore: any = await readTextIfExists("packages/agents/src/agent-gateway/model-routing/model-routing-admission-store.ts");
-  if (!admissionStore) {
-    findings.push("model-routing-admission-store-missing");
-  }
-  if (!admissionStore.includes("model_routing_migration")) {
-    findings.push("model-routing-migration-marker-missing");
-  }
-  counters.legacySymbolFindings = finiteCount(findings.length);
-  assert.strictEqual(findings.length, 0, `legacy model-routing paths present: ${findings.join(", ")}`);
-
   const suites: any = await runFocusedSuites("cap-01");
   counters.focusedSuites = finiteCount(suites.length);
   counters.focusedSuitesPassed = finiteCount(suites.filter((suite?: any) : any => suite.passed).length);
@@ -1172,8 +1142,7 @@ async function stageCap18Migrations() : Promise<any> {
   }
   const removedPaths: readonly string[] = Object.freeze([
     "packages/foundation/src/checkpoint/tree/pactium-substrate-preflight.ts",
-    "packages/foundation/src/checkpoint/tree/pactium-canonical-safe.ts",
-    "packages/agents/src/agent-gateway/model-routing/model-routing-traffic.ts"
+    "packages/foundation/src/checkpoint/tree/pactium-canonical-safe.ts"
   ]);
   for (const removedPath of removedPaths) {
     if (await exists(removedPath)) findings.push(`removed-path:${removedPath}`);

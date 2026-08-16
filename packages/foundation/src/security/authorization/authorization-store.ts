@@ -6,14 +6,40 @@ const COMMANDS: readonly string[] = Object.freeze([
   "getRefactorInstrumentation", "close"
 ]);
 
+type AuthorizationStoreInput = Record<string, unknown>;
+type AuthorizationLane = ReturnType<typeof createSqliteExecutionLane>;
+
+export interface AuthorizationStore {
+  readonly lane: AuthorizationLane;
+  appendDecision(decision?: AuthorizationStoreInput): Promise<unknown>;
+  appendReceipt(record?: AuthorizationStoreInput, metadata?: AuthorizationStoreInput): Promise<unknown>;
+  appendLoanRecord(record?: AuthorizationStoreInput, metadata?: AuthorizationStoreInput): Promise<unknown>;
+  appendDeniedRequest(record?: AuthorizationStoreInput): Promise<unknown>;
+  listDecisions(input?: AuthorizationStoreInput): Promise<unknown>;
+  listReceipts(input?: AuthorizationStoreInput): Promise<unknown>;
+  listLoanRecords(input?: AuthorizationStoreInput): Promise<unknown>;
+  listDeniedRequests(input?: AuthorizationStoreInput): Promise<unknown>;
+  getRefactorInstrumentation(): Promise<unknown>;
+  close(): Promise<unknown>;
+  getStats(): unknown;
+}
+
+interface AuthorizationStoreOptions {
+  userDataPath?: string;
+  rootPath?: string;
+  maxPending?: number;
+  maxPendingBytes?: number;
+  defaultDeadlineMs?: number;
+}
+
 export function createAuthorizationStore({
   userDataPath = "",
   rootPath = "",
   maxPending = 1024,
   maxPendingBytes = 16 * 1024 * 1024,
   defaultDeadlineMs = 30_000
-}: Record<string, any> = {}) : Readonly<Record<string, any>> {
-  const lane: any = createSqliteExecutionLane({
+}: AuthorizationStoreOptions = {}): Readonly<AuthorizationStore> {
+  const lane = createSqliteExecutionLane({
     owner: "authorization-evidence",
     workerUrl: new URL(
       `./authorization-store-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
@@ -25,26 +51,26 @@ export function createAuthorizationStore({
     maxPendingBytes,
     defaultDeadlineMs
   });
-  const execute: any = (kind: string, payload: Record<string, any> = {}) : Promise<any> => lane.execute(kind, payload);
+  const execute = (kind: string, payload: AuthorizationStoreInput = {}): Promise<unknown> => lane.execute(kind, payload);
   return Object.freeze({
     lane,
-    appendDecision: (decision: Record<string, any> = {}) : Promise<any> => execute("appendDecision", decision),
-    appendReceipt: (record: Record<string, any> = {}, metadata: Record<string, any> = {}) : Promise<any> => execute("appendReceipt", { record, metadata }),
-    appendLoanRecord: (record: Record<string, any> = {}, metadata: Record<string, any> = {}) : Promise<any> => execute("appendLoanRecord", { record, metadata }),
-    appendDeniedRequest: (record: Record<string, any> = {}) : Promise<any> => execute("appendDeniedRequest", record),
-    listDecisions: (input: Record<string, any> = {}) : Promise<any> => execute("listDecisions", input),
-    listReceipts: (input: Record<string, any> = {}) : Promise<any> => execute("listReceipts", input),
-    listLoanRecords: (input: Record<string, any> = {}) : Promise<any> => execute("listLoanRecords", input),
-    listDeniedRequests: (input: Record<string, any> = {}) : Promise<any> => execute("listDeniedRequests", input),
-    getRefactorInstrumentation: () : Promise<any> => execute("getRefactorInstrumentation"),
-    close: () : Promise<any> => lane.close(),
-    getStats: () : any => lane.getStats()
+    appendDecision: (decision: AuthorizationStoreInput = {}) => execute("appendDecision", decision),
+    appendReceipt: (record: AuthorizationStoreInput = {}, metadata: AuthorizationStoreInput = {}) => execute("appendReceipt", { record, metadata }),
+    appendLoanRecord: (record: AuthorizationStoreInput = {}, metadata: AuthorizationStoreInput = {}) => execute("appendLoanRecord", { record, metadata }),
+    appendDeniedRequest: (record: AuthorizationStoreInput = {}) => execute("appendDeniedRequest", record),
+    listDecisions: (input: AuthorizationStoreInput = {}) => execute("listDecisions", input),
+    listReceipts: (input: AuthorizationStoreInput = {}) => execute("listReceipts", input),
+    listLoanRecords: (input: AuthorizationStoreInput = {}) => execute("listLoanRecords", input),
+    listDeniedRequests: (input: AuthorizationStoreInput = {}) => execute("listDeniedRequests", input),
+    getRefactorInstrumentation: () => execute("getRefactorInstrumentation"),
+    close: () => lane.close(),
+    getStats: () => lane.getStats()
   });
 }
 
-let globalAuthorizationStore: any = null;
+let globalAuthorizationStore: Readonly<AuthorizationStore> | null = null;
 
-export function getGlobalAuthorizationStore() : any {
+export function getGlobalAuthorizationStore(): Readonly<AuthorizationStore> {
   if (!globalAuthorizationStore) globalAuthorizationStore = createAuthorizationStore();
   return globalAuthorizationStore;
 }

@@ -132,6 +132,7 @@ export async function createOperationPermissionPlatform({
     });
     const apiKeyDistributionProvider: any = createApiKeyDistributionProvider({
       store,
+      changeListener: notifyOperationPermissionChanged,
       registry,
       securityPermissions: effectiveSecurityPermissions
     });

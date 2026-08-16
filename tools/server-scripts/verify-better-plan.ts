@@ -19,7 +19,7 @@ const REPORT_SCHEMA: any = "v0.0.1:release:public-source-boundary-verifier-1";
 const CHECK_NAMES: readonly any[] = Object.freeze(["schema", "source", "label", "graph", "privacy"]);
 const REQUIRED_RECOVERED_CAPABILITIES: any = new Set<any>([
   "external-plugin-packaging-loading",
-  "agent-gateway-model-routing",
+  "model-gateway-service",
   "core-workspace-assets-governance",
 ]);
 // Pinned Strategy evidence identities must remain present even when Version Registry
@@ -99,7 +99,7 @@ const CAPABILITY_OWNERS: Readonly<Record<string, any>> = Object.freeze({
   storage: ["domain-capabilities", "packages/foundation/src/storage/storage-provider.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-STORAGE", "storage-backup-runtime"],
   jobs: ["domain-capabilities", "packages/foundation/src/work-queue/worker-runtime.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-JOBS", "jobs-work-queue-runtime"],
   "external-plugin-packaging-loading": ["optional-plugins", "packages/foundation/src/module-system/plugin-runtime.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING", "plugin-runtime-and-module-system"],
-  "agent-gateway-model-routing": ["agents-and-protocols", "packages/agents/src/agent-gateway/gateway-core.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING", "agent-gateway-model-routing"],
+  "model-gateway-service": ["agents-and-protocols", "services/model-gateway/src/main.mjs", "docs/plans/end-to-end-release", "REQ-MODEL-GATEWAY-BOUNDARY", "model-gateway-service"],
   "core-workspace-assets-governance": ["domain-capabilities", "packages/agents/src/workspace-asset-registry/index.ts", "docs/plans/end-to-end-release", "REQ-BASELINE-CORE-WORKSPACE-ASSETS-GOVERNANCE", "core-workspace-assets-governance"],
 });
 
@@ -141,8 +141,7 @@ const CAPABILITY_REGISTRY_CONTRACTS: Readonly<Record<string, any>> = Object.free
   "external-plugin-packaging-loading": [[], ["plugin-runtime-and-module-system"],
     ["release.acceptance-unit"],
     ["meshrix.state-machine.capability-acceptance-plugin-runtime-and-module-system"]],
-  "agent-gateway-model-routing": [["agent_gateway.call"], ["agent-gateway-model-routing"],
-    ["agent-gateway.runtime", "model-routing.runtime"], ["meshrix.strategy.model-routing"]],
+  "model-gateway-service": [[], ["model-gateway-service"], [], []],
   "core-workspace-assets-governance": [["workspace.file.list"], ["core-workspace-assets-governance"],
     ["workspace-asset-management.runtime", "workspace-governance.runtime"],
     ["meshrix.workspace.asset-registry"]],

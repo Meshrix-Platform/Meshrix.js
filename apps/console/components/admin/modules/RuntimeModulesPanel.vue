@@ -6,72 +6,59 @@ const {
   isBusy,
   consoleState,
   enabledMountCount,
-  externalGateway,
-  externalGatewayBusy,
+  gatewayChannels,
+  gatewayChannelBusy,
   moduleGroups,
   reloadModules,
   saveMountModules,
   totalMountCount,
 } = useModulesViewContext();
-const externalGatewayMode = externalGateway.activeMode;
-const externalGatewayGeneration = externalGateway.generation;
-const externalGatewayAdapterDraft = externalGateway.adapterDraft;
-const externalGatewayPublicBaseUrlDraft = externalGateway.publicBaseUrlDraft;
+const downstream = gatewayChannels.downstream;
+const upstream = gatewayChannels.upstream;
 </script>
 
 <template>
   <section class="modules-layout">
-    <article class="surface-card module-mount-card external-gateway-card">
+    <article class="surface-card module-mount-card gateway-channel-card">
       <div class="module-card-meta module-card-meta-right">
         <div>
-          <h3 class="module-card-title">外置网关</h3>
+          <h3 class="module-card-title">Gateway 通道</h3>
           <p class="mount-config-description">
-            让 Caddy、Nginx 等边缘代理负责负载均衡、通用限流与健康选择；身份、授权、审批、业务配额和审计仍由平台执行。
+            下游和上游分别选择内置通道或已启用插件提供的通道。启用插件只增加可选项，不会自动改变流量。
           </p>
         </div>
         <div class="module-card-header-actions">
-          <div class="section-tags">
-            <span>{{ externalGatewayMode === "external" ? "External" : "Direct" }}</span>
-            <span>代次 {{ externalGatewayGeneration }}</span>
-          </div>
+          <div class="section-tags"><span>分方向切换</span><span>无隐式回退</span></div>
         </div>
       </div>
-      <div class="mount-config-controls">
+      <div class="mount-config-controls gateway-channel-controls">
         <label class="module-field">
-          <span>外置网关适配器</span>
-          <select v-model="externalGatewayAdapterDraft" :disabled="externalGatewayBusy">
-            <option value="caddy">Caddy</option>
-            <option value="nginx">Nginx</option>
+          <span>下游 Gateway</span>
+          <select v-model="downstream.draft.value" :disabled="gatewayChannelBusy">
+            <option v-for="channelId in downstream.available.value" :key="channelId" :value="channelId">{{ channelId }}</option>
           </select>
+          <small>当前 {{ downstream.selected.value }} · 代次 {{ downstream.generation.value }}</small>
         </label>
         <label class="module-field">
-          <span>外置网关访问地址</span>
-          <input
-            v-model="externalGatewayPublicBaseUrlDraft"
-            autocomplete="off"
-            inputmode="url"
-            placeholder="https://gateway.example.com 或 http://网关IP:7330"
-          />
-          <small>填写下游 MCP 客户端实际访问的 IP 地址或域名；启用前会验证健康状态、平台身份、网关转发和 MCP 协议。</small>
+          <span>上游 Gateway</span>
+          <select v-model="upstream.draft.value" :disabled="gatewayChannelBusy">
+            <option v-for="channelId in upstream.available.value" :key="channelId" :value="channelId">{{ channelId }}</option>
+          </select>
+          <small>当前 {{ upstream.selected.value }} · 代次 {{ upstream.generation.value }}</small>
         </label>
         <div class="mount-config-actions">
           <button
             class="tool-button tool-button-ghost"
             type="button"
-            :disabled="externalGatewayBusy || externalGatewayMode === 'direct'"
-            @click="externalGateway.switchDirect(externalGatewayGeneration)"
-          >使用内置网关</button>
+            :disabled="gatewayChannelBusy || !downstream.changed.value"
+            @click="downstream.select({ direction: 'downstream', channelId: downstream.draft.value, expectedGeneration: downstream.generation.value })"
+          >应用下游通道</button>
           <button
             class="tool-button"
             type="button"
-            :disabled="externalGatewayBusy"
-            @click="externalGateway.apply({
-              expectedGeneration: externalGatewayGeneration,
-              mode: 'external',
-              adapterId: externalGatewayAdapterDraft,
-              publicBaseUrl: externalGatewayPublicBaseUrlDraft,
-            })"
-          >{{ externalGatewayBusy ? "验证中" : "验证并启用" }}</button>
+            :disabled="gatewayChannelBusy || !upstream.changed.value"
+            @click="upstream.select({ direction: 'upstream', channelId: upstream.draft.value, expectedGeneration: upstream.generation.value })"
+          >{{ gatewayChannelBusy ? "切换中" : "应用上游通道" }}</button>
         </div>
       </div>
     </article>

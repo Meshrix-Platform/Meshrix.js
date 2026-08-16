@@ -118,7 +118,7 @@ async function verifyManifestShape() : Promise<any> {
     );
     assertHydrationShape(module, `module ${module.moduleId}`);
     moduleIds.push(...collectModuleIds(module));
-    for (const child of module.childItems || []) {
+    for (const child of ("childItems" in module ? module.childItems : [])) {
       assertHydrationShape(child, `child module ${child.moduleId}`);
     }
   }
@@ -235,7 +235,7 @@ async function verifyHtmlSourceCoverage() : Promise<any> {
       true,
       `system architecture HTML must include module ${module.moduleId}`
     );
-    for (const child of module.childItems || []) {
+    for (const child of ("childItems" in module ? module.childItems : [])) {
       assert.equal(
         systemHtml.includes(`<code>${child.moduleId}</code>`) || systemHtml.includes(child.label),
         true,

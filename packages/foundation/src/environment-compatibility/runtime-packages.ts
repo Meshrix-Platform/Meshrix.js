@@ -6,17 +6,50 @@ import {
   pathExists
 } from "./host-runtime.ts";
 
-function text(value?: any) : any {
+interface PlatformOptions {
+  platform?: NodeJS.Platform | string;
+  arch?: string;
+  version?: unknown;
+}
+
+export interface RuntimePackageSource {
+  fileName: string;
+  url: string;
+  unsupportedReason?: string;
+}
+
+interface DockerHostSyncOptions extends PlatformOptions {
+  platformKey?: string;
+  runtimeCacheRoot?: string;
+  installerFileName?: string;
+  commandPathFn?: (command: string) => string;
+  pathExistsFn?: (targetPath: string) => boolean;
+  commandVersionFn?: (command: string, args?: string[]) => string;
+}
+
+export interface DockerHostSync {
+  id: "docker";
+  ready: boolean;
+  present: boolean;
+  cached: boolean;
+  dockerPath: string;
+  appPath: string;
+  appPresent: boolean;
+  installerPath: string;
+  version: string;
+}
+
+function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-export function gatewayCaddyArch({ arch = process.arch }: Record<string, any> = {}) : any {
+export function gatewayCaddyArch({ arch = process.arch }: PlatformOptions = {}): string {
   if (arch === "arm64") return "arm64";
   if (arch === "x64") return "amd64";
   return arch;
 }
 
-export function sourcePlatformKeys({ platform = process.platform, arch = process.arch }: Record<string, any> = {}) : any {
+export function sourcePlatformKeys({ platform = process.platform, arch = process.arch }: PlatformOptions = {}): string[] {
   return [
     hostPlatformKey({ platform, arch }),
     `${platform}-${gatewayCaddyArch({ arch })}`,
@@ -28,8 +61,8 @@ export function sourcePlatformKeys({ platform = process.platform, arch = process
 export function defaultPythonPackageFileName({
   platform = process.platform,
   version
-}: Record<string, any> = {}) : any {
-  const pythonVersion: any = text(version);
+}: PlatformOptions = {}): string {
+  const pythonVersion = text(version);
   if (platform === "darwin") return `python-${pythonVersion}-macos11.pkg`;
   if (platform === "win32") return `python-${pythonVersion}-amd64.exe`;
   return `python-${pythonVersion}.tgz`;
@@ -38,8 +71,8 @@ export function defaultPythonPackageFileName({
 export function defaultPythonPackageUrl({
   platform = process.platform,
   version
-}: Record<string, any> = {}) : any {
-  const pythonVersion: any = text(version);
+}: PlatformOptions = {}): string {
+  const pythonVersion = text(version);
   if (platform === "darwin") {
     return `https://www.python.org/ftp/python/${pythonVersion}/python-${pythonVersion}-macos11.pkg`;
   }
@@ -52,8 +85,8 @@ export function defaultPythonPackageUrl({
 export function defaultJreSourceEntry({
   platform = process.platform,
   arch = process.arch
-}: Record<string, any> = {}) : any {
-  const platformKey: any = hostPlatformKey({ platform, arch });
+}: PlatformOptions = {}): RuntimePackageSource {
+  const platformKey = hostPlatformKey({ platform, arch });
   if (platformKey === "linux-x64") {
     return {
       fileName: "OpenJDK21U-jre_x64_linux_hotspot_21.0.10_7.tar.gz",
@@ -100,27 +133,27 @@ export function defaultJreSourceEntry({
 export function defaultCaddyPackageUrl({
   platform = process.platform,
   arch = process.arch
-}: Record<string, any> = {}) : any {
-  const osName: any = platform === "win32" ? "windows" : platform;
+}: PlatformOptions = {}): string {
+  const osName = platform === "win32" ? "windows" : platform;
   return `https://caddyserver.com/api/download?os=${encodeURIComponent(osName)}&arch=${encodeURIComponent(gatewayCaddyArch({ arch }))}`;
 }
 
 export function defaultCaddyPackageFileName({
   platform = process.platform,
   arch = process.arch
-}: Record<string, any> = {}) : any {
-  const extension: any = platform === "win32" ? "zip" : "tar.gz";
+}: PlatformOptions = {}): string {
+  const extension = platform === "win32" ? "zip" : "tar.gz";
   return `caddy-${platform}-${arch}.${extension}`;
 }
 
 export function dockerDefaultInstallerUrl({
   platform = process.platform,
   arch = process.arch
-}: Record<string, any> = {}) : any {
+}: PlatformOptions = {}): string {
   if (platform !== "darwin") {
     return "";
   }
-  const dockerArch: any = arch === "arm64" ? "arm64" : "amd64";
+  const dockerArch = arch === "arm64" ? "arm64" : "amd64";
   return `https://desktop.docker.com/mac/main/${dockerArch}/Docker.dmg`;
 }
 
@@ -133,12 +166,12 @@ export function detectDockerHostSync({
   commandPathFn = commandPath,
   pathExistsFn = pathExists,
   commandVersionFn = commandVersion
-}: Record<string, any> = {}) : any {
-  const dockerPath: any = commandPathFn("docker");
-  const appPath: any = platform === "darwin" ? "/Applications/Docker.app" : "";
-  const resolvedInstallerFileName: any = installerFileName || `Docker-${platformKey}.dmg`;
-  const installerPath: any = runtimeCacheRoot ? path.join(runtimeCacheRoot, "docker", resolvedInstallerFileName) : "";
-  const appPresent: any = appPath ? pathExistsFn(appPath) : false;
+}: DockerHostSyncOptions = {}): DockerHostSync {
+  const dockerPath = commandPathFn("docker");
+  const appPath = platform === "darwin" ? "/Applications/Docker.app" : "";
+  const resolvedInstallerFileName = installerFileName || `Docker-${platformKey}.dmg`;
+  const installerPath = runtimeCacheRoot ? path.join(runtimeCacheRoot, "docker", resolvedInstallerFileName) : "";
+  const appPresent = appPath ? pathExistsFn(appPath) : false;
   return {
     id: "docker",
     ready: Boolean(dockerPath),
@@ -152,6 +185,6 @@ export function detectDockerHostSync({
   };
 }
 
-export function optionalModuleRuntimeRoot(repoRoot: any = "", moduleId: any = "") : any {
+export function optionalModuleRuntimeRoot(repoRoot = "", moduleId: unknown = ""): string {
   return path.join(repoRoot, "packages", "capabilities", "runtime-modules", text(moduleId));
 }

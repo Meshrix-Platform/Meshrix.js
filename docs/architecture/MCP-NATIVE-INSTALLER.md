@@ -3,6 +3,7 @@
 Meshrix.js ships a signed portable connector and native launchers for the supported downstream MCP
 target matrix. The installer verifies signed discovery and release metadata, detects supported
 targets, invokes the target adapter, and writes only connector-managed configuration.
+Client-specific behavior is owned by operator-supplied external client-adapter packages; Core owns only their bounded contract and loading boundary.
 
 ## API Key access and local custody
 

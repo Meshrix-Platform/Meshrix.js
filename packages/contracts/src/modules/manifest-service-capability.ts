@@ -1,4 +1,4 @@
-export const SERVICE_CAPABILITY_LAYERS: readonly any[] = Object.freeze([
+export const SERVICE_CAPABILITY_LAYERS = Object.freeze([
   Object.freeze({
     layerNumber: 1,
     layerId: "client-types",
@@ -36,7 +36,7 @@ export const SERVICE_CAPABILITY_LAYERS: readonly any[] = Object.freeze([
     functionItems: Object.freeze(["Operator-configured upstream APIs"])
   })
 ]);
-export const SERVICE_CAPABILITY_PROTOCOL_FIELDS: readonly any[] = Object.freeze([
+export const SERVICE_CAPABILITY_PROTOCOL_FIELDS = Object.freeze([
   Object.freeze({
     fieldId: "meshrix.call",
     layerNumber: 3,

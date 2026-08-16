@@ -1,0 +1,84 @@
+[
+  {
+    "id": "34000000-0000-4000-8000-000000000041",
+    "status": "completed",
+    "role": "implementation",
+    "prerequisites": [],
+    "platform": "any",
+    "difficulty": "deep",
+    "goal": "Close the independently deployable Model Gateway Service through its own HTTP, routing, admission, and accounting authorities.",
+    "description": "Verify native OpenAI and Anthropic wire compatibility, explicit Service authentication, bounded routing and admission, durable usage accounting, and a lifecycle independent from Meshrix.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "The standalone Service starts, serves its versioned direct-client contract, and remains independent from the Meshrix runtime.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "model-gateway-service"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Routing, admission, and usage accounting are separately executable evidence owned by the Service.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "model-gateway-routing"
+          },
+          {
+            "acceptanceCommandId": "model-gateway-admission"
+          },
+          {
+            "acceptanceCommandId": "model-gateway-usage-accounting"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "feat: close standalone model gateway service",
+      "target": "services/model-gateway"
+    },
+    "next": [
+      "34000000-0000-4000-8000-000000000042"
+    ]
+  },
+  {
+    "id": "34000000-0000-4000-8000-000000000042",
+    "status": "completed",
+    "role": "final_validation",
+    "prerequisites": [
+      "34000000-0000-4000-8000-000000000041"
+    ],
+    "platform": "any",
+    "difficulty": "deep",
+    "goal": "Validate the neutral Meshrix adapter and mandatory dual-Gateway attachment boundary.",
+    "description": "Complete this checkpoint only after the default-disabled stateless adapter exists and attached calls preserve the immutable traffic model, mandatory downstream and upstream Gateway traversal, governed execution, stable failure meaning, and complete detachment.",
+    "acceptance_criteria": [
+      {
+        "checked": true,
+        "text": "The neutral adapter contains only an explicit service reference and bounded timeout, and an attached call traverses both selected Gateway directions without importing Service authority.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "model-gateway-adapter"
+          }
+        ]
+      },
+      {
+        "checked": true,
+        "text": "Disabling or removing the adapter leaves Meshrix and the standalone Service independently operable with no shared state or fallback path.",
+        "evidence": [
+          {
+            "acceptanceCommandId": "model-gateway-adapter"
+          }
+        ]
+      }
+    ],
+    "commit": {
+      "repository": ".git",
+      "message": "test: validate model gateway adapter boundary",
+      "target": "plugins/model-gateway and focused acceptance"
+    },
+    "next": []
+  }
+]

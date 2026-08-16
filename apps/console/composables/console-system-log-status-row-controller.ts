@@ -9,7 +9,6 @@ import type {
 import type { SystemLogRow, WorkQueueRow } from "../types/app";
 import { jobStatusLabels } from "./console-defaults";
 import { jsonPreview } from "@meshrix/ui-console/console-format-utils";
-import { asRecord } from "./console-model-utils";
 import {
   backgroundProcessLabel,
   backgroundProcessTone,
@@ -26,6 +25,12 @@ import {
   type ReadonlyValue,
 } from "./console-system-log-row-utils";
 import { toolRiskLabel } from "./console-tool-display-utils";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
 
 export type ConsoleSystemStatusLogRowOptions = {
   activeMonitorAlerts: ReadonlyValue<MonitorAlertItem[]>;

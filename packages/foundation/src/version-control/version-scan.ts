@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const defaultRepoRoot: any = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
+export const defaultRepoRoot = path.resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
-export const VERSION_SCAN_ROOTS: readonly any[] = Object.freeze([
+export const VERSION_SCAN_ROOTS: readonly string[] = Object.freeze([
   "apps",
   "packages",
   "plugins",
@@ -17,44 +17,64 @@ export const VERSION_SCAN_ROOTS: readonly any[] = Object.freeze([
   "docs"
 ]);
 
-export const IGNORED_VERSION_SCAN_PATH_PARTS: readonly any[] = Object.freeze([
+export const IGNORED_VERSION_SCAN_PATH_PARTS: readonly string[] = Object.freeze([
   ".git",
   "build",
   "dist",
   "node_modules"
 ]);
 
-export const IGNORED_VERSION_SCAN_FILES: readonly any[] = Object.freeze([
+export const IGNORED_VERSION_SCAN_FILES: readonly string[] = Object.freeze([
   "package-lock.json"
 ]);
 
-export const IGNORED_VERSION_SCAN_PREFIXES: readonly any[] = Object.freeze([
+export const IGNORED_VERSION_SCAN_PREFIXES: readonly string[] = Object.freeze([
   "docs/plans/",
   "docs/reports/"
 ]);
 
-const GOVERNED_NAME_SOURCE: any =
+const GOVERNED_NAME_SOURCE =
   "(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?";
-const GOVERNED_VERSIONED_NAME_SOURCE: any = `${GOVERNED_NAME_SOURCE}-[0-9]+(?:\\.[0-9]+)*`;
+const GOVERNED_VERSIONED_NAME_SOURCE = `${GOVERNED_NAME_SOURCE}-[0-9]+(?:\\.[0-9]+)*`;
 
-export const GOVERNED_VERSION_PATTERN: any = new RegExp(
+export const GOVERNED_VERSION_PATTERN = new RegExp(
   `^v[0-9]+\\.[0-9]+\\.[0-9]+:${GOVERNED_NAME_SOURCE}:${GOVERNED_VERSIONED_NAME_SOURCE}$`
 );
 
-export const GOVERNED_VERSION_TOKEN_PATTERN: any = new RegExp(
+export const GOVERNED_VERSION_TOKEN_PATTERN = new RegExp(
   `\\bv[0-9]+\\.[0-9]+\\.[0-9]+:${GOVERNED_NAME_SOURCE}:${GOVERNED_VERSIONED_NAME_SOURCE}(?![A-Za-z0-9_.:-])`,
   "g"
 );
 
-export const GOVERNED_VERSION_CANDIDATE_PATTERN: any =
+export const GOVERNED_VERSION_CANDIDATE_PATTERN =
   /\bv[0-9]+\.[0-9]+\.[0-9]+:[A-Za-z][A-Za-z0-9_.-]*(?::[A-Za-z][A-Za-z0-9_.-]*)*/g;
 
-const GOVERNED_DYNAMIC_IDENTIFIER_SOURCE: any = "[A-Za-z_$][A-Za-z0-9_$]*";
-const GOVERNED_DYNAMIC_VERSION_TEMPLATE_PATTERN: any = new RegExp(
+const GOVERNED_DYNAMIC_IDENTIFIER_SOURCE = "[A-Za-z_$][A-Za-z0-9_$]*";
+const GOVERNED_DYNAMIC_VERSION_TEMPLATE_PATTERN = new RegExp(
   `^\\\`(?<platform>v[0-9]+\\.[0-9]+\\.[0-9]+):(?<domain>${GOVERNED_NAME_SOURCE}):(?<prefix>${GOVERNED_NAME_SOURCE})-\\$\\{(?<identifier>${GOVERNED_DYNAMIC_IDENTIFIER_SOURCE})\\}-(?<revision>[0-9]+(?:\\.[0-9]+)*)\\\``
 );
 
-const GOVERNED_DYNAMIC_VERSION_TEMPLATE_AUTHORITIES: Readonly<Record<string, any>> = Object.freeze({
+interface DynamicVersionAuthority {
+  readonly domain: string;
+  readonly prefix: string;
+  readonly identifier: string;
+  readonly validatorSnippets: readonly string[];
+}
+
+interface VersionScanOptions {
+  repoRoot?: string;
+  scanRoots?: readonly string[];
+  excludedRelativePaths?: readonly string[];
+}
+
+export interface GovernedVersionOccurrence {
+  relativePath: string;
+  value: string;
+  line: number;
+  column: number;
+}
+
+const GOVERNED_DYNAMIC_VERSION_TEMPLATE_AUTHORITIES: Readonly<Record<string, DynamicVersionAuthority>> = Object.freeze({
   "tools/generators/generate-capability-acceptance-definitions.ts": Object.freeze({
     domain: "state-machine",
     prefix: "capability-acceptance",
@@ -66,43 +86,43 @@ const GOVERNED_DYNAMIC_VERSION_TEMPLATE_AUTHORITIES: Readonly<Record<string, any
   })
 });
 
-export function isValidatedGovernedDynamicVersionTemplateAt(text?: any, candidateIndex?: any, {
+export function isValidatedGovernedDynamicVersionTemplateAt(text = "", candidateIndex = 0, {
   relativePath = ""
-}: Record<string, any> = {}) : any {
+}: { relativePath?: string } = {}): boolean {
   if (candidateIndex <= 0 || text[candidateIndex - 1] !== "`") return false;
-  const match: any = text.slice(candidateIndex - 1).match(GOVERNED_DYNAMIC_VERSION_TEMPLATE_PATTERN);
+  const match = text.slice(candidateIndex - 1).match(GOVERNED_DYNAMIC_VERSION_TEMPLATE_PATTERN);
   if (!match?.groups) return false;
-  const authority: any = GOVERNED_DYNAMIC_VERSION_TEMPLATE_AUTHORITIES[relativePath];
+  const authority = GOVERNED_DYNAMIC_VERSION_TEMPLATE_AUTHORITIES[relativePath];
   if (!authority ||
     authority.domain !== match.groups.domain ||
     authority.prefix !== match.groups.prefix ||
     authority.identifier !== match.groups.identifier ||
-    !authority.validatorSnippets.every((snippet?: any) : any => text.includes(snippet))) {
+    !authority.validatorSnippets.every((snippet) => text.includes(snippet))) {
     return false;
   }
-  const completedVersion: any = `${match.groups.platform}:${match.groups.domain}:${match.groups.prefix}-dynamic-${match.groups.revision}`;
+  const completedVersion = `${match.groups.platform}:${match.groups.domain}:${match.groups.prefix}-dynamic-${match.groups.revision}`;
   return GOVERNED_VERSION_PATTERN.test(completedVersion);
 }
 
-export function shouldSkipVersionScanPath(relativePath?: any, {
+export function shouldSkipVersionScanPath(relativePath = "", {
   excludedRelativePaths = []
-}: Record<string, any> = {}) : any {
+}: Pick<VersionScanOptions, "excludedRelativePaths"> = {}): boolean {
   if (excludedRelativePaths.includes(relativePath)) return true;
-  if (IGNORED_VERSION_SCAN_PREFIXES.some((prefix?: any) : any => relativePath.startsWith(prefix))) return true;
+  if (IGNORED_VERSION_SCAN_PREFIXES.some((prefix) => relativePath.startsWith(prefix))) return true;
   if (IGNORED_VERSION_SCAN_FILES.includes(path.basename(relativePath))) return true;
-  return relativePath.split("/").some((part?: any) : any => IGNORED_VERSION_SCAN_PATH_PARTS.includes(part));
+  return relativePath.split("/").some((part) => IGNORED_VERSION_SCAN_PATH_PARTS.includes(part));
 }
 
-export function isVersionScanTextFile(filePath?: any) : any {
+export function isVersionScanTextFile(filePath = ""): boolean {
   return /\.(?:mjs|js|cjs|ts|tsx|json|md|html|yaml|yml|txt)$/.test(filePath);
 }
 
-export function lineAndColumn(text?: any, index?: any) : any {
-  const prefix: any = text.slice(0, index);
-  const lines: any = prefix.split("\n");
+export function lineAndColumn(text = "", index = 0): { line: number; column: number } {
+  const prefix = text.slice(0, index);
+  const lines = prefix.split("\n");
   return {
     line: lines.length,
-    column: lines.at(-1).length + 1
+    column: (lines.at(-1)?.length ?? 0) + 1
   };
 }
 
@@ -110,14 +130,14 @@ export function collectVersionScanFiles({
   repoRoot = defaultRepoRoot,
   scanRoots = VERSION_SCAN_ROOTS,
   excludedRelativePaths = []
-}: Record<string, any> = {}) : any {
-  const files: any[] = [];
+}: VersionScanOptions = {}): string[] {
+  const files: string[] = [];
 
-  function walk(directory?: any) : any {
+  function walk(directory: string): void {
     if (!fs.existsSync(directory)) return;
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const filePath: any = path.join(directory, entry.name);
-      const relativePath: any = path.relative(repoRoot, filePath).split(path.sep).join("/");
+      const filePath = path.join(directory, entry.name);
+      const relativePath = path.relative(repoRoot, filePath).split(path.sep).join("/");
       if (shouldSkipVersionScanPath(relativePath, { excludedRelativePaths })) continue;
       if (entry.isDirectory()) {
         walk(filePath);
@@ -137,18 +157,18 @@ export function collectGovernedVersionOccurrences({
   repoRoot = defaultRepoRoot,
   scanRoots = VERSION_SCAN_ROOTS,
   excludedRelativePaths = []
-}: Record<string, any> = {}) : any {
-  const occurrences: any = new Map<any, any>();
+}: VersionScanOptions = {}): Map<string, GovernedVersionOccurrence[]> {
+  const occurrences = new Map<string, GovernedVersionOccurrence[]>();
   for (const filePath of collectVersionScanFiles({ repoRoot, scanRoots, excludedRelativePaths })) {
-    const relativePath: any = path.relative(repoRoot, filePath).split(path.sep).join("/");
-    const text: any = fs.readFileSync(filePath, "utf8");
+    const relativePath = path.relative(repoRoot, filePath).split(path.sep).join("/");
+    const text = fs.readFileSync(filePath, "utf8");
     for (const match of text.matchAll(GOVERNED_VERSION_CANDIDATE_PATTERN)) {
-      const value: any = match[0];
+      const value = match[0];
       if (isValidatedGovernedDynamicVersionTemplateAt(text, match.index || 0, { relativePath })) continue;
       if (!occurrences.has(value)) {
         occurrences.set(value, []);
       }
-      occurrences.get(value).push({
+      occurrences.get(value)?.push({
         relativePath,
         value,
         ...lineAndColumn(text, match.index || 0)

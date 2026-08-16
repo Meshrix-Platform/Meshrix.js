@@ -18,6 +18,7 @@ import {
   securityAlertStoreFor,
   workspaceGovernanceRegistryFor
 } from "./registry-services.ts";
+import { GATEWAY_CHANNEL_SELECTION_SOURCE } from "@meshrix/contracts/plugins/gateway-channel-contract";
 
 const RUNTIME_ASSEMBLY_PROTOCOL_VERSION: any = "v0.0.1:release:runtime-assembly-package-1";
 
@@ -375,13 +376,11 @@ export async function executeRuntimeMountOperation({ operationId, input = {}, co
   const id: any = String(operationId || "");
   const handledOperations: any = new Set<any>([
     "runtime.assembly.build",
+    "runtime.gateway_channels",
+    "runtime.gateway_channels.select",
     "runtime.mounts",
     "runtime.set_mounts",
-    "runtime.reload_mounts",
-    "runtime.external_gateway",
-    "runtime.external_gateway.validate",
-    "runtime.external_gateway.apply",
-    "runtime.external_gateway.switch_direct"
+    "runtime.reload_mounts"
   ]);
   if (!handledOperations.has(id)) {
     return null;
@@ -391,21 +390,51 @@ export async function executeRuntimeMountOperation({ operationId, input = {}, co
     return buildRuntimeAssemblyPackage({ input, context });
   }
 
-  if (id.startsWith("runtime.external_gateway")) {
-    const management: any = context.externalGatewayManagement;
-    if (!management) return result(503, { error: "外置网关管理 provider 不可用。" });
-    if (id === "runtime.external_gateway") {
-      return result(200, {
-        ...management.getState(),
-        availableAdapters: typeof management.listAdapters === "function" ? management.listAdapters() : []
+  if (id === "runtime.gateway_channels" || id === "runtime.gateway_channels.select") {
+    const router: any = context.gatewayChannelRouter;
+    if (!router || typeof router.snapshot !== "function" || typeof router.select !== "function") {
+      return result(503, { ok: false, error: { code: "gateway_channel_router_unavailable" } });
+    }
+    if (!context.authSession?.user) {
+      return result(403, { ok: false, error: { code: "gateway_channel_console_session_required" } });
+    }
+    if (id === "runtime.gateway_channels") {
+      return result(200, { ok: true, ...router.snapshot() });
+    }
+    const fields: any[] = Object.keys(input || {});
+    if (fields.some((field?: any) : any => !["direction", "channelId", "expectedGeneration"].includes(field))) {
+      return result(400, { ok: false, error: { code: "gateway_channel_selection_input_invalid" } });
+    }
+    const direction: any = input.direction;
+    const channelId: any = typeof input.channelId === "string" ? input.channelId.trim() : "";
+    const expectedGeneration: any = input.expectedGeneration;
+    if (!['downstream', 'upstream'].includes(direction) || !channelId || channelId.length > 128 ||
+        !Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0) {
+      return result(400, { ok: false, error: { code: "gateway_channel_selection_input_invalid" } });
+    }
+    const before: any = router.snapshot();
+    if (before.selections?.[direction]?.generation !== expectedGeneration) {
+      return result(409, { ok: false, error: { code: "gateway_channel_selection_stale" }, ...before });
+    }
+    try {
+      const selected: any = router.select({ direction, channelId, source: GATEWAY_CHANNEL_SELECTION_SOURCE });
+      const after: any = router.snapshot();
+      await publishProtocolEvent(
+        context.protocolEventBus,
+        "runtime.gateway_channels",
+        { direction: selected.direction, channelId: selected.channelId, generation: selected.generation },
+        { type: "runtime.gateway_channels.selected" }
+      );
+      return result(200, { ok: true, selected, ...after });
+    } catch (error: any) {
+      const code: any = String(error?.message || "gateway_channel_selection_failed");
+      const current: any = router.snapshot();
+      return result(code === "gateway_selected_channel_unavailable" ? 409 : 400, {
+        ok: false,
+        error: { code },
+        ...current
       });
     }
-    const operationResult: any = id === "runtime.external_gateway.validate"
-      ? await management.validate(input)
-      : id === "runtime.external_gateway.apply"
-        ? await management.apply(input)
-        : await management.switchDirect(input);
-    return result(operationResult.ok === false ? 400 : 200, operationResult);
   }
 
   const moduleManagement: any = context.moduleManagement;
@@ -452,100 +481,6 @@ export async function executeRuntimeMountOperation({ operationId, input = {}, co
       { type: "runtime.mounts.reloaded" }
     );
     return result(200, operationResult);
-  }
-
-  return null;
-}
-
-
-export async function executeMaintenanceAgentOperation({ operationId, input = {}, context }: Record<string, any>) : Promise<any> {
-  const id: any = String(operationId || "");
-  const handledOperations: any = new Set<any>([
-    "maintenance_agent.config.get",
-    "maintenance_agent.config.set",
-    "maintenance_agent.chat",
-    "maintenance_agent.runs.create",
-    "maintenance_agent.runs.list",
-    "maintenance_agent.runs.get",
-    "maintenance_agent.runs.approve",
-    "maintenance_agent.runs.cancel"
-  ]);
-  if (!handledOperations.has(id)) {
-    return null;
-  }
-
-  const maintenanceAgent: any = context.maintenanceAgent;
-  if (!maintenanceAgent) {
-    return result(503, { error: "维护智能体模块不可用。" });
-  }
-  const authSession: any = context.authSession || null;
-  const operationAuthorization: any =
-    context.request?.__meshrixToolRuntimeAuthorization ||
-    context.operationAuthorization ||
-    null;
-  try {
-    if (id === "maintenance_agent.config.get") {
-      return result(200, await maintenanceAgent.getConfig());
-    }
-    if (id === "maintenance_agent.config.set") {
-      return result(200, await maintenanceAgent.setConfig(input.config || input.value || input, {
-        authSession
-      }));
-    }
-    if (id === "maintenance_agent.chat") {
-      return result(200, await maintenanceAgent.chat(input, {
-        authSession,
-        operationAuthorization
-      }));
-    }
-    if (id === "maintenance_agent.runs.list") {
-      return result(200, await maintenanceAgent.listRuns({
-        limit: Number(input.limit || 50)
-      }));
-    }
-    if (id === "maintenance_agent.runs.create") {
-      return result(200, await maintenanceAgent.startRun(input, {
-        authSession,
-        operationAuthorization
-      }));
-    }
-    if (id === "maintenance_agent.runs.get") {
-      const runId: any = String(input.runId || input["run-id"] || input.id || "").trim();
-      const run: any = await maintenanceAgent.getRun(runId);
-      if (!run) {
-        return result(404, { error: "维护运行不存在。" });
-      }
-      return result(200, { run });
-    }
-    if (id === "maintenance_agent.runs.approve") {
-      const runId: any = String(input.runId || input["run-id"] || input.id || "").trim();
-      const run: any = await maintenanceAgent.approveRun(runId, input, {
-        authSession,
-        operationAuthorization
-      });
-      if (!run) {
-        return result(404, { error: "维护运行不存在。" });
-      }
-      return result(200, { run });
-    }
-    if (id === "maintenance_agent.runs.cancel") {
-      const runId: any = String(input.runId || input["run-id"] || input.id || "").trim();
-      const run: any = await maintenanceAgent.cancelRun(runId, input, { authSession });
-      if (!run) {
-        return result(404, { error: "维护运行不存在。" });
-      }
-      return result(200, { run });
-    }
-  } catch (error: any) {
-    const status: any = id === "maintenance_agent.runs.approve" ? 409 : 400;
-    const fallbackByOperation: Record<string, any> = {
-      "maintenance_agent.config.set": "维护智能体配置保存失败。",
-      "maintenance_agent.chat": "维护智能体对话失败。",
-      "maintenance_agent.runs.create": "维护智能体运行创建失败。",
-      "maintenance_agent.runs.approve": "维护运行审批失败。",
-      "maintenance_agent.runs.cancel": "维护运行取消失败。"
-    };
-    return result(status, errorPayload(error, fallbackByOperation[id] || "维护智能体操作失败。"));
   }
 
   return null;

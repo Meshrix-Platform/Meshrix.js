@@ -47,7 +47,7 @@ export const ENTERPRISE_OPERATIONS_REQUIREMENTS: readonly any[] = Object.freeze(
   "REQ-EFF-RELEASE",
   "REQ-BASELINE-CONSOLE-ADMINISTRATION",
   "REQ-BASELINE-CONTAINER-DEPLOYMENT",
-  "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING"
+  "REQ-BASELINE-MANDATORY-GATEWAY-PIPELINE"
 ]);
 
 export const ENTERPRISE_OPERATIONS_SLOT_IDS: readonly any[] = Object.freeze([
@@ -83,8 +83,9 @@ const SOURCE_FILES: readonly any[] = Object.freeze([
   "tools/server-scripts/verify-enterprise-governance-coverage.ts",
   "tools/server-scripts/verify-enterprise-observability-coverage.ts",
   "tools/server-scripts/verify-console-administration-coverage.ts",
-  "tools/server-scripts/verify-agent-gateway.ts",
-  "tools/server-scripts/verify-model-routing.ts"
+  "tools/server-scripts/verify-model-gateway-plugin.ts",
+  "tools/server-scripts/verify-model-gateway-detachment.ts",
+  "tools/server-scripts/verify-external-gateway-plugin.ts"
 ]);
 
 export const ENTERPRISE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
@@ -174,15 +175,22 @@ export const ENTERPRISE_OPERATIONS_PRODUCERS: readonly any[] = Object.freeze([
     dependsOn: Object.freeze([])
   }),
   Object.freeze({
-    id: "agent-gateway",
-    script: "tools/server-scripts/verify-agent-gateway.ts",
+    id: "model-gateway",
+    script: "tools/server-scripts/verify-model-gateway-plugin.ts",
     reportPath: "",
     timeoutMs: 120_000,
     dependsOn: Object.freeze([])
   }),
   Object.freeze({
-    id: "model-routing",
-    script: "tools/server-scripts/verify-model-routing.ts",
+    id: "model-gateway-detachment",
+    script: "tools/server-scripts/verify-model-gateway-detachment.ts",
+    reportPath: "",
+    timeoutMs: 120_000,
+    dependsOn: Object.freeze([])
+  }),
+  Object.freeze({
+    id: "external-gateway",
+    script: "tools/server-scripts/verify-external-gateway-plugin.ts",
     reportPath: "",
     timeoutMs: 120_000,
     dependsOn: Object.freeze([])
@@ -196,8 +204,9 @@ export const ENTERPRISE_OPERATIONS_SLOTS: readonly any[] = Object.freeze([
       "operation-permission-tag-governed-e2e",
       "enterprise-governance-coverage",
       "enterprise-enforcement-coverage",
-      "agent-gateway",
-      "model-routing"
+      "model-gateway",
+      "model-gateway-detachment",
+      "external-gateway"
     ]),
     inProcess: Object.freeze([])
   }),
@@ -719,7 +728,7 @@ export function probeContainerEnvironment({
   return { available: true, blocker: "" };
 }
 
-async function executeAdmittedDigestRollback({
+export async function executeAdmittedDigestRollback({
   candidateImage,
   previousImage
 }: Record<string, any> = {}) : Promise<any> {

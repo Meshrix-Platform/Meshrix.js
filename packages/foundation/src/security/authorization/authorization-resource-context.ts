@@ -1,10 +1,21 @@
 import { firstString, objectOrNull, stringsFrom, uniqueStrings } from "./authorization-engine-common.ts";
 
-function valueAtPath(source: Record<string, any> = {}, path: any = "") : any {
+interface ResourceRecord extends Record<string, unknown> {
+  metadata?: Record<string, unknown>;
+}
+
+interface ResourceResolutionInput {
+  operation?: ResourceRecord;
+  tool?: ResourceRecord | null;
+  input?: ResourceRecord;
+  context?: ResourceRecord;
+}
+
+function valueAtPath(source: ResourceRecord = {}, path: unknown = ""): unknown {
   if (!source || typeof source !== "object" || Array.isArray(source)) {
     return undefined;
   }
-  const key: any = String(path || "").trim();
+  const key = String(path || "").trim();
   if (!key) {
     return undefined;
   }
@@ -14,21 +25,21 @@ function valueAtPath(source: Record<string, any> = {}, path: any = "") : any {
   if (!key.includes(".")) {
     return undefined;
   }
-  let current: any = source;
+  let current: unknown = source;
   for (const part of key.split(".")) {
     if (!current || typeof current !== "object" || Array.isArray(current)) {
       return undefined;
     }
-    current = current[part];
+    current = (current as Record<string, unknown>)[part];
   }
   return current;
 }
 
-function fieldMapAliases(key: any, ...resources: any[]) : any {
-  const values: any[] = [];
+function fieldMapAliases(key: unknown, ...resources: ResourceRecord[]): string[] {
+  const values: unknown[] = [];
   for (const resource of resources) {
-    const fieldMap: any = objectOrNull(resource?.fieldMap) || {};
-    values.push(fieldMap[key]);
+    const fieldMap = objectOrNull(resource.fieldMap) || {};
+    values.push(fieldMap[String(key || "")]);
   }
   return stringsFrom(...values);
 }
@@ -43,15 +54,25 @@ function mappedResourceValues({
   operationResourceContext = {},
   toolResource = {},
   toolResourceContext = {}
-}: Record<string, any> = {}) : any {
-  const aliases: any = fieldMapAliases(
+}: {
+  key?: unknown;
+  input?: ResourceRecord;
+  context?: ResourceRecord;
+  inputResource?: ResourceRecord;
+  contextResource?: ResourceRecord;
+  operationResource?: ResourceRecord;
+  operationResourceContext?: ResourceRecord;
+  toolResource?: ResourceRecord;
+  toolResourceContext?: ResourceRecord;
+} = {}) {
+  const aliases = fieldMapAliases(
     key,
     operationResourceContext,
     operationResource,
     toolResourceContext,
     toolResource
   );
-  const values: any[] = [];
+  const values: unknown[] = [];
   for (const alias of aliases) {
     values.push(
       valueAtPath(input, alias),
@@ -63,20 +84,20 @@ function mappedResourceValues({
   return values;
 }
 
-export function resolveResourceContext({ operation = {}, tool = null, input = {}, context = {} }: Record<string, any> = {}) : any {
-  const inputResource: Record<string, any> = {
-    ...(objectOrNull(input.resourceContext) || {}),
-    ...(objectOrNull(input.resource) || {})
+export function resolveResourceContext({ operation = {}, tool = null, input = {}, context = {} }: ResourceResolutionInput = {}) {
+  const inputResource: ResourceRecord = {
+    ...objectOrNull(input.resourceContext),
+    ...objectOrNull(input.resource)
   };
-  const contextResource: Record<string, any> = {
-    ...(objectOrNull(context.resourceContext) || {}),
-    ...(objectOrNull(context.resource) || {})
+  const contextResource: ResourceRecord = {
+    ...objectOrNull(context.resourceContext),
+    ...objectOrNull(context.resource)
   };
-  const operationResource: any = objectOrNull(operation.resource) || {};
-  const operationResourceContext: any = objectOrNull(operation.resourceContext) || {};
-  const toolResource: any = objectOrNull(tool?.resource) || {};
-  const toolResourceContext: any = objectOrNull(tool?.resourceContext) || {};
-  const mapped: any = (key?: any) : any => mappedResourceValues({
+  const operationResource = objectOrNull(operation.resource) || {};
+  const operationResourceContext = objectOrNull(operation.resourceContext) || {};
+  const toolResource = objectOrNull(tool?.resource) || {};
+  const toolResourceContext = objectOrNull(tool?.resourceContext) || {};
+  const mapped = (key?: unknown) => mappedResourceValues({
     key,
     input,
     context,

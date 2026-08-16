@@ -40,7 +40,7 @@
         "admin.gateway-routes"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-external-gateway.ts",
+        "tools/server-scripts/verify-external-gateway-plugin.ts",
         "tools/server-scripts/verify-upstream-gateway-e2e.ts",
         "tools/server-scripts/verify-upstream-mcp-gateway-e2e.ts",
         "tools/server-scripts/verify-upstream-fixture-transit.ts"
@@ -330,38 +330,27 @@
       ]
     },
     {
-      "id": "agent-gateway-model-routing",
+      "id": "model-gateway-service",
       "capabilityClass": "detachable-core",
-      "activationFeatureId": "agent-gateway",
-      "title": "Agent Gateway And Model Routing",
+      "activationFeatureId": "model-gateway",
+      "title": "Standalone Model Gateway Service And Neutral Adapter",
       "docs": [
-        "docs/functionality/AGENT-GATEWAY.md",
-        "docs/protocols/PROTOCOLS.md"
+        "services/model-gateway/README.md",
+        "docs/functionality/GATEWAY.md"
       ],
       "requirementRows": [
-        "Agent Gateway And Model Routing"
+        "Standalone Model Gateway Service And Neutral Adapter"
       ],
-      "requiredRuntimePrefixes": [
-        "agent_gateway."
-      ],
-      "mcpOutlets": [
-        "meshrix.gateway"
-      ],
-      "expectedConsoleFeatures": [
-        "admin.agent-config",
-        "admin.agent-assignment",
-        "admin.context-management"
+      "requiredFiles": [
+        "services/model-gateway/src/main.mjs",
+        "services/model-gateway/contracts/openapi.json",
+        "packages/contracts/src/model-gateway/index.ts"
       ],
       "verifierScripts": [
-        "tools/server-scripts/verify-agent-gateway.ts",
-        "tools/server-scripts/verify-model-routing.ts"
+        "tools/server-scripts/verify-model-gateway-service.ts"
       ],
       "requiredEdges": [
-        "serverOperations",
-        "toolCatalog",
-        "mcpOutlet",
-        "httpRoutes",
-        "console",
+        "sourceFiles",
         "verifier"
       ]
     },

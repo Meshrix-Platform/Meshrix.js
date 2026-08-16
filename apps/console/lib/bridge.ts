@@ -14,10 +14,8 @@ import {
 } from "./auth-client";
 import {
   getSettings,
-  probeModel,
   saveSettings,
 } from "./agent-settings-client";
-import { listAgents } from "./agent-registry-client";
 import {
   getAgentSyncConfig,
   publishAgentSync,
@@ -30,16 +28,6 @@ import {
   getDiscoveryConfig,
   saveDiscoveryConfig,
 } from "./discovery-client";
-import {
-  approveMaintenanceAgentRun,
-  cancelMaintenanceAgentRun,
-  chatMaintenanceAgent,
-  getMaintenanceAgentConfig,
-  getMaintenanceAgentRun,
-  listMaintenanceAgentRuns,
-  saveMaintenanceAgentConfig,
-  startMaintenanceAgentRun,
-} from "./maintenance-agent-client";
 import {
   reloadRuntimeMounts,
   saveRuntimeMounts,
@@ -74,12 +62,6 @@ import {
   saveMonitorAlertConfig,
 } from "./ops-monitor-client";
 import {
-  getContextProfiles,
-  listContextBuildRecords,
-  previewContextPack,
-  runContextEvaluation,
-} from "./context-compiler-client";
-import {
   getAuthorizationGovernance,
   revokeAuthorizationApproval,
   upsertAuthorizationGovernance,
@@ -97,9 +79,6 @@ import {
   rotateToolGrantToken,
   updateToolGrant,
 } from "./operation-permission-client";
-import {
-  callAgentGateway,
-} from "./agent-gateway-client";
 
 export type { BridgeDownloadOptions, BridgeDownloadResult } from "@meshrix/ui-console/bridge-http";
 const browserBridge: Bridge = {
@@ -119,9 +98,6 @@ const browserBridge: Bridge = {
   revokeAuthorizationApproval,
   getSettings,
   saveSettings,
-  probeModel,
-  callAgentGateway,
-  listAgents,
   getAgentSyncConfig,
   saveAgentSyncConfig,
   publishAgentSync,
@@ -131,14 +107,6 @@ const browserBridge: Bridge = {
   saveRuntimeMounts,
   reloadRuntimeMounts,
   getServerConsoleState,
-  getMaintenanceAgentConfig,
-  saveMaintenanceAgentConfig,
-  chatMaintenanceAgent,
-  startMaintenanceAgentRun,
-  listMaintenanceAgentRuns,
-  getMaintenanceAgentRun,
-  approveMaintenanceAgentRun,
-  cancelMaintenanceAgentRun,
   getBackgroundProcesses,
   recoverBackgroundSupervisor,
   getMonitorAlerts,
@@ -169,10 +137,6 @@ const browserBridge: Bridge = {
   getJob,
   getJobResult,
   getDiscoveryClients,
-  getContextProfiles,
-  previewContextPack,
-  listContextBuildRecords,
-  runContextEvaluation,
   createUploadSession,
   uploadSessionChunk,
   getUploadSession,

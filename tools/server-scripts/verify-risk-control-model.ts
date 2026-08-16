@@ -121,7 +121,7 @@ async function assertRuntimeRiskControlEnvelope() : Promise<any> {
     "OperationDispatcher must fail closed when an HTTP/RPC operation has no authorizer"
   );
 
-  const auditStore: any = await readProjectFile("packages/foundation/src/security/operation-audit.ts");
+  const auditStore: any = await readProjectFile("packages/foundation/src/security/operation-audit-worker-store.ts");
   assert.match(
     auditStore,
     /risk_control_envelope_json/,

@@ -16,7 +16,6 @@ export function createBuiltinStrategyAdapters({
   strategies = [],
   compactionStrategies = [],
   modelCompressor = null,
-  agentGatewayCall = null,
   latestSessionMemory,
   resetFailureState,
   registerModelFailure
@@ -32,7 +31,6 @@ export function createBuiltinStrategyAdapters({
   }: Record<string, any>) : Promise<any> {
     const attempts: any[] = [];
     const selectionIndex: any = createApiRoundSelectionIndex(messages);
-    const compressionAlias: any = String(profile.modelCompression?.alias || "").trim();
     const maxAttempts: any = Math.max(1, policy.ptlRetryLimit + 1);
     for (let attempt: any = 0; attempt < maxAttempts; attempt += 1) {
       const selected: any = typeof inputForAttempt === "function"
@@ -52,25 +50,13 @@ export function createBuiltinStrategyAdapters({
         ...asObject(selected.metadata)
       });
       try {
-        const response: any = typeof modelCompressor === "function"
-          ? await modelCompressor({
+        const response: any = await modelCompressor({
               profile,
               policy,
               messages: attemptMessages,
               runtimeState,
               targetTokens,
               prompt
-          })
-          : await agentGatewayCall?.({
-              alias: compressionAlias,
-              modelAlias: compressionAlias,
-              question: prompt,
-              parameters: {
-                temperature: 0,
-                max_tokens: Math.min(policy.modelMaxOutputTokens, targetTokens),
-                stream: false,
-                tool_choice: "none"
-              }
             });
         const parsed: any = parseModelSummary(response);
         return {
@@ -88,10 +74,7 @@ export function createBuiltinStrategyAdapters({
 
   function modelCompressionConfigured(context?: any) : any {
     if (context.profile.modelCompression?.enabled !== true) return false;
-    return typeof modelCompressor === "function" || (
-      typeof agentGatewayCall === "function" &&
-      Boolean(String(context.profile.modelCompression?.alias || "").trim())
-    );
+    return typeof modelCompressor === "function";
   }
 
   function requireDeterministicFallback(context?: any, reason?: any) : any {

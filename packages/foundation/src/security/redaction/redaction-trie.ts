@@ -17,19 +17,39 @@
 
 import { canonicalHash } from "../../serialization/canonical-json.ts";
 
-const DEFAULT_MAX_STRING_LENGTH: any = 256;
-const DEFAULT_MAX_ARRAY_ENTRIES: any = 50;
-const DEFAULT_MAX_OBJECT_ENTRIES: any = 50;
-const SECRET_REPLACEMENT_PREFIX: any = "secretRef:sha256:";
+const DEFAULT_MAX_STRING_LENGTH = 256;
+const DEFAULT_MAX_ARRAY_ENTRIES = 50;
+const DEFAULT_MAX_OBJECT_ENTRIES = 50;
+const SECRET_REPLACEMENT_PREFIX = "secretRef:sha256:";
+
+interface RedactionTrieOptions {
+  redactPaths?: readonly string[];
+  secretPaths?: readonly string[];
+  maxStringLength?: number;
+  maxArrayEntries?: number;
+  maxObjectEntries?: number;
+  schemaAnnotatedPaths?: readonly string[];
+}
+
+interface RedactedAuditOptions {
+  operationId?: string;
+  additionalRedactPaths?: readonly string[];
+}
+
+interface WildcardPattern {
+  pattern: string;
+  regex: RegExp;
+  isSecret: boolean;
+}
 
 export class RedactionTrie {
-  _wildcardPatterns: any;
-  maxArrayEntries: any;
-  maxObjectEntries: any;
-  maxStringLength: any;
-  redactPaths: any;
-  schemaAnnotatedPaths: any;
-  secretPaths: any;
+  _wildcardPatterns: WildcardPattern[];
+  maxArrayEntries: number;
+  maxObjectEntries: number;
+  maxStringLength: number;
+  redactPaths: Set<string>;
+  schemaAnnotatedPaths: Set<string>;
+  secretPaths: Set<string>;
   /**
    * @param {object} [options]
    * @param {string[]} [options.redactPaths] - Exact or wildcard paths to redact
@@ -39,13 +59,13 @@ export class RedactionTrie {
    * @param {number} [options.maxObjectEntries=50]
    * @param {string[]} [options.schemaAnnotatedPaths] - Paths from schema annotations
    */
-  constructor(options: Record<string, any> = {}) {
-    this.redactPaths = new Set<any>(options.redactPaths || []);
-    this.secretPaths = new Set<any>(options.secretPaths || []);
+  constructor(options: RedactionTrieOptions = {}) {
+    this.redactPaths = new Set(options.redactPaths ?? []);
+    this.secretPaths = new Set(options.secretPaths ?? []);
     this.maxStringLength = options.maxStringLength ?? DEFAULT_MAX_STRING_LENGTH;
     this.maxArrayEntries = options.maxArrayEntries ?? DEFAULT_MAX_ARRAY_ENTRIES;
     this.maxObjectEntries = options.maxObjectEntries ?? DEFAULT_MAX_OBJECT_ENTRIES;
-    this.schemaAnnotatedPaths = new Set<any>(options.schemaAnnotatedPaths || []);
+    this.schemaAnnotatedPaths = new Set(options.schemaAnnotatedPaths ?? []);
 
     // Pre-compiled wildcard patterns
     this._wildcardPatterns = [];
@@ -68,7 +88,7 @@ export class RedactionTrie {
    * @param {number} [depth=0] - Current nesting depth
    * @returns {*} Redacted value
    */
-  redact(value?: any, pathPrefix: any = "", depth: any = 0) : any {
+  redact(value?: unknown, pathPrefix = "", depth = 0): unknown {
     if (depth > 50) return "[max_depth_exceeded]";
 
     if (value === null || value === undefined) return value;
@@ -94,8 +114,8 @@ export class RedactionTrie {
     }
 
     if (Array.isArray(value)) {
-      const limited: any = value.slice(0, this.maxArrayEntries);
-      return limited.map((item?: any, i?: any) : any =>
+      const limited = value.slice(0, this.maxArrayEntries);
+      return limited.map((item, i) =>
         this.redact(item, `${pathPrefix}[${i}]`, depth + 1)
       );
     }
@@ -106,10 +126,10 @@ export class RedactionTrie {
     }
 
     if (typeof value === "object") {
-      const entries: any = (Object.entries(value) as [string, any][]).slice(0, this.maxObjectEntries);
-      const result: Record<string, any> = {};
+      const entries = Object.entries(value).slice(0, this.maxObjectEntries);
+      const result: Record<string, unknown> = {};
       for (const [key, val] of entries) {
-        const childPath: any = pathPrefix ? `${pathPrefix}.${key}` : key;
+        const childPath = pathPrefix ? `${pathPrefix}.${key}` : key;
         result[key] = this.redact(val, childPath, depth + 1);
       }
       return result;
@@ -126,13 +146,13 @@ export class RedactionTrie {
    * @param {string[]} [options.additionalRedactPaths] - Extra paths to redact
    * @returns {object} Redacted record with metadata
    */
-  createRedactedAuditRecord(input?: any, options: Record<string, any> = {}) : any {
-    const extraPaths: any = options.additionalRedactPaths || [];
-    const redactedInput: any = this.redact(input);
+  createRedactedAuditRecord(input?: unknown, options: RedactedAuditOptions = {}) {
+    const extraPaths = options.additionalRedactPaths ?? [];
+    const redactedInput = this.redact(input);
 
     // Re-redact any additional paths not in the base config
     if (extraPaths.length > 0) {
-      const tempTrie: any = new RedactionTrie({
+      const tempTrie = new RedactionTrie({
         redactPaths: [...this.redactPaths, ...extraPaths],
         secretPaths: [...this.secretPaths],
         maxStringLength: this.maxStringLength,
@@ -159,7 +179,7 @@ export class RedactionTrie {
 
   // --- Private ---
 
-  _shouldRedact(path?: any) : any {
+  _shouldRedact(path = ""): boolean {
     if (this.redactPaths.has(path)) return true;
     if (this.secretPaths.has(path)) return true;
     if (this.schemaAnnotatedPaths.has(path)) return true;
@@ -171,7 +191,7 @@ export class RedactionTrie {
     return false;
   }
 
-  _isSecret(path?: any) : any {
+  _isSecret(path = ""): boolean {
     if (this.secretPaths.has(path)) return true;
 
     for (const pattern of this._wildcardPatterns) {
@@ -181,14 +201,14 @@ export class RedactionTrie {
     return false;
   }
 
-  _secretRef(value?: any) : any {
-    const str: any = typeof value === "string" ? value : JSON.stringify(value);
-    const hash: any = canonicalHash(str);
+  _secretRef(value?: unknown): string {
+    const str = typeof value === "string" ? value : JSON.stringify(value);
+    const hash = canonicalHash(str);
     return `${SECRET_REPLACEMENT_PREFIX}${hash}`;
   }
 
-  _looksLikeSecret(value?: any) : any {
-    const v: any = String(value || "");
+  _looksLikeSecret(value?: unknown): boolean {
+    const v = String(value || "");
     // Common secret patterns
     if (/^sk-[a-zA-Z0-9]{20,}$/.test(v)) return true; // API keys
     if (/^eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}$/.test(v)) return true; // JWT
@@ -203,7 +223,7 @@ export class RedactionTrie {
  * Create a default redaction trie with common secret paths.
  * @returns {RedactionTrie}
  */
-export function createDefaultRedactionTrie() : any {
+export function createDefaultRedactionTrie(): RedactionTrie {
   return new RedactionTrie({
     redactPaths: [
       "password",
@@ -256,8 +276,8 @@ export function createDefaultRedactionTrie() : any {
 
 // --- Private helpers ---
 
-function _compileWildcard(pattern?: any) : any {
-  const escaped: any = pattern
+function _compileWildcard(pattern: string): WildcardPattern {
+  const escaped = pattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
     .replace(/\*/g, "[^.]+")
     .replace(/\[\\\.\+\]/g, "[^.]+");

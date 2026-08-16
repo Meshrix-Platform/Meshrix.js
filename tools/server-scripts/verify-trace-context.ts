@@ -83,7 +83,6 @@ async function main() : Promise<any> {
       userDataPath,
       runtimeOptions: {
         profile: "minimal",
-        enableFeatures: ["maintenance-agent-runbooks"],
         cwd: repoRoot,
         logDir
       }
@@ -105,21 +104,6 @@ async function main() : Promise<any> {
     assert.equal(settings.status, 200);
     const settingsTraceId: any = settings.headers.get("x-meshrix-trace-id");
     assert.match(settingsTraceId, /^trace_/);
-
-    const maintenanceRun: any = await requestJson(`${server.url}/api/maintenance-agent/runs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeaders(auth, { method: "POST", safetyConfirm: true })
-      },
-      body: JSON.stringify({
-        runbook: "health_smoke",
-        wait: false
-      })
-    });
-    assert.equal(maintenanceRun.status, 200);
-    const maintenanceTraceId: any = maintenanceRun.headers.get("x-meshrix-trace-id");
-    assert.match(maintenanceTraceId, /^trace_/);
 
     await new Promise((resolve?: any) : any => setTimeout(resolve, 400));
     const audit: any = await requestJson(`${server.url}/api/auth/audit?limit=200`, {
@@ -150,7 +134,6 @@ async function main() : Promise<any> {
     assert.ok(
       eventTraces.some(
         (trace?: any) : any =>
-          trace.traceId === maintenanceTraceId ||
           trace.traceId === settingsTraceId
       )
     );

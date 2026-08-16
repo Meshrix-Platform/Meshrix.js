@@ -219,7 +219,9 @@ export function createSqliteWorkQueueRuntime({ statements, timeSource, identityG
     });
     const seq: any = Number(result.lastInsertRowid);
     statements.updateLastTransitionSeq.run({ seq, work_item_id: row.work_item_id, updated_at_ms: nowMs });
-    return maintainRetentionAfterAppend(row, nowMs) ?
+    const workJournalCompacted: any = compactWorkJournal(row.work_item_id, nowMs);
+    const queueRetentionMaintained: any = maintainRetentionAfterAppend(row, nowMs);
+    return workJournalCompacted || queueRetentionMaintained ?
       Number(statements.getWorkItem.get(row.work_item_id)?.last_transition_seq || seq) : seq;
   }
 

@@ -183,33 +183,6 @@ routes:
           - admin.modules.mounts.reload
           - admin.modules.generation.inspect
 
-  - routePath: /admin/agent-config
-    viewFile: apps/console/views/admin/AgentConfigView.vue
-    features:
-      - featureId: admin.agent-config
-        actions:
-          - admin.agent-config.view
-          - admin.agent-config.update
-
-  - routePath: /admin/agent-assignment
-    viewFile: apps/console/views/admin/AgentAssignmentView.vue
-    features:
-      - featureId: admin.agent-assignment
-        actions:
-          - admin.agent-assignment.view
-          - admin.agent-assignment.update
-          - admin.agent-assignment.probe
-
-  - routePath: /admin/context-management
-    viewFile: apps/console/views/admin/ContextManagementView.vue
-    features:
-      - featureId: admin.context-management
-        actions:
-          - admin.context-management.profiles
-          - admin.context-management.preview
-          - admin.context-management.replay
-          - admin.context-management.export
-
   - routePath: /admin/upstream-services
     viewFile: apps/console/views/admin/UpstreamGatewayView.vue
     features:
@@ -228,13 +201,5 @@ routes:
         actions:
           - upstream.publish.grant-link
           - upstream.publish.gateway-link
-
-  - routePath: /admin/maintenance-agent
-    viewFile: apps/console/views/admin/MaintenanceAgentView.vue
-    features:
-      - featureId: admin.maintenance-agent
-        actions:
-          - admin.maintenance-agent.runbook
-          - admin.maintenance-agent.audit
 
 systemConfigTabs: []

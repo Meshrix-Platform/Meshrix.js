@@ -13,7 +13,7 @@ const localizeStatusPillLabel = (value: any) : any =>
 const {
   acknowledgeMonitorAlert = async () => undefined,
   isBusy = () => false,
-  canAdminMaintenanceAgent = ref(false),
+  canAdminOperations = ref(false),
   formatCompactDate = (value: unknown) => String(value || ""),
   monitorAlertConfigText = ref(""),
   monitorAlertDetailBullets = () => [],
@@ -159,7 +159,7 @@ function monitorAlertStateStatusLabel(status: unknown) {
           <button
             class="primary-action"
             type="button"
-            :disabled="!canAdminMaintenanceAgent || isBusy('monitor-alerts:save')"
+            :disabled="!canAdminOperations || isBusy('monitor-alerts:save')"
             :aria-busy="isBusy('monitor-alerts:save')"
             @click="saveMonitorAlertConfig"
           >

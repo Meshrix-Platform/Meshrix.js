@@ -22,6 +22,8 @@ import {
 } from "./plugin-contribution-controller.ts";
 import { createPluginWorkspaceAccess } from "./plugin-workspace-access.ts";
 import { createQueuedJobWorkflowProvider } from "./queued-job-workflow-provider.ts";
+import { createAgentMcpGatewayPipeline } from "./agent-mcp-gateway-pipeline.ts";
+import { createWorkspaceApplicationEnvelope } from "@meshrix/contracts/agent-mcp-traffic";
 import {
   createServerConsoleDomainServices,
   createServerConsoleOperationProviders,
@@ -102,7 +104,6 @@ export function createHttpApplicationAssemblyCloser({
   jobManager,
   ownsJobManager,
   uploadWorkspaceMaterializationProvider,
-  maintenanceAgent,
   agentWorkspace,
   integrationTaskSupervisor,
   consoleOperationProviders,
@@ -133,9 +134,6 @@ export function createHttpApplicationAssemblyCloser({
       if (ownsJobManager) await closeOwner(() : any => jobManager.close());
       if (typeof uploadWorkspaceMaterializationProvider?.close === "function") {
         await closeOwner(() : any => uploadWorkspaceMaterializationProvider.close());
-      }
-      if (typeof maintenanceAgent?.close === "function") {
-        await closeOwner(() : any => maintenanceAgent.close());
       }
       if (typeof agentWorkspace?.close === "function") {
         await closeOwner(() : any => agentWorkspace.close());
@@ -220,6 +218,7 @@ export async function registerPluginOwnerGrantLifecycle({
 export function registerPluginContributionLifecycle({
   runtime,
   pluginContributions,
+  synchronizePluginGatewayChannels = () => {},
   platformRegistry,
   operationPermissionPlatform
 }: Record<string, any> = {}) : any {
@@ -227,10 +226,12 @@ export function registerPluginContributionLifecycle({
     const change: any = pluginContributions.preparePluginContributionReplacement(pluginId, contributions);
     try {
       change.commit();
+      synchronizePluginGatewayChannels(pluginId);
       pluginContributions.refreshStateMachines(platformRegistry, pluginId);
       await operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
     } catch (error: any) {
       pluginContributions.deactivatePlugin(pluginId);
+      synchronizePluginGatewayChannels(pluginId);
       platformRegistry.unregisterOwner(pluginId);
       await operationPermissionPlatform.refreshOperations(pluginContributions.currentActiveOperations());
       throw error;
@@ -278,7 +279,7 @@ export async function createHttpApplicationAssembly({
     coreProvider,
     runtime,
     moduleManagement,
-    externalGatewayManagement,
+    gatewayChannelRouter,
     dataStructureSubstrate,
     consoleAuth,
     securityPermissions,
@@ -431,7 +432,6 @@ export async function createHttpApplicationAssembly({
   });
   const {
     contextRuntime,
-    maintenanceAgent,
     agentWorkspace,
     strategyManagementProvider,
     modelDecisionRuntime
@@ -439,7 +439,6 @@ export async function createHttpApplicationAssembly({
   agentWorkspaceRef = agentWorkspace;
   registerStartupCleanup({
     close: async () : Promise<any> => {
-      await maintenanceAgent?.close?.();
       await agentWorkspace?.close?.();
     },
     blocksDependencyShutdown: true
@@ -492,7 +491,7 @@ export async function createHttpApplicationAssembly({
     distPath,
     runtime,
     moduleManagement,
-    externalGatewayManagement,
+    gatewayChannelRouter,
     jobWorkflowProvider,
     storageProvider: registeredStorageProvider,
     clientRegistryService,
@@ -511,7 +510,6 @@ export async function createHttpApplicationAssembly({
     securityPermissions,
     processIdentity,
     operationAuditStore,
-    maintenanceAgent,
     agentWorkspace,
     contextRuntime,
     modelDecisionRuntime,
@@ -583,6 +581,7 @@ export async function createHttpApplicationAssembly({
   pluginLifecycleUnsubscribers.push(registerPluginContributionLifecycle({
     runtime,
     pluginContributions,
+    synchronizePluginGatewayChannels: compositionRoot.synchronizePluginGatewayChannels,
     platformRegistry,
     operationPermissionPlatform
   }));
@@ -613,6 +612,49 @@ export async function createHttpApplicationAssembly({
       consoleOperationProviders.getUpstreamManifestSnapshotCommitter()
         ?.getAudienceCatalogFactsForGrant(grantId) || null,
     logger: runtimeLogger
+  });
+  const agentMcpGatewayPipeline: any = createAgentMcpGatewayPipeline({
+    router: compositionRoot.gatewayChannelRouter,
+    workspaceApplication: {
+      async execute({ descriptor, callerInput, applicationContext }: Record<string, any>): Promise<any> {
+        const context: any = applicationContext || {};
+        const resolved: any = await toolSkillManagementProvider.resolveMcpWorkspaceInput({
+          input: callerInput,
+          request: context.request,
+          context: context.executionContext,
+          signal: context.signal
+        });
+        const workspaceId: any = String(context.executionContext?.workspaceId || "").trim();
+        const workingSetId: any = workspaceId
+          ? `working-set:${workspaceId}`
+          : `working-set:operation:${descriptor.operationId}`;
+        const applicationRef: any = workspaceId
+          ? `workspace:${workspaceId}`
+          : `workspace-operation:${descriptor.operationId}`;
+        return Object.freeze({
+          envelope: createWorkspaceApplicationEnvelope({
+            trafficModel: "workspace_application",
+            operationId: descriptor.operationId,
+            subjectRef: String(context.subjectRef || "subject:unknown"),
+            workingSetId,
+            cursorRef: null,
+            changeSetRef: null,
+            resourceRefs: [],
+            cacheScope: "private"
+          }),
+          result: Object.freeze({
+            stage: "workspace_application",
+            trafficModel: "workspace_application",
+            envelopeRef: applicationRef,
+            status: "admitted",
+            normalizedOutcomeRef: workspaceId ? "workspace:resolved" : "workspace-operation:resolved",
+            errorRef: null,
+            generationRef: applicationRef
+          }),
+          output: resolved
+        });
+      }
+    }
   });
   toolSkillManagementProviderRef = toolSkillManagementProvider;
   controllers.plugin = createPluginContributionController({
@@ -686,6 +728,7 @@ export async function createHttpApplicationAssembly({
       subjectRateLimiter,
       tenantRateLimiter,
       toolSkillManagementProvider,
+      agentMcpGatewayPipeline,
       upstreamGatewayRegistryForMcp: consoleOperationProviders.upstreamGatewayRegistry,
       ipRateLimiter
     });
@@ -700,7 +743,6 @@ export async function createHttpApplicationAssembly({
       discoveryState,
       listenUrl,
       isFeatureActive,
-      exposedMaintenanceAgent: maintenanceAgent,
       deletionCoordinator,
       featureRuntime
     };
@@ -722,7 +764,6 @@ export async function createHttpApplicationAssembly({
     jobManager,
     ownsJobManager,
     uploadWorkspaceMaterializationProvider,
-    maintenanceAgent,
     agentWorkspace,
     integrationTaskSupervisor,
     consoleOperationProviders,
@@ -746,7 +787,6 @@ export async function createHttpApplicationAssembly({
     isFeatureActive,
     jobManager,
     jobWorkflowProvider,
-    maintenanceAgent,
     agentWorkspace,
     operationAuditStore,
     operationConcurrencyScope,

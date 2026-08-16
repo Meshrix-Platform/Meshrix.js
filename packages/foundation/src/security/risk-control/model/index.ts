@@ -1,19 +1,21 @@
-export const RISK_CONTROL_MODEL_VERSION: any = "v1:m1.d2.l1.c1.r1";
-export const RISK_CONTROL_DSL_VERSION: any = "v1:d2";
+import type { RiskControlBoundary, RiskControlEnvironment, RiskControlObject } from "../types.ts";
 
-export const RISK_CONTROL_BOUNDARY_IDS: Readonly<Record<string, any>> = Object.freeze({
+export const RISK_CONTROL_MODEL_VERSION = "v1:m1.d2.l1.c1.r1";
+export const RISK_CONTROL_DSL_VERSION = "v1:d2";
+
+export const RISK_CONTROL_BOUNDARY_IDS = Object.freeze({
   CLIENT_MCP_INGRESS: "client-mcp-ingress",
   SERVER_API_EGRESS: "server-api-egress",
   PLATFORM_SELF: "platform-self"
 });
 
-export const RISK_CONTROL_ENVIRONMENT_IDS: Readonly<Record<string, any>> = Object.freeze({
+export const RISK_CONTROL_ENVIRONMENT_IDS = Object.freeze({
   TERMINAL_AGENT: "terminal-agent",
   PLATFORM_RUNTIME: "platform-runtime",
   APPLICATION_SERVER: "application-server"
 });
 
-export const RISK_CONTROL_OBJECT_IDS: Readonly<Record<string, any>> = Object.freeze({
+export const RISK_CONTROL_OBJECT_IDS = Object.freeze({
   IDENTITY_ADMISSION_AUTHENTICATION: "identity-admission-authentication",
   PERMISSION_BEHAVIOR_POLICY: "permission-behavior-policy",
   DATA_STATE_SEMANTICS: "data-state-semantics",
@@ -21,7 +23,7 @@ export const RISK_CONTROL_OBJECT_IDS: Readonly<Record<string, any>> = Object.fre
   AUDIT_FACT_VERIFICATION: "audit-fact-verification"
 });
 
-export const RISK_CONTROL_OBJECT_ORDER: readonly any[] = Object.freeze([
+export const RISK_CONTROL_OBJECT_ORDER: readonly string[] = Object.freeze([
   RISK_CONTROL_OBJECT_IDS.IDENTITY_ADMISSION_AUTHENTICATION,
   RISK_CONTROL_OBJECT_IDS.PERMISSION_BEHAVIOR_POLICY,
   RISK_CONTROL_OBJECT_IDS.DATA_STATE_SEMANTICS,
@@ -29,7 +31,7 @@ export const RISK_CONTROL_OBJECT_ORDER: readonly any[] = Object.freeze([
   RISK_CONTROL_OBJECT_IDS.AUDIT_FACT_VERIFICATION
 ]);
 
-export const RISK_CONTROL_GATES: readonly any[] = Object.freeze([
+export const RISK_CONTROL_GATES: readonly string[] = Object.freeze([
   "admit",
   "bind",
   "authorize",
@@ -38,7 +40,7 @@ export const RISK_CONTROL_GATES: readonly any[] = Object.freeze([
   "audit-recover"
 ]);
 
-export const RISK_CONTROL_DEFINITION_STATES: readonly any[] = Object.freeze([
+export const RISK_CONTROL_DEFINITION_STATES: readonly string[] = Object.freeze([
   "draft",
   "candidate",
   "active",
@@ -47,7 +49,7 @@ export const RISK_CONTROL_DEFINITION_STATES: readonly any[] = Object.freeze([
   "retired"
 ]);
 
-export const RISK_CONTROL_BOUNDARIES: readonly any[] = Object.freeze([
+export const RISK_CONTROL_BOUNDARIES: readonly RiskControlBoundary[] = Object.freeze([
   {
     id: RISK_CONTROL_BOUNDARY_IDS.CLIENT_MCP_INGRESS,
     label: "客户端 MCP 入口",
@@ -74,7 +76,7 @@ export const RISK_CONTROL_BOUNDARIES: readonly any[] = Object.freeze([
   }
 ]);
 
-export const RISK_CONTROL_ENVIRONMENTS: readonly any[] = Object.freeze([
+export const RISK_CONTROL_ENVIRONMENTS: readonly RiskControlEnvironment[] = Object.freeze([
   {
     id: RISK_CONTROL_ENVIRONMENT_IDS.TERMINAL_AGENT,
     label: "终端智能体",
@@ -92,7 +94,7 @@ export const RISK_CONTROL_ENVIRONMENTS: readonly any[] = Object.freeze([
   }
 ]);
 
-export const RISK_CONTROL_OBJECTS: readonly any[] = Object.freeze([
+export const RISK_CONTROL_OBJECTS: readonly RiskControlObject[] = Object.freeze([
   {
     id: RISK_CONTROL_OBJECT_IDS.IDENTITY_ADMISSION_AUTHENTICATION,
     label: "身份与准入认证",
@@ -125,14 +127,14 @@ export const RISK_CONTROL_OBJECTS: readonly any[] = Object.freeze([
   }
 ]);
 
-export function knownRiskControlBoundaryIds() : any {
-  return new Set<any>(RISK_CONTROL_BOUNDARIES.map((entry?: any) : any => entry.id));
+export function knownRiskControlBoundaryIds(): Set<string> {
+  return new Set(RISK_CONTROL_BOUNDARIES.map((entry) => entry.id));
 }
 
-export function knownRiskControlEnvironmentIds() : any {
-  return new Set<any>(RISK_CONTROL_ENVIRONMENTS.map((entry?: any) : any => entry.id));
+export function knownRiskControlEnvironmentIds(): Set<string> {
+  return new Set(RISK_CONTROL_ENVIRONMENTS.map((entry) => entry.id));
 }
 
-export function knownRiskControlObjectIds() : any {
-  return new Set<any>(RISK_CONTROL_OBJECTS.map((entry?: any) : any => entry.id));
+export function knownRiskControlObjectIds(): Set<string> {
+  return new Set(RISK_CONTROL_OBJECTS.map((entry) => entry.id));
 }

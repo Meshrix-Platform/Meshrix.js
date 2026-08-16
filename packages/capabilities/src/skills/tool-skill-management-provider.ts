@@ -267,16 +267,18 @@ export function createToolSkillManagementProvider({
   }
 
   function audiencePartitionKeys({ authorization = null }: Record<string, any> = {}) : any {
-    if (authorization?.credentialKind === "scoped_api_key") return [];
-    const grantId: any = String(authorization?.grant?.id || "").trim();
+    const grantId: any = String(authorization?.credentialKind === "scoped_api_key"
+      ? authorization?.apiKeyAuthorization?.workloadPrincipalId
+      : authorization?.grant?.id || "").trim();
     if (!grantId || typeof resolveAudiencePartitionKeys !== "function") return [];
     const keys: any = resolveAudiencePartitionKeys(grantId);
     return [...new Set<any>((Array.isArray(keys) ? keys : []).map((key?: any) : any => String(key || "").trim()).filter(Boolean))].sort();
   }
 
   function audienceCatalogFacts({ authorization = null }: Record<string, any> = {}) : any {
-    if (authorization?.credentialKind === "scoped_api_key") return null;
-    const grantId: any = String(authorization?.grant?.id || "").trim();
+    const grantId: any = String(authorization?.credentialKind === "scoped_api_key"
+      ? authorization?.apiKeyAuthorization?.workloadPrincipalId
+      : authorization?.grant?.id || "").trim();
     if (!grantId || typeof resolveAudienceCatalogFacts !== "function") return null;
     const facts: any = resolveAudienceCatalogFacts(grantId);
     if (!facts || typeof facts !== "object") return null;
@@ -312,6 +314,11 @@ export function createToolSkillManagementProvider({
           tool,
           purpose: "discovery"
         })?.allowed === true);
+  }
+
+  function resolveActiveTool(toolId: unknown): unknown {
+    const tool = (visibleToolSnapshot().toolsById.get(String(toolId || "")) || null) as { status?: unknown } | null;
+    return tool?.status === "active" ? tool : null;
   }
 
   async function executeTool({ toolId, input = {}, request = null, authorization = null, context = {}, dryRun = false, signal = null }: Record<string, any> = {}) : Promise<any> {
@@ -465,6 +472,7 @@ export function createToolSkillManagementProvider({
     audiencePartitionKeys,
     audienceCatalogFacts,
     listVisibleTools,
+    resolveActiveTool,
     executeTool,
     resolveMcpWorkspaceInput,
     publicMcpToolPayload,

@@ -13,6 +13,7 @@ const workerThreadTestPatterns = [
 ];
 
 const testFilePatterns = [
+  "tests/acceptance/**/*.{test,spec}.{ts,tsx}",
   "tests/vitest/**/*.{test,spec}.{ts,tsx}",
   "tests/server/**/*.{test,spec}.{ts,tsx}",
   "tests/unit/routing/**/*.{test,spec}.{ts,tsx}",

@@ -490,9 +490,10 @@ const catalogResponse = await fetch("http://127.0.0.1:7228/api/operation-permiss
 const scopes = await scopesResponse.json();
 const catalog = await catalogResponse.json();
 const selectedToolsets = new Set(${JSON.stringify(TOOLSETS)});
-const allowedTools = (catalog.tools || [])
-  .filter((tool) => (tool.toolsets || []).some((toolset) => selectedToolsets.has(toolset)))
-  .map((tool) => tool.id);
+const selectedTools = (catalog.tools || [])
+  .filter((tool) => (tool.toolsets || []).some((toolset) => selectedToolsets.has(toolset)));
+const allowedTools = selectedTools.map((tool) => tool.id);
+const scopeIds = [...new Set(selectedTools.flatMap((tool) => tool.requiredScopes || tool.scopes || []))];
 const response = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/api-keys", {
   method: "POST",
   headers: {
@@ -512,13 +513,13 @@ const response = await fetch("http://127.0.0.1:7228/api/operation-permission/v1/
       toolsetIds: [...selectedToolsets],
       allowedTools,
       deniedTools: [],
-      scopeIds: [],
+      scopeIds,
       maximumRisk: "high",
-      audience: { serverAudience: "127.0.0.1:7228", targetIds: ["codex"], connectorPackageIds: [] },
+      audience: { serverAudience: "127.0.0.1:${hostPort}", targetIds: ["codex"], connectorPackageIds: [] },
       resources: {
-        mode: "restricted", workspaceIds: [], dataClassifications: [], egressClasses: [],
+        mode: "unrestricted", workspaceIds: [], dataClassifications: [], egressClasses: [],
         semanticFamilies: [], capabilityDomains: [], capabilityVerbs: [], resourceKinds: [],
-        effectKinds: [], secretBindingIds: [], allowedOrigins: ["http://127.0.0.1:7228"], allowedCidrs: []
+        effectKinds: [], secretBindingIds: [], allowedOrigins: [], allowedCidrs: []
       },
       processIdentity: { mode: "optional" },
       limits: { maxUses: 64, requestsPerWindow: 64, windowSeconds: 3600, maxConcurrentEffects: 4 },

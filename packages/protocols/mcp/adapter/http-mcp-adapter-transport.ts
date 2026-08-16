@@ -9,6 +9,7 @@ import {
   normalizeMcpProxySessionId,
   parseMcpCatalogAcknowledgement
 } from "#meshrix/contracts/mcp-catalog-delivery";
+import { AGENT_MCP_OPERATION_DESCRIPTOR_SCHEMA_VERSION } from "@meshrix/contracts/agent-mcp-traffic";
 import {
   MCP_DISCOVERY_TOOL_NAME,
   MCP_GATEWAY_TOOL_NAME,
@@ -252,6 +253,7 @@ async function handleMcpMessage({
   url = null,
   method: httpMethod = "POST",
   toolSkillManagementProvider,
+  agentMcpGatewayPipeline = null,
   upstreamGatewayRegistry = null,
   listenUrl = "",
   discoveryState = null,
@@ -524,21 +526,62 @@ async function handleMcpMessage({
         delegatedTraceId: delegatedChildOperation.traceId
       } : {})
     };
-    const resolvedWorkspaceInput: any = await toolSkillManagementProvider.resolveMcpWorkspaceInput({
+    if (!agentMcpGatewayPipeline?.execute) {
+      throw new Error("agent_mcp_gateway_pipeline_unavailable");
+    }
+    const operationTool: any = toolSkillManagementProvider.resolveActiveTool?.(parsedCall.operation) || null;
+    if (!operationTool?.trafficModel) throw new Error("traffic_model_missing");
+    const subjectRef: any = String(
+      authorization?.subject?.subjectId || authorization?.grant?.subjectId || parsedCall.envelope.subject || "subject:unknown"
+    );
+    const pipelineResult: any = await agentMcpGatewayPipeline.execute({
+      descriptor: Object.freeze({
+        schemaVersion: AGENT_MCP_OPERATION_DESCRIPTOR_SCHEMA_VERSION,
+        operationId: operationTool.operationId,
+        trafficModel: operationTool.trafficModel
+      }),
+      callerInput: parsedCall.input,
+      refs: Object.freeze({
+        operationId: operationTool.operationId,
+        subjectRef,
+        targetRef: String(operationTool.id || parsedCall.operation),
+        resourceRefs: [],
+        inputRefs: [`mcp-input:${String(id ?? "notification")}`],
+        policyRef: String(authorization?.decisionId || authorization?.grant?.id || "policy:authorized"),
+        approvalBinding: String(parsedCall.envelope.approvalId || "approval:none"),
+        idempotencyKey: String(parsedCall.envelope.idempotencyKey || `mcp:${String(id ?? "notification")}`),
+        deadlineMs: Number(parsedCall.envelope.deadlineMs || 30_000),
+        cancellationRef: signal ? `abort:${String(id ?? "notification")}` : null,
+        streamingMode: parsedCall.envelope.stream === true ? "sse" : "none",
+        traceRefs: [String(mcpExecutionContext.traceId || `trace:${String(id ?? "notification")}`)],
+        evidenceRefs: []
+      }),
+      applicationContext: Object.freeze({
+        request,
+        executionContext: mcpExecutionContext,
+        signal,
+        subjectRef
+      }),
+      async executeOperation({ applicationOutput }: { applicationOutput: unknown }) {
+        const resolved = applicationOutput && typeof applicationOutput === "object"
+          ? applicationOutput as { input?: unknown }
+          : null;
+        return toolSkillManagementProvider.executeTool({
+          toolId: parsedCall.operation,
+          input: resolved?.input ?? parsedCall.input,
+          request,
+          authorization,
+          context: mcpExecutionContext,
+          dryRun: parsedCall.envelope.dryRun,
+          signal
+        });
+      }
+    });
+    const resolvedWorkspaceInput: any = pipelineResult.applicationOutput || Object.freeze({
       input: parsedCall.input,
-      request,
-      context: mcpExecutionContext,
-      signal
+      workspaceDirectory: null
     });
-    const result: any = await toolSkillManagementProvider.executeTool({
-      toolId: parsedCall.operation,
-      input: resolvedWorkspaceInput.input,
-      request,
-      authorization,
-      context: mcpExecutionContext,
-      dryRun: parsedCall.envelope.dryRun,
-      signal
-    });
+    const result: any = pipelineResult.operationOutput;
     if (!result.ok) {
       const publicFailurePayload: any = await toolSkillManagementProvider.publicMcpToolPayload({
         payload: result.payload || {},
@@ -641,6 +684,7 @@ export async function handleMeshrixMcpHttpRequest({
   method,
   url,
   toolSkillManagementProvider,
+  agentMcpGatewayPipeline = null,
   upstreamGatewayRegistry = null,
   listenUrl = "",
   discoveryState = null,
@@ -771,6 +815,7 @@ export async function handleMeshrixMcpHttpRequest({
         url,
         method,
         toolSkillManagementProvider,
+        agentMcpGatewayPipeline,
         upstreamGatewayRegistry,
         listenUrl,
         discoveryState,

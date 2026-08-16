@@ -138,8 +138,9 @@
   min-width: 0;
 }
 
-.maintenance-agent-policy-actions {
-  margin-top: var(--space-4);
+.ops-monitor-layout {
+  display: grid;
+  gap: var(--space-4);
 }
 
 @media (max-width: 720px) {
@@ -152,27 +153,6 @@
   }
 }
 
-.maintenance-agent-quick-actions {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.maintenance-agent-quick-actions .tool-button {
-  justify-self: start;
-}
-
-.maintenance-agent-step-list pre {
-  max-height: 280px;
-  overflow: auto;
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-subtle);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
-  font-size: var(--text-sm);
-}
 
 .table-actions-inline {
   display: inline-flex;

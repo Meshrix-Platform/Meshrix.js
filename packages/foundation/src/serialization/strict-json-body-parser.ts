@@ -10,7 +10,51 @@
 
 import { canonicalHash } from "./canonical-json.ts";
 
-const MAX_BODY_SIZE_DEFAULT: any = 10 * 1024 * 1024; // 10MB
+const MAX_BODY_SIZE_DEFAULT = 10 * 1024 * 1024; // 10MB
+
+interface StrictJsonOptions {
+  maxBodySize?: number;
+  contentType?: string;
+  traceId?: string;
+}
+
+interface StrictJsonErrorMetadata {
+  bodySize?: number;
+  contentType?: string;
+  traceId?: string;
+  bodyHash?: string;
+  maxBodySize?: number;
+  parseError?: { message: string; position: number | null };
+  readError?: string;
+}
+
+interface StrictJsonError {
+  code: string;
+  message: string;
+  metadata: {
+    bodySize: number;
+    contentType: string;
+    traceId: string;
+    bodyHash: string;
+    maxBodySize: number;
+    parseError: { message: string; position: number | null } | null;
+    readError: string | null;
+  };
+  timestamp: string;
+}
+
+export type StrictJsonResult =
+  | { success: true; data: Record<string, unknown> }
+  | { success: false; error: StrictJsonError };
+
+interface StrictJsonRequest {
+  headers?: Record<string, string | string[] | undefined>;
+  traceId?: string;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 /**
  * Parse a request body string as strict JSON.
@@ -21,10 +65,10 @@ const MAX_BODY_SIZE_DEFAULT: any = 10 * 1024 * 1024; // 10MB
  * @param {string} [options.traceId] - Trace ID for error reporting
  * @returns {{ success: true, data: object } | { success: false, error: object }}
  */
-export function parseStrictJsonBody(body?: any, options: Record<string, any> = {}) : any {
-  const maxBodySize: any = Number(options.maxBodySize) || MAX_BODY_SIZE_DEFAULT;
-  const contentType: any = String(options.contentType || "application/json");
-  const traceId: any = String(options.traceId || "");
+export function parseStrictJsonBody(body?: unknown, options: StrictJsonOptions = {}): StrictJsonResult {
+  const maxBodySize = Number(options.maxBodySize) || MAX_BODY_SIZE_DEFAULT;
+  const contentType = String(options.contentType || "application/json");
+  const traceId = String(options.traceId || "");
 
   // Null/undefined body
   if (body === null || body === undefined) {
@@ -37,8 +81,8 @@ export function parseStrictJsonBody(body?: any, options: Record<string, any> = {
     };
   }
 
-  const bodyStr: any = typeof body === "string" ? body : String(body);
-  const bodySize: any = Buffer.byteLength(bodyStr, "utf8");
+  const bodyStr = typeof body === "string" ? body : String(body);
+  const bodySize = Buffer.byteLength(bodyStr, "utf8");
 
   // Size check
   if (bodySize > maxBodySize) {
@@ -54,7 +98,7 @@ export function parseStrictJsonBody(body?: any, options: Record<string, any> = {
   }
 
   // Empty body
-  const trimmed: any = bodyStr.trim();
+  const trimmed = bodyStr.trim();
   if (trimmed.length === 0) {
     return {
       success: false,
@@ -72,7 +116,7 @@ export function parseStrictJsonBody(body?: any, options: Record<string, any> = {
 
   // Parse
   try {
-    const data: any = JSON.parse(trimmed);
+    const data: unknown = JSON.parse(trimmed);
     if (data === null || typeof data !== "object" || Array.isArray(data)) {
       return {
         success: false,
@@ -84,11 +128,12 @@ export function parseStrictJsonBody(body?: any, options: Record<string, any> = {
         }),
       };
     }
-    return { success: true, data };
-  } catch (err: any) {
-    const parseError: Record<string, any> = {
-      message: _redactErrorMessage(err.message),
-      position: _extractErrorPosition(err.message),
+    return { success: true, data: data as Record<string, unknown> };
+  } catch (err: unknown) {
+    const message = errorMessage(err);
+    const parseError = {
+      message: _redactErrorMessage(message),
+      position: _extractErrorPosition(message),
     };
 
     return {
@@ -111,27 +156,31 @@ export function parseStrictJsonBody(body?: any, options: Record<string, any> = {
  * @param {object} [options]
  * @returns {Promise<{ success: true, data: object } | { success: false, error: object }>}
  */
-export async function strictJsonBodyMiddleware(req?: any, readBody?: any, options: Record<string, any> = {}) : Promise<any> {
-  const contentType: any = String(
+export async function strictJsonBodyMiddleware(
+  req: StrictJsonRequest = {},
+  readBody: () => Promise<unknown>,
+  options: StrictJsonOptions = {}
+): Promise<StrictJsonResult> {
+  const contentType = String(
     req?.headers?.["content-type"] ||
       req?.headers?.["Content-Type"] ||
       "application/json"
   );
 
   try {
-    const body: any = await readBody();
+    const body = await readBody();
     return parseStrictJsonBody(body, {
       ...options,
       contentType,
       traceId: req?.traceId || options.traceId,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     return {
       success: false,
       error: _buildError("body_read_error", "Failed to read request body.", {
         contentType,
         traceId: req?.traceId || options.traceId || "",
-        readError: _redactErrorMessage(err.message),
+        readError: _redactErrorMessage(errorMessage(err)),
       }),
     };
   }
@@ -139,7 +188,7 @@ export async function strictJsonBodyMiddleware(req?: any, readBody?: any, option
 
 // --- Private ---
 
-function _buildError(code?: any, message?: any, metadata: Record<string, any> = {}) : any {
+function _buildError(code: string, message: string, metadata: StrictJsonErrorMetadata = {}): StrictJsonError {
   return {
     code,
     message,
@@ -156,11 +205,11 @@ function _buildError(code?: any, message?: any, metadata: Record<string, any> = 
   };
 }
 
-function _redactErrorMessage(message?: any) : any {
+function _redactErrorMessage(message?: unknown): string {
   if (!message) return "";
   // Remove any inline file paths, line numbers, column numbers that could leak
   // server internals. Keep the error type indicator only.
-  const cleaned: any = String(message)
+  const cleaned = String(message)
     .replace(/at position \d+/g, "at position <N>")
     .replace(/line \d+/gi, "line <N>")
     .replace(/column \d+/gi, "column <N>")
@@ -169,7 +218,7 @@ function _redactErrorMessage(message?: any) : any {
   return cleaned;
 }
 
-function _extractErrorPosition(message?: any) : any {
-  const match: any = String(message || "").match(/position (\d+)/);
+function _extractErrorPosition(message?: unknown): number | null {
+  const match = String(message || "").match(/position (\d+)/);
   return match ? parseInt(match[1], 10) : null;
 }

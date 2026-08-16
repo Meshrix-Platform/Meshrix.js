@@ -1,14 +1,6 @@
 export const BACKGROUND_PROCESS_SCHEMA_VERSION: any = "v0.0.1:platform:background-process-schema-1";
 export const IMPORT_PARSE_ACTIVE_STATUSES: any = new Set<any>(["queued", "running"]);
-export const MAINTENANCE_ACTIVE_STATUSES: any = new Set<any>(["queued", "running"]);
 export const SAFE_PATH_SEGMENT_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-export const AGENT_WORKER_SUPPORTED_PROVIDERS: any = new Set<any>([
-  "openai",
-  "deepseek",
-  "openrouter",
-  "copilot",
-  "local-model"
-]);
 
 export const BACKGROUND_PROCESS_DEFINITIONS: any[] = [
   {
@@ -22,28 +14,6 @@ export const BACKGROUND_PROCESS_DEFINITIONS: any[] = [
     monitors: ["import_parse_job 队列心跳", "checkpoint tree 更新"],
     alerts: ["queueInterrupted", "processNotRunning", "processStale", "processRestarted"]
   },
-  {
-    role: "maintenance-worker",
-    label: "智能巡检 Worker",
-    description: "调度智能巡检 runbook，恢复排队中的巡检运行，并写入审批和审计链路。",
-    processType: "service",
-    responsibility: "运行智能巡检调度服务。",
-    services: ["智能巡检调度", "巡检 runbook", "审批与审计"],
-    features: ["智能巡检", "任务队列"],
-    monitors: ["maintenance-agent runs", "智能巡检队列"],
-    alerts: ["processNotRunning", "processStale", "processRestarted"]
-  },
-  {
-    role: "agent-worker",
-    label: "智能体 Worker",
-    description: "执行受控网关调用和智能体转发任务。",
-    processType: "service",
-    responsibility: "运行智能体任务服务。",
-    services: ["智能体转发", "策略预览", "调用审计"],
-    features: ["智能体", "网关治理"],
-    monitors: ["agent task tick", "智能体运行状态"],
-    alerts: ["processNotRunning", "processStale", "processRestarted"]
-  }
 ];
 
 export const SERVER_PROCESS_DEFINITIONS: any[] = [
@@ -61,12 +31,12 @@ export const SERVER_PROCESS_DEFINITIONS: any[] = [
   {
     role: "background-supervisor",
     label: "后台 Worker 管理进程",
-    description: "管理并按需拉起导入解析、智能巡检和智能体 Worker，持续写入后台进程状态。",
+    description: "管理并按需拉起导入解析 Worker，持续写入后台进程状态。",
     processType: "daemon",
     responsibility: "管理后台 Worker 进程。",
     services: [],
     features: ["运维监控", "任务队列"],
-    monitors: ["import-worker", "maintenance-worker", "agent-worker"],
+    monitors: ["import-worker"],
     alerts: ["supervisorStopped", "processNotRunning", "processRestarted"]
   },
   {
@@ -83,9 +53,7 @@ export const SERVER_PROCESS_DEFINITIONS: any[] = [
 ];
 
 const ROLE_FEATURE_IDS: Readonly<Record<string, any>> = Object.freeze({
-  "import-worker": ["work-queue-core"],
-  "maintenance-worker": ["maintenance-agent-runbooks"],
-  "agent-worker": ["agent-gateway", "gateway-governance"]
+  "import-worker": ["work-queue-core"]
 });
 
 function activeConsoleFeatureIdsFromEnv() : any {

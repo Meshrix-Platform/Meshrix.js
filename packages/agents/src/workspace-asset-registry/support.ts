@@ -2,29 +2,47 @@ import crypto from "node:crypto";
 import { ServerConfig } from "@meshrix/foundation/config/server-config";
 import path from "node:path";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
+import type Database from "better-sqlite3";
 
-export const WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION: any = "v0.0.1:workspace:asset-registry-1";
-export const WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION: any = "v0.0.1:workspace:asset-operation-1";
+export type UnknownRecord = Record<string, unknown>;
 
-export function nowIso() : any {
+export interface ContentReference extends UnknownRecord {
+  contentRef: string;
+  contentHash: string;
+  byteSize: number;
+  mediaType: string;
+}
+
+export interface NormalizedFileItem {
+  workspaceId: string;
+  path: string;
+  contentHash: string;
+  byteSize: number;
+  mediaType: string;
+}
+
+export const WORKSPACE_ASSET_REGISTRY_PROTOCOL_VERSION = "v0.0.1:workspace:asset-registry-1" as const;
+export const WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION = "v0.0.1:workspace:asset-operation-1" as const;
+
+export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+export function asObject(value: unknown, fallback: UnknownRecord = {}): UnknownRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : fallback;
 }
 
-export function asArray(value?: any) : any {
+export function asArray(value?: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (value === undefined || value === null || value === "") return [];
   return [value];
 }
 
-export function text(value?: any) : any {
+export function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function stableProjection(value?: any) : any {
+function stableProjection(value?: unknown): unknown {
   if (Buffer.isBuffer(value)) {
     return {
       type: "buffer",
@@ -34,58 +52,58 @@ function stableProjection(value?: any) : any {
   }
   if (Array.isArray(value)) return value.map(stableProjection);
   if (value && typeof value === "object") {
-    return Object.fromEntries((Object.entries(value) as [string, any][]).map(([key, entry]: any[]) : any => [key, stableProjection(entry)]));
+    return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, stableProjection(entry)]));
   }
   return value;
 }
 
-export function workspaceAssetCanonicalJson(value?: any) : any {
+export function workspaceAssetCanonicalJson(value?: unknown): string {
   return canonicalJson(stableProjection(value));
 }
 
-export function stableId(prefix?: any, value?: any, length: any = 24) : any {
+export function stableId(prefix: string, value: unknown, length = 24): string {
   return `${prefix}_${crypto.createHash("sha256").update(workspaceAssetCanonicalJson(value)).digest("hex").slice(0, length)}`;
 }
 
-export function stringifyJson(value?: any) : any {
+export function stringifyJson(value?: unknown): string {
   return JSON.stringify(value ?? {});
 }
 
-export function parseJson(value?: any, fallback?: any) : any {
+export function parseJson<T>(value: unknown, fallback: T): T {
   try {
-    return JSON.parse(String(value || ""));
+    return JSON.parse(String(value || "")) as T;
   } catch {
     return fallback;
   }
 }
 
-export function uniqueStrings(values: any = []) : any {
-  return [...new Set<any>(asArray(values).map(text).filter(Boolean))];
+export function uniqueStrings(values: unknown = []): string[] {
+  return [...new Set(asArray(values).map(text).filter(Boolean))];
 }
 
-export function dbPathFor(userDataPath: any = "") : any {
-  const root: any = userDataPath || ServerConfig.getDataDir();
+export function dbPathFor(userDataPath = ""): string {
+  const root = userDataPath || ServerConfig.getDataDir();
   return path.join(root, "workspace-assets", "workspace-assets.sqlite");
 }
 
-export function normalizeWorkspaceId(input: Record<string, any> = {}) : any {
+export function normalizeWorkspaceId(input: UnknownRecord = {}): string {
   return text(input.workspaceId || input.workspaceRef || input.workspace || "default");
 }
 
-export function normalizeAssetKind(value: any = "") : any {
-  const normalized: any = text(value || "file");
+export function normalizeAssetKind(value: unknown = ""): string {
+  const normalized = text(value || "file");
   if (normalized === "code" || normalized === "code_change" || normalized === "codeChange") return "codeChange";
   if (normalized === "contribution") return "workspaceContribution";
   return normalized;
 }
 
-export function normalizeCanonicalState(value: any = "") : any {
-  const normalized: any = text(value || "canonical");
+export function normalizeCanonicalState(value: unknown = ""): string {
+  const normalized = text(value || "canonical");
   if (["canonical", "pending", "review", "projected", "source", "archived"].includes(normalized)) return normalized;
   return "canonical";
 }
 
-export function targetKey({ workspaceId, assetKind, targetKind, targetRef, sourceRef, displayName }: Record<string, any>) : any {
+export function targetKey({ workspaceId, assetKind, targetKind, targetRef, sourceRef, displayName }: UnknownRecord): UnknownRecord {
   return {
     workspaceId,
     assetKind,
@@ -96,14 +114,14 @@ export function targetKey({ workspaceId, assetKind, targetKind, targetRef, sourc
   };
 }
 
-export function assetRefFrom(input: Record<string, any> = {}) : any {
-  const provided: any = text(input.assetRef || input.assetId);
+export function assetRefFrom(input: UnknownRecord = {}): string {
+  const provided = text(input.assetRef || input.assetId);
   if (provided) return provided;
   return stableId("workspace_asset", targetKey(input));
 }
 
-export function contentRefFrom(input: Record<string, any> = {}) : any {
-  const content: any = asObject(input.content);
+export function contentRefFrom(input: UnknownRecord = {}): ContentReference {
+  const content = asObject(input.content);
   return {
     contentRef: text(content.contentRef || input.contentRef || ""),
     contentHash: text(content.contentHash || content.sha256 || input.contentHash || input.sha256 || ""),
@@ -112,7 +130,7 @@ export function contentRefFrom(input: Record<string, any> = {}) : any {
   };
 }
 
-export function receiptRefFrom(input: Record<string, any> = {}) : any {
+export function receiptRefFrom(input: UnknownRecord = {}): string {
   return stableId("workspace_asset_receipt", {
     assetRef: input.assetRef,
     ledgerEventId: input.ledgerEventId,
@@ -123,7 +141,7 @@ export function receiptRefFrom(input: Record<string, any> = {}) : any {
   });
 }
 
-export function revisionRefFrom(input: Record<string, any> = {}) : any {
+export function revisionRefFrom(input: UnknownRecord = {}): string {
   return stableId("workspace_asset_revision", {
     assetRef: input.assetRef,
     ledgerEventId: input.ledgerEventId,
@@ -134,7 +152,7 @@ export function revisionRefFrom(input: Record<string, any> = {}) : any {
   });
 }
 
-export function projectionRefFrom(input: Record<string, any> = {}) : any {
+export function projectionRefFrom(input: UnknownRecord = {}): string {
   return stableId("workspace_asset_projection", {
     assetRef: input.assetRef,
     targetKind: input.targetKind,
@@ -143,7 +161,7 @@ export function projectionRefFrom(input: Record<string, any> = {}) : any {
   });
 }
 
-export function linkRefFrom(input: Record<string, any> = {}) : any {
+export function linkRefFrom(input: UnknownRecord = {}): string {
   return stableId("workspace_asset_link", {
     assetRef: input.assetRef,
     linkedRef: input.linkedRef,
@@ -151,7 +169,7 @@ export function linkRefFrom(input: Record<string, any> = {}) : any {
   });
 }
 
-export function ensureSchema(db?: any) : any {
+export function ensureSchema(db: Database.Database): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -257,7 +275,7 @@ export function ensureSchema(db?: any) : any {
   `);
 }
 
-export function hydrateAsset(row?: any) : any {
+export function hydrateAsset(row?: UnknownRecord): UnknownRecord | null {
   if (!row) return null;
   return {
     protocolVersion: WORKSPACE_ASSET_OPERATION_PROTOCOL_VERSION,
@@ -275,7 +293,7 @@ export function hydrateAsset(row?: any) : any {
   };
 }
 
-export function hydrateRevision(row?: any) : any {
+export function hydrateRevision(row?: UnknownRecord): UnknownRecord | null {
   if (!row) return null;
   return {
     revisionRef: row.revision_ref,
@@ -294,7 +312,7 @@ export function hydrateRevision(row?: any) : any {
   };
 }
 
-export function hydrateProjection(row?: any) : any {
+export function hydrateProjection(row?: UnknownRecord): UnknownRecord | null {
   if (!row) return null;
   return {
     projectionRef: row.projection_ref,
@@ -309,7 +327,7 @@ export function hydrateProjection(row?: any) : any {
   };
 }
 
-export function hydrateReceipt(row?: any) : any {
+export function hydrateReceipt(row?: UnknownRecord): UnknownRecord | null {
   if (!row) return null;
   return {
     receiptRef: row.receipt_ref,
@@ -324,7 +342,7 @@ export function hydrateReceipt(row?: any) : any {
   };
 }
 
-export function hydrateLink(row?: any) : any {
+export function hydrateLink(row?: UnknownRecord): UnknownRecord | null {
   if (!row) return null;
   return {
     linkRef: row.link_ref,
@@ -336,17 +354,17 @@ export function hydrateLink(row?: any) : any {
   };
 }
 
-export function firstString(...values: any[]) : any {
+export function firstString(...values: unknown[]): string {
   for (const value of values) {
-    const normalized: any = text(value);
+    const normalized = text(value);
     if (normalized) return normalized;
   }
   return "";
 }
 
-export function displayNameFrom(input: Record<string, any> = {}) : any {
-  const targetRef: any = asObject(input.targetRef);
-  const sourceRef: any = asObject(input.sourceRef);
+export function displayNameFrom(input: UnknownRecord = {}): string {
+  const targetRef = asObject(input.targetRef);
+  const sourceRef = asObject(input.sourceRef);
   return firstString(
     input.displayName,
     targetRef.path,
@@ -358,24 +376,25 @@ export function displayNameFrom(input: Record<string, any> = {}) : any {
   );
 }
 
-export function receiptItemsFrom(input: Record<string, any> = {}) : any {
-  const receipts: any = asArray(input.receipts);
-  const normalized: any = receipts
-    .flatMap((item?: any) : any => {
+export function receiptItemsFrom(input: UnknownRecord = {}): UnknownRecord[] {
+  const receipts = asArray(input.receipts);
+  const normalized = receipts
+    .flatMap((item): UnknownRecord[] => {
       if (!item || typeof item !== "object") return [];
-      if ("receiptType" in item || "type" in item || "receipt" in item) return [item];
-      return (Object.entries(item) as [string, any][])
-        .filter(([, value]: any[]) : any => value !== null && value !== undefined && value !== "")
-        .map(([key, value]: any[]) : any => ({
+      const record = item as UnknownRecord;
+      if ("receiptType" in record || "type" in record || "receipt" in record) return [record];
+      return Object.entries(record)
+        .filter(([, value]) => value !== null && value !== undefined && value !== "")
+        .map(([key, value]) => ({
           receiptType: key,
           receipt: value
         }));
     })
-    .filter((item?: any) : any => item && typeof item === "object");
+    .filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item));
   return normalized;
 }
 
-export async function maybeCall(fn?: any, fallback?: any) : Promise<any> {
+export async function maybeCall<T>(fn: () => T | Promise<T>, fallback: T): Promise<T> {
   try {
     return await fn();
   } catch {
@@ -383,16 +402,16 @@ export async function maybeCall(fn?: any, fallback?: any) : Promise<any> {
   }
 }
 
-export function normalizedFileItems(payload: Record<string, any> = {}) : any {
-  const items: any = asArray(payload.files || payload.items || payload.entries);
+export function normalizedFileItems(payload: UnknownRecord = {}): NormalizedFileItem[] {
+  const items = asArray(payload.files || payload.items || payload.entries);
   return items
-    .filter((item?: any) : any => item && typeof item === "object" && item.isDirectory !== true && item.type !== "directory")
-    .map((item?: any) : any => ({
+    .filter((item): item is UnknownRecord => Boolean(item) && typeof item === "object" && !Array.isArray(item) && (item as UnknownRecord).isDirectory !== true && (item as UnknownRecord).type !== "directory")
+    .map((item) => ({
       workspaceId: normalizeWorkspaceId(item),
       path: firstString(item.path, item.relativePath, item.filePath),
       contentHash: firstString(item.contentSha256, item.sha256, item.contentHash),
       byteSize: Number(item.sizeBytes ?? item.byteSize ?? item.size ?? 0) || 0,
       mediaType: firstString(item.mediaType, item.contentType)
     }))
-    .filter((item?: any) : any => item.path);
+    .filter((item) => Boolean(item.path));
 }

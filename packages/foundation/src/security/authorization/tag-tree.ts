@@ -1,139 +1,84 @@
-const ACTIVE_STATUS: any = "active";
+export const TAG_TREE_PROTOCOL_VERSION = "v0.0.1:authorization:tag-tree-1";
+const ACTIVE_STATUS = "active";
 
-function normalizeId(value?: any) : any {
-  return String(value || "").trim();
+export interface TagRecord { tagId: string; parentTagId: string; kind: string; status: string; enabled: boolean; scopePrerequisites: string[]; }
+export interface TagRecordInput { tagId?: unknown; id?: unknown; parentTagId?: unknown; parentId?: unknown; kind?: unknown; status?: unknown; enabled?: unknown; scopePrerequisites?: unknown; scopesRequired?: unknown; }
+export interface TagLookup { getTag(tagId: string): TagRecordInput | null | undefined; }
+export interface TagTreeOptions { includeSelf?: boolean; activeOnly?: boolean; rootFirst?: boolean; }
+export interface TagTree {
+  activeTag(tagId?: unknown): TagRecord | null;
+  lineageOf(tagId?: unknown, options?: TagTreeOptions): TagRecord[];
+  ancestorsOf(tagId?: unknown, options?: TagTreeOptions): string[];
+  assertParentAllowed(tagId?: unknown, parentTagId?: unknown): true;
+  scopePrerequisitesFor(tagId?: unknown): string[];
+  effectiveTagsFor(tagIds?: unknown): string[];
 }
 
-function uniqueStrings(values: any = []) : any {
-  const input: any = Array.isArray(values) ? values : [values];
-  return [...new Set<any>(input.map(normalizeId).filter(Boolean))];
+function normalizeId(value?: unknown): string { return String(value || "").trim(); }
+function uniqueStrings(values: unknown = []): string[] {
+  const input = Array.isArray(values) ? values : [values];
+  return [...new Set(input.map(normalizeId).filter(Boolean))];
 }
-
-function normalizeTagRecord(tagId?: any, tag: any = null) : any {
-  if (!tag || typeof tag !== "object" || Array.isArray(tag)) {
-    return null;
-  }
-  const normalized: Record<string, any> = {
-    tagId: normalizeId(tag.tagId || tag.id || tagId),
-    parentTagId: normalizeId(tag.parentTagId || tag.parentId),
-    kind: normalizeId(tag.kind || "custom"),
-    status: normalizeId(tag.status || ACTIVE_STATUS),
-    enabled: tag.enabled !== false,
-    scopePrerequisites: uniqueStrings(tag.scopePrerequisites || tag.scopesRequired || [])
+function normalizeTagRecord(tagId?: unknown, tag: unknown = null): TagRecord | null {
+  if (!tag || typeof tag !== "object" || Array.isArray(tag)) return null;
+  const input = tag as TagRecordInput;
+  const normalized: TagRecord = {
+    tagId: normalizeId(input.tagId || input.id || tagId), parentTagId: normalizeId(input.parentTagId || input.parentId),
+    kind: normalizeId(input.kind || "custom"), status: normalizeId(input.status || ACTIVE_STATUS), enabled: input.enabled !== false,
+    scopePrerequisites: uniqueStrings(input.scopePrerequisites || input.scopesRequired || [])
   };
   return normalized.tagId ? normalized : null;
 }
-
-function activeTagFromStore(store?: any, tagId?: any) : any {
-  const normalizedTagId: any = normalizeId(tagId);
-  const tag: any = typeof store?.getTag === "function" ? store.getTag(normalizedTagId) : null;
-  const normalized: any = normalizeTagRecord(normalizedTagId, tag);
-  if (!normalized || normalized.enabled === false || normalized.status === "archived") {
-    return null;
-  }
-  return normalized;
+function activeTagFromStore(store: TagLookup | null | undefined, tagId?: unknown): TagRecord | null {
+  const normalizedTagId = normalizeId(tagId);
+  const normalized = normalizeTagRecord(normalizedTagId, store?.getTag(normalizedTagId));
+  return !normalized || !normalized.enabled || normalized.status === "archived" ? null : normalized;
+}
+function tagFromGetTag(getTag: TagLookup["getTag"], tagId?: unknown, { activeOnly = true }: TagTreeOptions = {}): TagRecord | null {
+  const normalizedTagId = normalizeId(tagId);
+  return activeOnly ? activeTagFromStore({ getTag }, normalizedTagId) : normalizeTagRecord(normalizedTagId, getTag(normalizedTagId));
 }
 
-function tagFromGetTag(getTag?: any, tagId?: any, { activeOnly = true }: Record<string, any> = {}) : any {
-  const normalizedTagId: any = normalizeId(tagId);
-  const tag: any = typeof getTag === "function" ? getTag(normalizedTagId) : null;
-  if (activeOnly) {
-    return activeTagFromStore({ getTag }, normalizedTagId);
-  }
-  return normalizeTagRecord(normalizedTagId, tag);
-}
-
-export function createTagTree({ getTag }: Record<string, any> = {}) : any {
-  if (typeof getTag !== "function") {
-    throw new Error("createTagTree requires a getTag(tagId) function.");
-  }
-
-  function activeTag(tagId?: any) : any {
-    return activeTagFromStore({ getTag }, tagId);
-  }
-
-  function lineageOf(tagId?: any, { includeSelf = true, activeOnly = true, rootFirst = false }: Record<string, any> = {}) : any {
-    const output: any[] = [];
-    const seen: any = new Set<any>();
-    let cursorId: any = normalizeId(tagId);
+export function createTagTree({ getTag }: Partial<TagLookup> = {}): TagTree {
+  if (typeof getTag !== "function") throw new Error("createTagTree requires a getTag(tagId) function.");
+  const lookup: TagLookup["getTag"] = getTag;
+  function lineageOf(tagId?: unknown, { includeSelf = true, activeOnly = true, rootFirst = false }: TagTreeOptions = {}): TagRecord[] {
+    const output: TagRecord[] = []; const seen = new Set<string>(); const requestedTagId = normalizeId(tagId); let cursorId = requestedTagId;
     while (cursorId && !seen.has(cursorId)) {
-      seen.add(cursorId);
-      const tag: any = tagFromGetTag(getTag, cursorId, { activeOnly });
-      if (!tag) {
-        break;
-      }
-      if (includeSelf || tag.tagId !== normalizeId(tagId)) {
-        output.push(tag);
-      }
-      cursorId = tag.parentTagId;
+      seen.add(cursorId); const tag = tagFromGetTag(lookup, cursorId, { activeOnly }); if (!tag) break;
+      if (includeSelf || tag.tagId !== requestedTagId) output.push(tag); cursorId = tag.parentTagId;
     }
     return rootFirst ? output.reverse() : output;
   }
-
-  function ancestorsOf(tagId?: any, options: Record<string, any> = {}) : any {
-    const tagIdText: any = normalizeId(tagId);
-    const includeSelf: any = options.includeSelf === true;
-    const output: any = lineageOf(tagIdText, { ...options, includeSelf });
-    if (includeSelf) {
-      return output.map((tag?: any) : any => tag.tagId);
-    }
-    return output
-      .filter((tag?: any) : any => tag.tagId !== tagIdText)
-      .map((tag?: any) : any => tag.tagId);
+  function ancestorsOf(tagId?: unknown, options: TagTreeOptions = {}): string[] {
+    const tagIdText = normalizeId(tagId); const includeSelf = options.includeSelf === true;
+    return lineageOf(tagIdText, { ...options, includeSelf }).filter((tag) => includeSelf || tag.tagId !== tagIdText).map((tag) => tag.tagId);
   }
-
-  function assertParentAllowed(tagId?: any, parentTagId?: any) : any {
-    const normalizedTagId: any = normalizeId(tagId);
-    const normalizedParentTagId: any = normalizeId(parentTagId);
+  function assertParentAllowed(tagId?: unknown, parentTagId?: unknown): true {
+    const normalizedTagId = normalizeId(tagId); const normalizedParentTagId = normalizeId(parentTagId);
     if (!normalizedParentTagId) return true;
-    if (normalizedParentTagId === normalizedTagId) {
-      throw new Error("Tag cannot parent itself.");
-    }
-    const parent: any = tagFromGetTag(getTag, normalizedParentTagId, { activeOnly: false });
-    if (!parent) {
-      throw new Error(`Unknown parent tag: ${normalizedParentTagId}`);
-    }
-    const seen: any = new Set<any>([normalizedTagId]);
+    if (normalizedParentTagId === normalizedTagId) throw new Error("Tag cannot parent itself.");
+    if (!tagFromGetTag(lookup, normalizedParentTagId, { activeOnly: false })) throw new Error(`Unknown parent tag: ${normalizedParentTagId}`);
+    const seen = new Set([normalizedTagId]);
     for (const tag of lineageOf(normalizedParentTagId, { includeSelf: true, activeOnly: false })) {
-      if (seen.has(tag.tagId)) {
-        throw new Error("Tag hierarchy cannot contain cycles.");
-      }
-      seen.add(tag.tagId);
+      if (seen.has(tag.tagId)) throw new Error("Tag hierarchy cannot contain cycles."); seen.add(tag.tagId);
     }
     return true;
   }
-
-  function scopePrerequisitesFor(tagId?: any) : any {
-    return uniqueStrings(lineageOf(tagId, { includeSelf: true, activeOnly: false, rootFirst: true })
-      .flatMap((tag?: any) : any => uniqueStrings(tag.scopePrerequisites || tag.scopesRequired || [])));
+  function scopePrerequisitesFor(tagId?: unknown): string[] {
+    return uniqueStrings(lineageOf(tagId, { includeSelf: true, activeOnly: false, rootFirst: true }).flatMap((tag) => tag.scopePrerequisites));
   }
-
-  function effectiveTagsFor(tagIds: any = []) : any {
-    return uniqueStrings(uniqueStrings(tagIds).flatMap((tagId?: any) : any => ancestorsOf(tagId, { includeSelf: true })));
-  }
-
   return {
-    activeTag,
-    lineageOf,
-    ancestorsOf,
-    assertParentAllowed,
-    scopePrerequisitesFor,
-    effectiveTagsFor
+    activeTag: (tagId) => activeTagFromStore({ getTag: lookup }, tagId), lineageOf, ancestorsOf, assertParentAllowed, scopePrerequisitesFor,
+    effectiveTagsFor: (tagIds = []) => uniqueStrings(uniqueStrings(tagIds).flatMap((tagId) => ancestorsOf(tagId, { includeSelf: true })))
   };
 }
-
-export function assertTagParentChangeAllowed({ getTag, tagId, parentTagId }: Record<string, any> = {}) : any {
+export function assertTagParentChangeAllowed({ getTag, tagId, parentTagId }: Partial<TagLookup> & { tagId?: unknown; parentTagId?: unknown } = {}): true {
   return createTagTree({ getTag }).assertParentAllowed(tagId, parentTagId);
 }
-
-export function effectiveScopePrerequisitesForTag({ getTag, tagId }: Record<string, any> = {}) : any {
+export function effectiveScopePrerequisitesForTag({ getTag, tagId }: Partial<TagLookup> & { tagId?: unknown } = {}): string[] {
   return createTagTree({ getTag }).scopePrerequisitesFor(tagId);
 }
-
-export function createTagTreeFromStore(store: any = null) : any {
-  return createTagTree({
-    getTag: (tagId?: any) : any => (typeof store?.getTag === "function" ? store.getTag(tagId) : null)
-  });
+export function createTagTreeFromStore(store: TagLookup | null = null): TagTree {
+  return createTagTree({ getTag: (tagId) => store?.getTag(tagId) ?? null });
 }
-
-export const TAG_TREE_PROTOCOL_VERSION: any = "v0.0.1:authorization:tag-tree-1";

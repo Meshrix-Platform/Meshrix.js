@@ -7,40 +7,54 @@ import {
   normalizeIpAddress
 } from "./trusted-client-ip.ts";
 
-export const PRODUCTION_INGRESS_MODE_ENV: any = "MESHRIX_PRODUCTION_INGRESS_MODE";
-export const PRODUCTION_INGRESS_TRUSTED_PROXY_MODE: any = "trusted-proxy";
+export const PRODUCTION_INGRESS_MODE_ENV = "MESHRIX_PRODUCTION_INGRESS_MODE";
+export const PRODUCTION_INGRESS_TRUSTED_PROXY_MODE = "trusted-proxy";
 
-const MAX_TRUSTED_PROXIES: any = 16;
-const LOCAL_PROBE_PATHS: any = new Set<any>(["/api/healthz", "/api/readyz"]);
+const MAX_TRUSTED_PROXIES = 16;
+const LOCAL_PROBE_PATHS = new Set(["/api/healthz", "/api/readyz"]);
 
-function controlledError(code?: any) : any {
+type HeaderValue = string | string[] | undefined;
+interface IngressRequest {
+  url?: string;
+  headers?: Record<string, HeaderValue>;
+  socket?: { remoteAddress?: string };
+  connection?: { remoteAddress?: string };
+}
+interface ProductionIngressOptions {
+  mode?: string;
+  advertisedBaseUrl?: string;
+  trustedProxies?: string;
+  cookieSecure?: string;
+}
+
+function controlledError(code: string): Error & { code: string } {
   return Object.assign(new Error(code), { code });
 }
 
-function singleHeader(value: any = "") : any {
-  const text: any = Array.isArray(value) ? value.join(",") : String(value || "");
-  const entries: any = text.split(",").map((entry?: any) : any => entry.trim()).filter(Boolean);
+function singleHeader(value: HeaderValue = ""): string {
+  const text = Array.isArray(value) ? value.join(",") : String(value || "");
+  const entries = text.split(",").map((entry) => entry.trim()).filter(Boolean);
   return entries.length === 1 ? entries[0] : "";
 }
 
-function normalizedTrustedProxyAddresses(value: any = "") : any {
-  const entries: any = String(value || "")
+function normalizedTrustedProxyAddresses(value = ""): readonly string[] {
+  const entries = String(value || "")
     .split(",")
-    .map((entry?: any) : any => normalizeIpAddress(entry).toLowerCase())
+    .map((entry) => normalizeIpAddress(entry).toLowerCase())
     .filter(Boolean);
   if (
     entries.length === 0 ||
     entries.length > MAX_TRUSTED_PROXIES ||
-    entries.some((entry?: any) : any => isIP(entry) === 0) ||
-    new Set<any>(entries).size !== entries.length
+    entries.some((entry) => isIP(entry) === 0) ||
+    new Set(entries).size !== entries.length
   ) {
     throw controlledError("production_ingress_trusted_proxies_invalid");
   }
   return Object.freeze(entries);
 }
 
-function securePublicOrigin(value: any = "") : any {
-  let parsed: any;
+function securePublicOrigin(value: unknown = ""): string {
+  let parsed: URL;
   try {
     parsed = new URL(String(value || ""));
   } catch {
@@ -59,7 +73,7 @@ function securePublicOrigin(value: any = "") : any {
   return parsed.origin;
 }
 
-function requestPath(request?: any) : any {
+function requestPath(request?: IngressRequest): string {
   try {
     return new URL(String(request?.url || "/"), "http://127.0.0.1").pathname;
   } catch {
@@ -67,7 +81,7 @@ function requestPath(request?: any) : any {
   }
 }
 
-function hasForwardingHeaders(request?: any) : any {
+function hasForwardingHeaders(request?: IngressRequest): boolean {
   return [
     "forwarded",
     "x-forwarded-for",
@@ -75,7 +89,7 @@ function hasForwardingHeaders(request?: any) : any {
     "x-forwarded-port",
     "x-forwarded-prefix",
     "x-forwarded-proto"
-  ].some((name?: any) : any => request?.headers?.[name] !== undefined);
+  ].some((name) => request?.headers?.[name] !== undefined);
 }
 
 export function createProductionIngressContract({
@@ -83,22 +97,22 @@ export function createProductionIngressContract({
   advertisedBaseUrl = "",
   trustedProxies = process.env.MESHRIX_TRUSTED_PROXIES || "",
   cookieSecure = process.env.MESHRIX_COOKIE_SECURE || "auto"
-}: Record<string, any> = {}) : any {
-  const normalizedMode: any = String(mode || "").trim().toLowerCase();
+}: ProductionIngressOptions = {}) {
+  const normalizedMode = String(mode || "").trim().toLowerCase();
   if (!normalizedMode) {
     return Object.freeze({
       mode: "local",
       enabled: false,
-      admit: () : any => Object.freeze({ ok: true, source: "direct" })
+      admit: () => Object.freeze({ ok: true, source: "direct" })
     });
   }
   if (normalizedMode !== PRODUCTION_INGRESS_TRUSTED_PROXY_MODE) {
     throw controlledError("production_ingress_mode_invalid");
   }
 
-  const publicOrigin: any = securePublicOrigin(advertisedBaseUrl);
-  const publicUrl: any = new URL(publicOrigin);
-  const trustedProxyAddresses: any = normalizedTrustedProxyAddresses(trustedProxies);
+  const publicOrigin = securePublicOrigin(advertisedBaseUrl);
+  const publicUrl = new URL(publicOrigin);
+  const trustedProxyAddresses = normalizedTrustedProxyAddresses(trustedProxies);
   if (
     ["never", "0", "false"].includes(
       String(cookieSecure || "auto").trim().toLowerCase()
@@ -112,8 +126,8 @@ export function createProductionIngressContract({
     enabled: true,
     publicOrigin,
     trustedProxyCount: trustedProxyAddresses.length,
-    admit(request?: any) : any {
-      const remoteAddress: any = normalizeIpAddress(
+    admit(request?: IngressRequest) {
+      const remoteAddress = normalizeIpAddress(
         request?.socket?.remoteAddress || request?.connection?.remoteAddress || ""
       );
       if (
@@ -140,11 +154,11 @@ export function createProductionIngressContract({
           code: "production_ingress_forwarding_metadata_invalid"
         });
       }
-      const protocol: any = singleHeader(request?.headers?.["x-forwarded-proto"]).toLowerCase();
-      const host: any = singleHeader(request?.headers?.["x-forwarded-host"]).toLowerCase();
-      const port: any = singleHeader(request?.headers?.["x-forwarded-port"]);
-      const clientChain: any = forwardedForChain(request);
-      const expectedPort: any = publicUrl.port || "443";
+      const protocol = singleHeader(request?.headers?.["x-forwarded-proto"]).toLowerCase();
+      const host = singleHeader(request?.headers?.["x-forwarded-host"]).toLowerCase();
+      const port = singleHeader(request?.headers?.["x-forwarded-port"]);
+      const clientChain = forwardedForChain(request);
+      const expectedPort = publicUrl.port || "443";
       if (
         protocol !== "https" ||
         host !== publicUrl.host.toLowerCase() ||

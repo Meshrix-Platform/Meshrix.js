@@ -1,0 +1,15 @@
+{
+  "name": "model-gateway-service",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Independently deployable model-only HTTP gateway service with native OpenAI and Anthropic wire compatibility.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

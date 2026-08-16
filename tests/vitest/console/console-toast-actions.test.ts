@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { computed, nextTick, ref } from "vue";
+import { nextTick } from "vue";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -12,32 +12,12 @@ import {
   pushConsoleToast,
   useConsoleToasts,
 } from "../../../apps/console/composables/console-toast-controller";
-import { createConsoleMaintenanceAgentController } from "../../../apps/console/composables/console-maintenance-agent-controller";
-import { createConsoleModelRepositoryController } from "../../../apps/console/composables/console-model-repository-controller";
 import {
   registerConsoleConfirmHost,
   settleAllConsoleConfirms,
-  settleConsoleConfirm,
   unregisterConsoleConfirmHost,
 } from "../../../apps/console/composables/console-confirm-controller";
 import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
-
-const maintenanceAgentClientMock: any = vi.hoisted(() : any => ({
-  approveMaintenanceAgentRun: vi.fn(),
-  cancelMaintenanceAgentRun: vi.fn(),
-  chatMaintenanceAgent: vi.fn(),
-  getMaintenanceAgentConfig: vi.fn(),
-  listMaintenanceAgentRuns: vi.fn(),
-  saveMaintenanceAgentConfig: vi.fn(),
-  startMaintenanceAgentRun: vi.fn(),
-}));
-
-const agentSettingsClientMock: any = vi.hoisted(() : any => ({
-  saveSettings: vi.fn(),
-}));
-
-vi.mock("../../../apps/console/lib/maintenance-agent-client", () : any => maintenanceAgentClientMock);
-vi.mock("../../../apps/console/lib/agent-settings-client", () : any => agentSettingsClientMock);
 
 function toastCopy() : any {
   return consoleMessages[currentConsoleLocale.value].toast;
@@ -132,7 +112,7 @@ describe("toast action", () : any => {
   });
 });
 
-describe("undo adoption on the two reversible draft operations", () : any => {
+describe("undo adoption on reversible publish drafts", () : any => {
   function publishFormWithOperation() : any {
     return {
       operationKey: "",
@@ -189,55 +169,7 @@ describe("undo adoption on the two reversible draft operations", () : any => {
     wrapper.unmount();
   });
 
-  function createMaintenanceController() : any {
-    return createConsoleMaintenanceAgentController({
-      canReadMaintenanceAgent: computed(() : any => true),
-      clearBusy: () : any => undefined,
-      consoleState: ref(null),
-      error: ref(""),
-      modelEntryStatusKey: (entry?: any) : any => String(entry?.uid || ""),
-      setBusy: () : any => undefined,
-      visibleModelEntries: computed(() : any => []),
-    });
-  }
-
-  it("offers undo when a maintenance schedule row is removed pre-save and restores it at its index", async () : Promise<any> => {
-    const controller: any = createMaintenanceController();
-    controller.maintenanceAgentConfig.value = {
-      schedules: [
-        { id: "schedule-a", label: "A", enabled: false, runbook: "rb-a", intervalMinutes: 60, nextRunAt: "" },
-        { id: "schedule-b", label: "B", enabled: false, runbook: "rb-b", intervalMinutes: 60, nextRunAt: "" },
-        { id: "schedule-c", label: "C", enabled: false, runbook: "rb-c", intervalMinutes: 60, nextRunAt: "" },
-      ],
-    };
-
-    // REQ-010 guards the click with a confirm; REQ-005's undo covers the
-    // pre-save local window after the confirmed removal.
-    const pendingRemoval: any = controller.removeMaintenanceAgentSchedule("schedule-b");
-    settleConsoleConfirm(true);
-    await pendingRemoval;
-
-    expect(controller.maintenanceAgentConfig.value.schedules.map((row?: any) : any => row.id))
-      .toEqual(["schedule-a", "schedule-c"]);
-    const { toasts } = useConsoleToasts();
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0].message).toBe(toastCopy().scheduleRemoved);
-    expect(toasts[0].action?.label).toBe(toastCopy().undo);
-
-    toasts[0].action.run();
-    expect(controller.maintenanceAgentConfig.value.schedules.map((row?: any) : any => row.id))
-      .toEqual(["schedule-a", "schedule-b", "schedule-c"]);
-  });
-
-  it("offers no undo when the schedule id is unknown", () : any => {
-    const controller: any = createMaintenanceController();
-    controller.maintenanceAgentConfig.value = { schedules: [] };
-
-    controller.removeMaintenanceAgentSchedule("missing");
-    expect(useConsoleToasts().toasts).toHaveLength(0);
-  });
-
-  it("limits the undo label to the two reversible draft sites (never governed server effects)", () : any => {
+  it("limits the undo label to the reversible publish draft site", () : any => {
     // Source scan: import.meta.url is not a file URL under the jsdom
     // environment, so anchor on the repo root vitest runs from.
     const consoleRoot: any = resolve(process.cwd(), "apps/console");
@@ -247,51 +179,6 @@ describe("undo adoption on the two reversible draft operations", () : any => {
     const undoConsumers: string[] = sourceFiles.filter((entry: string) : any =>
       readFileSync(`${consoleRoot}/${entry}`, "utf8").includes("toast.undo"),
     );
-    expect(undoConsumers.sort()).toEqual([
-      "composables/console-maintenance-agent-controller.ts",
-      "views/admin/upstream-service-publish/PublishServiceForm.vue",
-    ]);
-  });
-});
-
-describe("model repository rollback surfacing", () : any => {
-  it("toasts the restored state when the save fails and drafts roll back", async () : Promise<any> => {
-    agentSettingsClientMock.saveSettings.mockRejectedValueOnce(new Error("save unavailable"));
-    const settingsDraft: any = ref({
-      modelLibraryAgents: [{ uid: "agent-1", provider: "provider-a", model: "m" }],
-      modelLibraryEntries: ["provider-a"],
-    });
-    const error: any = ref("");
-    const controller: any = createConsoleModelRepositoryController({
-      clearBusy: () : any => undefined,
-      error,
-      modelEntryBindingSummary: () : any => "",
-      modelEntryIsBound: () : any => false,
-      modelEntryStatusKey: (entry?: any) : any => String(entry?.uid || entry?.provider || ""),
-      modelLibraryExpandedCards: ref({}),
-      normalizeModelEntry: (entry?: any) : any => entry,
-      providerLabel: (provider?: any) : any => String(provider),
-      replaceSettingsDraftFromServer: () : any => undefined,
-      selectedModelProvider: ref("provider-a"),
-      setBusy: () : any => undefined,
-      settingsDraft,
-      settingsPayloadForSave: () : any => settingsDraft.value,
-      visibleModelEntries: computed(() : any => settingsDraft.value.modelLibraryAgents),
-      visibleModelProviders: computed(() : any => settingsDraft.value.modelLibraryEntries),
-    });
-
-    // REQ-010 confirms the removal first; REQ-005's rollback toast surfaces
-    // when the later save fails and drafts restore.
-    const pendingRemoval: any = controller.removeModelProvider("provider-a");
-    settleConsoleConfirm(true);
-    await pendingRemoval;
-
-    expect(error.value).toBe("save unavailable");
-    expect(settingsDraft.value.modelLibraryAgents).toHaveLength(1);
-    expect(settingsDraft.value.modelLibraryEntries).toEqual(["provider-a"]);
-    const { toasts } = useConsoleToasts();
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0].tone).toBe("info");
-    expect(toasts[0].message).toBe(toastCopy().rollbackRestored);
+    expect(undoConsumers.sort()).toEqual(["views/admin/upstream-service-publish/PublishServiceForm.vue"]);
   });
 });

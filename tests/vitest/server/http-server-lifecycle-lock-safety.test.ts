@@ -164,7 +164,6 @@ describe("HTTP shutdown lock safety", () : any => {
     };
     const jobWorkflowProvider: Record<string, any> = { close: vi.fn(failure) };
     const jobManager: Record<string, any> = { close: vi.fn(failure) };
-    const maintenanceAgent: Record<string, any> = { close: vi.fn(failure) };
     const agentWorkspace: Record<string, any> = { close: vi.fn(failure) };
     const consoleOperationProviders: Record<string, any> = { close: vi.fn(failure) };
     const operationPermissionPlatform: Record<string, any> = { close: vi.fn(failure) };
@@ -173,7 +172,6 @@ describe("HTTP shutdown lock safety", () : any => {
       getJobWorkflowProvider: () : any => jobWorkflowProvider,
       jobManager,
       ownsJobManager: true,
-      maintenanceAgent,
       agentWorkspace,
       consoleOperationProviders,
       operationPermissionPlatform,
@@ -186,7 +184,6 @@ describe("HTTP shutdown lock safety", () : any => {
     expect(String(error)).not.toContain("private closer detail");
     expect(jobWorkflowProvider.close).toHaveBeenCalledOnce();
     expect(jobManager.close).toHaveBeenCalledOnce();
-    expect(maintenanceAgent.close).toHaveBeenCalledOnce();
     expect(agentWorkspace.close).toHaveBeenCalledOnce();
     expect(consoleOperationProviders.close).toHaveBeenCalledOnce();
     expect(operationPermissionPlatform.close).toHaveBeenCalledOnce();
@@ -194,7 +191,6 @@ describe("HTTP shutdown lock safety", () : any => {
 
     jobWorkflowProvider.close = vi.fn(async () : Promise<any> => {});
     jobManager.close = vi.fn(async () : Promise<any> => {});
-    maintenanceAgent.close = vi.fn(async () : Promise<any> => {});
     agentWorkspace.close = vi.fn(async () : Promise<any> => {});
     consoleOperationProviders.close = vi.fn(async () : Promise<any> => {});
     operationPermissionPlatform.close = vi.fn(async () : Promise<any> => {});

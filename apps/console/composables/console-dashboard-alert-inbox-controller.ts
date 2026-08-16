@@ -57,7 +57,7 @@ export function createConsoleDashboardAlertInboxController(options: DashboardAle
     for (const role of ["background-supervisor", "system-inspection"]) {
       if (alertId.startsWith(`monitor.process.${role}.`)) return processIsHealthy(role);
     }
-    const demandManagedRoles: any[] = ["import-worker", "maintenance-worker", "agent-worker"];
+    const demandManagedRoles: any[] = ["import-worker"];
     const role: any = demandManagedRoles.find((item?: any) : any => alertId.startsWith(`monitor.process.${item}.`));
     if (!role) return false;
     const processItem: any = options.backgroundProcesses.value.find((item?: any) : any => item.role === role);

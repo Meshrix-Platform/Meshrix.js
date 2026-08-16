@@ -261,7 +261,7 @@ usePageRefreshHandler(
     <template v-else>
       <section v-if="oneTimeSecret" class="surface-card api-key-reveal" role="region" aria-live="assertive" :aria-label="t('一次性密钥', 'One-time key')">
         <div>
-          <span class="api-key-eyebrow">{{ t("最后一步 · 仅显示这一次", "Final step · shown only this time") }}</span>
+          <span class="api-key-eyebrow">{{ t("最后一步，仅显示这一次", "Final step, shown only this time") }}</span>
           <h3>{{ t("保存连接资料", "Save the connection details") }}</h3>
           <p class="api-key-reveal-agent">{{ revealedRecord?.workloadDisplayName }}</p>
           <p>{{ revealedRecord ? processIdentitySummary(revealedRecord) : "" }}</p>

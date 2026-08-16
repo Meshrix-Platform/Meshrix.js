@@ -5,12 +5,17 @@ import {
   writeKernelRecord
 } from "./opaque-capability-key-backends.ts";
 import {
+  type CapabilityKernelRecord,
+  type CapabilityKernelState,
+  type CapabilityKeyRecord,
+  type CapabilityPermissionRecord,
+  type SealedPayload,
+  type UnknownRecord,
   DEFAULT_ALIAS,
   OPAQUE_CAPABILITY_KEY_PROTOCOL_VERSION,
   RECOVERY_PACKAGE_VERSION,
   asObject,
   capabilityKernelLockPath,
-  createEmptyKernelState,
   createKernelRecord,
   laterIso,
   mergeKernelStates,
@@ -27,12 +32,54 @@ import {
   withPrivateFileLock
 } from "./opaque-capability-key-core.ts";
 
-export function createMemoryCapabilityKeyBindingStore() : any {
-  const records: any = new Map<any, any>();
-  const permissions: any = new Map<any, any>();
+export interface StoreListOptions { includeInvalid?: boolean }
+interface SealedStoreOptions { backend?: string; dataDir?: string; alias?: string }
+export interface RecoveryExportOptions { passphrase?: string; reason?: string }
+export interface RecoveryImportOptions { recoveryPackage?: unknown; passphrase?: string }
 
-  function put(record?: any, capabilityHashes: any = []) : any {
-    const normalized: any = publicKeyRecord(record);
+export interface CapabilityKeyBindingStore {
+  put(record: CapabilityKeyRecord, capabilityHashes?: string[]): CapabilityKeyRecord | Promise<CapabilityKeyRecord>;
+  replaceCredential?(record: CapabilityKeyRecord, capabilityHashes?: string[], reason?: string): CapabilityKeyRecord | Promise<CapabilityKeyRecord>;
+  get(keyHash: string): CapabilityKeyRecord | null | Promise<CapabilityKeyRecord | null>;
+  hasCapability(keyHash: string, capabilityHashes?: string[]): boolean | Promise<boolean>;
+  invalidate(keyHash: string, reason?: string): CapabilityKeyRecord | null | Promise<CapabilityKeyRecord | null>;
+  list(options?: StoreListOptions): CapabilityKeyRecord[] | Promise<CapabilityKeyRecord[]>;
+  close?(): void;
+  exportRecoveryPackage?(options?: RecoveryExportOptions): unknown | Promise<unknown>;
+  importRecoveryPackage?(options?: RecoveryImportOptions): unknown | Promise<unknown>;
+}
+
+export interface LookupKeySource {
+  loadRuntimeLookupKey(): Promise<UnknownRecord>;
+  rotateRuntimeLookupKey(): Promise<UnknownRecord>;
+  describe(): UnknownRecord | Promise<UnknownRecord>;
+}
+
+function requireKeyRecord(value: unknown): CapabilityKeyRecord {
+  const record = publicKeyRecord(value);
+  if (!record) throw new Error("Capability key record is required.");
+  return record;
+}
+
+function requireSealedPayload(value: unknown): SealedPayload {
+  const payload = asObject(value, null);
+  if (!payload || !text(payload.algorithm) || !text(payload.nonceBase64) || !text(payload.ciphertextBase64) || !text(payload.tagBase64)) {
+    throw new Error("Capability kernel recovery package has an invalid sealed payload.");
+  }
+  return {
+    algorithm: text(payload.algorithm),
+    nonceBase64: text(payload.nonceBase64),
+    ciphertextBase64: text(payload.ciphertextBase64),
+    tagBase64: text(payload.tagBase64)
+  };
+}
+
+export function createMemoryCapabilityKeyBindingStore() {
+  const records = new Map<string, CapabilityKeyRecord>();
+  const permissions = new Map<string, CapabilityPermissionRecord>();
+
+  function put(record: CapabilityKeyRecord, capabilityHashes: string[] = []) {
+    const normalized = requireKeyRecord(record);
     records.set(normalized.keyHash, normalized);
     for (const capabilityHash of capabilityHashes) {
       permissions.set(`${normalized.keyHash}:${capabilityHash}`, {
@@ -45,14 +92,14 @@ export function createMemoryCapabilityKeyBindingStore() : any {
     return normalized;
   }
 
-  function replaceCredential(record?: any, capabilityHashes: any = [], reason: any = "credential_replaced") : any {
-    const normalized: any = publicKeyRecord(record);
-    const replacedKeyHashes: any = new Set<any>();
-    const timestamp: any = nowIso();
+  function replaceCredential(record: CapabilityKeyRecord, capabilityHashes: string[] = [], reason = "credential_replaced") {
+    const normalized = requireKeyRecord(record);
+    const replacedKeyHashes = new Set<string>();
+    const timestamp = nowIso();
     for (const [keyHash, existing] of records.entries()) {
       if (existing.credentialId !== normalized.credentialId || existing.status !== "valid") continue;
       replacedKeyHashes.add(keyHash);
-      records.set(keyHash, publicKeyRecord({
+      records.set(keyHash, requireKeyRecord({
         ...existing,
         status: "invalid",
         invalidatedAt: timestamp,
@@ -68,20 +115,20 @@ export function createMemoryCapabilityKeyBindingStore() : any {
     return put(normalized, capabilityHashes);
   }
 
-  function get(keyHash: any = "") : any {
+  function get(keyHash = "") {
     return publicKeyRecord(records.get(String(keyHash || "")) || null);
   }
 
-  function hasCapability(keyHash: any = "", capabilityHashes: any = []) : any {
-    return capabilityHashes.some((capabilityHash?: any) : any => permissions.get(`${keyHash}:${capabilityHash}`)?.status === "valid");
+  function hasCapability(keyHash = "", capabilityHashes: string[] = []) {
+    return capabilityHashes.some((capabilityHash) => permissions.get(`${keyHash}:${capabilityHash}`)?.status === "valid");
   }
 
-  function invalidate(keyHash: any = "", reason: any = "") : any {
-    const existing: any = get(keyHash);
+  function invalidate(keyHash = "", reason = "") {
+    const existing = get(keyHash);
     if (!existing) {
       return null;
     }
-    const updated: any = publicKeyRecord({
+    const updated = requireKeyRecord({
       ...existing,
       status: "invalid",
       invalidatedAt: nowIso(),
@@ -97,9 +144,9 @@ export function createMemoryCapabilityKeyBindingStore() : any {
     return updated;
   }
 
-  function list({ includeInvalid = false }: Record<string, any> = {}) : any {
-    const values: any = [...records.values()].map(publicKeyRecord);
-    return includeInvalid ? values : values.filter((record?: any) : any => record.status === "valid");
+  function list({ includeInvalid = false }: StoreListOptions = {}) {
+    const values = [...records.values()];
+    return includeInvalid ? values : values.filter((record) => record.status === "valid");
   }
 
   return Object.freeze({
@@ -109,7 +156,7 @@ export function createMemoryCapabilityKeyBindingStore() : any {
     hasCapability,
     invalidate,
     list,
-    close() : any {}
+    close() {}
   });
 }
 
@@ -117,29 +164,30 @@ export function createSealedCapabilityKernelStore({
   backend = "auto",
   dataDir = "",
   alias = DEFAULT_ALIAS
-}: Record<string, any> = {}) : any {
-  let loaded: any = false;
-  let record: any = null;
-  let state: any = null;
-  let loadCount: any = 0;
-  let saveCount: any = 0;
-  let loadPromise: any = null;
-  let mutationQueue: any = Promise.resolve();
+}: SealedStoreOptions = {}) {
+  let loaded = false;
+  let record: CapabilityKernelRecord | null = null;
+  let state: CapabilityKernelState | null = null;
+  let loadCount = 0;
+  let saveCount = 0;
+  let loadPromise: Promise<CapabilityKernelState> | null = null;
+  let mutationQueue = Promise.resolve();
 
-  function enqueueMutation(action?: any) : any {
-    const run: any = mutationQueue.catch(() : any => {}).then(async () : Promise<any> => withPrivateFileLock(
+  function enqueueMutation<T>(action: () => T | Promise<T>): Promise<T> {
+    const run = mutationQueue.catch(() => {}).then(async () => withPrivateFileLock(
       capabilityKernelLockPath({ dataDir, alias }),
-      async () : Promise<any> => {
-        const hotState: any = loaded && state ? state : null;
+      async () => {
+        const hotState = loaded && state ? state : null;
         if (loadPromise) {
-          await loadPromise.catch(() : any => {});
+          await loadPromise.catch(() => {});
         }
         loaded = false;
         state = null;
         loadPromise = null;
         if (hotState) {
-          await load();
-          state = mergeKernelStates(state, hotState);
+          const persistedState = await load();
+          state = mergeKernelStates(persistedState, hotState);
+          if (!record) throw new Error("Capability kernel record is not loaded.");
           record = {
             ...record,
             generation: Number(state.epoch || record?.generation || 1),
@@ -151,20 +199,21 @@ export function createSealedCapabilityKernelStore({
         return action();
       }
     ));
-    mutationQueue = run.then(() : any => undefined, () : any => undefined);
+    mutationQueue = run.then(() => undefined, () => undefined);
     return run;
   }
 
-  async function waitForMutations() : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  async function waitForMutations() {
+    await mutationQueue.catch(() => {});
   }
 
-  async function load() : Promise<any> {
+  async function load() {
     if (loaded) {
+      if (!state) throw new Error("Capability kernel state is not loaded.");
       return state;
     }
     if (!loadPromise) {
-      loadPromise = (async () : Promise<any> => {
+      loadPromise = (async () => {
         record = await readKernelRecord({ backend, dataDir, alias });
         record.alias = safeAlias(alias);
         if (!record.sealingKeyBase64 || !record.sealedState) {
@@ -179,27 +228,29 @@ export function createSealedCapabilityKernelStore({
         loaded = true;
         loadCount += 1;
         return state;
-      })().finally(() : any => {
+      })().finally(() => {
         loadPromise = null;
       });
     }
+    if (!loadPromise) throw new Error("Capability kernel load did not start.");
     return loadPromise;
   }
 
-  async function save(event: Record<string, any> = {}) : Promise<any> {
-    await load();
-    const timestamp: any = nowIso();
-    const nextEvent: Record<string, any> = {
+  async function save(event: UnknownRecord = {}) {
+    const currentState = await load();
+    const timestamp = nowIso();
+    const nextEvent: UnknownRecord = {
       eventId: `cap_event_${crypto.randomUUID()}`,
       at: timestamp,
       ...asObject(event)
     };
     state = normalizeKernelState({
-      ...state,
-      epoch: Number(state.epoch || 1) + 1,
+      ...currentState,
+      epoch: Number(currentState.epoch || 1) + 1,
       updatedAt: timestamp,
-      events: [...(Array.isArray(state.events) ? state.events : []), nextEvent].slice(-2048)
+      events: [...currentState.events, nextEvent].slice(-2048)
     });
+    if (!record) throw new Error("Capability kernel record is not loaded.");
     record = {
       ...record,
       generation: state.epoch,
@@ -212,13 +263,13 @@ export function createSealedCapabilityKernelStore({
     return state;
   }
 
-  async function put(inputRecord?: any, capabilityHashes: any = []) : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      await load();
-      const normalized: any = publicKeyRecord(inputRecord);
-      const records: any = new Map<any, any>(state.records.map((item?: any) : any => [item.keyHash, item]));
+  async function put(inputRecord: CapabilityKeyRecord, capabilityHashes: string[] = []) {
+    return enqueueMutation(async () => {
+      const currentState = await load();
+      const normalized = requireKeyRecord(inputRecord);
+      const records = new Map(currentState.records.map((item) => [item.keyHash, item]));
       records.set(normalized.keyHash, normalized);
-      const permissions: any = new Map<any, any>(state.permissions.map((item?: any) : any => [`${item.keyHash}:${item.capabilityHash}`, item]));
+      const permissions = new Map(currentState.permissions.map((item) => [`${item.keyHash}:${item.capabilityHash}`, item]));
       for (const capabilityHash of capabilityHashes) {
         permissions.set(`${normalized.keyHash}:${capabilityHash}`, {
           keyHash: normalized.keyHash,
@@ -227,28 +278,28 @@ export function createSealedCapabilityKernelStore({
           createdAt: nowIso()
         });
       }
-      state = {
-        ...state,
-        records: [...records.values()].map(publicKeyRecord),
+      state = normalizeKernelState({
+        ...currentState,
+        records: [...records.values()],
         permissions: [...permissions.values()]
-      };
+      });
       await save({ action: "put", keyHash: normalized.keyHash, capabilityHashCount: capabilityHashes.length });
       return normalized;
     });
   }
 
-  async function replaceCredential(inputRecord?: any, capabilityHashes: any = [], reason: any = "credential_replaced") : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      await load();
-      const normalized: any = publicKeyRecord(inputRecord);
-      const timestamp: any = nowIso();
-      const replacedKeyHashes: any = new Set<any>();
-      const records: any = new Map<any, any>(state.records.map((item?: any) : any => {
+  async function replaceCredential(inputRecord: CapabilityKeyRecord, capabilityHashes: string[] = [], reason = "credential_replaced") {
+    return enqueueMutation(async () => {
+      const currentState = await load();
+      const normalized = requireKeyRecord(inputRecord);
+      const timestamp = nowIso();
+      const replacedKeyHashes = new Set<string>();
+      const records = new Map(currentState.records.map((item) => {
         if (item.credentialId !== normalized.credentialId || item.status !== "valid") {
           return [item.keyHash, item];
         }
         replacedKeyHashes.add(item.keyHash);
-        return [item.keyHash, publicKeyRecord({
+        return [item.keyHash, requireKeyRecord({
           ...item,
           status: "invalid",
           invalidatedAt: timestamp,
@@ -257,9 +308,9 @@ export function createSealedCapabilityKernelStore({
         })];
       }));
       records.set(normalized.keyHash, normalized);
-      const permissions: any = new Map<any, any>(state.permissions.map((item?: any) : any => [
+      const permissions = new Map(currentState.permissions.map((item) => [
         `${item.keyHash}:${item.capabilityHash}`,
-        replacedKeyHashes.has(item.keyHash) ? { ...item, status: "invalid" } : item
+        replacedKeyHashes.has(item.keyHash) ? { ...item, status: "invalid" as const } : item
       ]));
       for (const capabilityHash of capabilityHashes) {
         permissions.set(`${normalized.keyHash}:${capabilityHash}`, {
@@ -269,11 +320,11 @@ export function createSealedCapabilityKernelStore({
           createdAt: timestamp
         });
       }
-      state = {
-        ...state,
-        records: [...records.values()].map(publicKeyRecord),
+      state = normalizeKernelState({
+        ...currentState,
+        records: [...records.values()],
         permissions: [...permissions.values()]
-      };
+      });
       await save({
         action: "replace-credential",
         credentialId: normalized.credentialId,
@@ -285,61 +336,62 @@ export function createSealedCapabilityKernelStore({
     });
   }
 
-  async function get(keyHash: any = "") : Promise<any> {
+  async function get(keyHash = "") {
     await waitForMutations();
-    await load();
-    return publicKeyRecord(state.records.find((item?: any) : any => item.keyHash === String(keyHash || "")) || null);
+    const currentState = await load();
+    return publicKeyRecord(currentState.records.find((item) => item.keyHash === String(keyHash || "")) || null);
   }
 
-  async function hasCapability(keyHash: any = "", capabilityHashes: any = []) : Promise<any> {
+  async function hasCapability(keyHash = "", capabilityHashes: string[] = []) {
     await waitForMutations();
-    await load();
+    const currentState = await load();
     if (capabilityHashes.length === 0) {
       return true;
     }
-    const wanted: any = new Set<any>(capabilityHashes);
-    return state.permissions.some((permission?: any) : any => (
+    const wanted = new Set(capabilityHashes);
+    return currentState.permissions.some((permission) => (
       permission.keyHash === String(keyHash || "") &&
       permission.status === "valid" &&
       wanted.has(permission.capabilityHash)
     ));
   }
 
-  async function invalidate(keyHash: any = "", reason: any = "") : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      await load();
-      const existing: any = publicKeyRecord(state.records.find((item?: any) : any => item.keyHash === String(keyHash || "")) || null);
+  async function invalidate(keyHash = "", reason = "") {
+    return enqueueMutation(async () => {
+      const currentState = await load();
+      const existing = publicKeyRecord(currentState.records.find((item) => item.keyHash === String(keyHash || "")) || null);
       if (!existing) {
         return null;
       }
-      const updated: any = publicKeyRecord({
+      const updated = requireKeyRecord({
         ...existing,
         status: "invalid",
         invalidatedAt: nowIso(),
         invalidationReason: text(reason),
         updatedAt: nowIso()
       });
-      state = {
-        ...state,
-        records: state.records.map((item?: any) : any => item.keyHash === updated.keyHash ? updated : item),
-        permissions: state.permissions.map((permission?: any) : any => (
-          permission.keyHash === updated.keyHash ? { ...permission, status: "invalid" } : permission
+      state = normalizeKernelState({
+        ...currentState,
+        records: currentState.records.map((item) => item.keyHash === updated.keyHash ? updated : item),
+        permissions: currentState.permissions.map((permission) => (
+          permission.keyHash === updated.keyHash ? { ...permission, status: "invalid" as const } : permission
         ))
-      };
+      });
       await save({ action: "invalidate", keyHash: updated.keyHash, reason: text(reason) });
       return updated;
     });
   }
 
-  async function list({ includeInvalid = false }: Record<string, any> = {}) : Promise<any> {
+  async function list({ includeInvalid = false }: StoreListOptions = {}) {
     await waitForMutations();
-    await load();
-    const values: any = state.records.map(publicKeyRecord);
-    return includeInvalid ? values : values.filter((item?: any) : any => item.status === "valid");
+    const currentState = await load();
+    const values = currentState.records;
+    return includeInvalid ? values : values.filter((item) => item.status === "valid");
   }
 
-  async function loadRuntimeLookupKeyUnlocked() : Promise<any> {
-    await load();
+  async function loadRuntimeLookupKeyUnlocked() {
+    const currentState = await load();
+    if (!record) throw new Error("Capability kernel record is not loaded.");
     if (record.__needsInitialWrite === true) {
       record.__needsInitialWrite = false;
       await save({ action: "initialize_runtime_lookup_key" });
@@ -349,12 +401,12 @@ export function createSealedCapabilityKernelStore({
       provider: record.provider,
       securityMode: record.securityMode,
       alias: record.alias,
-      generation: Number(state.epoch || record.generation || 1),
-      runtimeLookupKeyBase64: state.runtimeLookupKeyBase64
+      generation: Number(currentState.epoch || record.generation || 1),
+      runtimeLookupKeyBase64: currentState.runtimeLookupKeyBase64
     };
   }
 
-  async function loadRuntimeLookupKey() : Promise<any> {
+  async function loadRuntimeLookupKey() {
     if (!loaded || record?.__needsInitialWrite === true) {
       return enqueueMutation(loadRuntimeLookupKeyUnlocked);
     }
@@ -362,49 +414,51 @@ export function createSealedCapabilityKernelStore({
     return loadRuntimeLookupKeyUnlocked();
   }
 
-  async function rotateRuntimeLookupKey() : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      await load();
-      if (state.records.length > 0 || state.permissions.length > 0) {
+  async function rotateRuntimeLookupKey() {
+    return enqueueMutation(async () => {
+      const currentState = await load();
+      if (currentState.records.length > 0 || currentState.permissions.length > 0) {
         throw new Error("Runtime lookup key rotation is only allowed before capability bindings exist; rotate opaque capability keys instead.");
       }
-      state = {
-        ...state,
+      state = normalizeKernelState({
+        ...currentState,
         runtimeLookupKeyBase64: randomBase64(32)
-      };
+      });
       await save({ action: "rotate_runtime_lookup_key" });
+      if (!record) throw new Error("Capability kernel record is not loaded.");
       return publicKernelRecord(record);
     });
   }
 
-  function recoveryKeyFromPassphrase(passphrase: any = "", saltBase64: any = "") : any {
-    const passphraseText: any = text(passphrase);
+  function recoveryKeyFromPassphrase(passphrase = "", saltBase64 = "") {
+    const passphraseText = text(passphrase);
     if (!passphraseText) {
       throw new Error("Capability kernel recovery export requires a passphrase.");
     }
     return crypto.scryptSync(passphraseText, Buffer.from(saltBase64, "base64"), 32).toString("base64");
   }
 
-  async function exportRecoveryPackage({ passphrase = "", reason = "" }: Record<string, any> = {}) : Promise<any> {
+  async function exportRecoveryPackage({ passphrase = "", reason = "" }: RecoveryExportOptions = {}) {
     await waitForMutations();
-    await load();
-    const saltBase64: any = randomBase64(16);
-    const recoveryKeyBase64: any = recoveryKeyFromPassphrase(passphrase, saltBase64);
-    const packagePayload: Record<string, any> = {
+    const currentState = await load();
+    if (!record) throw new Error("Capability kernel record is not loaded.");
+    const saltBase64 = randomBase64(16);
+    const recoveryKeyBase64 = recoveryKeyFromPassphrase(passphrase, saltBase64);
+    const packagePayload: UnknownRecord = {
       protocolVersion: RECOVERY_PACKAGE_VERSION,
       alias: safeAlias(alias),
       exportedAt: nowIso(),
       reason: text(reason),
       provider: record.provider,
       securityMode: record.securityMode,
-      state
+      state: currentState
     };
     return {
       protocolVersion: RECOVERY_PACKAGE_VERSION,
       alias: safeAlias(alias),
       exportedAt: packagePayload.exportedAt,
-      stateRoot: state.stateRoot,
-      epoch: state.epoch,
+      stateRoot: currentState.stateRoot,
+      epoch: currentState.epoch,
       kdf: {
         name: "scrypt",
         saltBase64
@@ -413,26 +467,26 @@ export function createSealedCapabilityKernelStore({
     };
   }
 
-  async function importRecoveryPackage({ recoveryPackage = null, passphrase = "" }: Record<string, any> = {}) : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      const packageObject: any = asObject(recoveryPackage, null);
+  async function importRecoveryPackage({ recoveryPackage = null, passphrase = "" }: RecoveryImportOptions = {}) {
+    return enqueueMutation(async () => {
+      const packageObject = asObject(recoveryPackage, null);
       if (!packageObject || packageObject.protocolVersion !== RECOVERY_PACKAGE_VERSION) {
         throw new Error("Unsupported capability kernel recovery package.");
       }
-      const saltBase64: any = text(packageObject.kdf?.saltBase64);
-      const recoveryKeyBase64: any = recoveryKeyFromPassphrase(passphrase, saltBase64);
-      const opened: any = openSealedJson({
+      const saltBase64 = text(asObject(packageObject.kdf).saltBase64);
+      const recoveryKeyBase64 = recoveryKeyFromPassphrase(passphrase, saltBase64);
+      const opened = openSealedJson({
         sealingKeyBase64: recoveryKeyBase64,
-        sealed: packageObject.sealedRecovery
+        sealed: requireSealedPayload(packageObject.sealedRecovery)
       });
-      const importedState: any = normalizeKernelState(asObject(opened.state));
-      const targetProvider: any = record?.provider || (backend === "auto" && process.platform === "darwin" ? "macos-keychain" : "local-file");
-      const targetSecurityMode: any = record?.securityMode || (targetProvider === "macos-keychain" ? "keyring" : "degraded_file_fallback");
-      state = {
+      const importedState = normalizeKernelState(asObject(opened.state));
+      const targetProvider = record?.provider || (backend === "auto" && process.platform === "darwin" ? "macos-keychain" : "local-file");
+      const targetSecurityMode = record?.securityMode || (targetProvider === "macos-keychain" ? "keyring" : "degraded_file_fallback");
+      state = normalizeKernelState({
         ...importedState,
         provider: targetProvider,
         securityMode: targetSecurityMode
-      };
+      });
       record = record || createKernelRecord({ alias, provider: state.provider, securityMode: state.securityMode, state });
       record = {
         ...record,
@@ -456,16 +510,17 @@ export function createSealedCapabilityKernelStore({
     });
   }
 
-  async function describe() : Promise<any> {
+  async function describe() {
     await waitForMutations();
-    await load();
+    const currentState = await load();
+    if (!record) throw new Error("Capability kernel record is not loaded.");
     return {
       ...publicKernelRecord(record),
       loadCount,
       saveCount,
-      bindingCount: state.records.length,
-      permissionBindingCount: state.permissions.length,
-      runtimeLookupKeyRotationSupported: state.records.length === 0 && state.permissions.length === 0,
+      bindingCount: currentState.records.length,
+      permissionBindingCount: currentState.permissions.length,
+      runtimeLookupKeyRotationSupported: currentState.records.length === 0 && currentState.permissions.length === 0,
       linuxDetectedBackends: detectLinuxCapabilityKernelBackends()
     };
   }
@@ -477,7 +532,7 @@ export function createSealedCapabilityKernelStore({
     hasCapability,
     invalidate,
     list,
-    close() : any {},
+    close() {},
     keySource: {
       loadRuntimeLookupKey,
       rotateRuntimeLookupKey,

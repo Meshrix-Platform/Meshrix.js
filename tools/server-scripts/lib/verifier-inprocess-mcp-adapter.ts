@@ -129,6 +129,6 @@ function createVerifierPolicyRevision() : any {
   return {
     protocolVersion: "v0.0.1:risk-control:governance-policy-revision-1",
     revision: 1,
-    updatedAt: new Date().toISOString()
+    updatedAt: "2000-01-01T00:00:00.000Z"
   };
 }

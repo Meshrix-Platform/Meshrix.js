@@ -2,157 +2,53 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-const ROOT: any = path.resolve(import.meta.dirname, "../../..");
-const MODEL_ENV_KEYS: any[] = [
-  "MESHRIX_DEFAULT_MODEL",
-  "MESHRIX_DEFAULT_MODEL_PROVIDER",
-];
-
-afterEach(() : any => vi.unstubAllEnvs());
+import { describe, expect, it } from "vitest";
 
 describe("user configuration truth", () : any => {
   it("keeps the server settings projection empty without explicit input", async () : Promise<any> => {
-    for (const key of MODEL_ENV_KEYS) vi.stubEnv(key, "");
-    vi.resetModules();
     const {
       normalizeAgentToolExecution,
-      normalizeModelLibraryAgents,
       normalizeSettings,
     } = await import("../../../packages/server-runtime/src/composition/platform-core/settings-normalizers.ts");
 
     const normalized: any = normalizeSettings({});
-    expect(normalized.defaultModelProvider).toBe("");
-    expect(normalized.defaultModel).toBe("");
-    expect(normalized.gatewayAssistantDefaults).toMatchObject({
-      systemPrompt: "",
-      answerTemplate: "",
-      contextProfileId: "",
-      thinkingMode: "",
-      temperature: 0,
-      maxTokens: 0,
-      toolChoice: "",
-    });
-    expect(normalized.moduleIntelligence).toEqual({});
+    expect(Object.keys(normalized).sort()).toEqual(["agentToolExecution", "executionSandbox"]);
+    expect(normalized.executionSandbox).toBeNull();
     expect(normalizeAgentToolExecution({})).toMatchObject({
       functionCallSchema: {},
       http: { enabled: false, allowedHosts: [], timeoutMs: 0, maxResponseBytes: 0 },
       local: { enabled: false, commands: [], timeoutMs: 0, maxOutputBytes: 0 },
     });
-    expect(normalizeSettings({ defaultModel: "gpt-example" }).defaultModelProvider).toBe("");
-    expect(normalizeModelLibraryAgents([{
-      uid: "explicit-agent",
-      provider: "deepseek",
-      model: "explicit-model",
-    }])[0]).toMatchObject({
-      label: "",
-      agentName: "",
-      engine: "",
-      moduleAccess: { mode: "selected", moduleIds: [] },
-      timeoutMs: 0,
-      tokenHeader: "",
-    });
+    expect(normalizeSettings({
+      defaultModel: "retired-model",
+      modelLibraryAgents: [{ provider: "retired-provider" }],
+      gatewayAssistantDefaults: { systemPrompt: "retired" }
+    })).toEqual(normalized);
   });
 
-  it("lets explicit empty settings override configured process environment", async () : Promise<any> => {
-    vi.stubEnv("MESHRIX_DEFAULT_MODEL_PROVIDER", "deepseek");
-    vi.stubEnv("MESHRIX_DEFAULT_MODEL", "environment-model");
-    vi.resetModules();
-    const { normalizeSettings } = await import(
-      "../../../packages/server-runtime/src/composition/platform-core/settings-normalizers.ts"
+  it("does not persist retired model registry fields", async () : Promise<any> => {
+    const root: any = await import("node:fs/promises").then(({ mkdtemp }) =>
+      mkdtemp(path.join(os.tmpdir(), "meshrix-settings-empty-"))
     );
-    const normalized: any = normalizeSettings({
-      defaultModelProvider: "",
-      defaultModel: "",
-    });
-    expect(normalized.defaultModelProvider).toBe("");
-    expect(normalized.defaultModel).toBe("");
-  });
-
-  it("does not synthesize an agent from a default model selection", async () : Promise<any> => {
-    const {
-      publicAgentGatewayRegistry,
-      resolveAgentGatewayConfig,
-      resolveAgentGatewayRegistry,
-    } = await import("../../../packages/agents/src/agent-gateway/policy-validation.ts");
-    const defaultsOnly: Record<string, any> = {
-      defaultModelProvider: "deepseek",
-      defaultModel: "configured-model",
-    };
-    expect(resolveAgentGatewayRegistry(defaultsOnly)).toEqual([]);
-    expect(publicAgentGatewayRegistry(defaultsOnly)).toMatchObject({
-      defaultAlias: "",
-      agents: [],
-    });
-
-    const settings: Record<string, any> = {
-      modelLibraryAgents: [{
-        uid: "explicit-agent",
-        alias: "explicit-agent",
-        provider: "local-model",
-        model: "explicit-model",
-        baseUrl: "http://127.0.0.1:9/v1",
-        timeoutMs: 1000,
-      }],
-    };
-    expect(resolveAgentGatewayConfig(settings).alias).toBe("");
-    expect(resolveAgentGatewayConfig(settings, { modelAlias: "explicit-agent" }).alias)
-      .toBe("explicit-agent");
-  });
-
-  it("requires an explicit runtime root for the agent configuration registry", async () : Promise<any> => {
-    const { AgentConfigRegistry, getAgentConfigRegistry } = await import(
-      "../../../packages/agents/src/agent-configs/config-registry.ts"
-    );
-    expect(() : any => new AgentConfigRegistry()).toThrow(/explicit runtime rootPath/u);
-    expect(() : any => getAgentConfigRegistry()).toThrow(/explicit runtime rootPath/u);
-  });
-
-  it("keeps model-routing controls empty until explicitly configured", async () : Promise<any> => {
-    const { normalizeModelRoutingPolicy } = await import(
-      "../../../packages/agents/src/agent-gateway/model-routing/index.ts"
-    );
-    const policy: any = normalizeModelRoutingPolicy({
-      input: {
-        modelRouting: {
-          enabled: true,
-          routeId: "explicit-route",
-          candidateChain: ["explicit-agent"],
-        },
-      },
-    });
-    expect(policy.candidateChain).toEqual(["explicit-agent"]);
-    expect(policy.budget.currency).toBe("");
-    expect(policy.rateLimit).toMatchObject({
-      windowMs: 0,
-      maxCalls: 0,
-      maxConcurrent: 0,
-      maxInFlightMs: 0,
-    });
-    expect(policy.circuitBreaker).toMatchObject({
-      enabled: false,
-      failureThreshold: 0,
-      openMs: 0,
-    });
-  });
-
-  it("keeps the console empty state and example environment unconfigured", async () : Promise<any> => {
-    const { emptySettings } = await import("../../../apps/console/composables/console-defaults.ts");
-    expect(emptySettings.gatewayAssistantDefaults).toMatchObject({
-      systemPrompt: "",
-      answerTemplate: "",
-      contextProfileId: "",
-      temperature: 0,
-    });
-    expect(emptySettings.agentToolExecution.http.enabled).toBe(false);
-    expect(emptySettings.agentToolExecution.local.commands).toEqual([]);
-    expect(emptySettings.moduleIntelligence).toEqual({});
-
-    const envExample: any = fs.readFileSync(path.join(ROOT, ".env.example"), "utf8");
-    expect(envExample).toContain("MESHRIX_DEFAULT_MODEL_PROVIDER=\n");
-    expect(envExample).toContain("MESHRIX_DEFAULT_MODEL=\n");
-    expect(envExample).not.toMatch(/MESHRIX_DEFAULT_MODEL(?:_PROVIDER)?=\S+/u);
+    try {
+      const { loadSettings, saveSettings } = await import(
+        "../../../packages/server-runtime/src/composition/platform-core/settings-persistence.ts"
+      );
+      await saveSettings(root, {
+        defaultModel: "retired-model",
+        modelLibraryAgents: [{ provider: "retired-provider" }]
+      });
+      expect(await loadSettings(root)).toMatchObject({
+        executionSandbox: null,
+        agentToolExecution: { http: { enabled: false }, local: { enabled: false } }
+      });
+      const persisted = await import("node:fs/promises").then(({ readFile }) =>
+        readFile(path.join(root, "settings.json"), "utf8")
+      );
+      expect(persisted).not.toMatch(/model|provider/iu);
+    } finally {
+      await import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true }));
+    }
   });
 
   it("keeps discovery identity, URLs, mode, and polling intervals empty before configuration", async () : Promise<any> => {

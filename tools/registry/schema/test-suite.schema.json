@@ -21,7 +21,16 @@
           },
           "timeoutMs": { "type": "integer", "minimum": 1000 },
           "coverage": { "type": "boolean" },
-          "dynamic": { "type": "boolean" }
+          "dynamic": { "type": "boolean" },
+          "execution": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mergeVitestProcesses": { "type": "boolean" },
+              "cachePassedResults": { "type": "boolean" },
+              "shardEnvironment": { "type": "string", "minLength": 1 }
+            }
+          }
         }
       }
     },

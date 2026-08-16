@@ -3,8 +3,6 @@ import {
   KERNEL_API_OPERATION_IDS,
   KERNEL_TOOL_IDS,
   KERNEL_CAPABILITY_WILDCARDS,
-  KERNEL_API_CAPABILITY_PERMISSIONS,
-  KERNEL_TOOL_CAPABILITY_PERMISSIONS,
   KERNEL_CAPABILITY_PERMISSIONS,
   apiCapabilityId,
   toolExecuteCapabilityId
@@ -21,47 +19,58 @@ export {
   KERNEL_CAPABILITY_PERMISSIONS
 } from "./generated-capabilities.ts";
 
-const KERNEL_API_OPERATION_ID_SET: any = new Set<any>(KERNEL_API_OPERATION_IDS);
-const KERNEL_TOOL_ID_SET: any = new Set<any>(KERNEL_TOOL_IDS);
-const KERNEL_CAPABILITY_PERMISSION_SET: any = new Set<any>(KERNEL_CAPABILITY_PERMISSIONS);
-const KERNEL_CAPABILITY_WILDCARD_SET: any = new Set<any>(KERNEL_CAPABILITY_WILDCARDS);
-const REGISTERED_TOOL_CAPABILITY_PATTERN: any = /^cap:tool:[a-z][A-Za-z0-9._-]{0,159}:execute$/u;
+const KERNEL_API_OPERATION_ID_SET: ReadonlySet<string> = new Set(KERNEL_API_OPERATION_IDS);
+const KERNEL_TOOL_ID_SET: ReadonlySet<string> = new Set(KERNEL_TOOL_IDS);
+const KERNEL_CAPABILITY_PERMISSION_SET: ReadonlySet<string> = new Set(KERNEL_CAPABILITY_PERMISSIONS);
+const KERNEL_CAPABILITY_WILDCARD_SET: ReadonlySet<string> = new Set(KERNEL_CAPABILITY_WILDCARDS);
+const REGISTERED_TOOL_CAPABILITY_PATTERN = /^cap:tool:[a-z][A-Za-z0-9._-]{0,159}:execute$/u;
 
-export function isKernelCapabilityPermission(value?: any) : any {
-  const capability: any = String(value || "").trim();
+interface CapabilitySource {
+  capabilities?: unknown;
+  capabilityIds?: unknown;
+  permissions?: unknown;
+  operationId?: unknown;
+  id?: unknown;
+  requiredCapabilities?: unknown;
+  metadata?: CapabilitySource | null;
+  user?: CapabilitySource | null;
+}
+
+export function isKernelCapabilityPermission(value?: unknown): boolean {
+  const capability = String(value || "").trim();
   return KERNEL_CAPABILITY_PERMISSION_SET.has(capability) || KERNEL_CAPABILITY_WILDCARD_SET.has(capability);
 }
 
-export function unknownKernelCapabilities(...values: any[]) : any {
-  return uniqueStrings(stringsFrom(...values).filter((capability?: any) : any => !isKernelCapabilityPermission(capability)));
+export function unknownKernelCapabilities(...values: unknown[]): string[] {
+  return uniqueStrings(stringsFrom(...values).filter((capability) => !isKernelCapabilityPermission(capability)));
 }
 
-export function assertKnownKernelCapabilities(...values: any[]) : any {
-  const unknown: any = unknownKernelCapabilities(...values);
+export function assertKnownKernelCapabilities(...values: unknown[]): string[] {
+  const unknown = unknownKernelCapabilities(...values);
   if (unknown.length > 0) {
     throw new Error(`Unknown kernel capability permission: ${unknown.join(", ")}`);
   }
   return normalizeKernelCapabilities(...values);
 }
 
-export function normalizeKernelCapabilities(...values: any[]) : any {
+export function normalizeKernelCapabilities(...values: unknown[]): string[] {
   return uniqueStrings(stringsFrom(...values).filter(isKernelCapabilityPermission));
 }
 
-export function isRegisteredToolCapabilityPermission(value?: any) : any {
+export function isRegisteredToolCapabilityPermission(value?: unknown): boolean {
   return REGISTERED_TOOL_CAPABILITY_PATTERN.test(String(value || "").trim());
 }
 
-export function normalizeRegisteredToolCapabilities(...values: any[]) : any {
+export function normalizeRegisteredToolCapabilities(...values: unknown[]): string[] {
   return uniqueStrings(stringsFrom(...values).filter(isRegisteredToolCapabilityPermission));
 }
 
-export function listKernelCapabilityPermissions() : any {
+export function listKernelCapabilityPermissions(): string[] {
   return [...KERNEL_CAPABILITY_PERMISSIONS];
 }
 
-export function requiredCapabilitiesFor(operation: Record<string, any> = {}, tool: any = null) : any {
-  const explicit: any = uniqueStrings(stringsFrom(
+export function requiredCapabilitiesFor(operation: CapabilitySource = {}, tool: CapabilitySource | null = null): string[] {
+  const explicit = uniqueStrings(stringsFrom(
     operation.requiredCapabilities,
     operation.capabilities,
     tool?.requiredCapabilities,
@@ -70,17 +79,22 @@ export function requiredCapabilitiesFor(operation: Record<string, any> = {}, too
   if (explicit.length > 0) {
     return explicit;
   }
-  const toolId: any = String(tool?.id || "").trim();
+  const toolId = String(tool?.id || "").trim();
   if (toolId && KERNEL_TOOL_ID_SET.has(toolId)) {
     return [toolExecuteCapabilityId(toolId)];
   }
-  const operationId: any = String(operation?.id || tool?.operationId || "").trim();
+  const operationId = String(operation.id || tool?.operationId || "").trim();
   return operationId && KERNEL_API_OPERATION_ID_SET.has(operationId)
     ? [apiCapabilityId(operationId)]
     : [];
 }
 
-export function subjectCapabilities(subject: Record<string, any> = {}, actor: any = null, authSession: any = null, grant: any = null) : any {
+export function subjectCapabilities(
+  subject: CapabilitySource = {},
+  actor: CapabilitySource | null = null,
+  authSession: CapabilitySource | null = null,
+  grant: CapabilitySource | null = null
+): string[] {
   return normalizeKernelCapabilities(
     subject.capabilities,
     subject.capabilityIds,
@@ -99,12 +113,12 @@ export function subjectCapabilities(subject: Record<string, any> = {}, actor: an
   );
 }
 
-export function hasCapability(capabilities: any = [], capability: any = "") : any {
-  const capabilityId: any = String(capability || "").trim();
+export function hasCapability(capabilities: readonly unknown[] = [], capability: unknown = ""): boolean {
+  const capabilityId = String(capability || "").trim();
   if (!capabilityId) {
     return true;
   }
-  const capabilitySet: any = stringSet(capabilities);
+  const capabilitySet = stringSet(capabilities);
   if (capabilitySet.has("cap:*") || capabilitySet.has(capabilityId)) {
     return true;
   }

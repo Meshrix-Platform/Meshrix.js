@@ -27,6 +27,7 @@ const TOP_LEVEL_FIELDS: any = new Set<any>([
   "hostPathInputPreprocessing",
   "routes",
   "mcpTools",
+  "gatewayChannels",
   "consoleEntries",
   "stateMachines",
   "verifierHooks",
@@ -276,6 +277,7 @@ function publicManifest(manifest?: any) : any {
     hostPathInputPreprocessing: manifest.hostPathInputPreprocessing,
     routes: Object.freeze([...manifest.routes]),
     mcpTools: Object.freeze([...manifest.mcpTools]),
+    gatewayChannels: Object.freeze([...manifest.gatewayChannels]),
     consoleEntries: Object.freeze([...manifest.consoleEntries]),
     stateMachines: Object.freeze([...manifest.stateMachines]),
     verifierHooks: Object.freeze([...manifest.verifierHooks]),
@@ -435,6 +437,9 @@ export function normalizePluginManifest(manifest: Record<string, any> = {}, {
         : (() : any => { throw new Error("Plugin routes must be an array."); })(),
     mcpTools: uniqueStringList(manifest.mcpTools, "Plugin MCP tools", {
       normalize: (item?: any) : any => normalizeMcpToolId(item, "plugin MCP tool")
+    }),
+    gatewayChannels: uniqueStringList(manifest.gatewayChannels, "Plugin Gateway channels", {
+      normalize: (item?: any) : any => normalizeClaimId(item, "plugin Gateway channel contribution")
     }),
     consoleEntries: uniqueStringList(manifest.consoleEntries, "Plugin console entries", {
       normalize: (item?: any) : any => normalizeClaimId(item, "plugin console entry")
@@ -653,6 +658,7 @@ export function createPluginRegistry(manifests: any = []) : any {
   const featureClaims: any = new Map<any, any>();
   const operationClaims: any = new Map<any, any>();
   const toolClaims: any = new Map<any, any>();
+  const gatewayChannelClaims: any = new Map<any, any>();
   const routeClaims: any = new Map<any, any>();
   const consoleClaims: any = new Map<any, any>();
   const stateMachineClaims: any = new Map<any, any>();
@@ -675,6 +681,9 @@ export function createPluginRegistry(manifests: any = []) : any {
     }
     for (const toolId of manifest.mcpTools) {
       assertUniqueClaim(toolClaims, toolId, manifest.id, "MCP tool");
+    }
+    for (const contributionId of manifest.gatewayChannels) {
+      assertUniqueClaim(gatewayChannelClaims, contributionId, manifest.id, "Gateway channel contribution");
     }
     for (const route of manifest.routes) {
       assertUniqueClaim(routeClaims, route.id, manifest.id, "route");

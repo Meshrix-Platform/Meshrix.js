@@ -12,6 +12,40 @@ import { STORAGE_WORKSPACE_OPERATION_DEFINITIONS } from "./storage-workspace-ope
 import { STRATEGY_PERMISSION_OPERATION_DEFINITIONS } from "./strategy-permission-operation-definitions.ts";
 import { WORKSPACE_CONTEXT_OPERATION_DEFINITIONS } from "./workspace-context-operation-definitions.ts";
 
+const OPERATION_TRAFFIC_MODEL_BY_FEATURE = Object.freeze({
+  agent_workspace: "workspace_application",
+  context_runtime: "workspace_application",
+  agent_memory: "workspace_application",
+  agent_sync: "gateway_transit",
+  auth: "gateway_transit",
+  discovery: "gateway_transit",
+  events: "gateway_transit",
+  external_services: "gateway_transit",
+  gateway: "gateway_transit",
+  jobs: "gateway_transit",
+  module_management: "gateway_transit",
+  operation_permission: "gateway_transit",
+  production: "gateway_transit",
+  raw_objects: "gateway_transit",
+  runtime: "gateway_transit",
+  security_alerts: "gateway_transit",
+  settings: "gateway_transit",
+  storage: "gateway_transit",
+  strategy_management: "gateway_transit",
+  system: "gateway_transit",
+  tag_management: "gateway_transit",
+  uploads: "gateway_transit",
+} as const);
+
+function operationWithTrafficModel(operation: any): any {
+  const trafficModel = OPERATION_TRAFFIC_MODEL_BY_FEATURE[
+    operation.feature as keyof typeof OPERATION_TRAFFIC_MODEL_BY_FEATURE
+  ];
+  if (!trafficModel) throw new Error(`Operation ${operation.id || "<unknown>"} requires an explicit trafficModel feature classification.`);
+  if (operation.trafficModel !== undefined) throw new Error(`Operation ${operation.id || "<unknown>"} declares trafficModel more than once.`);
+  return { ...operation, trafficModel };
+}
+
 const SERVER_API_OPERATION_DEFINITIONS: any[] = [
   ...OPERATION_REGISTRY_GOVERNED_DEFINITIONS,
   ...PLATFORM_CONSOLE_OPERATION_DEFINITIONS,
@@ -23,7 +57,9 @@ const SERVER_API_OPERATION_DEFINITIONS: any[] = [
   ...WORKSPACE_CONTEXT_OPERATION_DEFINITIONS,
   ...CONTEXT_JOB_OPERATION_DEFINITIONS
 ];
-export const SERVER_API_OPERATIONS: any = decorateServerApiOperations(SERVER_API_OPERATION_DEFINITIONS);
+export const SERVER_API_OPERATIONS: any = decorateServerApiOperations(
+  SERVER_API_OPERATION_DEFINITIONS.map(operationWithTrafficModel)
+);
 
 export const SERVER_NON_OPERATION_API_CAPABILITIES: readonly any[] = Object.freeze([
   {

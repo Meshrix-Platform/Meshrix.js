@@ -1,4 +1,4 @@
-export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS: readonly any[] = Object.freeze([
+export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS = Object.freeze([
 {
       id: "auth.roles.get",
       feature: "auth",
@@ -392,6 +392,38 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       safety: { risk: "safe_write", requiresConfirmation: false }
     },
 {
+      id: "runtime.gateway_channels",
+      feature: "runtime",
+      label: "Read Gateway channel selections",
+      target: { controller: "system", method: "handleGetGatewayChannels" },
+      http: { method: "GET", path: "/api/runtime/gateway-channels", localInForwardMode: true },
+      rpc: { method: "runtime.gateway_channels" },
+      requiredScopes: ["runtime:admin"],
+      inputSchema: { type: "object", additionalProperties: false, properties: {} }
+    },
+{
+      id: "runtime.gateway_channels.select",
+      feature: "runtime",
+      label: "Select one Gateway direction",
+      target: { controller: "system", method: "handleSelectGatewayChannel" },
+      http: { method: "POST", path: "/api/runtime/gateway-channels/select", localInForwardMode: true },
+      rpc: { method: "runtime.gateway_channels.select", body: "params" },
+      requiredScopes: ["runtime:admin"],
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["direction", "channelId", "expectedGeneration"],
+        properties: {
+          direction: { enum: ["downstream", "upstream"] },
+          channelId: { type: "string", minLength: 1, maxLength: 128 },
+          expectedGeneration: { type: "integer", minimum: 0 }
+        }
+      },
+      safety: { risk: "safe_write", requiresConfirmation: false },
+      audit: { recordInput: false, recordOutput: false, metadataOnly: true },
+      log: { recordInput: false, recordOutput: false, redaction: "strict" }
+    },
+{
       id: "runtime.path_browse",
       feature: "runtime",
       label: "服务端路径浏览",
@@ -410,46 +442,6 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       rpc: { method: "runtime.mounts" },
       cli: { command: ["runtime", "mounts"], usage: "runtime mounts" },
       requiredScopes: ["console:read"]
-    },
-{
-      id: "runtime.external_gateway",
-      feature: "runtime",
-      label: "读取外置网关配置",
-      target: { controller: "system", method: "handleGetExternalGateway" },
-      http: { method: "GET", path: "/api/runtime/external-gateway" },
-      rpc: { method: "runtime.external_gateway" },
-      cli: { command: ["runtime", "external-gateway"], usage: "runtime external-gateway" },
-      requiredScopes: ["console:read"]
-    },
-{
-      id: "runtime.external_gateway.validate",
-      feature: "runtime",
-      label: "校验外置网关配置",
-      target: { controller: "system", method: "handleValidateExternalGateway" },
-      http: { method: "POST", path: "/api/runtime/external-gateway/validate" },
-      rpc: { method: "runtime.external_gateway.validate", body: "params" },
-      cli: { command: ["runtime", "external-gateway", "validate"], usage: "runtime external-gateway validate --body profile.json" },
-      requiredScopes: ["runtime:admin"]
-    },
-{
-      id: "runtime.external_gateway.apply",
-      feature: "runtime",
-      label: "启用外置网关配置",
-      target: { controller: "system", method: "handleApplyExternalGateway" },
-      http: { method: "POST", path: "/api/runtime/external-gateway/apply" },
-      rpc: { method: "runtime.external_gateway.apply", body: "params" },
-      cli: { command: ["runtime", "external-gateway", "apply"], usage: "runtime external-gateway apply --body profile.json" },
-      requiredScopes: ["runtime:admin"]
-    },
-{
-      id: "runtime.external_gateway.switch_direct",
-      feature: "runtime",
-      label: "切换为内置网关流控",
-      target: { controller: "system", method: "handleSwitchExternalGatewayDirect" },
-      http: { method: "POST", path: "/api/runtime/external-gateway/direct" },
-      rpc: { method: "runtime.external_gateway.switch_direct", body: "params" },
-      cli: { command: ["runtime", "external-gateway", "direct"], usage: "runtime external-gateway direct --body generation.json" },
-      requiredScopes: ["runtime:admin"]
     },
 {
       id: "runtime.set_mounts",
@@ -491,63 +483,4 @@ export const IDENTITY_RUNTIME_OPERATION_DEFINITIONS: readonly any[] = Object.fre
       cli: { command: ["settings", "set"], usage: "settings set --body settings.json" },
       requiredScopes: ["runtime:admin"]
     },
-{
-      id: "settings.model_probe",
-      feature: "settings",
-      label: "探测模型连通性",
-      target: { controller: "system", method: "handleProbeModel" },
-      http: { method: "POST", path: "/api/settings/model-probe" },
-      rpc: { method: "settings.model_probe", body: "params" },
-      cli: {
-        command: ["settings", "probe-model"],
-        usage: "settings probe-model --provider PROVIDER [--body settings.json]",
-        bodyParams: [
-          { name: "provider", aliases: ["provider", "model-provider"], required: true }
-        ]
-      },
-      requiredScopes: ["runtime:admin"]
-    },
-{
-      id: "agent_gateway.call",
-      feature: "agent_gateway",
-      label: "调用智能体模型接入点",
-      target: { controller: "system", method: "handleAgentGatewayCall" },
-      http: { method: "POST", path: "/api/agent-gateway/call" },
-      rpc: { method: "agent_gateway.call", body: "params" },
-      cli: {
-        command: ["agent-gateway", "call"],
-        usage: "agent-gateway call --question QUESTION [--workspace-id WORKSPACE_ID] [--agent-session-id SESSION_ID] [--tool-grant-id GRANT_ID] [--agent-name NAME] [--plugin-list a,b]",
-        bodyParams: [
-          { name: "agentName", aliases: ["agent-name", "agentName"] },
-    { name: "pluginList", aliases: ["plugin-list", "pluginList"] },
-    { name: "question", aliases: ["question", "q"], required: true },
-    { name: "sessionId", aliases: ["session-id", "sessionId"] },
-    { name: "agentSessionId", aliases: ["agent-session-id", "agentSessionId", "session-thread-id", "sessionThreadId"] },
-    { name: "clientUid", aliases: ["client-uid", "clientUid"] },
-    { name: "modelAlias", aliases: ["model-alias", "modelAlias", "alias", "model"] },
-    { name: "contextProfileId", aliases: ["context-profile", "context-profile-id", "contextProfileId"] },
-    { name: "toolGrantId", aliases: ["tool-grant-id", "toolGrantId", "grant-id", "grantId"] },
-    { name: "workspaceId", aliases: ["workspace-id", "workspaceId"] },
-    { name: "userId", aliases: ["user-id", "userId"] },
-    { name: "projectId", aliases: ["project-id", "projectId"] },
-    { name: "engine", aliases: ["engine"] }
-        ]
-      },
-      requiredScopes: ["model:call"],
-      inputSchema: {
-        type: "object",
-        required: ["question"],
-        properties: {
-          question: { type: "string" },
-          query: { type: "string" },
-          agentName: { type: "string" },
-          modelAlias: { type: "string" },
-          workspaceId: { type: "string" },
-          agentSessionId: { type: "string" },
-          toolGrantId: { type: "string" },
-          messages: { type: "array" }
-        }
-      },
-      log: { recordInput: false },
-      audit: { recordInput: false, metadataOnly: true }
-    }]);
+]);

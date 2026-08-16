@@ -48,6 +48,7 @@ function definition(id: any = "demo.run", patch: Record<string, any> = {}) : any
   return {
     id,
     feature: "system",
+    trafficModel: "gateway_transit",
     featureId: "core-platform",
     toolsets: ["meshrix.gateway.write"],
     label: id,

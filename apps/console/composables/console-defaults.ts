@@ -5,40 +5,7 @@ import type {
   SplitJobStatus,
 } from "../lib/types";
 import { clientAlignmentStateLabels } from "@meshrix/ui-console/console-client-display-utils";
-import type { AdminView, AppView, CloudProvider } from "../types/app";
-import { MODEL_USAGE_DEFINITIONS } from "@meshrix/contracts/modules/model-usage";
-
-export const modelLibraryProviderDefinitions: Array<{
-  id: CloudProvider;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: "deepseek",
-    label: "DeepSeek",
-    description: "OpenAI-compatible Chat Completions，API Key 由服务端代理使用。",
-  },
-  {
-    id: "openrouter",
-    label: "OpenRouter",
-    description: "OpenRouter API Key、Base URL 与模型 ID。",
-  },
-  {
-    id: "openai",
-    label: "OpenAI API",
-    description: "OpenAI Chat Completions API；端点、模型与凭据均由当前智能体显式配置。",
-  },
-  {
-    id: "copilot",
-    label: "Copilot / 企业代理",
-    description: "企业代理或兼容 Chat Completions 的内部模型服务。",
-  },
-  {
-    id: "local-model",
-    label: "本地模型服务",
-    description: "本机或局域网内的模型服务 Endpoint。",
-  },
-];
+import type { AdminView, AppView } from "../types/app";
 
 export const systemLogPaginationConfig: Record<string, any> = {
   defaultPageSize: 20,
@@ -46,48 +13,7 @@ export const systemLogPaginationConfig: Record<string, any> = {
   pageSizeOptions: [10, 20, 50, 100],
 };
 
-export type IntelligentModuleDefinition = {
-  id: string;
-  label: string;
-  designedModule: string;
-  description: string;
-  alertRequired?: boolean;
-};
-
-export const intelligentModuleDefinitions: IntelligentModuleDefinition[] = MODEL_USAGE_DEFINITIONS.map((definition?: any) : any => ({
-  id: definition.id,
-  label: definition.label,
-  designedModule: definition.designedModule,
-  description: definition.description,
-  alertRequired: definition.alertRequired,
-}));
-
 export const emptySettings: AgentSettings = {
-  modelIntelligenceEnabled: false,
-  defaultModelProvider: "",
-  defaultModel: "",
-  modelLibraryEntries: [],
-  modelLibraryAgents: [],
-  modelLibraryRevision: 0,
-  gatewayAssistantDefaults: {
-    systemPrompt: "",
-    toolPolicyPrompt: "",
-    continuationPrompt: "",
-    answerTemplate: "",
-    contextProfileId: "",
-    thinkingMode: "",
-    temperature: 0,
-    maxTokens: 0,
-    maxIterations: 0,
-    limit: 0,
-    toolChoice: "",
-    gatewayReviewModelAlias: "",
-    ruleAuthoringModelAlias: "",
-    reviewFusionModelAlias: "",
-    reviewFusionSystemPrompt: "",
-    reviewFusionTemperature: 0,
-    reviewFusionMaxTokens: 0,
-  },
   agentToolExecution: {
     functionCallSchema: {},
     http: {
@@ -105,9 +31,7 @@ export const emptySettings: AgentSettings = {
       commands: [],
     },
   },
-  moduleModelAssignments: {},
-  moduleAgentProfiles: {},
-  moduleIntelligence: {},
+  executionSandbox: null,
 };
 
 export const emptyDiscovery: DiscoveryConfig = {
@@ -159,10 +83,6 @@ export const adminViewTitleMap: Partial<Record<AdminView, string>> = {
   toolGovernance: "工具治理",
   toolStats: "工具统计",
   operationPermission: "工具权限",
-  agentConfig: "大模型配置",
-  agentAssignment: "智能体分配",
-  contextManagement: "上下文管理",
-  maintenanceAgent: "智能巡检",
   opsMonitor: "运维监控",
   strategyManagement: "策略管理",
   tagManagement: "标签管理",

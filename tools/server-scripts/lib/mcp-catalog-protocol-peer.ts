@@ -40,7 +40,9 @@ export async function issueNeutralMcpProtocolGrant({
   dynamicCapabilities = [],
   allowedServiceIds = [],
   allowedSecretBindings = [],
-  maxRisk = "read_only"
+  maxRisk = "read_only",
+  maxUses = 4_096,
+  requestsPerWindow = 4_096
 }: Record<string, any> = {}) : Promise<any> {
   const normalizedPeerId: any = String(peerId || "primary").replace(/[^a-z0-9-]+/giu, "-").slice(0, 48);
   const target: any = PEER_TARGET;
@@ -61,6 +63,8 @@ export async function issueNeutralMcpProtocolGrant({
       dynamicCapabilities,
       allowedServiceIds,
       allowedSecretBindings,
+      maxUses,
+      requestsPerWindow,
       label: verifierAccess.label
     }
   });
@@ -72,7 +76,14 @@ export async function issueNeutralMcpProtocolGrant({
     token,
     record: response.record
   });
-  return Object.freeze({ token, keyId, identityByToken, target });
+  return {
+    token,
+    keyId,
+    workloadPrincipalId: String(response.record.workloadPrincipalId || ""),
+    lifecycleRevision: Number(response.record.lifecycleRevision || 0),
+    identityByToken,
+    target
+  };
 }
 
 export function createMcpCatalogProtocolPeer({
@@ -166,11 +177,15 @@ export function createMcpCatalogProtocolPeer({
       ok: true,
       status: response.status,
       events,
-      async waitForInvalidation(timeoutMs: any = 5_000) : Promise<any> {
+      async waitForInvalidation(timeoutMs: any = 5_000, { partitionKeys = [] }: Record<string, any> = {}) : Promise<any> {
         const deadline: any = Date.now() + timeoutMs;
+        const expectedPartitions: any = new Set<any>(partitionKeys);
         while (Date.now() < deadline) {
           const event: any = events.find((entry?: any) : any => entry?.method === MCP_CATALOG_LIST_CHANGED_METHOD &&
-            parseMcpCatalogInvalidation(entry?.params?.change));
+            parseMcpCatalogInvalidation(entry?.params?.change) && (
+              expectedPartitions.size === 0 ||
+              entry.params.change.affectedPartitions.some((key?: any) : any => expectedPartitions.has(key))
+            ));
           if (event) return event;
           await new Promise((resolve?: any) : any => setTimeout(resolve, 20));
         }
@@ -188,12 +203,14 @@ export function createMcpCatalogProtocolPeer({
 
   async function pullCatalog({ timeoutMs = 5_000 }: Record<string, any> = {}) : Promise<any> {
     const deadline: any = Date.now() + timeoutMs;
+    let lastFailure: any = "catalog_contract_incomplete";
     do {
       const result: any = await rpc("tools/list", {});
       const facts: any = parseMcpCatalogFacts(result.payload?.result?._meta?.catalogConvergence);
       if (result.status === 200 && facts && Array.isArray(result.payload?.result?.tools)) {
         return Object.freeze({ ...result, facts, tools: result.payload.result.tools });
       }
+      lastFailure = `status_${Number(result.status || 0)}:${String(result.payload?.error?.data?.code || "catalog_contract_incomplete").slice(0, 96)}`;
       if ([401, 403].includes(result.status)) {
         const reasonCode: any = String(result.payload?.error?.data?.code || "neutral_peer_unauthorized");
         const error: Error & Record<string, any> = new Error(`Neutral peer catalog pull was not authorized: ${reasonCode}.`);
@@ -202,7 +219,7 @@ export function createMcpCatalogProtocolPeer({
       }
       await new Promise((resolve?: any) : any => setTimeout(resolve, 25));
     } while (Date.now() < deadline);
-    throw new Error("Neutral peer catalog pull did not satisfy the protocol contract.");
+    throw new Error(`Neutral peer catalog pull did not satisfy the protocol contract: ${lastFailure}.`);
   }
 
   async function acknowledge(facts?: any, partitionKeys: any = facts?.partitionKeys || []) : Promise<any> {

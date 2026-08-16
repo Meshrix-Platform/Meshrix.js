@@ -319,6 +319,22 @@ export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
       tests: { suites: ["tools/server-scripts/verify-upstream-gateway-e2e.ts"] }
     },
     {
+      featureId: "external-gateway",
+      pluginId: "external-gateway",
+      label: "Operator-owned external gateway channels",
+      group: "connectors",
+      dependsOn: ["operation-permission-core", "upstream-gateway"],
+      defaultEnabled: false
+    },
+    {
+      featureId: "model-gateway",
+      pluginId: "model-gateway",
+      label: "Independent Model Gateway Service adapter",
+      group: "connectors",
+      dependsOn: ["operation-permission-core", "upstream-gateway"],
+      defaultEnabled: false
+    },
+    {
       featureId: "skill-hub",
       pluginId: "skill-hub",
       label: "Skill Hub package lifecycle and contribution runtime",
@@ -333,37 +349,6 @@ export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
       group: "connectors",
       dependsOn: ["operation-permission-core", "security-permissions", "upstream-gateway"],
       defaultEnabled: false
-    },
-    {
-      featureId: "maintenance-agent-runbooks",
-      label: "Maintenance Agent runbooks",
-      group: "agent",
-      dependsOn: ["operation-dispatcher", "operation-permission-core", "security-permissions", "work-queue-core"],
-      defaultEnabled: false,
-      server: {
-        operationFeatures: ["maintenance_agent"],
-        operationPrefixes: ["maintenance_agent."],
-        eventTopics: ["maintenance.agent.run", "maintenance.agent.audit"],
-        webPanels: ["maintenance-agent"]
-      },
-      web: {
-        navItems: ["admin.maintenanceAgent"],
-        panels: ["MaintenanceAgentPanel"]
-      },
-      package: {
-        includePaths: [
-          "packages/agents/src/maintenance",
-          "packages/server-runtime/src/composition/background-workers/maintenance-worker.ts"
-        ],
-        excludePaths: []
-      },
-      tests: {
-        suites: [
-          "server:verify:maintenance-agent",
-          "tests/vitest/server/maintenance-agent-config.test.ts",
-          "tests/vitest/server/maintenance-agent-audit-store.test.ts"
-        ]
-      }
     },
     {
       featureId: "strategy-management",
@@ -428,55 +413,5 @@ export const FEATURE_MANIFEST: Readonly<Record<string, any>> = Object.freeze({
       dependsOn: ["agent-workspace-core"],
       defaultEnabled: false
     },
-    {
-      featureId: "agent-gateway",
-      label: "Agent gateway and model routing",
-      group: "agent-ingress",
-      dependsOn: ["operation-dispatcher", "operation-permission-core", "security-permissions"],
-      defaultEnabled: true,
-      server: {
-        operationFeatures: ["agent_gateway"],
-        operationPrefixes: ["agent_gateway.", "model_routing.", "agents."],
-        webPanels: ["agent-gateway"]
-      },
-      package: {
-        includePaths: ["packages/agents/src/agent-gateway"],
-        excludePaths: []
-      },
-      tests: { suites: ["server:verify:agent-gateway", "server:verify:model-routing"] }
-    },
-    {
-      featureId: "external-gateway",
-      label: "External Gateway",
-      group: "agent-ingress",
-      dependsOn: ["agent-gateway"],
-      defaultEnabled: true,
-      server: {
-        operations: [
-          "runtime.external_gateway",
-          "runtime.external_gateway.validate",
-          "runtime.external_gateway.apply",
-          "runtime.external_gateway.switch_direct"
-        ],
-        webPanels: ["external-gateway"]
-      },
-      package: {
-        includePaths: ["packages/agents/src/agent-gateway/external-gateway", "tools/server-scripts/external-gateway.ts"],
-        excludePaths: []
-      },
-      tests: { suites: ["server:verify:external-gateway"] }
-    },
-    {
-      featureId: "agent-management",
-      label: "Agent management",
-      group: "agent",
-      dependsOn: ["agent-gateway", "operation-permission-core"],
-      defaultEnabled: false,
-      server: {
-        operations: ["agents.list", "agents.create", "agents.update", "agents.delete"]
-      },
-      client: { modules: ["agent-registry"] },
-      tests: { suites: ["server:verify:agent-management"] }
-    }
 ])
 });

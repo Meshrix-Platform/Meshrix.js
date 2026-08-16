@@ -1,13 +1,18 @@
 import type { OperationPermissionScope, OperationPermissionToolset } from "../lib/types";
 import { operationPermissionToolsetName } from "../i18n/operation-permission-toolsets";
-import { maintenanceAgentRiskLabel } from "./console-status-utils";
 
 export function scopeLabel(scopeId: string, scopes: readonly OperationPermissionScope[] = []) : any {
   return scopes.find((scope?: any) : any => scope.id === scopeId)?.label || scopeId;
 }
 
 export function toolRiskLabel(risk: string) : any {
-  return maintenanceAgentRiskLabel(risk);
+  const labels: Record<string, string> = {
+    read_only: "只读",
+    safe_write: "安全写入",
+    repair_write: "修复写入",
+    destructive: "破坏性操作",
+  };
+  return labels[risk] || risk || "未知";
 }
 
 export function toolStatusLabel(status: string) : any {

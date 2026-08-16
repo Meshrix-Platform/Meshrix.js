@@ -1,8 +1,8 @@
 import { normalizePluginBundleManifest } from "./plugin-bundle-manifest.ts";
 
-const DIGEST_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
+const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 
-function requireDigest(value?: any, label?: any) : any {
+function requireDigest(value: unknown, label: string): string {
   if (typeof value !== "string" || !DIGEST_PATTERN.test(value)) {
     throw new Error(`PLUGIN_PACKAGE_FORMAT_REJECTED: ${label} must be a sha256 digest`);
   }
@@ -16,10 +16,10 @@ export function createVerifiedPluginPackage({
   validatedAt,
   sourceKind = "bytes",
   generation = null
-}: Record<string, any> = {}) : any {
-  const normalized: any = normalizePluginBundleManifest(manifest);
-  const packageDigestValue: any = requireDigest(packageDigest, "packageDigest");
-  const archiveDigestValue: any = requireDigest(archiveDigest, "archiveDigest");
+}: Record<string, unknown> = {}) {
+  const normalized = normalizePluginBundleManifest(manifest);
+  const packageDigestValue = requireDigest(packageDigest, "packageDigest");
+  const archiveDigestValue = requireDigest(archiveDigest, "archiveDigest");
   // Content-addressed package identity is the archive digest; payloadDigest binds inner files.
   if (packageDigestValue !== archiveDigestValue) {
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: packageDigest must equal archiveDigest");

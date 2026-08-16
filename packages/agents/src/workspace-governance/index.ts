@@ -4,66 +4,134 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ServerConfig } from "@meshrix/foundation/config/server-config";
 
-export const WORKSPACE_GOVERNANCE_PROTOCOL_VERSION: any = "v0.0.1:workspace:governance-1";
+type UnknownRecord = Record<string, unknown>;
 
-const REGISTRY_FILE: any = path.join("workspace-governance", "registry.json");
-const DATA_CLASS_RANK: Readonly<Record<string, any>> = Object.freeze({
+interface WorkspacePolicy extends UnknownRecord {
+  workspaceId: string;
+  organizationId: string;
+  projectId: string;
+  departmentId: string;
+  dataClass: string;
+  sensitivity: string;
+  ownerSubjectIds: string[];
+  allowedSubjectIds: string[];
+  externalCollaboratorIds: string[];
+  allowedActions: string[];
+  copyPolicy: string;
+  exportAllowed: boolean;
+  checkoutAllowed: boolean;
+  retention: UnknownRecord & { retainUntil: string; disposalAction: string };
+  legalHold: UnknownRecord & { enabled: boolean };
+}
+
+interface GovernanceRegistry extends UnknownRecord {
+  schemaVersion: string;
+  protocolVersion: string;
+  updatedAt: string;
+  policies: Record<string, WorkspacePolicy>;
+  shareGrants: Record<string, UnknownRecord>;
+  incompleteUnshares: Record<string, UnknownRecord>;
+  auditEvents: UnknownRecord[];
+}
+
+interface GovernanceSubject extends UnknownRecord {
+  subjectId: string;
+  organizationId: string;
+  projectIds: string[];
+  clearance: string;
+  external: boolean;
+  roles: string[];
+}
+
+interface GovernanceEvaluation extends UnknownRecord {
+  action: string;
+  subject: GovernanceSubject;
+  allowed: boolean;
+  reasons: string[];
+  obligations: UnknownRecord[];
+}
+
+export interface WorkspaceGovernanceService {
+  readonly protocolVersion: typeof WORKSPACE_GOVERNANCE_PROTOCOL_VERSION;
+  describe(): Promise<UnknownRecord>;
+  upsertPolicy(input?: UnknownRecord): Promise<UnknownRecord>;
+  evaluate(input?: UnknownRecord): Promise<GovernanceEvaluation>;
+  createShareGrant(input?: UnknownRecord, trusted?: UnknownRecord): Promise<UnknownRecord>;
+  revokeShareGrants(input?: UnknownRecord): Promise<UnknownRecord>;
+  findIncompleteUnshare(input?: UnknownRecord): Promise<UnknownRecord | null>;
+  recordIncompleteUnshare(input?: UnknownRecord): Promise<UnknownRecord>;
+  markIncompleteUnshareStage(input?: UnknownRecord): Promise<UnknownRecord>;
+  completeIncompleteUnshare(input?: UnknownRecord): Promise<UnknownRecord>;
+}
+
+export const WORKSPACE_GOVERNANCE_PROTOCOL_VERSION = "v0.0.1:workspace:governance-1" as const;
+
+const REGISTRY_FILE = path.join("workspace-governance", "registry.json");
+const DATA_CLASS_RANK: Readonly<Record<string, number>> = Object.freeze({
   public: 0,
   internal: 1,
   confidential: 2,
   restricted: 3,
   secret: 4
 });
-const VALID_COPY_POLICIES: any = new Set<any>(["deny", "sameProject", "withApproval", "allow"]);
-const DESTRUCTIVE_ACTIONS: any = new Set<any>(["delete", "purge", "expire", "retention.dispose"]);
-const EGRESS_ACTIONS: any = new Set<any>(["download", "export", "checkout", "copy", "share"]);
+const VALID_COPY_POLICIES = new Set(["deny", "sameProject", "withApproval", "allow"]);
+const DESTRUCTIVE_ACTIONS = new Set(["delete", "purge", "expire", "retention.dispose"]);
+const EGRESS_ACTIONS = new Set(["download", "export", "checkout", "copy", "share"]);
 
-function nowIso() : any {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function asObject(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function asObject(value: unknown, fallback: UnknownRecord = {}): UnknownRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : fallback;
 }
 
-function asArray(value?: any) : any {
+function recordMap(value: unknown): Record<string, UnknownRecord> {
+  const source = asObject(value);
+  return Object.fromEntries(
+    Object.entries(source).filter((entry): entry is [string, UnknownRecord] =>
+      Boolean(entry[1]) && typeof entry[1] === "object" && !Array.isArray(entry[1]))
+  );
+}
+
+function asArray(value?: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (value === undefined || value === null || value === "") return [];
   return [value];
 }
 
-function text(value?: any) : any {
+function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function uniqueStrings(value: any = []) : any {
-  return [...new Set<any>(asArray(value).map(text).filter(Boolean))];
+function uniqueStrings(value: unknown = []): string[] {
+  return [...new Set(asArray(value).map(text).filter(Boolean))];
 }
 
 
-function stableId(prefix?: any, value?: any) : any {
+function stableId(prefix: string, value: unknown): string {
   return `${prefix}_${crypto.createHash("sha256").update(stableJson(value)).digest("hex").slice(0, 18)}`;
 }
 
-async function readJson(filePath?: any, fallback?: any) : Promise<any> {
+async function readJson(filePath: string, fallback: unknown): Promise<unknown> {
   try {
     return JSON.parse(await fs.readFile(filePath, "utf8"));
-  } catch (error: any) {
-    if (error?.code === "ENOENT") return fallback;
+  } catch (error: unknown) {
+    if (asObject(error).code === "ENOENT") return fallback;
     throw error;
   }
 }
 
-async function writeJson(filePath?: any, value?: any) : Promise<any> {
+async function writeJson(filePath: string, value: unknown): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-function registryPath(userDataPath: any = "") : any {
+function registryPath(userDataPath = ""): string {
   return path.join(userDataPath || ServerConfig.getDataDir(), REGISTRY_FILE);
 }
 
-function emptyRegistry() : any {
+function emptyRegistry(): GovernanceRegistry {
   return {
     schemaVersion: "v0.0.1:schema:definition-1",
     protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
@@ -75,13 +143,13 @@ function emptyRegistry() : any {
   };
 }
 
-function normalizeDataClass(value?: any) : any {
-  const normalized: any = text(value || "internal");
+function normalizeDataClass(value?: unknown): string {
+  const normalized = text(value || "internal");
   return Object.prototype.hasOwnProperty.call(DATA_CLASS_RANK, normalized) ? normalized : "internal";
 }
 
-function normalizeRetentionPolicy(value: Record<string, any> = {}) : any {
-  const retention: any = asObject(value);
+function normalizeRetentionPolicy(value: unknown = {}): WorkspacePolicy["retention"] {
+  const retention = asObject(value);
   return {
     policyId: text(retention.policyId || "default"),
     ttlDays: Math.max(0, Number(retention.ttlDays || 0)),
@@ -91,8 +159,8 @@ function normalizeRetentionPolicy(value: Record<string, any> = {}) : any {
   };
 }
 
-function normalizeLegalHold(value: Record<string, any> = {}) : any {
-  const legalHold: any = asObject(value);
+function normalizeLegalHold(value: unknown = {}): WorkspacePolicy["legalHold"] {
+  const legalHold = asObject(value);
   return {
     enabled: legalHold.enabled === true,
     holdIds: uniqueStrings(legalHold.holdIds || legalHold.holdId),
@@ -101,11 +169,12 @@ function normalizeLegalHold(value: Record<string, any> = {}) : any {
   };
 }
 
-export function normalizeWorkspaceGovernancePolicy(input: Record<string, any> = {}) : any {
-  const source: any = asObject(input);
-  const workspaceId: any = text(source.workspaceId || "default");
-  const copyPolicy: any = text(source.copyPolicy || source.sharePolicy?.copyPolicy || "sameProject");
-  const normalized: Record<string, any> = {
+export function normalizeWorkspaceGovernancePolicy(input: UnknownRecord = {}): WorkspacePolicy {
+  const source = asObject(input);
+  const sharePolicy = asObject(source.sharePolicy);
+  const workspaceId = text(source.workspaceId || "default");
+  const copyPolicy = text(source.copyPolicy || sharePolicy.copyPolicy || "sameProject");
+  const normalized: WorkspacePolicy = {
     schemaVersion: "v0.0.1:schema:definition-1",
     protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
     workspaceId,
@@ -130,12 +199,12 @@ export function normalizeWorkspaceGovernancePolicy(input: Record<string, any> = 
   return normalized;
 }
 
-function dataClassRank(value?: any) : any {
+function dataClassRank(value?: unknown): number {
   return DATA_CLASS_RANK[normalizeDataClass(value)] ?? DATA_CLASS_RANK.internal;
 }
 
-function subjectRecord(input: Record<string, any> = {}) : any {
-  const subject: any = asObject(input.subject || input);
+function subjectRecord(input: UnknownRecord = {}): GovernanceSubject {
+  const subject = asObject(input.subject || input);
   return {
     subjectId: text(subject.subjectId || subject.userId || subject.agentId || input.subjectId || ""),
     organizationId: text(subject.organizationId || input.organizationId || ""),
@@ -146,43 +215,43 @@ function subjectRecord(input: Record<string, any> = {}) : any {
   };
 }
 
-function retentionExpired(policy: Record<string, any> = {}, now: any = new Date()) : any {
-  const retainUntil: any = text(policy.retention?.retainUntil || "");
+function retentionExpired(policy: WorkspacePolicy, now = new Date()): boolean {
+  const retainUntil = text(policy.retention.retainUntil || "");
   if (retainUntil) {
-    const date: any = new Date(retainUntil);
+    const date = new Date(retainUntil);
     return Number.isFinite(date.getTime()) && date.getTime() < now.getTime();
   }
   return false;
 }
 
-function approvalRevision(value: Record<string, any> = {}) : any {
-  const source: any = asObject(value);
+function approvalRevision(value: unknown = {}): { grantPolicyRevision: number; governancePolicyRevision: number } {
+  const source = asObject(value);
   return {
     grantPolicyRevision: Number(source.grantPolicyRevision || 0),
     governancePolicyRevision: Number(source.governancePolicyRevision || 0)
   };
 }
 
-function evaluateCanonicalApproval(approvalFact?: any, binding: Record<string, any> = {}, now: any = new Date()) : any {
-  const fact: any = asObject(approvalFact);
-  const expected: any = asObject(binding);
+function evaluateCanonicalApproval(approvalFact: unknown, binding: UnknownRecord = {}, now = new Date()): string {
+  const fact = asObject(approvalFact);
+  const expected = asObject(binding);
   if (!text(fact.pendingOperationId)) return "copy_requires_approval";
   if (fact.status !== "approved") {
     return ["completed", "failed", "rejected", "cancelled", "canceled"].includes(text(fact.status))
       ? "approval_replayed"
       : "approval_not_approved";
   }
-  const expiresAt: any = text(fact.expiresAt);
+  const expiresAt = text(fact.expiresAt);
   if (!expiresAt || !Number.isFinite(new Date(expiresAt).getTime()) || new Date(expiresAt).getTime() <= now.getTime()) {
     return "approval_stale";
   }
   for (const field of ["actorId", "operationId", "workspaceId", "targetWorkspaceId", "grantId"]) {
     if (!text(expected[field]) || text(fact[field]) !== text(expected[field])) return "approval_binding_mismatch";
   }
-  const actualRevision: any = approvalRevision(fact.policyRevision);
-  const expectedRevision: any = approvalRevision(expected.policyRevision);
-  const actualRevisionSource: any = asObject(fact.policyRevision);
-  const expectedRevisionSource: any = asObject(expected.policyRevision);
+  const actualRevision = approvalRevision(fact.policyRevision);
+  const expectedRevision = approvalRevision(expected.policyRevision);
+  const actualRevisionSource = asObject(fact.policyRevision);
+  const expectedRevisionSource = asObject(expected.policyRevision);
   if (
     !Object.hasOwn(actualRevisionSource, "grantPolicyRevision") ||
     !Object.hasOwn(actualRevisionSource, "governancePolicyRevision") ||
@@ -198,18 +267,18 @@ function evaluateCanonicalApproval(approvalFact?: any, binding: Record<string, a
   return "";
 }
 
-function evaluatePolicy(policy: Record<string, any> = {}, request: Record<string, any> = {}, trusted: Record<string, any> = {}) : any {
-  const action: any = text(request.action || "read");
-  const subject: any = subjectRecord(request);
-  const targetWorkspaceId: any = text(request.targetWorkspaceId || request.destinationWorkspaceId || "");
-  const targetProjectId: any = text(request.targetProjectId || request.destinationProjectId || "");
-  const now: any = request.now ? new Date(request.now) : new Date();
-  const reasons: any[] = [];
-  const obligations: any[] = [];
+function evaluatePolicy(policy: WorkspacePolicy, request: UnknownRecord = {}, trusted: UnknownRecord = {}): GovernanceEvaluation {
+  const action = text(request.action || "read");
+  const subject = subjectRecord(request);
+  const targetWorkspaceId = text(request.targetWorkspaceId || request.destinationWorkspaceId || "");
+  const targetProjectId = text(request.targetProjectId || request.destinationProjectId || "");
+  const now = request.now ? new Date(String(request.now)) : new Date();
+  const reasons: string[] = [];
+  const obligations: UnknownRecord[] = [];
 
-  const subjectIsOwner: any = policy.ownerSubjectIds.includes(subject.subjectId);
-  const subjectIsAllowed: any = policy.allowedSubjectIds.includes(subject.subjectId);
-  const subjectIsExternalListed: any = policy.externalCollaboratorIds.includes(subject.subjectId);
+  const subjectIsOwner = policy.ownerSubjectIds.includes(subject.subjectId);
+  const subjectIsAllowed = policy.allowedSubjectIds.includes(subject.subjectId);
+  const subjectIsExternalListed = policy.externalCollaboratorIds.includes(subject.subjectId);
   if (policy.organizationId && subject.organizationId && policy.organizationId !== subject.organizationId && !subjectIsExternalListed) {
     reasons.push("organization_mismatch");
   }
@@ -250,9 +319,9 @@ function evaluatePolicy(policy: Record<string, any> = {}, request: Record<string
     } else if (policy.copyPolicy === "sameProject" && targetProjectId && targetProjectId !== policy.projectId) {
       reasons.push("target_project_mismatch");
     } else if (policy.copyPolicy === "withApproval") {
-      const approvalReason: any = evaluateCanonicalApproval(
+      const approvalReason = evaluateCanonicalApproval(
         trusted.approvalFact,
-        trusted.approvalBinding,
+        asObject(trusted.approvalBinding),
         now
       );
       if (approvalReason) reasons.push(approvalReason);
@@ -274,47 +343,47 @@ function evaluatePolicy(policy: Record<string, any> = {}, request: Record<string
   };
 }
 
-function publicRegistry(registry: any = emptyRegistry()) : any {
+function publicRegistry(registry: GovernanceRegistry = emptyRegistry()): UnknownRecord {
   return {
     schemaVersion: registry.schemaVersion,
     protocolVersion: registry.protocolVersion,
     updatedAt: registry.updatedAt,
-    policies: (Object.values(registry.policies || {}) as any[]),
-    shareGrants: (Object.values(registry.shareGrants || {}) as any[]),
-    incompleteUnshares: (Object.values(registry.incompleteUnshares || {}) as any[]),
+    policies: Object.values(registry.policies || {}),
+    shareGrants: Object.values(registry.shareGrants || {}),
+    incompleteUnshares: Object.values(registry.incompleteUnshares || {}),
     auditEvents: registry.auditEvents || []
   };
 }
 
-export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<string, any> = {}) : any {
-  const filePath: any = registryPath(userDataPath);
-  let mutationTail: any = Promise.resolve();
+export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: { userDataPath?: string } = {}): WorkspaceGovernanceService {
+  const filePath = registryPath(userDataPath);
+  let mutationTail: Promise<void> = Promise.resolve();
 
-  function enqueueMutation(task?: any) : any {
-    const current: any = mutationTail.then(task, task);
-    mutationTail = current.then(() : any => undefined, () : any => undefined);
+  function enqueueMutation<T>(task: () => T | Promise<T>): Promise<T> {
+    const current = mutationTail.then(task, task);
+    mutationTail = current.then(() => undefined, () => undefined);
     return current;
   }
 
-  async function afterMutations(task?: any) : Promise<any> {
+  async function afterMutations<T>(task: () => T | Promise<T>): Promise<T> {
     await mutationTail;
     return task();
   }
 
-  async function readRegistry() : Promise<any> {
-    const loaded: any = await readJson(filePath, emptyRegistry());
+  async function readRegistry(): Promise<GovernanceRegistry> {
+    const loaded = asObject(await readJson(filePath, emptyRegistry()));
     return {
       ...emptyRegistry(),
       ...loaded,
-      policies: asObject(loaded.policies),
-      shareGrants: asObject(loaded.shareGrants),
-      incompleteUnshares: asObject(loaded.incompleteUnshares),
-      auditEvents: asArray(loaded.auditEvents)
+      policies: asObject(loaded.policies) as Record<string, WorkspacePolicy>,
+      shareGrants: recordMap(loaded.shareGrants),
+      incompleteUnshares: recordMap(loaded.incompleteUnshares),
+      auditEvents: asArray(loaded.auditEvents).filter((event): event is UnknownRecord => Boolean(event) && typeof event === "object" && !Array.isArray(event))
     };
   }
 
-  async function writeRegistry(registry?: any) : Promise<any> {
-    const next: Record<string, any> = {
+  async function writeRegistry(registry: GovernanceRegistry): Promise<GovernanceRegistry> {
+    const next: GovernanceRegistry = {
       ...registry,
       protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
       updatedAt: nowIso()
@@ -323,8 +392,8 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
     return next;
   }
 
-  function audit(registry?: any, eventType?: any, payload: Record<string, any> = {}) : any {
-    const event: Record<string, any> = {
+  function audit(registry: GovernanceRegistry, eventType: string, payload: UnknownRecord = {}): UnknownRecord {
+    const event: UnknownRecord = {
       auditId: stableId("workspace_governance_audit", { eventType, payload, nonce: crypto.randomUUID() }),
       eventType,
       workspaceId: text(payload.workspaceId || ""),
@@ -335,20 +404,20 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
     return event;
   }
 
-  const api: Record<string, any> = {
+  const api: WorkspaceGovernanceService = {
     protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
-    async describe() : Promise<any> {
+    async describe(): Promise<UnknownRecord> {
       return publicRegistry(await readRegistry());
     },
-    async upsertPolicy(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const policy: any = normalizeWorkspaceGovernancePolicy(input.policy || input);
+    async upsertPolicy(input: UnknownRecord = {}): Promise<UnknownRecord> {
+      const registry = await readRegistry();
+      const policy = normalizeWorkspaceGovernancePolicy(asObject(input.policy, input));
       registry.policies[policy.workspaceId] = {
-        ...(registry.policies[policy.workspaceId] || {}),
+        ...registry.policies[policy.workspaceId],
         ...policy,
         updatedAt: nowIso()
       };
-      const event: any = audit(registry, "workspace_governance.policy.upserted", {
+      const event = audit(registry, "workspace_governance.policy.upserted", {
         workspaceId: policy.workspaceId,
         organizationId: policy.organizationId,
         projectId: policy.projectId,
@@ -361,11 +430,11 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
         audit: event
       };
     },
-    async evaluate(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const workspaceId: any = text(input.workspaceId || input.policy?.workspaceId || "default");
-      const policy: any = registry.policies[workspaceId] || normalizeWorkspaceGovernancePolicy({ workspaceId });
-      const evaluation: any = evaluatePolicy(policy, input);
+    async evaluate(input: UnknownRecord = {}): Promise<GovernanceEvaluation> {
+      const registry = await readRegistry();
+      const workspaceId = text(input.workspaceId || asObject(input.policy).workspaceId || "default");
+      const policy = registry.policies[workspaceId] || normalizeWorkspaceGovernancePolicy({ workspaceId });
+      const evaluation = evaluatePolicy(policy, input);
       audit(registry, "workspace_governance.evaluated", {
         workspaceId,
         action: evaluation.action,
@@ -376,11 +445,11 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
       await writeRegistry(registry);
       return evaluation;
     },
-    async createShareGrant(input: Record<string, any> = {}, trusted: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const workspaceId: any = text(input.workspaceId || "");
-      const policy: any = registry.policies[workspaceId] || normalizeWorkspaceGovernancePolicy({ workspaceId });
-      const evaluation: any = evaluatePolicy(policy, {
+    async createShareGrant(input: UnknownRecord = {}, trusted: UnknownRecord = {}): Promise<UnknownRecord> {
+      const registry = await readRegistry();
+      const workspaceId = text(input.workspaceId || "");
+      const policy = registry.policies[workspaceId] || normalizeWorkspaceGovernancePolicy({ workspaceId });
+      const evaluation = evaluatePolicy(policy, {
         ...input,
         action: input.action || "share"
       }, trusted);
@@ -391,13 +460,14 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
           evaluation
         };
       }
-      const grant: Record<string, any> = {
-        shareGrantId: stableId("workspace_share_grant", {
+      const shareGrantId = stableId("workspace_share_grant", {
           workspaceId,
           granteeId: input.granteeId,
           targetWorkspaceId: input.targetWorkspaceId,
           actions: input.actions
-        }),
+        });
+      const grant: UnknownRecord = {
+        shareGrantId,
         workspaceId,
         organizationId: policy.organizationId,
         projectId: policy.projectId,
@@ -410,8 +480,8 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
         expiresAt: text(input.expiresAt || ""),
         createdAt: nowIso()
       };
-      registry.shareGrants[grant.shareGrantId] = grant;
-      const event: any = audit(registry, "workspace_governance.share_granted", grant);
+      registry.shareGrants[shareGrantId] = grant;
+      const event = audit(registry, "workspace_governance.share_granted", grant);
       await writeRegistry(registry);
       return {
         protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION,
@@ -421,23 +491,23 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
         audit: event
       };
     },
-    async revokeShareGrants(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const shareGrantId: any = text(input.shareGrantId || input.grantId || "");
-      const workspaceId: any = text(input.workspaceId || "");
-      const targetWorkspaceId: any = text(input.targetWorkspaceId || "");
-      const granteeId: any = text(input.granteeId || "");
+    async revokeShareGrants(input: UnknownRecord = {}): Promise<UnknownRecord> {
+      const registry = await readRegistry();
+      const shareGrantId = text(input.shareGrantId || input.grantId || "");
+      const workspaceId = text(input.workspaceId || "");
+      const targetWorkspaceId = text(input.targetWorkspaceId || "");
+      const granteeId = text(input.granteeId || "");
       if (!shareGrantId && (!workspaceId || !targetWorkspaceId)) {
         throw new Error("Share grant revocation requires shareGrantId or workspaceId and targetWorkspaceId.");
       }
-      const matches: any = (Object.values(registry.shareGrants) as any[]).filter((grant?: any) : any => {
+      const matches = Object.values(registry.shareGrants).filter((grant) => {
         if (shareGrantId) return grant.shareGrantId === shareGrantId;
         return grant.workspaceId === workspaceId &&
           grant.targetWorkspaceId === targetWorkspaceId &&
           (!granteeId || grant.granteeId === granteeId);
       });
-      for (const grant of matches) delete registry.shareGrants[grant.shareGrantId];
-      const event: any = audit(registry, "workspace_governance.share_revoked", {
+      for (const grant of matches) delete registry.shareGrants[text(grant.shareGrantId)];
+      const event = audit(registry, "workspace_governance.share_revoked", {
         workspaceId: workspaceId || matches[0]?.workspaceId || "",
         targetWorkspaceId: targetWorkspaceId || matches[0]?.targetWorkspaceId || "",
         actorId: text(input.actorId || ""),
@@ -452,24 +522,24 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
         audit: event
       };
     },
-    async findIncompleteUnshare(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const idempotencyKey: any = text(input.idempotencyKey || "");
+    async findIncompleteUnshare(input: UnknownRecord = {}): Promise<UnknownRecord | null> {
+      const registry = await readRegistry();
+      const idempotencyKey = text(input.idempotencyKey || "");
       if (!idempotencyKey) throw new Error("Incomplete unshare lookup requires idempotencyKey.");
-      const recordId: any = stableId("workspace_incomplete_unshare", { idempotencyKey });
+      const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
       return registry.incompleteUnshares[recordId] || null;
     },
-    async recordIncompleteUnshare(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const workspaceId: any = text(input.workspaceId || "");
-      const targetWorkspaceId: any = text(input.targetWorkspaceId || "");
-      const granteeId: any = text(input.granteeId || targetWorkspaceId);
-      const idempotencyKey: any = text(input.idempotencyKey || "");
+    async recordIncompleteUnshare(input: UnknownRecord = {}): Promise<UnknownRecord> {
+      const registry = await readRegistry();
+      const workspaceId = text(input.workspaceId || "");
+      const targetWorkspaceId = text(input.targetWorkspaceId || "");
+      const granteeId = text(input.granteeId || targetWorkspaceId);
+      const idempotencyKey = text(input.idempotencyKey || "");
       if (!workspaceId || !targetWorkspaceId || !idempotencyKey) {
         throw new Error("Incomplete unshare requires workspace, target, and idempotencyKey.");
       }
-      const recordId: any = stableId("workspace_incomplete_unshare", { idempotencyKey });
-      const existing: any = registry.incompleteUnshares[recordId];
+      const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
+      const existing = registry.incompleteUnshares[recordId];
       if (existing && (
         existing.workspaceId !== workspaceId ||
         existing.targetWorkspaceId !== targetWorkspaceId ||
@@ -485,7 +555,7 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
           advanced: false
         };
       }
-      const record: Record<string, any> = {
+      const record: UnknownRecord = {
         recordId,
         idempotencyKey,
         workspaceId,
@@ -494,11 +564,11 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
         stage: "intent_persisted",
         actorId: text(input.actorId || ""),
         reason: text(input.reason || "workspace_unshared"),
-        createdAt: existing?.createdAt || nowIso(),
+        createdAt: nowIso(),
         updatedAt: nowIso()
       };
       registry.incompleteUnshares[recordId] = record;
-      const event: any = audit(registry, "workspace_governance.unshare_intent_persisted", {
+      const event = audit(registry, "workspace_governance.unshare_intent_persisted", {
         recordId,
         workspaceId,
         targetWorkspaceId,
@@ -507,29 +577,29 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
       await writeRegistry(registry);
       return { protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION, record, created: true, advanced: true, audit: event };
     },
-    async markIncompleteUnshareStage(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const idempotencyKey: any = text(input.idempotencyKey || "");
-      const stage: any = text(input.stage || "");
+    async markIncompleteUnshareStage(input: UnknownRecord = {}): Promise<UnknownRecord> {
+      const registry = await readRegistry();
+      const idempotencyKey = text(input.idempotencyKey || "");
+      const stage = text(input.stage || "");
       if (!idempotencyKey || !["acl_removal_in_progress", "acl_removed_grant_pending"].includes(stage)) {
         throw new Error("Incomplete unshare stage transition is invalid.");
       }
-      const recordId: any = stableId("workspace_incomplete_unshare", { idempotencyKey });
-      const record: any = registry.incompleteUnshares[recordId];
+      const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
+      const record = registry.incompleteUnshares[recordId];
       if (!record) throw new Error("Incomplete unshare intent is missing.");
-      const transitions: Record<string, any> = {
+      const transitions: Record<string, string> = {
         intent_persisted: "acl_removal_in_progress",
         acl_removal_in_progress: "acl_removed_grant_pending"
       };
       if (record.stage === stage) {
         return { protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION, record, advanced: false };
       }
-      if (transitions[record.stage] !== stage) {
+      if (transitions[text(record.stage)] !== stage) {
         throw new Error("Incomplete unshare stage transition conflicts with persisted state.");
       }
-      const updated: Record<string, any> = { ...record, stage, updatedAt: nowIso() };
+      const updated: UnknownRecord = { ...record, stage, updatedAt: nowIso() };
       registry.incompleteUnshares[recordId] = updated;
-      const event: any = audit(registry, "workspace_governance.unshare_stage_advanced", {
+      const event = audit(registry, "workspace_governance.unshare_stage_advanced", {
         recordId,
         workspaceId: updated.workspaceId,
         targetWorkspaceId: updated.targetWorkspaceId,
@@ -538,24 +608,24 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
       await writeRegistry(registry);
       return { protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION, record: updated, advanced: true, audit: event };
     },
-    async completeIncompleteUnshare(input: Record<string, any> = {}) : Promise<any> {
-      const registry: any = await readRegistry();
-      const idempotencyKey: any = text(input.idempotencyKey || "");
+    async completeIncompleteUnshare(input: UnknownRecord = {}): Promise<UnknownRecord> {
+      const registry = await readRegistry();
+      const idempotencyKey = text(input.idempotencyKey || "");
       if (!idempotencyKey) throw new Error("Incomplete unshare completion requires idempotencyKey.");
-      const recordId: any = stableId("workspace_incomplete_unshare", { idempotencyKey });
-      const record: any = registry.incompleteUnshares[recordId];
+      const recordId = stableId("workspace_incomplete_unshare", { idempotencyKey });
+      const record = registry.incompleteUnshares[recordId];
       if (!record) return { protocolVersion: WORKSPACE_GOVERNANCE_PROTOCOL_VERSION, completed: false, recordId };
       if (record.stage !== "acl_removed_grant_pending") {
         throw new Error("Incomplete unshare ACL removal is not complete.");
       }
-      const matches: any = (Object.values(registry.shareGrants) as any[]).filter((grant?: any) : any =>
+      const matches = Object.values(registry.shareGrants).filter((grant) =>
         grant.workspaceId === record.workspaceId &&
         grant.targetWorkspaceId === record.targetWorkspaceId &&
         (!record.granteeId || grant.granteeId === record.granteeId)
       );
-      for (const grant of matches) delete registry.shareGrants[grant.shareGrantId];
+      for (const grant of matches) delete registry.shareGrants[text(grant.shareGrantId)];
       delete registry.incompleteUnshares[recordId];
-      const event: any = audit(registry, "workspace_governance.unshare_reconciled", {
+      const event = audit(registry, "workspace_governance.unshare_reconciled", {
         recordId,
         workspaceId: record.workspaceId,
         targetWorkspaceId: record.targetWorkspaceId,
@@ -572,21 +642,17 @@ export function createWorkspaceGovernanceRegistry({ userDataPath = "" }: Record<
       };
     }
   };
-  for (const methodName of [
-    "upsertPolicy",
-    "evaluate",
-    "createShareGrant",
-    "revokeShareGrants",
-    "recordIncompleteUnshare",
-    "markIncompleteUnshareStage",
-    "completeIncompleteUnshare"
-  ]) {
-    const method: any = api[methodName].bind(api);
-    api[methodName] = (...args: any[]) : any => enqueueMutation(() : any => method(...args));
-  }
-  for (const methodName of ["describe", "findIncompleteUnshare"]) {
-    const method: any = api[methodName].bind(api);
-    api[methodName] = (...args: any[]) : any => afterMutations(() : any => method(...args));
-  }
-  return Object.freeze(api);
+  return Object.freeze({
+    protocolVersion: api.protocolVersion,
+    describe: () => afterMutations(() => api.describe()),
+    upsertPolicy: (input?: UnknownRecord) => enqueueMutation(() => api.upsertPolicy(input)),
+    evaluate: (input?: UnknownRecord) => enqueueMutation(() => api.evaluate(input)),
+    createShareGrant: (input?: UnknownRecord, trusted?: UnknownRecord) =>
+      enqueueMutation(() => api.createShareGrant(input, trusted)),
+    revokeShareGrants: (input?: UnknownRecord) => enqueueMutation(() => api.revokeShareGrants(input)),
+    findIncompleteUnshare: (input?: UnknownRecord) => afterMutations(() => api.findIncompleteUnshare(input)),
+    recordIncompleteUnshare: (input?: UnknownRecord) => enqueueMutation(() => api.recordIncompleteUnshare(input)),
+    markIncompleteUnshareStage: (input?: UnknownRecord) => enqueueMutation(() => api.markIncompleteUnshareStage(input)),
+    completeIncompleteUnshare: (input?: UnknownRecord) => enqueueMutation(() => api.completeIncompleteUnshare(input))
+  });
 }

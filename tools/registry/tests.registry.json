@@ -5,6 +5,11 @@
   "profiles": {
     "core-public": {
       "description": "Core verifier gate",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
       "suites": [
         "runtime.resource-discipline",
         "repo.public-boundary",
@@ -27,6 +32,11 @@
     },
     "security-public": {
       "description": "Security-focused gate",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
       "suites": [
         "runtime.resource-discipline",
         "repo.public-boundary",
@@ -37,13 +47,17 @@
         "security.http-resource-admission",
         "governance.operation-permission-protocol-consistency",
         "governance.authorization-coverage",
-        "downstream-mcp.installer-convergence",
-        "agents.model-provider-runtime"
+        "downstream-mcp.installer-convergence"
       ],
       "timeoutMs": 1800000
     },
     "audit-public": {
       "description": "Audit gate",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
       "extends": "core-public",
       "suites": [
         "governance.tag-management",
@@ -88,10 +102,6 @@
         "workspace-governance.runtime",
         "communication-service.runtime",
         "strategy-management.runtime",
-        "agent-gateway.runtime",
-        "model-routing.runtime",
-        "agent-management.runtime",
-        "maintenance-agent.runtime",
         "execution-sandbox.controlled-runtime",
         "execution-sandbox.convergence-final",
         "upstream-gateway.e2e",
@@ -107,6 +117,8 @@
         "internal-platform.documentation-convergence",
         "internal-platform.surface-convergence",
         "internal-platform.capability-audit",
+        "plugins.runtime",
+        "model-gateway.service",
         "upstream-gateway.fixture-transit",
         "downstream-mcp.agent-tool-loop"
       ],
@@ -114,6 +126,11 @@
     },
     "smoke-public": {
       "description": "Smoke gate",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
       "extends": "core-public",
       "suites": [
         "smoke.start-server-defaults"
@@ -122,6 +139,11 @@
     },
     "release-public": {
       "description": "Functional completeness release gate",
+      "execution": {
+        "mergeVitestProcesses": true,
+        "cachePassedResults": true,
+        "shardEnvironment": "MESHRIX_TEST_SHARD"
+      },
       "extends": "audit-public",
       "suites": [
         "release.npm-package-installability",
@@ -665,27 +687,6 @@
       "artifacts": []
     },
     {
-      "id": "agents.model-provider-runtime",
-      "label": "Agent model registry, governed Gateway service, and credential binding runtime",
-      "owner": "platform",
-      "package": "agents",
-      "level": "security",
-      "command": "npm",
-      "args": [
-        "run",
-        "vitest",
-        "--",
-        "tests/vitest/server/model-provider-runtime.test.ts",
-        "tests/vitest/server/agent-gateway-service-golden-path.test.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "fast",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": []
-    },
-    {
       "id": "console.event-routing",
       "label": "Console server event routing boundary",
       "owner": "console",
@@ -779,9 +780,6 @@
         "tests/vitest/server/http-request-abort-propagation.test.ts",
         "tests/vitest/server/http-server-startup-lock-safety.test.ts",
         "tests/vitest/server/lock-manager.test.ts",
-        "tests/vitest/server/maintenance-planner-config-truth.test.ts",
-        "tests/vitest/server/maintenance-tool-registry.test.ts",
-        "tests/vitest/server/maintenance-worker-lifecycle.test.ts",
         "tests/vitest/server/operation-dispatch-locking.test.ts",
         "tests/vitest/server/operation-permission.test.ts",
         "tests/vitest/server/operation-state-machine-integration.test.ts",
@@ -931,6 +929,40 @@
       "requiredServices": [],
       "flakePolicy": "fail",
       "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "plugins.runtime",
+      "label": "External plugin packaging and runtime loading",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-plugin-runtime.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
+      "artifacts": []
+    },
+    {
+      "id": "model-gateway.service",
+      "label": "Standalone model gateway service and neutral adapter",
+      "owner": "platform",
+      "package": "server-runtime",
+      "level": "integration",
+      "command": "node",
+      "args": [
+        "tools/server-scripts/verify-model-gateway-service.ts"
+      ],
+      "sideEffects": "temp-files",
+      "timeoutClass": "standard",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": true,
       "artifacts": []
     },
     {
@@ -1184,74 +1216,6 @@
       "command": "node",
       "args": [
         "tools/server-scripts/verify-strategy-management.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "standard",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": []
-    },
-    {
-      "id": "agent-gateway.runtime",
-      "label": "Agent Gateway registry, catalog, and controlled-call verifier",
-      "owner": "platform",
-      "package": "agents",
-      "level": "integration",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-agent-gateway.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "standard",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": []
-    },
-    {
-      "id": "model-routing.runtime",
-      "label": "Model Routing registry, ledger, and health verifier",
-      "owner": "platform",
-      "package": "agents",
-      "level": "integration",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-model-routing.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "standard",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": []
-    },
-    {
-      "id": "agent-management.runtime",
-      "label": "Agent Management registry, catalog, and model-library CRUD verifier",
-      "owner": "platform",
-      "package": "agents",
-      "level": "integration",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-agent-management.ts"
-      ],
-      "sideEffects": "temp-files",
-      "timeoutClass": "standard",
-      "requiredServices": [],
-      "flakePolicy": "fail",
-      "coverageContribution": true,
-      "artifacts": []
-    },
-    {
-      "id": "maintenance-agent.runtime",
-      "label": "Maintenance Agent registry, catalog, and runbook verifier",
-      "owner": "platform",
-      "package": "agents",
-      "level": "integration",
-      "command": "node",
-      "args": [
-        "tools/server-scripts/verify-maintenance-agent.ts"
       ],
       "sideEffects": "temp-files",
       "timeoutClass": "standard",

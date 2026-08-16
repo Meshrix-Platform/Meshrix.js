@@ -14,7 +14,7 @@ import { assertCurrentDataDir } from "pactium";
 import { resolveMeshrixPactiumDataDir } from "#meshrix/foundation/checkpoint/tree/pactium-runtime";
 import { createOperationProofSubstrate } from "#meshrix/foundation/proof/proof-substrate/index";
 import { registerOperationProofSubstratePlatformServices } from "#meshrix/foundation/proof/proof-substrate/register";
-import { createConsoleAuth } from "#meshrix/foundation/security/auth/console-auth";
+import { CONSOLE_ROLES, createConsoleAuth } from "#meshrix/foundation/security/auth/console-auth";
 import { createOrganizationGovernanceService } from "@meshrix/foundation/security/authorization/organization-model";
 import { createOperationAuditStore } from "#meshrix/foundation/security/operation-audit";
 import { createProcessIdentityService } from "#meshrix/foundation/security/process-identity/index";
@@ -45,6 +45,10 @@ import {
 import {
   createPluginContributionRegistry
 } from "./plugin-contribution-registry.ts";
+import {
+  createBuiltInGatewayChannel,
+  createGatewayChannelRouter
+} from "./gateway-channel-router.ts";
 import { registerStateMachineDefinitions } from "./register-state-machines.ts";
 import {
   loadPluginRegistry,
@@ -69,20 +73,11 @@ import {
   samePluginArtifactTrust
 } from "#meshrix/foundation/module-system/plugin-artifact-trust";
 import { pluginArtifactCoreContractDigest } from "./plugin-artifact-core-contract.ts";
-import { createPersistentExternalGatewayManagementProvider } from "./external-gateway-management-provider.ts";
 import { createIntegrationTaskSupervisor } from "./integration-task-supervisor.ts";
 import {
   claimAgentWorkspaceMaterializationRootPort,
   createAgentWorkspaceMaterializationRootAuthority
 } from "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand";
-
-async function refreshAgentConfigRegistryIfNeeded({ enabled, userDataPath }: Record<string, any>) : Promise<any> {
-  if (!enabled) {
-    return null;
-  }
-  const { getAgentConfigRegistry } = await import("#meshrix/agents/agent-configs/config-registry");
-  return getAgentConfigRegistry({ rootPath: path.join(userDataPath, "agent-configs") }).refresh();
-}
 
 export class ServerCompositionCloseError extends Error {
   name: any;
@@ -334,6 +329,20 @@ export async function createServerCompositionRoot({
     coreOperations: SERVER_API_OPERATIONS,
     activeFeatureIds
   });
+  const gatewayChannelRouter: any = createGatewayChannelRouter({
+    downstream: createBuiltInGatewayChannel("downstream"),
+    upstream: createBuiltInGatewayChannel("upstream")
+  });
+  function synchronizePluginGatewayChannels(pluginId: string): void {
+    gatewayChannelRouter.removeContribution(pluginId);
+    const records: any[] = [...pluginContributions.gatewayChannels.values()]
+      .filter((record?: any) : any => record.pluginId === pluginId);
+    const implementation: any = records[0]?.implementation;
+    if (implementation) gatewayChannelRouter.registerContribution(pluginId, implementation);
+  }
+  for (const record of pluginContributions.gatewayChannels.values()) {
+    synchronizePluginGatewayChannels(record.pluginId);
+  }
   let consoleAuthRef: any = null;
   const unregisterPluginLifecycleListener: any = runtime.onPluginLifecycleTransition({
     prepare({ pluginId }: Record<string, any>) : any {
@@ -343,12 +352,14 @@ export async function createServerCompositionRoot({
       return Object.freeze({
         commit() : any {
           contributionChange.commit();
+          synchronizePluginGatewayChannels(pluginId);
           platformChange.commit();
           for (const featureId of pluginFeatureIds.get(pluginId) || [pluginId]) activeFeatureIds.delete(featureId);
           consoleAuthRef?.refreshActiveFeatureIds([...activeFeatureIds]);
         },
         rollback() : any {
           contributionChange.rollback();
+          synchronizePluginGatewayChannels(pluginId);
           platformChange.rollback();
           activeFeatureIds.clear();
           for (const featureId of previousFeatureIds) activeFeatureIds.add(featureId);
@@ -385,6 +396,7 @@ export async function createServerCompositionRoot({
   resourceClosers.push(() : any => registeredSecurityProvider?.close?.());
   const consoleAuth: any = createConsoleAuth({
     userDataPath,
+    consoleRoles: CONSOLE_ROLES,
     activeFeatureIds: [...activeFeatureIds],
     featureScopeGrants: Object.fromEntries((Object.entries(pluginConfigurations) as [string, any][])
       .flatMap(([pluginId, configuration]: any[]) : any => (Object.entries(configuration?.consoleRoleScopeGrants || {}) as [string, any][])
@@ -407,7 +419,6 @@ export async function createServerCompositionRoot({
     tagManagementStore: registeredSecurityProvider,
     processIdentity
   });
-  const externalGatewayManagement: any = await createPersistentExternalGatewayManagementProvider({ userDataPath });
   setModuleManagementSettingsDeps({ loadSettings, saveSettings });
   const moduleManagement: any = createModuleManagementProvider({
     runtime,
@@ -549,11 +560,6 @@ export async function createServerCompositionRoot({
     )
   });
   pluginContributions.registerStateMachines(platformRegistry);
-  await refreshAgentConfigRegistryIfNeeded({
-    enabled: isAnyFeatureActive("agent-gateway", "agent-management"),
-    userDataPath
-  });
-
   async function createBoundRuntimeProviders(input: Record<string, any> = {}) : Promise<any> {
     if (runtimeProviderCompositionState !== "available") {
       throw new TypeError(
@@ -648,6 +654,8 @@ export async function createServerCompositionRoot({
     activeApiOperations,
     getActiveApiOperations,
     pluginContributions,
+    gatewayChannelRouter,
+    synchronizePluginGatewayChannels,
     publicFeatures,
     isFeatureActive,
     isAnyFeatureActive,
@@ -655,7 +663,6 @@ export async function createServerCompositionRoot({
     coreProvider,
     runtime,
     moduleManagement,
-    externalGatewayManagement,
     dataStructureSubstrate,
     operationProofSubstrate,
     consoleAuth,

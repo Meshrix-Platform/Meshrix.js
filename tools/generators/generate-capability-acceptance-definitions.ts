@@ -28,21 +28,24 @@ const CAPABILITY_SLUG_PATTERN: any =
   /^(?![a-z0-9-]*(?:legacy|compat|v[0-9]+))[a-z](?:[a-z0-9-]*[a-z0-9])?$/u;
 
 const PLUGIN_RUNTIME_CAPABILITY_BINDINGS: Readonly<Record<string, any>> = Object.freeze({
-  "plugin-runtime-and-module-system": Object.freeze({ aggregate: true })
+  "model-gateway-service": Object.freeze({ pluginIds: Object.freeze(["model-gateway"]) }),
+  "plugin-runtime-and-module-system": Object.freeze({
+    aggregate: true,
+    pluginIds: Object.freeze(["external-gateway", "shared-space", "skill-hub"])
+  })
 });
 
 const DETACHABLE_CORE_CAPABILITIES: Readonly<Record<string, any>> = Object.freeze({
-  "agent-gateway-model-routing": "agent-gateway",
-  "maintenance-agent-collaboration": "maintenance-agent-runbooks",
+  "model-gateway-service": "model-gateway",
   "strategy-management": "strategy-management"
 });
 
 const DETACHABLE_GOVERNANCE_EVIDENCE_COMMANDS: Readonly<Record<string, any>> = Object.freeze({
-  "agent-gateway-model-routing": Object.freeze(["agent-gateway", "model-routing"]),
-  "maintenance-agent-collaboration": Object.freeze([
-    "maintenance-agent",
-    "enterprise-governance-coverage",
-    "operation-permission-tag-governed-e2e"
+  "model-gateway-service": Object.freeze([
+    "model-gateway-service",
+    "model-gateway-routing",
+    "model-gateway-admission",
+    "model-gateway-usage-accounting"
   ]),
   "strategy-management": Object.freeze([
     "strategy-management",

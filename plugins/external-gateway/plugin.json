@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "v0.0.1:plugin:manifest-1",
+  "id": "external-gateway",
+  "label": "External Gateway",
+  "version": "0.0.1",
+  "description": "Optional downstream and upstream transport channels for operator-owned Caddy, Nginx, or explicit direct endpoints.",
+  "defaultEnabled": false,
+  "contributionMode": "selected",
+  "dependencies": [],
+  "hostCapabilities": [],
+  "features": ["external-gateway"],
+  "operations": [],
+  "routes": [],
+  "mcpTools": [],
+  "gatewayChannels": ["external-gateway.channels"],
+  "consoleEntries": [],
+  "stateMachines": [],
+  "runtime": { "module": "./runtime.mjs" },
+  "verifierHooks": []
+}

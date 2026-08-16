@@ -2,23 +2,11 @@ import { buildBootstrapPayload } from "./bootstrap-payload.ts";
 import { createReadinessBaselineProvider } from "@meshrix/foundation/observability/readiness-baseline/baseline-provider";
 export { buildClientConnectionList } from "./client-connection-list.ts";
 
-function emptyAgentSettingsProjection() : any {
+function emptySettingsProjection() : any {
   return {
     settings: {
       path: "",
       value: {}
-    },
-    agentSelector: {
-      schemaVersion: "v0.0.1:schema:definition-1",
-      source: "agent-configs",
-      updatedAt: new Date().toISOString(),
-      options: []
-    },
-    agentConfigs: {
-      generation: "",
-      revision: 0,
-      modelManifest: {},
-      agentManifest: {}
     }
   };
 }
@@ -26,10 +14,10 @@ function emptyAgentSettingsProjection() : any {
 function normalizeConsoleDomainServices(services: Record<string, any> = {}) : any {
   const source: any = services && typeof services === "object" ? services : {};
   return {
-    buildAgentSettingsConsoleProjection:
-      typeof source.buildAgentSettingsConsoleProjection === "function"
-        ? source.buildAgentSettingsConsoleProjection
-        : async () : Promise<any> => emptyAgentSettingsProjection(),
+    buildSettingsConsoleProjection:
+      typeof source.buildSettingsConsoleProjection === "function"
+        ? source.buildSettingsConsoleProjection
+        : async () : Promise<any> => emptySettingsProjection(),
     buildConsoleJobsSummary:
       typeof source.buildConsoleJobsSummary === "function"
         ? source.buildConsoleJobsSummary
@@ -38,10 +26,6 @@ function normalizeConsoleDomainServices(services: Record<string, any> = {}) : an
       typeof source.buildConsoleClientConnections === "function"
         ? source.buildConsoleClientConnections
         : async () : Promise<any> => ({ summary: {}, items: [] }),
-    buildMaintenanceAgentConsoleSummary:
-      typeof source.buildMaintenanceAgentConsoleSummary === "function"
-        ? source.buildMaintenanceAgentConsoleSummary
-        : async () : Promise<any> => null,
     buildRuntimeConsoleSummary:
       typeof source.buildRuntimeConsoleSummary === "function"
         ? source.buildRuntimeConsoleSummary
@@ -158,19 +142,17 @@ export async function buildConsoleState({
   serverUrl,
   securityPermissions = null,
   request = null,
-  maintenanceAgent = null,
   features = null,
   consoleDomainServices = null
 }: Record<string, any>) : Promise<any> {
   const domainServices: any = normalizeConsoleDomainServices(consoleDomainServices);
   const publicDiscoveryState: any = buildConsoleDiscoveryConfig(discoveryState);
   const [
-    agentSettingsProjection,
+    settingsProjection,
     jobs,
-    clients,
-    maintenanceAgentSummary
+    clients
   ] = await Promise.all([
-    domainServices.buildAgentSettingsConsoleProjection({ userDataPath }),
+    domainServices.buildSettingsConsoleProjection({ userDataPath }),
     domainServices.buildConsoleJobsSummary({
       jobWorkflowProvider,
       limit: 50
@@ -178,10 +160,9 @@ export async function buildConsoleState({
     domainServices.buildConsoleClientConnections({
       clientRegistryService,
       offlineAfterSeconds: publicDiscoveryState.offlineAfterSeconds
-    }),
-    domainServices.buildMaintenanceAgentConsoleSummary({ maintenanceAgent })
+    })
   ]);
-  const projectedSettings: any = agentSettingsProjection.settings.value;
+  const projectedSettings: any = settingsProjection.settings.value;
   const runtimeSummary: any = await domainServices.buildRuntimeConsoleSummary({
     userDataPath,
     runtime,
@@ -197,9 +178,7 @@ export async function buildConsoleState({
       localDiagnostics: false
     },
     runtime: runtimeSummary,
-    settings: agentSettingsProjection.settings,
-    agentSelector: agentSettingsProjection.agentSelector,
-    agentConfigs: agentSettingsProjection.agentConfigs,
+    settings: settingsProjection.settings,
     discovery: {
       value: publicDiscoveryState,
       bootstrap: buildBootstrapPayload(publicDiscoveryState)
@@ -207,7 +186,6 @@ export async function buildConsoleState({
     auth: securityPermissions?.getConsoleSummary
       ? securityPermissions.getConsoleSummary(request)
       : null,
-    maintenanceAgent: maintenanceAgentSummary,
     storage: buildConsoleStorageSummary(storageProvider),
     readinessBaseline: await createReadinessBaselineProvider({ userDataPath }).status(),
     jobs,

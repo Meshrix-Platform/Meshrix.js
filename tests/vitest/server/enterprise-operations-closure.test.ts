@@ -61,15 +61,16 @@ describe("enterprise operations closure", () : any => {
       "REQ-EFF-RELEASE",
       "REQ-BASELINE-CONSOLE-ADMINISTRATION",
       "REQ-BASELINE-CONTAINER-DEPLOYMENT",
-      "REQ-BASELINE-AGENT-GATEWAY-MODEL-ROUTING"
+      "REQ-BASELINE-MANDATORY-GATEWAY-PIPELINE"
     ]);
     const producerIds: any = new Set<any>(ENTERPRISE_OPERATIONS_PRODUCERS.map((entry?: any) : any => entry.id));
     expect(producerIds.has("enterprise-enforcement-coverage")).toBe(true);
     expect(producerIds.has("enterprise-governance-coverage")).toBe(true);
     expect(producerIds.has("enterprise-observability-coverage")).toBe(true);
     expect(producerIds.has("console-administration-coverage")).toBe(true);
-    expect(producerIds.has("agent-gateway")).toBe(true);
-    expect(producerIds.has("model-routing")).toBe(true);
+    expect(producerIds.has("model-gateway")).toBe(true);
+    expect(producerIds.has("model-gateway-detachment")).toBe(true);
+    expect(producerIds.has("external-gateway")).toBe(true);
     expect(orderedEnterpriseOperationsProducers().map((entry?: any) : any => entry.id))
       .toContain("enterprise-enforcement-coverage");
     const enforcement: any = ENTERPRISE_OPERATIONS_PRODUCERS.find(

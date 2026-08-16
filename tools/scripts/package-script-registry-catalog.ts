@@ -733,8 +733,9 @@ const RAW_SCRIPT_REGISTRY: Readonly<Record<string, any>> = Object.freeze({
       "tools/server-scripts/lib/server-regression-command-runner.ts",
       "tools/server-scripts/verify-public-boundary.ts",
       "tools/server-scripts/verify-strategy-management.ts",
-      "tools/server-scripts/verify-agent-gateway.ts",
-      "tools/server-scripts/verify-model-routing.ts"
+      "tools/server-scripts/verify-model-gateway-plugin.ts",
+      "tools/server-scripts/verify-model-gateway-detachment.ts",
+      "tools/server-scripts/verify-external-gateway-plugin.ts"
     ], outputs: ["build/reports/server-headless-verification.json"],
   },
   "server:verify:checkpoints": {

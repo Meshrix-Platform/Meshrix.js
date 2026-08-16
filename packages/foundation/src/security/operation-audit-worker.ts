@@ -15,30 +15,35 @@ const COMMANDS: ReadonlySet<string> = new Set([
   "close"
 ]);
 
-const store: any = createOperationAuditWorkerStore(workerData);
+const store = createOperationAuditWorkerStore(workerData);
 
-function errorRecord(error: any) : Readonly<Record<string, any>> {
-  const details: Record<string, any> = {};
+function record(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function errorRecord(error: unknown): Readonly<Record<string, unknown>> {
+  const source = record(error);
+  const details: Record<string, unknown> = {};
   for (const key of ["actual", "auditId", "limit", "reason", "statusCode"]) {
-    if (error?.[key] !== undefined) details[key] = error[key];
+    if (source[key] !== undefined) details[key] = source[key];
   }
   return Object.freeze({
-    name: String(error?.name || "Error"),
-    code: String(error?.code || "sqlite_lane_command_failed"),
-    message: String(error?.message || "Operation audit command failed."),
+    name: String(source.name || "Error"),
+    code: String(source.code || "sqlite_lane_command_failed"),
+    message: String(source.message || "Operation audit command failed."),
     details
   });
 }
 
-function capacityStats() : Readonly<Record<string, any>> {
-  const meta: any = store.db.prepare(`
+function capacityStats(): Readonly<Record<string, unknown>> {
+  const meta = record(store.db.prepare(`
     SELECT row_count AS rowCount,
            logical_bytes AS logicalBytes,
            append_count AS appendCount,
            last_maintenance_at AS lastMaintenanceAt
     FROM operation_audit_meta
     WHERE singleton = 1
-  `).get();
+  `).get());
   return Object.freeze({
     ...meta,
     databaseBytes: Number(store.db.pragma("page_count", { simple: true }) || 0) *
@@ -50,16 +55,18 @@ function capacityStats() : Readonly<Record<string, any>> {
   });
 }
 
-parentPort?.on("message", async (message?: any) : Promise<void> => {
-  const reply: Record<string, any> = { id: message?.id, ok: false };
+parentPort?.on("message", async (message: unknown): Promise<void> => {
+  const request = record(message);
+  const payload = record(request.payload);
+  const reply: Record<string, unknown> = { id: request.id, ok: false };
   try {
-    const kind: string = String(message?.kind || "");
+    const kind = String(request.kind || "");
     if (!COMMANDS.has(kind)) {
       throw Object.assign(new Error("Operation audit SQLite command is not allowed."), {
         code: "sqlite_lane_command_rejected"
       });
     }
-    if (Date.now() > Number(message?.deadlineAtMs || 0)) {
+    if (Date.now() > Number(request.deadlineAtMs || 0)) {
       throw Object.assign(new Error("Operation audit SQLite command deadline elapsed."), {
         code: "sqlite_lane_deadline_exceeded"
       });
@@ -67,17 +74,23 @@ parentPort?.on("message", async (message?: any) : Promise<void> => {
     if (kind === "getCapacityStats") {
       reply.result = capacityStats();
     } else if (kind === "getById") {
-      reply.result = store.getById(message.payload?.auditId);
+      reply.result = store.getById(payload.auditId);
     } else if (kind === "getTrace") {
-      reply.result = store.getTrace(message.payload?.traceId, message.payload?.input || {});
+      reply.result = store.getTrace(payload.traceId, record(payload.input));
     } else if (kind === "close") {
       store.close();
       reply.result = undefined;
     } else {
-      reply.result = await store[kind](message.payload || {});
+      const command = store[kind as keyof typeof store];
+      if (typeof command !== "function") {
+        throw Object.assign(new Error("Operation audit SQLite command is not implemented."), {
+          code: "sqlite_lane_command_rejected"
+        });
+      }
+      reply.result = await (command as (input: Record<string, unknown>) => unknown)(payload);
     }
     reply.ok = true;
-  } catch (error: any) {
+  } catch (error: unknown) {
     reply.error = errorRecord(error);
   }
   parentPort?.postMessage(reply);

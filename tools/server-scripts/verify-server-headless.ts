@@ -10,8 +10,9 @@ import {
 export const SERVER_HEADLESS_VERIFY_COMMANDS: readonly any[] = Object.freeze([
   npmScript("public-boundary", "server:verify:public-boundary"),
   npmScript("strategy-management", "server:verify:strategy-management"),
-  npmScript("agent-gateway", "server:verify:agent-gateway"),
-  npmScript("model-routing", "server:verify:model-routing")
+  npmScript("model-gateway", "server:verify:model-gateway"),
+  npmScript("model-gateway-detachment", "server:verify:model-gateway-detachment"),
+  npmScript("external-gateway", "server:verify:external-gateway")
 ]);
 
 export async function main(argv: any = process.argv.slice(2)) : Promise<any> {

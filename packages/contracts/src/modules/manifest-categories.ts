@@ -1,6 +1,6 @@
-export const ARCHITECTURE_FACT_MANIFEST_VERSION: any = "v0.0.1:architecture:fact-manifest-1";
+export const ARCHITECTURE_FACT_MANIFEST_VERSION = "v0.0.1:architecture:fact-manifest-1";
 
-export const ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS: readonly any[] = Object.freeze([
+export const ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS = Object.freeze([
   Object.freeze({
     categoryId: "foundation",
     label: "基础模块",
@@ -28,7 +28,7 @@ export const ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS: readonly any[] = Object.f
   })
 ]);
 
-export const ARCHITECTURE_MODULE_CATEGORY_BY_LAYER: Readonly<Record<string, any>> = Object.freeze({
+export const ARCHITECTURE_MODULE_CATEGORY_BY_LAYER: Readonly<Record<string, string>> = Object.freeze({
   appearance: "appearance",
   "platform-capabilities": "core-capability",
   application: "application",
@@ -36,7 +36,7 @@ export const ARCHITECTURE_MODULE_CATEGORY_BY_LAYER: Readonly<Record<string, any>
   foundation: "foundation"
 });
 
-export const DOCUMENTATION_ASSET_CLASSIFICATIONS: readonly any[] = Object.freeze([
+export const DOCUMENTATION_ASSET_CLASSIFICATIONS = Object.freeze([
   Object.freeze({
     assetId: "product-readme",
     classification: "promotional",
@@ -95,7 +95,7 @@ export const DOCUMENTATION_ASSET_CLASSIFICATIONS: readonly any[] = Object.freeze
   })
 ]);
 
-export const SYSTEM_ARCHITECTURE_LAYERS: readonly any[] = Object.freeze([
+export const SYSTEM_ARCHITECTURE_LAYERS = Object.freeze([
   Object.freeze({
     layerId: "appearance",
     moduleCategory: "appearance",

@@ -9,7 +9,6 @@ export { pluginArtifactCoreContractDigest } from "./plugin-artifact-core-contrac
 export {
   getSettingsPath,
   loadSettings,
-  resolveModelForModule,
   saveSettings
 } from "#meshrix/settings";
 export {
@@ -31,14 +30,6 @@ export {
   serverToken
 } from "#meshrix/client-strings";
 export { sendJson } from "#meshrix/http-utils";
-export async function callAgentGateway(...args: any[]) : Promise<any> {
-  const module: any = await import("#meshrix/agents/agent-gateway/index");
-  return module.callAgentGateway(...args);
-}
-export async function publicAgentGatewayConfig(...args: any[]) : Promise<any> {
-  const module: any = await import("#meshrix/agents/agent-gateway/index");
-  return module.publicAgentGatewayConfig(...args);
-}
 export {
   createRuntimeLogger,
   getRuntimeLogger,

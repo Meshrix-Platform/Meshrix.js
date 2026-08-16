@@ -74,10 +74,6 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
   const canWriteJobs: any = computed(() : any => hasScope("jobs:write"));
   const canBrowseServerPaths: any = computed(() : any => hasScope("workspace:write"));
   const canAdminRuntime: any = computed(() : any => hasScope("runtime:admin"));
-  const canReadMaintenanceAgent: any = computed(() : any => hasScope("maintenance:read"));
-  const canRunMaintenanceAgent: any = computed(() : any => hasScope("maintenance:run"));
-  const canApproveMaintenanceAgent: any = computed(() : any => hasScope("maintenance:approve"));
-  const canAdminMaintenanceAgent: any = computed(() : any => hasScope("maintenance:admin"));
 
   async function refreshAuthState() : Promise<any> {
     try {
@@ -231,14 +227,10 @@ export function createConsoleAuthController(options: ConsoleAuthControllerOption
     authUsers,
     canAdminAuth,
     canAdminGateway,
-    canAdminMaintenanceAgent,
     canAdminRuntime,
-    canApproveMaintenanceAgent,
     canBrowseServerPaths,
     canMaintainGateway,
     canReadGateway,
-    canReadMaintenanceAgent,
-    canRunMaintenanceAgent,
     canWriteJobs,
     canWriteGateway,
     currentUser,

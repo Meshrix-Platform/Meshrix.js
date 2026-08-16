@@ -117,8 +117,7 @@
   .grant-tool-rule-table .job-row,
   .monitor-alert-table .job-table-header,
   .monitor-alert-table .job-row,
-  .source-client-chart-row,
-  .maintenance-agent-grid {
+  .source-client-chart-row {
     grid-template-columns: 1fr;
     min-width: 0;
   }

@@ -1,0 +1,677 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Meshrix Model Gateway Service Contract",
+    "version": "v1",
+    "description": "Language-neutral HTTP and JSON contract for the independently deployable Model Gateway Service with native OpenAI and Anthropic standard API compatibility."
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "modelGatewayHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service process is healthy.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Health" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "modelGatewayReadiness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is ready to admit calls.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Readiness" }
+              }
+            }
+          },
+          "503": {
+            "description": "Service is not ready; no call is admitted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Readiness" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "operationId": "modelGatewayOpenAiChatCompletions",
+        "description": "Native OpenAI-compatible chat completions call.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/OpenAiChatCompletionsRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Completion result.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OpenAiChatCompletionsResponse" }
+              },
+              "text/event-stream": {
+                "schema": { "$ref": "#/components/schemas/OpenAiChatCompletionStream" }
+              }
+            }
+          },
+          "default": {
+            "description": "Stable error envelope.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OpenAiError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/messages": {
+      "post": {
+        "operationId": "modelGatewayAnthropicMessages",
+        "description": "Native Anthropic-compatible messages call.",
+        "security": [
+          { "anthropicApiKey": [] }
+        ],
+        "parameters": [
+          {
+            "name": "anthropic-version",
+            "in": "header",
+            "required": true,
+            "schema": { "type": "string", "minLength": 1 }
+          },
+          {
+            "name": "anthropic-beta",
+            "in": "header",
+            "required": false,
+            "schema": { "type": "string", "minLength": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AnthropicMessagesRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message result.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnthropicMessagesResponse" }
+              },
+              "text/event-stream": {
+                "schema": { "$ref": "#/components/schemas/AnthropicMessageStream" }
+              }
+            }
+          },
+          "default": {
+            "description": "Stable error envelope.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AnthropicError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "operationId": "modelGatewayOpenAiModelsList",
+        "description": "Native OpenAI-compatible model list.",
+        "responses": {
+          "200": {
+            "description": "Model list.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelList" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/models/{model_id}": {
+      "get": {
+        "operationId": "modelGatewayOpenAiModelsGet",
+        "parameters": [
+          {
+            "name": "model_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Model detail.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelDetail" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-gateway/models": {
+      "get": {
+        "operationId": "modelGatewayModelsList",
+        "description": "Service-owned model management list.",
+        "responses": {
+          "200": {
+            "description": "Service-owned models.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ManagedModel" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "modelGatewayModelsCreate",
+        "description": "Create or replace a Service-owned model bound to one provider and immutable pricing revision.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ManagedModel" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created model.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ManagedModel" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-gateway/providers": {
+      "get": {
+        "operationId": "modelGatewayProvidersList",
+        "description": "Service-owned provider management list.",
+        "responses": {
+          "200": {
+            "description": "Service-owned providers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ManagedProvider" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "modelGatewayProvidersCreate",
+        "description": "Create or replace a Service-owned provider.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ManagedProvider" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created provider.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ManagedProvider" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-gateway/pricing-revisions": {
+      "get": {
+        "operationId": "modelGatewayPricingRevisionsList",
+        "description": "Immutable pricing revisions bound to model identity and currency.",
+        "responses": {
+          "200": {
+            "description": "Pricing revisions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/PricingRevision" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "modelGatewayPricingRevisionsCreate",
+        "description": "Create one immutable pricing revision.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PricingRevision" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Created pricing revision.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PricingRevision" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-gateway/calls/{call_id}/cancel": {
+      "post": {
+        "operationId": "modelGatewayCallCancel",
+        "description": "Request cancellation of one admitted call by idempotency-bound call identity.",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cancellation accepted.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CancellationResult" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/model-gateway/ledger/{call_id}": {
+      "get": {
+        "operationId": "modelGatewayLedgerGet",
+        "description": "Read the Service-owned idempotent call ledger.",
+        "parameters": [
+          {
+            "name": "call_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Call ledger.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CallLedger" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Service-issued client authentication; never a Meshrix permit."
+      },
+      "anthropicApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key",
+        "description": "Anthropic-compatible client authentication; never a Meshrix permit."
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "const": "ok" }
+        },
+        "additionalProperties": false
+      },
+      "Readiness": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "enum": ["ready", "not_ready"] }
+        },
+        "additionalProperties": false
+      },
+      "StableError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["type", "code", "message", "requestId"],
+            "properties": {
+              "type": { "enum": ["authentication", "authorization", "admission", "quota", "model", "provider", "timeout", "cancelled", "overload", "internal"] },
+              "code": { "type": "string", "minLength": 1 },
+              "message": { "type": "string", "minLength": 1 },
+              "requestId": { "type": "string", "minLength": 1 },
+              "retryable": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "OpenAiError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["message", "type"],
+            "properties": {
+              "message": { "type": "string", "minLength": 1 },
+              "type": { "type": "string", "minLength": 1 },
+              "param": { "type": ["string", "null"] },
+              "code": { "type": ["string", "null"] }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AnthropicError": {
+        "type": "object",
+        "required": ["type", "error", "request_id"],
+        "properties": {
+          "type": { "const": "error" },
+          "error": {
+            "type": "object",
+            "required": ["type", "message"],
+            "properties": {
+              "type": { "type": "string", "minLength": 1 },
+              "message": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": true
+          },
+          "request_id": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      },
+      "OpenAiChatCompletionStream": {
+        "type": "string",
+        "description": "Server-sent events containing chat.completion.chunk objects followed by [DONE]."
+      },
+      "AnthropicMessageStream": {
+        "type": "string",
+        "description": "Server-sent events using Anthropic message_start, content_block_*, message_delta, and message_stop event types."
+      },
+      "FixedPointAmount": {
+        "type": "object",
+        "required": ["currency", "units", "nanos"],
+        "properties": {
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "units": { "type": "integer", "minimum": 0 },
+          "nanos": { "type": "integer", "minimum": 0, "maximum": 999999999 }
+        },
+        "additionalProperties": false
+      },
+      "CallLedgerState": {
+        "type": "string",
+        "enum": ["released", "settled", "in_doubt"]
+      },
+      "CallLedger": {
+        "type": "object",
+        "required": ["callId", "modelRef", "pricingRevisionRef", "currency", "reservationRef", "state", "attempts"],
+        "properties": {
+          "callId": { "type": "string", "minLength": 1 },
+          "modelRef": { "type": "string", "minLength": 1 },
+          "pricingRevisionRef": { "type": "string", "minLength": 1 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "reservationRef": { "type": "string", "minLength": 1 },
+          "state": { "$ref": "#/components/schemas/CallLedgerState" },
+          "attempts": { "type": "integer", "minimum": 1, "maximum": 16 },
+          "amount": { "$ref": "#/components/schemas/FixedPointAmount" },
+          "inputTokens": { "type": "integer", "minimum": 0 },
+          "outputTokens": { "type": "integer", "minimum": 0 }
+        },
+        "additionalProperties": false
+      },
+      "PricingRevision": {
+        "type": "object",
+        "required": ["revisionRef", "modelRef", "currency", "inputTokenRate", "outputTokenRate", "immutable"],
+        "properties": {
+          "revisionRef": { "type": "string", "minLength": 1 },
+          "modelRef": { "type": "string", "minLength": 1 },
+          "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+          "inputTokenRate": { "$ref": "#/components/schemas/FixedPointAmount" },
+          "outputTokenRate": { "$ref": "#/components/schemas/FixedPointAmount" },
+          "immutable": { "const": true }
+        },
+        "additionalProperties": false
+      },
+      "AdmissionPolicy": {
+        "type": "object",
+        "required": ["policyRevisionRef", "maxRatePerSecond", "maxInputTokenBudget", "maxRequestedOutputTokenBudget", "maxTotalTokenQuota", "maxConcurrentCalls", "maxCostQuota"],
+        "properties": {
+          "policyRevisionRef": { "type": "string", "minLength": 1 },
+          "maxRatePerSecond": { "type": "integer", "minimum": 1 },
+          "maxInputTokenBudget": { "type": "integer", "minimum": 1 },
+          "maxRequestedOutputTokenBudget": { "type": "integer", "minimum": 1 },
+          "maxTotalTokenQuota": { "type": "integer", "minimum": 1 },
+          "maxConcurrentCalls": { "type": "integer", "minimum": 1 },
+          "maxCostQuota": { "$ref": "#/components/schemas/FixedPointAmount" }
+        },
+        "additionalProperties": false
+      },
+      "CancellationResult": {
+        "type": "object",
+        "required": ["callId", "state"],
+        "properties": {
+          "callId": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["requested", "cancelled", "terminal"] }
+        },
+        "additionalProperties": false
+      },
+      "OpenAiChatCompletionsRequest": {
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+          "model": { "type": "string", "minLength": 1 },
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": { "type": "string" },
+                "content": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          },
+          "stream": { "type": "boolean" },
+          "max_tokens": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": true
+      },
+      "OpenAiChatCompletionsResponse": {
+        "type": "object",
+        "required": ["id", "object", "model", "choices"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "object": { "const": "chat.completion" },
+          "model": { "type": "string", "minLength": 1 },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["index", "message"],
+              "properties": {
+                "index": { "type": "integer", "minimum": 0 },
+                "message": {
+                  "type": "object",
+                  "required": ["role", "content"],
+                  "properties": {
+                    "role": { "type": "string" },
+                    "content": { "type": "string" }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "usage": {
+            "type": "object",
+            "required": ["prompt_tokens", "completion_tokens", "total_tokens"],
+            "properties": {
+              "prompt_tokens": { "type": "integer", "minimum": 0 },
+              "completion_tokens": { "type": "integer", "minimum": 0 },
+              "total_tokens": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": true
+      },
+      "AnthropicMessagesRequest": {
+        "type": "object",
+        "required": ["model", "max_tokens", "messages"],
+        "properties": {
+          "model": { "type": "string", "minLength": 1 },
+          "max_tokens": { "type": "integer", "minimum": 1 },
+          "system": { "type": "string" },
+          "stream": { "type": "boolean" },
+          "messages": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["role", "content"],
+              "properties": {
+                "role": { "enum": ["user", "assistant"] },
+                "content": { "type": "string" }
+              },
+              "additionalProperties": true
+            }
+          }
+        },
+        "additionalProperties": true
+      },
+      "AnthropicMessagesResponse": {
+        "type": "object",
+        "required": ["id", "type", "model", "content", "stop_reason", "usage"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "const": "message" },
+          "model": { "type": "string", "minLength": 1 },
+          "content": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "text"],
+              "properties": {
+                "type": { "const": "text" },
+                "text": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "stop_reason": { "type": "string" },
+          "usage": {
+            "type": "object",
+            "required": ["input_tokens", "output_tokens"],
+            "properties": {
+              "input_tokens": { "type": "integer", "minimum": 0 },
+              "output_tokens": { "type": "integer", "minimum": 0 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": true
+      },
+      "ModelList": {
+        "type": "object",
+        "required": ["object", "data"],
+        "properties": {
+          "object": { "const": "list" },
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ModelDetail" }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ModelDetail": {
+        "type": "object",
+        "required": ["id", "object", "owned_by"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "object": { "const": "model" },
+          "owned_by": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      },
+      "ManagedModel": {
+        "type": "object",
+        "required": ["modelId", "providerRef", "pricingRevisionRef", "enabled"],
+        "properties": {
+          "modelId": { "type": "string", "minLength": 1 },
+          "providerRef": { "type": "string", "minLength": 1 },
+          "pricingRevisionRef": { "type": "string", "minLength": 1 },
+          "enabled": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "ManagedProvider": {
+        "type": "object",
+        "required": ["providerId", "protocol", "enabled"],
+        "properties": {
+          "providerId": { "type": "string", "minLength": 1 },
+          "protocol": { "enum": ["openai", "anthropic", "http"] },
+          "enabled": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

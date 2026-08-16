@@ -12,7 +12,10 @@ import {
   upstreamOperationCapabilityId
 } from "../../packages/agents/src/upstream-gateway/operation-capability.ts";
 import { UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION } from "../../packages/agents/src/upstream-gateway/publishing-application.ts";
-import { createConsoleAuth } from "../../packages/foundation/src/security/auth/console-auth.ts";
+import {
+  CONSOLE_ROLES,
+  createConsoleAuth
+} from "../../packages/foundation/src/security/auth/console-auth.ts";
 import { initializeLocalSecret } from "../../packages/foundation/src/security/secrets/local-secret-store.ts";
 import { createStorageProvider } from "../../packages/foundation/src/storage/storage-provider.ts";
 import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
@@ -391,7 +394,11 @@ async function main() : Promise<any> {
   const manifestAuthority: any = createStorageProvider({ userDataPath }).getDurableManifestCandidateAuthorityPort();
 
   const tagStore: any = createTagStoreAdapter({ userDataPath });
-  const auth: any = createConsoleAuth({ userDataPath, tagManagementStore: tagStore });
+  const auth: any = createConsoleAuth({
+    userDataPath,
+    consoleRoles: CONSOLE_ROLES,
+    tagManagementStore: tagStore
+  });
   const owner: any = await auth.ensureInitialOwner();
   const otherPassword: any = "other-admin-fixture-credential";
   const viewerPassword: any = "viewer-fixture-credential";
@@ -550,6 +557,26 @@ async function main() : Promise<any> {
     allowedSecretBindings: credentialBindingIds,
     maxRisk: "safe_write"
   });
+  const protocolGrant: any = await issueNeutralMcpProtocolGrant({
+    server,
+    approvalAuth: ownerSession.approval,
+    peerId: "protocol-convergence",
+    toolsets: ["meshrix.gateway.write", "meshrix.gateway.read"],
+    dynamicCapabilities: executionCapabilities,
+    allowedServiceIds: [serviceId],
+    allowedSecretBindings: credentialBindingIds,
+    maxRisk: "safe_write"
+  });
+  const timeoutGrant: any = await issueNeutralMcpProtocolGrant({
+    server,
+    approvalAuth: ownerSession.approval,
+    peerId: "protocol-timeout",
+    toolsets: ["meshrix.gateway.write", "meshrix.gateway.read"],
+    dynamicCapabilities: executionCapabilities,
+    allowedServiceIds: [serviceId],
+    allowedSecretBindings: credentialBindingIds,
+    maxRisk: "safe_write"
+  });
   const trafficGrant: any = await issueNeutralMcpProtocolGrant({
     server,
     approvalAuth: ownerSession.approval,
@@ -558,7 +585,8 @@ async function main() : Promise<any> {
     dynamicCapabilities: [capabilityId],
     allowedServiceIds: [serviceId],
     allowedSecretBindings: credentialBindingIds,
-    maxRisk: "safe_write"
+    maxRisk: "safe_write",
+    requestsPerWindow: 1
   });
   const audienceTagStore: any = createTagStoreAdapter({ userDataPath });
   audienceTagStore.upsertTag({ tagId: "audience:allow", kind: "custom", label: "Audience allow" });
@@ -570,25 +598,6 @@ async function main() : Promise<any> {
   });
   audienceTagStore.upsertTag({ tagId: "audience:required", kind: "custom", label: "Audience required" });
   audienceTagStore.upsertTag({ tagId: "audience:deny", kind: "custom", label: "Audience deny" });
-  audienceTagStore.upsertProjection({
-    tagId: "audience:inherited",
-    entityType: "organization",
-    entityId: "organization-verifier",
-    payload: { kind: "organization" }
-  });
-  audienceTagStore.upsertProjection({
-    tagId: "audience:required",
-    entityType: "team",
-    entityId: "team-verifier",
-    payload: { kind: "team" }
-  });
-  audienceTagStore.upsertProjection({
-    tagId: "audience:deny",
-    entityType: "role",
-    entityId: "role-denied-verifier",
-    payload: { kind: "role" }
-  });
-  audienceTagStore.close();
   const allowedPeer: any = createMcpCatalogProtocolPeer({
     baseUrl: server.url,
     grant: allowedGrant,
@@ -604,6 +613,11 @@ async function main() : Promise<any> {
     grant: executionGrant,
     proxySessionId: "neutral_execution_session_001"
   });
+  const protocolPeer: any = createMcpCatalogProtocolPeer({
+    baseUrl: server.url,
+    grant: protocolGrant,
+    proxySessionId: "neutral_protocol_convergence_session_001"
+  });
   const tagDeniedPeer: any = createMcpCatalogProtocolPeer({
     baseUrl: server.url,
     grant: tagDeniedGrant,
@@ -617,6 +631,7 @@ async function main() : Promise<any> {
   const allowedCatalog: any = await allowedPeer.pullCatalog();
   const deniedCatalog: any = await deniedPeer.pullCatalog();
   const executionCatalog: any = await executionPeer.pullCatalog();
+  const protocolCatalog: any = await protocolPeer.pullCatalog();
   for (const catalog of [allowedCatalog, deniedCatalog, executionCatalog]) {
     assert.equal(catalog.facts.sourceRevision, createAuthority.sourceRevision);
     assert.equal(catalog.facts.catalogRevision, executionCatalog.facts.catalogRevision);
@@ -629,236 +644,36 @@ async function main() : Promise<any> {
   assert.equal(allowedCatalog.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId), false);
   assert.equal(deniedCatalog.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId), false);
   observe("audience.initial.hidden", "hidden", "replace", 1, 1, 2);
+  for (const grant of [executionGrant, protocolGrant, timeoutGrant, trafficGrant]) {
+    audienceTagStore.upsertProjection({
+      tagId: "audience:inherited",
+      entityType: "subject",
+      entityId: grant.workloadPrincipalId,
+      payload: { kind: "scoped-api-key" }
+    });
+    audienceTagStore.upsertProjection({
+      tagId: "audience:required",
+      entityType: "subject",
+      entityId: grant.workloadPrincipalId,
+      payload: { kind: "scoped-api-key" }
+    });
+  }
+  for (const tagId of ["audience:inherited", "audience:required", "audience:deny"]) {
+    audienceTagStore.upsertProjection({
+      tagId,
+      entityType: "subject",
+      entityId: tagDeniedGrant.workloadPrincipalId,
+      payload: { kind: "scoped-api-key" }
+    });
+  }
+  audienceTagStore.close();
 
-  const tagDeniedGrantUpdate: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/grants/${encodeURIComponent(tagDeniedGrant.grantId)}`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({
-        scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
-        maxRisk: "safe_write",
-        metadata: {
-          maxRisk: "safe_write",
-          organizationId: "organization-verifier",
-          teamId: "team-verifier",
-          roleId: "role-denied-verifier"
-        },
-        reason: "tag_policy_verification"
-      })
-    }
-  );
-  assert.equal(tagDeniedGrantUpdate.status, 200);
-  const executionGrantUpdate: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/grants/${encodeURIComponent(executionGrant.grantId)}`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({
-        scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
-        maxRisk: "safe_write",
-        metadata: {
-          maxRisk: "safe_write",
-          organizationId: "organization-verifier",
-          teamId: "team-verifier",
-          roleId: "role-allowed-verifier"
-        },
-        reason: "tag_policy_execution_verification"
-      })
-    }
-  );
-  assert.equal(executionGrantUpdate.status, 200);
-  const trafficGrantUpdate: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/grants/${encodeURIComponent(trafficGrant.grantId)}`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({
-        scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
-        maxRisk: "safe_write",
-        rateLimit: { perMinute: 1 },
-        metadata: { maxRisk: "safe_write" },
-        reason: "traffic_admission_verification"
-      })
-    }
-  );
-  assert.equal(trafficGrantUpdate.status, 200);
-
-  const ackStream: any = await allowedPeer.openInvalidationStream();
+  const ackStream: any = await protocolPeer.openInvalidationStream();
   assert.equal(ackStream.ok, true);
   observe("protocol.stream.opened", "opened", "replace", 1, 1);
   const unaffectedStream: any = await deniedPeer.openInvalidationStream();
   assert.equal(unaffectedStream.ok, true);
   observe("protocol.unaffected-stream.opened", "opened", "replace", 1, 1);
-  const allowedGrantUpdate: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/grants/${encodeURIComponent(allowedGrant.grantId)}`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({
-        scopes: ["gateway:read", "gateway:write"],
-        toolsets: ["meshrix.gateway.read", "meshrix.gateway.write"],
-        maxRisk: "safe_write",
-        metadata: {
-          maxRisk: "safe_write",
-          organizationId: "organization-verifier",
-          teamId: "team-verifier",
-          roleId: "role-allowed-verifier"
-        },
-        reason: "protocol_verification"
-      })
-    }
-  );
-  assert.equal(
-    allowedGrantUpdate.status,
-    200,
-    `Grant update failed: ${String(allowedGrantUpdate.payload?.error?.code || "unknown")}`
-  );
-  observe("audience.grant.updated", "updated", "replace", 1, 1);
-  const invalidation: any = await ackStream.waitForInvalidation();
-  observe("protocol.invalidation.received", "received", "replace", 1, 1);
-  await assert.rejects(() : any => unaffectedStream.waitForInvalidation(300));
-  observe("protocol.unaffected-stream.quiet", "preserved", "replace", 1, 1);
-  const refreshed: any = await allowedPeer.pullCatalog();
-  assert.ok(refreshed.tools.find((tool?: any) : any => tool?._meta?.serviceId === serviceId));
-  observe("catalog.refresh.pulled", "pulled", "replace", 1, 1);
-  const malformedAcknowledgement: any = await allowedPeer.acknowledge({
-    ...refreshed.facts,
-    audienceRevision: "invalid"
-  }, invalidation.params.change.affectedPartitions);
-  assert.notEqual(malformedAcknowledgement.payload?.result?.ok, true);
-  observe("protocol.malformed-ack.rejected", "rejected", "replace", 1, 1);
-  const staleAcknowledgement: any = await allowedPeer.acknowledge({
-    ...refreshed.facts,
-    sourceRevision: Math.max(0, refreshed.facts.sourceRevision - 1)
-  }, invalidation.params.change.affectedPartitions);
-  assert.notEqual(staleAcknowledgement.payload?.result?.ok, true);
-  observe("protocol.stale-ack.rejected", "rejected", "replace", 1, 1);
-  const acknowledgement: any = await allowedPeer.acknowledge(
-    refreshed.facts,
-    invalidation.params.change.affectedPartitions
-  );
-  assert.equal(acknowledgement.payload?.result?.ok, true);
-  observe("protocol.exact-ack.accepted", "acknowledged", "replace", 1, 1);
-  const duplicateAcknowledgement: any = await allowedPeer.acknowledge(
-    refreshed.facts,
-    invalidation.params.change.affectedPartitions
-  );
-  assert.notEqual(duplicateAcknowledgement.payload?.result?.ok, true);
-  observe("protocol.duplicate-ack.rejected", "rejected", "replace", 1, 1);
-  await ackStream.close();
-  await unaffectedStream.close();
-  const upstreamTool: any = executionCatalog.tools.find((tool?: any) : any =>
-    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "echo");
-  assert.ok(upstreamTool);
-  const forwarded: any = await executionPeer.callTool(upstreamTool.name, { body: { value: "verified" } });
-  assert.equal(
-    forwarded.status,
-    200,
-    `Forwarding failed: ${String(forwarded.payload?.error?.data?.code || forwarded.payload?.error?.code || "unknown")}`
-  );
-  assert.equal(forwarded.payload?.error, undefined);
-  observe("forward.allowed.accepted", "accepted", "replace", 1, 1);
-  const publicForwardPayload: any = forwarded.payload?.result?.structuredContent?.payload;
-  assert.equal(publicForwardPayload?.response?.json?.ok, true);
-  assert.equal(Object.prototype.hasOwnProperty.call(publicForwardPayload?.response?.json || {}, "echo"), false);
-  assert.equal(JSON.stringify(forwarded.payload).includes("verified"), false);
-  observe("forward.response-schema.validated", "validated", "replace", 1, 1);
-  observe("forward.response-projection-redaction.observed", "observed", "replace", 1, 1);
-  assert.equal(fixture.state.calls, 1);
-  observe("forward.fixture-call.observed", "observed", "replace", 1, 1);
-  assert.equal(fixture.state.credentialCalls, 1);
-  observe("sensitive-reference.materialized", "observed", "replace", 1, 1);
-  const approvalTool: any = executionCatalog.tools.find((tool?: any) : any =>
-    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "approval");
-  assert.ok(approvalTool);
-  const approvalCallsBefore: any = fixture.state.approvalCalls;
-  const pendingApproval: any = await executionPeer.callTool(approvalTool.name, { body: { value: "approved" } });
-  const pendingApprovalPayload: any = pendingApproval.payload?.result?.structuredContent?.payload;
-  assert.equal(pendingApprovalPayload?.status, "pending_approval");
-  const pendingOperationId: any = String(pendingApprovalPayload?.pendingOperation?.pendingOperationId || "");
-  assert.ok(pendingOperationId);
-  assert.equal(fixture.state.approvalCalls, approvalCallsBefore);
-  observe("forward.approval.pending", "pending", "replace", 1, 1);
-  const resolvedApproval: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/pending-operations/${encodeURIComponent(pendingOperationId)}/resolve`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({ resolution: "approved", reason: "upstream_publishing_verification" })
-    }
-  );
-  assert.equal(
-    resolvedApproval.status,
-    200,
-    `Pending approval resolution failed: ${String(resolvedApproval.payload?.error?.code || "unknown")}`
-  );
-  assert.equal(resolvedApproval.payload?.pendingOperation?.status, "completed");
-  observe("forward.approval.resolved", "approved", "replace", 1, 1);
-  assert.equal(fixture.state.approvalCalls, approvalCallsBefore + 1);
-  observe("forward.approval.fixture-call.observed", "observed", "replace", 1, 1);
-  const replayedApproval: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/pending-operations/${encodeURIComponent(pendingOperationId)}/resolve`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({ resolution: "approved", reason: "upstream_publishing_replay_verification" })
-    }
-  );
-  assert.notEqual(replayedApproval.status, 200);
-  assert.equal(fixture.state.approvalCalls, approvalCallsBefore + 1);
-  observe("forward.approval.replay.rejected", "rejected", "replace", 1, 1);
-  const boundedTool: any = executionCatalog.tools.find((tool?: any) : any =>
-    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "bounded");
-  assert.ok(boundedTool);
-  const boundedCall: any = await executionPeer.callTool(boundedTool.name, { body: {} });
-  assert.ok(boundedCall.payload?.error || boundedCall.payload?.result?.structuredContent?.payload?.ok === false);
-  assert.equal(fixture.state.largeCalls, 1);
-  assert.equal(JSON.stringify(boundedCall.payload).includes("x".repeat(64)), false);
-  observe("forward.response-byte-bound.rejected", "rejected", "replace", 1, 1);
-  const timeoutTool: any = executionCatalog.tools.find((tool?: any) : any =>
-    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "timeout");
-  assert.ok(timeoutTool);
-  const timeoutCall: any = await executionPeer.callTool(timeoutTool.name, { body: {} });
-  assert.ok(timeoutCall.payload?.error || timeoutCall.payload?.result?.structuredContent?.payload?.ok === false);
-  assert.equal(fixture.state.slowCalls, 1);
-  observe("forward.timeout.rejected", "rejected", "replace", 1, 1);
-  const cancellationController: any = new AbortController();
-  const cancellationRequest: any = fetch(`${server.url}/api/gateway/v1/forward`, {
-    method: "POST",
-    headers: ownerSession.write,
-    body: JSON.stringify({ serviceId, operationKey: "timeout", body: {} }),
-    signal: cancellationController.signal
-  });
-  setTimeout(() : any => cancellationController.abort(), 20);
-  await assert.rejects(cancellationRequest, (error?: any) : any => error?.name === "AbortError");
-  await new Promise((resolve?: any) : any => setTimeout(resolve, 150));
-  const cancellationAudit: any = await requestJson(`${server.url}/api/gateway/v1/audit`, { headers: ownerSession.read });
-  assert.ok(cancellationAudit.payload?.items?.some((item?: any) : any =>
-    item?.payload?.operationKey === "timeout" && item?.payload?.reasonCode === "upstream_forward_cancelled"));
-  observe("forward.cancellation.observed", "cancelled", "replace", 1, 1);
-  const trafficCatalog: any = await trafficPeer.pullCatalog();
-  const trafficTool: any = trafficCatalog.tools.find((tool?: any) : any =>
-    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "echo");
-  assert.ok(trafficTool);
-  const callsBeforeTraffic: any = fixture.state.calls;
-  const admittedTraffic: any = await trafficPeer.callTool(trafficTool.name, { body: { value: "traffic" } });
-  assert.equal(admittedTraffic.payload?.error, undefined);
-  assert.equal(fixture.state.calls, callsBeforeTraffic + 1);
-  observe("forward.traffic.admitted", "admitted", "replace", 1, 1);
-  const rejectedTraffic: any = await trafficPeer.callTool(trafficTool.name, { body: { value: "rate-limited" } });
-  assert.ok(rejectedTraffic.payload?.error);
-  assert.equal(fixture.state.calls, callsBeforeTraffic + 1);
-  observe("forward.traffic.rejected", "rejected", "replace", 1, 1);
-  const deniedCall: any = await deniedPeer.callTool(upstreamTool.name, { body: { value: "denied" } });
-  assert.ok(deniedCall.status === 403 || deniedCall.payload?.error);
-  assert.equal(fixture.state.calls, 3);
-  assert.equal(fixture.state.credentialCalls, 2);
-  observe("forward.denied.rejected", "denied", "replace", 1, 1);
-
   const replaceOneCommand: any = command("replace", {
     serviceId,
     expectedServiceRevision: 1,
@@ -891,7 +706,167 @@ async function main() : Promise<any> {
   });
   observe("catalog.replace-first.admitted", "admitted", "replace", 1, 2, 1,
     catalogAdmissionFact(replaceOneAuthority, replaceOneCatalog.catalog));
-  const tagAllowedCatalog: any = await allowedPeer.pullCatalog();
+  const audienceNotificationStore: any = createTagStoreAdapter({ userDataPath });
+  audienceNotificationStore.upsertProjection({
+    tagId: "audience:deny",
+    entityType: "subject",
+    entityId: protocolGrant.workloadPrincipalId,
+    payload: { kind: "scoped-api-key" }
+  });
+  audienceNotificationStore.close();
+  observe("audience.scoped-api-key.projected", "projected", "replace", 2, 2);
+  const invalidation: any = await ackStream.waitForInvalidation(5_000, {
+    partitionKeys: protocolCatalog.facts.partitionKeys
+  });
+  observe("protocol.invalidation.received", "received", "replace", 1, 2);
+  await assert.rejects(() : any => unaffectedStream.waitForInvalidation(300));
+  observe("protocol.unaffected-stream.quiet", "preserved", "replace", 1, 2);
+  const refreshed: any = await protocolPeer.pullCatalog();
+  assert.equal(refreshed.tools.some((tool?: any) : any => tool?._meta?.serviceId === serviceId), false);
+  observe("catalog.refresh.pulled", "pulled", "replace", 1, 2);
+  const invalidationFacts: any = {
+    sourceRevision: invalidation.params.change.sourceRevision,
+    catalogRevision: invalidation.params.change.catalogRevision,
+    audienceRevision: invalidation.params.change.audienceRevision
+  };
+  const malformedAcknowledgement: any = await protocolPeer.acknowledge({
+    ...invalidationFacts,
+    audienceRevision: "invalid"
+  }, invalidation.params.change.affectedPartitions);
+  assert.notEqual(malformedAcknowledgement.payload?.result?.ok, true);
+  observe("protocol.malformed-ack.rejected", "rejected", "replace", 1, 2);
+  const staleAcknowledgement: any = await protocolPeer.acknowledge({
+    ...invalidationFacts,
+    sourceRevision: Math.max(0, invalidationFacts.sourceRevision - 1)
+  }, invalidation.params.change.affectedPartitions);
+  assert.notEqual(staleAcknowledgement.payload?.result?.ok, true);
+  observe("protocol.stale-ack.rejected", "rejected", "replace", 1, 2);
+  const acknowledgement: any = await protocolPeer.acknowledge(
+    invalidationFacts,
+    invalidation.params.change.affectedPartitions
+  );
+  assert.equal(
+    acknowledgement.payload?.result?.ok,
+    true,
+    String(acknowledgement.payload?.result?.reasonCode || acknowledgement.payload?.error?.data?.code || "catalog_acknowledgement_rejected")
+  );
+  observe("protocol.exact-ack.accepted", "acknowledged", "replace", 1, 2);
+  const duplicateAcknowledgement: any = await protocolPeer.acknowledge(
+    invalidationFacts,
+    invalidation.params.change.affectedPartitions
+  );
+  assert.notEqual(duplicateAcknowledgement.payload?.result?.ok, true);
+  observe("protocol.duplicate-ack.rejected", "rejected", "replace", 1, 2);
+  await ackStream.close();
+  await unaffectedStream.close();
+  const upstreamTool: any = executionCatalog.tools.find((tool?: any) : any =>
+    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "echo");
+  assert.ok(upstreamTool);
+  const forwarded: any = await executionPeer.callTool(upstreamTool.name, { body: { value: "verified" } });
+  assert.equal(
+    forwarded.status,
+    200,
+    `Forwarding failed: ${String(forwarded.payload?.error?.data?.details?.reasonCode || forwarded.payload?.error?.data?.code || "unknown")}`
+  );
+  assert.equal(forwarded.payload?.error, undefined);
+  observe("forward.allowed.accepted", "accepted", "replace", 2, 2);
+  const publicForwardPayload: any = forwarded.payload?.result?.structuredContent?.payload;
+  assert.equal(publicForwardPayload?.response?.json?.ok, true);
+  assert.equal(Object.prototype.hasOwnProperty.call(publicForwardPayload?.response?.json || {}, "echo"), false);
+  assert.equal(JSON.stringify(forwarded.payload).includes("verified"), false);
+  observe("forward.response-schema.validated", "validated", "replace", 2, 2);
+  observe("forward.response-projection-redaction.observed", "observed", "replace", 2, 2);
+  assert.equal(fixture.state.calls, 1);
+  observe("forward.fixture-call.observed", "observed", "replace", 2, 2);
+  assert.equal(fixture.state.credentialCalls, 1);
+  observe("sensitive-reference.materialized", "observed", "replace", 2, 2);
+  const approvalTool: any = executionCatalog.tools.find((tool?: any) : any =>
+    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "approval");
+  assert.ok(approvalTool);
+  const approvalCallsBefore: any = fixture.state.approvalCalls;
+  const pendingApproval: any = await executionPeer.callTool(approvalTool.name, { body: { value: "approved" } });
+  const pendingApprovalPayload: any = pendingApproval.payload?.result?.structuredContent?.payload;
+  assert.equal(pendingApprovalPayload?.status, "pending_approval");
+  const pendingOperationId: any = String(pendingApprovalPayload?.pendingOperation?.pendingOperationId || "");
+  assert.ok(pendingOperationId);
+  assert.equal(fixture.state.approvalCalls, approvalCallsBefore);
+  observe("forward.approval.pending", "pending", "replace", 2, 2);
+  const resolvedApproval: any = await requestJson(
+    `${server.url}/api/operation-permission/v1/pending-operations/${encodeURIComponent(pendingOperationId)}/resolve`,
+    {
+      method: "POST",
+      headers: ownerSession.write,
+      body: JSON.stringify({ resolution: "approved", reason: "upstream_publishing_verification" })
+    }
+  );
+  assert.equal(
+    resolvedApproval.status,
+    200,
+    `Pending approval resolution failed: ${String(resolvedApproval.payload?.error?.message || resolvedApproval.payload?.error?.code || "unknown")}`
+  );
+  assert.equal(resolvedApproval.payload?.pendingOperation?.status, "completed");
+  observe("forward.approval.resolved", "approved", "replace", 2, 2);
+  assert.equal(fixture.state.approvalCalls, approvalCallsBefore + 1);
+  observe("forward.approval.fixture-call.observed", "observed", "replace", 2, 2);
+  const replayedApproval: any = await requestJson(
+    `${server.url}/api/operation-permission/v1/pending-operations/${encodeURIComponent(pendingOperationId)}/resolve`,
+    {
+      method: "POST",
+      headers: ownerSession.write,
+      body: JSON.stringify({ resolution: "approved", reason: "upstream_publishing_replay_verification" })
+    }
+  );
+  assert.notEqual(replayedApproval.status, 200);
+  assert.equal(fixture.state.approvalCalls, approvalCallsBefore + 1);
+  observe("forward.approval.replay.rejected", "rejected", "replace", 2, 2);
+  const boundedTool: any = executionCatalog.tools.find((tool?: any) : any =>
+    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "bounded");
+  assert.ok(boundedTool);
+  const boundedCall: any = await executionPeer.callTool(boundedTool.name, { body: {} });
+  assert.ok(boundedCall.payload?.error || boundedCall.payload?.result?.structuredContent?.payload?.ok === false);
+  assert.equal(fixture.state.largeCalls, 1);
+  assert.equal(JSON.stringify(boundedCall.payload).includes("x".repeat(64)), false);
+  observe("forward.response-byte-bound.rejected", "rejected", "replace", 2, 2);
+  const timeoutTool: any = executionCatalog.tools.find((tool?: any) : any =>
+    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "timeout");
+  assert.ok(timeoutTool);
+  const timeoutCall: any = await executionPeer.callTool(timeoutTool.name, { body: {} });
+  assert.ok(timeoutCall.payload?.error || timeoutCall.payload?.result?.structuredContent?.payload?.ok === false);
+  observe("forward.timeout.rejected", "rejected", "replace", 2, 2);
+  const cancellationController: any = new AbortController();
+  const cancellationRequest: any = fetch(`${server.url}/api/gateway/v1/forward`, {
+    method: "POST",
+    headers: ownerSession.write,
+    body: JSON.stringify({ serviceId, operationKey: "timeout", body: {} }),
+    signal: cancellationController.signal
+  });
+  setTimeout(() : any => cancellationController.abort(), 20);
+  await assert.rejects(cancellationRequest, (error?: any) : any => error?.name === "AbortError");
+  await new Promise((resolve?: any) : any => setTimeout(resolve, 150));
+  const cancellationAudit: any = await requestJson(`${server.url}/api/gateway/v1/audit`, { headers: ownerSession.read });
+  assert.ok(cancellationAudit.payload?.items?.some((item?: any) : any =>
+    item?.payload?.operationKey === "timeout" && item?.payload?.reasonCode === "upstream_forward_cancelled"));
+  observe("forward.cancellation.observed", "cancelled", "replace", 2, 2);
+  const trafficCatalog: any = await trafficPeer.pullCatalog();
+  const trafficTool: any = trafficCatalog.tools.find((tool?: any) : any =>
+    tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "echo");
+  assert.ok(trafficTool);
+  const callsBeforeTraffic: any = fixture.state.calls;
+  const admittedTraffic: any = await trafficPeer.callTool(trafficTool.name, { body: { value: "traffic" } });
+  assert.equal(admittedTraffic.payload?.error, undefined);
+  assert.equal(fixture.state.calls, callsBeforeTraffic + 1);
+  observe("forward.traffic.admitted", "admitted", "replace", 2, 2);
+  const rejectedTraffic: any = await trafficPeer.callTool(trafficTool.name, { body: { value: "rate-limited" } });
+  assert.ok(rejectedTraffic.payload?.error);
+  assert.equal(fixture.state.calls, callsBeforeTraffic + 1);
+  observe("forward.traffic.rejected", "rejected", "replace", 2, 2);
+  const deniedCall: any = await deniedPeer.callTool(upstreamTool.name, { body: { value: "denied" } });
+  assert.ok(deniedCall.status === 403 || deniedCall.payload?.error);
+  assert.equal(fixture.state.calls, 3);
+  assert.equal(fixture.state.credentialCalls, 2);
+  observe("forward.denied.rejected", "denied", "replace", 2, 2);
+
+  const tagAllowedCatalog: any = await executionPeer.pullCatalog();
   const tagDeniedCatalog: any = await tagDeniedPeer.pullCatalog();
   assert.ok(tagAllowedCatalog.tools.some((tool?: any) : any =>
     tool?._meta?.serviceId === serviceId && tool?._meta?.operationKey === "echo"));
@@ -909,15 +884,18 @@ async function main() : Promise<any> {
   assert.equal(disconnectStream.ok, true);
   observe("protocol.revoked-stream.opened", "opened", "replace", 2, 2);
   const revoked: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/grants/${encodeURIComponent(deniedGrant.grantId)}/revoke`,
+    `${server.url}/api/operation-permission/v1/api-keys/${encodeURIComponent(deniedGrant.keyId)}/revoke`,
     {
       method: "POST",
       headers: ownerSession.write,
-      body: JSON.stringify({ reason: "verification_complete" })
+      body: JSON.stringify({
+        expectedLifecycleRevision: deniedGrant.lifecycleRevision,
+        reasonCode: "verification_complete"
+      })
     }
   );
   assert.equal(revoked.status, 200);
-  observe("protocol.grant.revoked", "revoked", "replace", 2, 2);
+  observe("protocol.api-key.revoked", "revoked", "replace", 2, 2);
   assert.equal(await Promise.race([
     disconnectStream.waitForClose(),
     new Promise((resolve?: any) : any => setTimeout(() : any => resolve("timeout"), 5_000))
@@ -927,9 +905,10 @@ async function main() : Promise<any> {
 
   const timeoutPeer: any = createMcpCatalogProtocolPeer({
     baseUrl: server.url,
-    grant: allowedGrant,
+    grant: timeoutGrant,
     proxySessionId: "neutral_timeout_session_001"
   });
+  const timeoutCatalog: any = await timeoutPeer.pullCatalog();
   const timeoutStream: any = await timeoutPeer.openInvalidationStream();
   assert.equal(timeoutStream.ok, true);
   observe("protocol.timeout-stream.opened", "opened", "replace", 2, 2);
@@ -939,7 +918,12 @@ async function main() : Promise<any> {
     expectedSetRevision: 2,
     idempotencyKey: "replace-verifier-two",
     fixtureUrl: fixture.url,
-    label: "Verifier service two"
+    label: "Verifier service two",
+    tagPolicy: {
+      allowTags: ["audience:allow"],
+      requiredTags: ["audience:required"],
+      denyTags: ["audience:deny"]
+    }
   });
   const replacedTwo: any = await publish(
     server.url, ownerSession, "PUT", `${collection}/${encodeURIComponent(serviceId)}`, replaceTwoCommand
@@ -960,27 +944,18 @@ async function main() : Promise<any> {
   });
   observe("catalog.replace-second.admitted", "admitted", "replace", 2, 3, 1,
     catalogAdmissionFact(replaceTwoAuthority, replaceTwoCatalog.catalog));
-  const timeoutGrantUpdate: any = await requestJson(
-    `${server.url}/api/operation-permission/v1/grants/${encodeURIComponent(allowedGrant.grantId)}`,
-    {
-      method: "POST",
-      headers: ownerSession.write,
-      body: JSON.stringify({
-        scopes: ["gateway:read"],
-        toolsets: ["meshrix.gateway.read"],
-        maxRisk: "read_only",
-        metadata: { maxRisk: "read_only" },
-        reason: "protocol_timeout_verification"
-      })
-    }
-  );
-  assert.equal(
-    timeoutGrantUpdate.status,
-    200,
-    `Grant update failed: ${String(timeoutGrantUpdate.payload?.error?.code || "unknown")}`
-  );
-  observe("protocol.timeout-grant.updated", "updated", "replace", 3, 3);
-  await timeoutStream.waitForInvalidation();
+  const timeoutTagStore: any = createTagStoreAdapter({ userDataPath });
+  timeoutTagStore.upsertProjection({
+    tagId: "audience:deny",
+    entityType: "subject",
+    entityId: timeoutGrant.workloadPrincipalId,
+    payload: { kind: "scoped-api-key" }
+  });
+  timeoutTagStore.close();
+  observe("protocol.timeout-audience.changed", "updated", "replace", 3, 3);
+  await timeoutStream.waitForInvalidation(5_000, {
+    partitionKeys: timeoutCatalog.facts.partitionKeys
+  });
   observe("protocol.timeout-invalidation.received", "received", "replace", 3, 3);
   assert.equal(await Promise.race([
     timeoutStream.waitForClose(),
@@ -994,7 +969,7 @@ async function main() : Promise<any> {
   observe("protocol.same-session.fenced", "fenced", "reconnect", 3, 3);
   const freshPeer: any = createMcpCatalogProtocolPeer({
     baseUrl: server.url,
-    grant: allowedGrant,
+    grant: timeoutGrant,
     proxySessionId: "neutral_fresh_session_001"
   });
   const freshStream: any = await freshPeer.openInvalidationStream();
@@ -1109,13 +1084,14 @@ async function main() : Promise<any> {
   observe("publication.republish.server-published", "server_published", "republish", 5, 6, 1,
     terminalPublicationFact);
 
+  const restartPort: any = Number(new URL(server.url).port);
   await server.close();
   servers.splice(servers.indexOf(server), 1);
   server = await startHttpServer({
     userDataPath,
     distPath: "",
     host: "127.0.0.1",
-    port: 0,
+    port: restartPort,
     runtimeOptions: { disableFileLogging: true }
   });
   servers.push(server);

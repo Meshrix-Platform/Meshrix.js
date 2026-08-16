@@ -86,14 +86,12 @@
                 }
               }
             },
-            "oneOf": [
+            "anyOf": [
               {
-                "required": ["aggregate"],
-                "not": { "required": ["pluginIds"] }
+                "required": ["aggregate"]
               },
               {
-                "required": ["pluginIds"],
-                "not": { "required": ["aggregate"] }
+                "required": ["pluginIds"]
               }
             ],
             "additionalProperties": false

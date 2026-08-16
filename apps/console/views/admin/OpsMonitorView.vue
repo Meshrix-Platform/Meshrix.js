@@ -10,7 +10,7 @@ provideOpsMonitorView(opsMonitorView);
 </script>
 
 <template>
-  <section class="maintenance-agent-layout ops-monitor-layout">
+  <section class="ops-monitor-layout">
     <OpsMonitorSummaryCard />
     <OpsMonitorProcessTable />
     <OpsMonitorAlertsPanel />

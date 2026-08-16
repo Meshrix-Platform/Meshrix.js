@@ -788,9 +788,6 @@ async function createFixture() : Promise<any> {
   }
 
   async function closePersistentResources() : Promise<any> {
-    await fixture.runtimeProviders?.maintenanceAgent
-      ?.close?.()
-      .catch(() : any => {});
     await fixture.agentWorkspace?.close?.();
     fixture.agentWorkspace = null;
     fixture.runtimeProviders = null;

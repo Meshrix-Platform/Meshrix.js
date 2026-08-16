@@ -18,65 +18,104 @@
 import crypto from "node:crypto";
 import { RadixPathTrie } from "./radix-path-trie.ts";
 
-const VALID_HTTP_METHODS: any = new Set<any>([
+const VALID_HTTP_METHODS = new Set([
   "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
 ]);
-const ROUTE_INDEX_INSTRUMENTATION_SCHEMA: any = "v0.0.1:server-runtime:operation-route-index-instrumentation-1";
-let routeIndexSnapshotBuildCount: any = 0;
+const ROUTE_INDEX_INSTRUMENTATION_SCHEMA = "v0.0.1:server-runtime:operation-route-index-instrumentation-1";
+let routeIndexSnapshotBuildCount = 0;
 
-function stableStringify(value: any) : any {
+type UnknownRecord = Record<string, unknown>;
+
+export interface OperationDefinition extends UnknownRecord {
+  id: string;
+  http?: { method?: string | string[]; path?: string } & UnknownRecord;
+  rpc?: { method?: string } & UnknownRecord;
+  capability?: UnknownRecord;
+  risk?: string;
+  safety?: { risk?: string };
+  requiredScopes?: string[];
+}
+
+interface RouteNode {
+  operation: OperationDefinition;
+  path: string;
+  method: string;
+  httpConfig: NonNullable<OperationDefinition["http"]>;
+}
+
+interface RouteConflict {
+  method: string;
+  path: string;
+  conflictPath: string;
+  reason: string;
+}
+
+interface RouteWarning {
+  operationId: string;
+  method: string;
+  reason: string;
+}
+
+interface HttpRouteSummary {
+  method: string;
+  path: string;
+  operationId: string;
+}
+
+function stableStringify(value: unknown): string {
   if (value === null || typeof value !== "object") {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "null";
   }
   if (Array.isArray(value)) {
-    return `[${value.map((item?: any) : any => stableStringify(item)).join(",")}]`;
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
   }
-  const entries: any = Object.keys(value)
+  const record = value as UnknownRecord;
+  const entries = Object.keys(record)
     .sort()
-    .map((key?: any) : any => `${JSON.stringify(key)}:${stableStringify(value[key])}`);
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`);
   return `{${entries.join(",")}}`;
 }
 
-export function operationsRevision(operations: any = []) : any {
+export function operationsRevision(operations: readonly unknown[] = []): string {
   return crypto.createHash("sha256").update(stableStringify(operations)).digest("hex");
 }
 
-export function getRouteIndexRefactorInstrumentation() : any {
+export function getRouteIndexRefactorInstrumentation() {
   return {
     schemaVersion: ROUTE_INDEX_INSTRUMENTATION_SCHEMA,
     snapshotBuildCount: routeIndexSnapshotBuildCount
   };
 }
 
-function immutableSnapshot(value?: any, seen: any = new WeakMap<object, any>()) : any {
+function immutableSnapshot<T>(value: T, seen = new WeakMap<object, unknown>()): T {
   if (!value || typeof value !== "object") return value;
-  if (seen.has(value)) return seen.get(value);
+  if (seen.has(value)) return seen.get(value) as T;
   if (Array.isArray(value)) {
-    const clone: any[] = [];
+    const clone: unknown[] = [];
     seen.set(value, clone);
     for (const item of value) clone.push(immutableSnapshot(item, seen));
-    return Object.freeze(clone);
+    return Object.freeze(clone) as T;
   }
   if (Object.getPrototypeOf(value) !== Object.prototype) return value;
-  const clone: Record<string, any> = {};
+  const clone: UnknownRecord = {};
   seen.set(value, clone);
-  for (const [key, child] of (Object.entries(value) as [string, any][])) {
+  for (const [key, child] of Object.entries(value)) {
     clone[key] = immutableSnapshot(child, seen);
   }
-  return Object.freeze(clone);
+  return Object.freeze(clone) as T;
 }
 
 export class OperationRouteIndex {
-  conflicts: any;
-  operations: any;
-  strict: any;
-  revision: any;
-  warnings: any;
-  #httpIndex = new Map<any, any>();
-  #httpRoutes: any = [];
-  #rpcIndex = new Map<any, any>();
-  #operationById = new Map<any, any>();
-  #capabilityByOperationId = new Map<any, any>();
+  conflicts: RouteConflict[];
+  operations: readonly OperationDefinition[];
+  strict: boolean;
+  revision: string;
+  warnings: RouteWarning[];
+  #httpIndex = new Map<string, RadixPathTrie<RouteNode>>();
+  #httpRoutes: HttpRouteSummary[] = [];
+  #rpcIndex = new Map<string, OperationDefinition>();
+  #operationById = new Map<string, OperationDefinition>();
+  #capabilityByOperationId = new Map<string, UnknownRecord>();
 
   /**
    * @param {Array} operations - Array of operation definitions from the registry
@@ -84,7 +123,7 @@ export class OperationRouteIndex {
    * @param {boolean} [options.strict=false] - If true, throw on conflicts
    * @param {string} [options.revision] - Exact registry revision this snapshot is built from
    */
-  constructor(operations: any = [], options: Record<string, any> = {}) {
+  constructor(operations: readonly OperationDefinition[] = [], options: { strict?: boolean; revision?: string } = {}) {
     if (!Array.isArray(operations)) {
       throw new TypeError("Operation route index requires an operation array.");
     }
@@ -102,12 +141,12 @@ export class OperationRouteIndex {
 
     this._build();
     routeIndexSnapshotBuildCount += 1;
-    this.conflicts = Object.freeze([...this.conflicts]);
-    this.warnings = Object.freeze([...this.warnings]);
-    this.#httpRoutes = Object.freeze(this.#httpRoutes.map((route?: any) : any => Object.freeze(route)));
+    this.conflicts = Object.freeze([...this.conflicts]) as RouteConflict[];
+    this.warnings = Object.freeze([...this.warnings]) as RouteWarning[];
+    this.#httpRoutes = Object.freeze(this.#httpRoutes.map((route) => Object.freeze(route))) as HttpRouteSummary[];
   }
 
-  getSnapshot() : any {
+  getSnapshot() {
     return Object.freeze({
       schemaVersion: "v0.0.1:server-runtime:operation-route-snapshot-1",
       revision: this.revision,
@@ -117,7 +156,7 @@ export class OperationRouteIndex {
     });
   }
 
-  getRefactorInstrumentation() : any {
+  getRefactorInstrumentation() {
     return getRouteIndexRefactorInstrumentation();
   }
 
@@ -127,13 +166,13 @@ export class OperationRouteIndex {
    * @param {string} path - URL path
    * @returns {{ operation: object, params: Record<string, string> } | null}
    */
-  findHttpOperation(method?: any, path?: any) : any {
+  findHttpOperation(method?: unknown, path?: unknown): { operation: OperationDefinition; params: Record<string, string> } | null {
     if (typeof method !== "string" || !method) return null;
-    const trie: any = this.#httpIndex.get(method.toUpperCase());
+    const trie = this.#httpIndex.get(method.toUpperCase());
     if (!trie) return null;
 
-    const pathname: any = _pathnameFrom(path);
-    const result: any = trie.lookup(pathname);
+    const pathname = _pathnameFrom(path);
+    const result = trie.lookup(pathname);
     if (!result) return null;
 
     return {
@@ -147,7 +186,7 @@ export class OperationRouteIndex {
    * @param {string} rpcMethod - RPC method name
    * @returns {object | null}
    */
-  findRpcOperation(rpcMethod?: any) : any {
+  findRpcOperation(rpcMethod?: unknown): OperationDefinition | null {
     return typeof rpcMethod === "string" ? this.#rpcIndex.get(rpcMethod) || null : null;
   }
 
@@ -156,7 +195,7 @@ export class OperationRouteIndex {
    * @param {string} operationId
    * @returns {object | undefined}
    */
-  getOperationById(operationId?: any) : any {
+  getOperationById(operationId?: unknown): OperationDefinition | undefined {
     return typeof operationId === "string" ? this.#operationById.get(operationId) : undefined;
   }
 
@@ -165,7 +204,7 @@ export class OperationRouteIndex {
    * @param {string} operationId
    * @returns {object | undefined}
    */
-  getCapabilityForOperation(operationId?: any) : any {
+  getCapabilityForOperation(operationId?: unknown): UnknownRecord | undefined {
     return typeof operationId === "string"
       ? this.#capabilityByOperationId.get(operationId)
       : undefined;
@@ -175,16 +214,16 @@ export class OperationRouteIndex {
    * List all HTTP paths with their methods.
    * @returns {Array<{method: string, path: string, operationId: string}>}
    */
-  listHttpRoutes() : any {
-    return this.#httpRoutes.map((route?: any) : any => ({ ...route }));
+  listHttpRoutes(): HttpRouteSummary[] {
+    return this.#httpRoutes.map((route) => ({ ...route }));
   }
 
   /**
    * List all RPC methods.
    * @returns {Array<{rpcMethod: string, operationId: string}>}
    */
-  listRpcMethods() : any {
-    const methods: any[] = [];
+  listRpcMethods(): Array<{ rpcMethod: string; operationId: string }> {
+    const methods: Array<{ rpcMethod: string; operationId: string }> = [];
     for (const [rpcMethod, operation] of this.#rpcIndex) {
       methods.push({
         rpcMethod,
@@ -197,20 +236,20 @@ export class OperationRouteIndex {
   /**
    * Get the total number of indexed operations.
    */
-  get size() : any {
+  get size(): number {
     return this.#operationById.size;
   }
 
   // --- Private ---
 
-  _build() : any {
+  _build(): void {
     for (const operation of this.operations) {
       this._indexOperation(operation);
     }
 
     // Detect trie conflicts
     for (const [method, trie] of this.#httpIndex) {
-      const trieConflicts: any = trie.detectConflicts();
+      const trieConflicts = trie.detectConflicts();
       for (const c of trieConflicts) {
         this.conflicts.push({
           ...c,
@@ -220,15 +259,15 @@ export class OperationRouteIndex {
     }
 
     if (this.strict && this.conflicts.length > 0) {
-      const msgs: any = this.conflicts.map(
-        (c?: any) : any => `[${c.method}] ${c.path} conflicts with ${c.conflictPath}: ${c.reason}`
+      const msgs = this.conflicts.map(
+        (c) => `[${c.method}] ${c.path} conflicts with ${c.conflictPath}: ${c.reason}`
       );
       throw new Error(`Route conflicts detected:\n${msgs.join("\n")}`);
     }
   }
 
-  _indexOperation(operation?: any) : any {
-    const opId: any = typeof operation?.id === "string" ? operation.id : "";
+  _indexOperation(operation: OperationDefinition): void {
+    const opId = typeof operation?.id === "string" ? operation.id : "";
     if (!opId || opId !== opId.trim()) {
       this.conflicts.push({
         method: "OPERATION",
@@ -269,10 +308,10 @@ export class OperationRouteIndex {
     }
   }
 
-  _indexHttpOperation(opId?: any, operation?: any) : any {
-    const http: any = operation.http;
-    const rawMethods: any = Array.isArray(http.method) ? http.method : [http.method];
-    const path: any = typeof http.path === "string" ? http.path : "";
+  _indexHttpOperation(opId: string, operation: OperationDefinition): void {
+    const http = operation.http!;
+    const rawMethods = Array.isArray(http.method) ? http.method : [http.method];
+    const path = typeof http.path === "string" ? http.path : "";
     if (rawMethods.length === 0 || !path || path !== path.trim()) {
       this.conflicts.push({
         method: "HTTP",
@@ -284,7 +323,7 @@ export class OperationRouteIndex {
     }
 
     for (const rawMethod of rawMethods) {
-      const method: any = typeof rawMethod === "string" ? rawMethod.toUpperCase() : "";
+      const method = typeof rawMethod === "string" ? rawMethod.toUpperCase() : "";
       if (!VALID_HTTP_METHODS.has(method)) {
         this.conflicts.push({
           method,
@@ -299,8 +338,8 @@ export class OperationRouteIndex {
         this.#httpIndex.set(method, new RadixPathTrie());
       }
 
-      const trie: any = this.#httpIndex.get(method);
-      const routeNode: Record<string, any> = {
+      const trie = this.#httpIndex.get(method)!;
+      const routeNode: RouteNode = {
         operation,
         path,
         method,
@@ -308,7 +347,7 @@ export class OperationRouteIndex {
       };
 
       try {
-        const inserted: any = trie.insert(path, routeNode);
+        const inserted = trie.insert(path, routeNode);
         if (!inserted) {
           this.conflicts.push({
             method,
@@ -319,20 +358,20 @@ export class OperationRouteIndex {
         } else {
           this.#httpRoutes.push({ method, path, operationId: opId });
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         this.conflicts.push({
           method,
           path,
           conflictPath: "",
-          reason: err.message,
+          reason: err instanceof Error ? err.message : String(err),
         });
       }
     }
   }
 
-  _indexRpcOperation(opId?: any, operation?: any) : any {
-    const rpc: any = operation.rpc;
-    const rpcMethod: any = typeof rpc.method === "string" ? rpc.method : "";
+  _indexRpcOperation(opId: string, operation: OperationDefinition): void {
+    const rpc = operation.rpc!;
+    const rpcMethod = typeof rpc.method === "string" ? rpc.method : "";
     if (!rpcMethod || rpcMethod !== rpcMethod.trim()) {
       this.conflicts.push({
         method: "RPC",
@@ -362,12 +401,15 @@ export class OperationRouteIndex {
  * @param {object} [options]
  * @returns {OperationRouteIndex}
  */
-export function createOperationRouteIndex(operations?: any, options: Record<string, any> = {}) : any {
+export function createOperationRouteIndex(
+  operations: readonly OperationDefinition[] = [],
+  options: { strict?: boolean; revision?: string } = {}
+): OperationRouteIndex {
   return new OperationRouteIndex(operations, options);
 }
 
-function _pathnameFrom(path?: any) : any {
-  const raw: any = String(path || "/");
-  const queryStart: any = raw.indexOf("?");
+function _pathnameFrom(path?: unknown): string {
+  const raw = String(path || "/");
+  const queryStart = raw.indexOf("?");
   return queryStart === -1 ? raw : raw.slice(0, queryStart) || "/";
 }

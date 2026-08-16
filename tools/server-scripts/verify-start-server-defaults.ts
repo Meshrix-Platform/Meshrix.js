@@ -129,6 +129,7 @@ const output: Record<string, any> = {
 };
 
 let child: any = null;
+let smokeStage = "launch";
 
 try {
   const launchCommand: any = requestedCommand ? path.resolve(requestedCommand) : process.execPath;
@@ -160,6 +161,7 @@ try {
   child.stderr.on("data", (chunk?: any) : any => output.push(chunk));
 
   const ready: any = await waitForReady(child, readyFilePath);
+  smokeStage = "startup_contract";
   const readyStat: any = await fs.stat(readyFilePath);
   if (process.platform !== "win32") {
     assert.equal(readyStat.mode & 0o777, 0o600);
@@ -176,15 +178,21 @@ try {
 
   const serverUrl: any = `http://${ready.host}:${ready.port}`;
 
+  smokeStage = "health_request";
   const health: any = await requestJson(`${serverUrl}/api/healthz?private=${queryNeedle}`, {
     headers: { "User-Agent": userAgentNeedle }
   });
+  smokeStage = "health_status";
   assert.equal(health.status, 200);
+  smokeStage = "health_trace";
   assert.ok(health.headers.get("x-meshrix-trace-id"));
 
+  smokeStage = "bootstrap_request";
   const bootstrap: any = await requestJson(`${serverUrl}/api/bootstrap`);
+  smokeStage = "bootstrap_status";
   assert.equal(bootstrap.status, 200);
 
+  smokeStage = "rpc_health_request";
   const rpcHealth: any = await requestJson(`${serverUrl}/api/rpc`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -195,9 +203,12 @@ try {
       params: {}
     })
   });
+  smokeStage = "rpc_health_status";
   assert.equal(rpcHealth.status, 200);
+  smokeStage = "rpc_health_payload";
   assert.equal(rpcHealth.payload.jsonrpc, "2.0");
 
+  smokeStage = "shutdown_contract";
   if (process.platform === "win32") {
     // Windows has no POSIX signal delivery; terminate the launcher process
     // tree instead of awaiting a signal-driven graceful shutdown.
@@ -225,6 +236,7 @@ try {
     // A hard-killed Windows server cannot remove its readiness file.
     await assert.rejects(fs.access(readyFilePath));
   }
+  smokeStage = "runtime_log_contract";
   const runtimeLogText: any = await readRuntimeLogText(path.join(userDataPath, "logs", "runtime"));
   assert.ok(runtimeLogText.length > 0, "runtime log output is missing");
   assertAbsent(
@@ -243,6 +255,7 @@ try {
   );
   await assertFilesExclude(userDataPath, [queryNeedle, userAgentNeedle]);
 
+  smokeStage = "invalid_port_contract";
   const invalidPortNeedle: any = "private-invalid-port-4c81";
   const failureReadyFilePath: any = path.join(userDataPath, "failure-ready.json");
   const failureChild: any = spawn(launchCommand, [
@@ -278,6 +291,7 @@ try {
   );
   await assert.rejects(fs.access(failureReadyFilePath));
 
+  smokeStage = "dynamic_port_contract";
   const noReadyChild: any = spawn(launchCommand, [
     ...(requestedCommand ? [] : [startServerPath]),
     "--port",
@@ -304,6 +318,9 @@ try {
   assertAbsent(noReadyText, [userDataPath, startServerPath], "dynamic port failure output");
 
   console.log("start-server default edition smoke passed");
+} catch (error) {
+  console.error(`[start-server-smoke] failed reasonCode=${smokeStage}`);
+  throw error;
 } finally {
   if (child && child.exitCode === null && child.signalCode === null) {
     child.kill("SIGKILL");

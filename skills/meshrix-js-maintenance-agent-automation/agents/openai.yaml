@@ -1,4 +1,0 @@
-interface:
-  display_name: "Meshrix.js Maintenance Agent Automation"
-  short_description: "Guide governed maintenance planning, approval, and execution"
-  default_prompt: "Use $meshrix-js-maintenance-agent-automation to design, implement, or verify the maintenance automation capability flow."

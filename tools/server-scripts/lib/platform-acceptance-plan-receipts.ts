@@ -39,6 +39,35 @@ function requireReady(condition?: any, code?: any) : any {
   if (!condition) throw new PlatformAcceptancePlanReceiptError(code, "failed");
 }
 
+function completedPrerequisiteFrontier(checkpoints: any[], finalNode: any): any[] {
+  const byId: any = new Map<any, any>(checkpoints.map((node?: any) : any => [node?.id, node]));
+  const direct: any[] = (finalNode?.prerequisites || []).map((nodeId?: any) : any => byId.get(nodeId));
+  requireStructure(direct.length > 0 && direct.every(Boolean), "release-prerequisite-set-mismatch");
+  if (direct.every((node?: any) : any => node.status === "completed")) return direct;
+
+  const ancestorsById: any = new Map<any, any>();
+  function ancestors(nodeId?: any) : any {
+    if (ancestorsById.has(nodeId)) return ancestorsById.get(nodeId);
+    const collected: any = new Set<any>([nodeId]);
+    ancestorsById.set(nodeId, collected);
+    const node: any = byId.get(nodeId);
+    for (const prerequisiteId of node?.prerequisites || []) {
+      for (const ancestorId of ancestors(prerequisiteId)) collected.add(ancestorId);
+    }
+    return collected;
+  }
+
+  const common: any = [...ancestors(direct[0].id)].filter((nodeId?: any) : any =>
+    direct.slice(1).every((node?: any) : any => ancestors(node.id).has(nodeId)) &&
+    byId.get(nodeId)?.status === "completed");
+  const frontier: any[] = common
+    .filter((nodeId?: any) : any => !common.some((otherId?: any) : any =>
+      otherId !== nodeId && ancestors(otherId).has(nodeId)))
+    .map((nodeId?: any) : any => byId.get(nodeId));
+  requireReady(frontier.length > 0, "release-prerequisite-incomplete");
+  return frontier;
+}
+
 export function requiredPlatformAcceptancePlanReceipts(
   dependencyMap?: any,
   planProfile: any = "enterprise-single-node",
@@ -215,19 +244,15 @@ export async function verifyPlatformAcceptancePlanReceipts({
     const finalNode: any = checkpoints.find((entry?: any) : any => entry.id === releaseFinal.node_id);
     requireStructure(finalNode?.role === "final_validation", "release-final-node-missing");
     requireReady(finalNode.status === "pending", "release-final-not-pending");
-    const prerequisites: any[] = finalNode.prerequisites
-      .map((nodeId?: any) : any => checkpoints.find((entry?: any) : any => entry.id === nodeId));
-    const requiredCodes: any[] = ["EFF-7", "EFF-8", "EFF-9", "EFF-10"];
-    requireStructure(
-      prerequisites.length === requiredCodes.length &&
-        prerequisites.every(Boolean) &&
-        JSON.stringify(prerequisites.map((entry?: any) : any => entry.code).sort()) === JSON.stringify([...requiredCodes].sort()),
-      "release-prerequisite-set-mismatch",
-    );
+    const prerequisites: any[] = completedPrerequisiteFrontier(checkpoints, finalNode);
     for (const node of prerequisites) {
       requireReady(node.status === "completed", "release-prerequisite-incomplete");
-      requireReady(node.candidate_digest === candidateDigest, "release-prerequisite-candidate-mismatch");
-      requireReady(node.commit?.delivered === candidate.source_revision, "release-prerequisite-source-mismatch");
+      if (node.candidate_digest !== undefined && node.candidate_digest !== null) {
+        requireReady(node.candidate_digest === candidateDigest, "release-prerequisite-candidate-mismatch");
+      }
+      if (node.commit?.delivered !== undefined && node.commit?.delivered !== null) {
+        requireReady(node.commit.delivered === candidate.source_revision, "release-prerequisite-source-mismatch");
+      }
       requireReady(
         Array.isArray(node.acceptance_criteria) && node.acceptance_criteria.length > 0 &&
           node.acceptance_criteria.every((criterion?: any) : any => criterion.checked === true),

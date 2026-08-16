@@ -58,8 +58,8 @@ function fixtureGrant() : any {
   };
 }
 
-function createPending(store?: any, suffix?: any, overrides: Record<string, any> = {}) : any {
-  return store.createPendingOperation({
+async function createPending(store?: any, suffix?: any, overrides: Record<string, any> = {}) : Promise<any> {
+  return await store.createPendingOperation({
     pendingOperationId: `pending-${suffix}`,
     traceId: `trace-${suffix}`,
     toolExecutionId: `tool-exec-${suffix}`,
@@ -86,9 +86,12 @@ function createPending(store?: any, suffix?: any, overrides: Record<string, any>
 async function proveTerminals(store?: any) : Promise<any> {
   const events: any[] = [];
   const executeCount: Record<string, any> = { value: 0 };
-  store.getGrant = async () : Promise<any> => fixtureGrant();
+  const runtimeStore: any = Object.freeze({
+    ...store,
+    getGrant: async () : Promise<any> => fixtureGrant()
+  });
   const runtime: any = createPendingOperationRuntime({
-    store,
+    store: runtimeStore,
     executeTool: async () : Promise<any> => {
       executeCount.value += 1;
       return {
@@ -111,7 +114,7 @@ async function proveTerminals(store?: any) : Promise<any> {
     securityPermissions: null
   });
 
-  const approvedPending: any = createPending(store, "approved");
+  const approvedPending: any = await createPending(store, "approved");
   const approved: any = await runtime({
     pendingOperationId: approvedPending.pendingOperationId,
     resolution: "approved",
@@ -123,7 +126,7 @@ async function proveTerminals(store?: any) : Promise<any> {
   assert.equal(approved.payload?.pendingOperation?.status, "completed");
   assert.equal(executeCount.value, 1);
 
-  const deniedPending: any = createPending(store, "denied");
+  const deniedPending: any = await createPending(store, "denied");
   const denied: any = await runtime({
     pendingOperationId: deniedPending.pendingOperationId,
     resolution: "denied",
@@ -136,7 +139,7 @@ async function proveTerminals(store?: any) : Promise<any> {
   assert.equal(denied.payload?.pendingOperation?.status, "rejected");
   assert.equal(executeCount.value, 1);
 
-  const cancelledPending: any = createPending(store, "cancelled");
+  const cancelledPending: any = await createPending(store, "cancelled");
   const cancelled: any = await runtime({
     pendingOperationId: cancelledPending.pendingOperationId,
     resolution: "cancelled",
@@ -149,14 +152,14 @@ async function proveTerminals(store?: any) : Promise<any> {
   assert.equal(cancelled.payload?.pendingOperation?.status, "cancelled");
   assert.equal(executeCount.value, 1);
 
-  const expiredPending: any = createPending(store, "expired", {
+  const expiredPending: any = await createPending(store, "expired", {
     expiresAt: new Date(Date.now() - 60_000).toISOString()
   });
-  const expiredLoaded: any = store.getPendingOperation(expiredPending.pendingOperationId);
+  const expiredLoaded: any = await store.getPendingOperation(expiredPending.pendingOperationId);
   assert.equal(expiredLoaded?.status, "expired");
   assert.equal(expiredLoaded?.errorCode, "pending_operation_expired");
 
-  const mismatchPending: any = createPending(store, "payload-mismatch");
+  const mismatchPending: any = await createPending(store, "payload-mismatch");
   const mismatched: any = await runtime({
     pendingOperationId: mismatchPending.pendingOperationId,
     resolution: "approved",
@@ -174,7 +177,7 @@ async function proveTerminals(store?: any) : Promise<any> {
   assert.equal(mismatched.payload?.pendingOperation?.status, "payload_mismatch");
   assert.equal(executeCount.value, 1);
 
-  const replaySource: any = createPending(store, "replayed");
+  const replaySource: any = await createPending(store, "replayed");
   const first: any = await runtime({
     pendingOperationId: replaySource.pendingOperationId,
     resolution: "denied",

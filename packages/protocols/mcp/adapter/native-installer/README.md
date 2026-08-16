@@ -16,7 +16,7 @@ uninstall. A pre-issued strict `mxak1` API Key must be supplied through protecte
 standard input or the configured environment variable. Shell and PowerShell
 remain narrow launchers for that connector-owned workflow.
 
-Supported targets are backed by pinned operator-provided client-adapter packages. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
+Supported targets are backed by pinned operator-supplied external client-adapter packages. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
 
 This release currently installs local connector-managed clients. OrbStack and
 remote-Linux direct HTTP client modes remain remaining qualification work and

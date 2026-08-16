@@ -5,15 +5,15 @@
  * transport value types Date, Buffer, Map and Set. Cycles and unsupported values fail
  * closed so a signature can never be computed over an ambiguous projection.
  */
-export const CANONICAL_JSON_VERSION: any = "v0.0.1:serialization:canonical-json-1";
+export const CANONICAL_JSON_VERSION = "v0.0.1:serialization:canonical-json-1";
 
-function compareKeys(left?: any, right?: any) : any {
-  const a: any = String(left);
-  const b: any = String(right);
+function compareKeys(left: unknown, right: unknown): number {
+  const a = String(left);
+  const b = String(right);
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function serialize(value?: any, seen?: any) : any {
+function serialize(value: unknown, seen: WeakSet<object>): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
   if (typeof value === "number") {
@@ -34,32 +34,33 @@ function serialize(value?: any, seen?: any) : any {
   seen.add(value);
   try {
     if (Array.isArray(value)) {
-      return `[${value.map((entry?: any) : any => serialize(entry, seen)).join(",")}]`;
+      return `[${value.map((entry) => serialize(entry, seen)).join(",")}]`;
     }
     if (value instanceof Map) {
-      const entries: any = [...value.entries()].sort(([a]: any[], [b]: any[]) : any => compareKeys(a, b));
-      return `{${entries.map(([key, entry]: any[]) : any => `${JSON.stringify(String(key))}:${serialize(entry, seen)}`).join(",")}}`;
+      const entries = [...value.entries()].sort(([a], [b]) => compareKeys(a, b));
+      return `{${entries.map(([key, entry]) => `${JSON.stringify(String(key))}:${serialize(entry, seen)}`).join(",")}}`;
     }
     if (value instanceof Set) {
-      const entries: any = [...value].map((entry?: any) : any => serialize(entry, seen)).sort();
+      const entries = [...value].map((entry) => serialize(entry, seen)).sort();
       return `[${entries.join(",")}]`;
     }
-    const prototype: any = Object.getPrototypeOf(value);
+    const record = value as Record<string, unknown>;
+    const prototype = Object.getPrototypeOf(record);
     if (prototype !== Object.prototype && prototype !== null) {
       throw new TypeError("Unsupported canonical JSON object prototype");
     }
-    return `{${Object.keys(value).sort(compareKeys).map((key?: any) : any => (
-      `${JSON.stringify(key)}:${serialize(value[key], seen)}`
+    return `{${Object.keys(record).sort(compareKeys).map((key) => (
+      `${JSON.stringify(key)}:${serialize(record[key], seen)}`
     )).join(",")}}`;
   } finally {
     seen.delete(value);
   }
 }
 
-export function canonicalJson(value?: any) : any {
+export function canonicalJson(value?: unknown) {
   return serialize(value, new WeakSet<object>());
 }
 
-export function canonicalEqual(left?: any, right?: any) : any {
+export function canonicalEqual(left?: unknown, right?: unknown) {
   return canonicalJson(left) === canonicalJson(right);
 }

@@ -1,114 +1,162 @@
 import { isIP } from "node:net";
 
-const SUPPORTED_TYPES: any = new Set<any>([
-  "array",
-  "boolean",
-  "integer",
-  "null",
-  "number",
-  "object",
-  "string"
-]);
-const SUPPORTED_FORMATS: any = new Set<any>([
-  "date",
-  "date-time",
-  "email",
-  "hostname",
-  "ipv4",
-  "ipv6",
-  "time",
-  "uri",
-  "url",
-  "uuid"
-]);
-const SUPPORTED_KEYWORDS: any = new Set<any>([
-  "additionalProperties",
-  "allOf",
-  "anyOf",
-  "const",
-  "enum",
-  "format",
-  "items",
-  "maximum",
-  "maxItems",
-  "maxLength",
-  "maxProperties",
-  "minimum",
-  "minItems",
-  "minLength",
-  "minProperties",
-  "not",
-  "oneOf",
-  "pattern",
-  "properties",
-  "required",
-  "type"
-]);
-const OBJECT_KEYWORDS: any = new Set<any>([
-  "additionalProperties",
-  "maxProperties",
-  "minProperties",
-  "properties",
-  "required"
-]);
-const ARRAY_KEYWORDS: any = new Set<any>(["items", "maxItems", "minItems"]);
-const STRING_KEYWORDS: any = new Set<any>(["format", "maxLength", "minLength", "pattern"]);
-const NUMBER_KEYWORDS: any = new Set<any>(["maximum", "minimum"]);
-const UNSAFE_PROPERTY_NAMES: any = new Set<any>(["__proto__", "constructor", "prototype"]);
+export type ClosedJsonValue = null | boolean | number | string |
+  readonly ClosedJsonValue[] | Readonly<{ [key: string]: ClosedJsonValue }>;
+export type ClosedJsonSchema = Readonly<{ [keyword: string]: ClosedJsonValue }>;
+export type ClosedJsonSchemaValidationResult =
+  | Readonly<{ ok: true }>
+  | Readonly<{ ok: false; error: string }>;
 
-const MAX_SCHEMA_DEPTH: any = 8;
-const MAX_SCHEMA_NODES: any = 512;
-const MAX_PROPERTIES_PER_SCHEMA: any = 128;
-const MAX_REQUIRED_FIELDS: any = 128;
-const MAX_ENUM_VALUES: any = 128;
-const MAX_COMBINATOR_BRANCHES: any = 32;
-const MAX_LITERAL_DEPTH: any = 16;
-const MAX_LITERAL_NODES: any = 4096;
-const MAX_VALUE_COLLECTION_SIZE: any = 4096;
-const MAX_VALIDATION_STEPS: any = 32768;
-const MAX_PATTERN_LENGTH: any = 160;
-const MAX_PROPERTY_NAME_LENGTH: any = 256;
+export interface CompiledClosedJsonSchema {
+  readonly schema: ClosedJsonSchema;
+  readonly validate: (value?: unknown) => ClosedJsonSchemaValidationResult;
+}
+export interface CompileClosedJsonSchemaOptions {
+  readonly label?: string;
+  readonly requireTopLevelObject?: boolean;
+}
 
-function isPlainObject(value?: any) : any {
+type SchemaType = "array" | "boolean" | "integer" | "null" | "number" | "object" | "string";
+type SchemaFormat = "date" | "date-time" | "email" | "hostname" | "ipv4" | "ipv6" |
+  "time" | "uri" | "url" | "uuid";
+type CombinatorKeyword = "allOf" | "anyOf" | "oneOf";
+type SupportedKeyword = "additionalProperties" | CombinatorKeyword | "const" | "enum" |
+  "format" | "items" | "maximum" | "maxItems" | "maxLength" | "maxProperties" |
+  "minimum" | "minItems" | "minLength" | "minProperties" | "not" | "pattern" |
+  "properties" | "required" | "type";
+type NonNegativeIntegerKeyword = "maxItems" | "maxLength" | "maxProperties" |
+  "minItems" | "minLength" | "minProperties";
+type FiniteNumberKeyword = "maximum" | "minimum";
+
+interface CompilationContext {
+  readonly active: WeakSet<object>;
+  readonly label: string;
+  literalNodes: number;
+  schemaNodes: number;
+}
+interface ValidationContext { steps: number }
+interface CompiledSchemaNode {
+  readonly additionalProperties: boolean | CompiledSchemaNode;
+  readonly allOf: readonly CompiledSchemaNode[];
+  readonly anyOf: readonly CompiledSchemaNode[];
+  readonly constValue: ClosedJsonValue | undefined;
+  readonly effectiveTypes: readonly SchemaType[];
+  readonly enumValues: readonly ClosedJsonValue[] | undefined;
+  readonly format: SchemaFormat | "";
+  readonly hasConst: boolean;
+  readonly items: CompiledSchemaNode | undefined;
+  readonly maximum: number | undefined;
+  readonly maxItems: number | undefined;
+  readonly maxLength: number | undefined;
+  readonly maxProperties: number | undefined;
+  readonly minimum: number | undefined;
+  readonly minItems: number | undefined;
+  readonly minLength: number | undefined;
+  readonly minProperties: number | undefined;
+  readonly not: CompiledSchemaNode | null;
+  readonly oneOf: readonly CompiledSchemaNode[];
+  readonly pattern: RegExp | null;
+  readonly properties: ReadonlyMap<string, CompiledSchemaNode>;
+  readonly required: readonly string[];
+  readonly schema: ClosedJsonSchema;
+}
+
+const SUPPORTED_TYPES: ReadonlySet<string> = new Set([
+  "array", "boolean", "integer", "null", "number", "object", "string"
+]);
+const SUPPORTED_FORMATS: ReadonlySet<string> = new Set([
+  "date", "date-time", "email", "hostname", "ipv4", "ipv6", "time", "uri", "url", "uuid"
+]);
+const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
+  "additionalProperties", "allOf", "anyOf", "const", "enum", "format", "items",
+  "maximum", "maxItems", "maxLength", "maxProperties", "minimum", "minItems",
+  "minLength", "minProperties", "not", "oneOf", "pattern", "properties", "required", "type"
+]);
+const OBJECT_KEYWORDS: ReadonlySet<string> = new Set([
+  "additionalProperties", "maxProperties", "minProperties", "properties", "required"
+]);
+const ARRAY_KEYWORDS: ReadonlySet<string> = new Set(["items", "maxItems", "minItems"]);
+const STRING_KEYWORDS: ReadonlySet<string> = new Set(["format", "maxLength", "minLength", "pattern"]);
+const NUMBER_KEYWORDS: ReadonlySet<string> = new Set(["maximum", "minimum"]);
+const UNSAFE_PROPERTY_NAMES: ReadonlySet<string> = new Set(["__proto__", "constructor", "prototype"]);
+
+const MAX_SCHEMA_DEPTH = 8;
+const MAX_SCHEMA_NODES = 512;
+const MAX_PROPERTIES_PER_SCHEMA = 128;
+const MAX_REQUIRED_FIELDS = 128;
+const MAX_ENUM_VALUES = 128;
+const MAX_COMBINATOR_BRANCHES = 32;
+const MAX_LITERAL_DEPTH = 16;
+const MAX_LITERAL_NODES = 4096;
+const MAX_VALUE_COLLECTION_SIZE = 4096;
+const MAX_VALIDATION_STEPS = 32768;
+const MAX_PATTERN_LENGTH = 160;
+const MAX_PROPERTY_NAME_LENGTH = 256;
+
+class ClosedJsonSchemaError extends TypeError {
+  readonly code = "closed_json_schema_invalid";
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype: object | null = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
-
-function schemaError(label?: any, path?: any, reason?: any) : any {
-  const error: any = new TypeError(`${label} ${path} ${reason}`);
-  error.code = "closed_json_schema_invalid";
-  return error;
+function isSchemaType(value: unknown): value is SchemaType {
+  return typeof value === "string" && SUPPORTED_TYPES.has(value);
+}
+function isSchemaFormat(value: unknown): value is SchemaFormat {
+  return typeof value === "string" && SUPPORTED_FORMATS.has(value);
+}
+function isSupportedKeyword(value: string): value is SupportedKeyword {
+  return SUPPORTED_KEYWORDS.has(value);
+}
+function isJsonArray(value: ClosedJsonValue): value is readonly ClosedJsonValue[] {
+  return Array.isArray(value);
+}
+function schemaError(label: string, path: string, reason: string): ClosedJsonSchemaError {
+  return new ClosedJsonSchemaError(`${label} ${path} ${reason}`);
 }
 
-function ownDataEntries(value?: any, label?: any, path?: any) : any {
-  const keys: any = Reflect.ownKeys(value);
-  if (keys.some((key?: any) : any => typeof key !== "string")) {
-    throw schemaError(label, path, "contains an unsupported symbol key.");
+function containsControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 31 || codePoint === 127)) return true;
   }
-  return keys.map((key?: any) : any => {
-    const descriptor: any = Object.getOwnPropertyDescriptor(value, key);
+  return false;
+}
+
+function ownDataEntries(
+  value: Record<string, unknown>, label: string, path: string
+): [string, unknown][] {
+  const entries: [string, unknown][] = [];
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      throw schemaError(label, path, "contains an unsupported symbol key.");
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (!descriptor?.enumerable || !Object.hasOwn(descriptor, "value")) {
       throw schemaError(label, path, "must contain only enumerable data properties.");
     }
-    return [key, descriptor.value];
-  });
+    const entry: unknown = descriptor.value;
+    entries.push([key, entry]);
+  }
+  return entries;
 }
 
-function assertPropertyName(value?: any, label?: any, path?: any) : any {
-  if (
-    typeof value !== "string" ||
-    value.length === 0 ||
-    value.length > MAX_PROPERTY_NAME_LENGTH ||
-    UNSAFE_PROPERTY_NAMES.has(value) ||
-    /[\u0000-\u001f\u007f]/u.test(value)
-  ) {
+function assertPropertyName(value: unknown, label: string, path: string): string {
+  if (typeof value !== "string" || value.length === 0 ||
+    value.length > MAX_PROPERTY_NAME_LENGTH || UNSAFE_PROPERTY_NAMES.has(value) ||
+    containsControlCharacter(value)) {
     throw schemaError(label, path, "contains an invalid property name.");
   }
   return value;
 }
 
-function cloneJsonLiteral(value?: any, state?: any, label?: any, path?: any, depth: any = 0, active: any = new WeakSet<object>()) : any {
+function cloneJsonLiteral(
+  value: unknown, state: CompilationContext, label: string, path: string, depth = 0,
+  active: WeakSet<object> = new WeakSet<object>()
+): ClosedJsonValue {
   if (depth > MAX_LITERAL_DEPTH) {
     throw schemaError(label, path, "contains an excessively nested JSON value.");
   }
@@ -116,39 +164,30 @@ function cloneJsonLiteral(value?: any, state?: any, label?: any, path?: any, dep
   if (state.literalNodes > MAX_LITERAL_NODES) {
     throw schemaError(label, path, "contains too many JSON value nodes.");
   }
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return value;
-  }
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number") {
-    if (!Number.isFinite(value)) {
-      throw schemaError(label, path, "must contain finite JSON numbers.");
-    }
+    if (!Number.isFinite(value)) throw schemaError(label, path, "must contain finite JSON numbers.");
     return value;
   }
   if (!value || typeof value !== "object") {
     throw schemaError(label, path, "must contain only JSON-compatible values.");
   }
-  if (active.has(value)) {
-    throw schemaError(label, path, "must not contain cycles.");
-  }
+  if (active.has(value)) throw schemaError(label, path, "must not contain cycles.");
   active.add(value);
   try {
     if (Array.isArray(value)) {
       if (value.length > MAX_LITERAL_NODES) {
         throw schemaError(label, path, "contains an oversized JSON array.");
       }
-      return Object.freeze(value.map((entry?: any, index?: any) : any =>
-        cloneJsonLiteral(entry, state, label, `${path}[${index}]`, depth + 1, active)
-      ));
+      return Object.freeze(value.map((entry, index) =>
+        cloneJsonLiteral(entry, state, label, `${path}[${index}]`, depth + 1, active)));
     }
-    if (!isPlainObject(value)) {
-      throw schemaError(label, path, "must contain only JSON objects.");
-    }
-    const entries: any = ownDataEntries(value, label, path);
+    if (!isPlainObject(value)) throw schemaError(label, path, "must contain only JSON objects.");
+    const entries = ownDataEntries(value, label, path);
     if (entries.length > MAX_LITERAL_NODES) {
       throw schemaError(label, path, "contains an oversized JSON object.");
     }
-    const output: Record<string, any> = {};
+    const output: Record<string, ClosedJsonValue> = {};
     for (const [key, entry] of entries) {
       assertPropertyName(key, label, path);
       output[key] = cloneJsonLiteral(entry, state, label, `${path}.${key}`, depth + 1, active);
@@ -159,29 +198,25 @@ function cloneJsonLiteral(value?: any, state?: any, label?: any, path?: any, dep
   }
 }
 
-function jsonLiteralKey(value?: any) : any {
+function jsonLiteralKey(value: ClosedJsonValue): string {
   if (value === null) return "null";
   if (typeof value === "string") return `string:${JSON.stringify(value)}`;
   if (typeof value === "number") return `number:${JSON.stringify(value)}`;
   if (typeof value === "boolean") return value ? "boolean:true" : "boolean:false";
-  if (Array.isArray(value)) {
-    return `array:[${value.map(jsonLiteralKey).join(",")}]`;
-  }
-  return `object:{${Object.keys(value)
-    .sort()
-    .map((key?: any) : any => `${JSON.stringify(key)}:${jsonLiteralKey(value[key])}`)
-    .join(",")}}`;
+  if (isJsonArray(value)) return `array:[${value.map(jsonLiteralKey).join(",")}]`;
+  return `object:{${Object.keys(value).sort()
+    .map((key) => `${JSON.stringify(key)}:${jsonLiteralKey(value[key])}`).join(",")}}`;
 }
 
-function readTypes(source?: any, label?: any, path?: any) : any {
+function readTypes(source: Record<string, unknown>, label: string, path: string): SchemaType[] {
   if (!Object.hasOwn(source, "type")) return [];
-  const rawTypes: any = Array.isArray(source.type) ? source.type : [source.type];
+  const rawTypes: unknown[] = Array.isArray(source.type) ? source.type : [source.type];
   if (rawTypes.length === 0 || rawTypes.length > SUPPORTED_TYPES.size) {
     throw schemaError(label, `${path}.type`, "must declare at least one supported type.");
   }
-  const types: any[] = [];
+  const types: SchemaType[] = [];
   for (const rawType of rawTypes) {
-    if (typeof rawType !== "string" || !SUPPORTED_TYPES.has(rawType) || types.includes(rawType)) {
+    if (!isSchemaType(rawType) || types.includes(rawType)) {
       throw schemaError(label, `${path}.type`, "contains an unsupported or duplicate type.");
     }
     types.push(rawType);
@@ -189,8 +224,8 @@ function readTypes(source?: any, label?: any, path?: any) : any {
   return types;
 }
 
-function inferredTypes(source?: any) : any {
-  const inferred: any = new Set<any>();
+function inferredTypes(source: Record<string, unknown>): Set<SchemaType> {
+  const inferred = new Set<SchemaType>();
   for (const keyword of Object.keys(source)) {
     if (OBJECT_KEYWORDS.has(keyword)) inferred.add("object");
     if (ARRAY_KEYWORDS.has(keyword)) inferred.add("array");
@@ -200,14 +235,15 @@ function inferredTypes(source?: any) : any {
   return inferred;
 }
 
-function assertKeywordTypeCompatibility(source?: any, types?: any, label?: any, path?: any) : any {
-  const explicit: any = types.length > 0;
-  const inferred: any = inferredTypes(source);
-  if (!explicit && inferred.size > 1) {
+function assertKeywordTypeCompatibility(
+  source: Record<string, unknown>, types: SchemaType[], label: string, path: string
+): SchemaType[] {
+  const inferred = inferredTypes(source);
+  if (types.length === 0 && inferred.size > 1) {
     throw schemaError(label, path, "mixes constraints for incompatible value types.");
   }
-  if (!explicit) return [...inferred];
-  const supports: any = (type?: any) : any => types.includes(type) ||
+  if (types.length === 0) return [...inferred];
+  const supports = (type: SchemaType): boolean => types.includes(type) ||
     (type === "number" && types.includes("integer"));
   for (const type of inferred) {
     if (!supports(type)) {
@@ -217,141 +253,122 @@ function assertKeywordTypeCompatibility(source?: any, types?: any, label?: any, 
   return types;
 }
 
-function readNonNegativeInteger(source?: any, keyword?: any, label?: any, path?: any) : any {
+function readNonNegativeInteger(
+  source: Record<string, unknown>, keyword: NonNegativeIntegerKeyword, label: string, path: string
+): number | undefined {
   if (!Object.hasOwn(source, keyword)) return undefined;
-  const value: any = source[keyword];
-  if (!Number.isSafeInteger(value) || value < 0) {
+  const value = source[keyword];
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw schemaError(label, `${path}.${keyword}`, "must be a non-negative safe integer.");
   }
   return value;
 }
-
-function readFiniteNumber(source?: any, keyword?: any, label?: any, path?: any) : any {
+function readFiniteNumber(
+  source: Record<string, unknown>, keyword: FiniteNumberKeyword, label: string, path: string
+): number | undefined {
   if (!Object.hasOwn(source, keyword)) return undefined;
-  const value: any = source[keyword];
+  const value = source[keyword];
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw schemaError(label, `${path}.${keyword}`, "must be a finite number.");
   }
   return value;
 }
-
-function assertOrderedBounds(minimum?: any, maximum?: any, label?: any, path?: any, names?: any) : any {
+function assertOrderedBounds(
+  minimum: number | undefined, maximum: number | undefined, label: string, path: string,
+  names: readonly [string, string]
+): void {
   if (minimum !== undefined && maximum !== undefined && minimum > maximum) {
     throw schemaError(label, path, `${names[0]} must not exceed ${names[1]}.`);
   }
 }
 
-function compileSafePattern(value?: any, label?: any, path?: any) : any {
+function compileSafePattern(value: unknown, label: string, path: string): readonly [string, RegExp] {
   if (typeof value !== "string" || value.length > MAX_PATTERN_LENGTH) {
     throw schemaError(label, path, `must be a string of at most ${MAX_PATTERN_LENGTH} characters.`);
   }
-  if (
-    /\\[1-9]/u.test(value) ||
-    /\(\?/u.test(value) ||
+  if (/\\[1-9]/u.test(value) || /\(\?/u.test(value) ||
     /\([^)]*[*+][^)]*\)\s*(?:[*+?]|\{\d*,?\d*\})/u.test(value) ||
-    (value.match(/\.\*/gu) || []).length > 1
-  ) {
+    (value.match(/\.\*/gu) || []).length > 1) {
     throw schemaError(label, path, "uses unsupported regular-expression syntax.");
   }
   try {
-    return new RegExp(value, "u");
+    return [value, new RegExp(value, "u")];
   } catch {
     throw schemaError(label, path, "must be a valid bounded regular expression.");
   }
 }
 
-function compileBranches(source?: any, keyword?: any, context?: any, path?: any, depth?: any, inheritedProperties?: any) : any {
+function compileBranches(
+  source: Record<string, unknown>, keyword: CombinatorKeyword, context: CompilationContext,
+  path: string, depth: number, inheritedProperties: ReadonlySet<string> | null
+): CompiledSchemaNode[] {
   if (!Object.hasOwn(source, keyword)) return [];
-  const branches: any = source[keyword];
-  if (
-    !Array.isArray(branches) ||
-    branches.length === 0 ||
-    branches.length > MAX_COMBINATOR_BRANCHES
-  ) {
-    throw schemaError(
-      context.label,
-      `${path}.${keyword}`,
-      `must contain between 1 and ${MAX_COMBINATOR_BRANCHES} schemas.`
-    );
+  const branches = source[keyword];
+  if (!Array.isArray(branches) || branches.length === 0 || branches.length > MAX_COMBINATOR_BRANCHES) {
+    throw schemaError(context.label, `${path}.${keyword}`,
+      `must contain between 1 and ${MAX_COMBINATOR_BRANCHES} schemas.`);
   }
-  return branches.map((branch?: any, index?: any) : any =>
-    compileSchemaNode(
-      branch,
-      context,
-      `${path}.${keyword}[${index}]`,
-      depth + 1,
-      inheritedProperties
-    )
-  );
+  return branches.map((branch, index) => compileSchemaNode(
+    branch, context, `${path}.${keyword}[${index}]`, depth + 1, inheritedProperties
+  ));
 }
 
-function compileSchemaNode(source?: any, context?: any, path?: any, depth?: any, inheritedProperties: any = null) : any {
+function compileSchemaNode(
+  source: unknown, context: CompilationContext, path: string, depth: number,
+  inheritedProperties: ReadonlySet<string> | null = null
+): CompiledSchemaNode {
   if (depth > MAX_SCHEMA_DEPTH) {
     throw schemaError(context.label, path, "exceeds the supported nesting depth.");
   }
-  if (!isPlainObject(source)) {
-    throw schemaError(context.label, path, "must be a plain object.");
-  }
-  if (context.active.has(source)) {
-    throw schemaError(context.label, path, "must not contain cycles.");
-  }
+  if (!isPlainObject(source)) throw schemaError(context.label, path, "must be a plain object.");
+  if (context.active.has(source)) throw schemaError(context.label, path, "must not contain cycles.");
   context.schemaNodes += 1;
   if (context.schemaNodes > MAX_SCHEMA_NODES) {
     throw schemaError(context.label, path, "contains too many schema nodes.");
   }
   context.active.add(source);
   try {
-    const entries: any = ownDataEntries(source, context.label, path);
+    const entries = ownDataEntries(source, context.label, path);
+    const keywords: SupportedKeyword[] = [];
     for (const [keyword] of entries) {
-      if (!SUPPORTED_KEYWORDS.has(keyword)) {
+      if (!isSupportedKeyword(keyword)) {
         throw schemaError(context.label, path, "contains an unsupported keyword.");
       }
+      keywords.push(keyword);
     }
-
-    const declaredTypes: any = readTypes(source, context.label, path);
-    const effectiveTypes: any = assertKeywordTypeCompatibility(
-      source,
-      declaredTypes,
-      context.label,
-      path
-    );
-    const properties: any = new Map<any, any>();
-    let canonicalProperties: any;
+    const declaredTypes = readTypes(source, context.label, path);
+    const effectiveTypes = assertKeywordTypeCompatibility(source, declaredTypes, context.label, path);
+    const properties = new Map<string, CompiledSchemaNode>();
+    let canonicalProperties: Record<string, ClosedJsonSchema> | undefined;
     if (Object.hasOwn(source, "properties")) {
       if (!isPlainObject(source.properties)) {
         throw schemaError(context.label, `${path}.properties`, "must be a plain object.");
       }
-      const propertyEntries: any = ownDataEntries(source.properties, context.label, `${path}.properties`);
+      const propertyEntries = ownDataEntries(source.properties, context.label, `${path}.properties`);
       if (propertyEntries.length > MAX_PROPERTIES_PER_SCHEMA) {
         throw schemaError(context.label, `${path}.properties`, "exceeds its cardinality limit.");
       }
       canonicalProperties = {};
       for (const [key, child] of propertyEntries) {
         assertPropertyName(key, context.label, `${path}.properties`);
-        const compiledChild: any = compileSchemaNode(
-          child,
-          context,
-          `${path}.properties.${key}`,
-          depth + 1
-        );
+        const compiledChild = compileSchemaNode(child, context, `${path}.properties.${key}`, depth + 1);
         properties.set(key, compiledChild);
         canonicalProperties[key] = compiledChild.schema;
       }
       Object.freeze(canonicalProperties);
     }
 
-    let required: any[] = [];
-    let canonicalRequired: any;
+    let required: string[] = [];
+    let canonicalRequired: readonly string[] | undefined;
     if (Object.hasOwn(source, "required")) {
       if (!Array.isArray(source.required) || source.required.length > MAX_REQUIRED_FIELDS) {
         throw schemaError(context.label, `${path}.required`, "must be a bounded string array.");
       }
-      const seen: any = new Set<any>();
-      const declaredProperties: any = canonicalProperties
-        ? new Set<any>(Object.keys(canonicalProperties))
-        : inheritedProperties;
-      required = source.required.map((key?: any) : any => {
-        assertPropertyName(key, context.label, `${path}.required`);
+      const seen = new Set<string>();
+      const declaredProperties: ReadonlySet<string> | null = canonicalProperties
+        ? new Set(Object.keys(canonicalProperties)) : inheritedProperties;
+      required = source.required.map((rawKey) => {
+        const key = assertPropertyName(rawKey, context.label, `${path}.required`);
         if (seen.has(key)) {
           throw schemaError(context.label, `${path}.required`, "must not contain duplicates.");
         }
@@ -364,287 +381,203 @@ function compileSchemaNode(source?: any, context?: any, path?: any, depth?: any,
       canonicalRequired = Object.freeze([...required]);
     }
 
-    let additionalProperties: any = true;
-    let canonicalAdditionalProperties: any;
+    let additionalProperties: boolean | CompiledSchemaNode = true;
+    let canonicalAdditionalProperties: boolean | ClosedJsonSchema | undefined;
     if (Object.hasOwn(source, "additionalProperties")) {
       if (typeof source.additionalProperties === "boolean") {
         additionalProperties = source.additionalProperties;
         canonicalAdditionalProperties = source.additionalProperties;
       } else {
         additionalProperties = compileSchemaNode(
-          source.additionalProperties,
-          context,
-          `${path}.additionalProperties`,
-          depth + 1
+          source.additionalProperties, context, `${path}.additionalProperties`, depth + 1
         );
         canonicalAdditionalProperties = additionalProperties.schema;
       }
     }
-
-    let items: any;
-    if (Object.hasOwn(source, "items")) {
-      items = compileSchemaNode(source.items, context, `${path}.items`, depth + 1);
-    }
-
-    const minimum: any = readFiniteNumber(source, "minimum", context.label, path);
-    const maximum: any = readFiniteNumber(source, "maximum", context.label, path);
-    const minLength: any = readNonNegativeInteger(source, "minLength", context.label, path);
-    const maxLength: any = readNonNegativeInteger(source, "maxLength", context.label, path);
-    const minItems: any = readNonNegativeInteger(source, "minItems", context.label, path);
-    const maxItems: any = readNonNegativeInteger(source, "maxItems", context.label, path);
-    const minProperties: any = readNonNegativeInteger(source, "minProperties", context.label, path);
-    const maxProperties: any = readNonNegativeInteger(source, "maxProperties", context.label, path);
+    const items = Object.hasOwn(source, "items")
+      ? compileSchemaNode(source.items, context, `${path}.items`, depth + 1) : undefined;
+    const minimum = readFiniteNumber(source, "minimum", context.label, path);
+    const maximum = readFiniteNumber(source, "maximum", context.label, path);
+    const minLength = readNonNegativeInteger(source, "minLength", context.label, path);
+    const maxLength = readNonNegativeInteger(source, "maxLength", context.label, path);
+    const minItems = readNonNegativeInteger(source, "minItems", context.label, path);
+    const maxItems = readNonNegativeInteger(source, "maxItems", context.label, path);
+    const minProperties = readNonNegativeInteger(source, "minProperties", context.label, path);
+    const maxProperties = readNonNegativeInteger(source, "maxProperties", context.label, path);
     assertOrderedBounds(minimum, maximum, context.label, path, ["minimum", "maximum"]);
     assertOrderedBounds(minLength, maxLength, context.label, path, ["minLength", "maxLength"]);
     assertOrderedBounds(minItems, maxItems, context.label, path, ["minItems", "maxItems"]);
-    assertOrderedBounds(
-      minProperties,
-      maxProperties,
-      context.label,
-      path,
-      ["minProperties", "maxProperties"]
-    );
+    assertOrderedBounds(minProperties, maxProperties, context.label, path,
+      ["minProperties", "maxProperties"]);
 
-    let enumValues: any;
+    let enumValues: ClosedJsonValue[] | undefined;
     if (Object.hasOwn(source, "enum")) {
-      if (
-        !Array.isArray(source.enum) ||
-        source.enum.length === 0 ||
-        source.enum.length > MAX_ENUM_VALUES
-      ) {
+      if (!Array.isArray(source.enum) || source.enum.length === 0 || source.enum.length > MAX_ENUM_VALUES) {
         throw schemaError(context.label, `${path}.enum`, "must be a bounded non-empty array.");
       }
-      enumValues = source.enum.map((value?: any, index?: any) : any =>
-        cloneJsonLiteral(value, context, context.label, `${path}.enum[${index}]`)
-      );
-      const enumKeys: any = new Set<any>(enumValues.map(jsonLiteralKey));
+      enumValues = source.enum.map((value, index) =>
+        cloneJsonLiteral(value, context, context.label, `${path}.enum[${index}]`));
+      const enumKeys = new Set(enumValues.map(jsonLiteralKey));
       if (enumKeys.size !== enumValues.length) {
         throw schemaError(context.label, `${path}.enum`, "must contain unique values.");
       }
       Object.freeze(enumValues);
     }
-
-    let constValue: any;
-    const hasConst: any = Object.hasOwn(source, "const");
-    if (hasConst) {
-      constValue = cloneJsonLiteral(source.const, context, context.label, `${path}.const`);
-    }
-
-    let format: any = "";
+    const hasConst = Object.hasOwn(source, "const");
+    const constValue = hasConst
+      ? cloneJsonLiteral(source.const, context, context.label, `${path}.const`) : undefined;
+    let format: SchemaFormat | "" = "";
     if (Object.hasOwn(source, "format")) {
-      if (typeof source.format !== "string" || !SUPPORTED_FORMATS.has(source.format)) {
+      if (!isSchemaFormat(source.format)) {
         throw schemaError(context.label, `${path}.format`, "is unsupported.");
       }
       format = source.format;
     }
-    const pattern: any = Object.hasOwn(source, "pattern")
-      ? compileSafePattern(source.pattern, context.label, `${path}.pattern`)
-      : null;
+    let pattern: RegExp | null = null;
+    let canonicalPattern: string | undefined;
+    if (Object.hasOwn(source, "pattern")) {
+      [canonicalPattern, pattern] = compileSafePattern(source.pattern, context.label, `${path}.pattern`);
+    }
+    const branchProperties: ReadonlySet<string> | null = canonicalProperties
+      ? new Set(Object.keys(canonicalProperties)) : inheritedProperties;
+    const allOf = compileBranches(source, "allOf", context, path, depth, branchProperties);
+    const anyOf = compileBranches(source, "anyOf", context, path, depth, branchProperties);
+    const oneOf = compileBranches(source, "oneOf", context, path, depth, branchProperties);
+    const not = Object.hasOwn(source, "not")
+      ? compileSchemaNode(source.not, context, `${path}.not`, depth + 1, branchProperties) : null;
 
-    const branchProperties: any = canonicalProperties
-      ? new Set<any>(Object.keys(canonicalProperties))
-      : inheritedProperties;
-    const allOf: any = compileBranches(source, "allOf", context, path, depth, branchProperties);
-    const anyOf: any = compileBranches(source, "anyOf", context, path, depth, branchProperties);
-    const oneOf: any = compileBranches(source, "oneOf", context, path, depth, branchProperties);
-    const not: any = Object.hasOwn(source, "not")
-      ? compileSchemaNode(source.not, context, `${path}.not`, depth + 1, branchProperties)
-      : null;
-
-    const canonicalByKeyword: Record<string, any> = {
+    const canonicalByKeyword: Record<SupportedKeyword, ClosedJsonValue | undefined> = {
       additionalProperties: canonicalAdditionalProperties,
-      allOf: allOf.length ? Object.freeze(allOf.map((branch?: any) : any => branch.schema)) : undefined,
-      anyOf: anyOf.length ? Object.freeze(anyOf.map((branch?: any) : any => branch.schema)) : undefined,
+      allOf: allOf.length ? Object.freeze(allOf.map((branch) => branch.schema)) : undefined,
+      anyOf: anyOf.length ? Object.freeze(anyOf.map((branch) => branch.schema)) : undefined,
       const: constValue,
       enum: enumValues,
       format: format || undefined,
       items: items?.schema,
-      maximum,
-      maxItems,
-      maxLength,
-      maxProperties,
-      minimum,
-      minItems,
-      minLength,
-      minProperties,
+      maximum, maxItems, maxLength, maxProperties, minimum, minItems, minLength, minProperties,
       not: not?.schema,
-      oneOf: oneOf.length ? Object.freeze(oneOf.map((branch?: any) : any => branch.schema)) : undefined,
-      pattern: pattern ? source.pattern : undefined,
+      oneOf: oneOf.length ? Object.freeze(oneOf.map((branch) => branch.schema)) : undefined,
+      pattern: canonicalPattern,
       properties: canonicalProperties,
       required: canonicalRequired,
-      type: Array.isArray(source.type)
-        ? Object.freeze([...declaredTypes])
-        : source.type
+      type: Object.hasOwn(source, "type")
+        ? Array.isArray(source.type) ? Object.freeze([...declaredTypes]) : declaredTypes[0]
+        : undefined
     };
-    const canonicalSchema: Record<string, any> = {};
-    for (const [keyword] of entries) {
-      canonicalSchema[keyword] = canonicalByKeyword[keyword];
+    const canonicalSchema: Record<string, ClosedJsonValue> = {};
+    for (const keyword of keywords) {
+      const value = canonicalByKeyword[keyword];
+      if (value === undefined) {
+        throw schemaError(context.label, path, `could not canonicalize ${keyword}.`);
+      }
+      canonicalSchema[keyword] = value;
     }
     Object.freeze(canonicalSchema);
-
     return Object.freeze({
-      additionalProperties,
-      allOf,
-      anyOf,
-      constValue,
-      effectiveTypes,
-      enumValues,
-      format,
-      hasConst,
-      items,
-      maximum,
-      maxItems,
-      maxLength,
-      maxProperties,
-      minimum,
-      minItems,
-      minLength,
-      minProperties,
-      not,
-      oneOf,
-      pattern,
-      properties,
-      required,
-      schema: canonicalSchema
+      additionalProperties, allOf, anyOf, constValue, effectiveTypes, enumValues, format,
+      hasConst, items, maximum, maxItems, maxLength, maxProperties, minimum, minItems,
+      minLength, minProperties, not, oneOf, pattern, properties, required, schema: canonicalSchema
     });
   } finally {
     context.active.delete(source);
   }
 }
 
-function valueMatchesType(value?: any, type?: any) : any {
+function valueMatchesType(value: unknown, type: SchemaType): boolean {
   switch (type) {
-    case "array":
-      return Array.isArray(value);
-    case "boolean":
-      return typeof value === "boolean";
-    case "integer":
-      return typeof value === "number" && Number.isInteger(value);
-    case "null":
-      return value === null;
-    case "number":
-      return typeof value === "number" && Number.isFinite(value);
-    case "object":
-      return isPlainObject(value);
-    case "string":
-      return typeof value === "string";
-    default:
-      return false;
+    case "array": return Array.isArray(value);
+    case "boolean": return typeof value === "boolean";
+    case "integer": return typeof value === "number" && Number.isInteger(value);
+    case "null": return value === null;
+    case "number": return typeof value === "number" && Number.isFinite(value);
+    case "object": return isPlainObject(value);
+    case "string": return typeof value === "string";
   }
 }
 
-function jsonValuesEqual(left?: any, right?: any, context?: any) : any {
+function jsonValuesEqual(left: unknown, right: unknown, context: ValidationContext): boolean {
   context.steps += 1;
   if (context.steps > MAX_VALIDATION_STEPS) return false;
   if (Object.is(left, right)) return true;
   if (typeof left !== typeof right || left === null || right === null) return false;
   if (Array.isArray(left)) {
     if (!Array.isArray(right) || left.length !== right.length) return false;
-    return left.every((entry?: any, index?: any) : any => jsonValuesEqual(entry, right[index], context));
+    return left.every((entry, index) => jsonValuesEqual(entry, right[index], context));
   }
   if (!isPlainObject(left) || !isPlainObject(right)) return false;
-  const leftKeys: any = Object.keys(left);
-  const rightKeys: any = Object.keys(right);
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
   if (leftKeys.length !== rightKeys.length) return false;
-  return leftKeys.every((key?: any) : any =>
-    Object.hasOwn(right, key) && jsonValuesEqual(left[key], right[key], context)
-  );
+  return leftKeys.every((key) =>
+    Object.hasOwn(right, key) && jsonValuesEqual(left[key], right[key], context));
 }
-
-function stringLength(value?: any) : any {
-  let length: any = 0;
+function stringLength(value: string): number {
+  let length = 0;
   for (const _character of value) length += 1;
   return length;
 }
-
-function isValidDate(value?: any) : any {
-  const match: any = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+function isValidDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
   if (!match) return false;
-  const date: any = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
   return date.getUTCFullYear() === Number(match[1]) &&
-    date.getUTCMonth() === Number(match[2]) - 1 &&
-    date.getUTCDate() === Number(match[3]);
+    date.getUTCMonth() === Number(match[2]) - 1 && date.getUTCDate() === Number(match[3]);
 }
-
-function isValidHostname(value?: any) : any {
-  return value.length > 0 &&
-    value.length <= 253 &&
-    !value.endsWith(".") &&
-    value.split(".").every((part?: any) : any =>
-      part.length > 0 &&
-      part.length <= 63 &&
-      /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/u.test(part)
-    );
+function isValidHostname(value: string): boolean {
+  return value.length > 0 && value.length <= 253 && !value.endsWith(".") &&
+    value.split(".").every((part) => part.length > 0 && part.length <= 63 &&
+      /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/u.test(part));
 }
-
-function matchesFormat(value?: any, format?: any) : any {
+function matchesFormat(value: string, format: SchemaFormat): boolean {
   switch (format) {
-    case "date":
-      return isValidDate(value);
+    case "date": return isValidDate(value);
     case "date-time":
       return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(value) &&
         Number.isFinite(Date.parse(value));
-    case "email":
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
-    case "hostname":
-      return isValidHostname(value);
-    case "ipv4":
-      return isIP(value) === 4;
-    case "ipv6":
-      return isIP(value) === 6;
+    case "email": return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+    case "hostname": return isValidHostname(value);
+    case "ipv4": return isIP(value) === 4;
+    case "ipv6": return isIP(value) === 6;
     case "time":
       return /^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-][01]\d:[0-5]\d)?$/u.test(value);
     case "uri":
-      try {
-        new URL(value);
-        return true;
-      } catch {
-        return false;
-      }
+      try { new URL(value); return true; } catch { return false; }
     case "url":
-      try {
-        return ["http:", "https:"].includes(new URL(value).protocol);
-      } catch {
-        return false;
-      }
+      try { return ["http:", "https:"].includes(new URL(value).protocol); } catch { return false; }
     case "uuid":
       return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value);
-    default:
-      return false;
   }
 }
 
-function validationFailure(error?: any) : any {
+function validationFailure(error: string): ClosedJsonSchemaValidationResult {
   return { ok: false, error };
 }
-
-function validateNode(node?: any, value?: any, path?: any, context?: any) : any {
+function validateNode(
+  node: CompiledSchemaNode, value: unknown, path: string, context: ValidationContext
+): ClosedJsonSchemaValidationResult {
   context.steps += 1;
   if (context.steps > MAX_VALIDATION_STEPS) {
     return validationFailure(`${path} exceeds the validation work limit.`);
   }
-  if (
-    node.effectiveTypes.length > 0 &&
-    !node.effectiveTypes.some((type?: any) : any => valueMatchesType(value, type))
-  ) {
+  if (node.effectiveTypes.length > 0 &&
+    !node.effectiveTypes.some((type) => valueMatchesType(value, type))) {
     return validationFailure(`${path} must be ${node.effectiveTypes.join(" or ")}.`);
   }
-  if (node.enumValues && !node.enumValues.some((entry?: any) : any =>
-    jsonValuesEqual(entry, value, context)
-  )) {
+  if (node.enumValues && !node.enumValues.some((entry) => jsonValuesEqual(entry, value, context))) {
     return validationFailure(`${path} must match a declared enum value.`);
   }
   if (node.hasConst && !jsonValuesEqual(node.constValue, value, context)) {
     return validationFailure(`${path} must match the declared const value.`);
   }
   for (const branch of node.allOf) {
-    const result: any = validateNode(branch, value, path, context);
-    if (!result.ok) return validationFailure(`${path} does not satisfy allOf.`);
+    if (!validateNode(branch, value, path, context).ok) {
+      return validationFailure(`${path} does not satisfy allOf.`);
+    }
   }
   if (node.anyOf.length > 0) {
-    let matched: any = false;
+    let matched = false;
     for (const branch of node.anyOf) {
-      const branchContext: Record<string, any> = { steps: context.steps };
+      const branchContext: ValidationContext = { steps: context.steps };
       if (validateNode(branch, value, path, branchContext).ok) matched = true;
       context.steps = Math.max(context.steps, branchContext.steps);
       if (matched) break;
@@ -652,23 +585,22 @@ function validateNode(node?: any, value?: any, path?: any, context?: any) : any 
     if (!matched) return validationFailure(`${path} does not satisfy anyOf.`);
   }
   if (node.oneOf.length > 0) {
-    let matches: any = 0;
+    let matches = 0;
     for (const branch of node.oneOf) {
-      const branchContext: Record<string, any> = { steps: context.steps };
+      const branchContext: ValidationContext = { steps: context.steps };
       if (validateNode(branch, value, path, branchContext).ok) matches += 1;
       context.steps = Math.max(context.steps, branchContext.steps);
     }
     if (matches !== 1) return validationFailure(`${path} does not satisfy exactly one oneOf branch.`);
   }
   if (node.not) {
-    const branchContext: Record<string, any> = { steps: context.steps };
-    const matched: any = validateNode(node.not, value, path, branchContext).ok;
+    const branchContext: ValidationContext = { steps: context.steps };
+    const matched = validateNode(node.not, value, path, branchContext).ok;
     context.steps = Math.max(context.steps, branchContext.steps);
     if (matched) return validationFailure(`${path} matches the disallowed schema.`);
   }
-
   if (typeof value === "string") {
-    const length: any = stringLength(value);
+    const length = stringLength(value);
     if (node.minLength !== undefined && length < node.minLength) {
       return validationFailure(`${path} is shorter than minLength.`);
     }
@@ -701,14 +633,14 @@ function validateNode(node?: any, value?: any, path?: any, context?: any) : any 
       return validationFailure(`${path} has more items than maxItems.`);
     }
     if (node.items) {
-      for (let index: any = 0; index < value.length; index += 1) {
-        const result: any = validateNode(node.items, value[index], `${path}[${index}]`, context);
+      for (let index = 0; index < value.length; index += 1) {
+        const result = validateNode(node.items, value[index], `${path}[${index}]`, context);
         if (!result.ok) return result;
       }
     }
   }
   if (isPlainObject(value)) {
-    const keys: any = Object.keys(value);
+    const keys = Object.keys(value);
     if (keys.length > MAX_VALUE_COLLECTION_SIZE) {
       return validationFailure(`${path} exceeds the collection validation limit.`);
     }
@@ -724,17 +656,14 @@ function validateNode(node?: any, value?: any, path?: any, context?: any) : any 
       }
     }
     for (const key of keys) {
-      const propertySchema: any = node.properties.get(key);
+      const propertySchema = node.properties.get(key);
       if (propertySchema) {
-        const result: any = validateNode(propertySchema, value[key], `${path}.${key}`, context);
+        const result = validateNode(propertySchema, value[key], `${path}.${key}`, context);
         if (!result.ok) return result;
-        continue;
-      }
-      if (node.additionalProperties === false) {
+      } else if (node.additionalProperties === false) {
         return validationFailure(`${path} contains an undeclared property.`);
-      }
-      if (node.additionalProperties !== true) {
-        const result: any = validateNode(node.additionalProperties, value[key], `${path}.${key}`, context);
+      } else if (node.additionalProperties !== true) {
+        const result = validateNode(node.additionalProperties, value[key], `${path}.${key}`, context);
         if (!result.ok) return result;
       }
     }
@@ -743,26 +672,20 @@ function validateNode(node?: any, value?: any, path?: any, context?: any) : any 
 }
 
 export function compileClosedJsonSchema(
-  schema?: any,
-  { label = "JSON schema", requireTopLevelObject = false }: Record<string, any> = {}
-) : any {
-  const safeLabel: any = typeof label === "string" && label.trim()
-    ? label.trim().slice(0, 160)
-    : "JSON schema";
-  const context: Record<string, any> = {
-    active: new WeakSet<object>(),
-    label: safeLabel,
-    literalNodes: 0,
-    schemaNodes: 0
+  schema?: unknown,
+  { label = "JSON schema", requireTopLevelObject = false }: CompileClosedJsonSchemaOptions = {}
+): CompiledClosedJsonSchema {
+  const safeLabel = typeof label === "string" && label.trim()
+    ? label.trim().slice(0, 160) : "JSON schema";
+  const context: CompilationContext = {
+    active: new WeakSet<object>(), label: safeLabel, literalNodes: 0, schemaNodes: 0
   };
-  const root: any = compileSchemaNode(schema, context, "$", 0);
-  if (
-    requireTopLevelObject &&
-    (root.effectiveTypes.length !== 1 || root.effectiveTypes[0] !== "object")
-  ) {
+  const root = compileSchemaNode(schema, context, "$", 0);
+  if (requireTopLevelObject &&
+    (root.effectiveTypes.length !== 1 || root.effectiveTypes[0] !== "object")) {
     throw schemaError(safeLabel, "$", "must declare an object root.");
   }
-  const validate: any = (value?: any) : any => {
+  const validate = (value?: unknown): ClosedJsonSchemaValidationResult => {
     try {
       return validateNode(root, value, "$", { steps: 0 });
     } catch {
@@ -770,13 +693,10 @@ export function compileClosedJsonSchema(
     }
   };
   Object.freeze(validate);
-  return Object.freeze({
-    schema: root.schema,
-    validate
-  });
+  return Object.freeze({ schema: root.schema, validate });
 }
 
-export const CLOSED_EMPTY_JSON_OBJECT_SCHEMA: any = compileClosedJsonSchema({
+export const CLOSED_EMPTY_JSON_OBJECT_SCHEMA: ClosedJsonSchema = compileClosedJsonSchema({
   type: "object",
   properties: {},
   additionalProperties: false

@@ -37,21 +37,27 @@ import {
   timingSafeStringEqual,
   verifyPassword
 } from "./console-auth-support.ts";
-import { createConsoleAuthResources } from "./console-auth-resources.ts";
+import {
+  createConsoleAuthResources,
+  type ConsoleAuthResourceOptions,
+  type ConsoleAuthResources,
+  type ConsoleSessionDbRow,
+  type ConsoleUserDbRow
+} from "./console-auth-resources.ts";
 
-const CONSOLE_AUDIT_SECURITY_PROJECTION: any = "console-audit-security-metadata";
-const PROTECTED_SINK_AUTHORITY_PROTOCOL: any =
+const CONSOLE_AUDIT_SECURITY_PROJECTION = "console-audit-security-metadata";
+const PROTECTED_SINK_AUTHORITY_PROTOCOL =
   "v0.0.1:final-protected-sink:console-authority-1";
-const DEFERRED_PROTECTED_SINK_AUTHORITY_PROTOCOL: any =
+const DEFERRED_PROTECTED_SINK_AUTHORITY_PROTOCOL =
   "v0.0.1:final-protected-sink:deferred-console-authority-1";
-const PROTECTED_SINK_AUTHORITY_PHASES: any = new Set<any>([
+const PROTECTED_SINK_AUTHORITY_PHASES = new Set([
   "admission",
   "execution",
   "final-protected-sink"
 ]);
-const SECURITY_DIGEST_PATTERN: any = /^hmac-sha256:[a-f0-9]{64}$/i;
-const REASON_CODE_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
-const SECURITY_METADATA_KEYS: any = new Set<any>([
+const SECURITY_DIGEST_PATTERN = /^hmac-sha256:[a-f0-9]{64}$/i;
+const REASON_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/;
+const SECURITY_METADATA_KEYS = new Set([
   "byteLength",
   "hashAlgorithm",
   "keyCount",
@@ -62,7 +68,7 @@ const SECURITY_METADATA_KEYS: any = new Set<any>([
   "sha256",
   "type"
 ]);
-const SECURITY_METADATA_TYPES: any = new Set<any>([
+const SECURITY_METADATA_TYPES = new Set([
   "array",
   "boolean",
   "buffer",
@@ -75,7 +81,7 @@ const SECURITY_METADATA_TYPES: any = new Set<any>([
   "stack",
   "string"
 ]);
-const SECURITY_METADATA_REASONS: any = new Set<any>([
+const SECURITY_METADATA_REASONS = new Set([
   "absolute-path",
   "error-text",
   "identity",
@@ -84,7 +90,211 @@ const SECURITY_METADATA_REASONS: any = new Set<any>([
   "sensitive-key"
 ]);
 
-function authorityDigest(domain?: any, facts?: any) : any {
+interface HttpRequestLike {
+  method?: string;
+  url?: string;
+  headers?: Record<string, string | string[] | undefined>;
+  socket?: { remoteAddress?: string; encrypted?: boolean };
+}
+
+interface SafetyFacts extends Record<string, unknown> {
+  risk?: unknown;
+  approvalScope?: unknown;
+  requiresConfirmation?: unknown;
+  requiresConfirmationExplicit?: unknown;
+  requiresApproval?: unknown;
+  destructive?: unknown;
+  blocked?: unknown;
+  confirm?: unknown;
+}
+
+interface OperationFacts extends Record<string, unknown> {
+  id?: string;
+  public?: boolean;
+  readOnly?: boolean;
+  destructive?: boolean;
+  requiresApproval?: boolean;
+  authorizationPhase?: unknown;
+  skipCsrf?: boolean;
+  safety?: SafetyFacts;
+}
+
+interface DecisionFacts extends Record<string, unknown> {
+  allowed?: boolean;
+  operationId?: unknown;
+  effect?: unknown;
+  reasonCode?: unknown;
+  action?: unknown;
+  resource?: { risk?: unknown };
+}
+
+interface ApprovalFacts extends Record<string, unknown> {
+  approvalScope?: unknown;
+  state?: unknown;
+  confirmation?: Record<string, unknown>;
+  operationId?: unknown;
+  requiresConfirmation?: unknown;
+  risk?: unknown;
+}
+
+interface ConsoleInput extends Record<string, unknown> {
+  confirm?: unknown;
+  safetyConfirm?: unknown;
+  safety?: SafetyFacts;
+}
+
+interface ConsoleSessionUser extends Record<string, unknown> {
+  userId: string;
+  username: string;
+  displayName: string;
+  roleId: string;
+  scopes: string[];
+  tenantId: string;
+  orgId: string;
+}
+
+interface ConsoleSession extends Record<string, unknown> {
+  sessionId: string;
+  csrfToken?: string;
+  expiresAt: string;
+  user: ConsoleSessionUser;
+}
+
+interface DurableAuthoritySource extends Record<string, unknown> {
+  session: Record<string, unknown>;
+  user: Record<string, unknown>;
+}
+
+interface RoleFacts extends Record<string, unknown> {
+  roleId: string;
+  label?: string;
+  scopes?: string[];
+  enabled?: boolean;
+  system?: boolean;
+}
+
+interface DeferredAuthorityRow {
+  authority_ref: string;
+  session_id: string;
+  operation_id: string;
+  request_digest: string;
+  approval_intent_digest: string;
+  issued_at: string;
+  expires_at: string;
+  revoked_at: string;
+  reason_code: string;
+}
+
+interface DeferredSessionState {
+  role: RoleFacts;
+  row: ConsoleSessionDbRow;
+  source: DurableAuthoritySource;
+  session: ConsoleSession;
+}
+
+interface ProtectedSinkInput {
+  session: ConsoleSession;
+  operation: OperationFacts;
+  input: ConsoleInput;
+  request?: HttpRequestLike | null;
+  authorizationDecision: DecisionFacts;
+  governancePolicyRevision?: unknown;
+}
+
+interface DeferredCaptureInput {
+  request?: HttpRequestLike;
+  authSession?: ConsoleSession;
+  operation?: OperationFacts;
+  input?: ConsoleInput;
+}
+
+interface DeferredRevalidationInput {
+  authorityRef?: unknown;
+  operation?: OperationFacts;
+  input?: ConsoleInput;
+  requestDigest?: unknown;
+  authorityBindingDigest?: unknown;
+}
+
+interface DeferredRevocationInput {
+  authorityRef?: unknown;
+  reason?: unknown;
+}
+
+interface SessionListRow {
+  session_id: string;
+  user_id: string;
+  username: string;
+  role_id: string;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+}
+
+interface OidcConfigRow {
+  enabled: number;
+  issuer: string;
+  client_id: string;
+  client_secret_configured: number;
+  redirect_uri: string;
+  allowed_domains_json: string;
+  role_mapping_json: string;
+  updated_at: string;
+}
+
+interface AuditRow {
+  audit_id: string;
+  user_id: string;
+  username: string;
+  operation_id: string;
+  action: string;
+  method: string;
+  path: string;
+  status: string;
+  target_json: string;
+  error: string;
+  created_at: string;
+}
+
+interface AuditInput extends Record<string, unknown> {
+  user?: Partial<ConsoleSessionUser>;
+  reasonCode?: unknown;
+}
+
+interface AuditQuery {
+  limit?: number;
+  userId?: string;
+  status?: string;
+}
+
+interface AuthorizationInput {
+  request?: HttpRequestLike | null;
+  operation?: OperationFacts;
+  method?: string;
+  url?: URL | null;
+  input?: ConsoleInput;
+  context?: Record<string, unknown>;
+  phase?: string;
+}
+
+interface AuthorizationResult {
+  ok: boolean;
+  status?: number;
+  error?: string;
+  setupMode?: boolean;
+  bootstrap?: ReturnType<typeof getEmptyBootstrapStatus>;
+  reasonCode?: string;
+  session?: ConsoleSession | null;
+  authorizationDecision?: DecisionFacts;
+  governancePolicyRevision?: unknown;
+  protectedSinkAuthority?: Readonly<Record<string, unknown>>;
+}
+
+function getEmptyBootstrapStatus() {
+  return { required: false, tokenPrefix: "", tokenFilePath: "" };
+}
+
+function authorityDigest(domain?: unknown, facts?: unknown): string {
   return `sha256:${crypto
     .createHash("sha256")
     .update(
@@ -94,14 +304,14 @@ function authorityDigest(domain?: any, facts?: any) : any {
     .digest("hex")}`;
 }
 
-function sha256Canonical(value?: any) : any {
+function sha256Canonical(value?: unknown): string {
   return crypto
     .createHash("sha256")
     .update(canonicalJson(value))
     .digest("hex");
 }
 
-function deferredRequestDigest(operationId?: any, input?: any) : any {
+function deferredRequestDigest(operationId?: unknown, input?: unknown): string {
   return sha256Canonical({
     schemaVersion: DEFERRED_PROTECTED_SINK_AUTHORITY_PROTOCOL,
     operationId,
@@ -109,76 +319,84 @@ function deferredRequestDigest(operationId?: any, input?: any) : any {
   });
 }
 
-function exactNonEmptyText(value?: any) : any {
+function exactNonEmptyText(value?: unknown): string {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
-function exactText(value?: any) : any {
+function exactText(value?: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function exactIsoTimestamp(value?: any, { allowEmpty = false }: Record<string, any> = {}) : any {
+function exactIsoTimestamp(value?: unknown, { allowEmpty = false }: { allowEmpty?: boolean } = {}): string | null {
   if (typeof value !== "string") return null;
   if (!value && allowEmpty) return "";
   return Number.isFinite(Date.parse(value)) ? new Date(Date.parse(value)).toISOString() : null;
 }
 
-function exactJsonArray(value?: any) : any {
+function exactJsonArray(value?: unknown): unknown[] | null {
   if (typeof value !== "string") return null;
   try {
-    const parsed: any = JSON.parse(value);
+    const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
 }
 
-function exactJsonObject(value?: any) : any {
+function exactJsonObject(value?: unknown): Record<string, unknown> | null {
   if (typeof value !== "string") return null;
   try {
-    const parsed: any = JSON.parse(value);
+    const parsed = JSON.parse(value);
     return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed
+      ? parsed as Record<string, unknown>
       : null;
   } catch {
     return null;
   }
 }
 
-function stableStrings(values?: any) : any {
+function stableStrings(values?: unknown): string[] | null {
   if (
     !Array.isArray(values) ||
-    values.some((value?: any) : any => typeof value !== "string")
+    values.some((value)  => typeof value !== "string")
   ) {
     return null;
   }
-  return [...new Set<any>(values.map((value?: any) : any => value.trim()).filter(Boolean))].sort();
+  return [...new Set(values.map((value)  => value.trim()).filter(Boolean))].sort();
 }
 
-function durableSessionAuthoritySource({ row, tokenHash, role }: Record<string, any>) : any {
-  const sessionId: any = exactNonEmptyText(row?.session_id);
-  const userId: any = exactNonEmptyText(row?.user_id);
-  const tenantId: any = exactNonEmptyText(row?.tenant_id);
-  const orgId: any = exactNonEmptyText(row?.org_id);
-  const roleId: any = exactNonEmptyText(row?.role_id);
-  const sessionCreatedAt: any = exactIsoTimestamp(row?.created_at);
-  const sessionExpiresAt: any = exactIsoTimestamp(row?.expires_at);
-  const userCreatedAt: any = exactIsoTimestamp(row?.user_created_at);
-  const userUpdatedAt: any = exactIsoTimestamp(row?.user_updated_at);
-  const currentTokenHash: any = exactNonEmptyText(tokenHash);
-  const userAgentHash: any = exactText(row?.user_agent_hash);
-  const teamIds: any = exactJsonArray(row?.team_ids_json);
-  const departmentIds: any = exactJsonArray(row?.department_ids_json);
-  const allowedWorkspaceIds: any = exactJsonArray(row?.allowed_workspace_ids_json);
-  const allowedDataClasses: any = exactJsonArray(row?.allowed_data_classes_json);
-  const allowedEgress: any = exactJsonArray(row?.allowed_egress_json);
-  const attributes: any = exactJsonObject(row?.attributes_json);
-  const stableTeamIds: any = stableStrings(teamIds);
-  const stableDepartmentIds: any = stableStrings(departmentIds);
-  const stableAllowedWorkspaceIds: any = stableStrings(allowedWorkspaceIds);
-  const stableAllowedDataClasses: any = stableStrings(allowedDataClasses);
-  const stableAllowedEgress: any = stableStrings(allowedEgress);
-  const roleScopes: any = stableStrings(role?.scopes);
+function durableSessionAuthoritySource({
+  row,
+  tokenHash,
+  role
+}: {
+  row: ConsoleSessionDbRow;
+  tokenHash: unknown;
+  role: RoleFacts | null;
+}): Readonly<DurableAuthoritySource> | null {
+  const sessionId = exactNonEmptyText(row?.session_id);
+  const userId = exactNonEmptyText(row?.user_id);
+  const tenantId = exactNonEmptyText(row?.tenant_id);
+  const orgId = exactNonEmptyText(row?.org_id);
+  const roleId = exactNonEmptyText(row?.role_id);
+  const sessionCreatedAt = exactIsoTimestamp(row?.created_at);
+  const sessionExpiresAt = exactIsoTimestamp(row?.expires_at);
+  const userCreatedAt = exactIsoTimestamp(row?.user_created_at);
+  const userUpdatedAt = exactIsoTimestamp(row?.user_updated_at);
+  const currentTokenHash = exactNonEmptyText(tokenHash);
+  const userAgentHash = exactText(row?.user_agent_hash);
+  const teamIds = exactJsonArray(row?.team_ids_json);
+  const departmentIds = exactJsonArray(row?.department_ids_json);
+  const allowedWorkspaceIds = exactJsonArray(row?.allowed_workspace_ids_json);
+  const allowedDataClasses = exactJsonArray(row?.allowed_data_classes_json);
+  const allowedEgress = exactJsonArray(row?.allowed_egress_json);
+  const attributes = exactJsonObject(row?.attributes_json);
+  const stableTeamIds = stableStrings(teamIds);
+  const stableDepartmentIds = stableStrings(departmentIds);
+  const stableAllowedWorkspaceIds = stableStrings(allowedWorkspaceIds);
+  const stableAllowedDataClasses = stableStrings(allowedDataClasses);
+  const stableAllowedEgress = stableStrings(allowedEgress);
+  const roleScopes = stableStrings(role?.scopes);
   if (
     !sessionId ||
     !userId ||
@@ -231,7 +449,7 @@ function durableSessionAuthoritySource({ row, tokenHash, role }: Record<string, 
   });
 }
 
-function governancePolicyAuthorityFacts(revision?: any) : any {
+function governancePolicyAuthorityFacts(revision?: unknown) {
   if (
     !revision ||
     typeof revision !== "object" ||
@@ -242,9 +460,10 @@ function governancePolicyAuthorityFacts(revision?: any) : any {
   ) {
     return null;
   }
-  const protocolVersion: any = exactNonEmptyText(revision.protocolVersion);
-  const revisionNumber: any = Number(revision.revision);
-  const updatedAt: any = exactIsoTimestamp(revision.updatedAt, { allowEmpty: true });
+  const revisionRecord = revision as Record<string, unknown>;
+  const protocolVersion = exactNonEmptyText(revisionRecord.protocolVersion);
+  const revisionNumber = Number(revisionRecord.revision);
+  const updatedAt = exactIsoTimestamp(revisionRecord.updatedAt, { allowEmpty: true });
   if (
     !protocolVersion ||
     !Number.isSafeInteger(revisionNumber) ||
@@ -260,7 +479,7 @@ function governancePolicyAuthorityFacts(revision?: any) : any {
   });
 }
 
-function truthyApprovalFlag(value?: any) : any {
+function truthyApprovalFlag(value?: unknown): boolean {
   return value === true ||
     value === 1 ||
     ["1", "true", "yes"].includes(
@@ -268,8 +487,12 @@ function truthyApprovalFlag(value?: any) : any {
     );
 }
 
-function operationApprovalAuthorityFacts({ operation, input, request }: Record<string, any>) : any {
-  const safety: any = operation?.safety;
+function operationApprovalAuthorityFacts({ operation, input, request }: {
+  operation: OperationFacts;
+  input: ConsoleInput;
+  request?: HttpRequestLike | null;
+}) {
+  const safety = operation?.safety;
   if (
     !safety ||
     typeof safety !== "object" ||
@@ -279,11 +502,11 @@ function operationApprovalAuthorityFacts({ operation, input, request }: Record<s
   ) {
     return null;
   }
-  const operationId: any = exactNonEmptyText(operation?.id);
-  const risk: any = exactNonEmptyText(safety.risk);
-  const approvalScope: any = exactText(safety.approvalScope);
+  const operationId = exactNonEmptyText(operation?.id);
+  const risk = exactNonEmptyText(safety.risk);
+  const approvalScope = exactText(safety.approvalScope);
   if (!operationId || !risk || approvalScope === null) return null;
-  const requiresIndependentApproval: any =
+  const requiresIndependentApproval =
     operation?.requiresApproval === true ||
     safety.requiresApproval === true ||
     operation?.destructive === true ||
@@ -304,7 +527,7 @@ function operationApprovalAuthorityFacts({ operation, input, request }: Record<s
       state: "not-required"
     });
   }
-  const confirmation: Readonly<Record<string, any>> = Object.freeze({
+  const confirmation: Readonly<Record<string, unknown>> = Object.freeze({
     confirm: truthyApprovalFlag(input?.confirm),
     nestedSafetyConfirm: truthyApprovalFlag(input?.safety?.confirm),
     safetyConfirm: truthyApprovalFlag(input?.safetyConfirm),
@@ -315,7 +538,7 @@ function operationApprovalAuthorityFacts({ operation, input, request }: Record<s
       request?.headers?.["x-meshrix-confirm"]
     )
   });
-  if (!(Object.values(confirmation) as any[]).some(Boolean)) return null;
+  if (!(Object.values(confirmation) as unknown[]).some(Boolean)) return null;
   return Object.freeze({
     approvalScope,
     confirmation,
@@ -326,13 +549,13 @@ function operationApprovalAuthorityFacts({ operation, input, request }: Record<s
   });
 }
 
-function durableApprovalIntentFacts(approval?: any) : any {
+function durableApprovalIntentFacts(approval?: ApprovalFacts | null) {
   if (!approval) return null;
   return Object.freeze({
     approvalScope: approval.approvalScope,
     confirmed:
       approval.state === "not-required" ||
-      (Object.values(approval.confirmation || {}) as any[]).some(Boolean),
+      (Object.values(approval.confirmation || {}) as unknown[]).some(Boolean),
     operationId: approval.operationId,
     requiresConfirmation: approval.requiresConfirmation,
     risk: approval.risk,
@@ -340,16 +563,19 @@ function durableApprovalIntentFacts(approval?: any) : any {
   });
 }
 
-function operationRiskAuthorityFacts({ operation, authorizationDecision }: Record<string, any>) : any {
-  const safety: any = operation?.safety;
-  const operationId: any = exactNonEmptyText(operation?.id);
-  const risk: any = exactNonEmptyText(safety?.risk);
-  const decisionOperationId: any = exactNonEmptyText(authorizationDecision?.operationId);
-  const decisionRisk: any = exactNonEmptyText(authorizationDecision?.resource?.risk);
-  const effect: any = exactNonEmptyText(authorizationDecision?.effect);
-  const reasonCode: any = exactNonEmptyText(authorizationDecision?.reasonCode);
-  const action: any = exactNonEmptyText(authorizationDecision?.action);
-  const approvalScope: any = exactText(safety?.approvalScope);
+function operationRiskAuthorityFacts({ operation, authorizationDecision }: {
+  operation: OperationFacts;
+  authorizationDecision: DecisionFacts;
+}) {
+  const safety = operation?.safety;
+  const operationId = exactNonEmptyText(operation?.id);
+  const risk = exactNonEmptyText(safety?.risk);
+  const decisionOperationId = exactNonEmptyText(authorizationDecision?.operationId);
+  const decisionRisk = exactNonEmptyText(authorizationDecision?.resource?.risk);
+  const effect = exactNonEmptyText(authorizationDecision?.effect);
+  const reasonCode = exactNonEmptyText(authorizationDecision?.reasonCode);
+  const action = exactNonEmptyText(authorizationDecision?.action);
+  const approvalScope = exactText(safety?.approvalScope);
   if (
     !operationId ||
     !risk ||
@@ -388,21 +614,21 @@ function operationRiskAuthorityFacts({ operation, authorizationDecision }: Recor
   });
 }
 
-function isProtectedSinkOperation(operation?: any) : any {
-  const operationId: any = String(operation?.id || "").trim();
+function isProtectedSinkOperation(operation?: OperationFacts): boolean {
+  const operationId = String(operation?.id || "").trim();
   return operationId === "jobs.upload_workspace_materialize" ||
     operationId === "gateway.forward" ||
     operationId.startsWith("upstream_operation.");
 }
 
-function freezeSessionSnapshot(value?: any) : any {
-  const pending: any[] = [value];
-  const visited: any = new WeakSet<object>();
+function freezeSessionSnapshot<T>(value: T): T {
+  const pending: unknown[] = [value];
+  const visited = new WeakSet<object>();
   while (pending.length > 0) {
-    const current: any = pending.pop();
+    const current = pending.pop();
     if (!current || typeof current !== "object" || visited.has(current)) continue;
     visited.add(current);
-    for (const nested of (Object.values(current) as any[])) {
+    for (const nested of (Object.values(current) as unknown[])) {
       if (nested && typeof nested === "object") pending.push(nested);
     }
     Object.freeze(current);
@@ -421,12 +647,76 @@ export {
   buildConsoleOperationAuthorizationContext
 } from "./console-auth-support.ts";
 
-export function createConsoleAuth({ userDataPath, activeFeatureIds = [], featureScopeGrants = {}, tagManagementStore = null }: Record<string, any>) : any {
-  let consoleRoles: any = createConsoleRoleCatalog({ activeFeatureIds, featureScopeGrants });
-  const resources: any = createConsoleAuthResources({ userDataPath, consoleRoles, tagManagementStore });
+export type ConsoleAuthOptions = Omit<ConsoleAuthResourceOptions, "consoleRoles"> & {
+  consoleRoles?: ConsoleAuthResourceOptions["consoleRoles"];
+  activeFeatureIds?: unknown[];
+  featureScopeGrants?: Record<string, Record<string, readonly string[]>>;
+};
+
+export type ConsoleAuthDatabase = ConsoleAuthResources["db"];
+
+interface ConsoleAuthContract {
+  rootPath: string;
+  db: ConsoleAuthDatabase;
+  authorizationStore: ConsoleAuthResources["authorizationStore"];
+  authorizationGovernanceStore: ConsoleAuthResources["authorizationGovernanceStore"];
+  tagManagementStore: unknown;
+  authorizationEngine: ConsoleAuthResources["authorizationEngine"];
+  ensureInitialOwner(): Promise<Record<string, unknown>>;
+  getBootstrapStatus(): ReturnType<typeof getEmptyBootstrapStatus>;
+  hasUsers(): boolean;
+  authorizeOperation(input?: AuthorizationInput): Promise<AuthorizationResult>;
+  captureDeferredProtectedSinkAuthority(
+    input?: DeferredCaptureInput
+  ): Promise<Readonly<Record<string, unknown>>>;
+  revalidateDeferredProtectedSinkAuthority(
+    input?: DeferredRevalidationInput
+  ): Promise<Readonly<Record<string, unknown>>>;
+  revokeDeferredProtectedSinkAuthority(
+    input?: DeferredRevocationInput
+  ): Promise<Readonly<{ revoked: boolean }>>;
+  getSessionFromRequest(
+    request?: HttpRequestLike | null,
+    options?: { fresh?: boolean }
+  ): ConsoleSession | null;
+  getSummary(request?: HttpRequestLike | null): Record<string, unknown>;
+  login(
+    input?: Record<string, unknown>,
+    request?: HttpRequestLike
+  ): Promise<Record<string, unknown>>;
+  logout(request?: HttpRequestLike): Record<string, unknown>;
+  rotateSession(request?: HttpRequestLike): Record<string, unknown>;
+  listUsers(): Array<Record<string, unknown> | null>;
+  createUser(input?: Record<string, unknown>): Promise<Record<string, unknown> | null>;
+  updateUser(
+    userId?: unknown,
+    patch?: Record<string, unknown>
+  ): Promise<Record<string, unknown> | null>;
+  listSessions(): Array<Record<string, unknown>>;
+  revokeSession(sessionId?: unknown): { ok: boolean };
+  roleList(): unknown[];
+  refreshActiveFeatureIds(nextActiveFeatureIds?: unknown[]): Readonly<Record<string, unknown>>;
+  getOidcConfig(): Record<string, unknown>;
+  setOidcConfig(input?: Record<string, unknown>): Record<string, unknown>;
+  audit(input?: AuditInput): void;
+  listAudit(query?: AuditQuery): Array<Record<string, unknown>>;
+  close(): Promise<void>;
+}
+
+function createConsoleAuthImplementation({
+  userDataPath,
+  activeFeatureIds = [],
+  featureScopeGrants = {},
+  tagManagementStore = null
+}: ConsoleAuthOptions): {
+  db: ConsoleAuthDatabase;
+  api: Omit<ConsoleAuthContract, "db">;
+} {
+  let consoleRoles = createConsoleRoleCatalog({ activeFeatureIds, featureScopeGrants });
+  const resources = createConsoleAuthResources({ userDataPath, consoleRoles, tagManagementStore });
+  const db: ConsoleAuthDatabase = resources.db;
   const {
     rootPath,
-    db,
     authorizationStore,
     authorizationGovernanceStore,
     authorizationEngine,
@@ -440,10 +730,10 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     deleteSessionByStateStmt,
     touchSessionActivityStmt
   } = resources;
-  const requestSessionCache: any = new WeakMap<object, any>();
-  const sessionAuthoritySources: any = new WeakMap<object, any>();
+  let requestSessionCache = new WeakMap<object, ConsoleSession | null>();
+  const sessionAuthoritySources = new WeakMap<object, DurableAuthoritySource>();
 
-  const recordFailedLoginStmt: any = db.prepare(`
+  const recordFailedLoginStmt = db.prepare(`
     UPDATE console_users
     SET failed_attempts = CASE
           WHEN COALESCE(failed_attempts, 0) + 1 >= ? THEN 0
@@ -460,7 +750,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       AND salt = ?
       AND (COALESCE(locked_until, '') = '' OR locked_until <= ?)
   `);
-  const completeSuccessfulLoginStmt: any = db.prepare(`
+  const completeSuccessfulLoginStmt = db.prepare(`
     UPDATE console_users
     SET last_login_at = ?, updated_at = ?, failed_attempts = 0, locked_until = ''
     WHERE user_id = ?
@@ -469,20 +759,27 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       AND salt = ?
       AND (COALESCE(locked_until, '') = '' OR locked_until <= ?)
   `);
-  const insertConsoleSessionStmt: any = db.prepare(`
+  const insertConsoleSessionStmt = db.prepare(`
     INSERT INTO console_sessions (
       session_id, user_id, token_hash, user_agent_hash, created_at, last_seen_at, expires_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
-  const commitSuccessfulLogin: any = db.transaction(({
+  const commitSuccessfulLogin = db.transaction(({
     userRow,
     sessionId,
     tokenHash,
     userAgentHash,
     createdAt,
     expiresAt
-  }: Record<string, any>) : any => {
-    const updated: any = completeSuccessfulLoginStmt.run(
+  }: {
+    userRow: ConsoleUserDbRow;
+    sessionId: string;
+    tokenHash: string;
+    userAgentHash: string;
+    createdAt: string;
+    expiresAt: string;
+  }) => {
+    const updated = completeSuccessfulLoginStmt.run(
       createdAt,
       createdAt,
       userRow.user_id,
@@ -503,8 +800,8 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     return true;
   });
 
-  function auditIdentityRef(value?: any, kind: any = "identity") : any {
-    const text: any = String(value || "").trim();
+  function auditIdentityRef(value?: unknown, kind = "identity"): string {
+    const text = String(value || "").trim();
     if (!text || SECURITY_DIGEST_PATTERN.test(text)) {
       return text;
     }
@@ -514,12 +811,12 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     });
   }
 
-  function safeAuditReasonCode(value?: any, fallback: any = "") : any {
-    const text: any = String(value || "").trim();
+  function safeAuditReasonCode(value?: unknown, fallback = ""): string {
+    const text = String(value || "").trim();
     return REASON_CODE_PATTERN.test(text) ? text : fallback;
   }
 
-  function securityAuditProjection(value?: any, type: any = "target") : any {
+  function securityAuditProjection(value?: unknown, type = "target") {
     return {
       projection: CONSOLE_AUDIT_SECURITY_PROJECTION,
       type,
@@ -530,8 +827,8 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function securityAuditErrorProjection(error?: any, reasonCode: any = "") : any {
-    const inferredReasonCode: any =
+  function securityAuditErrorProjection(error?: unknown, reasonCode?: unknown) {
+    const inferredReasonCode =
       safeAuditReasonCode(reasonCode) ||
       (String(error || "") ? "console_audit_error" : "");
     return {
@@ -540,31 +837,34 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function parseSecurityAuditProjection(value?: any, type: any = "target") : any {
-    const parsed: any = parseJson(value, null);
-    const summary: any = parsed?.summary;
+  function parseSecurityAuditProjection(value?: unknown, type = "target") {
+    const parsedValue = parseJson<unknown>(value, null);
+    if (!parsedValue || typeof parsedValue !== "object" || Array.isArray(parsedValue)) return null;
+    const parsed = parsedValue as Record<string, unknown>;
+    const summary = parsed.summary && typeof parsed.summary === "object" && !Array.isArray(parsed.summary)
+      ? parsed.summary as Record<string, unknown>
+      : null;
     if (
-      parsed &&
-      typeof parsed === "object" &&
       parsed.projection === CONSOLE_AUDIT_SECURITY_PROJECTION &&
       parsed.type === type &&
       summary &&
       typeof summary === "object" &&
       !Array.isArray(summary) &&
-      Object.keys(parsed).every((key?: any) : any =>
+      Object.keys(parsed).every((key)  =>
         (type === "error"
           ? ["projection", "reasonCode", "summary", "type"]
           : ["projection", "summary", "type"]
         ).includes(key)
       ) &&
       summary.metadataOnly === true &&
-      Object.keys(summary).every((key?: any) : any => SECURITY_METADATA_KEYS.has(key)) &&
-      SECURITY_METADATA_TYPES.has(summary.type) &&
-      /^[a-f0-9]{16}$/i.test(summary.sha256 || "") &&
+      Object.keys(summary).every((key)  => SECURITY_METADATA_KEYS.has(key)) &&
+      SECURITY_METADATA_TYPES.has(String(summary.type || "")) &&
+      /^[a-f0-9]{16}$/i.test(String(summary.sha256 || "")) &&
       summary.hashAlgorithm === "hmac-sha256" &&
-      (!summary.reason || SECURITY_METADATA_REASONS.has(summary.reason)) &&
-      ["byteLength", "keyCount", "length"].every((key?: any) : any =>
-        summary[key] === undefined || (Number.isInteger(summary[key]) && summary[key] >= 0)
+      (!summary.reason || SECURITY_METADATA_REASONS.has(String(summary.reason))) &&
+      ["byteLength", "keyCount", "length"].every((key)  =>
+        summary[key] === undefined ||
+          (typeof summary[key] === "number" && Number.isInteger(summary[key]) && summary[key] >= 0)
       ) &&
       (summary.redacted === undefined || typeof summary.redacted === "boolean") &&
       (type !== "error" || !parsed.reasonCode || safeAuditReasonCode(parsed.reasonCode) === parsed.reasonCode)
@@ -574,54 +874,58 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     return null;
   }
 
-  function computeCsrfToken(rawSessionToken?: any) : any {
+  function computeCsrfToken(rawSessionToken?: unknown): string {
     return "csrf_" + crypto
       .createHmac("sha256", _csrfSecret)
       .update(String(rawSessionToken || ""))
       .digest("base64url");
   }
 
-  function hasUsers() : any {
+  function hasUsers()  {
     return Number(countUsersStmt.get()?.count || 0) > 0;
   }
 
-  function resolveRole(roleId: any = "viewer") : any {
-    return authorizationGovernanceStore.getRole(roleId) ||
+  function resolveRole(roleId = "viewer"): RoleFacts {
+    const role = authorizationGovernanceStore.getRole(roleId) ||
       consoleRoles[roleId] ||
       authorizationGovernanceStore.getRole("viewer") ||
       consoleRoles.viewer;
+    if (!role || typeof role.roleId !== "string") {
+      throw new Error(`Console role is unavailable: ${roleId}`);
+    }
+    return role as RoleFacts;
   }
 
-  function normalizeConsoleRole(value?: any) : any {
-    const roleId: any = String(value || "viewer").trim();
-    const role: any = resolveRole(roleId);
+  function normalizeConsoleRole(value?: unknown): string {
+    const roleId = String(value || "viewer").trim();
+    const role = resolveRole(roleId);
     if (!role || role.roleId !== roleId || role.enabled === false) {
       throw new Error(`未知角色：${roleId}`);
     }
     return roleId;
   }
 
-  function publicUserWithGovernanceRole(row?: any) : any {
-    const user: any = publicUser(row, consoleRoles);
+  function publicUserWithGovernanceRole(row?: ConsoleUserDbRow | null) {
+    const user = publicUser(row, consoleRoles);
     if (!user) {
       return null;
     }
-    const role: any = resolveRole(user.roleId);
+    const role = resolveRole(user.roleId);
     return {
       ...user,
-      roleLabel: role.label,
+      roleLabel: role.label || role.roleId,
       scopes: role.scopes || []
     };
   }
 
-  async function ensureInitialOwner() : Promise<any> {
+  async function ensureInitialOwner()  {
     if (hasUsers()) {
       return { created: false };
     }
 
-    const username: any = "owner";
-    const password: any = randomToken("sap_");
-    const user: any = await createUser({
+    const username = "owner";
+    const password = randomToken("sap_");
+    const user = await createUser({
       username,
       displayName: "Owner",
       password,
@@ -637,7 +941,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function getBootstrapStatus() : any {
+  function getBootstrapStatus()  {
     return {
       required: false,
       tokenPrefix: "",
@@ -645,14 +949,14 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function roleList() : any {
+  function roleList()  {
     return authorizationGovernanceStore.listRoles();
   }
 
-  function refreshActiveFeatureIds(nextActiveFeatureIds: any = []) : any {
-    const nextRoles: any = createConsoleRoleCatalog({ activeFeatureIds: nextActiveFeatureIds, featureScopeGrants });
-    for (const role of (Object.values(nextRoles) as any[])) {
-      const existing: any = authorizationGovernanceStore.getRole(role.roleId);
+  function refreshActiveFeatureIds(nextActiveFeatureIds = [])  {
+    const nextRoles = createConsoleRoleCatalog({ activeFeatureIds: nextActiveFeatureIds, featureScopeGrants });
+    for (const role of Object.values(nextRoles)) {
+      const existing = authorizationGovernanceStore.getRole(role.roleId);
       if (existing?.system === false) continue;
       authorizationGovernanceStore.upsertRole({
         ...role,
@@ -661,22 +965,26 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       }, { seed: true });
     }
     consoleRoles = nextRoles;
-    requestSessionCache.clear?.();
+    requestSessionCache = new WeakMap<object, ConsoleSession | null>();
     return Object.freeze({ ok: true, roles: Object.freeze(roleList()) });
   }
 
-  function sessionFromToken(token?: any, request: any = null, allowInactivityRetry: any = true) : any {
+  function sessionFromToken(
+    token?: unknown,
+    request: HttpRequestLike | null = null,
+    allowInactivityRetry = true
+  ): ConsoleSession | null {
     if (!token) {
       return null;
     }
-    const tokenHash: any = hashToken(token);
-    const row: any = getSessionByTokenHashStmt.get(tokenHash);
+    const tokenHash = hashToken(token);
+    const row = getSessionByTokenHashStmt.get(tokenHash);
     if (!row || !row.enabled) {
       return null;
     }
-    const currentTimeMs: any = Date.now();
-    const expiresAtMs: any = Date.parse(row.expires_at);
-    const lastSeenMs: any = Date.parse(row.last_seen_at);
+    const currentTimeMs = Date.now();
+    const expiresAtMs = Date.parse(row.expires_at);
+    const lastSeenMs = Date.parse(row.last_seen_at);
     if (!Number.isFinite(expiresAtMs) || !Number.isFinite(lastSeenMs)) {
       deleteSessionByStateStmt.run(
         row.session_id,
@@ -700,7 +1008,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       row.role_id !== "owner" &&
       currentTimeMs - lastSeenMs > SESSION_INACTIVITY_TTL_MS
     ) {
-      const deleted: any = deleteSessionByStateStmt.run(
+      const deleted = deleteSessionByStateStmt.run(
         row.session_id,
         tokenHash,
         row.expires_at,
@@ -711,7 +1019,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       }
       return null;
     }
-    const role: any = resolveRole(row.role_id);
+    const role = resolveRole(row.role_id);
     if (currentTimeMs - lastSeenMs >= SESSION_ACTIVITY_WRITE_INTERVAL_MS) {
       touchSessionActivityStmt.run(
         new Date(currentTimeMs).toISOString(),
@@ -723,7 +1031,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     // L-1: soft-validate user-agent binding (audit suspicious mismatches, do not hard-reject
     // to avoid breaking legitimate users whose UA changes between requests)
     if (request && row.user_agent_hash) {
-      const incomingUaHash: any = hashToken(request?.headers?.["user-agent"] || "");
+      const incomingUaHash = hashToken(request?.headers?.["user-agent"] || "");
       if (incomingUaHash !== row.user_agent_hash) {
         audit({
           user: {
@@ -747,8 +1055,8 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     }
     // M-3: CSRF token is derived via HMAC from the raw session token — never stored
     // in the DB, so DB read-access cannot expose valid CSRF tokens.
-    const csrfToken: any = computeCsrfToken(token);
-    const session: any = freezeSessionSnapshot({
+    const csrfToken = computeCsrfToken(token);
+    const session = freezeSessionSnapshot({
       sessionId: row.session_id,
       csrfToken,
       expiresAt: row.expires_at,
@@ -758,7 +1066,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         displayName: row.display_name || row.username,
         roleId: row.role_id,
         roleLabel: role.label,
-        scopes: [...role.scopes],
+        scopes: [...(role.scopes || [])],
         tenantId: row.tenant_id,
         orgId: row.org_id,
         teamIds: parseJson(row.team_ids_json, []),
@@ -773,7 +1081,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         lastLoginAt: row.last_login_at || ""
       }
     });
-    const authoritySource: any = durableSessionAuthoritySource({
+    const authoritySource = durableSessionAuthoritySource({
       row,
       role,
       tokenHash
@@ -782,28 +1090,31 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     return session;
   }
 
-  function getSessionFromRequest(request?: any, { fresh = false }: Record<string, any> = {}) : any {
-    const cacheableRequest: any = request !== null &&
+  function getSessionFromRequest(
+    request?: HttpRequestLike | null,
+    { fresh = false }: { fresh?: boolean } = {}
+  ): ConsoleSession | null {
+    const cacheableRequest = request !== null &&
       (typeof request === "object" || typeof request === "function");
     if (!fresh && cacheableRequest && requestSessionCache.has(request)) {
-      const cachedSession: any = requestSessionCache.get(request);
+      const cachedSession = requestSessionCache.get(request);
       if (!cachedSession) return null;
-      const expiresAtMs: any = Date.parse(cachedSession.expiresAt);
+      const expiresAtMs = Date.parse(cachedSession.expiresAt);
       if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
         requestSessionCache.set(request, null);
         return null;
       }
       return cachedSession;
     }
-    const cookies: any = parseCookies(request);
-    const cookieToken: any = cookies[CONSOLE_SESSION_COOKIE] || "";
-    const session: any = sessionFromToken(cookieToken, request);
-    if (cacheableRequest) requestSessionCache.set(request, session);
+    const cookies = parseCookies(request ?? undefined);
+    const cookieToken = cookies[CONSOLE_SESSION_COOKIE] || "";
+    const session = sessionFromToken(cookieToken, request);
+    if (cacheableRequest && request) requestSessionCache.set(request, session);
     return session;
   }
 
-  function sessionAuthorityRevision(session?: any) : any {
-    const source: any = sessionAuthoritySources.get(session);
+  function sessionAuthorityRevision(session: ConsoleSession): string {
+    const source = sessionAuthoritySources.get(session);
     return source
       ? authorityDigest("durable-session-authority-source", source)
       : "";
@@ -816,20 +1127,27 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     request,
     authorizationDecision,
     governancePolicyRevision
-  }: Record<string, any>) : any {
-    const policy: any = governancePolicyAuthorityFacts(governancePolicyRevision);
-    const approval: any = operationApprovalAuthorityFacts({
+  }: {
+    source: DurableAuthoritySource | null;
+    operation: OperationFacts;
+    input: ConsoleInput;
+    request?: HttpRequestLike | null;
+    authorizationDecision: DecisionFacts;
+    governancePolicyRevision?: unknown;
+  }) {
+    const policy = governancePolicyAuthorityFacts(governancePolicyRevision);
+    const approval = operationApprovalAuthorityFacts({
       operation,
       input,
       request
     });
-    const durableApproval: any = durableApprovalIntentFacts(approval);
-    const risk: any = operationRiskAuthorityFacts({
+    const durableApproval = durableApprovalIntentFacts(approval);
+    const risk = operationRiskAuthorityFacts({
       operation,
       authorizationDecision
     });
     if (!source || !policy || !durableApproval || !risk) return null;
-    const subjectGeneration: any = authorityDigest(
+    const subjectGeneration = authorityDigest(
       "console-user-generation",
       source.user
     );
@@ -873,21 +1191,21 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     });
   }
 
-  function protectedSinkAuthority(input?: any) : any {
+  function protectedSinkAuthority(input: ProtectedSinkInput) {
     return protectedSinkAuthorityFromSource({
       ...input,
-      source: sessionAuthoritySources.get(input.session)
+      source: sessionAuthoritySources.get(input.session) ?? null
     });
   }
 
-  const readDeferredAuthorityStmt: any = db.prepare(`
+  const readDeferredAuthorityStmt = db.prepare<unknown[], DeferredAuthorityRow>(`
     SELECT authority_ref, session_id, operation_id, request_digest,
            approval_intent_digest, issued_at, expires_at, revoked_at,
            reason_code
     FROM console_deferred_protected_sink_authorities
     WHERE authority_ref = ?
   `);
-  const readDeferredSessionStmt: any = db.prepare(`
+  const readDeferredSessionStmt = db.prepare<unknown[], ConsoleSessionDbRow>(`
     SELECT s.session_id, s.user_id, s.token_hash, s.user_agent_hash,
            s.created_at, s.last_seen_at, s.expires_at,
            u.username, u.display_name, u.role_id, u.enabled,
@@ -900,27 +1218,27 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     JOIN console_users u ON u.user_id = s.user_id
     WHERE s.session_id = ?
   `);
-  const insertDeferredAuthorityStmt: any = db.prepare(`
+  const insertDeferredAuthorityStmt = db.prepare(`
     INSERT INTO console_deferred_protected_sink_authorities (
       authority_ref, session_id, operation_id, request_digest,
       approval_intent_digest, issued_at, expires_at, revoked_at,
       reason_code
     ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '')
   `);
-  const revokeDeferredAuthorityStmt: any = db.prepare(`
+  const revokeDeferredAuthorityStmt = db.prepare(`
     UPDATE console_deferred_protected_sink_authorities
     SET revoked_at = CASE WHEN revoked_at = '' THEN ? ELSE revoked_at END,
         reason_code = CASE WHEN revoked_at = '' THEN ? ELSE reason_code END
     WHERE authority_ref = ?
   `);
 
-  function currentDeferredSession(sessionId?: any) : any {
-    const row: any = readDeferredSessionStmt.get(sessionId);
+  function currentDeferredSession(sessionId?: unknown): DeferredSessionState | null {
+    const row = readDeferredSessionStmt.get(sessionId);
     if (!row || row.enabled !== 1 || Date.parse(row.expires_at) <= Date.now()) {
       return null;
     }
-    const role: any = resolveRole(row.role_id);
-    const source: any = durableSessionAuthoritySource({
+    const role = resolveRole(row.role_id);
+    const source = durableSessionAuthoritySource({
       row,
       role,
       tokenHash: row.token_hash
@@ -939,7 +1257,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
           displayName: row.display_name || row.username,
           roleId: row.role_id,
           roleLabel: role.label,
-          scopes: [...role.scopes],
+          scopes: [...(role.scopes || [])],
           tenantId: row.tenant_id,
           orgId: row.org_id,
           teamIds: parseJson(row.team_ids_json, []),
@@ -967,17 +1285,21 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     operation,
     input,
     sessionState
-  }: Record<string, any>) : Promise<any> {
-    const governancePolicyRevision: any =
+  }: {
+    operation: OperationFacts;
+    input: ConsoleInput;
+    sessionState: DeferredSessionState;
+  }) {
+    const governancePolicyRevision =
       authorizationGovernanceStore.getPolicyRevision();
-    const authorizationDecision: any = await authorizationEngine.evaluate({
+    const authorizationDecision = await authorizationEngine.evaluate({
       operation,
       request: null,
       authSession: sessionState.session,
       input: buildConsoleOperationAuthorizationInput({
         input,
         method: "POST",
-        url: { pathname: "/api/jobs/upload-workspace-materializations" }
+        url: new URL("http://127.0.0.1/api/jobs/upload-workspace-materializations")
       }),
       context: buildConsoleOperationAuthorizationContext({
         context: {
@@ -987,7 +1309,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       enforceConfirmation: false
     });
     if (authorizationDecision?.allowed !== true) return null;
-    const authority: any = protectedSinkAuthorityFromSource({
+    const authority = protectedSinkAuthorityFromSource({
       source: sessionState.source,
       operation,
       input,
@@ -995,7 +1317,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       authorizationDecision,
       governancePolicyRevision
     });
-    const approval: any = durableApprovalIntentFacts(
+    const approval = durableApprovalIntentFacts(
       operationApprovalAuthorityFacts({
         operation,
         input,
@@ -1016,10 +1338,11 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     authSession,
     operation,
     input
-  }: Record<string, any> = {}) : Promise<any> {
-    const operationId: any = exactNonEmptyText(operation?.id);
+  }: DeferredCaptureInput = {})  {
+    const operationId = exactNonEmptyText(operation?.id);
     if (
       operationId !== "jobs.upload_workspace_materialize" ||
+      !operation ||
       !input ||
       typeof input !== "object" ||
       Array.isArray(input)
@@ -1032,8 +1355,15 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         }
       );
     }
-    const authorization: any = await authorizeOperation({
-      request,
+    const authorization = await authorizeOperation({
+      request: request
+        ? {
+            method: request.method,
+            url: request.url,
+            headers: request.headers,
+            socket: request.socket
+          }
+        : null,
       operation,
       method: String(request?.method || "POST"),
       url: new URL(
@@ -1046,9 +1376,10 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       },
       phase: "admission"
     });
-    const authorizedSession: any = authorization?.session;
+    const authorizedSession = authorization?.session;
     if (
       authorization?.ok !== true ||
+      !authSession ||
       !authorizedSession ||
       authorizedSession.sessionId !== authSession?.sessionId ||
       !sessionAuthorityRevision(authSession) ||
@@ -1064,7 +1395,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         }
       );
     }
-    const approval: any = durableApprovalIntentFacts(
+    const approval = durableApprovalIntentFacts(
       operationApprovalAuthorityFacts({
         operation,
         input,
@@ -1080,15 +1411,15 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         }
       );
     }
-    const authorityRef: any =
+    const authorityRef =
       `deferred-authority:${crypto.randomBytes(24).toString("base64url")}`;
-    const requestDigest: any = deferredRequestDigest(operationId, input);
-    const approvalIntentDigest: any = sha256Canonical(approval);
-    const authorityBindingDigest: any = sha256Canonical(
+    const requestDigest = deferredRequestDigest(operationId, input);
+    const approvalIntentDigest = sha256Canonical(approval);
+    const authorityBindingDigest = sha256Canonical(
       authorization.protectedSinkAuthority
     );
-    const issuedAt: any = nowIso();
-    const expiresAt: any = new Date(
+    const issuedAt = nowIso();
+    const expiresAt = new Date(
       Math.min(
         Date.parse(authorizedSession.expiresAt),
         Date.now() + SESSION_TTL_MS
@@ -1121,17 +1452,19 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     input,
     requestDigest,
     authorityBindingDigest
-  }: Record<string, any> = {}) : Promise<any> {
-    const row: any = readDeferredAuthorityStmt.get(
+  }: DeferredRevalidationInput = {})  {
+    const row = readDeferredAuthorityStmt.get(
       exactNonEmptyText(authorityRef)
     );
-    const operationId: any = exactNonEmptyText(operation?.id);
-    const currentRequestDigest: any =
+    const operationId = exactNonEmptyText(operation?.id);
+    const currentRequestDigest =
       operationId && input && typeof input === "object" && !Array.isArray(input)
         ? deferredRequestDigest(operationId, input)
         : "";
     if (
       !row ||
+      !operation ||
+      !input ||
       row.operation_id !== operationId ||
       row.request_digest !== requestDigest ||
       row.request_digest !== currentRequestDigest ||
@@ -1144,8 +1477,8 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         revoked: Boolean(row?.revoked_at)
       });
     }
-    const sessionState: any = currentDeferredSession(row.session_id);
-    const current: any = sessionState
+    const sessionState = currentDeferredSession(row.session_id);
+    const current = sessionState
       ? await evaluateDeferredCurrentAuthority({
           operation,
           input,
@@ -1177,12 +1510,12 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
   async function revokeDeferredProtectedSinkAuthority({
     authorityRef,
     reason = "deferred_authority_revoked"
-  }: Record<string, any> = {}) : Promise<any> {
-    const reasonCode: any = String(reason || "")
+  }: DeferredRevocationInput = {})  {
+    const reasonCode = String(reason || "")
       .trim()
       .replace(/[^A-Za-z0-9._:-]/gu, "_")
       .slice(0, 160) || "deferred_authority_revoked";
-    const result: any = revokeDeferredAuthorityStmt.run(
+    const result = revokeDeferredAuthorityStmt.run(
       nowIso(),
       reasonCode,
       exactNonEmptyText(authorityRef)
@@ -1192,13 +1525,13 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     });
   }
 
-  async function createUser(input: Record<string, any> = {}) : Promise<any> {
-    const username: any = normalizeUsername(input.username);
-    const normalizedCredential: any = normalizePassword(input.password || input.newPassword);
-    const roleId: any = normalizeConsoleRole(input.roleId || "viewer");
-    const userId: any = stableId("console_user", username, Date.now(), crypto.randomUUID());
+  async function createUser(input: Record<string, unknown> = {})  {
+    const username = normalizeUsername(input.username);
+    const normalizedCredential = normalizePassword(input.password || input.newPassword);
+    const roleId = normalizeConsoleRole(input.roleId || "viewer");
+    const userId = stableId("console_user", username, Date.now(), crypto.randomUUID());
     const { salt, passwordHash } = await hashPassword(normalizedCredential);
-    const createdAt: any = nowIso();
+    const createdAt = nowIso();
     db.prepare(`
       INSERT INTO console_users (
         user_id, username, display_name, role_id, password_hash, salt, enabled,
@@ -1228,26 +1561,29 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     return publicUserWithGovernanceRole(getUserByIdStmt.get(userId));
   }
 
-  async function login(input: Record<string, any> = {}, request?: any) : Promise<any> {
-    const username: any = normalizeUsername(input.username);
-    const password: any = String(input.password || "");
-    const userRow: any = getUserByUsernameStmt.get(username);
+  async function login(
+    input: Record<string, unknown> = {},
+    request?: HttpRequestLike
+  )  {
+    const username = normalizeUsername(input.username);
+    const password = String(input.password || "");
+    const userRow = getUserByUsernameStmt.get(username);
     if (!userRow || !userRow.enabled) {
       // Constant-time guard: don't reveal whether username exists.
-      await verifyPassword("__sentinel__", "salt", "hash").catch(() : any => {});
+      await verifyPassword("__sentinel__", "salt", "hash").catch(()  => {});
       throw new Error("用户名或密码错误。");
     }
 
     // Check lockout before touching the password.
-    const lockedUntil: any = userRow.locked_until ? new Date(userRow.locked_until).getTime() : 0;
+    const lockedUntil = userRow.locked_until ? new Date(userRow.locked_until).getTime() : 0;
     if (lockedUntil > Date.now()) {
-      const remainingMin: any = Math.ceil((lockedUntil - Date.now()) / 60_000);
+      const remainingMin = Math.ceil((lockedUntil - Date.now()) / 60_000);
       throw new Error(`账户已被临时锁定，请 ${remainingMin} 分钟后重试。`);
     }
 
-    const ok: any = await verifyPassword(password, userRow.salt, userRow.password_hash);
+    const ok = await verifyPassword(password, userRow.salt, userRow.password_hash);
     if (!ok) {
-      const failedAt: any = nowIso();
+      const failedAt = nowIso();
       recordFailedLoginStmt.run(
         LOGIN_MAX_ATTEMPTS,
         LOGIN_MAX_ATTEMPTS,
@@ -1261,13 +1597,13 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       throw new Error("用户名或密码错误。");
     }
 
-    const token: any = randomToken();
+    const token = randomToken();
     // M-3: CSRF is HMAC-derived from the session token — not stored in DB
-    const csrfToken: any = computeCsrfToken(token);
-    const sessionId: any = stableId("console_session", userRow.user_id, Date.now(), crypto.randomUUID());
-    const createdAt: any = nowIso();
-    const expiresAt: any = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-    const committed: any = commitSuccessfulLogin({
+    const csrfToken = computeCsrfToken(token);
+    const sessionId = stableId("console_session", userRow.user_id, Date.now(), crypto.randomUUID());
+    const createdAt = nowIso();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const committed = commitSuccessfulLogin({
       userRow,
       sessionId,
       tokenHash: hashToken(token),
@@ -1280,9 +1616,9 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     }
 
     // H-1: delete the initial-credentials file now that the owner has logged in
-    fsp.unlink(path.join(rootPath, "initial-credentials.txt")).catch(() : any => {});
+    fsp.unlink(path.join(rootPath, "initial-credentials.txt")).catch(()  => {});
 
-    const session: any = sessionFromToken(token);
+    const session = sessionFromToken(token);
     return {
       session,
       csrfToken,
@@ -1299,9 +1635,9 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function logout(request?: any) : any {
-    const cookies: any = parseCookies(request);
-    const token: any = cookies[CONSOLE_SESSION_COOKIE] || "";
+  function logout(request?: HttpRequestLike)  {
+    const cookies = parseCookies(request);
+    const token = cookies[CONSOLE_SESSION_COOKIE] || "";
     if (token) {
       db.prepare("DELETE FROM console_sessions WHERE token_hash = ?").run(hashToken(token));
     }
@@ -1314,17 +1650,17 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function rotateSession(request?: any) : any {
-    const cookies: any = parseCookies(request);
-    const currentToken: any = cookies[CONSOLE_SESSION_COOKIE] || "";
-    const currentSession: any = sessionFromToken(currentToken, request);
+  function rotateSession(request?: HttpRequestLike)  {
+    const cookies = parseCookies(request);
+    const currentToken = cookies[CONSOLE_SESSION_COOKIE] || "";
+    const currentSession = sessionFromToken(currentToken, request);
     if (!currentSession) {
       return { ok: false, status: 401, error: "控制台未登录。" };
     }
-    const token: any = randomToken();
-    const csrfToken: any = computeCsrfToken(token);
-    const rotatedAt: any = nowIso();
-    const expiresAt: any = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const token = randomToken();
+    const csrfToken = computeCsrfToken(token);
+    const rotatedAt = nowIso();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     db.prepare(`
       UPDATE console_sessions
       SET token_hash = ?, last_seen_at = ?, expires_at = ?
@@ -1335,7 +1671,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       expiresAt,
       currentSession.sessionId
     );
-    const session: any = sessionFromToken(token, request);
+    const session = sessionFromToken(token, request);
     return {
       ok: true,
       session,
@@ -1354,11 +1690,11 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  async function updateUser(userId?: any, patch: Record<string, any> = {}) : Promise<any> {
-    const normalizedUserId: any = String(userId || "");
+  async function updateUser(userId?: unknown, patch: Record<string, unknown> = {})  {
+    const normalizedUserId = String(userId || "");
     if (!getUserByIdStmt.get(normalizedUserId)) return null;
 
-    const normalizedPatch: Record<string, any> = {
+    const normalizedPatch: Record<string, unknown> = {
       displayName: patch.displayName !== undefined ? String(patch.displayName || "").trim() : undefined,
       roleId: patch.roleId !== undefined ? normalizeConsoleRole(patch.roleId) : undefined,
       enabled: patch.enabled !== undefined ? (patch.enabled === false ? 0 : 1) : undefined,
@@ -1379,14 +1715,14 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         ? patch.attributes
         : undefined
     };
-    const credential: any = patch.password || patch.newPassword
+    const credential = patch.password || patch.newPassword
       ? await hashPassword(normalizePassword(patch.password || patch.newPassword))
       : null;
 
-    const commitUpdate: any = db.transaction(() : any => {
-      const current: any = getUserByIdStmt.get(normalizedUserId);
+    const commitUpdate = db.transaction(()  => {
+      const current = getUserByIdStmt.get(normalizedUserId);
       if (!current) return null;
-      const updates: Record<string, any> = {
+      const updates: Record<string, unknown> = {
         displayName: normalizedPatch.displayName !== undefined
           ? (normalizedPatch.displayName || current.username)
           : current.display_name,
@@ -1431,24 +1767,24 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       }
       return getUserByIdStmt.get(current.user_id);
     });
-    const updatedRow: any = typeof commitUpdate.immediate === "function"
+    const updatedRow = typeof commitUpdate.immediate === "function"
       ? commitUpdate.immediate()
       : commitUpdate();
     return publicUserWithGovernanceRole(updatedRow);
   }
 
-  function listUsers() : any {
+  function listUsers()  {
     return listUsersStmt.all().map(publicUserWithGovernanceRole);
   }
 
-  function listSessions() : any {
-    return db.prepare(`
+  function listSessions()  {
+    return db.prepare<unknown[], SessionListRow>(`
       SELECT s.session_id, s.user_id, s.created_at, s.last_seen_at, s.expires_at, u.username, u.role_id
       FROM console_sessions s
       JOIN console_users u ON u.user_id = s.user_id
       ORDER BY s.last_seen_at DESC
       LIMIT 200
-    `).all().map((row?: any) : any => ({
+    `).all().map((row)  => ({
       sessionId: row.session_id,
       userId: row.user_id,
       username: row.username,
@@ -1459,13 +1795,15 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     }));
   }
 
-  function revokeSession(sessionId?: any) : any {
-    const result: any = deleteSessionByIdStmt.run(String(sessionId || ""));
+  function revokeSession(sessionId?: unknown)  {
+    const result = deleteSessionByIdStmt.run(String(sessionId || ""));
     return { ok: Number(result.changes || 0) > 0 };
   }
 
-  function getOidcConfig() : any {
-    const row: any = db.prepare("SELECT * FROM console_oidc_config WHERE config_id = 'default'").get();
+  function getOidcConfig()  {
+    const row = db.prepare<unknown[], OidcConfigRow>(
+      "SELECT * FROM console_oidc_config WHERE config_id = 'default'"
+    ).get();
     return {
       enabled: Boolean(row?.enabled),
       issuer: row?.issuer || "",
@@ -1478,10 +1816,10 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function setOidcConfig(input: Record<string, any> = {}) : any {
-    const current: any = getOidcConfig();
-    const clientSecret: any = String(input.clientSecret || "").trim();
-    const next: Record<string, any> = {
+  function setOidcConfig(input: Record<string, unknown> = {})  {
+    const current = getOidcConfig();
+    const clientSecret = String(input.clientSecret || "").trim();
+    const next: Record<string, unknown> = {
       enabled: input.enabled === true,
       issuer: String(input.issuer || "").trim(),
       clientId: String(input.clientId || "").trim(),
@@ -1523,13 +1861,13 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     return getOidcConfig();
   }
 
-  function audit(input: Record<string, any> = {}) : any {
+  function audit(input: AuditInput = {})  {
     if (!hasUsers()) {
       return;
     }
-    const user: any = input.user || {};
-    const targetProjection: any = securityAuditProjection(input.target || {}, "target");
-    const errorProjection: any = securityAuditErrorProjection(input.error, input.reasonCode);
+    const user = input.user || {};
+    const targetProjection = securityAuditProjection(input.target || {}, "target");
+    const errorProjection = securityAuditErrorProjection(input.error, input.reasonCode);
     db.prepare(`
       INSERT INTO console_audit_log (
         audit_id, user_id, username, operation_id, action, method, path, status, target_json, error, created_at
@@ -1549,10 +1887,10 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     );
   }
 
-  function listAudit({ limit = 100, userId = "", status = "" }: Record<string, any> = {}) : any {
-    const safeLimit: any = Math.max(1, Math.min(Number(limit || 100), 500));
-    const clauses: any[] = [];
-    const params: any[] = [];
+  function listAudit({ limit = 100, userId = "", status = "" }: AuditQuery = {})  {
+    const safeLimit = Math.max(1, Math.min(Number(limit || 100), 500));
+    const clauses = [];
+    const params = [];
     if (userId) {
       clauses.push("user_id = ?");
       params.push(auditIdentityRef(userId, "user-id"));
@@ -1561,16 +1899,16 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
       clauses.push("status = ?");
       params.push(String(status));
     }
-    const where: any = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return db.prepare(`
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    return db.prepare<unknown[], AuditRow>(`
       SELECT * FROM console_audit_log
       ${where}
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(...params, safeLimit).map((row?: any) : any => {
-      const targetProjection: any = parseSecurityAuditProjection(row.target_json, "target") ||
+    `).all(...params, safeLimit).map((row)  => {
+      const targetProjection = parseSecurityAuditProjection(row.target_json, "target") ||
         securityAuditProjection({}, "target");
-      const errorProjection: any = parseSecurityAuditProjection(row.error, "error") ||
+      const errorProjection = parseSecurityAuditProjection(row.error, "error") ||
         securityAuditErrorProjection("");
       return {
         auditId: row.audit_id,
@@ -1591,21 +1929,21 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
 
   async function authorizeOperation({
     request,
-    operation,
-    method,
-    url,
+    operation = {},
+    method = "",
+    url = null,
     input = {},
     context = {},
     phase = ""
-  }: Record<string, any> = {}) : Promise<any> {
-    const publicAccess: any = operation?.public === true;
-    const authorizationPhase: any = String(
+  }: AuthorizationInput = {}): Promise<AuthorizationResult>  {
+    const publicAccess = operation.public === true;
+    const authorizationPhase = String(
       phase || context?.authorizationPhase || ""
     ).trim();
-    const protectedSinkAuthorityPhase: any =
+    const protectedSinkAuthorityPhase =
       PROTECTED_SINK_AUTHORITY_PHASES.has(authorizationPhase) &&
       isProtectedSinkOperation(operation);
-    if (!safeRequestMethod(method) && !sameOriginRequest(request)) {
+    if (!safeRequestMethod(method) && !sameOriginRequest(request ?? undefined)) {
       audit({
         operationId: operation?.id || "",
         action: "origin",
@@ -1634,7 +1972,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     if (publicAccess) {
       return { ok: true, session: getSessionFromRequest(request) };
     }
-    const session: any = getSessionFromRequest(request, {
+    const session = getSessionFromRequest(request, {
       fresh: protectedSinkAuthorityPhase
     });
     if (!session) {
@@ -1654,21 +1992,28 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         bootstrap: getBootstrapStatus()
       };
     }
-    const governancePolicyRevisionBefore: any =
+    const governancePolicyRevisionBefore =
       authorizationGovernanceStore.getPolicyRevision();
-    const policyFactsBefore: any =
+    const policyFactsBefore =
       governancePolicyAuthorityFacts(governancePolicyRevisionBefore);
-    const authorizationDecision: any = await authorizationEngine.evaluate({
+    const authorizationDecision = await authorizationEngine.evaluate({
       operation,
-      request,
+      request: request
+        ? {
+            method: request.method,
+            url: request.url,
+            headers: request.headers,
+            socket: request.socket
+          }
+        : null,
       authSession: session,
       input: buildConsoleOperationAuthorizationInput({ input, method, url }),
       context: buildConsoleOperationAuthorizationContext({ context }),
       enforceConfirmation: false
     });
-    const governancePolicyRevision: any =
+    const governancePolicyRevision =
       authorizationGovernanceStore.getPolicyRevision();
-    const policyFactsAfter: any =
+    const policyFactsAfter =
       governancePolicyAuthorityFacts(governancePolicyRevision);
     if (
       protectedSinkAuthorityPhase &&
@@ -1699,9 +2044,13 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         reasonCode: authorizationDecision.reasonCode || "authorization_denied",
         error: authorizationDecision.reasonCode || "authorization denied"
       });
-      const missingScopes: any = authorizationDecision.missingScopes || [];
-      const missingCapabilities: any = authorizationDecision.missingCapabilities || [];
-      const scopeSuffix: any = missingCapabilities.length > 0
+      const missingScopes = Array.isArray(authorizationDecision.missingScopes)
+        ? authorizationDecision.missingScopes
+        : [];
+      const missingCapabilities = Array.isArray(authorizationDecision.missingCapabilities)
+        ? authorizationDecision.missingCapabilities
+        : [];
+      const scopeSuffix = missingCapabilities.length > 0
         ? `：${missingCapabilities.join(", ")}`
         : missingScopes.length > 0
         ? `：${missingScopes.join(", ")}`
@@ -1714,11 +2063,11 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         authorizationDecision
       };
     }
-    const needsCsrf: any =
+    const needsCsrf =
       !operation?.skipCsrf &&
       !safeRequestMethod(method);
     if (needsCsrf) {
-      const csrf: any = String(request?.headers?.["x-meshrix-csrf"] || "").trim();
+      const csrf = String(request?.headers?.["x-meshrix-csrf"] || "").trim();
       if (!csrf || !timingSafeStringEqual(csrf, session.csrfToken)) {
         audit({
           user: session.user,
@@ -1738,7 +2087,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         };
       }
     }
-    let currentSession: any = session;
+    let currentSession: ConsoleSession | null = session;
     if (protectedSinkAuthorityPhase) {
       currentSession = getSessionFromRequest(request, { fresh: true });
       if (
@@ -1757,7 +2106,7 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
         };
       }
     }
-    const currentProtectedSinkAuthority: any = protectedSinkAuthority({
+    const currentProtectedSinkAuthority = protectedSinkAuthority({
       session: currentSession,
       operation,
       input,
@@ -1786,8 +2135,8 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
     };
   }
 
-  function getSummary(request: any = null) : any {
-    const session: any = request ? getSessionFromRequest(request) : null;
+  function getSummary(request: HttpRequestLike | null = null)  {
+    const session = request ? getSessionFromRequest(request) : null;
     return {
       enabled: hasUsers(),
       bootstrap: getBootstrapStatus(),
@@ -1810,37 +2159,44 @@ export function createConsoleAuth({ userDataPath, activeFeatureIds = [], feature
   }
 
   return {
-    rootPath,
     db,
-    authorizationStore,
-    authorizationGovernanceStore,
-    tagManagementStore: authorizationGovernanceStore.tagManagementStore || null,
-    authorizationEngine,
-    ensureInitialOwner,
-    getBootstrapStatus,
-    hasUsers,
-    authorizeOperation,
-    captureDeferredProtectedSinkAuthority,
-    revalidateDeferredProtectedSinkAuthority,
-    revokeDeferredProtectedSinkAuthority,
-    getSessionFromRequest,
-    getSummary,
-    login,
-    logout,
-    rotateSession,
-    listUsers,
-    createUser,
-    updateUser,
-    listSessions,
-    revokeSession,
-    roleList,
-    refreshActiveFeatureIds,
-    getOidcConfig,
-    setOidcConfig,
-    audit,
-    listAudit,
-    close: resources.close
+    api: {
+      rootPath,
+      authorizationStore,
+      authorizationGovernanceStore,
+      tagManagementStore: authorizationGovernanceStore.tagManagementStore || null,
+      authorizationEngine,
+      ensureInitialOwner,
+      getBootstrapStatus,
+      hasUsers,
+      authorizeOperation,
+      captureDeferredProtectedSinkAuthority,
+      revalidateDeferredProtectedSinkAuthority,
+      revokeDeferredProtectedSinkAuthority,
+      getSessionFromRequest,
+      getSummary,
+      login,
+      logout,
+      rotateSession,
+      listUsers,
+      createUser,
+      updateUser,
+      listSessions,
+      revokeSession,
+      roleList,
+      refreshActiveFeatureIds,
+      getOidcConfig,
+      setOidcConfig,
+      audit,
+      listAudit,
+      close: resources.close
+    }
   };
+}
+
+export function createConsoleAuth(options: ConsoleAuthOptions): ConsoleAuthContract {
+  const { api, db } = createConsoleAuthImplementation(options);
+  return { ...api, db };
 }
 
 export default createConsoleAuth;

@@ -4,7 +4,53 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-function nowIso() : any {
+type HostEnvironment = NodeJS.ProcessEnv;
+
+export interface LaunchAgentTargets {
+  serviceLabel: string;
+  uid: number;
+  launchTarget: string;
+  serviceTarget: string;
+  plistPath: string;
+}
+
+interface LaunchAgentTargetOptions {
+  serviceLabel?: string;
+  defaultServiceLabel?: string;
+  uid?: number | string;
+  homeDir?: string;
+  plistPath?: string;
+}
+
+export interface CommandResult {
+  code: number;
+  signal: string;
+  stdout: string;
+  stderr: string;
+}
+
+type RunCommand = (command: string, args?: string[], options?: { cwd?: string; env?: HostEnvironment }) => Promise<CommandResult>;
+
+interface RecoverLaunchAgentOptions extends LaunchAgentTargetOptions {
+  alreadyRunning?: boolean;
+  platform?: NodeJS.Platform | string;
+  targetsFactory?: (options: LaunchAgentTargetOptions) => LaunchAgentTargets;
+  fileExists?: (filePath: string) => boolean | Promise<boolean>;
+  launchctlPath?: string;
+  runCommand?: RunCommand;
+}
+
+export interface LaunchAgentRecoveryResult extends Partial<LaunchAgentTargets> {
+  ok: boolean;
+  attempted: boolean;
+  reason?: string;
+  action?: string;
+  platform?: string;
+  checkedAt: string;
+  commands?: Array<{ args: string[]; code: number; signal: string; stderr: string; stdout: string }>;
+}
+
+function nowIso(): string {
   return new Date().toISOString();
 }
 
@@ -14,19 +60,19 @@ export function launchAgentTargets({
   uid,
   homeDir = os.homedir(),
   plistPath = ""
-}: Record<string, any> = {}) : any {
-  const resolvedDefault: any = String(defaultServiceLabel || serviceLabel);
-  const resolvedServiceLabel: any = String(serviceLabel || resolvedDefault).trim() || resolvedDefault;
-  const resolvedUid: any = Number.isInteger(Number(uid))
+}: LaunchAgentTargetOptions = {}): LaunchAgentTargets {
+  const resolvedDefault = String(defaultServiceLabel || serviceLabel);
+  const resolvedServiceLabel = String(serviceLabel || resolvedDefault).trim() || resolvedDefault;
+  const resolvedUid = Number.isInteger(Number(uid))
     ? Number(uid)
     : typeof process.getuid === "function"
       ? process.getuid()
       : 0;
-  const resolvedPlistPath: any = path.resolve(
+  const resolvedPlistPath = path.resolve(
     String(plistPath || path.join(homeDir, "Library", "LaunchAgents", `${resolvedServiceLabel}.plist`))
   );
-  const launchTarget: any = `gui/${resolvedUid}`;
-  const serviceTarget: any = `${launchTarget}/${resolvedServiceLabel}`;
+  const launchTarget = `gui/${resolvedUid}`;
+  const serviceTarget = `${launchTarget}/${resolvedServiceLabel}`;
   return {
     serviceLabel: resolvedServiceLabel,
     uid: resolvedUid,
@@ -36,29 +82,29 @@ export function launchAgentTargets({
   };
 }
 
-export function defaultRunCommand(command?: any, args: any = [], options: Record<string, any> = {}) : any {
-  return new Promise((resolve?: any, reject?: any) : any => {
-    const child: any = spawn(command, args, {
+export function defaultRunCommand(command: string, args: string[] = [], options: { cwd?: string; env?: HostEnvironment } = {}): Promise<CommandResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       cwd: options.cwd || process.cwd(),
       env: options.env || process.env
     });
-    let stdout: any = "";
-    let stderr: any = "";
-    child.stdout?.on("data", (chunk?: any) : any => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
-    child.stderr?.on("data", (chunk?: any) : any => {
+    child.stderr?.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
     child.once("error", reject);
-    child.once("exit", (code?: any, signal?: any) : any => {
+    child.once("exit", (code, signal) => {
       resolve({ code: code || 0, signal: signal || "", stdout, stderr });
     });
   });
 }
 
-async function fileExists(filePath?: any) : Promise<any> {
+async function fileExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
     return true;
@@ -67,7 +113,7 @@ async function fileExists(filePath?: any) : Promise<any> {
   }
 }
 
-function commandSummary(item?: any) : any {
+function commandSummary(item: { args: string[]; result: CommandResult }) {
   return {
     args: item.args,
     code: item.result?.code ?? 0,
@@ -77,13 +123,13 @@ function commandSummary(item?: any) : any {
   };
 }
 
-function isAlreadyLoaded(result: Record<string, any> = {}) : any {
-  const text: any = `${result.stderr || ""}\n${result.stdout || ""}`;
+function isAlreadyLoaded(result: CommandResult): boolean {
+  const text = `${result.stderr || ""}\n${result.stdout || ""}`;
   return /already\s+(?:bootstrapped|loaded|exists)|Bootstrap failed:\s*5/i.test(text);
 }
 
-export async function recoverLaunchAgentService(options: Record<string, any> = {}) : Promise<any> {
-  const checkedAt: any = nowIso();
+export async function recoverLaunchAgentService(options: RecoverLaunchAgentOptions = {}): Promise<LaunchAgentRecoveryResult> {
+  const checkedAt = nowIso();
   if (options.alreadyRunning) {
     return {
       ok: true,
@@ -93,7 +139,7 @@ export async function recoverLaunchAgentService(options: Record<string, any> = {
     };
   }
 
-  const platform: any = String(options.platform || process.platform);
+  const platform = String(options.platform || process.platform);
   if (platform !== "darwin") {
     return {
       ok: false,
@@ -104,9 +150,9 @@ export async function recoverLaunchAgentService(options: Record<string, any> = {
     };
   }
 
-  const targetsFactory: any = options.targetsFactory || launchAgentTargets;
-  const targets: any = targetsFactory(options);
-  const exists: any = typeof options.fileExists === "function"
+  const targetsFactory = options.targetsFactory || launchAgentTargets;
+  const targets = targetsFactory(options);
+  const exists = typeof options.fileExists === "function"
     ? await options.fileExists(targets.plistPath)
     : await fileExists(targets.plistPath);
   if (!exists) {
@@ -119,17 +165,17 @@ export async function recoverLaunchAgentService(options: Record<string, any> = {
     };
   }
 
-  const launchctlPath: any = options.launchctlPath || "/bin/launchctl";
-  const runCommand: any = options.runCommand || defaultRunCommand;
-  const commands: any[] = [];
+  const launchctlPath = options.launchctlPath || "/bin/launchctl";
+  const runCommand = options.runCommand || defaultRunCommand;
+  const commands: Array<{ args: string[]; result: CommandResult }> = [];
 
-  async function runLaunchctl(args?: any) : Promise<any> {
-    const result: any = await runCommand(launchctlPath, args);
+  async function runLaunchctl(args: string[]): Promise<CommandResult> {
+    const result = await runCommand(launchctlPath, args);
     commands.push({ args, result });
     return result;
   }
 
-  const kickstart: any = await runLaunchctl(["kickstart", "-k", targets.serviceTarget]);
+  const kickstart = await runLaunchctl(["kickstart", "-k", targets.serviceTarget]);
   if (kickstart.code === 0) {
     return {
       ok: true,
@@ -141,7 +187,7 @@ export async function recoverLaunchAgentService(options: Record<string, any> = {
     };
   }
 
-  const bootstrap: any = await runLaunchctl(["bootstrap", targets.launchTarget, targets.plistPath]);
+  const bootstrap = await runLaunchctl(["bootstrap", targets.launchTarget, targets.plistPath]);
   if (bootstrap.code !== 0 && !isAlreadyLoaded(bootstrap)) {
     return {
       ok: false,
@@ -153,7 +199,7 @@ export async function recoverLaunchAgentService(options: Record<string, any> = {
     };
   }
 
-  const retryKickstart: any = await runLaunchctl(["kickstart", "-k", targets.serviceTarget]);
+  const retryKickstart = await runLaunchctl(["kickstart", "-k", targets.serviceTarget]);
   return {
     ok: retryKickstart.code === 0,
     attempted: true,

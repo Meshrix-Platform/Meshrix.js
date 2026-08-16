@@ -23,9 +23,8 @@ describe("feature manifest public boundary", () : any => {
     expect(core.includes).toContain("operation-permission-core");
     expect(core.includes).toContain("downstream-mcp");
     expect(core.includes).toContain("upstream-gateway");
-    expect(core.includes).toContain("agent-gateway");
     expect(standard.includes).toContain("operation-permission-core");
-    expect(standard.includes).toContain("agent-gateway");
-    expect(integrations.includes).toContain("external-gateway");
+    expect(standard.includes).toEqual(core.includes);
+    expect(integrations.includes).toEqual(core.includes);
   });
 });

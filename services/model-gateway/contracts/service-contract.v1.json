@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.dev/contracts/model-gateway/service-contract.v1.json",
+  "title": "Model Gateway Service wire contract",
+  "description": "Versioned language-neutral HTTP and JSON contract for the standalone Model Gateway Service.",
+  "type": "object",
+  "required": ["contractVersion", "nativeCompatibility", "ownedPaths", "admissionBounds", "ledgerStates", "terminalLedgerStates", "stableErrors", "fixedPointScale"],
+  "properties": {
+    "contractVersion": {
+      "const": "v0.0.1:model-gateway:service-1"
+    },
+    "nativeCompatibility": {
+      "type": "object",
+      "required": ["openai", "anthropic"],
+      "properties": {
+        "openai": {
+          "type": "array",
+          "items": { "enum": ["/v1/chat/completions", "/v1/models"] }
+        },
+        "anthropic": {
+          "type": "array",
+          "items": { "const": "/v1/messages" }
+        }
+      }
+    },
+    "ownedPaths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "admissionBounds": {
+      "type": "array",
+      "items": {
+        "enum": ["request_rate", "input_token_budget", "requested_output_token_budget", "total_token_quota", "concurrent_calls", "cost_quota"]
+      }
+    },
+    "ledgerStates": {
+      "type": "array",
+      "items": { "enum": ["released", "settled", "in_doubt"] }
+    },
+    "terminalLedgerStates": {
+      "type": "array",
+      "items": { "const": "settled" }
+    },
+    "stableErrors": {
+      "type": "array",
+      "items": {
+        "enum": ["unauthorized", "rate_limited", "quota_exceeded", "budget_exceeded", "invalid_request", "model_not_found", "provider_unavailable", "cancelled", "settlement_uncertain", "internal_error"]
+      }
+    },
+    "fixedPointScale": {
+      "const": 1000000
+    }
+  },
+  "additionalProperties": false
+}

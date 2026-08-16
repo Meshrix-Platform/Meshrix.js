@@ -20,9 +20,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pull-request-verify:
+    name: Pull request verification
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - name: Install dependencies
+        run: npm ci
+      - name: Rebuild local plan baseline
+        run: node tools/plan/rebuild-current-plan-baseline.ts
+      - name: Fast pull-request verification with localized failures
+        shell: bash
+        run: |
+          run_check() {
+            local command_label="$1"
+            local log_file="$2"
+            shift 2
+            if ! "$@" > "$log_file" 2>&1; then
+              node tools/server-scripts/localize-verify-failure.ts "$log_file" --command "$command_label" || true
+              tail -n 60 "$log_file"
+              return 1
+            fi
+          }
+          run_check "npm run typecheck" /tmp/pr-typecheck.log npm run typecheck
+          run_check "npm run vitest" /tmp/pr-vitest.log npm run vitest
+
   public-gate:
     name: Public platform gate
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -74,7 +109,7 @@ jobs:
 
   node-22-compatibility:
     name: Supported Node 22 compatibility
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -98,7 +133,7 @@ jobs:
 
   npm-package-portability:
     name: Fresh-container npm package simulation
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

@@ -185,6 +185,64 @@ describe("platform acceptance Plan receipt preflight", () : any => {
     })).rejects.toThrow("release-prerequisite-incomplete");
   });
 
+  it("binds an in-progress consolidated Plan to its latest completed shared frontier", async () : Promise<any> => {
+    const canonical: any = {
+      id: "canonical-node",
+      code: "GATE-CANONICAL",
+      role: "implementation",
+      status: "completed",
+      prerequisites: [],
+      acceptance_criteria: [{ checked: true, evidence_refs: [{ type: "command" }] }],
+    };
+    const remainders: any[] = ["DQ-ACCEPTANCE", "DQ-TYPING-REST", "DQ-FEEDBACK-SCALE"].map((code?: any) : any => ({
+      id: `${code}-node`,
+      code,
+      role: "implementation",
+      status: "pending",
+      prerequisites: [canonical.id],
+      acceptance_criteria: [{ checked: false }],
+    }));
+    const map: any = {
+      schema_version: 3,
+      plans: [{
+        directory: "end-to-end-release",
+        parent: null,
+        parent_contract_node_id: null,
+        parent_integrations: [],
+        final_validations: [{ node_id: "release-final", profiles: ["enterprise-single-node"] }],
+        prerequisite_receipts: [],
+        children: [],
+        accepted_final_receipts: {},
+      }],
+    };
+
+    await expect(verifyPlatformAcceptancePlanReceipts({
+      repoRoot: "/synthetic-repo",
+      selectedProfile: "enterprise-single-node",
+      dependencyMap: map,
+      verifyPlan: async () : Promise<any> => ({ accepted: true }),
+      loadCandidate: async () : Promise<any> => ({
+        candidate_digest: "a".repeat(64),
+        source_revision: "b".repeat(40),
+      }),
+      loadCheckpoints: async () : Promise<any> => [
+        canonical,
+        ...remainders,
+        {
+          id: "release-final",
+          code: "GATE-FINAL",
+          role: "final_validation",
+          status: "pending",
+          prerequisites: remainders.map((node?: any) : any => node.id),
+        },
+      ],
+      verifyCheckpointEvidence: async () : Promise<any> => ({ evidenceCount: 1 }),
+    })).resolves.toMatchObject({
+      requiredCheckpointCount: 1,
+      checkpointBindings: [expect.objectContaining({ code: "GATE-CANONICAL" })],
+    });
+  });
+
   it("requires the exact Release Acceptance prerequisite final receipts", () : any => {
     expect(requiredPlatformAcceptancePlanReceipts(dependencyMap())).toEqual([
       { plan: "end-to-end-release/fixture-alpha", finalNodeId: "alpha-final", planProfile: "enterprise-single-node" },

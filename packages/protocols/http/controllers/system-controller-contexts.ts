@@ -4,7 +4,7 @@ export function createSystemControllerContexts({
   userDataPath,
   runtime,
   moduleManagement = null,
-  externalGatewayManagement = null,
+  gatewayChannelRouter = null,
   jobWorkflowProvider,
   storageProvider = null,
   clientRegistryService = null,
@@ -36,15 +36,6 @@ export function createSystemControllerContexts({
     }
     return provider;
   };
-  const agentRuntimeProvider: any = requireDomainProvider(
-    "agentRuntimeProvider",
-    (provider?: any) : any =>
-      provider &&
-      typeof provider.getAgentConfigRegistry === "function" &&
-      typeof provider.callAgentGateway === "function" &&
-      typeof provider.probeModelConnection === "function" &&
-      typeof provider.inspectAgentModelRouting === "function"
-  );
   const executeConsoleDomainOperation: any = requireDomainService("executeConsoleDomainOperation");
   const uploadSessionStore: any = requireDomainProvider(
     "uploadSessionStore",
@@ -88,7 +79,7 @@ export function createSystemControllerContexts({
       storageProvider,
       clientRegistryService,
       runtime,
-      externalGatewayManagement,
+      gatewayChannelRouter,
       settingsPort,
       discoveryPort,
       loadSettings: settingsPort?.loadSettings || null,
@@ -100,22 +91,20 @@ export function createSystemControllerContexts({
       workQueueObservation,
       contextRuntime,
       getListenUrl,
-      agentRuntimeProvider,
       appendConsoleOperationLog,
       authSession
     };
   }
 
-  function settingsAgentGatewayContext(authSession: any = null, extra: Record<string, any> = {}) : any {
+  function settingsContext(authSession: any = null, extra: Record<string, any> = {}) : any {
     return {
       userDataPath,
       runtime,
       moduleManagement,
-      externalGatewayManagement,
+      gatewayChannelRouter,
       protocolEventBus,
       contextRuntime,
       agentWorkspace,
-      agentRuntimeProvider,
       settingsPort,
       discoveryPort,
       appendConsoleOperationLog,
@@ -157,7 +146,7 @@ export function createSystemControllerContexts({
   return Object.freeze({
     executeConsoleDomainOperation,
     runtimeWorkflowContext,
-    settingsAgentGatewayContext,
+    settingsContext,
     authorizationFacadeContext,
     accessControlContext,
     appendConsoleOperationLog,

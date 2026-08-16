@@ -1,4 +1,13 @@
-const EDGE_TRAFFIC_OPERATIONS: readonly any[] = Object.freeze([
+export interface GatewayValkeyCapability { id: string; kind: string; operations: readonly string[]; }
+
+function isGatewayValkeyCapability(value: unknown): value is GatewayValkeyCapability {
+  return typeof value === "object" && value !== null &&
+    typeof Reflect.get(value, "id") === "string" &&
+    typeof Reflect.get(value, "kind") === "string" &&
+    Array.isArray(Reflect.get(value, "operations"));
+}
+
+const EDGE_TRAFFIC_OPERATIONS: readonly string[] = Object.freeze([
   "gateway.policy.preview",
   "gateway.forward",
   "gateway.payload.transit",
@@ -7,14 +16,14 @@ const EDGE_TRAFFIC_OPERATIONS: readonly any[] = Object.freeze([
   "gateway.metrics",
 ]);
 
-const DISTRIBUTED_CACHE_OPERATIONS: readonly any[] = Object.freeze([
+const DISTRIBUTED_CACHE_OPERATIONS: readonly string[] = Object.freeze([
   "getCacheEntry",
   "setCacheEntry",
   "deleteCacheEntry",
   "invalidateCacheNamespace",
 ]);
 
-export const GATEWAY_VALKEY_DISCIPLINE: Readonly<Record<string, any>> = Object.freeze({
+export const GATEWAY_VALKEY_DISCIPLINE = Object.freeze({
   id: "gateway-valkey",
   edgeTrafficGovernance: Object.freeze({
     capabilityId: "edge-traffic-governance",
@@ -33,25 +42,25 @@ export const GATEWAY_VALKEY_DISCIPLINE: Readonly<Record<string, any>> = Object.f
   }),
 });
 
-function capabilityById(capabilities?: any, capabilityId?: any) : any {
-  return capabilities.find((entry?: any) : any => entry?.id === capabilityId) ?? null;
+function capabilityById(capabilities: readonly GatewayValkeyCapability[], capabilityId: string): GatewayValkeyCapability | null {
+  return capabilities.find((entry) => entry.id === capabilityId) ?? null;
 }
 
-function operationsMatch(actual?: any, expected?: any) : any {
+function operationsMatch(actual: readonly string[], expected: readonly string[]): boolean {
   return Array.isArray(actual) &&
     actual.length === expected.length &&
-    expected.every((operation?: any, index?: any) : any => actual[index] === operation);
+    expected.every((operation, index) => actual[index] === operation);
 }
 
-export function assertGatewayValkeyCapabilities(capabilities?: any) : any {
-  if (!Array.isArray(capabilities)) {
+export function assertGatewayValkeyCapabilities(capabilities: unknown): true {
+  if (!Array.isArray(capabilities) || !capabilities.every(isGatewayValkeyCapability)) {
     throw new Error("Gateway and Valkey capabilities must be an array.");
   }
-  const governance: any = capabilityById(
+  const governance = capabilityById(
     capabilities,
     GATEWAY_VALKEY_DISCIPLINE.edgeTrafficGovernance.capabilityId,
   );
-  const cache: any = capabilityById(
+  const cache = capabilityById(
     capabilities,
     GATEWAY_VALKEY_DISCIPLINE.distributedCache.capabilityId,
   );

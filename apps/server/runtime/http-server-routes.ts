@@ -36,6 +36,35 @@ import {
   trackResponseBodyBytes
 } from "./http-server-middleware.ts";
 
+function classifiedRequestFailureReason(error?: any) : string {
+  const existing = String(error?.reasonCode || error?.code || "").trim();
+  if (/^[a-z0-9][a-z0-9._:-]*$/iu.test(existing)) return existing;
+  const stack = String(error?.stack || "");
+  const message = String(error?.message || "");
+  if (/^[a-z0-9][a-z0-9_:-]*$/u.test(message)) {
+    return message;
+  }
+  const origin = [
+    ["upstream-gateway", "upstream_gateway"],
+    ["universal-tag-policy", "tag_policy"],
+    ["tag-management", "tag_management"],
+    ["security-permissions-provider", "security_permissions"],
+    ["authorization-engine", "authorization_engine"],
+    ["operation-permission", "operation_permission"],
+    ["http-mcp-adapter", "mcp_adapter"]
+  ].find(([needle]) => stack.includes(needle))?.[1] || "request";
+  const kind = error instanceof TypeError
+    ? /is not a function/iu.test(message)
+      ? "function_missing"
+      : /Cannot read properties|undefined|null/iu.test(message)
+        ? "property_missing"
+        : "type_error"
+    : /SQLITE|database/iu.test(message)
+      ? "storage_error"
+      : "runtime_error";
+  return `${origin}_${kind}`;
+}
+
 export async function authorizeProxyRegisteredApiRequest({
   securityPermissions,
   request,
@@ -229,6 +258,7 @@ export function createHttpServerRequestHandler({
   subjectRateLimiter,
   tenantRateLimiter,
   toolSkillManagementProvider,
+  agentMcpGatewayPipeline,
   upstreamGatewayRegistryForMcp,
   ipRateLimiter,
   requestBodyAdmissionController = null
@@ -303,7 +333,7 @@ export function createHttpServerRequestHandler({
       actor: { type: "http-request" }
     });
     setTraceContextOnRequest(request, traceContext);
-    response.setHeader("X-Meshrix.js-Trace-Id", traceContext.traceId);
+    response.setHeader("X-Meshrix-Trace-Id", traceContext.traceId);
     request.__meshrixRequestId = requestId;
     let finished: any = false;
     let requestMetricRecorded: any = false;
@@ -595,6 +625,7 @@ export function createHttpServerRequestHandler({
               method,
               url,
               toolSkillManagementProvider,
+              agentMcpGatewayPipeline,
               upstreamGatewayRegistry: upstreamGatewayRegistryForMcp,
               listenUrl: getListenUrl(),
               discoveryState,
@@ -707,7 +738,10 @@ export function createHttpServerRequestHandler({
             })(),
             statusCode,
             durationMs: Date.now() - startedAt,
-            error: summarizeError(error)
+            error: {
+              ...summarizeError(error),
+              reasonCode: classifiedRequestFailureReason(error)
+            }
           });
           if (!response.headersSent) {
             sendJson(response, statusCode, {

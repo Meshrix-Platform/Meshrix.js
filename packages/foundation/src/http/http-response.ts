@@ -15,7 +15,9 @@
  * @param {number} statusCode
  * @param {*} payload
  */
-export function sendJson(response?: any, statusCode?: any, payload?: any) : any {
+import type { ServerResponse } from "node:http";
+
+export function sendJson(response: ServerResponse, statusCode: number, payload: unknown): void {
   response.writeHead(statusCode, {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",

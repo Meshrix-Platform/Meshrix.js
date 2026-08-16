@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json.schemastore.org/oxlintrc.json",
+  "rules": {
+    "typescript/no-explicit-any": "error"
+  }
+}

@@ -26,8 +26,6 @@ export type ConsoleDestructiveOperationTone = "neutral" | "warning" | "danger";
 
 export type ConsoleDestructiveOperationId =
   | "auth.session.revoke"
-  | "model-repository.provider.remove"
-  | "maintenance-agent.schedule.remove"
   | "service-discovery.address.remove"
   | "publish.service.disable"
   | "publish.service.republish"
@@ -56,16 +54,6 @@ export const CONSOLE_DESTRUCTIVE_OPERATIONS: readonly ConsoleDestructiveOperatio
     id: "auth.session.revoke",
     tone: "danger",
     consequence: "destructive.consequence.authSessionRevoke",
-  }),
-  Object.freeze<ConsoleDestructiveOperation>({
-    id: "model-repository.provider.remove",
-    tone: "warning",
-    consequence: "destructive.consequence.modelRepositoryProviderRemove",
-  }),
-  Object.freeze<ConsoleDestructiveOperation>({
-    id: "maintenance-agent.schedule.remove",
-    tone: "warning",
-    consequence: "destructive.consequence.maintenanceAgentScheduleRemove",
   }),
   Object.freeze<ConsoleDestructiveOperation>({
     id: "service-discovery.address.remove",

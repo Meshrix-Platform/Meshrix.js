@@ -9,20 +9,74 @@ import { createLockManagerAsync } from "#meshrix/foundation/concurrency/lock-man
 import { createClientRegistryService } from "../state/client-registry-service.ts";
 
 export class ServerRuntimeCloseError extends Error {
-  name: any;
+  override name = "ServerRuntimeCloseError";
   constructor() {
     super("Server runtime resource shutdown did not complete cleanly.");
-    this.name = "ServerRuntimeCloseError";
   }
 }
 
-async function closeRuntimeResources(resources?: any) : Promise<any> {
-  const failures: any[] = [];
-  const steps: any[] = [
-    () : any => resources.mountManager?.close?.(),
-    () : any => resources.operationLockManager?.destroy?.(),
-    () : any => resources.clientRegistryService?.close?.(),
-    () : any => resources.storageKernel?.close?.()
+interface RuntimeResources {
+  mountManager?: { close?: () => void | Promise<void> } | null;
+  operationLockManager?: { destroy?: () => void | Promise<void> } | null;
+  clientRegistryService?: { close?: () => void | Promise<void> } | null;
+  storageKernel?: { close?: () => void | Promise<void> } | null;
+}
+
+type CloseStep = () => void | Promise<void>;
+type StorageKernel = ReturnType<typeof createStorageKernel>;
+type StorageProvider = ReturnType<typeof createStorageProvider>;
+type ClientRegistryService = ReturnType<typeof createClientRegistryService>;
+type OperationLockManager = Awaited<ReturnType<typeof createLockManagerAsync>>;
+type MountManager = Awaited<ReturnType<typeof createMountManager>>;
+
+export interface CreateServerRuntimeOptions {
+  userDataPath: string;
+  runtimeOptions?: Record<string, unknown>;
+  builtinMountProviders?: Record<string, unknown>;
+  pluginDeployment?: unknown;
+  operationLockManager?: OperationLockManager | null;
+  registerPluginRuntimeMeasurementSource?: unknown;
+  pluginHostPorts?: Record<string, unknown>;
+}
+
+export interface ServerRuntime {
+  userDataPath: string;
+  storageKernel: StorageKernel;
+  storageProvider: StorageProvider;
+  operationLockManager: OperationLockManager;
+  clientRegistryService: ClientRegistryService;
+  mountConfigPath: ReturnType<typeof getMountConfigPath>;
+  mountConfigPaths: ReturnType<typeof getMountConfigPaths>;
+  mountManager: MountManager;
+  readonly mounts: MountManager["mounts"];
+  readonly postCommitHooks: ReturnType<MountManager["createExecutionView"]>["postCommitHooks"];
+  readonly plugins: MountManager["plugins"];
+  readonly runtimeOptions: MountManager["runtimeOptions"];
+  readonly mountGeneration: MountManager["generation"];
+  createExecutionView(): ReturnType<MountManager["createExecutionView"]> & {
+    userDataPath: string;
+    storageKernel: StorageKernel;
+    storageProvider: StorageProvider;
+    operationLockManager: OperationLockManager;
+    clientRegistryService: ClientRegistryService;
+  };
+  applyMountConfig(...args: Parameters<MountManager["applyMountConfig"]>): ReturnType<MountManager["applyMountConfig"]>;
+  reloadMounts(...args: Parameters<MountManager["reloadMounts"]>): ReturnType<MountManager["reloadMounts"]>;
+  refreshMounts(...args: Parameters<MountManager["refreshMounts"]>): ReturnType<MountManager["refreshMounts"]>;
+  transitionPluginLifecycle(...args: Parameters<MountManager["transitionPluginLifecycle"]>): ReturnType<MountManager["transitionPluginLifecycle"]>;
+  onPluginLifecycleTransition(...args: Parameters<MountManager["onPluginLifecycleTransition"]>): ReturnType<MountManager["onPluginLifecycleTransition"]>;
+  onPluginContributionChange(...args: Parameters<MountManager["onPluginContributionChange"]>): ReturnType<MountManager["onPluginContributionChange"]>;
+  getPluginArtifactGenerationDigest(...args: Parameters<MountManager["getPluginArtifactGenerationDigest"]>): ReturnType<MountManager["getPluginArtifactGenerationDigest"]>;
+  close(): Promise<void>;
+}
+
+async function closeRuntimeResources(resources: RuntimeResources = {}): Promise<void> {
+  const failures: boolean[] = [];
+  const steps: CloseStep[] = [
+    () => resources.mountManager?.close?.(),
+    () => resources.operationLockManager?.destroy?.(),
+    () => resources.clientRegistryService?.close?.(),
+    () => resources.storageKernel?.close?.()
   ];
   for (const close of steps) {
     try {
@@ -34,19 +88,19 @@ async function closeRuntimeResources(resources?: any) : Promise<any> {
   if (failures.length > 0) throw new ServerRuntimeCloseError();
 }
 
-function createRuntimeResourceCloser(resources?: any) : any {
-  let remaining: any[] = [
-    () : any => resources.mountManager?.close?.(),
-    () : any => resources.operationLockManager?.destroy?.(),
-    () : any => resources.clientRegistryService?.close?.(),
-    () : any => resources.storageKernel?.close?.()
+function createRuntimeResourceCloser(resources: RuntimeResources = {}): () => Promise<void> {
+  let remaining: CloseStep[] = [
+    () => resources.mountManager?.close?.(),
+    () => resources.operationLockManager?.destroy?.(),
+    () => resources.clientRegistryService?.close?.(),
+    () => resources.storageKernel?.close?.()
   ];
-  let closePromise: any = null;
-  return () : any => {
+  let closePromise: Promise<void> | null = null;
+  return () => {
     if (remaining.length === 0) return Promise.resolve();
     if (closePromise) return closePromise;
-    closePromise = (async () : Promise<any> => {
-      const failed: any[] = [];
+    closePromise = (async (): Promise<void> => {
+      const failed: CloseStep[] = [];
       for (const close of remaining) {
         try {
           await close();
@@ -56,7 +110,7 @@ function createRuntimeResourceCloser(resources?: any) : any {
       }
       remaining = failed;
       if (failed.length > 0) throw new ServerRuntimeCloseError();
-    })().finally(() : any => {
+    })().finally(() => {
       closePromise = null;
     });
     return closePromise;
@@ -71,13 +125,13 @@ export async function createServerRuntime({
   operationLockManager: injectedOperationLockManager = null,
   registerPluginRuntimeMeasurementSource = null,
   pluginHostPorts = {},
-}: Record<string, any>) : Promise<any> {
-  let storageKernel: any = null;
-  let storageProvider: any = null;
-  let clientRegistryService: any = null;
-  let operationLockManager: any = injectedOperationLockManager;
-  let mountManager: any = null;
-  let closePromise: any = null;
+}: CreateServerRuntimeOptions): Promise<ServerRuntime> {
+  let storageKernel: StorageKernel | null = null;
+  let storageProvider: StorageProvider | null = null;
+  let clientRegistryService: ClientRegistryService | null = null;
+  let operationLockManager: OperationLockManager | null = injectedOperationLockManager;
+  let mountManager: MountManager | null = null;
+  let closePromise: Promise<void> | null = null;
 
   try {
     storageKernel = createStorageKernel({ userDataPath });
@@ -102,7 +156,7 @@ export async function createServerRuntime({
       registerPluginRuntimeMeasurementSource,
       pluginHostPorts,
     });
-    const closeResources: any = createRuntimeResourceCloser({
+    const closeResources = createRuntimeResourceCloser({
       mountManager,
       operationLockManager,
       clientRegistryService,
@@ -118,22 +172,22 @@ export async function createServerRuntime({
       mountConfigPath: getMountConfigPath(userDataPath),
       mountConfigPaths: getMountConfigPaths(userDataPath),
       mountManager,
-      get mounts() : any {
+      get mounts() {
         return mountManager.mounts;
       },
-      get postCommitHooks() : any {
+      get postCommitHooks() {
         return mountManager.createExecutionView().postCommitHooks;
       },
-      get plugins() : any {
+      get plugins() {
         return mountManager.plugins;
       },
-      get runtimeOptions() : any {
+      get runtimeOptions() {
         return mountManager.runtimeOptions;
       },
-      get mountGeneration() : any {
+      get mountGeneration() {
         return mountManager.generation;
       },
-      createExecutionView() : any {
+      createExecutionView() {
         return {
           userDataPath,
           storageKernel,
@@ -143,42 +197,42 @@ export async function createServerRuntime({
           ...mountManager.createExecutionView(),
         };
       },
-      async applyMountConfig(config?: any, options: Record<string, any> = {}) : Promise<any> {
-        return mountManager.applyMountConfig(config, options);
+      applyMountConfig(...args: Parameters<MountManager["applyMountConfig"]>) {
+        return mountManager.applyMountConfig(...args);
       },
-      async reloadMounts(options: Record<string, any> = {}) : Promise<any> {
-        return mountManager.reloadMounts(options);
+      reloadMounts(...args: Parameters<MountManager["reloadMounts"]>) {
+        return mountManager.reloadMounts(...args);
       },
-      async refreshMounts(options: Record<string, any> = {}) : Promise<any> {
-        return mountManager.refreshMounts(options);
+      refreshMounts(...args: Parameters<MountManager["refreshMounts"]>) {
+        return mountManager.refreshMounts(...args);
       },
-      transitionPluginLifecycle(request: Record<string, any> = {}) : any {
-        return mountManager.transitionPluginLifecycle(request);
+      transitionPluginLifecycle(...args: Parameters<MountManager["transitionPluginLifecycle"]>) {
+        return mountManager.transitionPluginLifecycle(...args);
       },
-      onPluginLifecycleTransition(listener?: any) : any {
-        return mountManager.onPluginLifecycleTransition(listener);
+      onPluginLifecycleTransition(...args: Parameters<MountManager["onPluginLifecycleTransition"]>) {
+        return mountManager.onPluginLifecycleTransition(...args);
       },
-      onPluginContributionChange(listener?: any) : any {
-        return mountManager.onPluginContributionChange(listener);
+      onPluginContributionChange(...args: Parameters<MountManager["onPluginContributionChange"]>) {
+        return mountManager.onPluginContributionChange(...args);
       },
-      getPluginArtifactGenerationDigest(pluginId?: any) : any {
-        return mountManager.getPluginArtifactGenerationDigest(pluginId);
+      getPluginArtifactGenerationDigest(...args: Parameters<MountManager["getPluginArtifactGenerationDigest"]>) {
+        return mountManager.getPluginArtifactGenerationDigest(...args);
       },
-      async close() : Promise<any> {
-        closePromise ||= closeResources().catch((error?: any) : any => {
+      async close(): Promise<void> {
+        closePromise ||= closeResources().catch((error: unknown) => {
           closePromise = null;
           throw error;
         });
         return closePromise;
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     await closeRuntimeResources({
       mountManager,
       operationLockManager,
       clientRegistryService,
       storageKernel
-    }).catch(() : any => {});
+    }).catch(() => {});
     throw error;
   }
 }

@@ -5,28 +5,35 @@ import {
 import { publicMetadata, uniqueStrings } from "./identity-helpers.ts";
 import { resolveCommandCandidate } from "./identity-helpers.ts";
 import { protocolRecordBase } from "./audit-projection.ts";
+import type {
+  DownstreamAspectLayer,
+  DownstreamAssemblyContext,
+  DownstreamCapability,
+  DownstreamFrameworkDefinition,
+  UnknownRecord
+} from "./types.ts";
 
-function publicCommandProbe(probe: Record<string, any> = {}) : any {
+function publicCommandProbe(probe: UnknownRecord = {}) {
   return Object.freeze({
     found: probe.found === true,
     command: String(probe.command || "").trim()
   });
 }
 
-export class McpAgentFrameworkAdapterLayer {
-  adapterKind: any;
-  layerId: any;
-  constructor({ layerId = "mcp", adapterKind = "agent-framework-mcp-adapter-layer" }: Record<string, any> = {}) {
+export class McpAgentFrameworkAdapterLayer implements DownstreamAspectLayer {
+  adapterKind: string;
+  layerId: string;
+  constructor({ layerId = "mcp", adapterKind = "agent-framework-mcp-adapter-layer" }: { layerId?: string; adapterKind?: string } = {}) {
     this.layerId = layerId;
     this.adapterKind = adapterKind;
   }
 
-  supports(framework: Record<string, any> = {}) : any {
+  supports(framework: DownstreamFrameworkDefinition): boolean {
     return Boolean(framework?.mcp);
   }
 
-  assembleFramework(framework: Record<string, any> = {}, context: Record<string, any> = {}) : any {
-    const mcp: any = framework.mcp;
+  assembleFramework(framework: DownstreamFrameworkDefinition, context: DownstreamAssemblyContext = {}): DownstreamCapability {
+    const mcp = framework.mcp;
     if (!mcp) {
       return {
         aspectProtocolVersion: DOWNSTREAM_CLIENT_ASPECT_PROTOCOL_VERSION,
@@ -43,7 +50,7 @@ export class McpAgentFrameworkAdapterLayer {
         }
       };
     }
-    const commandProbe: any = resolveCommandCandidate(uniqueStrings([...framework.commandNames, ...mcp.commandNames]), context);
+    const commandProbe = resolveCommandCandidate(uniqueStrings([...framework.commandNames, ...mcp.commandNames]), context);
     return Object.freeze({
       ...protocolRecordBase({
         layerId: this.layerId,
@@ -78,6 +85,6 @@ export class McpAgentFrameworkAdapterLayer {
   }
 }
 
-export function createDefaultDownstreamClientAspectLayers() : any {
+export function createDefaultDownstreamClientAspectLayers(): DownstreamAspectLayer[] {
   return [new McpAgentFrameworkAdapterLayer()];
 }

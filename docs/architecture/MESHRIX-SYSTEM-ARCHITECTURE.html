@@ -20,11 +20,11 @@
   table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #d8dee6; }
   th, td { text-align: left; border-bottom: 1px solid #e5e9ef; padding: 10px; vertical-align: top; }
   th { background: #edf1f6; }
-</style><!-- architecture-facts-digest: sha256:d5b62c7f131fbfb085b1767db3e51f46011cec5c83e17abb50432131ffd7bf96 -->
+</style><!-- architecture-facts-digest: sha256:8997db1de4b5992bd58f6e28763fd07df24afd9a612bcbd6d0a820841a20cf48 -->
 </head>
 <body><main>
 <h1>Meshrix.js System Architecture</h1>
-<p>Authority: packages/contracts/src/modules/manifest.ts. Projection-only diagram; digest sha256:d5b62c7f131fbfb085b1767db3e51f46011cec5c83e17abb50432131ffd7bf96.</p>
+<p>Authority: packages/contracts/src/modules/manifest.ts. Projection-only diagram; digest sha256:8997db1de4b5992bd58f6e28763fd07df24afd9a612bcbd6d0a820841a20cf48.</p>
 <h2>System Layers</h2>
 <div class="grid">
 <section class="band layer">
@@ -407,7 +407,7 @@
     <td>core-capability</td>
     <td>optional</td>
     <td></td>
-    <td>临时上下文<br>长期记忆<br>模型网关<br>模型库与智能体配置</td>
+    <td>工作空间上下文<br>长期记忆<br>受治理工具调用</td>
   </tr>
   <tr>
     <td>上下文（临时）</td>
@@ -425,78 +425,7 @@
     <td>agent-capabilities</td>
     <td>长期上下文<br>contentRefs</td>
   </tr>
-  <tr>
-    <td>模型网关</td>
-    <td><code>agent-gateway</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-capabilities</td>
-    <td>alias / provider / model resolution<br>degraded routing chain / rate limit<br>budget / circuit breaker / ledger</td>
-  </tr>
-  <tr>
-    <td>Model Routing</td>
-    <td><code>model-routing</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-gateway</td>
-    <td>degraded routing chain / rate limit<br>budget / circuit breaker / ledger</td>
-  </tr>
-  <tr>
-    <td>Model Probe</td>
-    <td><code>model-probe</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-gateway</td>
-    <td>connectivity probe<br>latency / status / configured check</td>
-  </tr>
-  <tr>
-    <td>Provider Registry &amp; Call</td>
-    <td><code>agent-gateway-call</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-gateway</td>
-    <td>alias / provider / model resolution<br>configured upstream forwarding</td>
-  </tr>
-  <tr>
-    <td>基础配置</td>
-    <td><code>agent-configs</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-capabilities</td>
-    <td>manifest load / normalize / persist<br>model library<br>gateway defaults and profiles</td>
-  </tr>
-  <tr>
-    <td>Config Registry</td>
-    <td><code>config-registry</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-configs</td>
-    <td>generation validate / atomic pointer commit<br>redacted public projection</td>
-  </tr>
-  <tr>
-    <td>Model Library</td>
-    <td><code>model-list</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-configs</td>
-    <td>provider / model / endpoint config<br>encrypted credential references only</td>
-  </tr>
-  <tr>
-    <td>Gateway Agents</td>
-    <td><code>agent-list</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-configs</td>
-    <td>agent alias / prompt / plugin list<br>explicit module visibility</td>
-  </tr>
-  <tr>
-    <td>Defaults &amp; Profiles</td>
-    <td><code>agent-defaults</code></td>
-    <td>core-capability</td>
-    <td>optional</td>
-    <td>agent-configs</td>
-    <td>timeout / parameters / system prompt<br>context profile binding</td>
-  </tr></tbody>
+  </tbody>
 </table>
 </section>
 <section>

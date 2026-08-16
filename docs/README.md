@@ -127,8 +127,8 @@ are the complete maintenance authority for Meshrix.js:
 | Upstream gateway | [GATEWAY.md](functionality/GATEWAY.md) |
 | Ingestion and jobs | [INGESTION-JOBS.md](functionality/INGESTION-JOBS.md) |
 | Strategy Management | [STRATEGY-MANAGEMENT.md](functionality/STRATEGY-MANAGEMENT.md) |
-| Agent Gateway and Model Routing | [AGENT-GATEWAY.md](functionality/AGENT-GATEWAY.md) |
-| Maintenance Agent | [MAINTENANCE-AGENT.md](functionality/MAINTENANCE-AGENT.md) |
+| Mandatory gateway pipeline | [GATEWAY.md](functionality/GATEWAY.md) |
+| Standalone Model Gateway Service | [README.md](../services/model-gateway/README.md) |
 | Agent workspace governance | [ARCHITECTURE.md — Agent Workspace Governance Boundary](architecture/ARCHITECTURE.md#agent-workspace-governance-boundary) |
 | Workspace assets | [WORKSPACE-ASSETS.md](functionality/WORKSPACE-ASSETS.md) |
 | Agent collaboration | [AGENT-COLLABORATION.md](functionality/AGENT-COLLABORATION.md) |

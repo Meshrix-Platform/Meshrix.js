@@ -54,6 +54,7 @@ const {
   tagPolicy,
   tagProjections,
   upsertTag,
+  latestHttpFailureDiagnostic,
   cleanup
 } = harness;
 
@@ -137,6 +138,7 @@ try {
     console.error(`stage=${redactText(error?.stage || "unknown")} reason=${redactText(error?.reasonCode || "unknown")}`);
     console.error(redactText(error?.stack || String(error)));
     if (error?.cause) console.error(redactText(error.cause?.stack || error.cause?.message || String(error.cause)));
+    console.error(`httpFailure=${JSON.stringify(await latestHttpFailureDiagnostic())}`);
   }
   exitCode = 1;
 } finally {

@@ -1,24 +1,25 @@
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash } from "node:crypto";
+import type { CatalogEntry, CatalogKind, CatalogRef } from "../types.ts";
 
+type CatalogEntryInput = Omit<CatalogEntry, "digest">;
 
-export function riskControlDigest(prefix?: any, value?: any) : any {
+export function riskControlDigest(prefix = "", value: unknown = null): string {
   return `sha256:${prefix}:${createHash("sha256").update(`${prefix}\n${canonicalJson(value)}`).digest("hex")}`;
 }
 
-function entryDigest(prefix?: any, entry?: any) : any {
-  const { digest: _digest, ...body } = entry;
-  return riskControlDigest(prefix, body);
+function entryDigest(prefix: string, entry: CatalogEntryInput): string {
+  return riskControlDigest(prefix, entry);
 }
 
-function freezeEntries(prefix?: any, entries?: any) : any {
-  return Object.freeze(entries.map((entry?: any) : any => Object.freeze({
+function freezeEntries(prefix: string, entries: readonly CatalogEntryInput[]): readonly Readonly<CatalogEntry>[] {
+  return Object.freeze(entries.map((entry) => Object.freeze({
     ...entry,
     digest: entryDigest(prefix, entry)
   })));
 }
 
-export const RISK_CONTROL_COMPONENT_CATALOG: any = freezeEntries("v0.0.1:strategy:risk-control-component-1", [
+export const RISK_CONTROL_COMPONENT_CATALOG = freezeEntries("v0.0.1:strategy:risk-control-component-1", [
   { id: "component.mcp-adapter", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix.js MCP adapter" },
   { id: "component.operation-dispatcher", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix.js operation dispatcher" },
   { id: "component.console-auth", version: "v1:c1.r1", lifecycle: "active", authority: "Meshrix.js console auth" },
@@ -37,7 +38,7 @@ export const RISK_CONTROL_COMPONENT_CATALOG: any = freezeEntries("v0.0.1:strateg
   { id: "component.connector-governance", version: "v1:c1.r1", lifecycle: "active", authority: "Connector governance" }
 ]);
 
-export const RISK_CONTROL_FACT_SOURCE_CATALOG: any = freezeEntries("v0.0.1:strategy:risk-control-fact-source-1", [
+export const RISK_CONTROL_FACT_SOURCE_CATALOG = freezeEntries("v0.0.1:strategy:risk-control-fact-source-1", [
   { id: "fact.mcp-grant", version: "v1:f1.r1", lifecycle: "active", authority: "MCP grant record" },
   { id: "fact.console-session", version: "v1:f1.r1", lifecycle: "active", authority: "Console session store" },
   { id: "fact.tool-grant-store", version: "v1:f1.r1", lifecycle: "active", authority: "Tool grant store" },
@@ -54,7 +55,7 @@ export const RISK_CONTROL_FACT_SOURCE_CATALOG: any = freezeEntries("v0.0.1:strat
   { id: "fact.runtime-health", version: "v1:f1.r1", lifecycle: "active", authority: "Runtime health and capacity facts" }
 ]);
 
-export const RISK_CONTROL_VERIFIER_CATALOG: any = freezeEntries("v0.0.1:strategy:risk-control-verifier-1", [
+export const RISK_CONTROL_VERIFIER_CATALOG = freezeEntries("v0.0.1:strategy:risk-control-verifier-1", [
   { id: "verifier.risk-control.registry-integrity", version: "v1:v1.r1", lifecycle: "active", authority: "server:scripts:verify-risk-control-model" },
   { id: "verifier.risk-control.operation-envelope", version: "v1:v1.r1", lifecycle: "active", authority: "operation envelope hash-chain verifier" },
   { id: "verifier.risk-control.evidence-locator", version: "v1:v1.r1", lifecycle: "active", authority: "evidence locator verifier" },
@@ -66,13 +67,13 @@ export const RISK_CONTROL_VERIFIER_CATALOG: any = freezeEntries("v0.0.1:strategy
   { id: "verifier.platform-managed-migration.completion", version: "v1:v1.r1", lifecycle: "active", authority: "Platform Managed Migration completion verifier" }
 ]);
 
-export const RISK_CONTROL_EVIDENCE_PROFILE_CATALOG: any = freezeEntries("v0.0.1:strategy:risk-control-evidence-governance-profile-1", [
+export const RISK_CONTROL_EVIDENCE_PROFILE_CATALOG = freezeEntries("v0.0.1:strategy:risk-control-evidence-governance-profile-1", [
   { id: "profile.classification.internal", version: "v1:p1.l1.c1.r1", lifecycle: "active", kind: "classification", semantics: "internal audit evidence" },
   { id: "profile.redaction.standard", version: "v1:p1.l1.c1.r1", lifecycle: "active", kind: "redaction-policy", semantics: "redact secrets, tokens, paths, raw headers, and provider debug payloads" },
   { id: "profile.retention.audit-standard", version: "v1:p1.l1.c1.r1", lifecycle: "active", kind: "retention", semantics: "retain enough evidence for audit, recovery, and replay diagnosis" }
 ]);
 
-export const RISK_CONTROL_EVIDENCE_STORE_CATALOG: any = freezeEntries("v0.0.1:strategy:risk-control-evidence-store-1", [
+export const RISK_CONTROL_EVIDENCE_STORE_CATALOG = freezeEntries("v0.0.1:strategy:risk-control-evidence-store-1", [
   {
     id: "store.operation-audit",
     version: "v1:s1.l1.c1.r1",
@@ -96,11 +97,11 @@ export const RISK_CONTROL_EVIDENCE_STORE_CATALOG: any = freezeEntries("v0.0.1:st
   }
 ]);
 
-function byId(entries?: any) : any {
-  return new Map<any, any>(entries.map((entry?: any) : any => [entry.id, entry]));
+function byId(entries: readonly Readonly<CatalogEntry>[]): ReadonlyMap<string, Readonly<CatalogEntry>> {
+  return new Map(entries.map((entry) => [entry.id, entry]));
 }
 
-export const RISK_CONTROL_CATALOGS: Readonly<Record<string, any>> = Object.freeze({
+export const RISK_CONTROL_CATALOGS: Readonly<Record<CatalogKind, readonly Readonly<CatalogEntry>[]>> = Object.freeze({
   enforcedBy: RISK_CONTROL_COMPONENT_CATALOG,
   factSource: RISK_CONTROL_FACT_SOURCE_CATALOG,
   verifiedBy: RISK_CONTROL_VERIFIER_CATALOG,
@@ -108,7 +109,7 @@ export const RISK_CONTROL_CATALOGS: Readonly<Record<string, any>> = Object.freez
   evidenceProfile: RISK_CONTROL_EVIDENCE_PROFILE_CATALOG
 });
 
-export const RISK_CONTROL_CATALOG_INDEXES: Readonly<Record<string, any>> = Object.freeze({
+export const RISK_CONTROL_CATALOG_INDEXES: Readonly<Record<CatalogKind, ReadonlyMap<string, Readonly<CatalogEntry>>>> = Object.freeze({
   enforcedBy: byId(RISK_CONTROL_COMPONENT_CATALOG),
   factSource: byId(RISK_CONTROL_FACT_SOURCE_CATALOG),
   verifiedBy: byId(RISK_CONTROL_VERIFIER_CATALOG),
@@ -116,8 +117,8 @@ export const RISK_CONTROL_CATALOG_INDEXES: Readonly<Record<string, any>> = Objec
   evidenceProfile: byId(RISK_CONTROL_EVIDENCE_PROFILE_CATALOG)
 });
 
-export function activeCatalogRef(kind?: any, id?: any) : any {
-  const entry: any = RISK_CONTROL_CATALOG_INDEXES[kind]?.get(id);
+export function activeCatalogRef(kind: CatalogKind, id: string): Readonly<CatalogRef> {
+  const entry = RISK_CONTROL_CATALOG_INDEXES[kind].get(id);
   if (!entry) {
     throw new Error(`Unknown Risk Control ${kind} catalog entry: ${id}`);
   }

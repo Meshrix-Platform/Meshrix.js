@@ -1,4 +1,4 @@
-export const SYSTEM_ARCHITECTURE_MODULES: readonly any[] = Object.freeze([
+export const SYSTEM_ARCHITECTURE_MODULES = Object.freeze([
   Object.freeze({
     moduleId: "character-configuration",
     layerId: "platform-capabilities",

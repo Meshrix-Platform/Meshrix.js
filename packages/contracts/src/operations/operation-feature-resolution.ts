@@ -30,14 +30,10 @@ const FEATURE_BY_REGISTRY_FEATURE: Readonly<Record<string, any>> = Object.freeze
   external_services: "upstream-gateway",
   operation_permission: "operation-permission-core",
   strategy_management: "strategy-management",
-  agent_management: "agent-management",
   agent_memory: "agent-memory",
   context_runtime: "context-runtime-core",
-  custom_http_adapter: "agent-gateway",
-  agent_gateway: "agent-gateway",
-  agent_sync: "agent-gateway",
-  agent_workspace: "agent-workspace-core",
-  maintenance_agent: "maintenance-agent-runbooks"
+  agent_sync: "core-platform",
+  agent_workspace: "agent-workspace-core"
 });
 
 export function operationFeatureId(operation: Record<string, any> = {}) : any {
@@ -61,17 +57,8 @@ export function operationFeatureId(operation: Record<string, any> = {}) : any {
   if (operationId.startsWith("context.session_memory.") || operationId.startsWith("agent_memory.")) {
     return "agent-memory";
   }
-  if (operationId.startsWith("maintenance_agent.")) {
-    return "maintenance-agent-runbooks";
-  }
-  if (["agents.list", "agents.create", "agents.update", "agents.delete"].includes(operationId)) {
-    return "agent-management";
-  }
-  if (operationId === "settings.model_probe") {
-    return "agent-gateway";
-  }
-  if (operationId.startsWith("agent_gateway.") || operationId.startsWith("agent_sync.")) {
-    return "agent-gateway";
+  if (operationId.startsWith("agent_sync.")) {
+    return "core-platform";
   }
   if (operationId.startsWith("security_alerts.")) {
     return "security-alerts";

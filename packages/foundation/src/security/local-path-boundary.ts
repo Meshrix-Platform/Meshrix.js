@@ -2,18 +2,38 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ServerConfig } from "#meshrix/server-config";
+import type { Stats } from "node:fs";
 
-function text(value: any = "") : any {
+interface ControlledRootsOptions { userDataPath?: string; extraRoots?: readonly string[]; }
+interface PathLabelOptions { label?: string; }
+interface ControlledPathOptions extends PathLabelOptions { userDataPath?: string; allowedRoots?: readonly string[]; }
+interface RootPair { rootPath: string; realPath: string; }
+interface ExistingPathResult { absolutePath: string; realPath: string; stat: Stats; allowedRoots: string[]; }
+interface PathWithinRootOptions extends PathLabelOptions {
+  allowMissing?: boolean;
+  requireExisting?: boolean;
+  allowDirectory?: boolean;
+  allowFile?: boolean;
+  allowSpecial?: boolean;
+}
+
+function errorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && typeof Reflect.get(error, "code") === "string"
+    ? String(Reflect.get(error, "code"))
+    : undefined;
+}
+
+function text(value: unknown = ""): string {
   return String(value || "").trim();
 }
 
-function uniquePaths(values: any = []) : any {
-  const seen: any = new Set<any>();
-  const paths: any[] = [];
+function uniquePaths(values: readonly unknown[] = []): string[] {
+  const seen = new Set<string>();
+  const paths: string[] = [];
   for (const value of values) {
-    const item: any = text(value);
+    const item = text(value);
     if (!item) continue;
-    const resolved: any = path.resolve(item);
+    const resolved = path.resolve(item);
     if (seen.has(resolved)) continue;
     seen.add(resolved);
     paths.push(resolved);
@@ -21,16 +41,16 @@ function uniquePaths(values: any = []) : any {
   return paths;
 }
 
-function configuredRoots(envName: any = "MESHRIX_ALLOWED_LOCAL_SOURCE_ROOTS") : any {
+function configuredRoots(envName = "MESHRIX_ALLOWED_LOCAL_SOURCE_ROOTS"): string[] {
   return uniquePaths(text(process.env[envName]).split(path.delimiter));
 }
 
-function dataRoot(userDataPath: any = "") : any {
+function dataRoot(userDataPath = ""): string {
   return path.resolve(text(userDataPath) || ServerConfig.getDataDir());
 }
 
-export function controlledLocalSourceRoots({ userDataPath = "", extraRoots = [] }: Record<string, any> = {}) : any {
-  const root: any = dataRoot(userDataPath);
+export function controlledLocalSourceRoots({ userDataPath = "", extraRoots = [] }: ControlledRootsOptions = {}): string[] {
+  const root = dataRoot(userDataPath);
   return uniquePaths([
     path.join(root, "local-sources"),
     path.join(root, "agent-workspaces", "local-sources"),
@@ -40,20 +60,20 @@ export function controlledLocalSourceRoots({ userDataPath = "", extraRoots = [] 
   ]);
 }
 
-export function pathIsWithinRoot(candidatePath?: any, rootPath?: any) : any {
-  const relative: any = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relative === "" || (relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+export function pathIsWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-export function normalizeSandboxRelativePath(value: any = "", { label = "虚拟路径" }: Record<string, any> = {}) : any {
-  const raw: any = text(value).replace(/\\/g, "/");
+export function normalizeSandboxRelativePath(value: unknown = "", { label = "虚拟路径" }: PathLabelOptions = {}): string {
+  const raw = text(value).replace(/\\/g, "/");
   if (!raw || raw === ".") {
     return "";
   }
   if (raw.includes("\0")) {
     throw new Error(`${label}不能包含空字节。`);
   }
-  let decoded: any = raw;
+  let decoded = raw;
   try {
     decoded = decodeURIComponent(raw);
   } catch {
@@ -67,7 +87,7 @@ export function normalizeSandboxRelativePath(value: any = "", { label = "虚拟�
   ) {
     throw new Error(`${label}必须是相对路径。`);
   }
-  const segments: any[] = [];
+  const segments: string[] = [];
   for (const segment of decoded.split("/")) {
     if (!segment || segment === ".") {
       continue;
@@ -80,10 +100,10 @@ export function normalizeSandboxRelativePath(value: any = "", { label = "虚拟�
   return segments.join("/");
 }
 
-export function resolveVirtualPathWithinRoot(rootPath: any = "", virtualPath: any = "", options: Record<string, any> = {}) : any {
-  const root: any = path.resolve(rootPath);
-  const relativePath: any = normalizeSandboxRelativePath(virtualPath, options);
-  const absolutePath: any = path.resolve(root, ...relativePath.split("/").filter(Boolean));
+export function resolveVirtualPathWithinRoot(rootPath = "", virtualPath: unknown = "", options: PathLabelOptions = {}) {
+  const root = path.resolve(rootPath);
+  const relativePath = normalizeSandboxRelativePath(virtualPath, options);
+  const absolutePath = path.resolve(root, ...relativePath.split("/").filter(Boolean));
   if (!pathIsWithinRoot(absolutePath, root)) {
     throw new Error(`${options.label || "虚拟路径"}不能跳出受控根目录。`);
   }
@@ -94,9 +114,9 @@ export function resolveVirtualPathWithinRoot(rootPath: any = "", virtualPath: an
   };
 }
 
-function rootPairsSync(roots: any = []) : any {
-  return uniquePaths(roots).map((rootPath?: any) : any => {
-    let realPath: any = rootPath;
+function rootPairsSync(roots: readonly string[] = []): RootPair[] {
+  return uniquePaths(roots).map((rootPath) => {
+    let realPath = rootPath;
     try {
       realPath = fsSync.realpathSync.native(rootPath);
     } catch {
@@ -106,10 +126,10 @@ function rootPairsSync(roots: any = []) : any {
   });
 }
 
-async function rootPairs(roots: any = []) : Promise<any> {
-  const pairs: any[] = [];
+async function rootPairs(roots: readonly string[] = []): Promise<RootPair[]> {
+  const pairs: RootPair[] = [];
   for (const rootPath of uniquePaths(roots)) {
-    let realPath: any = rootPath;
+    let realPath = rootPath;
     try {
       realPath = await fs.realpath(rootPath);
     } catch {
@@ -120,192 +140,192 @@ async function rootPairs(roots: any = []) : Promise<any> {
   return pairs;
 }
 
-function pathMatchesRootPairs(candidatePath?: any, realCandidatePath?: any, pairs: any = []) : any {
-  return pairs.some((pair?: any) : any =>
+function pathMatchesRootPairs(candidatePath: string, realCandidatePath: string, pairs: readonly RootPair[] = []): boolean {
+  return pairs.some((pair) =>
     (pathIsWithinRoot(candidatePath, pair.rootPath) || pathIsWithinRoot(candidatePath, pair.realPath)) &&
     pathIsWithinRoot(realCandidatePath, pair.realPath)
   );
 }
 
-export function assertExistingLocalDirectoryWithinControlledRootsSync(sourcePath?: any, {
+export function assertExistingLocalDirectoryWithinControlledRootsSync(sourcePath?: unknown, {
   userDataPath = "",
   allowedRoots = controlledLocalSourceRoots({ userDataPath }),
   label = "本机目录"
-}: Record<string, any> = {}) : any {
-  const rawPath: any = text(sourcePath);
+}: ControlledPathOptions = {}): ExistingPathResult {
+  const rawPath = text(sourcePath);
   if (!rawPath) {
     throw new Error(`${label}路径不能为空。`);
   }
-  const absolutePath: any = path.resolve(rawPath);
-  const root: any = path.parse(absolutePath).root;
+  const absolutePath = path.resolve(rawPath);
+  const root = path.parse(absolutePath).root;
   if (absolutePath === root) {
     throw new Error(`不能把文件系统根目录作为${label}。`);
   }
-  const stat: any = fsSync.lstatSync(absolutePath);
+  const stat = fsSync.lstatSync(absolutePath);
   if (stat.isSymbolicLink()) {
     throw new Error(`${label}不能是符号链接。`);
   }
   if (!stat.isDirectory()) {
     throw new Error(`${label}必须是目录。`);
   }
-  const realPath: any = fsSync.realpathSync.native(absolutePath);
-  const pairs: any = rootPairsSync(allowedRoots);
+  const realPath = fsSync.realpathSync.native(absolutePath);
+  const pairs = rootPairsSync(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
     throw new Error(`${label}必须位于 Meshrix.js 受控本机来源目录内。`);
   }
-  return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair?: any) : any => pair.rootPath) };
+  return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair) => pair.rootPath) };
 }
 
-export async function assertExistingLocalDirectoryWithinControlledRoots(sourcePath?: any, {
+export async function assertExistingLocalDirectoryWithinControlledRoots(sourcePath?: unknown, {
   userDataPath = "",
   allowedRoots = controlledLocalSourceRoots({ userDataPath }),
   label = "本机目录"
-}: Record<string, any> = {}) : Promise<any> {
-  const rawPath: any = text(sourcePath);
+}: ControlledPathOptions = {}): Promise<ExistingPathResult> {
+  const rawPath = text(sourcePath);
   if (!rawPath) {
     throw new Error(`${label}路径不能为空。`);
   }
-  const absolutePath: any = path.resolve(rawPath);
-  const root: any = path.parse(absolutePath).root;
+  const absolutePath = path.resolve(rawPath);
+  const root = path.parse(absolutePath).root;
   if (absolutePath === root) {
     throw new Error(`不能把文件系统根目录作为${label}。`);
   }
-  const stat: any = await fs.lstat(absolutePath);
+  const stat = await fs.lstat(absolutePath);
   if (stat.isSymbolicLink()) {
     throw new Error(`${label}不能是符号链接。`);
   }
   if (!stat.isDirectory()) {
     throw new Error(`${label}必须是目录。`);
   }
-  const realPath: any = await fs.realpath(absolutePath);
-  const pairs: any = await rootPairs(allowedRoots);
+  const realPath = await fs.realpath(absolutePath);
+  const pairs = await rootPairs(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
     throw new Error(`${label}必须位于 Meshrix.js 受控本机来源目录内。`);
   }
-  return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair?: any) : any => pair.rootPath) };
+  return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair) => pair.rootPath) };
 }
 
-export async function assertExistingLocalFileWithinControlledRoots(filePath?: any, {
+export async function assertExistingLocalFileWithinControlledRoots(filePath?: unknown, {
   userDataPath = "",
   allowedRoots = controlledLocalSourceRoots({ userDataPath }),
   label = "本机文件"
-}: Record<string, any> = {}) : Promise<any> {
-  const rawPath: any = text(filePath);
+}: ControlledPathOptions = {}): Promise<ExistingPathResult> {
+  const rawPath = text(filePath);
   if (!rawPath) {
     throw new Error(`${label}路径不能为空。`);
   }
-  const absolutePath: any = path.resolve(rawPath);
-  const stat: any = await fs.lstat(absolutePath);
+  const absolutePath = path.resolve(rawPath);
+  const stat = await fs.lstat(absolutePath);
   if (stat.isSymbolicLink()) {
     throw new Error(`${label}不能是符号链接。`);
   }
   if (!stat.isFile()) {
     throw new Error(`${label}必须是普通文件。`);
   }
-  const realPath: any = await fs.realpath(absolutePath);
-  const pairs: any = await rootPairs(allowedRoots);
+  const realPath = await fs.realpath(absolutePath);
+  const pairs = await rootPairs(allowedRoots);
   if (!pathMatchesRootPairs(absolutePath, realPath, pairs)) {
     throw new Error(`${label}必须位于 Meshrix.js 受控本机来源目录内。`);
   }
-  return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair?: any) : any => pair.rootPath) };
+  return { absolutePath, realPath, stat, allowedRoots: pairs.map((pair) => pair.rootPath) };
 }
 
-export async function assertWritablePathWithinRoot(rootPath?: any, targetPath?: any, { label = "目标路径" }: Record<string, any> = {}) : Promise<any> {
-  const root: any = path.resolve(rootPath);
-  const target: any = path.resolve(targetPath);
+export async function assertWritablePathWithinRoot(rootPath: string, targetPath: string, { label = "目标路径" }: PathLabelOptions = {}) {
+  const root = path.resolve(rootPath);
+  const target = path.resolve(targetPath);
   if (!pathIsWithinRoot(target, root)) {
     throw new Error(`${label}不能跳出受控根目录。`);
   }
-  const rootStat: any = await fs.lstat(root);
+  const rootStat = await fs.lstat(root);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
     throw new Error("受控根目录必须是普通目录。");
   }
-  const rootRealPath: any = await fs.realpath(root);
-  const relative: any = path.relative(root, target);
-  const segments: any = relative ? relative.split(path.sep).filter(Boolean) : [];
-  let current: any = root;
+  const rootRealPath = await fs.realpath(root);
+  const relative = path.relative(root, target);
+  const segments = relative ? relative.split(path.sep).filter(Boolean) : [];
+  let current = root;
   for (const segment of segments.slice(0, -1)) {
     current = path.join(current, segment);
     try {
-      const stat: any = await fs.lstat(current);
+      const stat = await fs.lstat(current);
       if (stat.isSymbolicLink()) {
         throw new Error(`${label}不能经过符号链接目录。`);
       }
       if (!stat.isDirectory()) {
         throw new Error(`${label}父路径必须是目录。`);
       }
-    } catch (error: any) {
-      if (error?.code === "ENOENT") {
+    } catch (error: unknown) {
+      if (errorCode(error) === "ENOENT") {
         break;
       }
       throw error;
     }
   }
-  const parentPath: any = path.dirname(target);
+  const parentPath = path.dirname(target);
   try {
-    const parentRealPath: any = await fs.realpath(parentPath);
+    const parentRealPath = await fs.realpath(parentPath);
     if (!pathIsWithinRoot(parentRealPath, rootRealPath)) {
       throw new Error(`${label}真实父路径不能跳出受控根目录。`);
     }
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") {
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") {
       throw error;
     }
   }
   try {
-    const stat: any = await fs.lstat(target);
+    const stat = await fs.lstat(target);
     if (stat.isSymbolicLink()) {
       throw new Error(`${label}不能写入符号链接。`);
     }
-    const realPath: any = await fs.realpath(target);
+    const realPath = await fs.realpath(target);
     if (!pathIsWithinRoot(realPath, rootRealPath)) {
       throw new Error(`${label}真实路径不能跳出受控根目录。`);
     }
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") {
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") {
       throw error;
     }
   }
   return { absolutePath: target, rootPath: root, rootRealPath };
 }
 
-export function assertPathWithinRootSync(rootPath?: any, targetPath?: any, {
+export function assertPathWithinRootSync(rootPath: string, targetPath: string, {
   label = "目标路径",
   allowMissing = true,
   requireExisting = false,
   allowDirectory = true,
   allowFile = true,
   allowSpecial = false
-}: Record<string, any> = {}) : any {
-  const root: any = path.resolve(rootPath);
-  const target: any = path.resolve(targetPath);
+}: PathWithinRootOptions = {}) {
+  const root = path.resolve(rootPath);
+  const target = path.resolve(targetPath);
   if (!pathIsWithinRoot(target, root)) {
     throw new Error(`${label}不能跳出受控根目录。`);
   }
-  const rootStat: any = fsSync.lstatSync(root);
+  const rootStat = fsSync.lstatSync(root);
   if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
     throw new Error("受控根目录必须是普通目录。");
   }
-  const rootRealPath: any = fsSync.realpathSync.native(root);
-  const relative: any = path.relative(root, target);
-  const segments: any = relative ? relative.split(path.sep).filter(Boolean) : [];
-  let current: any = root;
+  const rootRealPath = fsSync.realpathSync.native(root);
+  const relative = path.relative(root, target);
+  const segments = relative ? relative.split(path.sep).filter(Boolean) : [];
+  let current = root;
   for (const segment of segments.slice(0, -1)) {
     current = path.join(current, segment);
     try {
-      const stat: any = fsSync.lstatSync(current);
+      const stat = fsSync.lstatSync(current);
       if (stat.isSymbolicLink()) {
         throw new Error(`${label}不能经过符号链接目录。`);
       }
       if (!stat.isDirectory()) {
         throw new Error(`${label}父路径必须是目录。`);
       }
-      const realPath: any = fsSync.realpathSync.native(current);
+      const realPath = fsSync.realpathSync.native(current);
       if (!pathIsWithinRoot(realPath, rootRealPath)) {
         throw new Error(`${label}真实父路径不能跳出受控根目录。`);
       }
-    } catch (error: any) {
-      if (error?.code === "ENOENT") {
+    } catch (error: unknown) {
+      if (errorCode(error) === "ENOENT") {
         if (!allowMissing && requireExisting) {
           throw error;
         }
@@ -315,7 +335,7 @@ export function assertPathWithinRootSync(rootPath?: any, targetPath?: any, {
     }
   }
   try {
-    const stat: any = fsSync.lstatSync(target);
+    const stat = fsSync.lstatSync(target);
     if (stat.isSymbolicLink()) {
       throw new Error(`${label}不能指向符号链接。`);
     }
@@ -328,13 +348,13 @@ export function assertPathWithinRootSync(rootPath?: any, targetPath?: any, {
     if (!stat.isDirectory() && !stat.isFile() && !allowSpecial) {
       throw new Error(`${label}必须是普通文件或目录。`);
     }
-    const realPath: any = fsSync.realpathSync.native(target);
+    const realPath = fsSync.realpathSync.native(target);
     if (!pathIsWithinRoot(realPath, rootRealPath)) {
       throw new Error(`${label}真实路径不能跳出受控根目录。`);
     }
     return { absolutePath: target, rootPath: root, rootRealPath, exists: true, stat };
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") {
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") {
       throw error;
     }
     if (requireExisting || !allowMissing) {

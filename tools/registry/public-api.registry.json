@@ -3,50 +3,8 @@
   "version": "v0.2.0",
   "aliases": [
     {
-      "alias": "#meshrix/agents/agent-configs/config-registry",
-      "targetPath": "./packages/agents/src/agent-configs/config-registry.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/agent-configs/credential-binding",
-      "targetPath": "./packages/agents/src/agent-configs/credential-binding.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/agent-gateway/external-gateway/index",
-      "targetPath": "./packages/agents/src/agent-gateway/external-gateway/index.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/agent-gateway/index",
-      "targetPath": "./packages/agents/src/agent-gateway/index.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/agent-gateway/model-probe/index",
-      "targetPath": "./packages/agents/src/agent-gateway/model-probe/index.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
       "alias": "#meshrix/agents/agent-memory/index",
       "targetPath": "./packages/agents/src/agent-memory/index.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/agent-runtime-provider",
-      "targetPath": "./packages/agents/src/agent-runtime-provider.ts",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"
@@ -61,34 +19,6 @@
     {
       "alias": "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
       "targetPath": "./packages/agents/src/agent-workspace/agent-workspace-materialization-port.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/maintenance/index",
-      "targetPath": "./packages/agents/src/maintenance/index.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/maintenance/planner",
-      "targetPath": "./packages/agents/src/maintenance/planner.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/maintenance/tool-registry",
-      "targetPath": "./packages/agents/src/maintenance/tool-registry.ts",
-      "status": "active",
-      "domainPackage": "agents",
-      "owner": "platform"
-    },
-    {
-      "alias": "#meshrix/agents/maintenance/work-queue-contract",
-      "targetPath": "./packages/agents/src/maintenance/work-queue-contract.ts",
       "status": "active",
       "domainPackage": "agents",
       "owner": "platform"

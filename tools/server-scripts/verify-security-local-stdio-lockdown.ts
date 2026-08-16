@@ -166,7 +166,7 @@ async function assertSecurityDesignSeparation() : Promise<any> {
   const packageManifest: any = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
   assert.equal(
     packageManifest.scripts["server:verify:security-hardening"],
-    "node tools/server-scripts/verify-security-hardening.ts",
+    "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-security-hardening.ts",
     "Security hardening must run through the explicit verifier script"
   );
   await fs.access(path.join(repoRoot, SECURITY_DESIGN_PATH));
@@ -237,6 +237,8 @@ async function assertMcpPublicPayloadLockdown() : Promise<any> {
         targets: ["codex"],
         label: "verify-security-local-process-lockdown",
         connectorVersion: "security",
+        toolsets: ["meshrix.runtime.read"],
+        maxRisk: "read_only",
         processIdentity: verifierIdentity.request
       }
     });
