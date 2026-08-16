@@ -47,8 +47,9 @@ Route specialized work to:
 - `$meshrix-js-platform-acceptance-workflow` for final readiness reduction.
 
 Offline delivery and the current plan receipt may close on Linux inside a
-virtual machine. Prefer Ubuntu; accept Debian. That path is not a native Linux
-or distribution support claim, and it is not the project-level Functional
-Release Gate.
+virtual machine. Prefer Ubuntu; accept Debian. Native Linux and distribution
+qualification remain remaining required work after the named Real-Machine
+Verification Workflow. Project-level functional acceptance remains
+`npm run verify:acceptance`.
 
 Plan verification with `npm test` or the changed-file profile.

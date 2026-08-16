@@ -68,6 +68,7 @@ import { createAgentWorkspaceSyncApi } from "./agent-workspace-sync.ts";
 import {
   createAgentWorkspaceMaterializationPort
 } from "./agent-workspace-materialization.ts";
+import { createWorkspaceReferenceMigration } from "./workspace-reference-migration.ts";
 import {
   assertAgentWorkspaceMaterializationRootAuthority,
   bindAgentWorkspaceMaterializationRootPort
@@ -78,6 +79,10 @@ export {
   AGENT_WORKSPACE_CONTEXT_BUNDLE_VERSION,
   AGENT_SESSION_THREAD_VERSION
 } from "./agent-workspace-support.ts";
+export {
+  createWorkspaceReferenceMigration,
+  WORKSPACE_REFERENCE_MIGRATION_OWNED_MODULE
+} from "./workspace-reference-migration.ts";
 
 function withOwnedAgentWorkspaceDatabase(databasePath?: any, construct?: any) : any {
   let db: any = null;
@@ -1175,6 +1180,8 @@ export function createAgentWorkspace({
       applyLocalDirectorySync
     } : {}),
     restoreWorkspaceFiles,
+    openWorkspaceCollaboration: (input: Record<string, any> = {}) : any =>
+      createWorkspaceReferenceMigration(input),
     getWorkspaceSandboxMutationReceipt,
     getWorkspaceRefactorInstrumentation: () : any =>
       fileStateApi.getRefactorInstrumentation

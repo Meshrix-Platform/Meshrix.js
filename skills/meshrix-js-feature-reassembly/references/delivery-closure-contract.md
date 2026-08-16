@@ -38,7 +38,7 @@ Use the fields that expose uncertainty:
 | Visible result | UI or client projection derived from that same result |
 | Material failures | Stable failure meaning, retryability, recovery, and preserved input |
 | Proof | Smallest verifier and privacy-safe evidence that support the claim |
-| Non-goals | Explicitly deferred outcomes and adjacent findings |
+| Remaining work | Explicitly deferred outcomes and adjacent findings that remain required later |
 
 Do not enumerate every theoretical failure. Build a failure matrix only for
 stages whose failure is reachable and material to the user or system:

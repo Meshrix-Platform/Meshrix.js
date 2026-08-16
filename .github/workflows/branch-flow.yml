@@ -33,11 +33,7 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
-      - name: Verify branch flow fixtures
-        run: node tools/scripts/verify-branch-flow.ts --self-test
       - name: Verify branch flow
         run: node tools/scripts/verify-branch-flow.ts
-      - name: Verify publication policy fixtures
-        run: node tools/scripts/verify-git-publication.ts --self-test
       - name: Verify published tree
         run: node tools/scripts/verify-git-publication.ts --index

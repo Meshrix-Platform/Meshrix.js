@@ -23,7 +23,7 @@ Read `docs/functionality/MAINTENANCE-AGENT.md` before changing this default-disa
 - The fixed planner requires no model credential. The gateway planner must use Agent Gateway and the configured maintenance module profile.
 - A missing module profile never triggers an inferred model or fallback.
 - The planner proposes operations; it never owns their implementation or bypasses approval.
-- The current dispatcher path uses a synthetic maintenance actor and skips a second Grant authorization. Treat current-Grant reauthorization and a plan-hash TTL as required closure gaps; do not claim them as implemented.
+- The current dispatcher path uses a synthetic maintenance actor and skips a second Grant authorization. Current-Grant reauthorization and a plan-hash TTL remain remaining required GATE work.
 - A failed scheduled run must not terminate the background worker or unlock unrelated resources.
 - Do not retain chat bodies, tool payloads, credentials, or raw results in evidence.
 

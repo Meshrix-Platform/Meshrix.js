@@ -2,7 +2,7 @@
 
 Meshrix.js is an open, private-deployable gateway platform for agent access, upstream service forwarding, governed operations, and auditable collaboration.
 
-Contributions must keep the repository serious, calm, pragmatic, and accurate. Changes should improve current runtime behavior, documentation accuracy, tests, or deployability. Do not add private product capabilities, secrets, local machine details, or speculative product claims.
+Contributions must keep the repository serious, calm, pragmatic, and accurate. Changes should improve current runtime behavior, documentation accuracy, tests, or deployability. Do not add private product capabilities, secrets, local machine details, or speculative product claims. Document current gaps as remaining required work the project keeps closing, not as permanent non-goals.
 
 Participation is governed by [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 

@@ -17,17 +17,18 @@ This guide walks through the repository-verified runtime plugins in
 - No live provider credentials, private endpoints, or machine-local paths are
   required for the repository demo.
 
-## What this demo does not claim
+## Remaining work this demo still has
 
 - Meshrix Core and its repository-local extensions remain **pre-release**.
   Source availability, repository verification, and a tagged production release
-  are separate states.
-- Passing `npm run verify` here is **not** a formal release acceptance or
-  production-readiness claim for Core or any deployment.
+  remain remaining required work on separate evidence tracks.
+- Passing `npm run verify` here is repository verification. Formal release
+  acceptance and production qualification remain remaining required work.
 - `coding-github` does not contact GitHub during repository tests. Live REST or
   MCP access requires operator-published upstream services and grants in Core.
-- Catalog-only placeholder plugins elsewhere in this repository are **not**
-  implemented runtime packages and must not be presented as release-ready.
+- Catalog-only placeholder plugins elsewhere in this repository are not yet
+  implemented runtime packages. Completing those packages remains remaining
+  work before they can be presented as release-ready.
 
 ## Quick start (reproducible)
 

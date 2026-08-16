@@ -35,7 +35,7 @@ describe("offline delivery operator pack", () : any => {
         hasProvenance: true,
         hasSignatures: true,
         bundle: { image_digest: "sha256:abc" },
-        outputRoot: "/Users/example/Meshrix.js/build/offline-delivery-bundle",
+        outputRoot: "<user-home>/Meshrix.js/build/offline-delivery-bundle",
       },
     });
     expect(receipt).toEqual({

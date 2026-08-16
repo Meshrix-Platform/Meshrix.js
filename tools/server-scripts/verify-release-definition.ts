@@ -83,6 +83,19 @@ export async function verifyReleaseDefinition({
   if (lock.version !== version || lock.packages?.[""]?.version !== version) {
     fail("release_definition_lock_version_mismatch", "package-lock.json does not match the release version.");
   }
+  const releasePlan: any = JSON.parse(await fs.readFile(path.join(rootDir, "docs/releases/plan.json"), "utf8"));
+  if (releasePlan.schemaVersion !== 2 || releasePlan.repository !== "Meshrix.js") {
+    fail("release_definition_plan_identity_invalid", "Release plan identity is invalid.");
+  }
+  if (releasePlan.currentVersion !== rootPackage.version) {
+    fail("release_definition_plan_version_mismatch", "Release plan version does not match package.json.");
+  }
+  const changelog: any = String(releasePlan.changelog || "");
+  try {
+    await fs.access(path.join(rootDir, changelog));
+  } catch {
+    fail("release_definition_plan_changelog_missing", "Release plan changelog is missing.");
+  }
   const platforms: any = definition?.container?.platforms;
   if (JSON.stringify(platforms) !== JSON.stringify(["linux/amd64", "linux/arm64"])) {
     fail("release_definition_platforms_invalid", "The release requires amd64 and arm64 image artifacts.");

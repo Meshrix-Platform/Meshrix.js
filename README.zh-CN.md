@@ -34,16 +34,16 @@ Meshrix.js 使用 Vue.js Web Console 与 Node.js 服务端。前后端分别维�
 
 默认运行时自包含。元数据、raw objects、任务、设置、grant、审计记录和 checkpoint 存放在服务端数据目录。外部中间件和服务适配器作为面向特定部署集成的可选增强。
 
-> **当前状态：pre-release。** 源码可用、实现、验证、各发布渠道、环境支持与托管
-> 运营是彼此独立的事实。规范状态见 [Status](docs/STATUS.md)。
+> **当前状态：pre-release。** 源码可用、实现、验证、各发布渠道、环境资格与托管
+> 运营仍是分轨进行的剩余必做工作。规范状态见 [Status](docs/STATUS.md)。
 
-Meshrix.js 将强制的功能验收与可选的环境声明严格分开。
+Meshrix.js 将强制的功能验收与仍待完成的环境资格分开。
 `npm run verify:acceptance` 是 Functional Release Gate（功能完整有效发布门禁），
 必须在发布前通过。通过门禁的不可变候选版本可以继续运行
 `npm run verify:real-machine -- ...`；这一可重复执行的 Real-Machine
-Verification Workflow（真机验证工作流）只为一个确切系统或部署建立
-Environment Support Claim（环境支持声明）。真机是否可用、是否执行或执行失败，
-都不会阻断或改变功能验收结果。完整契约见
+Verification Workflow（真机验证工作流）是为一个确切系统或部署完成环境资格的
+剩余工作。真机是否可用、是否执行或执行失败，都不会阻断或改变功能验收结果。
+完整契约见
 [发布定义](docs/RUNBOOK.md#release-definition-and-publication)。
 
 本文是规范性[英文项目概览](README.md)的简体中文本地化版本。

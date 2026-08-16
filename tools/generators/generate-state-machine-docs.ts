@@ -117,7 +117,7 @@ function buildStateMachinesDoc(registry?: any) : any {
     "",
     "Completed implementation and final-validation criteria must cite reproducible commands. An aggregate reducer cannot be used as evidence for its own input checkpoint. Every implementation, organization, simulation, failure-injection, resource, security, recovery, and packaging check that the development environment can execute is functional evidence; a missing required check fails the Functional Release Gate.",
     "",
-    "A Real-Machine Verification Workflow is optional and external to these machines. It may run only for an immutable candidate that already has a passing Functional Release Gate receipt. Its `not_run`, `ineligible`, `passed`, or `failed` result controls only the exact Environment Support Claim and can never block, promote, or alter functional acceptance.",
+    "A Real-Machine Verification Workflow is remaining required work and is external to these machines. It may run only for an immutable candidate that already has a passing Functional Release Gate receipt. Its `not_run`, `ineligible`, `passed`, or `failed` result controls only the exact Environment Support Claim and can never block, promote, or alter functional acceptance.",
     "",
     "Run the capability evidence verifier directly with:",
     "",

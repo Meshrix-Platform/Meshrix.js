@@ -3,8 +3,8 @@
 This release was assembled by the canonical tag workflow after the Functional
 Release Gate, the required Node.js 22 clean install/start probe, and actionable
 high-severity scans of both container artifacts completed successfully.
-Real-machine results are separate candidate-bound Environment Support Claims;
-their absence or failure does not block this release.
+Real-machine qualification remains remaining required work after this release;
+absence or failure does not block this release.
 
 ## Changes
 

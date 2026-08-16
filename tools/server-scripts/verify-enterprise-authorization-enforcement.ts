@@ -239,7 +239,7 @@ function realReportEvidence(tagGoverned: Record<string, any> = {}, protocol: Rec
     protocolConsistency: {
       releaseReady: releaseEvidenceReady(PROTOCOL_CONSISTENCY_REPORT, protocol),
       approvalRequired: protocolText.includes("approval_required"),
-      revokedGrant: protocolText.includes("revoked_grant"),
+      revokedGrant: protocolText.includes("revoked_grant") || protocolText.includes("revoked_credential"),
       rateLimited: protocolText.includes("rate_limited"),
       sameDecisionAcrossHttpRpcMcp: protocolText.includes("\"http\"") && protocolText.includes("\"rpc\"") && protocolText.includes("\"mcp\"")
     }

@@ -64,14 +64,14 @@ Meshrix.js MCP allowlists remain in Meshrix.js
 
 | Was | Closure |
 | --- | --- |
-| Meshrix.js `default_config_path("openclaw")` is `None` phrased as “not claimed” | **Vendor named-inventory:** `$HOME/.openclaw/openclaw.json` (JSON5), optional; override `OPENCLAW_CONFIG_PATH` ([docs](https://docs.openclaw.ai/gateway/configuration)). Meshrix.js history roots still include `$HOME/.openclaw`, `$HOME/.config/openclaw`, XDG, and `%APPDATA%/OpenClaw`. |
+| Meshrix.js `default_config_path("openclaw")` is `None`; populating it remains remaining required work | **Vendor named-inventory:** `$HOME/.openclaw/openclaw.json` (JSON5), optional; override `OPENCLAW_CONFIG_PATH` ([docs](https://docs.openclaw.ai/gateway/configuration)). Meshrix.js history roots still include `$HOME/.openclaw`, `$HOME/.config/openclaw`, XDG, and `%APPDATA%/OpenClaw`. |
 
 ### hermes — default config file; TUI Gateway locality
 
 | Was | Closure |
 | --- | --- |
 | Meshrix.js `default_config_path("hermes")` is `None` | **Vendor named-inventory:** `$HERMES_HOME/config.yaml` with secrets in `$HERMES_HOME/.env`; default `$HOME/.hermes` ([configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration)). Native Windows installer default `HERMES_HOME=%LOCALAPPDATA%/hermes` ([Windows](https://hermes-agent.nousresearch.com/docs/user-guide/windows-native)). |
-| TUI Gateway “not claimed as local” | **Verified-absent as unconditional local gateway:** Meshrix.js / `COMPATIBILITY` treat TUI Gateway as connection-bound manual-VM transport only, not a default local gateway without that evidence. |
+| TUI Gateway local-gateway qualification remains remaining required work | **Verified-absent as unconditional local gateway:** Meshrix.js / `COMPATIBILITY` currently treat TUI Gateway as connection-bound manual-VM transport only. A default local gateway remains remaining required work until that evidence exists. |
 
 ### copilot — default config file
 
@@ -83,7 +83,7 @@ Meshrix.js MCP allowlists remain in Meshrix.js
 
 | Was | Closure |
 | --- | --- |
-| “not claimed” for Meshrix.js conversation | **Verified-absent:** Meshrix.js conversation-driver / `COMPATIBILITY` inventories have no send/resume/steer lane for desktop id `kimi`. History and detection use app-state roots; Meshrix.js MCP target id `kimi` is separate. CLI ACP conversation belongs to `kimi-code`. App-state config paths in Meshrix.js: macOS `$HOME/Library/Application Support/Kimi/config.json`; Windows `%APPDATA%/Kimi/config.json`; Linux `$HOME/.config/Kimi/config.json`. |
+| Meshrix.js conversation send/resume/steer for desktop `kimi` remains remaining required work | **Verified-absent:** Meshrix.js conversation-driver / `COMPATIBILITY` inventories currently have no send/resume/steer lane for desktop id `kimi`. History and detection use app-state roots; Meshrix.js MCP target id `kimi` is separate. CLI ACP conversation belongs to `kimi-code`. App-state config paths in Meshrix.js: macOS `$HOME/Library/Application Support/Kimi/config.json`; Windows `%APPDATA%/Kimi/config.json`; Linux `$HOME/.config/Kimi/config.json`. |
 
 ### codex — Desktop install outside macOS
 
@@ -95,16 +95,16 @@ Meshrix.js MCP allowlists remain in Meshrix.js
 
 | Was | Closure |
 | --- | --- |
-| Desktop Agent UI store / cross-form identity “unverified”; IDE↔CLI resume “not claimed” | **CLI config named-inventory:** `$HOME/.cursor/cli-config.json` ([CLI configuration](https://cursor.com/docs/cli/reference/configuration)); resume via `agent --resume` / `agent resume` ([using](https://cursor.com/docs/cli/using)). **Verified-absent IDE↔CLI local resume bridge:** Cursor staff on the official forum state local IDE chats (`agent-transcripts` / editor index) and CLI sessions (`$HOME/.cursor/chats`, ACP stores) are separate and do not sync for `--resume` ([forum confirmation](https://forum.cursor.com/t/local-ide-agent-chats-and-the-agent-cli-still-use-separate-session-stores/165486)). **Desktop Agent UI persistence:** No third exclusive Meshrix.js history root; material appears only when written into IDE `state.vscdb` composers and/or project `agent-transcripts` (Meshrix.js `cursor_catalog` order: CLI trees, then IDE sqlite). **Verified-absent Meshrix.js send lane** for Desktop Agent UI: conversation attach is Agent CLI (`cursor-agent-cli-v1`) only. |
+| Desktop Agent UI store / cross-form identity remain remaining required work; IDE↔CLI resume remains remaining required work | **CLI config named-inventory:** `$HOME/.cursor/cli-config.json` ([CLI configuration](https://cursor.com/docs/cli/reference/configuration)); resume via `agent --resume` / `agent resume` ([using](https://cursor.com/docs/cli/using)). **Verified-absent IDE↔CLI local resume bridge:** Cursor staff on the official forum state local IDE chats (`agent-transcripts` / editor index) and CLI sessions (`$HOME/.cursor/chats`, ACP stores) are separate and do not sync for `--resume` ([forum confirmation](https://forum.cursor.com/t/local-ide-agent-chats-and-the-agent-cli-still-use-separate-session-stores/165486)). **Desktop Agent UI persistence:** No third exclusive Meshrix.js history root; material appears only when written into IDE `state.vscdb` composers and/or project `agent-transcripts` (Meshrix.js `cursor_catalog` order: CLI trees, then IDE sqlite). **Verified-absent Meshrix.js send lane** for Desktop Agent UI: conversation attach is Agent CLI (`cursor-agent-cli-v1`) only. |
 
 ### workbuddy / codebuddy / trae-work / trae-agent — new reference targets (2026-08)
 
 | Agent | Was | Closure |
 | --- | --- | --- |
 | `workbuddy` (Tencent desktop) | Not in the index; desktop paths community-only | **Associated:** `~/.workbuddy/` (macOS/Linux) / `%USERPROFILE%\.workbuddy\` (Windows) with `workbuddy.db`, `settings.json`, `models.json`, `mcp.json`, `SOUL.md`, `Claw/`; filenames named in community documentation, no vendor inventory located. Desktop↔CLI store independence community-confirmed (editing `~/.codebuddy/settings.json` does not affect the desktop). |
-| `codebuddy` (Tencent CLI) | Not in the index | **Named-inventory:** `~/.codebuddy/` global + project `.codebuddy/` with `history.jsonl`, `sessions/`, `projects/<project>/*.jsonl`, `file-history/`, `plans/`, `traces/` etc. per official [codebuddy-dir](https://www.codebuddy.ai/docs/cli/codebuddy-dir). **Transcript-primary** conversation material. npm package name/Node ≥ 18 remain `associated` (community-reported). No ACP/stream-json documented → conversation lane not claimed. |
-| `trae-work` (ByteDance desktop) | Not in the index | **Associated:** `~/.trae/` / `~/.trae-cn/` roots; sessions `%USERPROFILE%\.trae\sessions` (`*.json`) with `TRAE_DATA_DIR`/`TRAE_SESSIONS_DIR`/`TRAE_SESSION_GLOB` overrides — evidence is the community [peon-ping adapter](https://github.com/PeonPing/peon-ping/blob/main/adapters/trae.ps1), not vendor docs. Official [overview](https://docs.trae.cn/work_what-is-trae-work) names web/desktop/mobile forms; CLI launch of the client **not documented** there. Work-mode custom MCP limitation per official forum. No sqlite claimed. |
-| `trae-agent` (ByteDance CLI) | Not in the index | **Named-inventory** from first-party [README](https://github.com/bytedance/trae-agent): `trae-cli` binary, `trae_config.yaml` (from `.example`), `.env`, `trajectories/trajectory_*.json` (or `--trajectory-file`). **Transcript-primary** execution material; no sqlite. Interactive TUI (`run`/`interactive`) with no ACP/JSON-RPC/serve documented → conversation lane not claimed. |
+| `codebuddy` (Tencent CLI) | Not in the index | **Named-inventory:** `~/.codebuddy/` global + project `.codebuddy/` with `history.jsonl`, `sessions/`, `projects/<project>/*.jsonl`, `file-history/`, `plans/`, `traces/` etc. per official [codebuddy-dir](https://www.codebuddy.ai/docs/cli/codebuddy-dir). **Transcript-primary** conversation material. npm package name/Node ≥ 18 remain `associated` (community-reported). No ACP/stream-json documented → conversation lane remains remaining required work. |
+| `trae-work` (ByteDance desktop) | Not in the index | **Associated:** `~/.trae/` / `~/.trae-cn/` roots; sessions `%USERPROFILE%\.trae\sessions` (`*.json`) with `TRAE_DATA_DIR`/`TRAE_SESSIONS_DIR`/`TRAE_SESSION_GLOB` overrides — evidence is the community [peon-ping adapter](https://github.com/PeonPing/peon-ping/blob/main/adapters/trae.ps1), not vendor docs. Official [overview](https://docs.trae.cn/work_what-is-trae-work) names web/desktop/mobile forms; CLI launch of the client **not documented** there. Work-mode custom MCP limitation per official forum. No sqlite inventory found. |
+| `trae-agent` (ByteDance CLI) | Not in the index | **Named-inventory** from first-party [README](https://github.com/bytedance/trae-agent): `trae-cli` binary, `trae_config.yaml` (from `.example`), `.env`, `trajectories/trajectory_*.json` (or `--trajectory-file`). **Transcript-primary** execution material; no sqlite. Interactive TUI (`run`/`interactive`) with no ACP/JSON-RPC/serve documented → conversation lane remains remaining required work. |
 
 ## Maintenance
 

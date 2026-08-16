@@ -130,9 +130,27 @@ export function createOperationPermissionStore({
     "proof.prove": (input?: any) : any => proofSubstrate?.proveWorkspaceMembership?.(input || {}),
     "proof.project": (input?: any) : any => proofSubstrate?.getWorkspaceProjection?.(String(input?.workspaceId || "")),
     "apiKey.verifierKey": (input?: any) : any => apiKeyVerifierKeyProvider?.getKey?.(String(input?.generation || "")),
-    "change.notify": (input?: any) : any => typeof changeListener === "function" ? changeListener(input || {}) : null
+    "change.notify": (input?: any) : any => {
+      if (typeof changeListener !== "function") {
+        return null;
+      }
+      const payload: any = input || {};
+      const runWhenLaneIdle: any = () : any => {
+        const stats: any = lane?.getStats?.() || {};
+        if (stats.closed === true) {
+          return;
+        }
+        if (Number(stats.pending || 0) > 0) {
+          setImmediate(runWhenLaneIdle);
+          return;
+        }
+        Promise.resolve(changeListener(payload)).catch(() : any => null);
+      };
+      setImmediate(runWhenLaneIdle);
+      return { ok: true, deferred: true };
+    }
   };
-  const lane: any = createSqliteExecutionLane({
+  let lane: any = createSqliteExecutionLane({
     owner: "authorization-operation-permission",
     workerUrl: new URL(
       `./store-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,

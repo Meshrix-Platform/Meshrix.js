@@ -220,10 +220,13 @@ export async function createOperationPermissionProtocolConsistencyHarness() : Pr
     const payload: any = text.trim() ? JSON.parse(text) : {};
     if (expectedStatuses) {
       const publicErrorCode: any = String(payload?.error?.code || "unknown_error").slice(0, 96);
+      const publicErrorDetail: any = String(
+        payload?.error?.message || (typeof payload?.error === "string" ? payload.error : "")
+      ).slice(0, 180);
       assert.equal(
         expectedStatuses.includes(response.status),
         true,
-        `Unexpected status ${response.status} (${publicErrorCode}) for ${routeOrUrl}`
+        `Unexpected status ${response.status} (${publicErrorCode}) for ${routeOrUrl}${publicErrorDetail ? `: ${publicErrorDetail}` : ""}`
       );
     }
     if (!allowSecretPayload && assertNoLeakPayload) {

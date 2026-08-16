@@ -1,8 +1,9 @@
 # Offline Linux VM dual-architecture delivery
 
 This sheet is the operator-facing instruction set for a candidate-bound
-Meshrix.js Linux amd64 and arm64 OCI bundle. It does not establish native
-Linux, Ubuntu, or Debian support, capacity, or publication.
+Meshrix.js Linux amd64 and arm64 OCI bundle. Native Linux, Ubuntu, and Debian
+qualification, capacity, and publication remain remaining required work after
+the named workflows.
 
 The operator pack command is `npm run pack:offline`. It writes the signed
 Server + Web Console dual-arch bundle to `build/offline-delivery-bundle` and
@@ -53,8 +54,9 @@ that VM.
 Operator secret files stay outside Meshrix.js data and backup volumes and are
 never written into reports.
 
-## Non-claims
+## Remaining host qualification
 
-Linux amd64 and arm64 artifacts plus a passing Linux VM lifecycle are
-functional-candidate delivery evidence. They are not an environment support
-statement for this host or any other host.
+Linux amd64 and arm64 artifacts plus a passing Linux VM lifecycle close the
+current functional-candidate delivery. Native-host and other-environment
+qualification remain remaining required work after the named Real-Machine
+Verification Workflow.

@@ -145,6 +145,10 @@
       "source": "./packages/foundation/src/security/governed-execution-permit-authority.ts",
       "default": "./packages/foundation/dist/security/governed-execution-permit-authority.js"
     },
+    "#meshrix/foundation/security/production-ingress-contract": {
+      "source": "./packages/foundation/src/security/production-ingress-contract.ts",
+      "default": "./packages/foundation/dist/security/production-ingress-contract.js"
+    },
     "#meshrix/foundation/security/secrets/local-secret-key-provider": {
       "source": "./packages/foundation/src/security/secrets/local-secret-key-provider.ts",
       "default": "./packages/foundation/dist/security/secrets/local-secret-key-provider.js"
@@ -152,6 +156,10 @@
     "#meshrix/foundation/security/secrets/local-secret-store": {
       "source": "./packages/foundation/src/security/secrets/local-secret-store.ts",
       "default": "./packages/foundation/dist/security/secrets/local-secret-store.js"
+    },
+    "#meshrix/foundation/storage/backup-contract": {
+      "source": "./packages/foundation/src/storage/backup-contract.ts",
+      "default": "./packages/foundation/dist/storage/backup-contract.js"
     },
     "#meshrix/foundation/storage/bounded-jsonl": {
       "source": "./packages/foundation/src/storage/bounded-jsonl.ts",
@@ -164,6 +172,10 @@
     "#meshrix/foundation/storage/storage-provider": {
       "source": "./packages/foundation/src/storage/storage-provider.ts",
       "default": "./packages/foundation/dist/storage/storage-provider.js"
+    },
+    "#meshrix/http-utils": {
+      "source": "./packages/protocols/http/http-utils.ts",
+      "default": "./packages/protocols/dist/http/http-utils.js"
     },
     "#meshrix/operation-registry": {
       "source": "./packages/contracts/src/operations/operation-registry.ts",
@@ -180,6 +192,14 @@
     "#meshrix/protocols/http/controllers/jobs-controller-artifact-handlers": {
       "source": "./packages/protocols/http/controllers/jobs-controller-artifact-handlers.ts",
       "default": "./packages/protocols/dist/http/controllers/jobs-controller-artifact-handlers.js"
+    },
+    "#meshrix/protocols/http/controllers/upstream-payload-transit-controller": {
+      "source": "./packages/protocols/http/controllers/upstream-payload-transit-controller.ts",
+      "default": "./packages/protocols/dist/http/controllers/upstream-payload-transit-controller.js"
+    },
+    "#meshrix/protocols/mcp/adapter/http-mcp-adapter": {
+      "source": "./packages/protocols/mcp/adapter/http-mcp-adapter.ts",
+      "default": "./packages/protocols/dist/mcp/adapter/http-mcp-adapter.js"
     },
     "#meshrix/protocols/http/controllers/system-controller-foundation-handlers": {
       "source": "./packages/protocols/http/controllers/system-controller-foundation-handlers.ts",
@@ -201,6 +221,10 @@
       "source": "./packages/server-runtime/src/composition/console-domain/operation-executor.ts",
       "default": "./packages/server-runtime/dist/composition/console-domain/operation-executor.js"
     },
+    "#meshrix/server-runtime/composition/console-domain/services": {
+      "source": "./packages/server-runtime/src/composition/console-domain/services.ts",
+      "default": "./packages/server-runtime/dist/composition/console-domain/services.js"
+    },
     "#meshrix/server-runtime/composition/core-platform-provider": {
       "source": "./packages/server-runtime/src/composition/core-platform-provider.ts",
       "default": "./packages/server-runtime/dist/composition/core-platform-provider.js"
@@ -212,6 +236,10 @@
     "#meshrix/server-runtime/composition/dispatch-operation-risk-control": {
       "source": "./packages/server-runtime/src/composition/dispatch-operation-risk-control.ts",
       "default": "./packages/server-runtime/dist/composition/dispatch-operation-risk-control.js"
+    },
+    "#meshrix/server-runtime/composition/http-application-assembly": {
+      "source": "./packages/server-runtime/src/composition/http-application-assembly.ts",
+      "default": "./packages/server-runtime/dist/composition/http-application-assembly.js"
     },
     "#meshrix/server-runtime/composition/operation-dispatch-lock": {
       "source": "./packages/server-runtime/src/composition/operation-dispatch-lock.ts",
@@ -256,6 +284,10 @@
     "#meshrix/server-runtime/state/interface/index": {
       "source": "./packages/server-runtime/src/state/interface/index.ts",
       "default": "./packages/server-runtime/dist/state/interface/index.js"
+    },
+    "#meshrix/server-runtime/state/upload-session-admission": {
+      "source": "./packages/server-runtime/src/state/upload-session-admission.ts",
+      "default": "./packages/server-runtime/dist/state/upload-session-admission.js"
     },
     "#meshrix/server-runtime/state/upload-session-store": {
       "source": "./packages/server-runtime/src/state/upload-session-store.ts",
@@ -386,12 +418,11 @@
     "build": "npm run build:node && npm run build:web",
     "typecheck": "npm run typecheck:node && npm run typecheck:test && npm run typecheck:web",
     "test": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile core-public",
-    "test:standard": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile standard-public",
     "test:security": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile security-public",
     "test:audit": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile audit-public",
     "test:smoke": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --profile smoke-public",
     "test:list": "cross-env NODE_OPTIONS=--conditions=source node tests/run.ts --list",
-    "verify": "npm run typecheck && npm run build && npm test && npm run verify:local-services && npm run verify:local-runtime-plugins && npm run verify:local-client-adapters && npm run verify:local-extension-package-closure",
+    "verify": "npm run typecheck && npm run build && npm test && npm run vitest && npm run verify:local-services && npm run verify:local-runtime-plugins && npm run verify:local-client-adapters && npm run verify:local-extension-package-closure",
     "server:verify": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-server-runtime.ts",
     "server:verify:headless": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-server-headless.ts",
     "server:verify:checkpoints": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-server-checkpoints.ts",

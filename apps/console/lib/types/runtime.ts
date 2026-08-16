@@ -298,10 +298,13 @@ export type FeatureRuntimeSummary = {
       componentId: string;
       assetUrl: string;
       assetExport: string;
+      sandboxUrl?: string;
+      bridgeVersion?: string;
       artifactDigest: string;
       artifactGeneration: number;
       label?: string;
       requiredScopes: string[];
+      toolIds?: string[];
     }>;
   };
 };

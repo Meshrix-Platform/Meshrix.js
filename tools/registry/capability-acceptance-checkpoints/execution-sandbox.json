@@ -39,7 +39,7 @@
     "platform": "linux",
     "difficulty": "deep",
     "goal": "Validate Controlled Execution Sandbox closed-loop acceptance.",
-    "description": "Produce the exact core receipt consumed through the generic plugin Host contract without claiming plugin or platform readiness.",
+    "description": "Produce the exact core receipt consumed through the generic plugin Host contract. Plugin and platform readiness remain remaining required work until their catalog-backed evidence exists.",
     "acceptance_criteria": [
       {
         "checked": true,

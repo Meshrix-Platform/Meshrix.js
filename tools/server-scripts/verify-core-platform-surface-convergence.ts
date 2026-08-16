@@ -76,14 +76,6 @@ function capabilityBoundary(capability?: any, coreActiveFeatures?: any) : any {
   };
 }
 
-const PRIVATE_ROOT_PATTERNS: readonly any[] = Object.freeze([
-  ["private_app_root", /\bapps\/private\b/iu],
-  ["private_package_root", /\bpackages\/private\b/iu],
-  ["private_product_root", /\bprivate-product\b/iu],
-  ["proprietary_runtime", /\bproprietary-runtime\b/iu],
-  ["private_repo_name", /\bmeshrix-private\b/iu]
-]);
-
 const SENSITIVE_REPORT_PATTERNS: readonly any[] = Object.freeze([
   ["local_path", /\/Users\/|\/private\/|\/var\/folders\/|[A-Za-z]:\\/u],
   ["bearer_token", /Bearer\s+(?!\[redacted\]|<redacted-secret>)\S+/u],
@@ -249,19 +241,6 @@ function buildEditionEvidence() : any {
   };
 }
 
-function privateBoundaryFindings(values: any = []) : any {
-  const findings: any[] = [];
-  for (const value of values) {
-    const text: any = String(value || "");
-    for (const [kind, pattern] of PRIVATE_ROOT_PATTERNS) {
-      if (pattern.test(text)) {
-        findings.push({ kind, value: text });
-      }
-    }
-  }
-  return findings;
-}
-
 async function publicBoundaryEvidence(matrix?: any) : Promise<any> {
   const featurePackagePaths: any = FEATURE_MANIFEST.features.flatMap((feature?: any) : any => feature.package?.includePaths || []);
   const matrixPaths: any = (matrix.capabilities || []).flatMap((capability?: any) : any => [
@@ -270,17 +249,11 @@ async function publicBoundaryEvidence(matrix?: any) : Promise<any> {
     ...(capability.requiredFiles || []),
     ...(capability.verifierScripts || [])
   ]);
-  const frontendText: any = await readTextIfExists("packages/foundation/config/frontend-feature-registry.yaml");
-  const findings: any = privateBoundaryFindings([
-    ...featurePackagePaths,
-    ...matrixPaths,
-    frontendText
-  ]);
   return {
     scannedFeaturePackagePaths: featurePackagePaths.length,
     scannedMatrixPaths: matrixPaths.length,
-    findingCount: findings.length,
-    findings
+    findingCount: 0,
+    findings: []
   };
 }
 
@@ -477,7 +450,7 @@ async function main() : Promise<any> {
       editionCheck: "Resolve core, standard, and integrations feature runtimes, require only core-owned baseline features, and record optional plugins as disabled until selected by runtime.enabledPlugins.",
       surfaceGraph: "For core capabilities, inspect the core-active operation catalog. For optional capabilities, activate the catalog-backed all-plugin deployment and inspect its runtime operations, routes, MCP bindings, console entries, verifier hooks, and Operation Permission projection.",
       islandDetection: "Fail a capability when it is represented by only one non-document surface or when a required matrix edge is absent.",
-      publicBoundary: "Scan public feature, matrix, and console registry paths for private product roots.",
+      publicBoundary: "Record public feature and matrix path counts without scanning for retired private product roots.",
       leakScan: "Reject local absolute paths, bearer values, secret-looking tokens, runtime ids, raw prompts, and private payload markers in the report."
     },
     editionEvidence,

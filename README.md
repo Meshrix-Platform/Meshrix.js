@@ -44,16 +44,17 @@ directory. External middleware and service adapters are optional extensions
 for deployment-specific integrations.
 
 > **Current state: pre-release.** Source availability, implementation,
-> verification, publication channels, environment support, and hosted
-> operation are separate facts. See [Status](docs/STATUS.md).
+> verification, publication channels, environment qualification, and hosted
+> operation remain remaining required work on separate evidence tracks. See
+> [Status](docs/STATUS.md).
 
-Meshrix.js separates mandatory functional acceptance from optional environment
-claims. `npm run verify:acceptance` is the Functional Release Gate and must
-pass before publication. An accepted immutable candidate may then be exercised
-by `npm run verify:real-machine -- ...`; that independently repeatable workflow
-can establish an Environment Support Claim for one exact system or deployment.
-Real-machine availability or results never block or alter functional
-acceptance. See the [release contract](docs/RUNBOOK.md#release-definition-and-publication).
+Meshrix.js separates mandatory functional acceptance from remaining environment
+qualification. `npm run verify:acceptance` is the Functional Release Gate and
+must pass before publication. An accepted immutable candidate may then be
+exercised by `npm run verify:real-machine -- ...`; that independently
+repeatable workflow is the remaining work that qualifies one exact system or
+deployment. Real-machine availability or results never block or alter
+functional acceptance. See the [release contract](docs/RUNBOOK.md#release-definition-and-publication).
 
 This English document is the normative project overview. See the
 [Simplified Chinese localization](README.zh-CN.md).

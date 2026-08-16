@@ -33,4 +33,4 @@ The Agent Gateway owns configured candidate selection and routing state. Route g
 
 ## Verification
 
-Run `npm test` for the current baseline. Empty configuration, disabled management, module denial, missing credentials, invalid egress, bounded concurrency, circuit recovery, candidate exhaustion, generation crash recovery, response redaction, and low-cardinality accounting remain acceptance requirements. Until a catalog-backed routing task proves them together, do not claim capability-line readiness. Select available evidence with `$meshrix-js-regression-planner`.
+Run `npm test` for the current baseline. Empty configuration, disabled management, module denial, missing credentials, invalid egress, bounded concurrency, circuit recovery, candidate exhaustion, generation crash recovery, response redaction, and low-cardinality accounting remain acceptance requirements. Until a catalog-backed routing task proves them together, capability-line readiness remains remaining required work. Select available evidence with `$meshrix-js-regression-planner`.

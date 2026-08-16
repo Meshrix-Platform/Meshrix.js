@@ -38,7 +38,6 @@ export const PATTERN_CLASSIFIED_SCRIPT_NAMES: readonly any[] = Object.freeze([
   "stop:server",
   "test:list",
   "test:security",
-  "test:standard",
   "typecheck:node",
   "typecheck:test",
   "typecheck:web",

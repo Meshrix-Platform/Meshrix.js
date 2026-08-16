@@ -421,7 +421,7 @@ screenshot, and cleanup path. Record validation mode `simulated-fallback` and
 reason
 `no_supported_local_client_detected_after_complete_catalog_scan`. Display the
 simulator as `mcp-simulator`, never as one of the absent client products, and
-state that it does not establish client compatibility. Record the exact safe startup and connector configuration as
+state that client compatibility remains remaining required work until a real client is qualified. Record the exact safe startup and connector configuration as
 selectable text. Capture Chromium screenshots from the running Web Console for
 the default Workbench, descriptor configuration, publication health, operation
 projection, API Key issuance and downstream configuration, Operation Permission approval, and the final downstream

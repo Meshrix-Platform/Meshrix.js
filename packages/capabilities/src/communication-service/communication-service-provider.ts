@@ -3,7 +3,7 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_SERVER_NAME,
   MCP_STABLE_TOOL_NAME
-} from "../../../protocols/mcp/adapter/http-mcp-adapter.ts";
+} from "@meshrix/protocols/mcp/adapter/http-mcp-adapter";
 
 export const COMMUNICATION_SERVICE_PROTOCOL_VERSION: any = "v0.0.1:platform:communication-service-1";
 export const COMMUNICATION_SERVICE_ID: any = "communication-service";

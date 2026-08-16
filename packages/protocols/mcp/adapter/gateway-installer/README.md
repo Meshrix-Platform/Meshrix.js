@@ -25,11 +25,13 @@ powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native
 powershell -ExecutionPolicy Bypass -File .\packages\protocols\mcp\adapter\native-installer\meshrix-mcp-uninstall.ps1 -Target openclaw,codex,claude-code,antigravity,opencode,pi,kimi
 ```
 
-Supported targets are supplied by pinned operator-provided client-adapter packages. Core retains only the target catalog, adapter protocol, package integrity/cache policy, API Key input, proxy, and local lifecycle transaction. Client commands, configuration formats, probes, and mutations are not implemented in Core.
+Supported targets are supplied by pinned operator-provided client-adapter packages. Core retains only the target catalog, adapter protocol, package integrity/cache policy, API Key input, proxy, and local lifecycle transaction. Client commands, configuration formats, probes, and mutations remain remaining work in the operator-supplied adapter packages.
 
-The published target matrix supports these clients through a local connector
-process. OrbStack and remote-Linux direct HTTP registration are rejected before
-installation because those locations are outside the published target matrix.
+The published target matrix currently covers local connector-managed clients
+through a stdio proxy. The connector uses process-identity signing for local
+integrity. OrbStack and remote-Linux direct HTTP registration remain remaining
+qualification work; they currently fail before installation because those
+locations are outside the published target matrix.
 
 The runtime CLI remains available for internal verifiers and protocol runtime
 commands:

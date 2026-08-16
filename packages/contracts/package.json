@@ -13,6 +13,11 @@
       "source": "./src/mcp-catalog-delivery.ts",
       "default": "./dist/mcp-catalog-delivery.js"
     },
+    "./service-collaboration-contract": {
+      "types": "./dist/service-collaboration-contract.d.ts",
+      "source": "./src/service-collaboration-contract.ts",
+      "default": "./dist/service-collaboration-contract.js"
+    },
     "./modules/manifest": {
       "types": "./dist/modules/manifest.d.ts",
       "source": "./src/modules/manifest.ts",

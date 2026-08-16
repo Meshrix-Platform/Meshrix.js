@@ -397,7 +397,7 @@ async function verifyPendingApprovalRequirementsPersistence() : Promise<any> {
     grantKinds: ["once", "timed"]
   };
   try {
-    const pending: any = store.createPendingOperation({
+    const pending: any = await store.createPendingOperation({
       pendingOperationId: "pending-layered-approval",
       traceId: "trace-layered-approval",
       toolExecutionId: "tool-exec-layered-approval",
@@ -418,7 +418,7 @@ async function verifyPendingApprovalRequirementsPersistence() : Promise<any> {
       },
       context: { transport: "verifier" }
     });
-    const projectionOnly: any = store.createPendingOperation({
+    const projectionOnly: any = await store.createPendingOperation({
       pendingOperationId: "pending-projection-only-approval",
       traceId: "trace-projection-only-approval",
       toolExecutionId: "tool-exec-projection-only-approval",
@@ -442,10 +442,11 @@ async function verifyPendingApprovalRequirementsPersistence() : Promise<any> {
       },
       context: { transport: "verifier" }
     });
-    const listed: any = store.listPendingOperations({ status: "pending", limit: 5 })
+    const listedRows: any = await store.listPendingOperations({ status: "pending", limit: 5 });
+    const listed: any = (Array.isArray(listedRows) ? listedRows : [])
       .find((item?: any) : any => item.pendingOperationId === pending.pendingOperationId);
-    const loaded: any = store.getPendingOperation(pending.pendingOperationId, { includeOriginalInput: true });
-    const loadedProjectionOnly: any = store.getPendingOperation(projectionOnly.pendingOperationId, { includeOriginalInput: true });
+    const loaded: any = await store.getPendingOperation(pending.pendingOperationId, { includeOriginalInput: true });
+    const loadedProjectionOnly: any = await store.getPendingOperation(projectionOnly.pendingOperationId, { includeOriginalInput: true });
     const expectedLayers: any[] = ["department", "team"];
     const layerString: any = (value: any = []) : any => JSON.stringify(value);
     const passed: any = layerString(pending.approvalLayers) === layerString(expectedLayers) &&
@@ -468,7 +469,7 @@ async function verifyPendingApprovalRequirementsPersistence() : Promise<any> {
       publicRedactedInput: loaded?.redactedInput?.token === "<redacted>"
     };
   } finally {
-    store.close();
+    await store.close();
     await fs.rm(userDataPath, { recursive: true, force: true });
   }
 }
