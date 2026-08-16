@@ -26,15 +26,19 @@ The durable package lifecycle covers `declared → acquiring → acquired → ve
 
 Dependencies activate before dependents. The declared runtime module exports `activatePlugin`; activation returns the manifest identity, the exact declared mounts and executable contributions, and a `close` function. Operations, routes, MCP tools, console entries, state machines, and verifier hooks must match the signed or digest-bound package. Core snapshots and freezes accepted declarations before publishing read-only contribution maps.
 
-Plugin modules are privileged in-process deployment code. Signature and entry validation prove provenance and declared loading; they are not an isolation boundary for hostile JavaScript. Agent-controlled or otherwise untrusted execution uses the separately governed execution-sandbox port and has no host-process fallback.
+Plugin modules are currently privileged in-process deployment code. Signature
+and entry validation prove provenance and declared loading. Process-isolated
+plugin confinement remains remaining GATE work so hostile JavaScript cannot
+penetrate Core. Agent-controlled or otherwise untrusted execution uses the
+separately governed execution-sandbox port and has no host-process fallback.
 
 ## Plugin Console browser boundary
 
 **Current status:** verified plugin Console contributions still execute as
 trusted same-origin browser code through dynamic `import()`. Package provenance
-does not make that code a browser sandbox. Third-party Console isolation is a
-required candidate workstream and remains incomplete until the old loader is
-deleted and real-browser escape verification passes.
+is not the browser confinement boundary. Opaque-origin Console isolation
+remains remaining GATE work until the old loader is deleted and real-browser
+escape verification passes.
 
 The target contribution contract replaces public `assetUrl` and `assetExport`
 with `sandboxUrl`, a bridge version, an artifact identity, and an explicit set

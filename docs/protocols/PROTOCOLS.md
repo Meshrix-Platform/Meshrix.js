@@ -112,7 +112,8 @@ external-service gateway owns that connection and credential, reduces each
 event to a revision and operation id, and publishes it to authenticated MCP
 subscriptions. Notifications trigger catalog refresh; neither Core nor the
 connector executes commands carried by a notification. The removed GET `/mcp`
-SSE registration and query-string capability negotiation are not supported.
+SSE registration and query-string capability negotiation stay retired;
+Streamable HTTP is the current registration path.
 
 ## Delegated MCP Child Calls
 

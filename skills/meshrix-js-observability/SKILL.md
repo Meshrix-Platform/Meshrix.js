@@ -50,4 +50,4 @@ evidence sanitation to `$meshrix-js-privacy-evidence`, and final readiness to
 
 ## Verification
 
-Run `npm test` for the current baseline. Every legal and illegal alert transition, label rejection, port-specific overload policy, cancellation, deterministic retention, atomic report publication, adversarial privacy samples, empty configuration, stale or forged reports, and child-report readiness overreach remain acceptance requirements. Until a catalog-backed observability task proves them together, do not claim capability-line readiness. Use `$meshrix-js-regression-planner` for available evidence.
+Run `npm test` for the current baseline. Every legal and illegal alert transition, label rejection, port-specific overload policy, cancellation, deterministic retention, atomic report publication, adversarial privacy samples, empty configuration, stale or forged reports, and child-report readiness overreach remain acceptance requirements. Until a catalog-backed observability task proves them together, capability-line readiness remains remaining required work. Use `$meshrix-js-regression-planner` for available evidence.

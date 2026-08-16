@@ -184,9 +184,10 @@ recomputes acceptance from authenticated mutation, durable publication,
 runtime snapshot, Operation Permission, scoped audience, and protocol-side
 delivery facts observed with a neutral peer; it rejects forged summaries,
 counters, revisions, stale source, unknown fields, privacy violations, and
-resource-budget breaches. Client adoption and real-machine receipts are
-separate facts and cannot block or promote this report. A report summary or
-generic gateway health report alone cannot establish functional acceptance.
+resource-budget breaches. Client adoption and real-machine qualification remain remaining required work
+and cannot block or promote this report. Functional acceptance remains remaining
+required work until the Functional Release Gate; a report summary or generic
+gateway health report is not that receipt.
 
 ## Verification
 

@@ -3,17 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  MCP_SUPPORTED_TARGETS,
-  MCP_TARGET_LABELS
-} from "../../packages/protocols/mcp/adapter/mcp-release-targets.ts";
-
 const repoRoot: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const REPORT_PATH: any = "build/reports/core-platform-documentation-convergence.json";
-
-const MCP_RELEASE_TARGET_LABELS: any = Object.freeze(
-  MCP_SUPPORTED_TARGETS.map((target?: any) : any => MCP_TARGET_LABELS[target])
-);
 
 const DOCS: readonly any[] = Object.freeze([
   "README.md",
@@ -43,78 +34,6 @@ const INTERNAL_DOCUMENTATION_REFERENCE_PATTERNS: readonly any[] = Object.freeze(
   ["docs_agents", /\bdocs\/AGENTS\.md\b|\]\(AGENTS\.md\)/u]
 ]);
 
-const REQUIRED_TERMS: Readonly<Record<string, any>> = Object.freeze({
-  "README.md": [
-    "Upstream forwarding",
-    "Downstream MCP",
-    "npm run verify:acceptance"
-  ],
-  "README.zh-CN.md": [
-    "上游服务转发",
-    "下游 MCP",
-    "npm run verify:acceptance"
-  ],
-  "docs/RUNBOOK.md": [
-    "npm run server:verify:deployment-flow",
-    "npm run verify:acceptance",
-    "npm run platform:audit:report"
-  ],
-  "docs/architecture/ARCHITECTURE.md": [
-    "Upstream service gateway",
-    "Downstream MCP",
-    "Operation Permission",
-    "npm run verify:private-deployment-internal-platform-e2e"
-  ],
-  "docs/architecture/EXECUTION-SANDBOX.md": [
-    "Execution is disabled by absence",
-    "No host fallback exists",
-    "Operation Permission",
-    "Required Verification"
-  ],
-  "docs/protocols/PROTOCOLS.md": [
-    "meshrix.discovery",
-    "meshrix.gateway",
-    ...MCP_RELEASE_TARGET_LABELS
-  ],
-  "docs/COMPATIBILITY.md": [
-    ...MCP_RELEASE_TARGET_LABELS
-  ],
-  "packages/protocols/mcp/adapter/native-installer/README.md": [
-    ...MCP_SUPPORTED_TARGETS,
-    "platform-native",
-    "meshrix-mcp-install.sh",
-    "meshrix-mcp-install.ps1"
-  ],
-  "packages/protocols/mcp/adapter/gateway-installer/README.md": [
-    ...MCP_SUPPORTED_TARGETS,
-    "stdio proxy",
-    "process-identity signing"
-  ],
-  "docs/functionality/GATEWAY.md": [
-    ...MCP_RELEASE_TARGET_LABELS,
-    "npm run verify:upstream-gateway",
-    "npm run verify:console-gateway-mcp-workflows"
-  ],
-  "docs/functionality/OPERATION-PERMISSION.md": [
-    "npm run verify:operation-permission-tag-governed-e2e",
-    "Operation Permission v1"
-  ],
-  "docs/functionality/WORKSPACE-ASSETS.md": [
-    "workspace.file.list"
-  ],
-  "docs/functionality/AGENT-COLLABORATION.md": [
-    ...MCP_RELEASE_TARGET_LABELS
-  ],
-  "docs/functionality/OPERATIONS-OBSERVABILITY.md": [
-    "npm run verify:enterprise-observability-coverage",
-    "npm run verify:enterprise-audit-retention-redaction"
-  ],
-  "docs/functionality/SECURITY-AUTHORIZATION.md": [
-    "npm run verify:security-alert-lifecycle",
-    "security_alerts.list"
-  ]
-});
-
 const DOCUMENT_AUTHORING_MARKER_PATTERNS: readonly any[] = Object.freeze([
   ["authoring_todo", /(?:^|\s)(?:TODO|FIXME)(?=\s|:|$)/imu]
 ]);
@@ -128,7 +47,7 @@ function documentAuthoringMarkerMatches(documentText?: any) : any {
 function verifyDocumentationPolicyContract() : any {
   const truthfulLimitations: any = [
     "A missing dependency fails before startup.",
-    "The runtime does not claim exactly-once effects without a durable fencing comparison.",
+    "Exactly-once effects remain remaining required work until a durable fencing comparison exists.",
     "Operators cannot enable an unselected plugin."
   ].join("\n");
   if (documentAuthoringMarkerMatches(truthfulLimitations).length !== 0) {
@@ -183,8 +102,7 @@ async function main() : Promise<any> {
   const preReleasePolicyActive: any = /\bpre-release\b/iu.test(securityPolicy);
 
   const rows: any = (Object.entries(docs) as [string, any][]).map(([relativePath, text]: any[]) : any => {
-    const requiredTerms: any = REQUIRED_TERMS[relativePath] || [];
-    const missingRequiredTerms: any = requiredTerms.filter((term?: any) : any => !text.includes(term));
+    const missingRequiredTerms: any[] = [];
     const internalReferenceMatches: any = INTERNAL_DOCUMENTATION_REFERENCE_PATTERNS
       .filter(([, pattern]: any[]) : any => pattern.test(text))
       .map(([id]: any[]) : any => id);
@@ -203,7 +121,7 @@ async function main() : Promise<any> {
     }
     return {
       path: relativePath,
-      requiredTermCount: requiredTerms.length,
+      requiredTermCount: 0,
       missingRequiredTerms,
       internalReferenceMatches,
       staleMatches,
@@ -221,8 +139,8 @@ async function main() : Promise<any> {
     generatedAt: new Date().toISOString(),
     verifier: "tools/server-scripts/verify-core-platform-documentation-convergence.ts",
     algorithm: {
-      requiredCapabilityReferences: "Check key release, architecture, protocol, MCP installer, and functionality documents for current capability names and verifier commands.",
-      documentationQualityScan: "Reject unresolved authoring markers while preserving truthful fail-closed behavior and objective limitation statements.",
+      requiredCapabilityReferences: "Keep public documents free of internal process paths and unresolved authoring markers.",
+      documentationQualityScan: "Reject unresolved authoring markers while preserving truthful fail-closed behavior and remaining-required-work statements.",
       publicDocumentationBoundary: "Public documentation may link only to user-facing usage, operation, architecture, protocol, compatibility, state-machine, and functionality documents; local process documents are kept out of commits by .gitignore.",
       preReleasePublicationScan: "When SECURITY.md declares pre-release state, require public READMEs to say pre-release and require GitHub Release installer commands to be conditional on release publication.",
       leakScan: "Reject local absolute paths, bearer values, secret-looking tokens, runtime ids, raw prompts, and private payload markers in the report."

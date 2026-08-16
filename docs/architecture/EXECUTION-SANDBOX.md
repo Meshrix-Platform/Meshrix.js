@@ -11,8 +11,9 @@ launcher-boundary, and trusted OCI simulation facts. Current functional
 convergence is accepted only when `controlled-execution-sandbox` owns all four
 leaf reports and the `controlled-execution-convergence-final` reducer accepts
 their matching source provenance plus the exact current Plan receipts. That
-reducer emits only `controlledExecutionConvergenceReady`; it cannot establish
-an external provider Environment Support Claim.
+reducer emits only `controlledExecutionConvergenceReady`. External-provider
+environment qualification remains remaining required work on the named
+Real-Machine Verification Workflow.
 
 ## Scope And Trust Boundary
 
@@ -28,7 +29,7 @@ Every governed executable workload must enter through the execution-sandbox port
 
 Developer test commands and release tooling that are not reachable from a product runtime operation are outside this product boundary. They must not be exposed indirectly as runtime tools.
 
-Selected plugin modules remain privileged, reviewed deployment code loaded in the server process. The execution sandbox isolates workloads requested by those modules; it does not make a hostile `activatePlugin` implementation safe. An untrusted plugin implementation requires a separate out-of-process plugin boundary and must not be loaded by the privileged in-process plugin runtime.
+Selected plugin modules remain privileged, reviewed deployment code loaded in the server process. The execution sandbox isolates workloads requested by those modules. Process-isolated plugin confinement remains remaining GATE work so a hostile `activatePlugin` implementation cannot penetrate Core. Until that confinement lands, an untrusted plugin implementation must not be loaded by the privileged in-process plugin runtime.
 
 ## Architectural Invariants
 
@@ -191,7 +192,7 @@ Functional Release Gate criteria.
 
 When `sandboxAvailable` is false, an executable artifact may be accepted only through the core storage-only custody contract. Ingestion performs no archive expansion, parsing, scanning, executable review, build, publication as executable, or execution. It streams bytes into a closed authenticated envelope with bounded encrypted chunks, original-content and envelope digests, byte and chunk counts, media-type metadata, and an opaque custody-key reference. Plaintext is not persisted, caller-controlled filenames and executable modes are not storage identities, and plugins or ordinary storage code receive neither a decryption key nor a plaintext path.
 
-Server-side envelope encryption prevents stored representation from being directly runnable and separates decryption from ordinary request handling; it does not claim that a fully trusted server administrator lacks recovery authority. Deployments requiring the server to be cryptographically unable to recover plaintext must use a client-held key or an independently controlled key broker. Base64, archive wrapping, compression, filename changes, executable-bit removal, `noexec`, and reversible obfuscation are not security boundaries.
+Server-side envelope encryption prevents stored representation from being directly runnable and separates decryption from ordinary request handling. A fully trusted server administrator can currently recover plaintext. Cryptographic inability of the server to recover plaintext remains remaining required work for deployments that need it; those deployments must use a client-held key or an independently controlled key broker until that work lands. Base64, archive wrapping, compression, filename changes, executable-bit removal, `noexec`, and reversible obfuscation are not security boundaries.
 
 Opaque artifacts support governed status, encrypted-envelope download, retention, and deletion only. The registered custody port does not expose plaintext promotion. A closure-private promotion authority is held only by the sandbox broker, after current provider resolution and admission; plugins and ordinary platform consumers cannot present a self-authored provider receipt to obtain plaintext. Provider recovery causes no scan, publication, or execution. Promotion is a new explicit request: current admission binds the exact envelope and content digests, authorization, approval, policy, and ready sandbox receipt before the custody broker streams plaintext directly into run-specific read-only input. A failed promotion leaves the original envelope unchanged and non-executable.
 
@@ -249,7 +250,7 @@ Run `npm run verify:controlled-execution-sandbox` for the contract, lifecycle,
 custody, launcher-boundary, and trusted-backend leaf checks. Then run
 `npm run verify:controlled-execution-convergence` to reduce the exact current
 leaf and Plan-receipt set. These development-environment checks contribute to
-the Functional Release Gate. A passing Core report does not establish an
-external plugin or provider Environment Support Claim; each optional
-Real-Machine Verification Workflow validates its own exact integration
-receipt without changing functional acceptance.
+the Functional Release Gate. Environment qualification for each optional
+plugin or provider remains remaining required work; a passing Core report is
+not that receipt. Each remaining Real-Machine Verification Workflow validates
+its own exact integration receipt without changing functional acceptance.

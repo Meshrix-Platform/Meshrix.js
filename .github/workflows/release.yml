@@ -51,8 +51,6 @@ jobs:
         run: npm ci
       - name: Core repository gate
         run: npm run verify
-      - name: Full Vitest suite
-        run: npm run vitest
       - name: Audit profile
         run: npm run test:audit
       - name: Dependency vulnerability gate

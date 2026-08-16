@@ -4,53 +4,56 @@ This document records current compatibility targets and the evidence required
 for a support claim. [Status](STATUS.md) owns the product-wide intent,
 implementation, verification, release, and support result.
 
-## Claim rules
+## Evidence and remaining-work rules
 
-- A source path or configured target is an implementation fact, not support.
-- A passing focused check is verification for its exact scope, not a release.
+- A source path or configured target is an implementation fact. Support remains
+  remaining required work until the named qualification evidence exists.
+- A passing focused check is verification for its exact scope. Release
+  completeness remains remaining required work until the Functional Release
+  Gate accepts the immutable candidate.
 - A Functional Release Gate receipt applies only to its immutable candidate.
 - Functional candidate acceptance, including Linux amd64 and arm64 offline
   artifacts delivered onto a Linux virtual machine reachable from a macOS
-  operator host, does not automatically establish Linux real-machine, Ubuntu,
-  Debian, cloud, macOS, Windows, connector, cross-host, or recovery-environment
-  support. A Linux OS inside the VM is enough to close offline delivery and the
-  current plan receipt. Ubuntu is preferred; Debian is accepted. This is not a
-  native Linux, Ubuntu, or Debian support claim.
+  operator host, closes the current offline and plan receipts. A Linux OS
+  inside the VM is enough for those closures. Ubuntu is preferred; Debian is
+  accepted. Native Linux, Ubuntu, Debian, cloud, macOS, Windows, connector,
+  cross-host, and recovery-environment qualification remain remaining required
+  work after the named Real-Machine Verification Workflow.
 - A source tag, npm package, container manifest, GitHub Release, and hosted
-  deployment are separate release or operation facts.
-- Environment support requires the same accepted candidate to pass the named
-  Real-Machine Verification Workflow for the exact system, architecture,
+  deployment are separate remaining release or operation workstreams.
+- Environment qualification requires the same accepted candidate to pass the
+  named Real-Machine Verification Workflow for the exact system, architecture,
   artifact, configuration, and deployment profile.
 - Client, plugin, and optional-service adoption evidence is independently
-  owned and cannot block or promote Meshrix.js acceptance.
+  owned remaining work and cannot block or promote Meshrix.js acceptance.
 
 ## Runtime and delivery matrix
 
-| Surface | Current target | Current claim |
+| Surface | Current target | Current status |
 | --- | --- | --- |
-| Enterprise single-node profile | `enterprise-single-node` private-deployment release profile | Pre-release target; release publication and environment support are currently unclaimed. |
-| Node.js runtime | Version range declared by `package.json` | Implemented target; no operating-system support claim is asserted here. |
-| Local source startup | Repository npm scripts and local server entry point | Development path; not a release or production-support claim. |
-| Server and Web Console container | Linux amd64 and arm64 OCI artifacts on a Linux VM | Assembly and functional-verification target; Ubuntu preferred, Debian accepted; native Linux or distribution support remains unclaimed until its exact workflow passes. |
-| Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Target contract only. Current verified Console code still executes as trusted same-origin code; third-party browser isolation is unclaimed until migration and browser escape verification pass. |
-| npm release set | Manifests named by the release definition | Publication target only; package publication must be proved independently for the immutable accepted candidate. |
-| MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact requires its own publication and environment receipt. |
-| Storage | Self-contained local storage by default; optional integrations only when explicitly configured | Local implementation target; an optional datastore has a separate compatibility claim. |
-| Production ingress | Administrator-owned TLS boundary conforming to the documented trusted-proxy contract | Functional target; one deployed proxy environment requires its own evidence. |
-| Backup and restore | Independent backup root and clean-root recovery journey | Required candidate closure; no recovery support claim is currently asserted. |
-| Upgrade and rollback | N-1 preflight, backup, migration, health admission, and failure rollback | Required candidate closure; no upgrade support claim is currently asserted. |
+| Enterprise single-node profile | `enterprise-single-node` private-deployment release profile | Pre-release target; release publication and environment qualification remain remaining required work. |
+| Node.js runtime | Version range declared by `package.json` | Implemented target; operating-system qualification remains remaining required work on the named host workflow. |
+| Local source startup | Repository npm scripts and local server entry point | Development path; release and production qualification remain remaining required work. |
+| Server and Web Console container | Linux amd64 and arm64 OCI artifacts on a Linux VM | Assembly and functional-verification target; Ubuntu preferred, Debian accepted; native Linux or distribution qualification remains remaining required work until its exact workflow passes. |
+| Plugin Console iframe | Opaque-origin sandbox and versioned capability bridge | Target contract. Current verified Console code still executes as trusted same-origin code; third-party browser isolation remains remaining GATE work until migration and browser escape verification pass. |
+| npm release set | Manifests named by the release definition | Publication target; package publication remains remaining required work for the immutable accepted candidate. |
+| MCP connector | Repository-owned generic connector and security boundary | Functional target; each packaged operating-system artifact still requires its own publication and environment receipt. |
+| Storage | Self-contained local storage by default; optional integrations only when explicitly configured | Local implementation target; each optional datastore remains remaining qualification work. |
+| Production ingress | Administrator-owned TLS boundary conforming to the documented trusted-proxy contract | Functional target; each deployed proxy environment remains remaining qualification work. |
+| Backup and restore | Independent backup root and clean-root recovery journey | Required candidate closure; recovery-environment qualification remains remaining required work. |
+| Upgrade and rollback | N-1 preflight, backup, migration, health admission, and failure rollback | Required candidate closure; upgrade-environment qualification remains remaining required work. |
 
 ## Protocol and integration ownership
 
-| Surface | Owner and boundary | Current claim |
+| Surface | Owner and boundary | Current status |
 | --- | --- | --- |
 | HTTP, MCP, plugin-package, pubsub, storage, checkpoint, and console protocols | Meshrix.js protocol and technical documents | Implemented scope is defined only by the owning documents and schemas. |
-| Plugin browser code | Planned opaque-origin iframe with a bounded Host bridge | Current same-origin loading is trusted deployment code, not a hostile-code sandbox or compatibility guarantee for legacy plugin entries. |
+| Plugin browser code | Planned opaque-origin iframe with a bounded Host bridge | Current same-origin loading is trusted deployment code. Opaque-origin isolation and hostile-code confinement remain remaining GATE work; legacy plugin entries remain remaining compatibility work. |
 | Upstream service publishing | Meshrix.js server gateway and Operation Permission | Server-side functional target; compatible external-service adoption is independently owned. |
 | Downstream client protocol | Meshrix.js generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix.js release dependency. |
 | Client-specific adapters | Repository-local packages selected explicitly by an operator | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
 | Optional parsers, providers, datastores, and service adapters | Repository-local `services/` or `plugins/` implementation when present | Disabled or absent by default; each enabled path needs its own contract and evidence. |
-| Pactium | Exact dependency `pactium@0.7.0` and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities; it does not establish Meshrix.js release or environment support. |
+| Pactium | Exact dependency `pactium@0.7.0` and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities. Meshrix.js release and environment qualification remain remaining required work on their own receipts. |
 
 ## Pactium host-helper deprecation
 
@@ -77,7 +80,9 @@ When Meshrix.js 1.0.0 is cut, delete the Deprecated wrappers and retarget caller
 
 ## MCP client targets
 
-Meshrix.js verifies only its neutral connector boundary. A client becomes
-supported only when the operator supplies an exact adapter artifact with a
-named client version and configuration plus current lifecycle evidence. This
-repository does not currently make those client support claims.
+Meshrix.js verifies only its neutral connector boundary. The documented
+downstream adapter target scope is OpenClaw, Codex, Claude Code, Antigravity,
+OpenCode, Pi, and Kimi CLI. A named client becomes qualified only when the
+operator supplies an exact adapter artifact with a named client version and
+configuration plus current lifecycle evidence. Those client qualifications
+remain remaining required work until that evidence exists.

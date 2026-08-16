@@ -6,6 +6,7 @@ import {
   validatePluginDeployment
 } from "./plugin-registry.ts";
 import { pluginOwnerGenerationDigest } from "./plugin-artifact-authority.ts";
+import { registerPluginConsoleIsolationVerification } from "./plugin-console-isolation.ts";
 import { createPluginVerifierHooks } from "./plugin-verifier-runner.ts";
 
 export const PLUGIN_ACTIVATION_EXPORT: any = "activatePlugin";
@@ -695,6 +696,20 @@ export async function activatePluginDeployment({
         ))
       });
       normalizeRuntimeContributions(manifest, effectiveContributions(), { hostVerifierHooks });
+      if (manifest.consoleEntries.length > 0) {
+        registerPluginConsoleIsolationVerification({
+          pluginId: manifest.id,
+          enabled: true,
+          consoleEntryIds: [...manifest.consoleEntries],
+          artifactDigest: artifactSnapshot?.artifactDigest,
+          artifactGeneration: artifactSnapshot?.generation,
+          ownedToolIds: Object.freeze([...manifest.operations, ...manifest.mcpTools]),
+          toolIdsByEntry: Object.freeze(Object.fromEntries(manifest.consoleEntries.map((entryId?: any) : any => {
+            const implementation: any = result.contributions?.consoleEntries?.[entryId];
+            return [entryId, Array.isArray(implementation?.toolIds) ? implementation.toolIds : []];
+          })))
+        });
+      }
       records.push(createPluginRecord(
         manifest,
         mounts,

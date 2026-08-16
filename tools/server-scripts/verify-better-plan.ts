@@ -222,6 +222,42 @@ function checksAccepted(checks?: any) : any {
   return CHECK_NAMES.every((name?: any) : any => checks[name] === true);
 }
 
+function normalizedOwnedPath(value?: any) : any {
+  return String(value || "").replace(/\\/gu, "/").replace(/\/+$/u, "");
+}
+
+function ownedPathsOverlap(left?: any, right?: any) : any {
+  const leftPath: any = normalizedOwnedPath(left);
+  const rightPath: any = normalizedOwnedPath(right);
+  return leftPath.length > 0 && rightPath.length > 0 &&
+    (leftPath === rightPath || leftPath.startsWith(`${rightPath}/`) || rightPath.startsWith(`${leftPath}/`));
+}
+
+function mutuallyDisjointOwnedPaths(nodes?: any[]) : any {
+  const observed: any[] = [];
+  for (const node of nodes ?? []) {
+    const owned: any[] = node?.design?.owned_paths;
+    const acceptance: any[] = node?.design?.acceptance_paths;
+    if (!Array.isArray(owned) || owned.length === 0 || !Array.isArray(acceptance) || acceptance.length === 0) {
+      return false;
+    }
+    for (const ownedPath of [...owned, ...acceptance]) {
+      if (observed.some((entry?: any) : any => ownedPathsOverlap(entry.path, ownedPath))) return false;
+      observed.push({ node: node.id, path: ownedPath });
+    }
+  }
+  return true;
+}
+
+function sameReferences(actual?: any, expected: any[] = []) : any {
+  if (!Array.isArray(actual) || actual.length !== expected.length) return false;
+  const normalizedActual: any[] = [...actual].sort();
+  const normalizedExpected: any[] = [...expected].sort();
+  return normalizedActual.every(
+    (value?: any, index?: any) : any => value === normalizedExpected[index],
+  );
+}
+
 function assertReportSafe(report?: any) : any {
   assertNoSensitiveLeak(report, "Better Plan validation report");
   const text: any = JSON.stringify(report);
@@ -410,18 +446,125 @@ async function defaultCanonicalValidator({ repoRoot, writeReport = false, requir
       mapPlan?.directory === "end-to-end-release" && mapPlan?.parent === null &&
       Array.isArray(mapPlan?.children) && mapPlan.children.length === 0 &&
       Array.isArray(mapPlan?.prerequisite_receipts) && mapPlan.prerequisite_receipts.length === 0 &&
-      Array.isArray(checkpoints) && checkpoints.length > 0;
+      Array.isArray(checkpoints) && checkpoints.length === 24;
     sourceAccepted = manifestPlan?.source_files?.length === 2 &&
       manifestPlan.source_files.includes("docs/plans/end-to-end-release/Plan.md") &&
       manifestPlan.source_files.includes("docs/plans/end-to-end-release/DependencyMap.json") &&
       planText.includes("The Shared-Document Model") &&
       planText.includes("Effect Commands") &&
+      planText.includes("Mandatory Dual-Gateway Pipeline, Optional Application Stage, Standalone Model Gateway, And Local Maintenance Boundary") &&
+      planText.includes("Architecture Reorganization And Real Parallelism") &&
+      planText.includes("Capability Acceptance Plan Migration") &&
+      planText.includes("model_gateway.call") &&
+      planText.includes("services/model-gateway") &&
+      planText.includes("default-disabled stateless Meshrix adapter") &&
+      planText.includes("Agent MCP fixed Gateway pipeline") &&
+      planText.includes("workspace_application") &&
+      planText.includes("gateway_transit") &&
+      planText.includes("DownstreamGatewayEnvelope") &&
+      planText.includes("UpstreamGatewayEnvelope") &&
+      planText.includes("`gateway_transit` bypasses every Workspace concept in this section, not either Gateway") &&
+      planText.includes("Both traffic models still traverse the mandatory downstream and upstream Gateway layers") &&
+      planText.includes("plugins/external-gateway") &&
+      planText.includes("Plugin load, activation, reload, disable, uninstall, health change and recovery only affect availability") &&
+      planText.includes("Switching downstream does not implicitly switch upstream") &&
+      planText.includes("bounded load distribution, rate and concurrency admission, health and circuit handling, overload shedding") &&
+      !planText.includes("Workspace application traffic never reaches it") &&
+      !planText.includes("gateway_transit traffic only") &&
+      !planText.includes("This path never enters GatewayChannelRouter") &&
+      planText.includes("only an explicit governed administrator action from the Meshrix Console") &&
+      planText.includes("Side-effect-free detachment") &&
+      planText.includes("share no process, database, data root, configuration, secret store, ledger, cache, lock, event bus, or lifecycle") &&
+      planText.includes("configuration file replaced atomically is the only behavior-control input") &&
+      planText.includes("cannot call, schedule, cancel, observe, configure, start, stop, restart") &&
+      planText.includes("no maintenance scheduler, queue, configuration, state, status, PID, socket, credential, Host port, process handle or run observation") &&
+      planText.includes("three genuinely independent implementation branches") &&
+      planText.includes("only necessary join") &&
       planText.includes("at least 60 percent fewer model-visible calls") &&
       planText.includes("at least 70 percent fewer combined model-context and wire bytes");
     const codes: any = checkpoints.map((node?: any) : any => node?.code);
+    const nodesByCode: any = new Map<any, any>(checkpoints.map((node?: any) : any => [node?.code, node]));
+    const contractNode: any = nodesByCode.get("GATE-CONTRACT");
+    const parallelNodes: any[] = ["GATE-MODEL", "GATE-MAINTENANCE", "GATE-EDGE"]
+      .map((code?: any) : any => nodesByCode.get(code));
+    const canonicalNode: any = nodesByCode.get("GATE-CANONICAL");
+    const gatewayFinalNode: any = nodesByCode.get("GATE-FINAL");
+    const efficiencyFinalNode: any = nodesByCode.get("EFF-FINAL");
+    const thinNodes: any[] = ["DQ-PROVENANCE", "DQ-TYPING", "DQ-FEEDBACK"]
+      .map((code?: any) : any => nodesByCode.get(code));
+    const remainderNodes: any[] = ["DQ-ACCEPTANCE", "DQ-TYPING-REST", "DQ-FEEDBACK-SCALE"]
+      .map((code?: any) : any => nodesByCode.get(code));
+    const parallelIds: any[] = parallelNodes.map((node?: any) : any => node?.id);
+    const thinIds: any[] = thinNodes.map((node?: any) : any => node?.id);
+    const remainderIds: any[] = remainderNodes.map((node?: any) : any => node?.id);
+    const pendingDeliveryAndGate: any[] = [
+      ...thinNodes,
+      contractNode,
+      ...parallelNodes,
+      canonicalNode,
+      ...remainderNodes,
+      gatewayFinalNode,
+    ].filter((node?: any) : any => node && node.status === "pending");
+    const architectureGraphAccepted: any = Boolean(
+      efficiencyFinalNode && contractNode && parallelNodes.every(Boolean) && canonicalNode &&
+      gatewayFinalNode && thinNodes.every(Boolean) && remainderNodes.every(Boolean) &&
+      sameReferences(efficiencyFinalNode.next, thinIds) &&
+      thinNodes.every((node?: any) : any =>
+        sameReferences(node.prerequisites, [efficiencyFinalNode.id]) &&
+        sameReferences(node.next, [contractNode.id])) &&
+      sameReferences(contractNode.prerequisites, thinIds) &&
+      sameReferences(contractNode.next, parallelIds) &&
+      parallelNodes.every((node?: any) : any =>
+        sameReferences(node.prerequisites, [contractNode.id]) && sameReferences(node.next, [canonicalNode.id])) &&
+      sameReferences(canonicalNode.prerequisites, parallelIds) &&
+      sameReferences(canonicalNode.next, remainderIds) &&
+      remainderNodes.every((node?: any) : any =>
+        sameReferences(node.prerequisites, [canonicalNode.id]) &&
+        sameReferences(node.next, [gatewayFinalNode.id])) &&
+      sameReferences(gatewayFinalNode.prerequisites, remainderIds) &&
+      sameReferences(gatewayFinalNode.next, []) &&
+      mutuallyDisjointOwnedPaths(pendingDeliveryAndGate) &&
+      mapPlan?.final_validations?.length === 1 &&
+      mapPlan.final_validations[0]?.node_id === gatewayFinalNode.id
+    );
+    const standaloneModelServiceAccepted: any = Boolean(
+      contractNode?.commit?.target === "packages/contracts/src/agent-mcp-traffic" &&
+      contractNode?.design?.owned_paths?.includes("services/model-gateway/contracts") &&
+      contractNode?.design?.owned_paths?.includes("packages/contracts/src/agent-mcp-traffic") &&
+      contractNode?.design?.owned_paths?.includes("packages/contracts/src/gateway-transit") &&
+      contractNode?.design?.owned_paths?.includes("plugins/agents/meshrix-self-maintenance/contracts") &&
+      parallelNodes[0]?.commit?.target === "services/model-gateway" &&
+      parallelNodes[0]?.design?.owned_paths?.includes("services/model-gateway/src") &&
+      parallelNodes[1]?.commit?.target === "plugins/agents/meshrix-self-maintenance/src" &&
+      parallelNodes[1]?.design?.owned_paths?.includes("plugins/agents/meshrix-self-maintenance/src") &&
+      parallelNodes[2]?.commit?.target === "plugins/external-gateway" &&
+      parallelNodes[2]?.design?.owned_paths?.includes("plugins/external-gateway") &&
+      parallelNodes[2]?.description?.includes("registers one downstream and one upstream External Gateway choice") &&
+      parallelNodes[2]?.description?.includes("cannot activate its own route") &&
+      parallelNodes[2]?.description?.includes("never redirects traffic") &&
+      parallelNodes[2]?.description?.includes("usable by both workspace_application and gateway_transit") &&
+      parallelNodes[2]?.description?.includes("receives no Workspace reference, Workspace port, or WorkspaceApplicationEnvelope") &&
+      canonicalNode?.description?.includes("per-direction selected-channel generation") &&
+      canonicalNode?.description?.includes("originating in the Meshrix Console") &&
+      canonicalNode?.description?.includes("Build one Core AgentMcpGatewayPipeline") &&
+      canonicalNode?.description?.includes("without calling resolveMcpWorkspaceInput") &&
+      canonicalNode?.description?.includes("skip either Gateway stage") &&
+      canonicalNode?.design?.owned_paths?.includes("plugins/model-gateway") &&
+      canonicalNode?.regression?.commands?.includes("npm run server:verify:agent-self-maintenance-boundary") &&
+      canonicalNode?.regression?.commands?.includes("npm run server:verify:model-gateway-detachment") &&
+      gatewayFinalNode?.regression?.commands?.includes("node tools/server-scripts/verify-model-gateway-service.ts") &&
+      gatewayFinalNode?.regression?.commands?.includes("node tools/server-scripts/verify-agent-self-maintenance-runtime.ts") &&
+      gatewayFinalNode?.regression?.commands?.includes("npm run server:verify:model-gateway-detachment")
+    );
     labelAccepted = new Set<any>(codes).size === checkpoints.length &&
-      ["EFF-0", "EFF-7", "EFF-8", "EFF-9", "EFF-10", "EFF-FINAL"]
+      ["EFF-0", "EFF-7", "EFF-8", "EFF-9", "EFF-10", "EFF-FINAL",
+        "DQ-PROVENANCE", "DQ-TYPING", "DQ-FEEDBACK",
+        "GATE-CONTRACT", "GATE-MODEL", "GATE-MAINTENANCE",
+        "GATE-EDGE", "GATE-CANONICAL",
+        "DQ-ACCEPTANCE", "DQ-TYPING-REST", "DQ-FEEDBACK-SCALE", "GATE-FINAL"]
         .every((code?: any) : any => codes.includes(code)) &&
+      architectureGraphAccepted &&
+      standaloneModelServiceAccepted &&
       checkpoints.every((node?: any) : any =>
         typeof node?.title === "string" && node.title.length > 0 &&
         Array.isArray(node?.requirements) && node.requirements.length > 0 &&

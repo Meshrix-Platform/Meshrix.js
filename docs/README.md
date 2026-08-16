@@ -9,7 +9,7 @@ This directory contains the formal technical documentation for installing,
 running, operating, integrating, and verifying Meshrix.js as a
 private-deployable internal platform.
 
-Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, and executable verification commands.
+Documentation must be serious, calm, pragmatic, and accurate. It records verified technical facts, current capability status, configuration, protocol boundaries, decision records, executable verification commands, and remaining required work. A current inability is remaining work the project keeps closing, not a durable refusal.
 
 ## Maintenance Invariants
 
@@ -29,13 +29,14 @@ is not independent authority. A path that has not converged on this boundary
 fails the Functional Release Gate.
 
 The [Runbook release contract](RUNBOOK.md#release-definition-and-publication)
-separates the mandatory Functional Release Gate from optional Real-Machine
+separates the mandatory Functional Release Gate from remaining Real-Machine
 Verification Workflows and their Environment Support Claims. Functional
 acceptance is a prerequisite for every real-machine workflow. A real-machine
 receipt never blocks, promotes, or changes functional acceptance. Offline
 delivery and the current plan receipt may close on Linux inside a virtual
-machine; Ubuntu is preferred and Debian is accepted. That path is not a native
-Linux, Ubuntu, or Debian support claim.
+machine; Ubuntu is preferred and Debian is accepted. Native Linux, Ubuntu, and
+Debian qualification remain remaining required work after the named
+Real-Machine Verification Workflow.
 
 Governance evidence and ordinary telemetry have different value. Protected
 access and side effects require the minimum bounded lifecycle proof. Routine
@@ -55,11 +56,11 @@ License compliance alone is not admission: a production dependency must also
 pass the Runbook's authority, maturity, multi-organization adoption, security
 maintenance, operational evidence, and workload-conformance gates.
 
-The [What's Next register](WHATS-NEXT.md) names the sole current efficiency-led
-functional candidate and its required closures without duplicating execution
-detail. It summarizes tracked facts without replacing the owning
-implementation, architecture decision, local execution plan, verifier,
-acceptance receipt, or release authority.
+The [What's Next register](WHATS-NEXT.md) names the sole current functional
+candidate, including the efficiency and Gateway-boundary closures, without
+duplicating execution detail. It summarizes tracked facts without replacing
+the owning implementation, architecture decision, local execution plan,
+verifier, acceptance receipt, or release authority.
 
 ## Project Documents
 

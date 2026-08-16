@@ -29,4 +29,5 @@ publication.
 Static checks and build output may run by default. Network access, protected
 runtime data, container startup, destructive reset, and publication require
 explicit authorization. A skipped or unavailable environment-specific check
-does not establish support and does not invalidate an unrelated source claim.
+does not invalidate an unrelated source claim. Environment qualification for
+the skipped check remains remaining required work.

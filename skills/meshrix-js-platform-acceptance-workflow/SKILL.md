@@ -40,8 +40,9 @@ report may establish only its scoped evidence readiness.
 Plan-scoped offline delivery and the current plan receipt may close on a Linux
 operating system inside a virtual machine. Prefer Ubuntu; accept Debian. A
 macOS operator host is allowed when that Linux VM is reachable. This path is
-not `npm run verify:acceptance` and does not create native Linux, Ubuntu,
-Debian, or environment-support claims.
+not `npm run verify:acceptance`. Native Linux, Ubuntu, Debian, and environment
+qualification remain remaining required work after the named Real-Machine
+Verification Workflow.
 
 ## Handle evidence
 

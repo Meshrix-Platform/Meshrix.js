@@ -68,7 +68,7 @@ Apply these rules to every task inside the Meshrix.js product repository.
 ## 任务启动流程
 
 - 开始工作时建议说明当前 worktree、目标子系统和计划写入范围；先应用本技能的仓库级规则，再查看目标子系统对应小节，没有对应小节时再读取最近的 README。
-- 本仓库的跨计划执行选择只使用 `npm run plan:next`。主智能体应先按用户意图校正相关计划；该命令只授权执行叶子，不限制主智能体修复计划或计划工具。`planning_repair_required` 禁止派遣执行者，但不终止用户任务，控制权应返回主智能体。通用 Better Plan `next` 只理解单个 `Checkpoints.json` 的本地依赖，不能作为执行授权；不得启动缺少子计划最终回执、与当前主机平台不匹配或不属于 Meshrix.js `.git` 目标的节点。原生 Windows 主机资格节点仍须在对应主机上执行。离线交付和当前计划闭环只要虚拟机内是 Linux 即可完成：优先 Ubuntu，Debian 也可；macOS 操作主机在能到达该 Linux 虚拟机时可以闭环。这不是原生 Linux、Ubuntu、Debian 或环境支持声明，也不是 `npm run verify:acceptance`。
+- 本仓库的跨计划执行选择只使用 `npm run plan:next`。主智能体应先按用户意图校正相关计划；该命令只授权执行叶子，不限制主智能体修复计划或计划工具。`planning_repair_required` 禁止派遣执行者，但不终止用户任务，控制权应返回主智能体。通用 Better Plan `next` 只理解单个 `Checkpoints.json` 的本地依赖，不能作为执行授权；不得启动缺少子计划最终回执、与当前主机平台不匹配或不属于 Meshrix.js `.git` 目标的节点。原生 Windows 主机资格节点仍须在对应主机上执行。离线交付和当前计划闭环只要虚拟机内是 Linux 即可完成：优先 Ubuntu，Debian 也可；macOS 操作主机在能到达该 Linux 虚拟机时可以闭环。原生 Linux、Ubuntu、Debian 和环境资格仍是之后必须完成的剩余工作。项目级功能验收仍是 `npm run verify:acceptance`。
 - 如果任务需要跨子系统修改，建议切换到集成 worktree 或明确唯一负责人，再开始编辑。
 - 涉及入口文件或文档索引调整时，运行 `npm test` 或对应的入口健康检查。
 
@@ -130,15 +130,22 @@ Apply these rules to every task inside the Meshrix.js product repository.
 
 - 本项目文档必须保持严肃、冷静、务实、准确。
 - 公开文档、规范文档、产品说明、功能说明、协议说明、运行说明和新增 Markdown 文档默认必须使用英文；只有文件名或目录明确标注为本地化版本（例如 `*.zh-CN.md`）或用户明确要求本地化内容时，才使用对应语言。
-- 文档只记录技术事实、运行方式、配置字段、协议边界、验证命令、决策结果和客观限制。
+- 文档只记录技术事实、运行方式、配置字段、协议边界、验证命令、决策结果和剩余必做工作。当前做不到的能力写成之后必须完成的缺口，而不是永久不做。
 - 不记录未验证的背景说明、来源解释、内部讨论过程、夸张表述或未落实承诺。
 - 开源平台文档以企业私有化部署为前提，默认能力必须自包含；外部中间件只能写成可选增强或集成目标，不能写成基础运行依赖，除非代码和部署清单已经强制依赖。
-- 能力缺口必须以可验证事实描述，并指向计划、代码路径或验证命令；不能用愿景描述替代实现状态。
+- 能力缺口必须以可验证事实描述，并指向计划、代码路径或验证命令；不能用愿景描述替代实现状态，也不能把缺口写成项目明确拒绝。
+
+## Remaining required work
+
+A current gap is remaining required work. Record what is true today and keep
+closing it. Do not freeze “we do not do this” or “we cannot do this” as a
+durable Meshrix.js refusal. Fail-closed security invariants stay required until
+a stronger replacement lands.
 
 ## Linux VM closure
 
 - A Linux operating system inside a virtual machine can close Meshrix.js offline delivery and the current plan receipt. Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when that Linux VM is reachable.
-- This path does not create native Linux, Ubuntu, Debian, or environment-support claims, and it is not `npm run verify:acceptance`.
+- Native Linux, Ubuntu, Debian, and environment qualification remain remaining required work after the named Real-Machine Verification Workflow. Project-level functional acceptance remains `npm run verify:acceptance`.
 
 ## 验证范围
 

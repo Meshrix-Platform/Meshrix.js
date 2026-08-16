@@ -45,6 +45,7 @@ function entry(patch: Partial<PluginConsoleEntry> = {}): PluginConsoleEntry {
     artifactGeneration: 1,
     label: "Sample plugin",
     requiredScopes: ["console:read"],
+    toolIds: [],
     ...patch,
   };
   if (!result.assetUrl) {
@@ -54,17 +55,17 @@ function entry(patch: Partial<PluginConsoleEntry> = {}): PluginConsoleEntry {
   return result;
 }
 
-function createModuleImporter() : any {
-  return vi.fn(async () : Promise<any> => ({
-    mountPluginConsole: vi.fn(() : any => () : any => {}),
-  }));
+function createHost() : any {
+  return {
+    loadAsset: vi.fn(async () : Promise<any> => "export function mountPluginConsole() { return () => {}; }"),
+  };
 }
 
 describe("plugin console runtime routes", () : any => {
   it("registers only enabled exact plugin components and removes the active route safely", async () : Promise<any> => {
     const router: any = createTestRouter();
-    const moduleImporter: any = createModuleImporter();
-    syncPluginConsoleRoutes(router, [entry()], { moduleImporter });
+    const host: any = createHost();
+    syncPluginConsoleRoutes(router, [entry()], { host });
     configureRuntimeRouteGuard(router, {
       ready: true,
       authenticated: true,
@@ -75,6 +76,7 @@ describe("plugin console runtime routes", () : any => {
     expect(router.currentRoute.value.path).toBe("/admin/sample-plugin");
     expect(router.currentRoute.value.meta.pluginId).toBe("sample-plugin");
     expect(router.currentRoute.value.meta.title).toBe("Sample plugin");
+    expect(host.loadAsset).not.toHaveBeenCalled();
 
     syncPluginConsoleRoutes(router, []);
     await new Promise((resolve?: any) : any => setTimeout(resolve, 0));
@@ -83,7 +85,7 @@ describe("plugin console runtime routes", () : any => {
   });
 
   it("resolves and registers multiple views from one plugin artifact", async () : Promise<any> => {
-    const moduleImporter: any = createModuleImporter();
+    const host: any = createHost();
     const sampleEntries: any[] = [
       entry({
         id: "admin.sample-a",
@@ -109,24 +111,25 @@ describe("plugin console runtime routes", () : any => {
     ];
 
     for (const sampleEntry of sampleEntries) {
-      const loadComponent: any = resolvePluginConsoleComponent(sampleEntry, moduleImporter);
+      const loadComponent: any = resolvePluginConsoleComponent(sampleEntry, host);
       expect(loadComponent).toBeTypeOf("function");
       await expect(loadComponent?.()).resolves.toMatchObject({ name: expect.stringMatching(/^PluginConsole_/u) });
     }
+    expect(host.loadAsset).not.toHaveBeenCalled();
 
     const router: any = createTestRouter();
-    expect(() : any => syncPluginConsoleRoutes(router, sampleEntries, { moduleImporter })).not.toThrow();
+    expect(() : any => syncPluginConsoleRoutes(router, sampleEntries, { host })).not.toThrow();
     expect(router.getRoutes().filter((route?: any) : any => route.meta.pluginId === "sample-plugin"))
       .toHaveLength(sampleEntries.length);
   });
 
   it("denies direct navigation before authorization and with missing scopes", async () : Promise<any> => {
     const router: any = createTestRouter();
-    const moduleImporter: any = createModuleImporter();
-    syncPluginConsoleRoutes(router, [entry()], { moduleImporter });
+    const host: any = createHost();
+    syncPluginConsoleRoutes(router, [entry()], { host });
     await router.push("/admin/sample-plugin");
     expect(router.currentRoute.value.path).toBe("/welcome");
-    expect(moduleImporter).not.toHaveBeenCalled();
+    expect(host.loadAsset).not.toHaveBeenCalled();
 
     configureRuntimeRouteGuard(router, {
       ready: true,
@@ -136,7 +139,7 @@ describe("plugin console runtime routes", () : any => {
     });
     await router.push("/admin/sample-plugin");
     expect(router.currentRoute.value.path).toBe("/");
-    expect(moduleImporter).not.toHaveBeenCalled();
+    expect(host.loadAsset).not.toHaveBeenCalled();
   });
 
   it("fails closed for missing assets and core route conflicts", () : any => {
@@ -147,8 +150,14 @@ describe("plugin console runtime routes", () : any => {
     expect(() : any => syncPluginConsoleRoutes(router, [entry({ routePath: "/" })])).toThrow(/route conflicts/u);
   });
 
+  it("rejects same-origin compatibility exports and navigable sandbox URLs", () : any => {
+    expect(resolvePluginConsoleComponent(entry({ assetExport: "default" }))).toBeUndefined();
+    expect(resolvePluginConsoleComponent(entry({ sandboxUrl: "/api/plugins/v1/console-assets/x/1/aa/entry.ts" }))).toBeUndefined();
+    expect(resolvePluginConsoleComponent(entry({ bridgeVersion: "legacy.same-origin" }))).toBeUndefined();
+  });
+
   it("hides slot entries and avoids resolving their component before policy authorization", () : any => {
-    const moduleImporter: any = createModuleImporter();
+    const host: any = createHost();
     const slotEntry: any = entry({
       id: "workspace.local-directory",
       pluginId: "sample-plugin",
@@ -167,25 +176,25 @@ describe("plugin console runtime routes", () : any => {
     expect(resolveAccessiblePluginConsoleComponent(
       slotEntry,
       check([], ["sample-feature"]),
-      moduleImporter,
+      host,
     )).toBeUndefined();
     expect(resolveAccessiblePluginConsoleComponent(
       slotEntry,
       check(["workspace:read"], []),
-      moduleImporter,
+      host,
     )).toBeUndefined();
     expect(canAccessPluginConsoleEntry(slotEntry, check(["workspace:read"], ["sample-feature"]))).toBe(true);
     expect(resolveAccessiblePluginConsoleComponent(
       slotEntry,
       check(["workspace:read"], ["sample-feature"]),
-      moduleImporter,
+      host,
     )).toBeTypeOf("function");
-    expect(moduleImporter).not.toHaveBeenCalled();
+    expect(host.loadAsset).not.toHaveBeenCalled();
     expect(hasPluginConsoleRoute(slotEntry)).toBe(false);
     expect(isAdminPluginConsoleEntry(slotEntry)).toBe(false);
 
     const router: any = createTestRouter();
-    expect(() : any => syncPluginConsoleRoutes(router, [slotEntry], { moduleImporter })).not.toThrow();
+    expect(() : any => syncPluginConsoleRoutes(router, [slotEntry], { host })).not.toThrow();
     expect(router.getRoutes().some((route?: any) : any => route.meta.pluginId === "sample-plugin")).toBe(false);
   });
 });

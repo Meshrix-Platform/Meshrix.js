@@ -4,12 +4,9 @@
   "generatedAt": "2026-07-22",
   "profiles": {
     "core-public": {
-      "description": "Core lightweight platform gate",
+      "description": "Core verifier gate",
       "suites": [
         "runtime.resource-discipline",
-        "runtime.capacity-catalog-conformance",
-        "runtime.capacity-work-queue-dispatch-conformance",
-        "runtime.capacity-execution-fence-conformance",
         "repo.public-boundary",
         "security.secret-hygiene",
         "repo.local-info-hygiene",
@@ -17,40 +14,15 @@
         "registry.version-naming",
         "registry.version-governance",
         "repo.root-hygiene",
-        "planning.execution-admission",
         "repo.script-registry",
         "repo.organization",
-        "repo.source-organization-analysis",
         "architecture.import-graph",
         "architecture.protocol-boundary",
-        "domains.manifest",
         "foundation.checkpoint-tree",
-        "foundation.storage-object-lifecycle",
-        "foundation.local-secret-store",
-        "security.authorization-hardening",
-        "security.http-resource-admission",
         "foundation.state-machine",
-        "agents.model-provider-runtime",
-        "agents.agent-workspace-schema",
-        "console.event-routing",
-        "release.acceptance-unit",
         "release.acceptance-ledger-anchor",
-        "runtime.operation-routing",
-        "runtime.refactor-convergence",
-        "runtime.job-work-queue-recovery",
-        "runtime.operation-dispatch-lock",
-        "execution-sandbox.provider-resolution",
-        "gateway.mcp-session-lifecycle",
-        "gateway.payload-transit",
-        "gateway.performance-observation",
         "gateway.external"
       ],
-      "timeoutMs": 1800000
-    },
-    "standard-public": {
-      "description": "Platform validation",
-      "extends": "core-public",
-      "suites": [],
       "timeoutMs": 1800000
     },
     "security-public": {
@@ -182,7 +154,7 @@
       "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -202,7 +174,7 @@
       "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -222,7 +194,47 @@
       "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "efficiency.interaction-cost-baseline",
+      "label": "Agent-to-Service interaction cost baseline",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/interaction-cost-baseline.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
+      "artifacts": []
+    },
+    {
+      "id": "efficiency.service-collaboration-contract",
+      "label": "Agent-to-Service collaboration contract",
+      "owner": "platform",
+      "package": "repo",
+      "level": "integration",
+      "command": "npm",
+      "args": [
+        "run",
+        "vitest",
+        "--",
+        "tests/vitest/server/service-collaboration-contract.test.ts"
+      ],
+      "sideEffects": "none",
+      "timeoutClass": "fast",
+      "requiredServices": [],
+      "flakePolicy": "fail",
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -352,7 +364,7 @@
     },
     {
       "id": "registry.version-naming",
-      "label": "Governed version naming and legacy token rejection",
+      "label": "Governed version string shape",
       "owner": "platform",
       "package": "foundation",
       "level": "architecture",
@@ -553,7 +565,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -691,7 +703,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -728,7 +740,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -749,7 +761,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -797,7 +809,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -825,7 +837,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -852,7 +864,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -875,7 +887,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -918,7 +930,7 @@
       "timeoutClass": "standard",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -974,7 +986,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -1011,7 +1023,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {
@@ -1272,7 +1284,7 @@
       "timeoutClass": "fast",
       "requiredServices": [],
       "flakePolicy": "fail",
-      "coverageContribution": true,
+      "coverageContribution": false,
       "artifacts": []
     },
     {

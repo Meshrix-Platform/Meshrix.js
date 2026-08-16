@@ -191,7 +191,7 @@ Agent Workspace (canonical identity: workspaceId)
 | Skill contribution, review, publication, adoption, and permission-aware use | Independent Skill Hub service | Meshrix reaches the service through a governed adapter and operator-published HTTP binding. A project adopts published skills by reference. |
 | Authorization, approval, audit, execution admission, and proof | Core | Plugin selection, project attachment, skill adoption, or directory connection never bypasses Core policy or enables execution by itself. |
 
-Core-managed project files are not a Code Space. They provide bounded storage, asset custody, checkpoints, and recovery inside the project boundary. The current GitHub Codespace provider adds governed remote-repository operations; it does not create, start, stop, or persist a GitHub Codespaces cloud instance. A Shared Space connects an existing external directory. These three content surfaces have different owners and identifiers and must not be collapsed into a single path abstraction.
+Core-managed project files are not a Code Space. They provide bounded storage, asset custody, checkpoints, and recovery inside the project boundary. The current GitHub Codespace provider adds governed remote-repository operations. Creating, starting, stopping, or persisting a GitHub Codespaces cloud instance remains remaining required work if that surface is admitted as a product capability. A Shared Space connects an existing external directory. These three content surfaces have different owners and identifiers and must not be collapsed into a single path abstraction.
 
 ### Capability relationship and reference model
 
@@ -244,7 +244,7 @@ The Execution Sandbox is a Core platform boundary, not a plugin implementation d
 
 Every runtime path that interprets, loads, or launches code influenced by an agent, user, skill, package, or plugin request must enter through the same narrow core port. Skill publication, adoption, plugin enablement, an Operation Permission grant, or one approval never enables execution by itself. A backend failure or an unenforceable restriction fails closed without falling back to a shell or unrestricted local process.
 
-The runtime implements the closed Core port, default-deny policy compiler, bounded broker, trusted-provider resolver, narrow plugin Host port, opaque input custody, quarantined output validation, and a governed OCI Node profile. Provider observation does not become user configuration. Admission requires explicit configuration and a current operator-provisioned conformance receipt; missing, stale, revoked, or unenforceable facts deny without a host-process fallback. Each consuming plugin must produce its own integration receipt; storage-only custody, file-safety checks, and privileged in-process plugin loading are not execution-isolation evidence. The detailed contract, lifecycle, and verification boundary are defined in [EXECUTION-SANDBOX.md](EXECUTION-SANDBOX.md).
+The runtime implements the closed Core port, default-deny policy compiler, bounded broker, trusted-provider resolver, narrow plugin Host port, opaque input custody, quarantined output validation, and a governed OCI Node profile. Provider observation does not become user configuration. Admission requires explicit configuration and a current operator-provisioned conformance receipt; missing, stale, revoked, or unenforceable facts deny without a host-process fallback. Each consuming plugin must produce its own integration receipt. Storage-only custody, file-safety checks, and privileged in-process plugin loading are current provenance facts. Process-isolated plugin confinement remains remaining GATE work and is the isolation evidence. The detailed contract, lifecycle, and verification boundary are defined in [EXECUTION-SANDBOX.md](EXECUTION-SANDBOX.md).
 
 ## Upstream Service Publishing Boundary
 
@@ -261,10 +261,11 @@ Server and client implementations are completely decoupled behind published comm
 Server verification uses neutral protocol peers, generated fixtures, and frozen
 wire corpora to prove authentication, authorization, scoped notification,
 catalog pull, acknowledgement, disconnect, timeout, and reconnect-fence
-behavior. Client adoption and client product evidence are separate
-compatibility facts. Real-machine platform lifecycle evidence is owned by an
-optional Real-Machine Verification Workflow. Neither category can block or
-promote server implementation, publication, or the Functional Release Gate.
+behavior. Client adoption and client product evidence remain remaining
+compatibility work. Real-machine platform lifecycle evidence remains remaining
+required work on the named Real-Machine Verification Workflow. Neither category
+can block or promote server implementation, publication, or the Functional
+Release Gate.
 
 ## Communication Service
 

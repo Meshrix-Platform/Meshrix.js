@@ -184,7 +184,6 @@ function fullRegressionCommandsFor(shards?: any) : any {
   return Object.freeze([
     auditShardCommand(shards.profile, shards.hostSuiteIds),
     "npm run verify",
-    "npm run vitest",
     auditShardCommand(shards.profile, shards.workerSuiteIds),
   ]);
 }

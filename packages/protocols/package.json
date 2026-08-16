@@ -88,6 +88,11 @@
       "source": "./mcp/adapter/http-mcp-adapter.ts",
       "default": "./dist/mcp/adapter/http-mcp-adapter.js"
     },
+    "./mcp/adapter/gateway-installer/connector-working-view": {
+      "types": "./dist/mcp/adapter/gateway-installer/connector-working-view.d.ts",
+      "source": "./mcp/adapter/gateway-installer/connector-working-view.ts",
+      "default": "./dist/mcp/adapter/gateway-installer/connector-working-view.js"
+    },
     "./mcp/adapter/mcp-notification-bus": {
       "types": "./dist/mcp/adapter/mcp-notification-bus.d.ts",
       "source": "./mcp/adapter/mcp-notification-bus.ts",

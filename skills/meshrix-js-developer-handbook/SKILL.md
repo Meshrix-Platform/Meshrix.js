@@ -74,8 +74,9 @@ release-artifact-contract, release-engineering-workflow,
 platform-acceptance-workflow, security, protocol, or the matching domain
 module.
 
-## Non-claims
+## Remaining host qualification
 
 A Linux VM may close offline delivery and the current plan receipt. Prefer
-Ubuntu; accept Debian. That path is not native Linux support and is not
-`npm run verify:acceptance`.
+Ubuntu; accept Debian. Native Linux qualification remains remaining required
+work after the named Real-Machine Verification Workflow. Project-level
+functional acceptance remains `npm run verify:acceptance`.

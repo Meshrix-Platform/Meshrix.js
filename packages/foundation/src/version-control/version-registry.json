@@ -3,7 +3,7 @@
   "schemaVersion": "v0.0.1:version-governance:registry-schema-1",
   "registryId": "meshrix.version-registry",
   "protocolVersion": "v0.0.1:version-governance:protocol-1",
-  "updatedAt": "2026-08-13",
+  "updatedAt": "2026-08-16",
   "authority": {
     "mode": "source-controlled-singleton",
     "artifactStoreRoot": ".meshrix-server-data/artifacts",
@@ -10960,6 +10960,503 @@
               "evidenceId": "v0-0-1-server-runtime-operation-route-snapshot-1-test",
               "kind": "test",
               "uri": "tests/vitest/server/runtime-refactor-routing-mcp-discovery.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.plugin.console-bridge",
+      "kind": "module",
+      "description": "Versioned bridge contract for isolated plugin console communication.",
+      "activeVersion": "v0.0.1:plugin:console-bridge-1",
+      "versions": [
+        {
+          "version": "v0.0.1:plugin:console-bridge-1",
+          "ref": "meshrix.plugin.console-bridge@v0.0.1:plugin:console-bridge-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current isolated plugin console bridge contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-plugin-console-bridge-1-console-source",
+              "kind": "other",
+              "uri": "apps/console/plugin-console-isolation.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-plugin-console-bridge-1-foundation-source",
+              "kind": "other",
+              "uri": "packages/foundation/src/module-system/plugin-console-isolation.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.workspace-reference-migration.state",
+      "kind": "state_machine",
+      "description": "Versioned state identity for workspace reference migration.",
+      "activeVersion": "v0.0.1:workspace-reference-migration:state-1",
+      "versions": [
+        {
+          "version": "v0.0.1:workspace-reference-migration:state-1",
+          "ref": "meshrix.workspace-reference-migration.state@v0.0.1:workspace-reference-migration:state-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current workspace reference migration state contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-workspace-reference-migration-state-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/agent-workspace/workspace-reference-migration.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.workspace-reference-migration.report",
+      "kind": "other",
+      "description": "Versioned report identity for workspace reference migration.",
+      "activeVersion": "v0.0.1:workspace-reference-migration:report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:workspace-reference-migration:report-1",
+          "ref": "meshrix.workspace-reference-migration.report@v0.0.1:workspace-reference-migration:report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current workspace reference migration report contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-workspace-reference-migration-report-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/agent-workspace/workspace-reference-migration.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.core-change-set.report",
+      "kind": "other",
+      "description": "Versioned report identity for Core Change Set authority.",
+      "activeVersion": "v0.0.1:core-change-set:report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:core-change-set:report-1",
+          "ref": "meshrix.core-change-set.report@v0.0.1:core-change-set:report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current Core Change Set authority report contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-core-change-set-report-1-source",
+              "kind": "other",
+              "uri": "packages/agents/src/core-change-set-authority.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.service-collaboration.wire",
+      "kind": "protocol",
+      "description": "Versioned service collaboration wire contract.",
+      "activeVersion": "v0.0.1:service-collaboration:wire-1",
+      "versions": [
+        {
+          "version": "v0.0.1:service-collaboration:wire-1",
+          "ref": "meshrix.service-collaboration.wire@v0.0.1:service-collaboration:wire-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current service collaboration wire contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-service-collaboration-wire-1-source",
+              "kind": "other",
+              "uri": "packages/contracts/src/service-collaboration-contract.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-service-collaboration-wire-1-fixture",
+              "kind": "other",
+              "uri": "packages/contracts/src/fixtures/service-collaboration-wire-corpus.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.service-collaboration.report",
+      "kind": "other",
+      "description": "Versioned service collaboration report contract.",
+      "activeVersion": "v0.0.1:service-collaboration:report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:service-collaboration:report-1",
+          "ref": "meshrix.service-collaboration.report@v0.0.1:service-collaboration:report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current service collaboration report contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-service-collaboration-report-1-source",
+              "kind": "other",
+              "uri": "packages/contracts/src/service-collaboration-contract.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-service-collaboration-report-1-declaration",
+              "kind": "other",
+              "uri": "packages/contracts/src/service-collaboration-contract.d.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.connector-working-view.state",
+      "kind": "runtime_capability",
+      "description": "Versioned Connector Working View state contract.",
+      "activeVersion": "v0.0.1:connector-working-view:state-1",
+      "versions": [
+        {
+          "version": "v0.0.1:connector-working-view:state-1",
+          "ref": "meshrix.connector-working-view.state@v0.0.1:connector-working-view:state-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current Connector Working View state contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-connector-working-view-state-1-source",
+              "kind": "other",
+              "uri": "packages/protocols/mcp/adapter/gateway-installer/connector-working-view.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.connector-working-view.report",
+      "kind": "other",
+      "description": "Versioned Connector Working View report contract.",
+      "activeVersion": "v0.0.1:connector-working-view:report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:connector-working-view:report-1",
+          "ref": "meshrix.connector-working-view.report@v0.0.1:connector-working-view:report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current Connector Working View report contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-connector-working-view-report-1-source",
+              "kind": "other",
+              "uri": "packages/protocols/mcp/adapter/gateway-installer/connector-working-view.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.service-collaboration.mcp-envelope",
+      "kind": "protocol",
+      "description": "Versioned MCP envelope projection for service collaboration.",
+      "activeVersion": "v0.0.1:service-collaboration:mcp-envelope-1",
+      "versions": [
+        {
+          "version": "v0.0.1:service-collaboration:mcp-envelope-1",
+          "ref": "meshrix.service-collaboration.mcp-envelope@v0.0.1:service-collaboration:mcp-envelope-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current service collaboration MCP envelope projection."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-service-collaboration-mcp-envelope-1-source",
+              "kind": "other",
+              "uri": "packages/protocols/mcp/service-collaboration-projection.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-service-collaboration-mcp-envelope-1-fixture",
+              "kind": "other",
+              "uri": "packages/protocols/mcp/fixtures/service-collaboration-mcp-wire-corpus.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.enterprise-operations-closure-report",
+      "kind": "other",
+      "description": "Versioned enterprise operations closure report.",
+      "activeVersion": "v0.0.1:meshrix:enterprise-operations-closure-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:enterprise-operations-closure-report-1",
+          "ref": "meshrix.enterprise-operations-closure-report@v0.0.1:meshrix:enterprise-operations-closure-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current enterprise operations closure report."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-enterprise-operations-closure-report-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/enterprise-operations-closure.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-meshrix-enterprise-operations-closure-report-1-test",
+              "kind": "other",
+              "uri": "tests/vitest/server/functional-acceptance-receipt.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.functional-final-receipt",
+      "kind": "other",
+      "description": "Versioned functional final receipt contract.",
+      "activeVersion": "v0.0.1:meshrix:functional-final-receipt-1",
+      "versions": [
+        {
+          "version": "v0.0.1:meshrix:functional-final-receipt-1",
+          "ref": "meshrix.functional-final-receipt@v0.0.1:meshrix:functional-final-receipt-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current functional final receipt contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-meshrix-functional-final-receipt-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/functional-final.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.plugin.console-isolation-closure",
+      "kind": "other",
+      "description": "Versioned isolated plugin console closure report.",
+      "activeVersion": "v0.0.1:plugin:console-isolation-closure-1",
+      "versions": [
+        {
+          "version": "v0.0.1:plugin:console-isolation-closure-1",
+          "ref": "meshrix.plugin.console-isolation-closure@v0.0.1:plugin:console-isolation-closure-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current isolated plugin console closure report."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-plugin-console-isolation-closure-1-source",
+              "kind": "other",
+              "uri": "tools/server-scripts/plugin-console-isolation-closure.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-plugin-console-isolation-closure-1-test",
+              "kind": "other",
+              "uri": "tests/vitest/server/functional-acceptance-receipt.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.explicit-effect-commands.report",
+      "kind": "other",
+      "description": "Versioned explicit Effect Command report contract.",
+      "activeVersion": "v0.0.1:explicit-effect-commands:report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:explicit-effect-commands:report-1",
+          "ref": "meshrix.explicit-effect-commands.report@v0.0.1:explicit-effect-commands:report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current explicit Effect Command report contract."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-explicit-effect-commands-report-1-verifier",
+              "kind": "verifier",
+              "uri": "tools/server-scripts/verify-explicit-effect-commands.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.efficiency.named-profile-catalog",
+      "kind": "policy",
+      "description": "Versioned named efficiency profile catalog.",
+      "activeVersion": "v0.0.1:efficiency:named-profile-catalog-1",
+      "versions": [
+        {
+          "version": "v0.0.1:efficiency:named-profile-catalog-1",
+          "ref": "meshrix.efficiency.named-profile-catalog@v0.0.1:efficiency:named-profile-catalog-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current named efficiency profile catalog."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-efficiency-named-profile-catalog-1-source",
+              "kind": "verifier",
+              "uri": "tools/verifiers/efficiency-profile-catalog.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-efficiency-named-profile-catalog-1-consumer",
+              "kind": "other",
+              "uri": "tools/server-scripts/efficiency-profile.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.efficiency.named-profile-report",
+      "kind": "other",
+      "description": "Versioned named efficiency profile report.",
+      "activeVersion": "v0.0.1:efficiency:named-profile-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:efficiency:named-profile-report-1",
+          "ref": "meshrix.efficiency.named-profile-report@v0.0.1:efficiency:named-profile-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current named efficiency profile report."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-efficiency-named-profile-report-1-source",
+              "kind": "verifier",
+              "uri": "tools/verifiers/efficiency-profile-catalog.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-efficiency-named-profile-report-1-consumer",
+              "kind": "other",
+              "uri": "tools/server-scripts/efficiency-profile.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-efficiency-named-profile-report-1-test",
+              "kind": "other",
+              "uri": "tests/vitest/server/functional-acceptance-receipt.test.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.efficiency.interaction-cost-baseline-catalog",
+      "kind": "policy",
+      "description": "Versioned interaction-cost baseline catalog.",
+      "activeVersion": "v0.0.1:efficiency:interaction-cost-baseline-catalog-1",
+      "versions": [
+        {
+          "version": "v0.0.1:efficiency:interaction-cost-baseline-catalog-1",
+          "ref": "meshrix.efficiency.interaction-cost-baseline-catalog@v0.0.1:efficiency:interaction-cost-baseline-catalog-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current interaction-cost baseline catalog."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-efficiency-interaction-cost-baseline-catalog-1-source",
+              "kind": "verifier",
+              "uri": "tools/verifiers/interaction-cost-baseline-catalog.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-efficiency-interaction-cost-baseline-catalog-1-consumer",
+              "kind": "other",
+              "uri": "tools/server-scripts/interaction-cost-baseline.ts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "artifactId": "meshrix.efficiency.interaction-cost-baseline-report",
+      "kind": "other",
+      "description": "Versioned interaction-cost baseline report.",
+      "activeVersion": "v0.0.1:efficiency:interaction-cost-baseline-report-1",
+      "versions": [
+        {
+          "version": "v0.0.1:efficiency:interaction-cost-baseline-report-1",
+          "ref": "meshrix.efficiency.interaction-cost-baseline-report@v0.0.1:efficiency:interaction-cost-baseline-report-1",
+          "lifecycle": "active",
+          "compatibility": {
+            "newBindingsAllowed": true,
+            "historicalResolutionAllowed": true,
+            "notes": "Current interaction-cost baseline report."
+          },
+          "artifactRefs": [],
+          "evidenceRefs": [
+            {
+              "evidenceId": "v0-0-1-efficiency-interaction-cost-baseline-report-1-source",
+              "kind": "verifier",
+              "uri": "tools/verifiers/interaction-cost-baseline-catalog.ts"
+            },
+            {
+              "evidenceId": "v0-0-1-efficiency-interaction-cost-baseline-report-1-consumer",
+              "kind": "other",
+              "uri": "tools/server-scripts/interaction-cost-baseline.ts"
             }
           ]
         }

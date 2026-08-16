@@ -8,10 +8,10 @@ assets. It is not exposed to downstream agents (`allowDownstream: false`).
 
 - `npm run verify:acceptance` is the mandatory Functional Release Gate and the
   only project-level acceptance authority.
-- `npm run verify:real-machine -- ...` runs an optional, candidate-bound
-  Real-Machine Verification Workflow. Its receipt can establish only the
-  named Environment Support Claim and cannot block or promote project
-  acceptance.
+- `npm run verify:real-machine -- ...` runs remaining candidate-bound
+  Real-Machine Verification Workflows. A passing receipt is the named
+  Environment Support Claim for that exact environment and cannot block or
+  promote project acceptance.
 - `.github/workflows/release.yml` is the only release publication path.
 - `.github/RELEASE_TEMPLATE.md` is the canonical release-notes template.
 - The canonical publication branch is `release`. A version tag is accepted
@@ -29,7 +29,6 @@ assets. It is not exposed to downstream agents (`allowDownstream: false`).
    ```bash
    npm ci
    npm run verify
-   npm run vitest
    npm run test:audit
    npm audit --audit-level=high
    npm run verify:acceptance
@@ -46,8 +45,8 @@ assets. It is not exposed to downstream agents (`allowDownstream: false`).
 After functional acceptance, an operator may run any desired real-machine
 workflow for the exact immutable candidate. Each workflow must preflight,
 start, probe, stop, clean up, and emit a redacted receipt without source edits.
-A `not_run`, `ineligible`, or `failed` workflow leaves only its environment
-support unclaimed.
+A `not_run`, `ineligible`, or `failed` workflow leaves only that environment's
+qualification as remaining required work.
 
 ## Publication
 

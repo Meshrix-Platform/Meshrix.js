@@ -55,7 +55,6 @@ const SUMMARY_IMPLEMENTATION_NODES: readonly any[] = Object.freeze([
 ]);
 const SUMMARY_FULL_REGRESSION_COMMANDS: readonly any[] = Object.freeze([
   "npm run verify",
-  "npm run vitest",
   "node tests/run.ts --suite self-contained-audit",
 ]);
 
@@ -222,7 +221,7 @@ describe("enterprise single-node release Plan execution authority", () : any => 
         path.join(planRoot, "end-to-end-release/Checkpoints.json"),
         "utf8",
       ));
-      expect(checkpoints).toHaveLength(12);
+      expect(checkpoints).toHaveLength(24);
       expect(checkpoints.every((node?: any) : any => node.status === "pending")).toBe(true);
       expect(checkpoints.some((node?: any) : any =>
         node.requirements.includes("REQ-BASELINE-EXTERNAL-PLUGIN-PACKAGING-LOADING"))).toBe(true);
@@ -239,6 +238,98 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       expect(currentPlan).toContain("at least 60 percent fewer model-visible calls");
       expect(currentPlan).toContain("at least 70 percent fewer combined model-context and wire bytes");
       expect(currentPlan).toContain("EFF-7");
+      expect(currentPlan).toContain("Architecture Reorganization And Real Parallelism");
+      expect(currentPlan).toContain("Capability Acceptance Plan Migration");
+      expect(currentPlan).toContain("Mandatory Dual-Gateway Pipeline, Optional Application Stage, Standalone Model Gateway, And Local Maintenance Boundary");
+      expect(currentPlan).toContain("services/model-gateway");
+      expect(currentPlan).toContain("default-disabled stateless Meshrix adapter");
+      expect(currentPlan).toContain("Agent MCP fixed Gateway pipeline");
+      expect(currentPlan).toContain("workspace_application");
+      expect(currentPlan).toContain("gateway_transit");
+      expect(currentPlan).toContain("DownstreamGatewayEnvelope");
+      expect(currentPlan).toContain("UpstreamGatewayEnvelope");
+      expect(currentPlan).toContain("`gateway_transit` bypasses every Workspace concept in this section, not either Gateway");
+      expect(currentPlan).toContain("Both traffic models still traverse the mandatory downstream and upstream Gateway layers");
+      expect(currentPlan).toContain("plugins/external-gateway");
+      expect(currentPlan).toContain("Plugin load, activation, reload, disable, uninstall, health change and recovery only affect availability");
+      expect(currentPlan).toContain("Switching downstream does not implicitly switch upstream");
+      expect(currentPlan).toContain("bounded load distribution, rate and concurrency admission, health and circuit handling, overload shedding");
+      expect(currentPlan).not.toContain("Workspace application traffic never reaches it");
+      expect(currentPlan).not.toContain("gateway_transit traffic only");
+      expect(currentPlan).not.toContain("This path never enters GatewayChannelRouter");
+      expect(currentPlan).toContain("only an explicit governed administrator action from the Meshrix Console");
+      expect(currentPlan).toContain("Side-effect-free detachment");
+      expect(currentPlan).toContain("configuration file replaced atomically is the only behavior-control input");
+      expect(currentPlan).toContain("cannot call, schedule, cancel, observe, configure, start, stop, restart");
+      const codes: any[] = checkpoints.map((node?: any) : any => node.code);
+      expect(codes.slice(codes.indexOf("EFF-FINAL") + 1, codes.indexOf("GATE-CONTRACT"))).toEqual([
+        "DQ-PROVENANCE",
+        "DQ-TYPING",
+        "DQ-FEEDBACK",
+      ]);
+      expect(codes.slice(codes.indexOf("GATE-CANONICAL") + 1, codes.indexOf("GATE-FINAL"))).toEqual([
+        "DQ-ACCEPTANCE",
+        "DQ-TYPING-REST",
+        "DQ-FEEDBACK-SCALE",
+      ]);
+      const nodesByCode: any = new Map<any, any>(checkpoints.map((node?: any) : any => [node.code, node]));
+      const efficiencyFinalNode: any = nodesByCode.get("EFF-FINAL");
+      const thinNodes: any[] = ["DQ-PROVENANCE", "DQ-TYPING", "DQ-FEEDBACK"]
+        .map((code?: any) : any => nodesByCode.get(code));
+      const contractNode: any = nodesByCode.get("GATE-CONTRACT");
+      const parallelNodes: any[] = [
+        "GATE-MODEL",
+        "GATE-MAINTENANCE",
+        "GATE-EDGE",
+      ].map((code?: any) : any => nodesByCode.get(code));
+      const canonicalNode: any = nodesByCode.get("GATE-CANONICAL");
+      const remainderNodes: any[] = ["DQ-ACCEPTANCE", "DQ-TYPING-REST", "DQ-FEEDBACK-SCALE"]
+        .map((code?: any) : any => nodesByCode.get(code));
+      const finalNode: any = nodesByCode.get("GATE-FINAL");
+      expect(contractNode.commit.target).toBe("packages/contracts/src/agent-mcp-traffic");
+      expect(contractNode.design.owned_paths).toContain("services/model-gateway/contracts");
+      expect(contractNode.design.owned_paths).toContain("packages/contracts/src/agent-mcp-traffic");
+      expect(contractNode.design.owned_paths).toContain("packages/contracts/src/gateway-transit");
+      expect(contractNode.design.owned_paths).toContain("plugins/agents/meshrix-self-maintenance/contracts");
+      expect(parallelNodes[0].commit.target).toBe("services/model-gateway");
+      expect(parallelNodes[0].design.owned_paths).toContain("services/model-gateway/src");
+      expect(parallelNodes[1].commit.target).toBe("plugins/agents/meshrix-self-maintenance/src");
+      expect(parallelNodes[1].design.owned_paths).toContain("plugins/agents/meshrix-self-maintenance/src");
+      expect(parallelNodes[2].commit.target).toBe("plugins/external-gateway");
+      expect(parallelNodes[2].design.owned_paths).toContain("plugins/external-gateway");
+      expect(parallelNodes[2].description).toContain("registers one downstream and one upstream External Gateway choice");
+      expect(parallelNodes[2].description).toContain("cannot activate its own route");
+      expect(parallelNodes[2].description).toContain("never redirects traffic");
+      expect(parallelNodes[2].description).toContain("usable by both workspace_application and gateway_transit");
+      expect(parallelNodes[2].description).toContain("receives no Workspace reference, Workspace port, or WorkspaceApplicationEnvelope");
+      expect(canonicalNode.description).toContain("per-direction selected-channel generation");
+      expect(canonicalNode.description).toContain("originating in the Meshrix Console");
+      expect(canonicalNode.description).toContain("Build one Core AgentMcpGatewayPipeline");
+      expect(canonicalNode.description).toContain("without calling resolveMcpWorkspaceInput");
+      expect(canonicalNode.description).toContain("skip either Gateway stage");
+      expect(canonicalNode.design.owned_paths).toContain("plugins/model-gateway");
+      expect(canonicalNode.regression.commands).toContain("npm run server:verify:model-gateway-detachment");
+      expect(canonicalNode.regression.commands).toContain("npm run server:verify:agent-self-maintenance-boundary");
+      expect(finalNode.regression.commands).toContain("node tools/server-scripts/verify-model-gateway-service.ts");
+      expect(finalNode.regression.commands).toContain("node tools/server-scripts/verify-agent-self-maintenance-runtime.ts");
+      expect(finalNode.regression.commands).toContain("npm run server:verify:model-gateway-detachment");
+      expect(efficiencyFinalNode.next.sort()).toEqual(thinNodes.map((node?: any) : any => node.id).sort());
+      expect(thinNodes.every((node?: any) : any =>
+        node.prerequisites.length === 1 && node.prerequisites[0] === efficiencyFinalNode.id &&
+        node.next.length === 1 && node.next[0] === contractNode.id)).toBe(true);
+      expect(contractNode.prerequisites.sort()).toEqual(thinNodes.map((node?: any) : any => node.id).sort());
+      expect(contractNode.next.sort()).toEqual(parallelNodes.map((node?: any) : any => node.id).sort());
+      expect(parallelNodes.every((node?: any) : any =>
+        node.prerequisites.length === 1 && node.prerequisites[0] === contractNode.id &&
+        node.next.length === 1 && node.next[0] === canonicalNode.id)).toBe(true);
+      expect(canonicalNode.prerequisites.sort()).toEqual(parallelNodes.map((node?: any) : any => node.id).sort());
+      expect(canonicalNode.next.sort()).toEqual(remainderNodes.map((node?: any) : any => node.id).sort());
+      expect(remainderNodes.every((node?: any) : any =>
+        node.prerequisites.length === 1 && node.prerequisites[0] === canonicalNode.id &&
+        node.next.length === 1 && node.next[0] === finalNode.id)).toBe(true);
+      expect(finalNode.prerequisites.sort()).toEqual(remainderNodes.map((node?: any) : any => node.id).sort());
+      expect(finalNode.next).toEqual([]);
+      expect(dependencyMap.plans[0].final_validations[0].node_id).toBe(finalNode.id);
       const futureGoals: any = await fs.readFile(path.join(planRoot, "FutureGoals.md"), "utf8");
       expect(futureGoals).not.toContain("plugin Console isolation");
 
@@ -296,6 +387,21 @@ describe("enterprise single-node release Plan execution authority", () : any => 
       });
     } finally {
       await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("names delivery-quality closures and the thin-substrate split in operator docs", async () : Promise<any> => {
+    const [status, whatsNext] = await Promise.all([
+      fs.readFile(path.join(REPO_ROOT, "docs/STATUS.md"), "utf8"),
+      fs.readFile(path.join(REPO_ROOT, "docs/WHATS-NEXT.md"), "utf8"),
+    ]);
+    for (const document of [status, whatsNext]) {
+      expect(document).toContain("provenance");
+      expect(document).toContain("security-critical typing");
+      expect(document).toContain("faster verification");
+      expect(document).toMatch(/thin substrate blocks GATE-CONTRACT/i);
+      expect(document).toMatch(/remainder joins GATE-FINAL/i);
+      expect(document).not.toMatch(/engineering (work )?is (already )?(complete|done)/iu);
     }
   });
 

@@ -30,4 +30,4 @@ Strategy Management owns deterministic preview and explanation. Route execution 
 
 ## Verification
 
-Run `npm test` for the current baseline. Prove all current strategy operations, cross-surface parity, deterministic decision semantics for normalized equivalent input, invalid-input denial, authorization denial, zero side effects, and mandatory reauthorization after an allowed preview. Random decision identifiers and timestamps are not part of deterministic equality. Until a catalog-backed strategy task proves the full set, do not claim capability-line readiness. Use `$meshrix-js-regression-planner` for available evidence.
+Run `npm test` for the current baseline. Prove all current strategy operations, cross-surface parity, deterministic decision semantics for normalized equivalent input, invalid-input denial, authorization denial, zero side effects, and mandatory reauthorization after an allowed preview. Random decision identifiers and timestamps are not part of deterministic equality. Until a catalog-backed strategy task proves the full set, capability-line readiness remains remaining required work. Use `$meshrix-js-regression-planner` for available evidence.

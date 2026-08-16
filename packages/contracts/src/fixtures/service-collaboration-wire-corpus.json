@@ -1,0 +1,776 @@
+{
+  "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+  "valid": {
+    "open-request": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "open-request",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetRef": "ws.sc.1",
+      "resourceRefs": [
+        "res.sc.1"
+      ],
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "open-response": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "open-response",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "entityIds": [
+        "ent.sc.a"
+      ],
+      "handles": [
+        {
+          "handle": "hdl_sc_entity_a",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "observe-request": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "observe-request",
+      "verb": "observe",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "handle": "hdl_sc_entity_a",
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "observe-response": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "observe-response",
+      "verb": "observe",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "catalogRevision": "cat.sc.1",
+      "schemaRevision": "sch.sc.1",
+      "acknowledgements": [
+        {
+          "head": 4,
+          "changeId": "chg.sc.0"
+        }
+      ],
+      "history": [
+        {
+          "head": 4,
+          "changeId": "chg.sc.0",
+          "entityIds": [
+            "ent.sc.a"
+          ]
+        }
+      ],
+      "cacheHit": true,
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      }
+    },
+    "edit-view": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "edit-view",
+      "verb": "edit",
+      "workingSetId": "ws.sc.1",
+      "head": 4,
+      "dirtyEntityIds": [
+        "ent.sc.a"
+      ],
+      "omittedUnchanged": true
+    },
+    "commit-request-dirty": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "commit-request",
+      "verb": "commit",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "handle": "hdl_sc_entity_a",
+      "dirty": true,
+      "changeSet": {
+        "changeId": "chg.sc.1",
+        "baselineHead": 4,
+        "operations": [
+          {
+            "opId": "op.sc.1",
+            "type": "insert",
+            "entityId": "ent.sc.a",
+            "index": 1,
+            "relevantIndexes": [
+              1
+            ],
+            "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+          }
+        ],
+        "attributionRef": "attr.sc.1",
+        "family": "document-state",
+        "visibility": "atomic"
+      }
+    },
+    "commit-request-clean": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "commit-request",
+      "verb": "commit",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "handle": "hdl_sc_entity_a",
+      "dirty": false,
+      "changeSet": null
+    },
+    "acknowledge": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "acknowledge",
+      "verb": "acknowledge",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "assignedHead": 5,
+      "changedEntityIds": [
+        "ent.sc.a"
+      ],
+      "resultFacts": [
+        {
+          "code": "applied",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "conflicts": [],
+      "invalidations": [
+        {
+          "code": "resource_changed",
+          "resourceUri": "meshrix://collaboration/ws.sc.1/ent.sc.a"
+        }
+      ]
+    },
+    "subscribe-request": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "subscribe-request",
+      "verb": "subscribe",
+      "authorizationReResolved": true,
+      "method": "subscriptions/listen",
+      "notifications": [
+        "notifications/resources/updated"
+      ],
+      "workingSetId": "ws.sc.1",
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      },
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      }
+    },
+    "resource-updated": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "resource-updated",
+      "method": "notifications/resources/updated",
+      "authorizationReResolved": true,
+      "resourceUri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+      "head": 5,
+      "cursor": {
+        "cursor": "cur.sc.2",
+        "indexedHead": 5,
+        "cursorState": "valid"
+      },
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "invalidationCodes": [
+        "resource_changed"
+      ]
+    },
+    "rebase-request": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "rebase-request",
+      "verb": "rebase",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "handle": "hdl_sc_entity_a",
+      "baselineHead": 4,
+      "operations": [
+        {
+          "opId": "op.sc.1",
+          "type": "insert",
+          "entityId": "ent.sc.a",
+          "index": 1,
+          "relevantIndexes": [
+            1
+          ],
+          "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "rebase-response": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "rebase-response",
+      "verb": "rebase",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "head": 5,
+      "outcome": "rebased",
+      "rebasedOperations": [
+        {
+          "opId": "op.sc.1",
+          "type": "insert",
+          "entityId": "ent.sc.a",
+          "index": 2,
+          "relevantIndexes": [
+            1
+          ],
+          "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "conflicts": [],
+      "cursor": {
+        "cursor": "cur.sc.2",
+        "indexedHead": 5,
+        "cursorState": "valid"
+      }
+    },
+    "resync-request": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "resync-request",
+      "verb": "resync",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "handle": "hdl_sc_entity_a",
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "resync-response-delta": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "resync-response",
+      "verb": "resync",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "outcome": "delta",
+      "head": 5,
+      "deltas": [
+        {
+          "head": 5,
+          "opIndex": 0,
+          "operation": {
+            "opId": "op.sc.2",
+            "type": "insert",
+            "entityId": "ent.sc.a",
+            "index": 0,
+            "relevantIndexes": [
+              0
+            ],
+            "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+          }
+        }
+      ],
+      "snapshot": null,
+      "tail": [],
+      "cursor": {
+        "cursor": "cur.sc.2",
+        "indexedHead": 5,
+        "cursorState": "valid"
+      }
+    },
+    "resync-response-snapshot": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "resync-response",
+      "verb": "resync",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "outcome": "snapshot-tail",
+      "head": 5,
+      "deltas": [],
+      "snapshot": {
+        "snapshotId": "snap.sc.1",
+        "head": 4,
+        "entityIds": [
+          "ent.sc.a"
+        ],
+        "resourceUris": [
+          "meshrix://collaboration/ws.sc.1/ent.sc.a"
+        ],
+        "byteLength": 128
+      },
+      "tail": [
+        {
+          "opId": "op.sc.2",
+          "type": "insert",
+          "entityId": "ent.sc.a",
+          "index": 0,
+          "relevantIndexes": [
+            0
+          ],
+          "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+        }
+      ],
+      "cursor": {
+        "cursor": "cur.sc.expired",
+        "indexedHead": 2,
+        "cursorState": "expired"
+      }
+    },
+    "effect-command": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "effect-command",
+      "family": "effect-command",
+      "authorizationReResolved": true,
+      "effectId": "eff.sc.1",
+      "idempotency": "idempotent",
+      "principalLookup": "prin.sc.1",
+      "grantLookup": "gr.sc.1",
+      "targetRef": "tgt.sc.1",
+      "policyRef": "pol.sc.1",
+      "approvalLookup": "apr.sc.1",
+      "audienceRef": "aud.sc.1",
+      "requestRef": "req.sc.1",
+      "cancellationState": "none",
+      "resultState": "accepted",
+      "auditRef": "audt.sc.1",
+      "compensationRef": null
+    },
+    "fallback": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "fallback",
+      "protocolPath": "ordinary-mcp",
+      "methods": [
+        "tools/call",
+        "resources/read",
+        "resources/list"
+      ],
+      "authorizationReResolved": true
+    }
+  },
+  "invalid": {
+    "unknownRequiredField": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "open-response",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "entityIds": [
+        "ent.sc.a"
+      ],
+      "handles": [
+        {
+          "handle": "hdl_sc_entity_a",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      },
+      "extraField": true
+    },
+    "privacyGrant": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "open-response",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "entityIds": [
+        "ent.sc.a"
+      ],
+      "handles": [
+        {
+          "handle": "hdl_sc_entity_a",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      },
+      "grantId": "prohibited"
+    },
+    "privacyContent": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "resource-updated",
+      "method": "notifications/resources/updated",
+      "authorizationReResolved": true,
+      "resourceUri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+      "head": 5,
+      "cursor": {
+        "cursor": "cur.sc.2",
+        "indexedHead": 5,
+        "cursorState": "valid"
+      },
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "invalidationCodes": [
+        "resource_changed"
+      ],
+      "content": "opaque-payload"
+    },
+    "secondCoreGeneration": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-2",
+      "kind": "open-response",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "entityIds": [
+        "ent.sc.a"
+      ],
+      "handles": [
+        {
+          "handle": "hdl_sc_entity_a",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "crdtMarker": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "open-response",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "entityIds": [
+        "ent.sc.a"
+      ],
+      "handles": [
+        {
+          "handle": "hdl_sc_entity_a",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      },
+      "yjs": true
+    },
+    "publicPrivateView": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "observe-response",
+      "verb": "observe",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "catalogRevision": "cat.sc.1",
+      "schemaRevision": "sch.sc.1",
+      "acknowledgements": [
+        {
+          "head": 4,
+          "changeId": "chg.sc.0"
+        }
+      ],
+      "history": [
+        {
+          "head": 4,
+          "changeId": "chg.sc.0",
+          "entityIds": [
+            "ent.sc.a"
+          ]
+        }
+      ],
+      "cacheHit": true,
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "public"
+      }
+    },
+    "unsortedDeltas": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "resync-response",
+      "verb": "resync",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "outcome": "delta",
+      "head": 5,
+      "deltas": [
+        {
+          "head": 5,
+          "opIndex": 1,
+          "operation": {
+            "opId": "op.sc.2",
+            "type": "insert",
+            "entityId": "ent.sc.a",
+            "index": 0,
+            "relevantIndexes": [
+              0
+            ],
+            "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+          }
+        },
+        {
+          "head": 5,
+          "opIndex": 0,
+          "operation": {
+            "opId": "op.sc.1",
+            "type": "insert",
+            "entityId": "ent.sc.a",
+            "index": 1,
+            "relevantIndexes": [
+              1
+            ],
+            "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+          }
+        }
+      ],
+      "snapshot": null,
+      "tail": [],
+      "cursor": {
+        "cursor": "cur.sc.2",
+        "indexedHead": 5,
+        "cursorState": "valid"
+      }
+    },
+    "effectInChangeSet": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "commit-request",
+      "verb": "commit",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "handle": "hdl_sc_entity_a",
+      "dirty": true,
+      "changeSet": {
+        "changeId": "chg.sc.1",
+        "baselineHead": 4,
+        "operations": [
+          {
+            "opId": "op.sc.1",
+            "type": "insert",
+            "entityId": "ent.sc.a",
+            "index": 1,
+            "relevantIndexes": [
+              1
+            ],
+            "payloadDigest": "sha256:abababababababababababababababababababababababababababababababab"
+          }
+        ],
+        "attributionRef": "attr.sc.1",
+        "family": "effect-command",
+        "visibility": "atomic"
+      }
+    },
+    "authorizationNotResolved": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "open-request",
+      "verb": "open",
+      "authorizationReResolved": false,
+      "workingSetRef": "ws.sc.1",
+      "resourceRefs": [
+        "res.sc.1"
+      ],
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    },
+    "unknownKind": {
+      "schemaVersion": "v0.0.1:service-collaboration:wire-1",
+      "protocolVersion": "2026-07-28",
+      "coreStateGeneration": "meshrix-core-state-1",
+      "kind": "crdt-merge",
+      "verb": "open",
+      "authorizationReResolved": true,
+      "workingSetId": "ws.sc.1",
+      "entityIds": [
+        "ent.sc.a"
+      ],
+      "handles": [
+        {
+          "handle": "hdl_sc_entity_a",
+          "entityId": "ent.sc.a"
+        }
+      ],
+      "head": 4,
+      "resourceLinks": [
+        {
+          "uri": "meshrix://collaboration/ws.sc.1/ent.sc.a",
+          "head": 4,
+          "cacheHint": {
+            "ttlMs": 60000,
+            "cacheScope": "private"
+          }
+        }
+      ],
+      "cacheHint": {
+        "ttlMs": 60000,
+        "cacheScope": "private"
+      },
+      "cursor": {
+        "cursor": "cur.sc.1",
+        "indexedHead": 4,
+        "cursorState": "valid"
+      }
+    }
+  }
+}

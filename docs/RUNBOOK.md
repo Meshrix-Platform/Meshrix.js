@@ -403,13 +403,26 @@ inside a virtual machine without network access or rebuild.
 Ubuntu is preferred; Debian is accepted. A macOS operator host is allowed when
 that Linux VM is reachable. When a Linux VM target or a dual-architecture
 builder is unavailable, the oracle fails closed with `blocked_by_environment`
-and a finite reason. Contract-fixture bytes do not satisfy acceptance and do
-not create a native Linux, Ubuntu, or Debian support, capacity, or publication
-claim. To write the signed Server + Web Console dual-arch bundle without
+and a finite reason. Contract-fixture bytes do not satisfy acceptance. Native
+Linux, Ubuntu, Debian, capacity, and publication qualification remain remaining
+required work after the named workflows. To write the signed Server + Web Console dual-arch bundle without
 starting or stopping an instance, run `npm run pack:offline`. To import and
 start that bundle without the closure's stop and cleanup steps, run
 `npm run start:offline`. Stop it with `npm run stop:offline`. Restart the same
 offline stack with `npm run restart:offline`.
+
+The plan-scoped final receipt consumes those exact current reports:
+
+```bash
+node tools/server-scripts/functional-final.ts
+```
+
+It writes `build/reports/functional-final.json`. A reachable Linux VM from this
+macOS operator host is enough to close the current plan candidate. Prefer
+Ubuntu; accept Debian. This command is not `npm run verify:acceptance`.
+Project-level functional-complete, publication, production-readiness, native
+Linux, Ubuntu, Debian, and environment qualification remain remaining required
+work.
 
 Before an upgrade, invoke the governed `storage.backups.create` operation and
 retain its successful receipt; backups are written to the independent
@@ -419,9 +432,22 @@ retain its successful receipt; backups are written to the independent
 entries. The durable orchestration state machine is implemented at
 `tools/server-scripts/upgrade/enterprise-upgrade-rollback.ts`; verify its
 successful, rolled-back, and `in_doubt` paths with
-`node tools/server-scripts/verify-upgrade-rollback.ts`. The repository does
-not yet prove an N-1 schema migration against two distinct released images.
-Do not claim an upgrade complete until that evidence exists.
+`npm run vitest -- tests/vitest/server/enterprise-upgrade-rollback.test.ts`. The candidate-bound
+enterprise operations closure is:
+
+```bash
+node tools/server-scripts/enterprise-operations-closure.ts
+```
+
+It composes governed MCP, denial and uncertainty, diagnostics, emergency
+administration, key lifecycle, clean-root restore, and N-1 upgrade / failed
+rollback producers into `build/reports/enterprise-operations-closure.json`.
+Missing container, key, or restore environments fail closed with a finite
+blocker. Capacity, production-readiness, and environment qualification remain remaining
+required work after this closure. Digest-pinned images may be supplied as
+`--candidate` and `--previous`. The repository does not yet prove an N-1 schema
+migration against two distinct released images. Upgrade completeness remains
+remaining required work until that evidence exists.
 
 Before an unreliable-network deployment window, prepare the npm artifact cache:
 
@@ -446,8 +472,9 @@ npm run server:verify:deployment-flow:podman
 
 Initialize the Podman machine only once. The Podman report is written separately
 as `build/reports/deployment-container-flow-podman.json`. It is development-
-environment simulation evidence for the Functional Release Gate. It is not a
-real-machine receipt and cannot establish an Environment Support Claim.
+environment simulation evidence for the Functional Release Gate. Real-machine
+qualification remains remaining required work until the named Real-Machine
+Verification Workflow passes.
 
 ## TypeScript Source And Build Boundary
 
@@ -488,6 +515,27 @@ npm test
 npm run build
 ```
 
+Workspace file collaboration uses the shared Working View and Change Set
+model. Host asset fetches remain ordinary Host operations. The focused
+command below leaves capacity, environment qualification, and the named
+efficiency profile as remaining required work:
+
+```bash
+node --conditions=source tools/server-scripts/verify-workspace-collaboration-migration.ts
+```
+
+The named warm efficiency profile compares equivalent frozen legacy and
+collaborative workloads. `capacityCertified` is true only when completeness,
+privacy, safety, recovery, and every warm threshold pass; otherwise it is
+false with a finite reason. Environment qualification, publication, and
+production-readiness remain remaining required work after this command:
+
+```bash
+NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-agent-service-efficiency-profile.ts
+```
+
+The report is `build/reports/agent-service-efficiency-profile.json`.
+
 For a source split, package extraction, ownership move, protocol separation,
 or feature-surface reassembly, use the repository-owned architecture and
 verification contracts. Inspect the changed-file closure before execution:
@@ -499,8 +547,8 @@ npm run verify:core-platform-surface-convergence
 
 The reassembly profile covers the Core typecheck and build, public regression
 gate, capability surface convergence, and canonical acceptance-plan contract.
-It does not execute the Functional Release Gate or establish an Environment
-Support Claim, client compatibility, or plugin compatibility.
+It does not execute the Functional Release Gate. Environment qualification,
+client compatibility, and plugin compatibility remain remaining required work.
 
 ### Optional integration isolation
 
@@ -592,11 +640,11 @@ Meshrix.js has two deliberately separate acceptance standards:
    by every simulation, container, failure-injection, recovery, packaging, and
    protocol check that the development environment can execute. A missing,
    skipped, stale, or failing required functional check fails this gate.
-2. A **Real-Machine Verification Workflow** is an optional, independently
-   repeatable validation of the exact accepted candidate on one declared
+2. A **Real-Machine Verification Workflow** is remaining required work that
+   independently repeats the exact accepted candidate on one declared
    operating system, architecture, device, host, or network environment. Its
-   successful receipt establishes only the corresponding **Environment Support
-   Claim**.
+   successful receipt is the named **Environment Support Claim** for that
+   exact environment.
 
 The dependency is one-way:
 
@@ -609,14 +657,15 @@ Functional Release Gate receipt
 A real-machine workflow must refuse an unaccepted or mismatched candidate, but
 its absence, unavailability, failure, or expired receipt never changes the
 Functional Release Gate result and never blocks project publication. It only
-leaves that environment unverified. Project-level functional results are
-`passed` or `failed`; `blocked` is not a project release result. Real-machine
-workflow results are `not_run`, `ineligible`, `passed`, or `failed`.
+leaves that environment qualification as remaining required work. Project-level
+functional results are `passed` or `failed`; `blocked` is not a project release
+result. Real-machine workflow results are `not_run`, `ineligible`, `passed`, or
+`failed`.
 
 Avoid the ambiguous standalone terms `production-ready`, `final readiness`,
-and `platform acceptance`. State the exact claim instead: `functional release
-accepted`, `real-machine verified on <environment>`, or `environment support
-not claimed`.
+and `platform acceptance`. State the exact remaining-work or completed evidence
+instead: `functional release accepted`, `real-machine verified on
+<environment>`, or `environment qualification remains remaining required work`.
 
 `tools/registry/release-definition.registry.json` is the sole source for the
 product version, Git tag, release channel, package manifest set, container
@@ -732,7 +781,7 @@ Release Gate depends on this job, so every later publication job inherits the
 Core prepublication prerequisite.
 Multi-platform assembly, scanning, signing, SBOM, and provenance checks are
 functional artifact requirements. Native host execution is performed only by
-the optional Real-Machine Verification Workflows and cannot block publication.
+the remaining Real-Machine Verification Workflows and cannot block publication.
 
 Meshrix.js `0.0.1` has an exact registry dependency on `pactium@0.7.0`. Publish
 that Pactium version first and confirm registry visibility before creating the
@@ -889,11 +938,12 @@ files live only in a bounded runner-temporary directory, are excluded from
 receipt artifacts, are removed before materialization, and are removed again
 under `always()` after the run. The public-cloud and clean-host targets require
 self-hosted runners carrying the corresponding labels; lack of such a runner
-leaves only that optional environment claim unverified.
+leaves that environment qualification as remaining required work.
 
 An optional workflow that cannot run returns its own `not_run`, `ineligible`,
-or `failed` result and denies only its Environment Support Claim. The
-Functional Release Gate does not read, wait for, or aggregate these receipts.
+or `failed` result and leaves only its environment qualification as remaining
+required work. The Functional Release Gate does not read, wait for, or
+aggregate these receipts.
 
 ### Upstream Service Publishing Functional Evidence
 
@@ -956,7 +1006,7 @@ Functional Release Gate may consume the JSON report as project release
 evidence; the HTML does not create a second readiness authority.
 
 For a non-authoritative diagnostic that records currently open functional or
-environment-claim gaps without changing either result, run:
+remaining environment-qualification gaps without changing either result, run:
 
 ```bash
 npm run platform:audit:report
@@ -1030,8 +1080,8 @@ storage side effects, confirmation denial before restore execution, retention
 approval, the confirmed restore, proof and audit lifecycle completion, and
 storage-kernel reopen. The functional verifier writes only a redacted fact
 report; the Functional Release Gate determines acceptance. Execution on a
-separate physical or virtual host is an optional Real-Machine Verification
-Workflow and controls only its Environment Support Claim.
+separate physical or virtual host remains remaining environment qualification
+work for that host.
 
 Backup creation identifies SQLite from the file path rather than the capability
 artifact category. Every `.sqlite`, `.sqlite3`, and `.db` file, including

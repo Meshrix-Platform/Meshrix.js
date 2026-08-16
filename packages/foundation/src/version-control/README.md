@@ -13,7 +13,7 @@
 - Singleton registry: `packages/foundation/src/version-control/version-registry.json`
 - Registry schema: `packages/foundation/src/version-control/version-registry.schema.json`
 - Scan contract: `packages/foundation/src/version-control/version-scan.ts`
-- Naming verifier: `node tools/server-scripts/verify-version-naming.ts`
+- Naming verifier: `node tools/server-scripts/verify-version-naming.ts` checks that current governed version strings match the canonical shape. It does not hunt retired spellings.
 - Verifier: `npm run verify:version-registry`
 - Runtime artifact store root: `.meshrix-server-data/artifacts`
 - Platform version baseline: `v0.0.1`
@@ -29,7 +29,7 @@ A governed version has exactly three segments after tokenization: the platform v
 2. Define migration path configuration as explicit `fromVersion -> toVersion` transitions.
 3. Preserve adjacent-version migration rules, compatibility windows, retirement state, and evidence references.
 4. Maintain a Version Compatibility Table for `consumerRef -> providerRef` compatibility facts.
-5. Export compatibility projections for UI, diagnostics, the Functional Release Gate, and optional Environment Support Claim consumers without making those consumers the source of truth.
+5. Export compatibility projections for UI, diagnostics, the Functional Release Gate, and remaining Environment Support Claim consumers without making those consumers the source of truth.
 6. Reference materialized version artifacts in `.meshrix-server-data/artifacts` without treating that artifact store as the configuration authority.
 
 ## Identity
@@ -57,10 +57,13 @@ planned -> dry_run_passed -> checkpointed -> running -> verified -> completed
 
 `failed` is a recoverable state that must resolve through guarded `retry`, `rollback`, or `abandon`. `completed`, `rolled_back`, and `abandoned` are terminal states. This lifecycle governs the migration action between two `artifactId@version` references; it does not replace the lifecycle of either versioned artifact.
 
-## Non-goals
+## Module boundary
 
-- It is not git or source-code version control.
-- It is not a release page, release note generator, or production-readiness gate.
-- It is not an artifact payload store.
-- It must not let individual domains own hidden startup migrations, old-format version retention paths, or long-lived compatibility branches.
-- It must not store secret values as migration or version evidence.
+- This module is version governance, not git or source-code version control.
+- Release pages, release-note generation, and production-readiness gates remain
+  remaining work owned by the release definition and Functional Release Gate.
+- Artifact payload storage remains remaining work owned by the runtime artifact
+  store, not this registry.
+- Individual domains must not own hidden startup migrations, old-format version
+  retention paths, or long-lived compatibility branches.
+- Secret values must not be stored as migration or version evidence.

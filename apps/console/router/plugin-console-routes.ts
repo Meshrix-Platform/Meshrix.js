@@ -1,6 +1,12 @@
 import type { Router, RouteRecordRaw } from "vue-router";
 import { defineComponent, h, onBeforeUnmount, onMounted, ref } from "vue";
 
+import {
+  admitPluginConsoleIsolationEntry,
+  mountPluginConsoleIsolation,
+  type PluginConsoleIsolationHost,
+} from "../plugin-console-isolation.ts";
+
 export type PluginConsoleEntry = {
   id: string;
   pluginId: string;
@@ -11,17 +17,16 @@ export type PluginConsoleEntry = {
   componentId: string;
   assetUrl: string;
   assetExport: string;
+  sandboxUrl?: string;
+  bridgeVersion?: string;
   artifactDigest: string;
   artifactGeneration: number;
   label?: string;
   requiredScopes: readonly string[];
+  toolIds?: readonly string[];
 };
 
 export type RoutedPluginConsoleEntry = PluginConsoleEntry & { routePath: string };
-export type PluginConsoleModuleImporter = (assetUrl: string) => Promise<Record<string, unknown>>;
-
-const importPluginConsoleModule: PluginConsoleModuleImporter = (assetUrl?: any) : any =>
-  import(/* @vite-ignore */ assetUrl);
 
 export function hasPluginConsoleRoute(entry: PluginConsoleEntry): entry is RoutedPluginConsoleEntry {
   return typeof entry.routePath === "string" && entry.routePath.length > 0;
@@ -50,77 +55,54 @@ export function canAccessPluginConsoleEntry(
 
 const routeRegistrations: any = new WeakMap<Router, Map<string, () => void>>();
 
-function validConsoleAssetUrl(entry: PluginConsoleEntry) : any {
-  const digest: any = String(entry.artifactDigest || "").replace(/^sha256:/u, "");
-  const prefix: any = `/api/plugins/v1/console-assets/${entry.pluginId}/${entry.artifactGeneration}/${digest}/`;
-  return /^sha256:[a-f0-9]{64}$/u.test(entry.artifactDigest) &&
-    Number.isSafeInteger(entry.artifactGeneration) && entry.artifactGeneration > 0 &&
-    entry.assetUrl.startsWith(prefix) && entry.assetUrl.endsWith(".ts") &&
-    !/[?#]/u.test(entry.assetUrl) && !entry.assetUrl.split("/").includes("..");
-}
-
 function pluginConsoleComponentLoader(
   entry: PluginConsoleEntry,
-  moduleImporter: PluginConsoleModuleImporter,
+  host: PluginConsoleIsolationHost,
 ) : any {
-  return async () : Promise<any> => {
-    const pluginModule: any = await moduleImporter(entry.assetUrl);
-    const mountPluginConsole: any = pluginModule?.[entry.assetExport];
-    if (typeof mountPluginConsole !== "function") {
-      throw new Error("Verified plugin console module export is unavailable.");
-    }
-    return defineComponent({
-      name: `PluginConsole_${entry.pluginId}_${entry.viewKey}`,
-      setup() : any {
-        const mountElement: any = ref<Element | null>(null);
-        const failure: any = ref("");
-        const controller: any = new AbortController();
-        let dispose: null | (() => unknown) = null;
-        onMounted(async () : Promise<any> => {
-          try {
-            const result: any = await mountPluginConsole({
-              element: mountElement.value,
-              componentId: entry.componentId,
-              signal: controller.signal,
-            });
-            dispose = typeof result === "function" ? result : null;
-          } catch {
-            failure.value = "Plugin console view could not be loaded.";
+  const isolation: any = admitPluginConsoleIsolationEntry(entry);
+  return async () : Promise<any> => defineComponent({
+    name: `PluginConsole_${entry.pluginId}_${entry.viewKey}`,
+    setup() : any {
+      const mountElement: any = ref<Element | null>(null);
+      const failure: any = ref("");
+      let dispose: null | (() => unknown) = null;
+      onMounted(async () : Promise<any> => {
+        try {
+          if (!isolation || !mountElement.value) {
+            throw new Error("Verified plugin console module export is unavailable.");
           }
-        });
-        onBeforeUnmount(() : any => {
-          controller.abort("plugin_console_unmounted");
-          if (dispose) void Promise.resolve(dispose()).catch(() : any => {});
-          dispose = null;
-        });
-        return () : any => h("div", {
-          class: "meshrix-plugin-console-host",
-          ref: mountElement,
-        }, failure.value || undefined);
-      },
-    });
-  };
+          dispose = await mountPluginConsoleIsolation(mountElement.value, isolation, host);
+        } catch {
+          failure.value = "Plugin console view could not be loaded.";
+        }
+      });
+      onBeforeUnmount(() : any => {
+        if (dispose) void Promise.resolve(dispose()).catch(() : any => {});
+        dispose = null;
+      });
+      return () : any => h("div", {
+        class: "meshrix-plugin-console-host",
+        ref: mountElement,
+      }, failure.value || undefined);
+    },
+  });
 }
 
 export function resolvePluginConsoleComponent(
   entry: PluginConsoleEntry,
-  moduleImporter: PluginConsoleModuleImporter = importPluginConsoleModule,
+  host: PluginConsoleIsolationHost = {},
 ): (() => Promise<any>) | undefined {
-  const prefix: any = `${entry.pluginId}/`;
-  if (!entry.componentId.startsWith(prefix)) return undefined;
-  const componentName: any = entry.componentId.slice(prefix.length);
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(componentName)) return undefined;
-  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(entry.assetExport) || !validConsoleAssetUrl(entry)) return undefined;
-  return pluginConsoleComponentLoader(entry, moduleImporter);
+  if (!admitPluginConsoleIsolationEntry(entry)) return undefined;
+  return pluginConsoleComponentLoader(entry, host);
 }
 
 export function resolveAccessiblePluginConsoleComponent(
   entry: PluginConsoleEntry,
   canAccessRouteMeta: (meta: unknown) => boolean,
-  moduleImporter: PluginConsoleModuleImporter = importPluginConsoleModule,
+  host: PluginConsoleIsolationHost = {},
 ) : any {
   if (!canAccessPluginConsoleEntry(entry, canAccessRouteMeta)) return undefined;
-  return resolvePluginConsoleComponent(entry, moduleImporter);
+  return resolvePluginConsoleComponent(entry, host);
 }
 
 function routeName(entry: PluginConsoleEntry) : any {
@@ -130,10 +112,10 @@ function routeName(entry: PluginConsoleEntry) : any {
 export function syncPluginConsoleRoutes(
   router: Router,
   entries: readonly PluginConsoleEntry[] = [],
-  { moduleImporter = importPluginConsoleModule }: { moduleImporter?: PluginConsoleModuleImporter } = {},
+  { host = {} }: { host?: PluginConsoleIsolationHost } = {},
 ) : any {
   for (const entry of entries) {
-    if (!resolvePluginConsoleComponent(entry, moduleImporter)) {
+    if (!resolvePluginConsoleComponent(entry, host)) {
       throw new Error(`Enabled plugin console component is unavailable: ${entry.componentId}.`);
     }
   }
@@ -158,7 +140,7 @@ export function syncPluginConsoleRoutes(
   for (const entry of routeEntries) {
     const name: any = routeName(entry);
     if (registrations.has(name)) continue;
-    const component: any = resolvePluginConsoleComponent(entry, moduleImporter);
+    const component: any = resolvePluginConsoleComponent(entry, host);
     if (!component) continue;
     const conflict: any = router.getRoutes().find((candidate?: any) : any => candidate.path === entry.routePath);
     if (conflict) throw new Error(`Enabled plugin console route conflicts with ${entry.routePath}.`);

@@ -99,8 +99,10 @@ process fallback.
 
 Console contributions reference precompiled browser `.mjs` assets included in
 the package inventory. Core binds each asset URL to plugin identity, artifact
-digest, and active generation. Raw framework source, dynamic evaluation, and
-source-repository scanning are not supported. Disabling, replacing, or removing
+digest, and active generation. Console contributions currently admit only
+precompiled `.mjs` assets. Raw framework source, dynamic evaluation, and
+source-repository scanning remain denied until a governed acquisition path
+exists. Disabling, replacing, or removing
 a generation invalidates its old asset route.
 
 ## Verification

@@ -18,9 +18,10 @@ remain narrow launchers for that connector-owned workflow.
 
 Supported targets are backed by pinned operator-provided client-adapter packages. No client-specific runtime, command probing, configuration mutation, or compatibility test is embedded in Core.
 
-This release installs local connector-managed clients only. OrbStack and
-remote-Linux direct HTTP client modes are outside the published support matrix
-and fail before installation begins.
+This release currently installs local connector-managed clients. OrbStack and
+remote-Linux direct HTTP client modes remain remaining qualification work and
+currently fail before installation because they are outside the published
+target matrix.
 
 After GitHub Release publication, download a versioned portable archive,
 `RELEASE_SHA256SUMS`, and `RELEASE_SHA256SUMS.sigstore.json`. Verify the
