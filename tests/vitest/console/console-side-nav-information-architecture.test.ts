@@ -8,13 +8,12 @@ function source(relativePath: string): string {
 }
 
 describe("console side nav information architecture", () => {
-  it("renders the seven administration groups in the canonical order", () => {
+  it("renders the active administration groups in the canonical order", () => {
     const sideNav = source("components/shell/ConsoleSideNav.vue");
     const sectionTags = [
       "<ConsoleSideNavServiceSection />",
       "<ConsoleSideNavToolsSection />",
       "<ConsoleSideNavPermissionSection />",
-      "<ConsoleSideNavModelSection />",
       "<ConsoleSideNavSystemSection />",
       "<ConsoleSideNavOperationsSection />",
       "<ConsoleSideNavVersionSection />",
@@ -60,7 +59,6 @@ describe("console side nav information architecture", () => {
       "service",
       "tools",
       "permission",
-      "model",
       "system",
       "operations",
       "version",

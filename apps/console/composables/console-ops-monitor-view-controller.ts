@@ -92,8 +92,8 @@ export function useOpsMonitorViewConsole() : any {
   backgroundSupervisorLabel,
 } = useServerConsoleShellContext().jobs;
 const {
-  canAdminMaintenanceAgent,
-} = useServerConsoleShellContext().maintenance;
+  canAdminAuth: canAdminOperations,
+} = useServerConsoleShellContext().access;
 const {
   acknowledgeMonitorAlert,
   activeMonitorAlerts,
@@ -151,7 +151,7 @@ const {
     backgroundRunningCount,
     backgroundSupervisorLabel,
     isBusy,
-    canAdminMaintenanceAgent,
+    canAdminOperations,
     formatCompactDate,
     monitorAlertConfigText,
     monitorAlertDetailBullets,

@@ -9,14 +9,11 @@ import {
 } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type {
-  AgentModelConfig,
   AgentSettings,
-  ModelProbeResponse,
   ServerConsoleState,
 } from "../lib/types";
 import type {
   AdminView,
-  CloudProvider,
   RefreshStateOptions,
 } from "../types/app";
 import {
@@ -42,26 +39,15 @@ import {
 } from "./console-browser-effects";
 import {
   emptySettings,
-  intelligentModuleDefinitions,
-  modelLibraryProviderDefinitions,
 } from "./console-defaults";
-import { createConsoleAgentSelectionReferenceController } from "./console-agent-selection-reference-controller";
-import { createConsoleAgentSelectorController } from "./console-agent-selector-controller";
 import { createConsoleApprovalFlowSelectionController } from "./console-approval-flow-selection-controller";
 import { createConsoleAuthController } from "./console-auth-controller";
 import { createConsoleBusyController } from "./console-busy-controller";
 import { createConsoleClientController } from "./console-client-controller";
-import { createConsoleContextCompilerController } from "./console-context-compiler-controller";
 import { createConsoleDashboardAlertController } from "./console-dashboard-alert-controller";
 import { createConsoleDiscoveryController } from "./console-discovery-controller";
 import { CONSOLE_EVENT_TOPICS, createConsoleEventRouter } from "./console-event-router";
 import { createConsoleJobController } from "./console-job-controller";
-import { createConsoleMaintenanceAgentController } from "./console-maintenance-agent-controller";
-import { createConsoleModelLibraryController } from "./console-model-library-controller";
-import {
-  modelEntryParameters,
-  normalizeAgentModelEntry,
-} from "./console-model-utils";
 import { createConsoleOperationPermissionController } from "./console-operation-permission-controller";
 import { createConsoleOperationPermissionPendingController } from "./console-operation-permission-pending-controller";
 import { createConsoleOpsMonitorController } from "./console-ops-monitor-controller";
@@ -131,13 +117,6 @@ export function useConsole() : any {
   const editingMountPaths: any = ref<Record<string, boolean>>({});
   const settingsDraft: any = ref<AgentSettings>(cloneSettings(emptySettings));
   const settingsDraftDirty: any = ref(false);
-  const gatewayAssistantForm: any = ref({ modelAlias: "" });
-  const ruleAuthoringForm: any = ref({ modelAlias: "" });
-  const selectedModelProvider: any = ref<CloudProvider>(modelLibraryProviderDefinitions[0]?.id || "");
-  const modelLibraryExpandedCards: any = ref<Record<string, boolean>>({});
-  const modelProbeResults: any = ref<Record<string, ModelProbeResponse>>({});
-  const moduleAgentCandidateDrafts: any = ref<Record<string, string>>({});
-  const agentModelOptionLabelCache: any = ref<Record<string, string>>({});
 
   const currentView: any = computed(() : any => String(route.meta?.viewId || "dashboard"));
   const activeConsoleFeatureIds: any = computed(() : any =>
@@ -145,15 +124,6 @@ export function useConsole() : any {
   );
   const busyController: any = createConsoleBusyController();
   const settingsBridge: any = createConsoleSettingsBridgeController();
-
-  function syncAgentSelectionForms(settings: AgentSettings) : any {
-    gatewayAssistantForm.value.modelAlias = String(
-      settings.gatewayAssistantDefaults?.gatewayReviewModelAlias || "",
-    );
-    ruleAuthoringForm.value.modelAlias = String(
-      settings.gatewayAssistantDefaults?.ruleAuthoringModelAlias || "",
-    );
-  }
 
   function applyConsoleState(
     nextState: ServerConsoleState,
@@ -170,7 +140,6 @@ export function useConsole() : any {
       !settingsDraftDirty.value;
     if (replaceSettings) {
       settingsBridge.replaceSettingsDraftFromServer(nextState.settings.value);
-      syncAgentSelectionForms(settingsDraft.value);
     }
     if (applyOptions.forceDrafts === true || !runtimeMountController.mountDraftDirty.value) {
       runtimeMountController.replaceMountDraftFromServer(nextState.runtime.mountModules);
@@ -178,10 +147,6 @@ export function useConsole() : any {
     if (applyOptions.forceDrafts === true || !discoveryController.discoveryDraftDirty.value) {
       discoveryController.replaceDiscoveryDraftFromServer(nextState.discovery.value);
     }
-    maintenanceAgentController.applyMaintenanceAgentStateFromConsoleState(nextState);
-    agentSelectorController.cacheAgentModelOptionLabels(
-      agentSelectorController.agentSelectorOptions.value,
-    );
     dashboardAlertController.syncDashboardAlertInbox(
       dashboardAlertController.liveDashboardAlerts.value,
     );
@@ -193,9 +158,7 @@ export function useConsole() : any {
 
   const applyServerEvent: any = createConsoleEventRouter({
     applyConsoleState,
-    applyMaintenanceConfig: (config?: any) : any => maintenanceAgentController.applyMaintenanceAgentConfigFromEvent(config),
     getConsoleState: () : any => consoleState.value,
-    refreshMaintenanceSilently: () : any => void maintenanceAgentController.refreshMaintenanceAgent({ silent: true }),
     removeJob: (jobId?: any) : any => jobController.removeJobFromEvent(jobId),
     upsertJob: (job?: any) : any => jobController.upsertJobFromEvent(job),
   });
@@ -234,52 +197,9 @@ export function useConsole() : any {
       refreshOperationPermissionPendingOperations:
         operationPermissionPendingController.refreshOperationPermissionPendingOperations,
     });
-  const agentSelectorController: any = createConsoleAgentSelectorController({
-    agentModelOptionLabelCache,
-    consoleState,
-    gatewayAssistantForm,
-  });
-  const ruleAuthoringModelOptions: any = computed(() : any =>
-    agentSelectorController.agentOptionsForModule("agentTools"),
-  );
-
-  function normalizeModelEntry(entry: Partial<AgentModelConfig>, index: any = 0) : any {
-    return normalizeAgentModelEntry(entry, index);
-  }
-
-  const modelLibraryController: any = createConsoleModelLibraryController({
-    gatewayAssistantModelAlias: () : any => String(
-      settingsDraft.value.gatewayAssistantDefaults?.gatewayReviewModelAlias ||
-      gatewayAssistantForm.value.modelAlias ||
-      "",
-    ),
-    clearBusy: busyController.clearBusy,
-    currentAgentModelOptionLabel: agentSelectorController.currentAgentModelOptionLabel,
-    error,
-    modelLibraryExpandedCards,
-    modelProbeResults,
-    moduleAgentCandidateDrafts,
-    normalizeModelEntry,
-    replaceSettingsDraftFromServer: settingsBridge.replaceSettingsDraftFromServer,
-    ruleAuthoringModelAlias: () : any => String(
-      settingsDraft.value.gatewayAssistantDefaults?.ruleAuthoringModelAlias ||
-      ruleAuthoringForm.value.modelAlias ||
-      "",
-    ),
-    selectedModelProvider,
-    setBusy: busyController.setBusy,
-    settingsDraft,
-    settingsPayloadForSave: settingsBridge.settingsPayloadForSave,
-  });
   const settingsDraftController: any = createConsoleSettingsDraftController({
-    modelEntryParameters,
-    modelRef: modelLibraryController.modelRef,
-    moduleModelAssignmentOptions: modelLibraryController.moduleModelAssignmentOptions,
-    moduleNeedsIntelligence: modelLibraryController.moduleNeedsIntelligence,
-    normalizeModelEntry,
     settingsDraft,
     settingsDraftDirty,
-    visibleModelEntries: () : any => modelLibraryController.visibleModelEntries.value,
   });
   settingsBridge.bindSettingsDraftActions(settingsDraftController);
 
@@ -311,10 +231,8 @@ export function useConsole() : any {
   const settingsPersistenceController: any = createConsoleSettingsPersistenceController({
     clearBusy: busyController.clearBusy,
     error,
-    modelEntryStatusKey: modelLibraryController.modelEntryStatusKey,
     mountDraft: runtimeMountController.mountDraft,
     mountDraftDirty: runtimeMountController.mountDraftDirty,
-    probeModelLibraryBeforeSave: modelLibraryController.probeModelLibraryBeforeSave,
     refreshState: refreshStateController.refreshState,
     setBusy: busyController.setBusy,
     settingsDraft,
@@ -323,19 +241,9 @@ export function useConsole() : any {
   });
   settingsBridge.bindSettingsPersistenceActions(settingsPersistenceController);
 
-  const maintenanceAgentController: any = createConsoleMaintenanceAgentController({
-    canReadMaintenanceAgent: authController.canReadMaintenanceAgent,
-    clearBusy: busyController.clearBusy,
-    consoleState,
-    error,
-    modelEntryStatusKey: modelLibraryController.modelEntryStatusKey,
-    setBusy: busyController.setBusy,
-    visibleModelEntries: modelLibraryController.visibleModelEntries,
-  });
   const opsMonitorController: any = createConsoleOpsMonitorController({
-    allMaintenanceAgentRuns: maintenanceAgentController.allMaintenanceAgentRuns,
-    canAdminMaintenanceAgent: authController.canAdminMaintenanceAgent,
-    canReadMaintenanceAgent: authController.canReadMaintenanceAgent,
+    canAdminOperations: authController.canAdminAuth,
+    canReadOperations: authController.isAuthenticated,
     clearBusy: busyController.clearBusy,
     consoleState,
     error,
@@ -350,26 +258,6 @@ export function useConsole() : any {
     refreshState: refreshStateController.refreshState,
     setBusy: busyController.setBusy,
   });
-
-  const agentSelectionReferenceController: any = createConsoleAgentSelectionReferenceController();
-  const selectedRuleAuthoringModel: any = computed(() : any =>
-    agentSelectorController.selectedAgentFromOptions(
-      ruleAuthoringModelOptions.value,
-      ruleAuthoringForm.value.modelAlias,
-    ),
-  );
-  agentSelectionReferenceController.watchAgentSelectionReference(
-    "gateway-assistant",
-    "网关审计智能体",
-    () : any => gatewayAssistantForm.value.modelAlias,
-    () : any => agentSelectorController.selectedGatewayAssistantModel.value,
-  );
-  agentSelectionReferenceController.watchAgentSelectionReference(
-    "rule-authoring",
-    "创建规则智能体",
-    () : any => ruleAuthoringForm.value.modelAlias,
-    () : any => selectedRuleAuthoringModel.value,
-  );
 
   function accessSubject() : any {
     return { scopes: authController.currentUserScopes.value };
@@ -461,7 +349,6 @@ export function useConsole() : any {
 
   const systemLogRowController: any = createConsoleSystemLogRowController({
     activeMonitorAlerts: opsMonitorController.activeMonitorAlerts,
-    agentSelectionReferenceLogs: agentSelectionReferenceController.agentSelectionReferenceLogs,
     authAudit: authController.authAudit,
     backgroundProcesses: opsMonitorController.backgroundProcesses,
     backgroundProcessStatus: opsMonitorController.backgroundProcessStatus,
@@ -474,18 +361,7 @@ export function useConsole() : any {
     serverLogRows: systemLogRowController.serverLogRows,
   });
   const optionBarController: any = createConsoleOptionBarController({
-    addableModelProviders: modelLibraryController.addableModelProviders,
     authState: authController.authState,
-    moduleModelAssignmentOptions: modelLibraryController.moduleModelAssignmentOptions,
-    providerLabel: modelLibraryController.providerLabel,
-  });
-  const contextCompilerController: any = createConsoleContextCompilerController({
-    clearBusy: busyController.clearBusy,
-    error,
-    selectedContextProfileId: () : any => String(
-      settingsDraft.value.gatewayAssistantDefaults?.contextProfileId || "",
-    ),
-    setBusy: busyController.setBusy,
   });
   const runtimeLifecycleController: any = createConsoleRuntimeLifecycleController({
     consoleBootstrapping: authController.consoleBootstrapping,
@@ -497,7 +373,6 @@ export function useConsole() : any {
       error.value = nextError instanceof Error ? nextError.message : "控制台初始化失败。";
     },
     refreshAuthState: authController.refreshAuthState,
-    refreshContextCompiler: contextCompilerController.refreshContextCompiler,
     refreshMonitorAlerts: opsMonitorController.refreshMonitorAlerts,
     refreshState: refreshStateController.refreshState,
     startServerEventSubscription: serverEventController.startServerEventSubscription,
@@ -568,17 +443,11 @@ export function useConsole() : any {
     drawerTab,
     error,
     firstAccessibleRoutePath,
-    gatewayAssistantForm,
     hasAnyFeature,
     hasFeature,
     highlightedConfigTarget,
-    intelligentModuleDefinitions,
-    modelProbeResults,
     openAdmin,
     openDrawer,
-    ruleAuthoringForm,
-    ruleAuthoringModelOptions,
-    selectedModelProvider,
     serverAvailable,
     settingsDraft,
     settingsDraftDirty,
@@ -591,14 +460,11 @@ export function useConsole() : any {
     ...authController,
     ...operationPermissionPendingController,
     ...approvalFlowSelectionController,
-    ...agentSelectorController,
-    ...modelLibraryController,
     ...settingsBridge,
     ...pathPickerController,
     ...runtimeMountController,
     ...discoveryController,
     ...operationPermissionController,
-    ...maintenanceAgentController,
     ...opsMonitorController,
     ...clientController,
     ...jobController,
@@ -606,7 +472,6 @@ export function useConsole() : any {
     ...systemLogRowController,
     ...systemLogController,
     ...optionBarController,
-    ...contextCompilerController,
     ...runtimeLifecycleController,
   };
 

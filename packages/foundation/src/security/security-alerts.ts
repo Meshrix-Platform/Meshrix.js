@@ -21,34 +21,49 @@ import {
   sanitizeSensitiveReport
 } from "../observability/sensitive-report-scan.ts";
 import { OBSERVABILITY_BUDGETS } from "../observability/observability-budgets.ts";
+import type Database from "better-sqlite3";
 
-export const SECURITY_ALERTS_PROTOCOL_VERSION: any = "v0.0.1:security:alerts-1";
+export const SECURITY_ALERTS_PROTOCOL_VERSION = "v0.0.1:security:alerts-1";
 
-function nowIso() : any {
+type DataRecord = Record<string, unknown>;
+interface SecurityAlertRow extends DataRecord {
+  alert_id: string; category: string; severity: string; reason_code: string; title: string;
+  status: string; actor_ref: string; subject_ref: string; resource_ref: string; source_ip: string;
+  trace_id: string; details_json: string; lifecycle_revision: number; lifecycle_json: string;
+  created_at: string; acknowledged_at: string; acknowledged_by: string; retention_archived_at: string;
+}
+interface AlertLifecycle extends DataRecord {
+  lifecycleStatus: string; lifecycleRevision: number; active: boolean; lifecycleHistory: unknown[];
+  resourceRef: string; acknowledgedAt?: string; resolvedAt?: string; suppressedAt?: string;
+  notificationFailedAt?: string; archivedAt?: string;
+}
+interface SecurityAlertStoreOptions { userDataPath?: string; db?: Database.Database | null; }
+
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function text(value: any = "") : any {
+function text(value: unknown = ""): string {
   return String(value || "").trim();
 }
 
-function asObject(value: Record<string, any> = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function asObject(value: unknown = {}): DataRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as DataRecord : {};
 }
 
-function randomId(prefix: any = "alert") : any {
+function randomId(prefix = "alert"): string {
   return `${prefix}_${Date.now().toString(36)}_${crypto.randomBytes(5).toString("hex")}`;
 }
 
-function resolveDataDir(userDataPath: any = "") : any {
+function resolveDataDir(userDataPath = ""): string {
   return path.resolve(text(userDataPath) || ServerConfig.getDataDir());
 }
 
-export function getSecurityAlertsDatabasePath(userDataPath: any = "") : any {
+export function getSecurityAlertsDatabasePath(userDataPath = ""): string {
   return path.join(resolveDataDir(userDataPath), "security", "alerts", "security-alerts.sqlite");
 }
 
-function ensureSchema(db?: any) : any {
+function ensureSchema(db: Database.Database): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -79,7 +94,7 @@ function ensureSchema(db?: any) : any {
     CREATE INDEX IF NOT EXISTS idx_security_alerts_reason ON security_alerts(reason_code);
     CREATE INDEX IF NOT EXISTS idx_security_alerts_trace ON security_alerts(trace_id);
   `);
-  const columns: any = new Set<any>(db.prepare("PRAGMA table_info(security_alerts)").all().map((column?: any) : any => column.name));
+  const columns = new Set(db.prepare("PRAGMA table_info(security_alerts)").all().map((column) => String((column as { name?: unknown }).name ?? "")));
   if (!columns.has("lifecycle_revision")) {
     db.exec("ALTER TABLE security_alerts ADD COLUMN lifecycle_revision INTEGER NOT NULL DEFAULT 0");
   }
@@ -91,32 +106,38 @@ function ensureSchema(db?: any) : any {
   }
 }
 
-function parseJson(value?: any, fallback: Record<string, any> = {}) : any {
+function parseJson<T>(value: unknown, fallback: T): T {
   try {
-    return JSON.parse(value || "");
+    return JSON.parse(String(value || "")) as T;
   } catch {
     return fallback;
   }
 }
 
-export function redactSecurityAlertValue(value?: any) : any {
+export function redactSecurityAlertValue(value?: unknown): unknown {
   return sanitizeSensitiveReport(value);
 }
 
-function normalizeSeverity(value: any = "medium") : any {
-  const severity: any = text(value || "medium").toLowerCase();
+function normalizeSeverity(value: unknown = "medium"): string {
+  const severity = text(value || "medium").toLowerCase();
   return ["info", "low", "medium", "high", "critical"].includes(severity) ? severity : "medium";
 }
 
-function alertSeverity(value: any = "medium") : any {
-  const severity: any = normalizeSeverity(value);
+function alertSeverity(value: unknown = "medium"): string {
+  const severity = normalizeSeverity(value);
   if (severity === "critical") return "critical";
   if (["info", "low"].includes(severity)) return "info";
   return "warning";
 }
 
-function lifecycleRecordFromRow(row: Record<string, any> = {}) : any {
-  const stored: any = parseJson(row.lifecycle_json, {});
+function lifecycleRecordFromRow(row: SecurityAlertRow): AlertLifecycle {
+  const stored = parseJson<Partial<AlertLifecycle>>(row.lifecycle_json, {});
+  const lifecycleStatus = text(stored.lifecycleStatus) || row.status;
+  const lifecycleRevision = Number(stored.lifecycleRevision ?? row.lifecycle_revision ?? 0);
+  const active = typeof stored.active === "boolean"
+    ? stored.active
+    : !["resolved", "suppressed", "archived"].includes(lifecycleStatus);
+  const lifecycleHistory = Array.isArray(stored.lifecycleHistory) ? stored.lifecycleHistory : [];
   return {
     alertId: row.alert_id,
     ruleId: row.reason_code,
@@ -127,24 +148,24 @@ function lifecycleRecordFromRow(row: Record<string, any> = {}) : any {
     source: "security_alert",
     role: "security",
     status: "",
-    resourceRef: row.resource_ref,
     ackRequired: true,
     tone: row.severity,
     firstSeenAt: row.created_at,
     lastSeenAt: row.created_at,
-    lifecycleStatus: row.status,
-    lifecycleRevision: Number(row.lifecycle_revision || 0),
-    active: !["resolved", "suppressed", "archived"].includes(row.status),
-    lifecycleHistory: [],
-    ...stored
+    ...stored,
+    resourceRef: text(stored.resourceRef) || row.resource_ref,
+    lifecycleStatus,
+    lifecycleRevision,
+    active,
+    lifecycleHistory
   };
 }
 
-function rowToAlert(row: any = null) : any {
+function rowToAlert(row: SecurityAlertRow | undefined = undefined) {
   if (!row) {
     return null;
   }
-  const lifecycle: any = lifecycleRecordFromRow(row);
+  const lifecycle = lifecycleRecordFromRow(row);
   return {
     protocolVersion: SECURITY_ALERTS_PROTOCOL_VERSION,
     alertId: row.alert_id,
@@ -172,23 +193,24 @@ function rowToAlert(row: any = null) : any {
   };
 }
 
-export function createSecurityAlertStore({ userDataPath = "", db: injectedDatabase = null }: Record<string, any> = {}) : any {
-  const dbPath: any = getSecurityAlertsDatabasePath(userDataPath);
-  const databasePath: any = injectedDatabase ? "" : ensurePrivateSqliteLocation(dbPath);
-  let db: any = injectedDatabase;
-  const ownsDatabase: any = !injectedDatabase;
+export function createSecurityAlertStore({ userDataPath = "", db: injectedDatabase = null }: SecurityAlertStoreOptions = {}) {
+  const dbPath = getSecurityAlertsDatabasePath(userDataPath);
+  const databasePath = injectedDatabase ? "" : ensurePrivateSqliteLocation(dbPath);
+  let db = injectedDatabase;
+  const ownsDatabase = !injectedDatabase;
   try {
-    if (!ownsDatabase) return createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath });
-    return withPrivateFileCreationMask(() : any => {
-      db = openSqliteDatabase(databasePath);
-      const store: any = createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath });
+    if (injectedDatabase) return createSecurityAlertStoreFromDatabase({ db: injectedDatabase, ownsDatabase, dbPath });
+    return withPrivateFileCreationMask(() => {
+      const openedDatabase = openSqliteDatabase(databasePath) as Database.Database;
+      db = openedDatabase;
+      const store = createSecurityAlertStoreFromDatabase({ db: openedDatabase, ownsDatabase, dbPath });
       ensurePrivateSqliteLocation(databasePath);
       return store;
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (ownsDatabase) {
       try {
-        db.close();
+        db?.close();
       } catch {
         // Preserve the construction failure; cleanup is best effort.
       }
@@ -197,15 +219,15 @@ export function createSecurityAlertStore({ userDataPath = "", db: injectedDataba
   }
 }
 
-function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Record<string, any>) : any {
-  let closed: any = false;
+function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: { db: Database.Database; ownsDatabase: boolean; dbPath: string }) {
+  let closed = false;
   ensureSchema(db);
 
-  function writeLifecycle(alertId?: any, lifecycle?: any, {
+  function writeLifecycle(alertId: string, lifecycle: AlertLifecycle, {
     acknowledgedBy = "",
     retentionArchivedAt = ""
-  }: Record<string, any> = {}) : any {
-    const changed: any = db.prepare(`
+  }: { acknowledgedBy?: string; retentionArchivedAt?: string } = {}): number {
+    const changed = db.prepare(`
       UPDATE security_alerts
       SET status = ?, lifecycle_revision = ?, lifecycle_json = ?,
           acknowledged_at = ?, acknowledged_by = ?, retention_archived_at = ?
@@ -222,16 +244,16 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
     return changed;
   }
 
-  function hydrateStoredLifecycleMetadata() : any {
-    const rows: any = db.prepare(`
+  function hydrateStoredLifecycleMetadata(): void {
+    const rows = db.prepare(`
       SELECT * FROM security_alerts
       WHERE lifecycle_json = '{}' OR lifecycle_json = ''
-    `).all();
+    `).all() as SecurityAlertRow[];
     if (rows.length === 0) return;
-    const migrate: any = db.transaction(() : any => {
+    const migrate = db.transaction(() => {
       for (const row of rows) {
-        const createdAt: any = text(row.created_at) || nowIso();
-        const signal: Record<string, any> = {
+        const createdAt = text(row.created_at) || nowIso();
+        const signal: DataRecord = {
           alertId: row.alert_id,
           ruleId: row.reason_code,
           category: row.category,
@@ -244,26 +266,25 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
           ackRequired: true,
           tone: row.severity
         };
-        const desiredStatus: any = row.status;
+        const desiredStatus = row.status;
         if (!ALERT_LIFECYCLE_STATES.includes(desiredStatus)) {
-          const error: Error & Record<string, any> = new Error("Stored security alert lifecycle status is invalid.");
-          error.code = "security_alert_lifecycle_storage_invalid";
+          const error = Object.assign(new Error("Stored security alert lifecycle status is invalid."), { code: "security_alert_lifecycle_storage_invalid" });
           throw error;
         }
-        let lifecycle: any = desiredStatus === "rule_loaded"
-          ? createAlertRecord(signal, { now: () : any => createdAt })
-          : activateAlertRecord(signal, null, { actor: "migration", now: () : any => createdAt });
+        let lifecycle = (desiredStatus === "rule_loaded"
+          ? createAlertRecord(signal, { now: () => createdAt })
+          : activateAlertRecord(signal, null, { actor: "migration", now: () => createdAt })) as AlertLifecycle;
         if (desiredStatus === "acknowledged") {
-          lifecycle = transitionAlertRecord(lifecycle, "acknowledge", { actor: "migration", now: () : any => createdAt });
+          lifecycle = transitionAlertRecord(lifecycle, "acknowledge", { actor: "migration", now: () => createdAt }) as AlertLifecycle;
         } else if (["resolved", "archived"].includes(desiredStatus)) {
-          lifecycle = transitionAlertRecord(lifecycle, "resolve", { actor: "migration", now: () : any => createdAt });
+          lifecycle = transitionAlertRecord(lifecycle, "resolve", { actor: "migration", now: () => createdAt }) as AlertLifecycle;
         } else if (desiredStatus === "suppressed") {
-          lifecycle = transitionAlertRecord(lifecycle, "suppress", { actor: "migration", now: () : any => createdAt });
+          lifecycle = transitionAlertRecord(lifecycle, "suppress", { actor: "migration", now: () => createdAt }) as AlertLifecycle;
         } else if (desiredStatus === "notification_failed") {
-          lifecycle = transitionAlertRecord(lifecycle, "notification_failed", { actor: "migration", now: () : any => createdAt });
+          lifecycle = transitionAlertRecord(lifecycle, "notification_failed", { actor: "migration", now: () => createdAt }) as AlertLifecycle;
         }
         if (desiredStatus === "archived") {
-          lifecycle = transitionAlertRecord(lifecycle, "archive", { actor: "migration", now: () : any => createdAt });
+          lifecycle = transitionAlertRecord(lifecycle, "archive", { actor: "migration", now: () => createdAt }) as AlertLifecycle;
         }
         writeLifecycle(row.alert_id, lifecycle, {
           acknowledgedBy: row.acknowledged_by,
@@ -276,9 +297,9 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
 
   hydrateStoredLifecycleMetadata();
 
-  function appendAlert(input: Record<string, any> = {}) : any {
-    const source: any = asObject(input);
-    const base: Record<string, any> = {
+  function appendAlert(input: DataRecord = {}) {
+    const source = asObject(input);
+    const base = {
       alertId: text(source.alertId) || randomId("sec_alert"),
       category: text(source.category) || "security",
       severity: normalizeSeverity(source.severity || "medium"),
@@ -292,7 +313,7 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
       details: redactSecurityAlertValue(source.details || {}),
       createdAt: text(source.createdAt || source.created_at) || nowIso()
     };
-    const lifecycle: any = activateAlertRecord({
+    const lifecycle = activateAlertRecord({
       alertId: base.alertId,
       ruleId: base.reasonCode,
       category: base.category,
@@ -306,8 +327,8 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
       tone: base.severity
     }, null, {
       actor: text(source.actorRef || source.actor_ref) || "security_producer",
-      now: () : any => base.createdAt
-    });
+      now: () => base.createdAt
+    }) as AlertLifecycle;
     db.prepare(`
       INSERT INTO security_alerts (
         alert_id, category, severity, reason_code, title, status, actor_ref, subject_ref,
@@ -333,14 +354,14 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
     return getAlert(base.alertId);
   }
 
-  function getAlert(alertId: any = "") : any {
-    return rowToAlert(db.prepare("SELECT * FROM security_alerts WHERE alert_id = ?").get(text(alertId)));
+  function getAlert(alertId: unknown = "") {
+    return rowToAlert(db.prepare("SELECT * FROM security_alerts WHERE alert_id = ?").get(text(alertId)) as SecurityAlertRow | undefined);
   }
 
-  function listAlerts(input: Record<string, any> = {}) : any {
-    const limit: any = Math.min(1000, Math.max(1, Number(input.limit || 100) || 100));
-    const where: any[] = ["retention_archived_at = ''"];
-    const params: any[] = [];
+  function listAlerts(input: DataRecord = {}) {
+    const limit = Math.min(1000, Math.max(1, Number(input.limit || 100) || 100));
+    const where: string[] = ["retention_archived_at = ''"];
+    const params: (string | number)[] = [];
     for (const [column, value] of [
       ["status", input.lifecycleStatus || input.status],
       ["severity", input.severity],
@@ -348,43 +369,43 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
       ["category", input.category],
       ["trace_id", (input.traceId || input.trace_id) ? stableAlertReference(input.traceId || input.trace_id) : ""]
     ]) {
-      const normalized: any = text(value);
+      const normalized = text(value);
       if (normalized) {
         where.push(`${column} = ?`);
         params.push(normalized);
       }
     }
-    const rows: any = db.prepare(`
+    const rows = db.prepare(`
       SELECT * FROM security_alerts
       WHERE ${where.join(" AND ")}
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(...params, limit);
+    `).all(...params, limit) as SecurityAlertRow[];
     return rows.map(rowToAlert);
   }
 
-  function acknowledgeAlert(input: Record<string, any> = {}) : any {
+  function acknowledgeAlert(input: DataRecord = {}) {
     return transitionAlert(input.alertId || input.alert_id || input.id, "acknowledge", {
       actor: input.acknowledgedBy || input.acknowledged_by || input.actorId || "operator"
     });
   }
 
-  function transitionAlert(alertIdInput: any = "", event: any = "", input: Record<string, any> = {}) : any {
-    const alertId: any = text(alertIdInput);
+  function transitionAlert(alertIdInput: unknown = "", event = "", input: DataRecord = {}) {
+    const alertId = text(alertIdInput);
     if (!alertId) {
       return { ok: false, status: 400, reasonCode: "alert_id_required", error: "alertId is required." };
     }
-    const row: any = db.prepare("SELECT * FROM security_alerts WHERE alert_id = ? AND retention_archived_at = ''").get(alertId);
+    const row = db.prepare("SELECT * FROM security_alerts WHERE alert_id = ? AND retention_archived_at = ''").get(alertId) as SecurityAlertRow | undefined;
     if (!row) {
       return { ok: false, status: 404, reasonCode: "security_alert_not_found", error: "Security alert was not found." };
     }
-    const actor: any = text(input.actor || input.acknowledgedBy || input.acknowledged_by) || "operator";
-    const lifecycle: any = transitionAlertRecord(lifecycleRecordFromRow(row), event, {
+    const actor = text(input.actor || input.acknowledgedBy || input.acknowledged_by) || "operator";
+    const lifecycle = transitionAlertRecord(lifecycleRecordFromRow(row), event, {
       actor,
       reason: input.reason,
       now: input.now,
       signal: input.signal
-    });
+    }) as AlertLifecycle;
     writeLifecycle(alertId, lifecycle, {
       acknowledgedBy: event === "acknowledge" ? actor : row.acknowledged_by,
       retentionArchivedAt: row.retention_archived_at
@@ -392,14 +413,14 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
     return { ok: true, alert: getAlert(alertId) };
   }
 
-  function exportRedacted(input: Record<string, any> = {}) : any {
-    const items: any = listAlerts(input);
+  function exportRedacted(input: DataRecord = {}) {
+    const items = listAlerts(input);
     return finalizeSensitiveReport({
       protocolVersion: SECURITY_ALERTS_PROTOCOL_VERSION,
       exportedAt: nowIso(),
       itemCount: items.length,
       items,
-      jsonl: items.map((item?: any) : any => JSON.stringify(item)).join("\n")
+      jsonl: items.map((item) => JSON.stringify(item)).join("\n")
     }, {
       provenance: {
         producer: "meshrix-core-security-alerts",
@@ -409,29 +430,29 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
     });
   }
 
-  function pruneAlerts(input: Record<string, any> = {}) : any {
-    const retentionDays: any = Math.max(1, Number(input.retentionDays || input.retention_days || 90) || 90);
-    const cutoff: any = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    const archivedAt: any = nowIso();
-    const rows: any = db.prepare(`
+  function pruneAlerts(input: DataRecord = {}) {
+    const retentionDays = Math.max(1, Number(input.retentionDays || input.retention_days || 90) || 90);
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const archivedAt = nowIso();
+    const rows = db.prepare(`
       SELECT * FROM security_alerts
       WHERE created_at < ? AND retention_archived_at = ''
       ORDER BY created_at ASC
       LIMIT ?
-    `).all(cutoff, OBSERVABILITY_BUDGETS.maxWorkQueueDepth);
-    const archiveRows: any = db.transaction(() : any => {
+    `).all(cutoff, OBSERVABILITY_BUDGETS.maxWorkQueueDepth) as SecurityAlertRow[];
+    const archiveRows = db.transaction(() => {
       for (const row of rows) {
-        let lifecycle: any = lifecycleRecordFromRow(row);
+        let lifecycle = lifecycleRecordFromRow(row);
         if (["firing", "acknowledged", "notification_failed"].includes(lifecycle.lifecycleStatus)) {
           lifecycle = transitionAlertRecord(lifecycle, "resolve", {
             actor: "retention",
-            now: () : any => archivedAt
-          });
+            now: () => archivedAt
+          }) as AlertLifecycle;
         }
         lifecycle = transitionAlertRecord(lifecycle, "archive", {
           actor: "retention",
-          now: () : any => archivedAt
-        });
+          now: () => archivedAt
+        }) as AlertLifecycle;
         writeLifecycle(row.alert_id, lifecycle, {
           acknowledgedBy: row.acknowledged_by,
           retentionArchivedAt: archivedAt
@@ -459,10 +480,10 @@ function createSecurityAlertStoreFromDatabase({ db, ownsDatabase, dbPath }: Reco
     transitionAlert,
     exportRedacted,
     pruneAlerts,
-    isClosed() : any {
+    isClosed(): boolean {
       return closed || db.open === false;
     },
-    close() : any {
+    close(): void {
       if (closed || (ownsDatabase && db.open === false)) {
         closed = true;
         return;

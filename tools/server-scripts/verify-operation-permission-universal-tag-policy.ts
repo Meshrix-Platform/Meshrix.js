@@ -10,6 +10,7 @@ import {
 import {
   createSecurityPermissionsProvider
 } from "../../packages/foundation/src/security/security-permissions-provider.ts";
+import { createAuthorizationEngine } from "../../packages/foundation/src/security/authorization/authorization-engine.ts";
 import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
 
 const REPORT_PATH: any = "build/reports/operation-permission-universal-tag-policy.json";
@@ -169,14 +170,7 @@ async function main() : Promise<any> {
 
     const provider: any = createSecurityPermissionsProvider({
       tagManagementStore: store,
-      authorizationEngine: {
-        evaluate: () : any => ({
-          effect: "allow",
-          allowed: true,
-          reasonCode: "allowed",
-          evaluatedLayers: ["authorization_subject"]
-        })
-      }
+      authorizationEngine: createAuthorizationEngine()
     });
     store.restoreTag("governance:deny");
     const providerDecision: any = provider.evaluatePolicy({

@@ -273,7 +273,17 @@ async function stageInstalledDependencyClosure(packageRoot?: any) : Promise<any>
 async function verifyPhysicalRemovalMatrix({ tempRoot, plugins }: Record<string, any>) : Promise<any> {
   if (plugins.length === 0) return [];
   const packageRoot: any = path.join(tempRoot, "removal-package");
-  await applyFeatureSourcePlan(packageRoot, createPackagingPlan({ profile: "public" }));
+  const packagedManifest: any = await fs.readFile(path.join(ROOT, "meshrix-source-package-manifest.json"), "utf8")
+    .then(JSON.parse)
+    .catch(() : any => null);
+  const packagedSource: any = /^[a-f0-9]{40,64}$/u.test(String(packagedManifest?.sourceRevision || ""));
+  await applyFeatureSourcePlan(packageRoot, createPackagingPlan({ profile: "public" }), {
+    repoRoot: ROOT,
+    ...(packagedSource ? {
+      sourceRevision: packagedManifest.sourceRevision,
+      gitIgnoreAware: false
+    } : {})
+  });
   await stageInstalledDependencyClosure(packageRoot);
   const results: any[] = [];
   for (const removed of plugins) {

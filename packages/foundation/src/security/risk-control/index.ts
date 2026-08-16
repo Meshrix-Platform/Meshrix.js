@@ -23,6 +23,7 @@ import {
   createRiskControlOperationEnvelope,
   validateRiskControlRegistry
 } from "./registry/dsl.ts";
+import type { RiskControlGateRecord, RiskControlOperationEnvelope } from "./types.ts";
 
 export * from "./model/index.ts";
 export * from "./catalogs/index.ts";
@@ -31,7 +32,7 @@ export * from "./controls/index.ts";
 export * from "./paths/index.ts";
 export * from "./projections/index.ts";
 
-export function describeRiskControlModel() : any {
+export function describeRiskControlModel() {
   return {
     modelVersion: RISK_CONTROL_MODEL_VERSION,
     boundaryCount: RISK_CONTROL_BOUNDARIES.length,
@@ -45,7 +46,7 @@ export function describeRiskControlModel() : any {
   };
 }
 
-export function assertRiskControlRegistryComplete() : any {
+export function assertRiskControlRegistryComplete() {
   validateRiskControlRegistry({
     controls: RISK_CONTROL_POINTS,
     paths: RISK_CONTROL_PATHS
@@ -53,11 +54,11 @@ export function assertRiskControlRegistryComplete() : any {
   return describeRiskControlModel();
 }
 
-export function createRiskControlRuntimeEnvelope(input: Record<string, any> = {}) : any {
+export function createRiskControlRuntimeEnvelope(input: { operationId?: string; traceId?: string; inputHash?: string } = {}): RiskControlOperationEnvelope {
   return createRiskControlOperationEnvelope(input);
 }
 
-export function appendRiskControlRuntimeGate(envelope?: any, input: Record<string, any> = {}) : any {
+export function appendRiskControlRuntimeGate(envelope: RiskControlOperationEnvelope | undefined, input: Parameters<typeof appendRiskControlGateRecord>[1] = {}): RiskControlGateRecord {
   return appendRiskControlGateRecord(envelope, input);
 }
 

@@ -153,95 +153,6 @@ function normalizeHttpEndpoint(operation: Record<string, any> = {}) : any {
   return { method, endpoint: `${path}${query}` };
 }
 
-function createInternalToolDefinition({
-  id,
-  label,
-  description,
-  owner = "meshrix",
-  source = "handler-backed",
-  handlerId,
-  featureId = "core-platform",
-  toolsets,
-  requiredScopes,
-  risk = "read_only",
-  inputSchema = { type: "object" },
-  tags = []
-}: Record<string, any>) : any {
-  const writeCapable: any = risk !== "read_only";
-  const approvalRequired: any = risk === "repair_write" || risk === "destructive";
-  return {
-    id,
-    version: "1",
-    label,
-    description,
-    owner,
-    ownerKind: "core",
-    ownerId: "core-platform",
-    source,
-    featureId,
-    operationId: "",
-    handlerId,
-    transport: {
-      internal: true
-    },
-    toolsets: uniqueStrings(toolsets),
-    requiredScopes: uniqueStrings(requiredScopes),
-    inputSchema,
-    outputSchema: { type: "object" },
-    risk,
-    readOnly: !writeCapable,
-    destructive: risk === "destructive",
-    concurrency: risk === "read_only"
-      ? { workloadClass: "light", maxParallel: 64, cost: 1 }
-      : { workloadClass: "standard", maxParallel: 1, cost: 2 },
-    requiresApproval: approvalRequired,
-    approvalScope: approvalRequired ? "operation:approve" : "",
-    timeoutMs: 30_000,
-    maxResultBytes: 2 * 1024 * 1024,
-    redactionPolicy: {
-      input: "default",
-      output: "summary"
-    },
-    auditPolicy: {
-      enabled: true,
-      recordInput: true,
-      recordOutput: false
-    },
-    telemetryPolicy: {
-      enabled: true
-    },
-    status: "internal",
-    tags: uniqueStrings([source, featureId, risk, ...tags])
-  };
-}
-
-function createInternalToolDefinitions() : any {
-  return [
-    ...[
-      ["system.health", "System health", "meshrix.runtime.read", "storage:read", "read_only"],
-      ["runtime.info", "Runtime info", "meshrix.runtime.read", "storage:read", "read_only"],
-      ["storage.summary", "Storage summary", "meshrix.storage.read", "storage:read", "read_only"],
-      ["storage.doctor", "Storage doctor", "meshrix.runtime.read", "storage:read", "read_only"],
-      ["storage.reconcile", "Storage reconcile", "meshrix.runtime.maintain", "runtime:admin", "repair_write"],
-      ["jobs.list", "Jobs list", "meshrix.jobs.read", "jobs:read", "read_only"],
-      ["jobs.failed_review", "Failed jobs review", "meshrix.jobs.read", "jobs:read", "read_only"],
-      ["runtime.reload_mounts", "Runtime reload mounts", "meshrix.runtime.maintain", "runtime:admin", "repair_write"]
-    ].map(([toolName, label, toolset, scope, risk]: any[]) : any =>
-      createInternalToolDefinition({
-        id: `maintenance-agent.${toolName}`,
-        label: `Maintenance agent ${label}`,
-        description: `Run ${label.toLowerCase()} through the MaintenanceAgent internal tool registry.`,
-        handlerId: `MaintenanceAgent.${toolName}`,
-        toolsets: [toolset],
-        requiredScopes: [scope],
-        risk,
-        featureId: "maintenance-agent-runbooks",
-        tags: ["maintenance-agent"]
-      })
-    )
-  ];
-}
-
 function summarizeToolGroups(tools: any = [], toolsets: any = OPERATION_PERMISSION_TOOLSETS) : any {
   return toolsets
     .map((toolset?: any) : any => {
@@ -460,6 +371,7 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
       protocol: String(operation._meta?.protocol || ""),
       dynamicCapability: operation._meta?.dynamicCapability || null,
       operationId: operation.id,
+      trafficModel: operation.trafficModel,
       handlerId: operation.target?.method || "",
       deprecated: operation.deprecated === true,
       replacementService: operation.replacementService || "",
@@ -525,11 +437,6 @@ export function createToolCatalog({ operations = [], activeFeatureIds = null, pr
       });
     }
   }
-  tools.push(
-    ...createInternalToolDefinitions().filter((tool?: any) : any =>
-      !activeFeatureSet || activeFeatureSet.has(tool.featureId || "core-platform")
-    )
-  );
   const directories: any = projectActiveCatalogDirectories(
     tools,
     Array.isArray(profiles) ? profiles : [],

@@ -142,21 +142,7 @@ describe("job runner and background worker wrappers", () : any => {
     expect(runtime.close).toHaveBeenCalledOnce();
   });
 
-  it("creates standby agent worker runtime and rejects unknown worker roles", async () : Promise<any> => {
-    const runtime: any = await createBackgroundWorkerRuntime({
-      role: "agent-worker",
-      userDataPath: "/data"
-    });
-
-    expect(runtime.mode).toBe("standby");
-    await expect(runtime.tick()).resolves.toEqual({
-      status: "standby",
-      details: {
-        mode: "supervised_process_ready",
-        note: "该后台角色由守护进程按需托管；智能体是否可用以模型库配置和探测状态为准。"
-      }
-    });
-    await expect(runtime.close()).resolves.toBeUndefined();
+  it("rejects unregistered worker roles", async () : Promise<any> => {
     await expect(createBackgroundWorkerRuntime({
       role: "missing-worker",
       userDataPath: "/data"

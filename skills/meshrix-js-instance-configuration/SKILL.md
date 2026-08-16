@@ -23,8 +23,8 @@ commands, output, reports, screenshots, and skill files.
 | Start, reuse, restart, or diagnose one instance | `$meshrix-js-instance-usage`, this skill, and `docs/RUNBOOK.md#local-startup` |
 | Select, install, trust, or configure a runtime plugin | Read [runtime-plugins.md](references/runtime-plugins.md) completely |
 | Enable Skill Hub for one deployment | Read [runtime-plugins.md](references/runtime-plugins.md), then apply `$meshrix-js-skill-hub-lifecycle` only for its business lifecycle |
-| Publish a host stdio command or bridge host `gh` | Read [agent-gateway.md](references/agent-gateway.md), then apply `$meshrix-js-upstream-service-publishing` |
-| Install Meshrix MCP access into a supported Agent target | Read [agent-gateway.md](references/agent-gateway.md), `$meshrix-js-downstream-mcp-client-access`, and the matching target skill |
+| Publish a host stdio command or bridge host `gh` | Read [agent-connectivity.md](references/agent-connectivity.md), then apply `$meshrix-js-upstream-service-publishing` |
+| Install Meshrix MCP access into a supported Agent target | Read [agent-connectivity.md](references/agent-connectivity.md), `$meshrix-js-downstream-mcp-client-access`, and the matching target skill |
 | Share governed skills between agents or a team | Apply `$meshrix-js-workspace-governed-sharing` and `$meshrix-js-skill-hub-lifecycle`; do not model sharing as runtime plugin configuration |
 
 Keep runtime selection, upstream service publication, downstream connector

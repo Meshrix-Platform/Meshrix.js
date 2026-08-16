@@ -17,10 +17,6 @@ const copies: any = [
 
 const assetCopies: any = [
   [
-    "packages/agents/src/agent-gateway/external-gateway/module.json",
-    "packages/agents/dist/agent-gateway/external-gateway/module.json",
-  ],
-  [
     "packages/agents/src/workspace-contribution/workspace-contribution.lifecycle.json",
     "packages/agents/dist/workspace-contribution/workspace-contribution.lifecycle.json",
   ],

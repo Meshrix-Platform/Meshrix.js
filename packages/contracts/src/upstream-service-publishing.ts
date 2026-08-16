@@ -1,9 +1,9 @@
-export const UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION: any =
+export const UPSTREAM_PUBLISHING_COMMAND_SCHEMA_VERSION =
   "v0.0.1:upstream-service-publishing:command-2";
 
-export const UPSTREAM_PUBLISHING_MAX_COMMAND_BYTES: any = 128 * 1024;
+export const UPSTREAM_PUBLISHING_MAX_COMMAND_BYTES = 128 * 1024;
 
-export const UPSTREAM_PUBLISHING_ACTIONS: readonly any[] = Object.freeze([
+export const UPSTREAM_PUBLISHING_ACTIONS = Object.freeze([
   "create",
   "replace",
   "disable",
@@ -11,7 +11,7 @@ export const UPSTREAM_PUBLISHING_ACTIONS: readonly any[] = Object.freeze([
   "republish"
 ]);
 
-export const UPSTREAM_PUBLISHING_STATES: readonly any[] = Object.freeze([
+export const UPSTREAM_PUBLISHING_STATES = Object.freeze([
   "rejected",
   "accepted",
   "publishing",
@@ -20,24 +20,24 @@ export const UPSTREAM_PUBLISHING_STATES: readonly any[] = Object.freeze([
   "removed"
 ]);
 
-export const UPSTREAM_REQUEST_REPRESENTATION_MODES: readonly any[] = Object.freeze([
+export const UPSTREAM_REQUEST_REPRESENTATION_MODES = Object.freeze([
   "structured_json",
   "opaque_stream",
   "artifact_body",
   "artifact_multipart"
 ]);
 
-export const UPSTREAM_RESPONSE_REPRESENTATION_MODES: readonly any[] = Object.freeze([
+export const UPSTREAM_RESPONSE_REPRESENTATION_MODES = Object.freeze([
   "structured_json",
   "opaque_stream",
   "artifact"
 ]);
 
-export const PORTABLE_UPSTREAM_SERVICE_KIND: any = "meshrix.upstream-service";
-export const PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION: any =
+export const PORTABLE_UPSTREAM_SERVICE_KIND = "meshrix.upstream-service";
+export const PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION =
   "v0.0.1:upstream-service:portable-import-2";
 
-export const UPSTREAM_SERVICE_DESCRIPTOR_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_SERVICE_DESCRIPTOR_FIELDS = Object.freeze([
   "serviceProtocol",
   "label",
   "description",
@@ -60,7 +60,7 @@ export const UPSTREAM_SERVICE_DESCRIPTOR_FIELDS: readonly any[] = Object.freeze(
   "mcp"
 ]);
 
-export const UPSTREAM_SERVICE_ENDPOINT_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_SERVICE_ENDPOINT_FIELDS = Object.freeze([
   "endpointId",
   "baseUrl",
   "weight",
@@ -69,7 +69,7 @@ export const UPSTREAM_SERVICE_ENDPOINT_FIELDS: readonly any[] = Object.freeze([
   "circuitBreaker"
 ]);
 
-export const UPSTREAM_SERVICE_OPERATION_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_SERVICE_OPERATION_FIELDS = Object.freeze([
   "operationKey",
   "label",
   "protocol",
@@ -90,33 +90,33 @@ export const UPSTREAM_SERVICE_OPERATION_FIELDS: readonly any[] = Object.freeze([
   "payloadTransport"
 ]);
 
-export const UPSTREAM_PAYLOAD_TRANSPORT_FIELDS: readonly any[] = Object.freeze(["request", "response"]);
-export const UPSTREAM_PAYLOAD_REQUEST_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_PAYLOAD_TRANSPORT_FIELDS = Object.freeze(["request", "response"]);
+export const UPSTREAM_PAYLOAD_REQUEST_FIELDS = Object.freeze([
   "mode",
   "maxBytes",
   "mediaTypes",
   "artifactArgument",
   "multipart"
 ]);
-export const UPSTREAM_PAYLOAD_RESPONSE_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_PAYLOAD_RESPONSE_FIELDS = Object.freeze([
   "mode",
   "maxBytes",
   "mediaTypes",
   "allowRanges"
 ]);
-export const UPSTREAM_MULTIPART_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_MULTIPART_FIELDS = Object.freeze([
   "artifactParts",
   "scalarFields",
   "maxParts"
 ]);
-export const UPSTREAM_ARTIFACT_PART_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_ARTIFACT_PART_FIELDS = Object.freeze([
   "argument",
   "partName",
   "required",
   "multiple",
   "maxCount"
 ]);
-export const UPSTREAM_SCALAR_PART_FIELDS: readonly any[] = Object.freeze([
+export const UPSTREAM_SCALAR_PART_FIELDS = Object.freeze([
   "argument",
   "partName",
   "required"
@@ -190,51 +190,55 @@ export interface PortableUpstreamServiceImport {
   descriptor: UpstreamServiceDescriptor;
 }
 
-const SAFE_SERVICE_KEY: any = /^[A-Za-z][A-Za-z0-9_.-]{0,63}(?:\/[A-Za-z][A-Za-z0-9_.-]{0,63}){0,3}$/u;
-const PORTABLE_DOCUMENT_FIELDS: any = new Set<any>(["kind", "schemaVersion", "serviceKey", "descriptor"]);
-const PORTABLE_DESCRIPTOR_FIELDS: any = new Set<any>(
-  UPSTREAM_SERVICE_DESCRIPTOR_FIELDS.filter((field?: any) : any => field !== "mcp")
+const SAFE_SERVICE_KEY = /^[A-Za-z][A-Za-z0-9_.-]{0,63}(?:\/[A-Za-z][A-Za-z0-9_.-]{0,63}){0,3}$/u;
+const PORTABLE_DOCUMENT_FIELDS = new Set(["kind", "schemaVersion", "serviceKey", "descriptor"]);
+const PORTABLE_DESCRIPTOR_FIELDS = new Set(
+  UPSTREAM_SERVICE_DESCRIPTOR_FIELDS.filter((field) => field !== "mcp")
 );
-const ENDPOINT_FIELDS: any = new Set<any>(UPSTREAM_SERVICE_ENDPOINT_FIELDS);
-const OPERATION_FIELDS: any = new Set<any>(UPSTREAM_SERVICE_OPERATION_FIELDS);
-const PAYLOAD_TRANSPORT_FIELDS: any = new Set<any>(UPSTREAM_PAYLOAD_TRANSPORT_FIELDS);
+const ENDPOINT_FIELDS = new Set(UPSTREAM_SERVICE_ENDPOINT_FIELDS);
+const OPERATION_FIELDS = new Set(UPSTREAM_SERVICE_OPERATION_FIELDS);
+const PAYLOAD_TRANSPORT_FIELDS = new Set(UPSTREAM_PAYLOAD_TRANSPORT_FIELDS);
 
-export function isUpstreamPublishingAction(value?: any) : any {
+export function isUpstreamPublishingAction(value?: unknown) {
   return typeof value === "string" && UPSTREAM_PUBLISHING_ACTIONS.includes(value);
 }
 
-export function isUpstreamPublishingState(value?: any) : any {
+export function isUpstreamPublishingState(value?: unknown) {
   return typeof value === "string" && UPSTREAM_PUBLISHING_STATES.includes(value);
 }
 
-export function isUpstreamRequestRepresentationMode(value?: any) : any {
+export function isUpstreamRequestRepresentationMode(value?: unknown): value is UpstreamRequestRepresentationMode {
   return typeof value === "string" && UPSTREAM_REQUEST_REPRESENTATION_MODES.includes(value);
 }
 
-export function isUpstreamResponseRepresentationMode(value?: any) : any {
+export function isUpstreamResponseRepresentationMode(value?: unknown): value is UpstreamResponseRepresentationMode {
   return typeof value === "string" && UPSTREAM_RESPONSE_REPRESENTATION_MODES.includes(value);
 }
 
-export function isUpstreamServiceKey(value?: any) : any {
+export function isUpstreamServiceKey(value?: unknown): value is string {
   return typeof value === "string" && SAFE_SERVICE_KEY.test(value);
 }
 
-function isPlainObject(value?: any) : any {
+function isPlainObject(value?: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function unknownFields(value?: any, fields?: any) : any {
-  return Object.keys(value).filter((key?: any) : any => !fields.has(key));
+function unknownFields(value: Record<string, unknown>, fields: ReadonlySet<string>): string[] {
+  return Object.keys(value).filter((key) => !fields.has(key));
 }
 
-function validatePortablePayloadTransport(value?: any, operationIndex?: any, serviceProtocol?: any) : any {
+function validatePortablePayloadTransport(
+  value: unknown,
+  operationIndex: number,
+  serviceProtocol: unknown
+): void {
   if (!isPlainObject(value)) {
     throw new Error(`descriptor.operations[${operationIndex}].payloadTransport must be an object.`);
   }
-  const unknown: any = unknownFields(value, PAYLOAD_TRANSPORT_FIELDS);
-  if (unknown.length) throw new Error(`Unknown payloadTransport field(s): ${unknown.join(", ")}.`);
+  const unsupported = unknownFields(value, PAYLOAD_TRANSPORT_FIELDS);
+  if (unsupported.length) throw new Error(`Unknown payloadTransport field(s): ${unsupported.join(", ")}.`);
   if (!isPlainObject(value.request)) {
     throw new Error(`descriptor.operations[${operationIndex}].payloadTransport requires a request object.`);
   }
@@ -248,7 +252,7 @@ function validatePortablePayloadTransport(value?: any, operationIndex?: any, ser
       (value.response !== undefined && !isUpstreamResponseRepresentationMode(value.response.mode))) {
     throw new Error(`descriptor.operations[${operationIndex}] has an invalid representation mode.`);
   }
-  const policies: any[] = [["request", value.request]];
+  const policies: Array<readonly [string, Record<string, unknown>]> = [["request", value.request]];
   if (value.response !== undefined) policies.push(["response", value.response]);
   for (const [direction, policy] of policies) {
     if (!Number.isSafeInteger(Number(policy.maxBytes)) || Number(policy.maxBytes) < 1) {
@@ -266,22 +270,24 @@ function validatePortablePayloadTransport(value?: any, operationIndex?: any, ser
   }
 }
 
-function assertPortableRemoteUrl(value?: any, field?: any) : any {
+function assertPortableRemoteUrl(value: unknown, field: string): void {
   if (typeof value !== "string" || !value) throw new Error(`${field} must be a remote URL.`);
-  let url: any;
+  let url: URL;
   try {
     url = new URL(value);
   } catch {
     throw new Error(`${field} must be a remote URL.`);
   }
-  const hasExplicitPort: any = /^https?:\/\/(?:\[[^\]]+\]|[^/:?#]+):[0-9]{1,5}(?:[/?#]|$)/u.test(value);
+  const hasExplicitPort = /^https?:\/\/(?:\[[^\]]+\]|[^/:?#]+):[0-9]{1,5}(?:[/?#]|$)/u.test(value);
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || !hasExplicitPort) {
     throw new Error(`${field} must use HTTP(S), an explicit port, and no embedded credentials.`);
   }
 }
 
-function validatePortableDescriptor(descriptor?: any) : any {
-  const unsupported: any = unknownFields(descriptor, PORTABLE_DESCRIPTOR_FIELDS);
+function validatePortableDescriptor(
+  descriptor: Record<string, unknown>
+): asserts descriptor is Record<string, unknown> & UpstreamServiceDescriptor {
+  const unsupported = unknownFields(descriptor, PORTABLE_DESCRIPTOR_FIELDS);
   if (unsupported.length) throw new Error(`Unknown descriptor field(s): ${unsupported.join(", ")}.`);
   if (descriptor.serviceProtocol !== "http" && descriptor.serviceProtocol !== "json-rpc") {
     throw new Error('descriptor.serviceProtocol must be "http" or "json-rpc".');
@@ -294,7 +300,7 @@ function validatePortableDescriptor(descriptor?: any) : any {
     if (!Array.isArray(descriptor.endpoints)) throw new Error("descriptor.endpoints must be an array.");
     for (const [index, endpoint] of descriptor.endpoints.entries()) {
       if (!isPlainObject(endpoint)) throw new Error(`descriptor.endpoints[${index}] must be an object.`);
-      const unsupportedEndpointFields: any = unknownFields(endpoint, ENDPOINT_FIELDS);
+      const unsupportedEndpointFields = unknownFields(endpoint, ENDPOINT_FIELDS);
       if (unsupportedEndpointFields.length) {
         throw new Error(`Unknown descriptor.endpoints[${index}] field(s): ${unsupportedEndpointFields.join(", ")}.`);
       }
@@ -304,9 +310,9 @@ function validatePortableDescriptor(descriptor?: any) : any {
   if (!Array.isArray(descriptor.operations) || descriptor.operations.length === 0) {
     throw new Error(`descriptor.operations must contain at least one explicit ${descriptor.serviceProtocol.toUpperCase()} operation.`);
   }
-  descriptor.operations.forEach((operation?: any, index?: any) : any => {
+  descriptor.operations.forEach((operation, index) => {
     if (!isPlainObject(operation)) throw new Error(`descriptor.operations[${index}] must be an object.`);
-    const unsupportedOperationFields: any = unknownFields(operation, OPERATION_FIELDS);
+    const unsupportedOperationFields = unknownFields(operation, OPERATION_FIELDS);
     if (unsupportedOperationFields.length) {
       throw new Error(`Unknown descriptor.operations[${index}] field(s): ${unsupportedOperationFields.join(", ")}.`);
     }
@@ -314,16 +320,16 @@ function validatePortableDescriptor(descriptor?: any) : any {
   });
 }
 
-export function parsePortableUpstreamServiceImport(text?: any) : any {
-  let parsed: any;
+export function parsePortableUpstreamServiceImport(text: string): PortableUpstreamServiceImport {
+  let parsed: unknown;
   try {
     parsed = JSON.parse(text);
-  } catch (error: any) {
+  } catch (error: unknown) {
     throw new Error(`Invalid JSON: ${error instanceof Error ? error.message : "parsing failed"}`);
   }
   if (!isPlainObject(parsed)) throw new Error("Import must be a JSON object.");
 
-  const unsupported: any = unknownFields(parsed, PORTABLE_DOCUMENT_FIELDS);
+  const unsupported = unknownFields(parsed, PORTABLE_DOCUMENT_FIELDS);
   if (unsupported.length) throw new Error(`Unknown top-level field(s): ${unsupported.join(", ")}.`);
   for (const key of PORTABLE_DOCUMENT_FIELDS) {
     if (!Object.prototype.hasOwnProperty.call(parsed, key)) throw new Error(`Missing top-level field: ${key}.`);
@@ -334,7 +340,7 @@ export function parsePortableUpstreamServiceImport(text?: any) : any {
   if (parsed.schemaVersion !== PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION) {
     throw new Error(`schemaVersion must be "${PORTABLE_UPSTREAM_SERVICE_SCHEMA_VERSION}".`);
   }
-  const serviceKey: any = typeof parsed.serviceKey === "string" ? parsed.serviceKey.trim() : "";
+  const serviceKey = typeof parsed.serviceKey === "string" ? parsed.serviceKey.trim() : "";
   if (!isUpstreamServiceKey(serviceKey)) {
     throw new Error("serviceKey must be a canonical non-empty service key.");
   }

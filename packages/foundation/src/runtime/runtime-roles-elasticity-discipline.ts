@@ -1,4 +1,16 @@
-const CONTROL_OPERATIONS: readonly any[] = Object.freeze([
+export interface RuntimeRoleCapability {
+  id: string;
+  kind: string;
+  operations: readonly string[];
+}
+
+interface RuntimeRolesElasticityBoundary {
+  control?: { previewElasticityBounds?: unknown };
+  data?: { writeRolePartition?: unknown };
+  workerRuntime?: { claimWorkerLease?: unknown; reportWorkerCapacity?: unknown };
+}
+
+const CONTROL_OPERATIONS = Object.freeze([
   "admitRoleWorkload",
   "scheduleRoleTopology",
   "previewElasticityBounds",
@@ -6,21 +18,21 @@ const CONTROL_OPERATIONS: readonly any[] = Object.freeze([
   "reportRoleTopology",
 ]);
 
-const DATA_OPERATIONS: readonly any[] = Object.freeze([
+const DATA_OPERATIONS = Object.freeze([
   "readRolePartition",
   "writeRolePartition",
   "commitRoleCheckpoint",
   "listRolePartitions",
 ]);
 
-const WORKER_OPERATIONS: readonly any[] = Object.freeze([
+const WORKER_OPERATIONS = Object.freeze([
   "claimWorkerLease",
   "releaseWorkerLease",
   "reportWorkerCapacity",
   "drainWorkerRole",
 ]);
 
-export const RUNTIME_ROLES_ELASTICITY_DISCIPLINE: Readonly<Record<string, any>> = Object.freeze({
+export const RUNTIME_ROLES_ELASTICITY_DISCIPLINE = Object.freeze({
   id: "runtime-roles-elasticity",
   controlRole: Object.freeze({
     capabilityId: "runtime-control",
@@ -51,29 +63,39 @@ export const RUNTIME_ROLES_ELASTICITY_DISCIPLINE: Readonly<Record<string, any>> 
   }),
 });
 
-function capabilityById(capabilities?: any, capabilityId?: any) : any {
-  return capabilities.find((entry?: any) : any => entry?.id === capabilityId) ?? null;
+function isCapability(value: unknown): value is RuntimeRoleCapability {
+  return Boolean(value) && typeof value === "object"
+    && typeof Reflect.get(value as object, "id") === "string"
+    && typeof Reflect.get(value as object, "kind") === "string"
+    && Array.isArray(Reflect.get(value as object, "operations"));
 }
 
-function operationsMatch(actual?: any, expected?: any) : any {
+function capabilityById(capabilities: readonly RuntimeRoleCapability[], capabilityId: string): RuntimeRoleCapability | null {
+  return capabilities.find((entry) => entry.id === capabilityId) ?? null;
+}
+
+function operationsMatch(actual: readonly string[], expected: readonly string[]): boolean {
   return Array.isArray(actual) &&
     actual.length === expected.length &&
-    expected.every((operation?: any, index?: any) : any => actual[index] === operation);
+    expected.every((operation, index) => actual[index] === operation);
 }
 
-export function assertRuntimeRolesElasticityCapabilities(capabilities?: any) : any {
+export function assertRuntimeRolesElasticityCapabilities(capabilities: unknown): true {
   if (!Array.isArray(capabilities)) {
     throw new Error("Runtime roles and elasticity capabilities must be an array.");
   }
-  const control: any = capabilityById(
+  if (!capabilities.every(isCapability)) {
+    throw new Error("Runtime roles and elasticity capabilities contain an invalid entry.");
+  }
+  const control = capabilityById(
     capabilities,
     RUNTIME_ROLES_ELASTICITY_DISCIPLINE.controlRole.capabilityId,
   );
-  const data: any = capabilityById(
+  const data = capabilityById(
     capabilities,
     RUNTIME_ROLES_ELASTICITY_DISCIPLINE.dataRole.capabilityId,
   );
-  const worker: any = capabilityById(
+  const worker = capabilityById(
     capabilities,
     RUNTIME_ROLES_ELASTICITY_DISCIPLINE.workerRole.capabilityId,
   );
@@ -98,7 +120,11 @@ export function assertRuntimeRolesElasticityCapabilities(capabilities?: any) : a
   return true;
 }
 
-export function assertRuntimeRolesElasticityBoundaries({ control, data, workerRuntime }: Record<string, any> = {}) : any {
+export function assertRuntimeRolesElasticityBoundaries({
+  control,
+  data,
+  workerRuntime
+}: RuntimeRolesElasticityBoundary = {}): true {
   if (!control || typeof control.previewElasticityBounds !== "function") {
     throw new Error("Bounded elasticity requires a control plane with previewElasticityBounds.");
   }

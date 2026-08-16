@@ -31,7 +31,7 @@ const BASELINE_CAPABILITY_FEATURES: Readonly<Record<string, any>> = Object.freez
   "container-deployment": ["devops-core"],
   storage: ["storage-core"],
   jobs: ["work-queue-core"],
-  "agent-gateway-model-routing": ["agent-gateway"]
+  "model-gateway-service": ["model-gateway"]
 });
 
 const REQUIRED_PUBLIC_BASELINE_FEATURES: readonly any[] = Object.freeze([
@@ -45,8 +45,7 @@ const REQUIRED_PUBLIC_BASELINE_FEATURES: readonly any[] = Object.freeze([
   "devops-core",
   "storage-core",
   "work-queue-core",
-  "console-shell",
-  "agent-gateway"
+  "console-shell"
 ]);
 
 function capabilityBoundary(capability?: any, coreActiveFeatures?: any) : any {

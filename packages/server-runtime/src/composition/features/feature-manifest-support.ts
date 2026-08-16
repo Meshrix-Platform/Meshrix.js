@@ -6,9 +6,7 @@ export const CORE_FEATURE_INCLUDES: readonly any[] = Object.freeze([
   "upstream-gateway",
   "agent-memory",
   "strategy-management",
-  "work-queue-core",
-  "agent-gateway",
-  "external-gateway"
+  "work-queue-core"
 ]);
 
 export const STANDARD_FEATURE_INCLUDES: readonly any[] = Object.freeze([

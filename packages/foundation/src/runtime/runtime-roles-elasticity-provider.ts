@@ -1,15 +1,24 @@
 import {
   assertRuntimeRolesElasticityCapabilities,
   RUNTIME_ROLES_ELASTICITY_DISCIPLINE,
+  type RuntimeRoleCapability,
 } from "./runtime-roles-elasticity-discipline.ts";
 
-export const RUNTIME_ROLES_ELASTICITY_PROTOCOL_VERSION: any = "v0.0.1:runtime:roles-elasticity-1";
+export const RUNTIME_ROLES_ELASTICITY_PROTOCOL_VERSION = "v0.0.1:runtime:roles-elasticity-1";
 
-export function createRuntimeRolesElasticityProvider() : any {
+export interface RuntimeRolesElasticityProvider {
+  readonly protocolVersion: typeof RUNTIME_ROLES_ELASTICITY_PROTOCOL_VERSION;
+  listCapabilities(): {
+    protocolVersion: typeof RUNTIME_ROLES_ELASTICITY_PROTOCOL_VERSION;
+    capabilities: RuntimeRoleCapability[];
+  };
+}
+
+export function createRuntimeRolesElasticityProvider(): RuntimeRolesElasticityProvider {
   return Object.freeze({
     protocolVersion: RUNTIME_ROLES_ELASTICITY_PROTOCOL_VERSION,
-    listCapabilities() : any {
-      const capabilities: any[] = [
+    listCapabilities(): ReturnType<RuntimeRolesElasticityProvider["listCapabilities"]> {
+      const capabilities: RuntimeRoleCapability[] = [
         {
           id: RUNTIME_ROLES_ELASTICITY_DISCIPLINE.controlRole.capabilityId,
           kind: RUNTIME_ROLES_ELASTICITY_DISCIPLINE.controlRole.kind,

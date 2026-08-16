@@ -31,6 +31,14 @@ function normalizeRuntimeDependencyPackages(value: Record<string, any> = {}) : a
   })));
 }
 
+function withoutSourceExportConditions(value: any): any {
+  if (Array.isArray(value)) return value.map(withoutSourceExportConditions);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]: any[]) : any => key !== "source")
+    .map(([key, child]: any[]) : any => [key, withoutSourceExportConditions(child)]));
+}
+
 export async function stagePluginArtifactVerificationFixture({
   sourcePluginRoot,
   artifactRoot: requestedArtifactRoot = "",
@@ -104,6 +112,10 @@ export async function stagePluginArtifactVerificationFixture({
         const targetRoot: any = path.join(publishRoot, "node_modules", packageName);
         await fs.mkdir(path.dirname(targetRoot), { recursive: true, mode: 0o700 });
         await fs.cp(dependencyRoot, targetRoot, { recursive: true, dereference: true, errorOnExist: true });
+        const dependencyManifestPath: any = path.join(targetRoot, "package.json");
+        const dependencyManifest: any = JSON.parse(await fs.readFile(dependencyManifestPath, "utf8"));
+        dependencyManifest.exports = withoutSourceExportConditions(dependencyManifest.exports);
+        await fs.writeFile(dependencyManifestPath, `${JSON.stringify(dependencyManifest, null, 2)}\n`, "utf8");
       }
     }
     manifests.set(manifest.id, { manifest, sourceRoot: publishRoot });

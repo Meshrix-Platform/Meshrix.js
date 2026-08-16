@@ -210,6 +210,20 @@
       "release": true
     },
     {
+      "id": "model-gateway",
+      "path": "plugins/model-gateway",
+      "status": "stable",
+      "version": "0.0.1",
+      "group": "products",
+      "types": [
+        "runtime-plugin"
+      ],
+      "summary": "Default-disabled stateless adapter for an independently deployed Model Gateway Service.",
+      "runtime": true,
+      "adapter": false,
+      "release": true
+    },
+    {
       "id": "skill-hub",
       "path": "plugins/skill-hub",
       "status": "stable",

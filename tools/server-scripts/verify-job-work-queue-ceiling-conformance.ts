@@ -513,7 +513,7 @@ async function verifyJournalRetention() : Promise<any> {
       queueDefinitionId: fixture.definition.queueDefinitionId,
       limit: 10
     });
-    assert.ok(retained.items.length <= FIXTURE_CEILINGS.terminalRetained);
+    assert.ok(retained.items.length <= FIXTURE_CEILINGS.terminalRetained, `terminalRetained=${retained.items.length}`);
     let journalEntries: any = 0;
     let peakPerItem: any = 0;
     for (const item of retained.items) {
@@ -521,10 +521,10 @@ async function verifyJournalRetention() : Promise<any> {
       journalEntries += journal.length;
       peakPerItem = Math.max(peakPerItem, journal.length);
     }
-    assert.ok(journalEntries <= FIXTURE_CEILINGS.journalEntries);
-    assert.ok(peakPerItem <= FIXTURE_CEILINGS.transitionsPerWorkItem);
-    assert.ok(peakJournalEntries <= FIXTURE_CEILINGS.journalEntries);
-    assert.ok(peakTransitionsPerWorkItem <= FIXTURE_CEILINGS.transitionsPerWorkItem);
+    assert.ok(journalEntries <= FIXTURE_CEILINGS.journalEntries, `journalEntries=${journalEntries}`);
+    assert.ok(peakPerItem <= FIXTURE_CEILINGS.transitionsPerWorkItem, `retainedTransitionsPerWorkItem=${peakPerItem}`);
+    assert.ok(peakJournalEntries <= FIXTURE_CEILINGS.journalEntries, `peakJournalEntries=${peakJournalEntries}`);
+    assert.ok(peakTransitionsPerWorkItem <= FIXTURE_CEILINGS.transitionsPerWorkItem, `peakTransitionsPerWorkItem=${peakTransitionsPerWorkItem}`);
     assert.equal(fixture.store.rebuildProjection().ok, true);
     return {
       terminalRetained: retained.items.length,

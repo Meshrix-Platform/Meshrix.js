@@ -187,7 +187,7 @@ export function createStrategyManagementProvider({
     const roleId: any = requireText(input.roleId, "roleId");
     return envelope("agent-policy", Object.freeze({
       roleId,
-      ...present("routeId", optionalText(input.routeId || input.modelRouting?.routeId)),
+      ...present("routeId", optionalText(input.routeId)),
       effect: "allow",
       reasonCode: "agent_policy_allowed"
     }));

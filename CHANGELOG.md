@@ -6,4 +6,4 @@ All notable changes to Meshrix.js are recorded here.
 
 - Maintains the Vue.js Web Console and Node.js server as separate workspaces.
 - Licenses the private implementation under the MIT License.
-- Requires optional service and adapter artifacts to be supplied explicitly.
+- Requires optional services and external client-adapter packages to be operator-supplied explicitly.

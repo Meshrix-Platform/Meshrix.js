@@ -9,7 +9,6 @@ import {
   MAX_NONCE_CACHE,
   PROCESS_IDENTITY_PROTOCOL_VERSION,
   PROCESS_IDENTITY_RETIRED_STATE_RESET,
-  asArray,
   asObject,
   bodySha256Hex,
   capabilityKeyFromHeaders,
@@ -44,11 +43,11 @@ import {
   stateRoot,
   text,
   timingSafeTextEqual,
-  uniqueStrings,
-  writeRecord
+  writeRecord,
+  type ProcessIdentityObject
 } from "./process-identity-core.ts";
 
-const MAX_RETIRED_OWNER_PROCESS_BINDING_GENERATIONS: any = 4096;
+const MAX_RETIRED_OWNER_PROCESS_BINDING_GENERATIONS = 4096;
 import {
   createProcessIdentityRevocationReceipt,
   verifyProcessIdentityRevocationReceiptSignature
@@ -71,6 +70,123 @@ export {
   verifyProcessIdentityRevocationReceiptSignature
 } from "./process-identity-revocation-receipt.ts";
 
+export type CapabilityKeyProvider = ReturnType<typeof createOpaqueCapabilityKeyProvider>;
+export type CapabilityBindingGuard = ReturnType<typeof createCapabilityBindingGuard>;
+
+export interface ProcessIdentityServiceOptions {
+  dataDir?: unknown;
+  alias?: unknown;
+  claimToken?: unknown;
+  claimTokenFile?: unknown;
+  capabilityKeyProvider?: CapabilityKeyProvider | null;
+  capabilityBindingGuard?: CapabilityBindingGuard | null;
+  maxTimestampSkewMs?: unknown;
+  nonceTtlMs?: unknown;
+  maxNonceCache?: unknown;
+}
+
+interface ProcessIdentityState extends ProcessIdentityObject {
+  serverIdentity: ProcessIdentityObject;
+  clients: ProcessIdentityObject[];
+  ownerProcessBindings: ProcessIdentityObject[];
+  retiredOwnerProcessBindingGenerations: ProcessIdentityObject[];
+  usedNonces: ProcessIdentityObject[];
+}
+
+export interface ProcessIdentityRequest {
+  headers?: Record<string, unknown>;
+  __meshrixProcessIdentity?: unknown;
+}
+
+export interface BootstrapClaimOptions {
+  request?: ProcessIdentityRequest | null;
+  input?: unknown;
+}
+
+export interface VerifySignedRequestOptions {
+  request?: ProcessIdentityRequest | null;
+  requestBody?: unknown;
+  url?: URL | null;
+  method?: unknown;
+  operation?: ProcessIdentityObject;
+}
+
+export interface RevalidateVerifiedRequestOptions {
+  verification?: unknown;
+  operation?: ProcessIdentityObject;
+}
+
+export interface AuthenticatedRequestOptions {
+  request?: ProcessIdentityRequest | null;
+  input?: unknown;
+}
+
+interface OwnerProcessBindingContext {
+  tenant: string;
+  subject: string;
+  target: string;
+  device: string;
+  process: string;
+  workspace: string;
+  correlation: string;
+}
+
+interface OwnerProcessBindingDecision {
+  ok: true;
+  ownerId: string;
+  ownerGenerationDigest: string;
+  context: OwnerProcessBindingContext;
+  contextDigest: string;
+}
+
+export interface ProcessIdentityDecision extends ProcessIdentityObject {
+  ok: boolean;
+}
+
+export interface ProcessIdentityService {
+  readonly protocolVersion: typeof PROCESS_IDENTITY_PROTOCOL_VERSION;
+  readonly capabilityKeyProvider: CapabilityKeyProvider;
+  readonly capabilityBindingGuard: CapabilityBindingGuard;
+  bootstrapClaim(options?: BootstrapClaimOptions): Promise<ProcessIdentityDecision>;
+  verifySignedRequest(options?: VerifySignedRequestOptions): Promise<ProcessIdentityDecision>;
+  revalidateVerifiedRequest(options?: RevalidateVerifiedRequestOptions): Promise<ProcessIdentityDecision>;
+  rotateClientIdentityPackage(options?: AuthenticatedRequestOptions): Promise<ProcessIdentityDecision>;
+  revokeClientIdentityPackage(options?: AuthenticatedRequestOptions): Promise<ProcessIdentityDecision>;
+  verifyClientIdentityRevocationReceipt(options?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
+  issueOwnerProcessBinding(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
+  inspectOwnerProcessBinding(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
+  revokeOwnerProcessBinding(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
+  revokeOwnerProcessBindings(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
+  verifyOwnerProcessBindingsRevoked(input?: Record<string, unknown>): Promise<ProcessIdentityDecision>;
+  describe(): Promise<ProcessIdentityDecision>;
+  close(): void;
+}
+
+function isProcessIdentityState(value: ProcessIdentityObject): value is ProcessIdentityState {
+  return Boolean(value.serverIdentity) &&
+    Array.isArray(value.clients) &&
+    Array.isArray(value.ownerProcessBindings) &&
+    Array.isArray(value.retiredOwnerProcessBindingGenerations) &&
+    Array.isArray(value.usedNonces);
+}
+
+function normalizedProcessIdentityState(value: ProcessIdentityObject): ProcessIdentityState {
+  const normalized = normalizeState(value);
+  if (!isProcessIdentityState(normalized)) {
+    throw new Error("Normalized process identity state is incomplete.");
+  }
+  return normalized;
+}
+
+function errorDetails(error: unknown): { status: number; reasonCode: string; message: string } {
+  const source = asObject(error, null);
+  return {
+    status: Number(source?.status || 400),
+    reasonCode: text(source?.reasonCode) || "bootstrap_claim_invalid",
+    message: error instanceof Error ? error.message : text(source?.message)
+  };
+}
+
 export function createProcessIdentityService({
   dataDir = "",
   alias = DEFAULT_ALIAS,
@@ -81,32 +197,32 @@ export function createProcessIdentityService({
   maxTimestampSkewMs = DEFAULT_NONCE_TTL_MS,
   nonceTtlMs = DEFAULT_NONCE_TTL_MS,
   maxNonceCache = MAX_NONCE_CACHE
-}: Record<string, any> = {}) : any {
-  const resolvedAlias: any = safeAlias(alias);
-  const resolvedDataDir: any = resolveDataDir(dataDir);
-  const resolvedCapabilityKeyProvider: any = capabilityKeyProvider || createOpaqueCapabilityKeyProvider({
+}: ProcessIdentityServiceOptions = {}): ProcessIdentityService {
+  const resolvedAlias = safeAlias(alias);
+  const resolvedDataDir = resolveDataDir(dataDir);
+  const resolvedCapabilityKeyProvider = capabilityKeyProvider || createOpaqueCapabilityKeyProvider({
     dataDir: resolvedDataDir,
     alias: `${resolvedAlias}-capabilities`
   });
-  const resolvedBindingGuard: any = capabilityBindingGuard || createCapabilityBindingGuard({
+  const resolvedBindingGuard = capabilityBindingGuard || createCapabilityBindingGuard({
     dataDir: resolvedDataDir,
     alias: `${resolvedAlias}-bindings`
   });
-  let loaded: any = false;
-  let record: any = null;
-  let state: any = null;
-  let mutationQueue: any = Promise.resolve();
-  const configuredMaxNonceCache: any = Number(maxNonceCache);
-  const resolvedMaxNonceCache: any = Number.isSafeInteger(configuredMaxNonceCache) && configuredMaxNonceCache > 0
+  let loaded = false;
+  let record: ProcessIdentityObject | null = null;
+  let state: ProcessIdentityState;
+  let mutationQueue: Promise<unknown> = Promise.resolve();
+  const configuredMaxNonceCache = Number(maxNonceCache);
+  const resolvedMaxNonceCache = Number.isSafeInteger(configuredMaxNonceCache) && configuredMaxNonceCache > 0
     ? configuredMaxNonceCache
     : MAX_NONCE_CACHE;
 
-  async function load() : Promise<any> {
+  async function load(): Promise<ProcessIdentityObject> {
     if (loaded) {
       return state;
     }
     record = await readRecord({ dataDir: resolvedDataDir, alias: resolvedAlias });
-    state = openState(record);
+    state = normalizedProcessIdentityState(openState(record));
     loaded = true;
     if (state[PROCESS_IDENTITY_RETIRED_STATE_RESET] || !record.sealingKeyBase64 || !record.sealedState) {
       await save();
@@ -116,8 +232,8 @@ export function createProcessIdentityService({
     return state;
   }
 
-  async function save() : Promise<any> {
-    state = normalizeState({
+  async function save(): Promise<ProcessIdentityObject> {
+    state = normalizedProcessIdentityState({
       ...state,
       alias: resolvedAlias,
       updatedAt: nowIso()
@@ -132,29 +248,29 @@ export function createProcessIdentityService({
     return state;
   }
 
-  function enqueueMutation(action?: any) : any {
-    const run: any = mutationQueue.catch(() : any => {}).then(async () : Promise<any> => {
+  function enqueueMutation<T>(action: () => Promise<T> | T): Promise<T> {
+    const run = mutationQueue.catch(()  => {}).then(async ()  => {
       await load();
       return action();
     });
-    mutationQueue = run.then(() : any => undefined, () : any => undefined);
+    mutationQueue = run.then(()  => undefined, ()  => undefined);
     return run;
   }
 
-  async function expectedClaimToken() : Promise<any> {
-    const direct: any = text(claimToken || process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN);
+  async function expectedClaimToken()  {
+    const direct = text(claimToken || process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN);
     if (direct) {
       return direct;
     }
-    const filePath: any = text(claimTokenFile || process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN_FILE);
+    const filePath = text(claimTokenFile || process.env.MESHRIX_PROCESS_IDENTITY_CLAIM_TOKEN_FILE);
     if (!filePath) {
       return "";
     }
     return text(await fs.promises.readFile(filePath, "utf8"));
   }
 
-  function findActiveClient({ clientId = "", packageId = "", processKeyId = "" }: Record<string, any> = {}) : any {
-    return (state.clients || []).find((client?: any) : any =>
+  function findActiveClient({ clientId = "", packageId = "", processKeyId = "" }: Record<string, unknown> = {})  {
+    return (state.clients || []).find((client)  =>
       client.status === "valid" &&
       client.clientId === text(clientId) &&
       client.packageId === text(packageId) &&
@@ -162,34 +278,35 @@ export function createProcessIdentityService({
     ) || null;
   }
 
-  async function bootstrapClaim({ request = null, input = {} }: Record<string, any> = {}) : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      const source: any = asObject(input);
+  async function bootstrapClaim({ request = null, input = {} }: BootstrapClaimOptions = {})  {
+    return enqueueMutation(async ()  => {
+      const source = asObject(input);
       if (!requestIsLoopback(request)) {
         return deny(403, "bootstrap_claim_loopback_required", "Process identity bootstrap claim is restricted to loopback clients.");
       }
-      const expected: any = await expectedClaimToken();
+      const expected = await expectedClaimToken();
       if (!expected) {
         return deny(503, "bootstrap_claim_token_unconfigured", "Process identity bootstrap claim token is not configured.");
       }
-      const provided: any = text(source.claimToken || source.claim_token || headerValue(request?.headers || {}, "x-meshrix-claim-token"));
+      const provided = text(source.claimToken || source.claim_token || headerValue(request?.headers || {}, "x-meshrix-claim-token"));
       if (!provided || !timingSafeTextEqual(provided, expected)) {
         return deny(401, "bootstrap_claim_token_invalid", "Process identity bootstrap claim token is invalid.");
       }
-      if (state.claimed === true || state.clients.some((client?: any) : any => client.status === "valid")) {
+      if (state.claimed === true || state.clients.some((client)  => client.status === "valid")) {
         return deny(409, "bootstrap_claim_already_consumed", "Process identity bootstrap claim has already been consumed.");
       }
-      let normalizedClient: any;
+      let normalizedClient;
       try {
         normalizedClient = normalizeClientInput(source);
-      } catch (error: any) {
-        return deny(error.status || 400, error.reasonCode || "bootstrap_claim_invalid", error.message);
+      } catch (error) {
+        const details = errorDetails(error);
+        return deny(details.status, details.reasonCode, details.message);
       }
-      const timestamp: any = nowIso();
-      const packageId: any = text(source.packageId) || `cidpkg_${crypto.randomUUID()}`;
-      const identityGeneration: any = 1;
-      const credentialId: any = `procid_${packageId}`;
-      const issued: any = await resolvedCapabilityKeyProvider.issue({
+      const timestamp = nowIso();
+      const packageId = text(source.packageId) || `cidpkg_${crypto.randomUUID()}`;
+      const identityGeneration = 1;
+      const credentialId = `procid_${packageId}`;
+      const issued = await resolvedCapabilityKeyProvider.issue({
         credentialId,
         capabilities: normalizedClient.capabilities,
         issuedAt: timestamp,
@@ -201,7 +318,7 @@ export function createProcessIdentityService({
           clientFingerprintHash: normalizedClient.clientFingerprint.fingerprintHash
         }
       });
-      const client: any = normalizeClientRecord({
+      const client = normalizeClientRecord({
         packageId,
         clientId: normalizedClient.clientId,
         installationId: normalizedClient.installationId,
@@ -220,11 +337,11 @@ export function createProcessIdentityService({
         issuedAt: timestamp,
         expiresAt: text(source.expiresAt)
       });
-      const binding: any = await resolvedBindingGuard.bindCapabilityKey({
+      const binding = await resolvedBindingGuard.bindCapabilityKey({
         capabilityKey: issued.capabilityKey,
-        credentialId: client.capabilityCredentialId,
+        credentialId: text(client.capabilityCredentialId),
         context: clientBindingContext(client),
-        expiresAt: client.expiresAt
+        expiresAt: text(client.expiresAt)
       });
       state = {
         ...state,
@@ -251,12 +368,12 @@ export function createProcessIdentityService({
     });
   }
 
-  async function recordNonce({ nonce = "", packageId = "", timestampMs = 0 }: Record<string, any> = {}) : Promise<any> {
-    const nonceHash: any = sha256TextBase64Url(`${packageId}\0${nonce}`);
-    const now: any = Date.now();
-    const freshNonces: any = (state.usedNonces || [])
-      .filter((item?: any) : any => parseTimestampMs(item.expiresAt) > now);
-    if (freshNonces.some((item?: any) : any => item.nonceHash === nonceHash)) {
+  async function recordNonce({ nonce = "", packageId = "", timestampMs = 0 }: Record<string, unknown> = {})  {
+    const nonceHash = sha256TextBase64Url(`${packageId}\0${nonce}`);
+    const now = Date.now();
+    const freshNonces = (state.usedNonces || [])
+      .filter((item)  => parseTimestampMs(item.expiresAt) > now);
+    if (freshNonces.some((item)  => item.nonceHash === nonceHash)) {
       return { ok: false, reasonCode: "process_identity_nonce_replay" };
     }
     if (freshNonces.length >= resolvedMaxNonceCache) {
@@ -264,9 +381,9 @@ export function createProcessIdentityService({
     }
     freshNonces.push({
       nonceHash,
-      packageId,
+      packageId: text(packageId),
       seenAt: nowIso(),
-      expiresAt: new Date(Math.max(now, timestampMs) + Math.max(1, Number(nonceTtlMs || DEFAULT_NONCE_TTL_MS))).toISOString()
+      expiresAt: new Date(Math.max(now, Number(timestampMs)) + Math.max(1, Number(nonceTtlMs || DEFAULT_NONCE_TTL_MS))).toISOString()
     });
     state = {
       ...state,
@@ -282,37 +399,37 @@ export function createProcessIdentityService({
     url = new URL("/", "http://127.0.0.1"),
     method = "GET",
     operation = {}
-  }: Record<string, any> = {}) : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  }: VerifySignedRequestOptions = {})  {
+    await mutationQueue.catch(()  => {});
     await load();
     if (operation?.processIdentity?.required !== true) {
       return { ok: true, applicable: false, reasonCode: "process_identity_not_required" };
     }
-    const headers: any = request?.headers || {};
-    const clientId: any = headerValue(headers, "x-meshrix-client-id");
-    const packageId: any = headerValue(headers, "x-meshrix-identity-package-id");
-    const processKeyId: any = headerValue(headers, "x-meshrix-process-key-id");
-    const timestamp: any = headerValue(headers, "x-meshrix-timestamp");
-    const nonce: any = headerValue(headers, "x-meshrix-nonce");
-    const bodyHash: any = headerValue(headers, "x-meshrix-body-sha256").toLowerCase();
-    const signature: any = headerValue(headers, "x-meshrix-signature");
-    const capabilityKey: any = capabilityKeyFromHeaders(headers);
+    const headers = request?.headers || {};
+    const clientId = headerValue(headers, "x-meshrix-client-id");
+    const packageId = headerValue(headers, "x-meshrix-identity-package-id");
+    const processKeyId = headerValue(headers, "x-meshrix-process-key-id");
+    const timestamp = headerValue(headers, "x-meshrix-timestamp");
+    const nonce = headerValue(headers, "x-meshrix-nonce");
+    const bodyHash = headerValue(headers, "x-meshrix-body-sha256").toLowerCase();
+    const signature = headerValue(headers, "x-meshrix-signature");
+    const capabilityKey = capabilityKeyFromHeaders(headers);
     if (!clientId || !packageId || !processKeyId || !timestamp || !nonce || !bodyHash || !signature || !capabilityKey) {
       return deny(401, "process_identity_headers_missing", "Process identity signature headers are required.");
     }
     if (bodyHash !== bodySha256Hex(requestBody)) {
       return deny(401, "process_identity_body_hash_mismatch", "Process identity body hash mismatch.");
     }
-    const timestampMs: any = parseTimestampMs(timestamp);
+    const timestampMs = parseTimestampMs(timestamp);
     if (!timestampMs || Math.abs(Date.now() - timestampMs) > Math.max(1000, Number(maxTimestampSkewMs || DEFAULT_NONCE_TTL_MS))) {
       return deny(401, "process_identity_timestamp_invalid", "Process identity timestamp is outside the accepted window.");
     }
-    const client: any = findActiveClient({ clientId, packageId, processKeyId });
+    const client = findActiveClient({ clientId, packageId, processKeyId });
     if (!client) {
       return deny(401, "process_identity_package_unknown", "Process identity package is not active.");
     }
-    const expectedFingerprint: any = normalizeClientFingerprint(client.clientFingerprint, { required: false });
-    let requestFingerprint: any;
+    const expectedFingerprint = normalizeClientFingerprint(client.clientFingerprint, { required: false });
+    let requestFingerprint;
     try {
       requestFingerprint = clientFingerprintFromHeaders(headers);
     } catch {
@@ -326,7 +443,7 @@ export function createProcessIdentityService({
         return deny(401, "process_identity_client_fingerprint_mismatch", "Process identity client fingerprint does not match the signed package.");
       }
     }
-    const canonical: any = canonicalProcessIdentityRequest({
+    const canonical = canonicalProcessIdentityRequest({
       method,
       pathWithQuery: pathWithQueryFromUrl(url),
       bodySha256: bodyHash,
@@ -337,17 +454,17 @@ export function createProcessIdentityService({
       processKeyId,
       clientFingerprint: requestFingerprint
     });
-    const signatureOk: any = crypto.verify(
+    const signatureOk = crypto.verify(
       null,
       Buffer.from(canonical, "utf8"),
-      crypto.createPublicKey(client.processPublicKeyPem),
+      crypto.createPublicKey(text(client.processPublicKeyPem)),
       Buffer.from(signature, "base64url")
     );
     if (!signatureOk) {
       return deny(401, "process_identity_signature_invalid", "Process identity request signature is invalid.");
     }
-    const requiredCapabilities: any = operationRequiredCapabilities(operation);
-    const capabilityDecision: any = await resolvedCapabilityKeyProvider.verify({
+    const requiredCapabilities = operationRequiredCapabilities(operation);
+    const capabilityDecision = await resolvedCapabilityKeyProvider.verify({
       capabilityKey,
       requiredCapabilities,
       includeRecordDetails: true
@@ -355,12 +472,12 @@ export function createProcessIdentityService({
     if (!capabilityDecision.ok) {
       return deny(403, capabilityDecision.reasonCode || "process_identity_capability_denied", "Process identity capability key is not authorized.");
     }
-    const bindingDecision: any = await resolvedBindingGuard.verifyCapabilityKeyBinding({
+    const bindingDecision = await resolvedBindingGuard.verifyCapabilityKeyBinding({
       capabilityKey,
       credentialId: client.capabilityCredentialId,
       context: clientBindingContext(client)
     });
-    const requireBinding: any = operation.processIdentity?.requireBinding !== false;
+    const requireBinding = operation.processIdentity?.requireBinding !== false;
     if (!bindingDecision.ok || (requireBinding && bindingDecision.applicable === false)) {
       return deny(
         403,
@@ -368,8 +485,8 @@ export function createProcessIdentityService({
         "Process identity capability binding is not authorized."
       );
     }
-    return enqueueMutation(async () : Promise<any> => {
-      const nonceDecision: any = await recordNonce({ nonce, packageId, timestampMs });
+    return enqueueMutation(async ()  => {
+      const nonceDecision = await recordNonce({ nonce, packageId, timestampMs });
       if (!nonceDecision.ok) {
         return deny(
           nonceDecision.reasonCode === "process_identity_nonce_capacity_exhausted" ? 503 : 401,
@@ -379,7 +496,7 @@ export function createProcessIdentityService({
             : "Process identity request nonce was already used."
         );
       }
-      const actor: Record<string, any> = {
+      const actor: Record<string, unknown> = {
         type: "process-client",
         userId: client.clientId,
         subjectId: client.clientId,
@@ -411,13 +528,14 @@ export function createProcessIdentityService({
   async function revalidateVerifiedRequest({
     verification = null,
     operation = {}
-  }: Record<string, any> = {}) : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  }: RevalidateVerifiedRequestOptions = {})  {
+    await mutationQueue.catch(()  => {});
     await load();
+    const verified = asObject(verification, null);
     if (
-      verification?.ok !== true ||
-      !verification.client ||
-      !verification.capabilityKey
+      verified?.ok !== true ||
+      !verified.client ||
+      !verified.capabilityKey
     ) {
       return deny(
         401,
@@ -425,10 +543,11 @@ export function createProcessIdentityService({
         "Current process identity verification is required."
       );
     }
-    const current: any = findActiveClient({
-      clientId: verification.client.clientId,
-      packageId: verification.client.packageId,
-      processKeyId: verification.client.processKeyId
+    const verifiedClient = asObject(verified.client);
+    const current = findActiveClient({
+      clientId: verifiedClient.clientId,
+      packageId: verifiedClient.packageId,
+      processKeyId: verifiedClient.processKeyId
     });
     if (!current) {
       return deny(
@@ -437,9 +556,9 @@ export function createProcessIdentityService({
         "Process identity package is no longer active."
       );
     }
-    const requiredCapabilities: any = operationRequiredCapabilities(operation);
-    const capabilityDecision: any = await resolvedCapabilityKeyProvider.verify({
-      capabilityKey: verification.capabilityKey,
+    const requiredCapabilities = operationRequiredCapabilities(operation);
+    const capabilityDecision = await resolvedCapabilityKeyProvider.verify({
+      capabilityKey: text(verified.capabilityKey),
       requiredCapabilities,
       includeRecordDetails: true
     });
@@ -450,12 +569,12 @@ export function createProcessIdentityService({
         "Process identity capability key is no longer authorized."
       );
     }
-    const bindingDecision: any = await resolvedBindingGuard.verifyCapabilityKeyBinding({
-      capabilityKey: verification.capabilityKey,
-      credentialId: current.capabilityCredentialId,
+    const bindingDecision = await resolvedBindingGuard.verifyCapabilityKeyBinding({
+      capabilityKey: text(verified.capabilityKey),
+      credentialId: text(current.capabilityCredentialId),
       context: clientBindingContext(current)
     });
-    const requireBinding: any = operation.processIdentity?.requireBinding !== false;
+    const requireBinding = operation.processIdentity?.requireBinding !== false;
     if (!bindingDecision.ok || (requireBinding && bindingDecision.applicable === false)) {
       return deny(
         403,
@@ -468,31 +587,32 @@ export function createProcessIdentityService({
       applicable: true,
       reasonCode: "process_identity_current",
       client: current,
-      capabilityKey: verification.capabilityKey,
+      capabilityKey: text(verified.capabilityKey),
       requiredCapabilities,
       capabilityDecision,
       bindingDecision,
-      actor: verification.actor,
-      authSession: verification.authSession
+      actor: verified.actor,
+      authSession: verified.authSession
     };
   }
 
-  async function rotateClientIdentityPackage({ request = null, input = {} }: Record<string, any> = {}) : Promise<any> {
-    const verification: any = request?.__meshrixProcessIdentity;
+  async function rotateClientIdentityPackage({ request = null, input = {} }: AuthenticatedRequestOptions = {})  {
+    const verification = asObject(request?.__meshrixProcessIdentity, null);
     if (!verification?.ok || !verification.client || !verification.capabilityKey) {
       return deny(401, "process_identity_verification_required", "Current process identity verification is required.");
     }
-    return enqueueMutation(async () : Promise<any> => {
-      const source: any = asObject(input);
-      const current: any = findActiveClient({
-        clientId: verification.client.clientId,
-        packageId: verification.client.packageId,
-        processKeyId: verification.client.processKeyId
+    const verifiedClient = asObject(verification.client);
+    return enqueueMutation(async ()  => {
+      const source = asObject(input);
+      const current = findActiveClient({
+        clientId: verifiedClient.clientId,
+        packageId: verifiedClient.packageId,
+        processKeyId: verifiedClient.processKeyId
       });
       if (!current) {
         return deny(409, "process_identity_package_not_active", "Current process identity package is no longer active.");
       }
-      const key: any = source.processPublicKeyPem || source.processPublicKeySpkiBase64 || source.publicKeyPem || source.publicKeySpkiBase64
+      const key = source.processPublicKeyPem || source.processPublicKeySpkiBase64 || source.publicKeyPem || source.publicKeySpkiBase64
         ? publicKeyFromInput(source)
         : {
             processKeyId: current.processKeyId,
@@ -500,12 +620,14 @@ export function createProcessIdentityService({
             processPublicKeySpkiBase64: current.processPublicKeySpkiBase64,
             processPublicKeyHash: current.processPublicKeyHash
           };
-      const timestamp: any = nowIso();
-      const packageId: any = text(source.packageId) || `cidpkg_${crypto.randomUUID()}`;
-      const credentialId: any = `procid_${packageId}`;
-      const capabilities: any = current.capabilities.length ? current.capabilities : DEFAULT_PROCESS_IDENTITY_CAPABILITIES;
-      const rotated: any = await resolvedCapabilityKeyProvider.rotateCapabilityKey({
-        capabilityKey: verification.capabilityKey,
+      const timestamp = nowIso();
+      const packageId = text(source.packageId) || `cidpkg_${crypto.randomUUID()}`;
+      const credentialId = `procid_${packageId}`;
+      const capabilities = Array.isArray(current.capabilities) && current.capabilities.length
+        ? [...current.capabilities]
+        : [...DEFAULT_PROCESS_IDENTITY_CAPABILITIES];
+      const rotated = await resolvedCapabilityKeyProvider.rotateCapabilityKey({
+        capabilityKey: text(verification.capabilityKey),
         capabilities,
         credentialId,
         reason: text(source.reason) || "process_identity_package_rotated",
@@ -520,11 +642,11 @@ export function createProcessIdentityService({
         return deny(403, rotated.reasonCode || "process_identity_rotation_denied", "Process identity capability key rotation failed.");
       }
       await resolvedBindingGuard.invalidateCapabilityKeyBinding({
-        capabilityKey: verification.capabilityKey,
-        credentialId: current.capabilityCredentialId,
+        capabilityKey: text(verification.capabilityKey),
+        credentialId: text(current.capabilityCredentialId),
         reason: "process_identity_package_rotated"
       });
-      const nextClient: any = normalizeClientRecord({
+      const nextClient = normalizeClientRecord({
         ...current,
         packageId,
         processKeyId: key.processKeyId,
@@ -543,14 +665,14 @@ export function createProcessIdentityService({
       });
       await resolvedBindingGuard.bindCapabilityKey({
         capabilityKey: rotated.capabilityKey,
-        credentialId: nextClient.capabilityCredentialId,
+        credentialId: text(nextClient.capabilityCredentialId),
         context: clientBindingContext(nextClient),
-        expiresAt: nextClient.expiresAt
+        expiresAt: text(nextClient.expiresAt)
       });
       state = {
         ...state,
         clients: [
-          ...state.clients.map((client?: any) : any => client.packageId === current.packageId
+          ...state.clients.map((client)  => client.packageId === current.packageId
             ? normalizeClientRecord({ ...client, status: "rotated", rotatedAt: timestamp })
             : client),
           nextClient
@@ -572,30 +694,31 @@ export function createProcessIdentityService({
     });
   }
 
-  async function revokeClientIdentityPackage({ request = null, input = {} }: Record<string, any> = {}) : Promise<any> {
-    const verification: any = request?.__meshrixProcessIdentity;
+  async function revokeClientIdentityPackage({ request = null, input = {} }: AuthenticatedRequestOptions = {})  {
+    const verification = asObject(request?.__meshrixProcessIdentity, null);
     if (!verification?.ok || !verification.client || !verification.capabilityKey) {
       return deny(401, "process_identity_verification_required", "Current process identity verification is required.");
     }
-    return enqueueMutation(async () : Promise<any> => {
-      const source: any = asObject(input);
-      const timestamp: any = nowIso();
-      const reason: any = text(source.reason) || "process_identity_package_revoked";
-      const endpoint: any = text(source.revocationEndpoint || source.endpoint) || "/api/process-identity/package/revoke";
-      const ownerSubjectRef: any = text(source.ownerSubjectRef);
-      const ownerArtifactId: any = text(source.ownerArtifactId);
-      const ownerArtifactDigestSha256: any = text(source.ownerArtifactDigestSha256);
+    const verifiedClient = asObject(verification.client);
+    return enqueueMutation(async ()  => {
+      const source = asObject(input);
+      const timestamp = nowIso();
+      const reason = text(source.reason) || "process_identity_package_revoked";
+      const endpoint = text(source.revocationEndpoint || source.endpoint) || "/api/process-identity/package/revoke";
+      const ownerSubjectRef = text(source.ownerSubjectRef);
+      const ownerArtifactId = text(source.ownerArtifactId);
+      const ownerArtifactDigestSha256 = text(source.ownerArtifactDigestSha256);
       await resolvedCapabilityKeyProvider.invalidate({
-        capabilityKey: verification.capabilityKey,
+        capabilityKey: text(verification.capabilityKey),
         reason
       });
       await resolvedBindingGuard.invalidateCapabilityKeyBinding({
-        capabilityKey: verification.capabilityKey,
-        credentialId: verification.client.capabilityCredentialId,
+        capabilityKey: text(verification.capabilityKey),
+        credentialId: text(verifiedClient.capabilityCredentialId),
         reason
       });
-      const revokedClientBase: any = normalizeClientRecord({
-        ...verification.client,
+      const revokedClientBase = normalizeClientRecord({
+        ...verifiedClient,
         status: "revoked",
         revokedAt: timestamp,
         revocationReason: reason,
@@ -604,7 +727,7 @@ export function createProcessIdentityService({
         ownerArtifactId,
         ownerArtifactDigestSha256
       });
-      const revocationReceipt: any = createProcessIdentityRevocationReceipt({
+      const revocationReceipt = createProcessIdentityRevocationReceipt({
         state,
         client: revokedClientBase,
         revokedAt: timestamp,
@@ -614,13 +737,13 @@ export function createProcessIdentityService({
         ownerArtifactId,
         ownerArtifactDigestSha256
       });
-      const revokedClient: any = normalizeClientRecord({
+      const revokedClient = normalizeClientRecord({
         ...revokedClientBase,
         revocationReceiptDigestSha256: revocationReceipt.receiptDigestSha256
       });
       state = {
         ...state,
-        clients: state.clients.map((client?: any) : any => client.packageId === verification.client.packageId
+        clients: state.clients.map((client)  => client.packageId === verifiedClient.packageId
           ? revokedClient
           : client)
       };
@@ -629,7 +752,7 @@ export function createProcessIdentityService({
         ok: true,
         status: 200,
         protocolVersion: PROCESS_IDENTITY_PROTOCOL_VERSION,
-        packageId: verification.client.packageId,
+        packageId: verifiedClient.packageId,
         revokedAt: timestamp,
         reason,
         revocationReceipt
@@ -637,13 +760,13 @@ export function createProcessIdentityService({
     });
   }
 
-  async function verifyClientIdentityRevocationReceipt({ receipt = null, expected = {} }: Record<string, any> = {}) : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  async function verifyClientIdentityRevocationReceipt({ receipt = null, expected = {} }: Record<string, unknown> = {})  {
+    await mutationQueue.catch(()  => {});
     await load();
-    const signatureDecision: any = verifyProcessIdentityRevocationReceiptSignature({
-      receipt,
+    const signatureDecision = verifyProcessIdentityRevocationReceiptSignature({
+      receipt: asObject(receipt, null),
       serverIdentity: state.serverIdentity,
-      expected
+      expected: asObject(expected)
     });
     if (!signatureDecision.ok) {
       return deny(
@@ -652,8 +775,8 @@ export function createProcessIdentityService({
         "Process identity revocation receipt signature or binding is invalid."
       );
     }
-    const payload: any = signatureDecision.payload || {};
-    const client: any = (state.clients || []).find((candidate?: any) : any =>
+    const payload = asObject(signatureDecision.payload);
+    const client = (state.clients || []).find((candidate)  =>
       candidate.packageId === payload.packageId &&
       candidate.clientId === payload.clientId &&
       candidate.processKeyId === payload.processKeyId
@@ -683,9 +806,9 @@ export function createProcessIdentityService({
     };
   }
 
-  function ownerProcessBindingContext(input: Record<string, any> = {}) : any {
-    const identity: any = asObject(input.identityContext);
-    const targetRef: any = text(input.targetRef);
+  function ownerProcessBindingContext(input: Record<string, unknown> = {}): OwnerProcessBindingContext | null {
+    const identity = asObject(input.identityContext);
+    const targetRef = text(input.targetRef);
     if (!text(identity.tenant) || !text(identity.subject) || !targetRef || (text(identity.target) && text(identity.target) !== targetRef)) {
       return null;
     }
@@ -700,41 +823,48 @@ export function createProcessIdentityService({
     };
   }
 
-  function ownerProcessBindingDecision(input: Record<string, any> = {}, binding: any = null) : any {
-    const ownerId: any = text(input.ownerId);
-    const ownerGenerationDigest: any = text(input.ownerGenerationDigest);
-    const context: any = ownerProcessBindingContext(input);
+  function ownerProcessBindingDecision(
+    input: Record<string, unknown> = {},
+    binding: ProcessIdentityObject | null = null
+  ): OwnerProcessBindingDecision | ReturnType<typeof deny> {
+    const ownerId = text(input.ownerId);
+    const ownerGenerationDigest = text(input.ownerGenerationDigest);
+    const context = ownerProcessBindingContext(input);
     if (!/^[a-z0-9][a-z0-9-]{0,127}$/u.test(ownerId) || !/^[a-f0-9]{64}$/u.test(ownerGenerationDigest) || !context) {
       return deny(400, "owner_process_binding_context_invalid", "Owner process binding context is invalid.");
     }
-    const contextDigest: any = sha256Hex(stableJson(context));
-    if (binding && (binding.ownerId !== ownerId || binding.ownerGenerationDigest !== ownerGenerationDigest || binding.contextDigest !== contextDigest)) {
+    const contextDigest = sha256Hex(stableJson(context));
+    if (binding && (
+      text(binding.ownerId) !== ownerId ||
+      text(binding.ownerGenerationDigest) !== ownerGenerationDigest ||
+      text(binding.contextDigest) !== contextDigest
+    )) {
       return deny(403, "owner_process_binding_mismatch", "Owner process binding does not match.");
     }
     return { ok: true, ownerId, ownerGenerationDigest, context, contextDigest };
   }
 
-  async function issueOwnerProcessBinding(input: Record<string, any> = {}) : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      const decision: any = ownerProcessBindingDecision(input);
-      if (!decision.ok) return decision;
-      if ((state.retiredOwnerProcessBindingGenerations || []).some((entry?: any) : any => entry.ownerId === decision.ownerId &&
+  async function issueOwnerProcessBinding(input: Record<string, unknown> = {})  {
+    return enqueueMutation(async ()  => {
+      const decision = ownerProcessBindingDecision(input);
+      if (!decision.ok || !("ownerId" in decision)) return decision;
+      if ((state.retiredOwnerProcessBindingGenerations || []).some((entry)  => entry.ownerId === decision.ownerId &&
           entry.ownerGenerationDigest === decision.ownerGenerationDigest)) {
         return deny(409, "owner_process_binding_generation_retired", "Owner process binding generation is retired.");
       }
-      const key: any = text(input.idempotencyKey);
+      const key = text(input.idempotencyKey);
       if (!key || key.length > 256) return deny(400, "owner_process_binding_idempotency_invalid", "Owner process binding idempotency key is invalid.");
-      const idempotencyKeyDigest: any = sha256Hex(stableJson([decision.ownerId, decision.ownerGenerationDigest, key]));
-      const existing: any = (state.ownerProcessBindings || []).find((binding?: any) : any => binding.idempotencyKeyDigest === idempotencyKeyDigest);
+      const idempotencyKeyDigest = sha256Hex(stableJson([decision.ownerId, decision.ownerGenerationDigest, key]));
+      const existing = (state.ownerProcessBindings || []).find((binding)  => binding.idempotencyKeyDigest === idempotencyKeyDigest);
       if (existing) {
         if (existing.contextDigest !== decision.contextDigest || existing.targetRef !== decision.context.target) {
           return deny(409, "owner_process_binding_idempotency_conflict", "Owner process binding idempotency key conflicts with an existing binding.");
         }
         return { ok: true, ...existing };
       }
-      const issuedAt: any = nowIso();
-      const processIdentityRef: any = `procbind_${sha256Hex(`${decision.contextDigest}\0${idempotencyKeyDigest}`).slice(0, 32)}`;
-      const binding: Record<string, any> = {
+      const issuedAt = nowIso();
+      const processIdentityRef = `procbind_${sha256Hex(`${decision.contextDigest}\0${idempotencyKeyDigest}`).slice(0, 32)}`;
+      const binding: Record<string, unknown> = {
         processIdentityRef,
         ownerId: decision.ownerId,
         ownerGenerationDigest: decision.ownerGenerationDigest,
@@ -748,12 +878,12 @@ export function createProcessIdentityService({
         revokedAt: "",
         receiptDigest: ""
       };
-      const previousState: any = state;
-      const previousRecord: any = record;
+      const previousState = state;
+      const previousRecord = record;
       state = { ...state, ownerProcessBindings: [...(state.ownerProcessBindings || []), binding] };
       try {
         await save();
-      } catch (error: any) {
+      } catch (error) {
         state = previousState;
         record = previousRecord;
         loaded = true;
@@ -763,25 +893,25 @@ export function createProcessIdentityService({
     });
   }
 
-  async function inspectOwnerProcessBinding(input: Record<string, any> = {}) : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  async function inspectOwnerProcessBinding(input: Record<string, unknown> = {})  {
+    await mutationQueue.catch(()  => {});
     await load();
-    const binding: any = (state.ownerProcessBindings || []).find((candidate?: any) : any => candidate.processIdentityRef === text(input.processIdentityRef));
+    const binding = (state.ownerProcessBindings || []).find((candidate)  => candidate.processIdentityRef === text(input.processIdentityRef));
     if (!binding) return deny(404, "owner_process_binding_not_found", "Owner process binding was not found.");
-    const decision: any = ownerProcessBindingDecision({ ...input, targetRef: binding.targetRef }, binding);
+    const decision = ownerProcessBindingDecision({ ...input, targetRef: binding.targetRef }, binding);
     return decision.ok ? { ok: true, ...binding } : decision;
   }
 
-  async function revokeOwnerProcessBinding(input: Record<string, any> = {}) : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      const processIdentityRef: any = text(input.processIdentityRef);
-      const binding: any = (state.ownerProcessBindings || []).find((candidate?: any) : any => candidate.processIdentityRef === processIdentityRef);
+  async function revokeOwnerProcessBinding(input: Record<string, unknown> = {})  {
+    return enqueueMutation(async ()  => {
+      const processIdentityRef = text(input.processIdentityRef);
+      const binding = (state.ownerProcessBindings || []).find((candidate)  => candidate.processIdentityRef === processIdentityRef);
       if (!binding) return deny(404, "owner_process_binding_not_found", "Owner process binding was not found.");
-      const decision: any = ownerProcessBindingDecision({ ...input, targetRef: binding.targetRef }, binding);
-      if (!decision.ok) return decision;
+      const decision = ownerProcessBindingDecision({ ...input, targetRef: binding.targetRef }, binding);
+      if (!decision.ok || !("ownerId" in decision)) return decision;
       if (binding.status === "revoked") return { ok: true, ...binding };
-      const revokedAt: any = nowIso();
-      const payload: Record<string, any> = {
+      const revokedAt = nowIso();
+      const payload: Record<string, unknown> = {
         receiptKind: "owner-process-binding-revocation",
         ownerId: binding.ownerId,
         ownerGenerationDigest: binding.ownerGenerationDigest,
@@ -794,27 +924,27 @@ export function createProcessIdentityService({
         serverId: state.serverIdentity.serverId,
         serverKeyId: state.serverIdentity.serverKeyId
       };
-      const receiptDigest: any = sha256Hex(stableJson(payload));
-      const receipt: Record<string, any> = {
+      const receiptDigest = sha256Hex(stableJson(payload));
+      const receipt: Record<string, unknown> = {
         ...payload,
         receiptDigest,
         signature: {
           algorithm: "ed25519",
           keyId: state.serverIdentity.serverKeyId,
           payloadDigest: `sha256:${receiptDigest}`,
-          value: signStableObject(state.serverIdentity.privateKeyPem, payload)
+          value: signStableObject(text(state.serverIdentity.privateKeyPem), payload)
         }
       };
-      const next: Record<string, any> = { ...binding, status: "revoked", revokedAt, receiptDigest };
-      const previousState: any = state;
-      const previousRecord: any = record;
+      const next: Record<string, unknown> = { ...binding, status: "revoked", revokedAt, receiptDigest };
+      const previousState = state;
+      const previousRecord = record;
       state = {
         ...state,
-        ownerProcessBindings: state.ownerProcessBindings.map((candidate?: any) : any => candidate.processIdentityRef === processIdentityRef ? next : candidate)
+        ownerProcessBindings: state.ownerProcessBindings.map((candidate)  => candidate.processIdentityRef === processIdentityRef ? next : candidate)
       };
       try {
         await save();
-      } catch (error: any) {
+      } catch (error) {
         state = previousState;
         record = previousRecord;
         loaded = true;
@@ -824,23 +954,23 @@ export function createProcessIdentityService({
     });
   }
 
-  async function revokeOwnerProcessBindings(input: Record<string, any> = {}) : Promise<any> {
-    return enqueueMutation(async () : Promise<any> => {
-      const ownerId: any = text(input.ownerId);
-      const ownerGenerationDigest: any = text(input.ownerGenerationDigest);
+  async function revokeOwnerProcessBindings(input: Record<string, unknown> = {})  {
+    return enqueueMutation(async ()  => {
+      const ownerId = text(input.ownerId);
+      const ownerGenerationDigest = text(input.ownerGenerationDigest);
       if (!/^[a-z0-9][a-z0-9-]{0,127}$/u.test(ownerId) || !/^[a-f0-9]{64}$/u.test(ownerGenerationDigest)) return deny(400, "owner_process_binding_owner_invalid", "Owner process binding owner is invalid.");
-      const revokedAt: any = nowIso();
-      const retiredGenerations: any = state.retiredOwnerProcessBindingGenerations || [];
-      const alreadyRetired: any = retiredGenerations.some((entry?: any) : any => entry.ownerId === ownerId &&
+      const revokedAt = nowIso();
+      const retiredGenerations = state.retiredOwnerProcessBindingGenerations || [];
+      const alreadyRetired = retiredGenerations.some((entry)  => entry.ownerId === ownerId &&
         entry.ownerGenerationDigest === ownerGenerationDigest);
       if (!alreadyRetired && retiredGenerations.length >= MAX_RETIRED_OWNER_PROCESS_BINDING_GENERATIONS) {
         return deny(507, "owner_process_binding_retirement_capacity_exceeded", "Owner process binding retirement capacity is full.");
       }
-      let revokedCount: any = 0;
-      const nextBindings: any = (state.ownerProcessBindings || []).map((binding?: any) : any => {
+      let revokedCount = 0;
+      const nextBindings = (state.ownerProcessBindings || []).map((binding)  => {
         if (binding.ownerId !== ownerId || binding.ownerGenerationDigest !== ownerGenerationDigest || binding.status === "revoked") return binding;
         revokedCount += 1;
-        const receiptDigest: any = sha256Hex(stableJson({
+        const receiptDigest = sha256Hex(stableJson({
           receiptKind: "owner-process-bindings-revocation",
           ownerId,
           ownerGenerationDigest,
@@ -853,8 +983,8 @@ export function createProcessIdentityService({
         return { ...binding, status: "revoked", revokedAt, receiptDigest };
       });
       if (revokedCount > 0 || !alreadyRetired) {
-        const previousState: any = state;
-        const previousRecord: any = record;
+        const previousState = state;
+        const previousRecord = record;
         state = {
           ...state,
           ownerProcessBindings: nextBindings,
@@ -864,30 +994,30 @@ export function createProcessIdentityService({
         };
         try {
           await save();
-        } catch (error: any) {
+        } catch (error) {
           state = previousState;
           record = previousRecord;
           loaded = true;
           throw error;
         }
       }
-      const remainingCount: any = nextBindings.filter((binding?: any) : any => binding.ownerId === ownerId && binding.ownerGenerationDigest === ownerGenerationDigest && binding.status !== "revoked").length;
+      const remainingCount = nextBindings.filter((binding)  => binding.ownerId === ownerId && binding.ownerGenerationDigest === ownerGenerationDigest && binding.status !== "revoked").length;
       return { ok: remainingCount === 0, ownerId, ownerGenerationDigest, revokedCount, remainingCount };
     });
   }
 
-  async function verifyOwnerProcessBindingsRevoked(input: Record<string, any> = {}) : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  async function verifyOwnerProcessBindingsRevoked(input: Record<string, unknown> = {})  {
+    await mutationQueue.catch(()  => {});
     await load();
-    const ownerId: any = text(input.ownerId);
-    const ownerGenerationDigest: any = text(input.ownerGenerationDigest);
+    const ownerId = text(input.ownerId);
+    const ownerGenerationDigest = text(input.ownerGenerationDigest);
     if (!/^[a-z0-9][a-z0-9-]{0,127}$/u.test(ownerId) || !/^[a-f0-9]{64}$/u.test(ownerGenerationDigest)) return deny(400, "owner_process_binding_owner_invalid", "Owner process binding owner is invalid.");
-    const remainingCount: any = (state.ownerProcessBindings || []).filter((binding?: any) : any => binding.ownerId === ownerId && binding.ownerGenerationDigest === ownerGenerationDigest && binding.status !== "revoked").length;
+    const remainingCount = (state.ownerProcessBindings || []).filter((binding)  => binding.ownerId === ownerId && binding.ownerGenerationDigest === ownerGenerationDigest && binding.status !== "revoked").length;
     return { ok: remainingCount === 0, ownerId, ownerGenerationDigest, remainingCount };
   }
 
-  async function describe() : Promise<any> {
-    await mutationQueue.catch(() : any => {});
+  async function describe()  {
+    await mutationQueue.catch(()  => {});
     await load();
     return {
       ok: true,
@@ -897,7 +1027,7 @@ export function createProcessIdentityService({
       serverIdentity: publicServerIdentity(state.serverIdentity),
       claimed: state.claimed === true,
       claimCount: Number(state.claimCount || 0),
-      activeClientCount: state.clients.filter((client?: any) : any => client.status === "valid").length,
+      activeClientCount: state.clients.filter((client)  => client.status === "valid").length,
       clientCount: state.clients.length,
       statePath: processIdentityStatePath({ dataDir: resolvedDataDir, alias: resolvedAlias })
     };
@@ -919,7 +1049,7 @@ export function createProcessIdentityService({
     describe,
     capabilityKeyProvider: resolvedCapabilityKeyProvider,
     capabilityBindingGuard: resolvedBindingGuard,
-    close() : any {
+    close()  {
       resolvedCapabilityKeyProvider.close?.();
       resolvedBindingGuard.close?.();
     }

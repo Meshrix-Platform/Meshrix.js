@@ -39,36 +39,6 @@ export function queueLifecycleLabel(status: string) : any {
   return labels[String(status || "").toLowerCase()] || status || "未知";
 }
 
-export function maintenanceAgentStatusTone(status: string) : any {
-  if (status === "awaiting_approval" || status === "queued") {
-    return "queued";
-  }
-  if (status === "running") {
-    return "running";
-  }
-  if (status === "completed") {
-    return "completed";
-  }
-  if (status === "completed_with_errors") {
-    return "queued";
-  }
-  return "failed";
-}
-
-export function maintenanceAgentStatusLabel(status: string) : any {
-  const labels: Record<string, string> = {
-    awaiting_approval: "待审批",
-    queued: "排队",
-    running: "运行中",
-    completed: "已完成",
-    completed_with_errors: "有错误",
-    failed: "失败",
-    cancelled: "已取消",
-    rejected: "已拒绝",
-  };
-  return labels[status] || status || "未知";
-}
-
 export function backgroundProcessTone(status: string) : any {
   if (status === "running") {
     return "running";
@@ -148,16 +118,6 @@ export function monitorAlertSeverityLabel(severity: string) : any {
     info: "提示",
   };
   return labels[severity] || severity || "未知";
-}
-
-export function maintenanceAgentRiskLabel(risk: string) : any {
-  const labels: Record<string, string> = {
-    read_only: "只读",
-    safe_write: "安全写入",
-    repair_write: "修复写入",
-    destructive: "破坏性",
-  };
-  return labels[risk] || risk || "未知";
 }
 
 export function alignmentTone(state: ClientAlignmentState) : any {

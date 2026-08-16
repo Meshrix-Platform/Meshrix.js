@@ -2,46 +2,60 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 
-function boundedInteger(value?: any, fallback?: any, { min = 1, max = 10 }: Record<string, any> = {}) : any {
-  const parsed: any = Number(value);
+interface IntegerBounds {
+  min?: number;
+  max?: number;
+}
+
+type DownloadEnvironment = Readonly<Record<string, string | undefined>>;
+
+export interface Sha256Verification {
+  ok: boolean;
+  expected: string;
+  actual: string;
+  error?: "invalid_expected_sha256";
+}
+
+function boundedInteger(value: unknown, fallback: number, { min = 1, max = 10 }: IntegerBounds = {}): number {
+  const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return fallback;
   }
   return Math.min(max, Math.max(min, Math.trunc(parsed)));
 }
 
-export function downloadRetryAttempts(env: any = process.env) : any {
+export function downloadRetryAttempts(env: DownloadEnvironment = process.env): number {
   return boundedInteger(env.MESHRIX_DOWNLOAD_RETRY_ATTEMPTS, 3, { min: 1, max: 10 });
 }
 
-export function retryDelayMs(attemptIndex: any = 0, env: any = process.env) : any {
-  const baseMs: any = boundedInteger(env.MESHRIX_DOWNLOAD_RETRY_DELAY_MS, 500, { min: 50, max: 30_000 });
-  const cappedAttempt: any = Math.min(6, Math.max(0, Math.trunc(Number(attemptIndex) || 0)));
+export function retryDelayMs(attemptIndex: unknown = 0, env: DownloadEnvironment = process.env): number {
+  const baseMs = boundedInteger(env.MESHRIX_DOWNLOAD_RETRY_DELAY_MS, 500, { min: 50, max: 30_000 });
+  const cappedAttempt = Math.min(6, Math.max(0, Math.trunc(Number(attemptIndex) || 0)));
   return Math.min(30_000, baseMs * (2 ** cappedAttempt));
 }
 
-export async function fileSize(filePath: any = "") : Promise<any> {
+export async function fileSize(filePath = ""): Promise<number> {
   if (!filePath) {
     return 0;
   }
   try {
-    const stat: any = await fsp.stat(filePath);
+    const stat = await fsp.stat(filePath);
     return stat.isFile() ? stat.size : 0;
   } catch {
     return 0;
   }
 }
 
-export function normalizeSha256(value: any = "") : any {
-  const normalized: any = String(value || "")
+export function normalizeSha256(value: unknown = ""): string {
+  const normalized = String(value || "")
     .trim()
     .replace(/^sha256:/i, "")
     .toLowerCase();
   return /^[a-f0-9]{64}$/.test(normalized) ? normalized : "";
 }
 
-export async function verifyFileSha256(filePath: any = "", expectedSha256: any = "") : Promise<any> {
-  const expected: any = normalizeSha256(expectedSha256);
+export async function verifyFileSha256(filePath = "", expectedSha256: unknown = ""): Promise<Sha256Verification> {
+  const expected = normalizeSha256(expectedSha256);
   if (!expected) {
     return {
       ok: false,
@@ -50,14 +64,14 @@ export async function verifyFileSha256(filePath: any = "", expectedSha256: any =
       error: "invalid_expected_sha256"
     };
   }
-  const hash: any = crypto.createHash("sha256");
-  await new Promise((resolve?: any, reject?: any) : any => {
-    const stream: any = fs.createReadStream(filePath);
-    stream.on("data", (chunk?: any) : any => hash.update(chunk));
+  const hash = crypto.createHash("sha256");
+  await new Promise<void>((resolve, reject) => {
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => { hash.update(chunk); });
     stream.on("error", reject);
-    stream.on("end", resolve);
+    stream.on("end", () => { resolve(); });
   });
-  const actual: any = hash.digest("hex");
+  const actual = hash.digest("hex");
   return {
     ok: actual === expected,
     expected,
@@ -65,8 +79,8 @@ export async function verifyFileSha256(filePath: any = "", expectedSha256: any =
   };
 }
 
-export function outputMentionsRangeUnsupported(output: any = "") : any {
-  const text: any = String(output || "").toLowerCase();
+export function outputMentionsRangeUnsupported(output: unknown = ""): boolean {
+  const text = String(output || "").toLowerCase();
   return text.includes("416") ||
     /range.*not.*satisf/.test(text) ||
     /requested range/.test(text) ||

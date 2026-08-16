@@ -218,6 +218,9 @@ async function createVerifierApiKey() : Promise<any> {
       label: "stress-mcp-gateway",
       connectorVersion: "stress-mcp-gateway",
       toolsets: ["meshrix.gateway.read", "meshrix.gateway.write", "meshrix.storage.read"],
+      maxRisk: "safe_write",
+      maxUses: 4_096,
+      requestsPerWindow: 4_096,
       dynamicCapabilities: [upstreamOperationCapabilityId(
         { serviceId: SERVICE_ID },
         { operationKey: "echo" }
@@ -393,7 +396,8 @@ try {
   const healthPhase: any = await runPhase(
     "downstream-mcp-system-health",
     (id?: any) : any => mcpRequest(id, "meshrix.discovery", "system.health", {}),
-    safetyMonitor
+    safetyMonitor,
+    { durationMs: Math.max(options.durationMs, 15_000) }
   );
   const gatewayPhase: any = await runPhase(
     "upstream-gateway-forward-through-mcp",
@@ -403,7 +407,7 @@ try {
       query: { i: String(id) }
     }),
     safetyMonitor,
-    { durationMs: Math.max(options.durationMs, 15000) }
+    { durationMs: Math.max(options.durationMs, options.requests * 500) }
   );
 
   const phases: any[] = [healthPhase, gatewayPhase];

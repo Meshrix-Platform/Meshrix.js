@@ -4,37 +4,63 @@ import path from "node:path";
 
 import { ServerConfig } from "#meshrix/server-config";
 
-export const LOCAL_SECRET_KEY_PROVIDER_VERSION: any =
+export const LOCAL_SECRET_KEY_PROVIDER_VERSION =
   "v0.0.1:security:local-secret-key-provider-1";
-export const LOCAL_SECRET_MASTER_KEY_FILE_ENV: any =
+export const LOCAL_SECRET_MASTER_KEY_FILE_ENV =
   "MESHRIX_LOCAL_SECRET_MASTER_KEY_FILE";
 
-const MASTER_KEY_BYTES: any = 32;
-const HEX_KEY_PATTERN: any = /^[0-9a-f]{64}$/u;
-const defaultProviders: any = new Map<any, any>();
+const MASTER_KEY_BYTES = 32;
+const HEX_KEY_PATTERN = /^[0-9a-f]{64}$/u;
 
-function text(value?: any) : any {
+export interface LocalSecretKeyFact {
+  readonly protocolVersion: string;
+  readonly custody: string;
+  readonly keyId: string;
+  readonly key: Buffer;
+}
+
+export interface LocalSecretKeyProvider {
+  readonly protocolVersion: string;
+  readonly custody: string;
+  loadKey(): Promise<LocalSecretKeyFact>;
+  close(): void;
+  describe(): Readonly<{
+    protocolVersion: string;
+    custody: string;
+    configured: boolean;
+  }>;
+}
+
+interface KeyProviderOptions {
+  dataDir?: string;
+  keyFile?: string;
+  keyProvider?: LocalSecretKeyProvider | null;
+}
+
+const defaultProviders = new Map<string, LocalSecretKeyProvider>();
+
+function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function keyProviderError(code?: any, message?: any) : any {
-  const error: Error & Record<string, any> = new Error(message);
+function keyProviderError(code = "local_secret_key_unavailable", message = "Meshrix.js local secret key is unavailable."): Error & { code: string } {
+  const error = new Error(message) as Error & { code: string };
   error.code = code;
   return error;
 }
 
-function resolvedDataDir(dataDir: any = "") : any {
+function resolvedDataDir(dataDir = ""): string {
   return path.resolve(text(dataDir) || ServerConfig.getDataDir());
 }
 
-function pathIsWithin(parent?: any, child?: any) : any {
-  const relative: any = path.relative(parent, child);
+function pathIsWithin(parent = "", child = ""): boolean {
+  const relative = path.relative(parent, child);
   return relative === "" ||
     (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
-function parseMasterKey(bytes?: any) : any {
-  const encoded: any = bytes.toString("utf8").trim().toLowerCase();
+function parseMasterKey(bytes: Buffer): Buffer {
+  const encoded = bytes.toString("utf8").trim().toLowerCase();
   if (!HEX_KEY_PATTERN.test(encoded)) {
     throw keyProviderError(
       "local_secret_key_invalid",
@@ -44,7 +70,7 @@ function parseMasterKey(bytes?: any) : any {
   return Buffer.from(encoded, "hex");
 }
 
-function keyFact(key?: any, custody?: any) : any {
+function keyFact(key: Buffer, custody: string): Readonly<LocalSecretKeyFact> {
   if (!Buffer.isBuffer(key) || key.length !== MASTER_KEY_BYTES) {
     throw keyProviderError(
       "local_secret_key_invalid",
@@ -59,8 +85,8 @@ function keyFact(key?: any, custody?: any) : any {
   });
 }
 
-async function validateExternalKeyFile({ dataDir, keyFile }: Record<string, any>) : Promise<any> {
-  const configuredPath: any = text(keyFile);
+async function validateExternalKeyFile({ dataDir = "", keyFile = "" }: KeyProviderOptions): Promise<string> {
+  const configuredPath = text(keyFile);
   if (!configuredPath || !path.isAbsolute(configuredPath)) {
     throw keyProviderError(
       "local_secret_key_unavailable",
@@ -68,9 +94,9 @@ async function validateExternalKeyFile({ dataDir, keyFile }: Record<string, any>
     );
   }
   const [keyStat, keyRealPath, dataRealPath] = await Promise.all([
-    fs.lstat(configuredPath).catch(() : any => null),
-    fs.realpath(configuredPath).catch(() : any => ""),
-    fs.realpath(resolvedDataDir(dataDir)).catch(() : any => resolvedDataDir(dataDir)),
+    fs.lstat(configuredPath).catch(() => null),
+    fs.realpath(configuredPath).catch(() => ""),
+    fs.realpath(resolvedDataDir(dataDir)).catch(() => resolvedDataDir(dataDir)),
   ]);
   if (
     !keyStat?.isFile() ||
@@ -95,14 +121,14 @@ async function validateExternalKeyFile({ dataDir, keyFile }: Record<string, any>
 export function createFileLocalSecretKeyProvider({
   dataDir = "",
   keyFile = process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV] || "",
-}: Record<string, any> = {}) : any {
-  let cachedKey: any = null;
-  let cachedKeyId: any = "";
+}: KeyProviderOptions = {}): LocalSecretKeyProvider {
+  let cachedKey: Buffer | null = null;
+  let cachedKeyId = "";
 
   return Object.freeze({
     protocolVersion: LOCAL_SECRET_KEY_PROVIDER_VERSION,
     custody: "external-file",
-    async loadKey() : Promise<any> {
+    async loadKey(): Promise<LocalSecretKeyFact> {
       if (cachedKey) {
         return Object.freeze({
           protocolVersion: LOCAL_SECRET_KEY_PROVIDER_VERSION,
@@ -111,13 +137,13 @@ export function createFileLocalSecretKeyProvider({
           key: Buffer.from(cachedKey),
         });
       }
-      const keyPath: any = await validateExternalKeyFile({ dataDir, keyFile });
-      let bytes: any;
-      let parsedKey: any;
+      const keyPath = await validateExternalKeyFile({ dataDir, keyFile });
+      let bytes: Buffer | undefined;
+      let parsedKey: Buffer | undefined;
       try {
         bytes = await fs.readFile(keyPath);
         parsedKey = parseMasterKey(bytes);
-        const fact: any = keyFact(parsedKey, "external-file");
+        const fact = keyFact(parsedKey, "external-file");
         cachedKey = Buffer.from(fact.key);
         cachedKeyId = fact.keyId;
         fact.key.fill(0);
@@ -127,8 +153,8 @@ export function createFileLocalSecretKeyProvider({
           keyId: cachedKeyId,
           key: Buffer.from(cachedKey),
         });
-      } catch (error: any) {
-        if (error?.code?.startsWith?.("local_secret_key_")) throw error;
+      } catch (error: unknown) {
+        if ((error as { code?: string })?.code?.startsWith("local_secret_key_")) throw error;
         throw keyProviderError(
           "local_secret_key_unavailable",
           "Meshrix.js local secret master key file is unavailable.",
@@ -138,12 +164,12 @@ export function createFileLocalSecretKeyProvider({
         parsedKey?.fill(0);
       }
     },
-    close() : any {
+    close(): void {
       cachedKey?.fill(0);
       cachedKey = null;
       cachedKeyId = "";
     },
-    describe() : any {
+    describe() {
       return Object.freeze({
         protocolVersion: LOCAL_SECRET_KEY_PROVIDER_VERSION,
         custody: "external-file",
@@ -155,9 +181,9 @@ export function createFileLocalSecretKeyProvider({
 
 export function createMemoryLocalSecretKeyProvider({
   key = crypto.randomBytes(MASTER_KEY_BYTES),
-}: Record<string, any> = {}) : any {
-  const retained: any = Buffer.from(key);
-  let closed: any = false;
+}: { key?: Uint8Array } = {}): LocalSecretKeyProvider {
+  const retained = Buffer.from(key);
+  let closed = false;
   if (retained.length !== MASTER_KEY_BYTES) {
     retained.fill(0);
     throw keyProviderError(
@@ -165,11 +191,11 @@ export function createMemoryLocalSecretKeyProvider({
       "Meshrix.js local secret master key is invalid.",
     );
   }
-  const keyId: any = `sha256:${crypto.createHash("sha256").update(retained).digest("hex")}`;
+  const keyId = `sha256:${crypto.createHash("sha256").update(retained).digest("hex")}`;
   return Object.freeze({
     protocolVersion: LOCAL_SECRET_KEY_PROVIDER_VERSION,
     custody: "memory",
-    async loadKey() : Promise<any> {
+    async loadKey(): Promise<LocalSecretKeyFact> {
       if (closed) {
         throw keyProviderError(
           "local_secret_key_unavailable",
@@ -183,11 +209,11 @@ export function createMemoryLocalSecretKeyProvider({
         key: Buffer.from(retained),
       });
     },
-    close() : any {
+    close(): void {
       closed = true;
       retained.fill(0);
     },
-    describe() : any {
+    describe() {
       return Object.freeze({
         protocolVersion: LOCAL_SECRET_KEY_PROVIDER_VERSION,
         custody: "memory",
@@ -197,7 +223,7 @@ export function createMemoryLocalSecretKeyProvider({
   });
 }
 
-export function resolveLocalSecretKeyProvider({ dataDir = "", keyProvider = null }: Record<string, any> = {}) : any {
+export function resolveLocalSecretKeyProvider({ dataDir = "", keyProvider = null }: KeyProviderOptions = {}): LocalSecretKeyProvider {
   if (keyProvider) {
     if (typeof keyProvider.loadKey !== "function") {
       throw keyProviderError(
@@ -207,9 +233,9 @@ export function resolveLocalSecretKeyProvider({ dataDir = "", keyProvider = null
     }
     return keyProvider;
   }
-  const keyFile: any = text(process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV]);
-  const cacheKey: any = `${resolvedDataDir(dataDir)}\0${keyFile}`;
-  let provider: any = defaultProviders.get(cacheKey);
+  const keyFile = text(process.env[LOCAL_SECRET_MASTER_KEY_FILE_ENV]);
+  const cacheKey = `${resolvedDataDir(dataDir)}\0${keyFile}`;
+  let provider = defaultProviders.get(cacheKey);
   if (!provider) {
     provider = createFileLocalSecretKeyProvider({ dataDir, keyFile });
     defaultProviders.set(cacheKey, provider);
@@ -220,9 +246,9 @@ export function resolveLocalSecretKeyProvider({ dataDir = "", keyProvider = null
 export async function assertLocalSecretKeyReady({
   dataDir = "",
   keyProvider = null,
-}: Record<string, any> = {}) : Promise<any> {
-  const provider: any = resolveLocalSecretKeyProvider({ dataDir, keyProvider });
-  const fact: any = await provider.loadKey();
+}: KeyProviderOptions = {}) {
+  const provider = resolveLocalSecretKeyProvider({ dataDir, keyProvider });
+  const fact = await provider.loadKey();
   try {
     if (
       !Buffer.isBuffer(fact?.key) ||

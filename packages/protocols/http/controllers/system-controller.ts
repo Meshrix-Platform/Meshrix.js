@@ -3,7 +3,7 @@ import {
   contentDispositionHeader,
   sendJson
 } from "#meshrix/http-utils";
-import { createSystemControllerAgentSettingsHandlers } from "./system-controller-agent-settings-handlers.ts";
+import { createSystemControllerSettingsHandlers } from "./system-controller-settings-handlers.ts";
 import { createSystemControllerAppearancePresetHandlers } from "./system-controller-appearance-preset-handlers.ts";
 import { createSystemControllerAuthHandlers } from "./system-controller-auth-handlers.ts";
 import { createSystemControllerCapabilityEcosystemHandlers } from "./system-controller-capability-ecosystem-handlers.ts";
@@ -33,7 +33,6 @@ const CONSOLE_STATE_PROOF_FIELDS: Readonly<Record<string, any>> = Object.freeze(
   discovery: Object.freeze(["mode", "configVersion"]),
   agentConfigs: Object.freeze(["generation", "revision"]),
   readinessBaseline: Object.freeze(["status", "state", "version", "revision", "generation", "ok", "ready", "healthy"]),
-  maintenanceAgent: Object.freeze(["status", "state", "version", "revision", "generation", "enabled", "active", "ready", "healthy"]),
   storage: Object.freeze([
     "databaseExists",
     "objectCount",
@@ -111,7 +110,6 @@ export function consoleStateProofChangeProjection(consoleState: Record<string, a
     discovery: pickProofFields(state.discovery?.value, CONSOLE_STATE_PROOF_FIELDS.discovery),
     agentConfigs: pickProofFields(state.agentConfigs, CONSOLE_STATE_PROOF_FIELDS.agentConfigs),
     readinessBaseline: pickProofFields(state.readinessBaseline, CONSOLE_STATE_PROOF_FIELDS.readinessBaseline),
-    maintenanceAgent: pickProofFields(state.maintenanceAgent, CONSOLE_STATE_PROOF_FIELDS.maintenanceAgent),
     storage: pickProofFields(state.storage, CONSOLE_STATE_PROOF_FIELDS.storage),
     jobs: countProjection(state.jobs?.summary),
     clients: countProjection(state.clients?.summary),
@@ -128,7 +126,7 @@ export function createSystemController({
   distPath,
   runtime,
   moduleManagement,
-  externalGatewayManagement,
+  gatewayChannelRouter,
   jobWorkflowProvider,
   storageProvider = null,
   clientRegistryService = null,
@@ -143,7 +141,6 @@ export function createSystemController({
   securityPermissions = null,
   processIdentity = null,
   operationAuditStore = null,
-  maintenanceAgent = null,
   agentWorkspace = null,
   contextRuntime = null,
   modelDecisionRuntime = null,
@@ -183,7 +180,7 @@ export function createSystemController({
   const {
     executeConsoleDomainOperation,
     runtimeWorkflowContext,
-    settingsAgentGatewayContext,
+    settingsContext,
     authorizationFacadeContext,
     accessControlContext,
     appendConsoleOperationLog,
@@ -192,7 +189,7 @@ export function createSystemController({
     userDataPath,
     runtime,
     moduleManagement,
-    externalGatewayManagement,
+    gatewayChannelRouter,
     jobWorkflowProvider,
     storageProvider,
     clientRegistryService,
@@ -478,20 +475,19 @@ export function createSystemController({
       distPath,
       runtime,
       moduleManagement,
-      externalGatewayManagement,
+      gatewayChannelRouter,
       jobWorkflowProvider,
       storageProvider,
       clientRegistryService,
       securityPermissions: effectiveSecurityPermissions,
-      maintenanceAgent,
       getToolSkillManagementProvider,
       getIntegrationTaskSupervisorSnapshot,
       consoleDomainServices
     }),
-    ...createSystemControllerAgentSettingsHandlers({
+    ...createSystemControllerSettingsHandlers({
       sendConsoleDomainOperation,
       parseJsonBody,
-      settingsAgentGatewayContext
+      settingsContext
     }),
     ...createSystemControllerAppearancePresetHandlers({
       parseJsonBody,

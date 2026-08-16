@@ -8,7 +8,6 @@ export const INTERACTIVE_INTERFACE_MANIFEST: Readonly<Record<string, any>> = Obj
       // Settings
       Object.freeze({ name: "getSettingsPath", source: "#meshrix/settings" }),
       Object.freeze({ name: "loadSettings", source: "#meshrix/settings" }),
-      Object.freeze({ name: "resolveModelForModule", source: "#meshrix/settings" }),
       Object.freeze({ name: "saveSettings", source: "#meshrix/settings" }),
 
       // State coordination
@@ -33,8 +32,6 @@ export const INTERACTIVE_INTERFACE_MANIFEST: Readonly<Record<string, any>> = Obj
       Object.freeze({ name: "sendJson", source: "#meshrix/http-utils" }),
 
       // Agent gateway
-      Object.freeze({ name: "callAgentGateway", source: "../../../agents/src/agent-gateway/index.ts" }),
-      Object.freeze({ name: "publicAgentGatewayConfig", source: "../../../agents/src/agent-gateway/index.ts" }),
 
       // Observability and discovery
       Object.freeze({ name: "createRuntimeLogger", source: "#meshrix/runtime-logger" }),

@@ -1,8 +1,5 @@
 import path from "node:path";
 
-import { loadSettings } from "#meshrix/settings";
-import { getAgentConfigRegistry } from "#meshrix/agents/agent-configs/config-registry";
-import { createAgentRuntimeProvider } from "#meshrix/agents/agent-runtime-provider";
 import {
   createUpstreamGatewayRegistry,
   createUpstreamManifestObserver,
@@ -17,7 +14,6 @@ import {
 import { createWorkspaceAssetRegistry } from "#meshrix/agents/workspace-asset-registry/index";
 import { createToolSkillManagementProvider } from "#meshrix/capabilities/skills/tool-skill-management-provider";
 import { createOperationPermissionPlatform } from "#meshrix/capabilities/operation-permission-core/index";
-import { createOperationPermissionStore } from "#meshrix/capabilities/operation-permission-core/store";
 import { broadcastAudienceCatalogInvalidation } from "#meshrix/protocols/mcp/adapter/http-mcp-adapter";
 import { broadcastConfiguredMcpNotification } from "#meshrix/protocols/mcp/adapter/mcp-notification-bus";
 import { disconnectMcpSseConnectionsByGrant } from "../state/sse-connection-state.ts";
@@ -78,50 +74,6 @@ async function startUpstreamManifestObserver(observer?: any) : Promise<any> {
     throw error;
   }
   return outcome;
-}
-
-function maintenanceOwnershipResource(
-  maintenanceAgent?: any,
-  maintenanceWorkQueue?: any,
-  operationPermissionStore?: any
-) : any {
-  return {
-    async close() : Promise<any> {
-      let failure: any = null;
-      try {
-        await maintenanceWorkQueue?.stop?.();
-      } catch (error: any) {
-        failure = error;
-      }
-      if (failure) throw failure;
-      try {
-        await maintenanceAgent?.close?.();
-      } catch (error: any) {
-        failure = error;
-      }
-      try {
-        await maintenanceWorkQueue?.close?.();
-      } catch (error: any) {
-        failure ||= error;
-      }
-      let operationPermissionStoreClosed: any = false;
-      try {
-        operationPermissionStoreClosed =
-          typeof operationPermissionStore?.isClosed === "function" &&
-          operationPermissionStore.isClosed();
-      } catch (error: any) {
-        failure ||= error;
-      }
-      if (!operationPermissionStoreClosed) {
-        try {
-          await operationPermissionStore?.close?.();
-        } catch (error: any) {
-          failure ||= error;
-        }
-      }
-      if (failure) throw failure;
-    }
-  };
 }
 
 export async function createServerOperationPermissionPlatform({
@@ -378,9 +330,15 @@ export async function createServerConsoleOperationProviders({
           getOperationPermissionPlatform,
           getGrants: async () : Promise<any> => {
             const platform: any = getOperationPermissionPlatform?.();
-            return typeof platform?.store?.listGrants === "function"
-              ? await platform.store.listGrants({ includeRevoked: false })
-              : [];
+            const [grants, apiKeyGrants]: any[] = await Promise.all([
+              typeof platform?.store?.listGrants === "function"
+                ? platform.store.listGrants({ includeRevoked: false })
+                : [],
+              typeof platform?.apiKeyDistributionProvider?.listAudienceGrants === "function"
+                ? platform.apiKeyDistributionProvider.listAudienceGrants()
+                : []
+            ]);
+            return [...(grants || []), ...(apiKeyGrants || [])];
           },
           getTagStore: () : any => securityPermissions?.tagManagementStore || null,
           getPolicyRevision: () : any => Number(securityPermissions?.getGovernancePolicyRevision?.()?.revision || 0) || 0,
@@ -400,7 +358,13 @@ export async function createServerConsoleOperationProviders({
         });
         const refreshAudience: any = async (event: Record<string, any> = {}) : Promise<any> => {
           const result: any = await manifestSnapshotCommitter?.refreshAudienceProjection?.();
-          if (["grant_token_rotated", "grant_revoked", "grant_deleted"].includes(event?.reasonCode)) {
+          if ([
+            "grant_token_rotated",
+            "grant_revoked",
+            "grant_deleted",
+            "api_key_rotate",
+            "api_key_revoke"
+          ].includes(event?.reasonCode)) {
             disconnectMcpSseConnectionsByGrant(event.grantId);
           }
           return result;
@@ -488,26 +452,11 @@ export function createServerConsoleDomainServices({
   ) {
     throw new TypeError("Server composition requires the bound upload session store.");
   }
-  const runtimeAgentConfigRegistry: any = () : any => getAgentConfigRegistry({
-    rootPath: path.join(userDataPath, "agent-configs")
-  });
-  const loadAgentGatewayModule: any = () : any => import("#meshrix/agents/agent-gateway/index");
-  const loadModelProbeModule: any = () : any => import("#meshrix/agents/agent-gateway/model-probe/index");
-  const agentRuntimeProvider: any = createAgentRuntimeProvider({
-    getAgentConfigRegistry: runtimeAgentConfigRegistry,
-    loadAgentGatewayModule,
-    loadModelProbeModule,
-    loadRuntimeSettings: settingsPort.loadSettings
-  });
   return createConsoleDomainServices({
     userDataPath,
-    getAgentConfigRegistry: runtimeAgentConfigRegistry,
-    agentRuntimeProvider,
     uploadSessionStore,
     consoleOperationProviders,
-    settingsPort,
-    loadAgentGatewayModule,
-    loadModelProbeModule
+    settingsPort
   });
 }
 
@@ -542,10 +491,7 @@ export async function createServerRuntimeProviders({
       concurrencyScope: operationConcurrencyScope
     });
     let strategyManagementProvider: any = null;
-    const needsContextRuntime: any = isAnyFeatureActive(
-      "context-runtime-core",
-      "maintenance-agent-runbooks"
-    );
+    const needsContextRuntime: any = isFeatureActive("context-runtime-core");
     const needsAgentMemory: any = isFeatureActive("agent-memory") || needsContextRuntime;
     const agentMemory: any = await createProvider(
       needsAgentMemory,
@@ -554,100 +500,16 @@ export async function createServerRuntimeProviders({
       [{ userDataPath }]
     );
     ownedResources.push(agentMemory);
-    const callAgentGatewayIfAvailable: any = async (input: Record<string, any> = {}, options: Record<string, any> = {}) : Promise<any> => {
-      if (!isFeatureActive("agent-gateway")) {
-        throw new Error("AgentGateway feature is not active in this feature edition.");
-      }
-      const { callAgentGateway } = await import("#meshrix/agents/agent-gateway/index");
-      return callAgentGateway({
-        ...options,
-        input,
-        userDataPath
-      });
-    };
     const contextRuntime: any = await createProvider(
       needsContextRuntime,
       "#meshrix/server-runtime/state/interface/index",
       "createContextRuntime",
       [{
         userDataPath,
-        agentMemory,
-        agentGatewayCall: async (input: Record<string, any> = {}) : Promise<any> => callAgentGatewayIfAvailable(input, {
-          settings: await loadSettings(userDataPath),
-          contextCompactionSource: "context-runtime"
-        })
+        agentMemory
       }]
     );
     ownedResources.push(contextRuntime);
-    const maintenanceAgentEnabled: any = isFeatureActive("maintenance-agent-runbooks");
-    const maintenanceOperationPermissionStore: any = maintenanceAgentEnabled
-      ? createOperationPermissionStore({
-          userDataPath,
-          securityPermissions,
-          governancePolicyRevisionProvider: () : any =>
-            securityPermissions?.getGovernancePolicyRevision?.()
-        })
-      : null;
-    if (maintenanceOperationPermissionStore) {
-      ownedResources.push(maintenanceOperationPermissionStore);
-    }
-    let maintenanceAgent: any = null;
-    const maintenanceWorkQueue: any = await createProvider(
-      maintenanceAgentEnabled,
-      "#meshrix/server-runtime/composition/maintenance-work-queue-provider",
-      "createMaintenanceWorkQueueProvider",
-      maintenanceAgentEnabled
-        ? [{
-            queueApplicationPort,
-            getMaintenanceAgent: () : any => maintenanceAgent,
-            capabilitySelected: true,
-            autoStart: false,
-            consumerEnabled: process.env.MESHRIX_MAINTENANCE_WORKER_EXTERNAL !== "1"
-          }]
-        : []
-    );
-    if (maintenanceWorkQueue) {
-      ownedResources.push(maintenanceWorkQueue);
-    }
-    maintenanceAgent = await createProvider(
-      maintenanceAgentEnabled,
-      "#meshrix/agents/maintenance/index",
-      "createMaintenanceAgentService",
-      maintenanceAgentEnabled
-        ? [{
-            userDataPath,
-            runtime,
-            jobManager,
-            protocolEventBus,
-            getDiscoveryState,
-            getListenUrl,
-            contextRuntime,
-            loadRuntimeSettings: loadSettings,
-            getControllers,
-            operationDispatcher,
-            operationAuditStore,
-            operationProofSubstrate,
-            operationConcurrencyScope,
-            operationPermissionStore: maintenanceOperationPermissionStore,
-            getGovernancePolicyRevision: () : any =>
-              securityPermissions?.getGovernancePolicyRevision?.(),
-            workQueuePort: maintenanceWorkQueue,
-            schedulerEnabled: process.env.MESHRIX_MAINTENANCE_WORKER_EXTERNAL !== "1",
-            logger: runtimeLogger
-          }]
-        : []
-    );
-    if (maintenanceAgent) {
-      ownedResources.pop();
-      ownedResources.pop();
-      ownedResources.push(maintenanceOwnershipResource(
-        maintenanceAgent,
-        maintenanceWorkQueue,
-        maintenanceOperationPermissionStore
-      ));
-      await maintenanceAgent.start();
-      maintenanceWorkQueue.start();
-    }
     const agentWorkspace: any = await createProvider(
       isFeatureActive("agent-workspace-core"),
       "#meshrix/agents/agent-workspace/index",
@@ -673,8 +535,6 @@ export async function createServerRuntimeProviders({
     ownedResources.push(strategyManagementProvider);
     return Object.freeze({
       contextRuntime,
-      maintenanceAgent,
-      maintenanceWorkQueue,
       agentWorkspace,
       strategyManagementProvider,
       modelDecisionRuntime: null

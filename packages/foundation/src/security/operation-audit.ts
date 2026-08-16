@@ -27,18 +27,53 @@ const COMMANDS: readonly string[] = Object.freeze([
   "close"
 ]);
 
-function restoreOperationAuditError(error: any) : never {
-  const details: Record<string, any> = error?.details || {};
-  if (error?.code === "operation_audit_capacity_exhausted") {
-    throw new OperationAuditCapacityError(details.reason, details.limit, details.actual);
+type DataRecord = Record<string, unknown>;
+interface OperationAuditStoreOptions {
+  userDataPath?: string;
+  maxPending?: number;
+  maxPendingBytes?: number;
+  defaultDeadlineMs?: number;
+}
+interface SqliteExecutionLane {
+  execute(kind: string, payload: DataRecord): Promise<unknown>;
+  close(): Promise<unknown>;
+  getStats(): unknown;
+}
+export interface OperationAuditStore {
+  lane: SqliteExecutionLane;
+  append(entry?: DataRecord): Promise<unknown>;
+  appendIdempotent(entry?: DataRecord): Promise<unknown>;
+  getById(auditId?: string): Promise<unknown>;
+  list(input?: DataRecord): Promise<unknown>;
+  getRetentionPolicy(): Promise<unknown>;
+  setRetentionPolicy(input?: DataRecord): Promise<unknown>;
+  pruneExpired(input?: DataRecord): Promise<unknown>;
+  exportRedacted(input?: DataRecord): Promise<unknown>;
+  getTrace(traceId?: string, input?: DataRecord): Promise<unknown>;
+  getCapacityStats(): Promise<unknown>;
+  close(): Promise<unknown>;
+  getStats(): unknown;
+}
+
+function record(value: unknown): DataRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as DataRecord
+    : {};
+}
+
+function restoreOperationAuditError(error: unknown): never {
+  const source = record(error);
+  const details = record(source.details);
+  if (source.code === "operation_audit_capacity_exhausted") {
+    throw new OperationAuditCapacityError(String(details.reason || "unknown"), Number(details.limit || 0), Number(details.actual || 0));
   }
-  if (error?.code === "operation_audit_id_required") {
+  if (source.code === "operation_audit_id_required") {
     throw new OperationAuditIdRequiredError();
   }
-  if (error?.code === "operation_audit_idempotency_conflict") {
-    throw new OperationAuditIdempotencyConflictError(details.auditId);
+  if (source.code === "operation_audit_idempotency_conflict") {
+    throw new OperationAuditIdempotencyConflictError(String(details.auditId || ""));
   }
-  throw error;
+  throw error instanceof Error ? error : new Error("Operation audit execution failed.");
 }
 
 /**
@@ -51,8 +86,8 @@ export function createOperationAuditStore({
   maxPending = 1024,
   maxPendingBytes = 16 * 1024 * 1024,
   defaultDeadlineMs = 30_000
-}: Record<string, any>) : Readonly<Record<string, any>> {
-  const lane: any = createSqliteExecutionLane({
+}: OperationAuditStoreOptions): Readonly<OperationAuditStore> {
+  const lane = createSqliteExecutionLane({
     owner: "mandatory-evidence-operation-audit",
     workerUrl: new URL(
       `./operation-audit-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`,
@@ -63,30 +98,30 @@ export function createOperationAuditStore({
     maxPending,
     maxPendingBytes,
     defaultDeadlineMs
-  });
+  }) as SqliteExecutionLane;
 
-  async function execute(kind: string, payload: Record<string, any> = {}) : Promise<any> {
+  async function execute(kind: string, payload: DataRecord = {}): Promise<unknown> {
     try {
       return await lane.execute(kind, payload);
-    } catch (error: any) {
+    } catch (error: unknown) {
       return restoreOperationAuditError(error);
     }
   }
 
   return Object.freeze({
     lane,
-    append: (entry: Record<string, any> = {}) : Promise<any> => execute("append", entry),
-    appendIdempotent: (entry: Record<string, any> = {}) : Promise<any> => execute("appendIdempotent", entry),
-    getById: (auditId = "") : Promise<any> => execute("getById", auditId ? { auditId } : {}),
-    list: (input: Record<string, any> = {}) : Promise<any> => execute("list", input),
-    getRetentionPolicy: () : Promise<any> => execute("getRetentionPolicy"),
-    setRetentionPolicy: (input: Record<string, any> = {}) : Promise<any> => execute("setRetentionPolicy", input),
-    pruneExpired: (input: Record<string, any> = {}) : Promise<any> => execute("pruneExpired", input),
-    exportRedacted: (input: Record<string, any> = {}) : Promise<any> => execute("exportRedacted", input),
-    getTrace: (traceId = "", input: Record<string, any> = {}) : Promise<any> => execute("getTrace", { traceId, input }),
-    getCapacityStats: () : Promise<any> => execute("getCapacityStats"),
-    close: () : Promise<any> => lane.close(),
-    getStats: () : any => lane.getStats()
+    append: (entry: DataRecord = {}) => execute("append", entry),
+    appendIdempotent: (entry: DataRecord = {}) => execute("appendIdempotent", entry),
+    getById: (auditId = "") => execute("getById", auditId ? { auditId } : {}),
+    list: (input: DataRecord = {}) => execute("list", input),
+    getRetentionPolicy: () => execute("getRetentionPolicy"),
+    setRetentionPolicy: (input: DataRecord = {}) => execute("setRetentionPolicy", input),
+    pruneExpired: (input: DataRecord = {}) => execute("pruneExpired", input),
+    exportRedacted: (input: DataRecord = {}) => execute("exportRedacted", input),
+    getTrace: (traceId = "", input: DataRecord = {}) => execute("getTrace", { traceId, input }),
+    getCapacityStats: () => execute("getCapacityStats"),
+    close: () => lane.close(),
+    getStats: () => lane.getStats()
   });
 }
 

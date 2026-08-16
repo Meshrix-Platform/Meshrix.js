@@ -1,8 +1,14 @@
-export const M7_REGIONAL_DR_PROFILE: any = "regional-dr";
+import {
+  assertM7Reports,
+  assertM7ReportShape,
+  isPlainObject
+} from "./m7-report-discipline.ts";
 
-export const M7_REGIONAL_DR_ENVIRONMENT_VAR: any = "MESHRIX_M7_REGIONAL_DR_ENVIRONMENT";
+export const M7_REGIONAL_DR_PROFILE = "regional-dr";
 
-export const M7_REGIONAL_DR_DISCIPLINE: Readonly<Record<string, any>> = Object.freeze({
+export const M7_REGIONAL_DR_ENVIRONMENT_VAR = "MESHRIX_M7_REGIONAL_DR_ENVIRONMENT";
+
+export const M7_REGIONAL_DR_DISCIPLINE = Object.freeze({
   id: "m7-regional-dr-capacity-fault",
   profile: M7_REGIONAL_DR_PROFILE,
   requirement: "REQ-SCALE-M7-REGIONAL-DR",
@@ -40,15 +46,11 @@ export const M7_REGIONAL_DR_DISCIPLINE: Readonly<Record<string, any>> = Object.f
   }),
 });
 
-function isPlainObject(value?: any) : any {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function hasNonEmptyString(value?: any) : any {
+function hasNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-export function assertM7RegionalDrEnvironmentReceipt(receipt?: any) : any {
+export function assertM7RegionalDrEnvironmentReceipt(receipt?: unknown): true {
   if (!isPlainObject(receipt)) {
     throw new Error("Regional-DR M7 environment receipt must be an object.");
   }
@@ -62,51 +64,18 @@ export function assertM7RegionalDrEnvironmentReceipt(receipt?: any) : any {
     throw new Error("Regional-DR M7 environment receipt classification is missing.");
   }
   for (const field of ["primary", "secondary"]) {
-    if (!isPlainObject(receipt[field]) || !hasNonEmptyString(receipt[field].serviceUrl)) {
+    const endpoint = receipt[field];
+    if (!isPlainObject(endpoint) || !hasNonEmptyString(endpoint.serviceUrl)) {
       throw new Error(`Regional-DR M7 environment receipt ${field}.serviceUrl is missing.`);
     }
   }
   return true;
 }
 
-export function assertM7RegionalDrReportShape(report?: any, kind?: any) : any {
-  const spec: any = M7_REGIONAL_DR_DISCIPLINE.reports[kind];
-  if (!spec) {
-    throw new Error(`Unknown regional-DR M7 report kind: ${String(kind)}.`);
-  }
-  if (!isPlainObject(report)) {
-    throw new Error(`${kind} report must be an object.`);
-  }
-  if (report.schema_version !== spec.schemaVersion) {
-    throw new Error(`${kind} report schema version is not current.`);
-  }
-  if (report.profile !== M7_REGIONAL_DR_PROFILE) {
-    throw new Error(`${kind} report profile must be regional-dr.`);
-  }
-  if (report.claim !== spec.claim) {
-    throw new Error(`${kind} report claim must remain ${spec.claim}.`);
-  }
-  if (typeof report.processPid !== "number" || report.processPid <= 0) {
-    throw new Error(`${kind} report must record the fresh verification process identity.`);
-  }
-  if (report.processPid === process.pid) {
-    throw new Error(`${kind} report must not be produced by the parent acceptance process.`);
-  }
-  if (typeof report.accepted !== "boolean") {
-    throw new Error(`${kind} report accepted flag is missing.`);
-  }
-  return true;
+export function assertM7RegionalDrReportShape(report?: unknown, kind?: unknown): true {
+  return assertM7ReportShape(M7_REGIONAL_DR_DISCIPLINE, report, kind, "regional-DR");
 }
 
-export function assertM7RegionalDrReports(reports?: any) : any {
-  if (!isPlainObject(reports)) {
-    throw new Error("Regional-DR M7 reports must be an object.");
-  }
-  for (const kind of Object.keys(M7_REGIONAL_DR_DISCIPLINE.reports)) {
-    assertM7RegionalDrReportShape(reports[kind], kind);
-    if (reports[kind].accepted !== true) {
-      throw new Error(`${kind} report is not accepted.`);
-    }
-  }
-  return true;
+export function assertM7RegionalDrReports(reports?: unknown): true {
+  return assertM7Reports(M7_REGIONAL_DR_DISCIPLINE, reports, "Regional-DR");
 }

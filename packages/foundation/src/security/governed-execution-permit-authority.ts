@@ -1,35 +1,59 @@
 import crypto from "node:crypto";
 import { canonicalJson } from "@meshrix/contracts/serialization/canonical-json";
 
-const PERMIT_PREFIX: any = "mxp_";
-const DEFAULT_TTL_MS: any = 15_000;
-const MAX_ACTIVE_PERMITS: any = 4_096;
-const MAX_PROOF_REF_BYTES: any = 256;
-const PROOF_REF_DIGEST_SCHEMA: any =
+const PERMIT_PREFIX = "mxp_";
+const DEFAULT_TTL_MS = 15_000;
+const MAX_ACTIVE_PERMITS = 4_096;
+const MAX_PROOF_REF_BYTES = 256;
+const PROOF_REF_DIGEST_SCHEMA =
   "v0.0.1:security:governed-execution-proof-reference-1";
-const activePermits: any = new Map<any, any>();
-const consumedReceipts: any = new WeakSet<object>();
+type DataRecord = Record<string, unknown>;
+interface PermitBinding {
+  operationId: string;
+  audience: string;
+  principalDigest: string;
+  resourceDigest: string;
+  requestDigest: string;
+  proofRef: string;
+  authorizationDigest: string;
+  approvalDigest: string;
+  riskDigest: string;
+  expiresAt: number;
+}
+interface PermitConsumptionReceipt extends Omit<PermitBinding, "expiresAt"> {
+  schemaVersion: string;
+  permitDigest: string;
+  consumedAt: string;
+}
+const activePermits = new Map<string, Readonly<PermitBinding>>();
+const consumedReceipts = new WeakSet<object>();
 
-function text(value?: any) : any {
+function text(value?: unknown): string {
   return String(value ?? "").trim();
 }
 
-function sha256(value?: any) : any {
+function dataRecord(value: unknown): DataRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as DataRecord
+    : {};
+}
+
+function sha256(value: crypto.BinaryLike): string {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
-function canonicalDigest(value?: any) : any {
+function canonicalDigest(value: unknown): string {
   return sha256(canonicalJson(value));
 }
 
-function proofReferenceDigest(value?: any) : any {
+function proofReferenceDigest(value?: unknown): string {
   if (typeof value !== "string") {
     deny(
       "governed_execution_permit_proof_ref_invalid",
       "Governed execution permit proof reference is invalid."
     );
   }
-  const exactValue: any = value;
+  const exactValue = value;
   if (
     exactValue.length === 0 ||
     Buffer.byteLength(exactValue, "utf8") > MAX_PROOF_REF_BYTES ||
@@ -46,16 +70,18 @@ function proofReferenceDigest(value?: any) : any {
   })}`;
 }
 
-function deny(code?: any, message?: any) : any {
+function deny(code: string, message: string): never {
   throw Object.assign(new Error(message), { code, statusCode: 403 });
 }
 
-function purgeExpired(now: any = Date.now()) : any {
+function purgeExpired(now = Date.now()): void {
   for (const [permitDigest, binding] of activePermits) {
     if (binding.expiresAt <= now) activePermits.delete(permitDigest);
   }
   while (activePermits.size >= MAX_ACTIVE_PERMITS) {
-    activePermits.delete(activePermits.keys().next().value);
+    const oldest = activePermits.keys().next().value;
+    if (oldest === undefined) break;
+    activePermits.delete(oldest);
   }
 }
 
@@ -66,8 +92,8 @@ export function digestGovernedExecutionRequest({
   path = "",
   input = {},
   requestBody = Buffer.alloc(0)
-}: Record<string, any> = {}) : any {
-  const body: any = Buffer.isBuffer(requestBody)
+}: { operationId?: unknown; transport?: unknown; method?: unknown; path?: unknown; input?: unknown; requestBody?: unknown } = {}): string {
+  const body = Buffer.isBuffer(requestBody)
     ? requestBody
     : Buffer.from(
         typeof requestBody === "string"
@@ -86,7 +112,7 @@ export function digestGovernedExecutionRequest({
   });
 }
 
-export function digestGovernedExecutionPrincipal(value: Record<string, any> = {}) : any {
+export function digestGovernedExecutionPrincipal(value: DataRecord = {}): string {
   return canonicalDigest({
     type: text(value.type),
     subjectId: text(value.subjectId || value.userId),
@@ -109,22 +135,26 @@ export function mintGovernedExecutionPermit({
   risk = {},
   ttlMs = DEFAULT_TTL_MS,
   now = Date.now()
-}: Record<string, any> = {}) : any {
-  const normalizedOperationId: any = text(operationId);
-  const normalizedAudience: any = text(audience);
-  const normalizedRequestDigest: any = text(requestDigest);
-  const proofRefDigest: any = proofReferenceDigest(proofRef);
+}: {
+  operationId?: unknown; audience?: unknown; principal?: unknown; resource?: unknown;
+  requestDigest?: unknown; proofRef?: unknown; authorization?: unknown; approval?: unknown;
+  risk?: unknown; ttlMs?: number; now?: number;
+} = {}): string {
+  const normalizedOperationId = text(operationId);
+  const normalizedAudience = text(audience);
+  const normalizedRequestDigest = text(requestDigest);
+  const proofRefDigest = proofReferenceDigest(proofRef);
   if (!normalizedOperationId || !normalizedAudience || !normalizedRequestDigest) {
     deny("governed_execution_permit_binding_incomplete", "Governed execution permit binding is incomplete.");
   }
-  const lifetime: any = Math.min(DEFAULT_TTL_MS, Math.max(1, Number(ttlMs) || DEFAULT_TTL_MS));
-  const token: any = `${PERMIT_PREFIX}${crypto.randomBytes(32).toString("base64url")}`;
-  const permitDigest: any = sha256(token);
+  const lifetime = Math.min(DEFAULT_TTL_MS, Math.max(1, Number(ttlMs) || DEFAULT_TTL_MS));
+  const token = `${PERMIT_PREFIX}${crypto.randomBytes(32).toString("base64url")}`;
+  const permitDigest = sha256(token);
   purgeExpired(now);
   activePermits.set(permitDigest, Object.freeze({
     operationId: normalizedOperationId,
     audience: normalizedAudience,
-    principalDigest: digestGovernedExecutionPrincipal(principal),
+    principalDigest: digestGovernedExecutionPrincipal(dataRecord(principal)),
     resourceDigest: canonicalDigest(resource ?? null),
     requestDigest: normalizedRequestDigest,
     proofRef: proofRefDigest,
@@ -136,13 +166,13 @@ export function mintGovernedExecutionPermit({
   return token;
 }
 
-export function consumeGovernedExecutionPermit(token?: any, expected: Record<string, any> = {}, now: any = Date.now()) : any {
-  const normalizedToken: any = text(token);
+export function consumeGovernedExecutionPermit(token?: unknown, expected: DataRecord = {}, now = Date.now()): Readonly<PermitConsumptionReceipt> {
+  const normalizedToken = text(token);
   if (!normalizedToken.startsWith(PERMIT_PREFIX)) {
     deny("governed_execution_permit_invalid", "Governed execution permit is invalid.");
   }
-  const permitDigest: any = sha256(normalizedToken);
-  const binding: any = activePermits.get(permitDigest);
+  const permitDigest = sha256(normalizedToken);
+  const binding = activePermits.get(permitDigest);
   activePermits.delete(permitDigest);
   if (!binding) deny("governed_execution_permit_unknown_or_replayed", "Governed execution permit is unknown or already consumed.");
   if (binding.expiresAt <= now) deny("governed_execution_permit_expired", "Governed execution permit expired.");
@@ -150,18 +180,18 @@ export function consumeGovernedExecutionPermit(token?: any, expected: Record<str
     ["operationId", text(expected.operationId)],
     ["audience", text(expected.audience)],
     ["requestDigest", text(expected.requestDigest)]
-  ]) {
+  ] as const) {
     if (!value || binding[field] !== value) {
       deny("governed_execution_permit_binding_mismatch", "Governed execution permit binding does not match the protected sink.");
     }
   }
-  if (expected.principal && binding.principalDigest !== digestGovernedExecutionPrincipal(expected.principal)) {
+  if (expected.principal && binding.principalDigest !== digestGovernedExecutionPrincipal(dataRecord(expected.principal))) {
     deny("governed_execution_permit_principal_mismatch", "Governed execution permit principal does not match.");
   }
   if (Object.hasOwn(expected, "resource") && binding.resourceDigest !== canonicalDigest(expected.resource ?? null)) {
     deny("governed_execution_permit_resource_mismatch", "Governed execution permit resource does not match.");
   }
-  const receipt: Readonly<Record<string, any>> = Object.freeze({
+  const receipt: Readonly<PermitConsumptionReceipt> = Object.freeze({
     schemaVersion: "v0.0.1:security:governed-execution-permit-consumption-1",
     permitDigest,
     operationId: binding.operationId,
@@ -179,7 +209,7 @@ export function consumeGovernedExecutionPermit(token?: any, expected: Record<str
   return receipt;
 }
 
-export function assertConsumedGovernedExecutionPermit(receipt?: any, expected: Record<string, any> = {}) : any {
+export function assertConsumedGovernedExecutionPermit(receipt: Readonly<PermitConsumptionReceipt> | undefined, expected: DataRecord = {}): Readonly<PermitConsumptionReceipt> {
   if (!receipt || typeof receipt !== "object" || !consumedReceipts.has(receipt)) {
     deny("governed_execution_permit_consumption_required", "A current consumed governed execution permit is required.");
   }
@@ -192,7 +222,7 @@ export function assertConsumedGovernedExecutionPermit(receipt?: any, expected: R
   if (text(expected.requestDigest) && receipt.requestDigest !== text(expected.requestDigest)) {
     deny("governed_execution_permit_request_mismatch", "Consumed permit is bound to another request.");
   }
-  if (expected.principal && receipt.principalDigest !== digestGovernedExecutionPrincipal(expected.principal)) {
+  if (expected.principal && receipt.principalDigest !== digestGovernedExecutionPrincipal(dataRecord(expected.principal))) {
     deny("governed_execution_permit_principal_mismatch", "Consumed permit is bound to another principal.");
   }
   return receipt;

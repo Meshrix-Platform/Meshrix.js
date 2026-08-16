@@ -12,54 +12,62 @@
  * @module server-runtime/routing/radix-path-trie
  */
 
-const PATH_SEGMENT: any = Symbol("path_segment");
-const PARAM_SEGMENT: any = Symbol("param_segment");
-const WILDCARD_SEGMENT: any = Symbol("wildcard_segment");
-const UNRESERVED_CHARACTER_PATTERN: any = /^[A-Za-z0-9._~-]$/u;
-const CONTROL_CHARACTER_PATTERN: any = /[\u0000-\u001F\u007F]/u;
-export const ROUTE_PARAMETER_MAX_BYTES: any = 1_024;
-export const ROUTE_WILDCARD_MAX_BYTES: any = 8_192;
+const PATH_SEGMENT = Symbol("path_segment");
+const PARAM_SEGMENT = Symbol("param_segment");
+const WILDCARD_SEGMENT = Symbol("wildcard_segment");
+type SegmentKind = typeof PATH_SEGMENT | typeof PARAM_SEGMENT | typeof WILDCARD_SEGMENT;
+const UNRESERVED_CHARACTER_PATTERN = /^[A-Za-z0-9._~-]$/u;
+export const ROUTE_PARAMETER_MAX_BYTES = 1_024;
+export const ROUTE_WILDCARD_MAX_BYTES = 8_192;
 
-function normalizePercentEncodedUnreserved(segment?: any) : any {
-  return segment.replace(/%([0-9A-Fa-f]{2})/gu, (encoded?: any, hex?: any) : any => {
-    const character: any = String.fromCharCode(Number.parseInt(hex, 16));
+export interface RadixPathMatch<T> {
+  value: T;
+  params: Record<string, string>;
+}
+
+function normalizePercentEncodedUnreserved(segment = ""): string {
+  return segment.replace(/%([0-9A-Fa-f]{2})/gu, (_encoded, hex: string) => {
+    const character = String.fromCharCode(Number.parseInt(hex, 16));
     return UNRESERVED_CHARACTER_PATTERN.test(character)
       ? character
       : `%${hex.toUpperCase()}`;
   });
 }
 
-export function normalizeRoutingPathname(path?: any) : any {
-  let pathname: any = String(path || "/").trim().split("?", 1)[0].split("#", 1)[0];
+export function normalizeRoutingPathname(path?: unknown): string | null {
+  let pathname = String(path || "/").trim().split("?", 1)[0].split("#", 1)[0];
   if (!pathname.startsWith("/")) pathname = `/${pathname}`;
-  const segments: any = pathname.split("/").filter(Boolean);
-  const normalized: any[] = [];
+  const segments = pathname.split("/").filter(Boolean);
+  const normalized: string[] = [];
   for (const segment of segments) {
-    let decoded: any;
+    let decoded: string;
     try {
       decoded = decodeURIComponent(segment);
     } catch {
       return null;
     }
-    if (CONTROL_CHARACTER_PATTERN.test(decoded)) return null;
+    if ([...decoded].some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 31 || code === 127;
+    })) return null;
     normalized.push(normalizePercentEncodedUnreserved(segment));
   }
   return normalized.length > 0 ? `/${normalized.join("/")}` : "/";
 }
 
-class RadixTrieNode {
-  children: any;
-  kind: any;
-  paramChild: any;
-  paramName: any;
-  paramNames: any;
-  segment: any;
-  value: any;
-  wildcardChild: any;
-  constructor(segment: any = "", kind: any = PATH_SEGMENT) {
+class RadixTrieNode<T> {
+  children: Map<string, RadixTrieNode<T>>;
+  kind: SegmentKind;
+  paramChild: RadixTrieNode<T> | null;
+  paramName: string | null;
+  paramNames: string[];
+  segment: string;
+  value: T | null;
+  wildcardChild: RadixTrieNode<T> | null;
+  constructor(segment = "", kind: SegmentKind = PATH_SEGMENT) {
     this.segment = segment;
     this.kind = kind;
-    this.children = new Map<any, any>();
+    this.children = new Map();
     this.paramChild = null;
     this.wildcardChild = null;
     this.value = null;
@@ -71,17 +79,17 @@ class RadixTrieNode {
   }
 }
 
-export class RadixPathTrie {
-  _paths: any;
-  _size: any;
-  root: any;
+export class RadixPathTrie<T = unknown> {
+  _paths: Set<string>;
+  _size: number;
+  root: RadixTrieNode<T>;
   constructor() {
     this.root = new RadixTrieNode("/", PATH_SEGMENT);
     this._size = 0;
-    this._paths = new Set<any>();
+    this._paths = new Set();
   }
 
-  get size() : any {
+  get size(): number {
     return this._size;
   }
 
@@ -92,8 +100,8 @@ export class RadixPathTrie {
    * @returns {boolean} true if inserted, false if duplicate
    * @throws {Error} if path conflicts with existing route
    */
-  insert(path?: any, value?: any) : any {
-    const normalized: any = normalizeRoutingPathname(path);
+  insert(path: string, value: T): boolean {
+    const normalized = normalizeRoutingPathname(path);
     if (normalized === null) {
       throw new Error("Route path contains invalid encoding or control characters.");
     }
@@ -101,13 +109,13 @@ export class RadixPathTrie {
       return false;
     }
 
-    const segments: any = this._parseSegments(normalized);
+    const segments = this._parseSegments(normalized);
     this._validateSegments(segments, normalized);
 
-    let node: any = this.root;
-    const paramNames: any[] = [];
+    let node = this.root;
+    const paramNames: string[] = [];
     for (const segment of segments) {
-      const kind: any = this._segmentKind(segment);
+      const kind = this._segmentKind(segment);
       if (kind === WILDCARD_SEGMENT) {
         if (!node.wildcardChild) {
           node.wildcardChild = new RadixTrieNode(segment, WILDCARD_SEGMENT);
@@ -123,7 +131,7 @@ export class RadixPathTrie {
         if (!node.children.has(segment)) {
           node.children.set(segment, new RadixTrieNode(segment, PATH_SEGMENT));
         }
-        node = node.children.get(segment);
+        node = node.children.get(segment)!;
       }
     }
 
@@ -143,17 +151,17 @@ export class RadixPathTrie {
    * @param {string} path - The concrete URL path (e.g., "/api/workspace/abc123/file/def456")
    * @returns {{ value: *, params: Record<string, string> } | null}
    */
-  lookup(path?: any) : any {
-    const normalized: any = normalizeRoutingPathname(path);
+  lookup(path?: unknown): RadixPathMatch<T> | null {
+    const normalized = normalizeRoutingPathname(path);
     if (normalized === null) return null;
-    const segments: any = normalized.split("/").filter(Boolean);
+    const segments = normalized.split("/").filter(Boolean);
     return this._lookup(this.root, segments, 0, []);
   }
 
   /**
    * Detect conflicts: returns array of { path, conflictPath, reason }.
    */
-  detectConflicts() : any {
+  detectConflicts(): Array<{ path: string; conflictPath: string; reason: string }> {
     // Duplicate concrete patterns and equivalent parameter shapes are rejected
     // during insertion. Static, parameter, and wildcard siblings are valid and
     // are resolved deterministically in that order.
@@ -163,27 +171,27 @@ export class RadixPathTrie {
   /**
    * Return all stored path patterns.
    */
-  paths() : any {
+  paths(): string[] {
     return [...this._paths];
   }
 
   // --- private ---
 
-  _parseSegments(normalizedPath?: any) : any {
+  _parseSegments(normalizedPath: string): string[] {
     if (normalizedPath === "/") return [];
     return normalizedPath.split("/").filter(Boolean);
   }
 
-  _segmentKind(segment?: any) : any {
+  _segmentKind(segment: string): SegmentKind {
     if (segment === "*" || segment === "**") return WILDCARD_SEGMENT;
     if (segment.startsWith(":")) return PARAM_SEGMENT;
     return PATH_SEGMENT;
   }
 
-  _validateSegments(segments?: any, fullPath?: any) : any {
-    for (let i: any = 0; i < segments.length; i++) {
-      const segment: any = segments[i];
-      const kind: any = this._segmentKind(segment);
+  _validateSegments(segments: string[], fullPath: string): void {
+    for (let i = 0; i < segments.length; i++) {
+      const segment = segments[i];
+      const kind = this._segmentKind(segment);
       if (kind === WILDCARD_SEGMENT) {
         if (i !== segments.length - 1) {
           throw new Error(`Wildcard must be the final segment in path: "${fullPath}"`);
@@ -191,7 +199,7 @@ export class RadixPathTrie {
         continue;
       }
       if (kind === PARAM_SEGMENT) {
-        const paramName: any = segment.startsWith(":") ? segment.slice(1) : segment;
+        const paramName = segment.startsWith(":") ? segment.slice(1) : segment;
         if (!paramName) {
           throw new Error(`Parameter name is required in path: "${fullPath}"`);
         }
@@ -199,7 +207,7 @@ export class RadixPathTrie {
     }
   }
 
-  _lookup(node?: any, segments?: any, index?: any, paramValues?: any) : any {
+  _lookup(node: RadixTrieNode<T>, segments: string[], index: number, paramValues: string[]): RadixPathMatch<T> | null {
     if (index >= segments.length) {
       if (node.value !== null) {
         return {
@@ -216,33 +224,33 @@ export class RadixPathTrie {
       return null;
     }
 
-    const segment: any = segments[index];
-    let decodedSegment: any;
+    const segment = segments[index];
+    let decodedSegment: string;
     try {
       decodedSegment = decodeURIComponent(segment);
     } catch {
       return null;
     }
 
-    const staticChild: any = node.children.get(decodedSegment);
+    const staticChild = node.children.get(decodedSegment);
     if (staticChild) {
-      const matched: any = this._lookup(staticChild, segments, index + 1, paramValues);
+      const matched = this._lookup(staticChild, segments, index + 1, paramValues);
       if (matched) return matched;
     }
 
     if (node.paramChild) {
       if (Buffer.byteLength(decodedSegment, "utf8") <= ROUTE_PARAMETER_MAX_BYTES) {
         paramValues.push(decodedSegment);
-        const matched: any = this._lookup(node.paramChild, segments, index + 1, paramValues);
+        const matched = this._lookup(node.paramChild, segments, index + 1, paramValues);
         paramValues.pop();
         if (matched) return matched;
       }
     }
 
     if (node.wildcardChild && node.wildcardChild.value !== null) {
-      let tail: any;
+      let tail: string;
       try {
-        tail = segments.slice(index).map((item?: any) : any => decodeURIComponent(item)).join("/");
+        tail = segments.slice(index).map((item) => decodeURIComponent(item)).join("/");
       } catch {
         return null;
       }
@@ -256,10 +264,10 @@ export class RadixPathTrie {
     return null;
   }
 
-  _buildParams(paramNames?: any, paramValues?: any, wildcardValue: any = null) : any {
-    const params: Record<string, any> = {};
-    for (let i: any = 0; i < paramValues.length; i++) {
-      const key: any = paramNames[i] || `param${i}`;
+  _buildParams(paramNames: string[], paramValues: string[], wildcardValue: string | null = null): Record<string, string> {
+    const params: Record<string, string> = {};
+    for (let i = 0; i < paramValues.length; i++) {
+      const key = paramNames[i] || `param${i}`;
       params[key] = paramValues[i];
     }
     if (wildcardValue !== null) {

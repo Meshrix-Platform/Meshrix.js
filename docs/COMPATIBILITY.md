@@ -51,7 +51,7 @@ implementation, verification, release, and support result.
 | Plugin browser code | Planned opaque-origin iframe with a bounded Host bridge | Current same-origin loading is trusted deployment code. Opaque-origin isolation and hostile-code confinement remain remaining GATE work; legacy plugin entries remain remaining compatibility work. |
 | Upstream service publishing | Meshrix.js server gateway and Operation Permission | Server-side functional target; compatible external-service adoption is independently owned. |
 | Downstream client protocol | Meshrix.js generic protocol, authorization, credential, cache, proxy, and lifecycle boundary | Neutral-peer verification target; no client product is a Meshrix.js release dependency. |
-| Client-specific adapters | Repository-local packages selected explicitly by an operator | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
+| Client-specific adapters | Operator-supplied external client-adapter packages selected explicitly | Meshrix.js validates the package contract and never discovers implementations from another source repository. |
 | Optional parsers, providers, datastores, and service adapters | Repository-local `services/` or `plugins/` implementation when present | Disabled or absent by default; each enabled path needs its own contract and evidence. |
 | Pactium | Exact dependency `pactium@0.7.0` and protocol identities declared by Meshrix.js manifests and version registry | Dependency compatibility is limited to the exact declared identities. Meshrix.js release and environment qualification remain remaining required work on their own receipts. |
 

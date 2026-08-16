@@ -51,6 +51,7 @@ function createResponse() : any {
 function baseOperation(overrides: Record<string, any> = {}) : any {
   return {
     id: "unit.dispatch",
+    trafficModel: "gateway_transit",
     target: { controller: "unit", method: "handle" },
     http: { method: "POST", path: "/api/unit/dispatch" },
     concurrency: { workloadClass: "parallel", maxParallel: 16, cost: 2 },

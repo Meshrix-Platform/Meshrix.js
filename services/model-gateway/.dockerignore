@@ -1,0 +1,9 @@
+node_modules
+data
+test
+scripts
+contracts
+README.md
+dist
+.git
+.DS_Store

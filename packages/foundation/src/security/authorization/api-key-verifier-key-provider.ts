@@ -5,8 +5,23 @@ import { ensurePrivateDir } from "../../storage/private-file-atomic.ts";
 
 export const API_KEY_VERIFIER_GENERATION = "v1";
 
-export function createMemoryApiKeyVerifierKeyProvider(key: Buffer = crypto.randomBytes(32)): any {
-  const material: any = Buffer.from(key);
+export interface ApiKeyVerifierKeyProvider {
+  readonly currentGeneration: string;
+  getKey(generation: string): Buffer | null;
+}
+
+interface ApiKeyVerifierKeyProviderOptions {
+  userDataPath?: string;
+}
+
+function errorCode(error: unknown): string {
+  return error && typeof error === "object" && "code" in error
+    ? String(error.code || "")
+    : "";
+}
+
+export function createMemoryApiKeyVerifierKeyProvider(key: Buffer = crypto.randomBytes(32)): ApiKeyVerifierKeyProvider {
+  const material = Buffer.from(key);
   if (material.length !== 32) throw new Error("API Key verifier key must be 256 bits.");
   return Object.freeze({
     currentGeneration: API_KEY_VERIFIER_GENERATION,
@@ -16,20 +31,20 @@ export function createMemoryApiKeyVerifierKeyProvider(key: Buffer = crypto.rando
   });
 }
 
-export function createApiKeyVerifierKeyProvider({ userDataPath }: Record<string, any> = {}): any {
-  const root: any = path.join(String(userDataPath || ""), "security", "api-key-verifiers");
-  const keyPath: any = path.join(root, `${API_KEY_VERIFIER_GENERATION}.key`);
+export function createApiKeyVerifierKeyProvider({ userDataPath }: ApiKeyVerifierKeyProviderOptions = {}): ApiKeyVerifierKeyProvider {
+  const root = path.join(String(userDataPath || ""), "security", "api-key-verifiers");
+  const keyPath = path.join(root, `${API_KEY_VERIFIER_GENERATION}.key`);
   ensurePrivateDir(root);
-  let material: any;
+  let material: Buffer;
   try {
     material = fs.readFileSync(keyPath);
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") throw error;
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") throw error;
     material = crypto.randomBytes(32);
     try {
       fs.writeFileSync(keyPath, material, { flag: "wx", mode: 0o600 });
-    } catch (writeError: any) {
-      if (writeError?.code !== "EEXIST") throw writeError;
+    } catch (writeError: unknown) {
+      if (errorCode(writeError) !== "EEXIST") throw writeError;
       material = fs.readFileSync(keyPath);
     }
   }

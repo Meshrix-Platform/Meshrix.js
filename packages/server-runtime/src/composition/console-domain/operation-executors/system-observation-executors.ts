@@ -324,7 +324,6 @@ export async function executeConsoleStateOperation({ operationId, context }: Rec
       serverUrl: context.serverUrl,
       securityPermissions: context.securityPermissions,
       request: context.request,
-      maintenanceAgent: context.maintenanceAgent,
       features: context.features,
       toolSkillManagementProvider: context.toolSkillManagementProvider,
       consoleDomainServices: context.consoleDomainServices

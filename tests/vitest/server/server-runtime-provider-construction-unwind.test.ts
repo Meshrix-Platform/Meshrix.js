@@ -2,13 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const factories: any = vi.hoisted(() : any => ({
   createAgentMemory: vi.fn(),
-  createAgentRuntimeProvider: vi.fn(),
   createAgentWorkspace: vi.fn(),
   createContributionRegistry: vi.fn(),
   createContextRuntime: vi.fn(),
   createExecutiveReportStore: vi.fn(),
-  createMaintenanceAgentService: vi.fn(),
-  createMaintenanceWorkQueueProvider: vi.fn(),
   createOperationPermissionPlatform: vi.fn(),
   createOperationPermissionStore: vi.fn(),
   createReadinessBaselineProvider: vi.fn(),
@@ -25,10 +22,6 @@ const factories: any = vi.hoisted(() : any => ({
 }));
 
 vi.mock("#meshrix/settings", () : any => ({ loadSettings: vi.fn() }));
-vi.mock("#meshrix/agents/agent-configs/config-registry", () : any => ({ getAgentConfigRegistry: vi.fn() }));
-vi.mock("#meshrix/agents/agent-runtime-provider", () : any => ({
-  createAgentRuntimeProvider: factories.createAgentRuntimeProvider
-}));
 vi.mock("#meshrix/agents/upstream-gateway/index", () : any => ({
   createUpstreamGatewayRegistry: factories.createUpstreamGatewayRegistry,
   createUpstreamManifestObserver: factories.createUpstreamManifestObserver,
@@ -72,12 +65,6 @@ vi.mock("#meshrix/agents/agent-memory/index", () : any => ({
 }));
 vi.mock("#meshrix/server-runtime/state/interface/index", () : any => ({
   createContextRuntime: factories.createContextRuntime
-}));
-vi.mock("#meshrix/agents/maintenance/index", () : any => ({
-  createMaintenanceAgentService: factories.createMaintenanceAgentService
-}));
-vi.mock("#meshrix/server-runtime/composition/maintenance-work-queue-provider", () : any => ({
-  createMaintenanceWorkQueueProvider: factories.createMaintenanceWorkQueueProvider
 }));
 vi.mock("#meshrix/agents/agent-workspace/index", () : any => ({
   createAgentWorkspace: factories.createAgentWorkspace
@@ -128,17 +115,10 @@ function runtimeInput(activeFeatures: any = []) : any {
 beforeEach(() : any => {
   vi.clearAllMocks();
   factories.createAgentMemory.mockReturnValue({});
-  factories.createAgentRuntimeProvider.mockReturnValue({});
   factories.createAgentWorkspace.mockReturnValue({});
   factories.createContributionRegistry.mockReturnValue({});
   factories.createContextRuntime.mockReturnValue({});
   factories.createExecutiveReportStore.mockReturnValue({ list: vi.fn(), generate: vi.fn() });
-  factories.createMaintenanceAgentService.mockReturnValue({ close: vi.fn() });
-  factories.createMaintenanceWorkQueueProvider.mockReturnValue({
-    start: vi.fn(),
-    stop: vi.fn(),
-    close: vi.fn()
-  });
   factories.createOperationPermissionPlatform.mockReturnValue({});
   factories.createOperationPermissionStore.mockReturnValue({ close: vi.fn(), isClosed: vi.fn(() : any => false) });
   factories.createReadinessBaselineProvider.mockReturnValue({});
@@ -274,88 +254,34 @@ describe("server runtime provider construction unwind", () : any => {
     expect(observer.close).toHaveBeenCalledOnce();
   });
 
-  it("closes the dedicated maintenance store when the maintenance service factory fails", async () : Promise<any> => {
-    const closeOrder: any[] = [];
-    const constructionFailure: any = new Error("maintenance service construction failed");
-    const agentMemory: any = closeable("agent-memory", closeOrder);
-    const contextRuntime: any = closeable("context-runtime", closeOrder);
-    const operationPermissionStore: any = closeable("operation-permission", closeOrder);
-    const maintenanceWorkQueue: any = closeable("maintenance-work-queue", closeOrder);
-    maintenanceWorkQueue.start = vi.fn();
-    maintenanceWorkQueue.stop = vi.fn(async () : Promise<any> => {
-      closeOrder.push("maintenance-work-queue-stop");
-    });
-    factories.createAgentMemory.mockReturnValue(agentMemory);
-    factories.createContextRuntime.mockReturnValue(contextRuntime);
-    factories.createOperationPermissionStore.mockReturnValue(operationPermissionStore);
-    factories.createMaintenanceWorkQueueProvider.mockReturnValue(maintenanceWorkQueue);
-    factories.createMaintenanceAgentService.mockImplementation(() : any => {
-      throw constructionFailure;
-    });
-
-    const failure: any = await createServerRuntimeProviders(runtimeInput([
-      "maintenance-agent-runbooks"
-    ])).catch((error?: any) : any => error);
-
-    expect(failure).toBe(constructionFailure);
-    expect(closeOrder).toEqual([
-      "maintenance-work-queue",
-      "operation-permission",
-      "context-runtime",
-      "agent-memory"
-    ]);
-    expect(operationPermissionStore.close).toHaveBeenCalledOnce();
-  });
-
-  it("unwinds workspace and maintenance owners before their dependencies after a later provider failure", async () : Promise<any> => {
+  it("unwinds workspace owners before their dependencies after a later provider failure", async () : Promise<any> => {
     const closeOrder: any[] = [];
     const constructionFailure: any = new Error("strategy construction failed");
     const agentMemory: any = closeable("agent-memory", closeOrder);
     const contextRuntime: any = closeable("context-runtime", closeOrder);
     const operationPermissionStore: any = closeable("operation-permission", closeOrder);
-    const maintenanceWorkQueue: any = closeable("maintenance-work-queue", closeOrder);
-    maintenanceWorkQueue.start = vi.fn();
-    maintenanceWorkQueue.stop = vi.fn(async () : Promise<any> => {
-      closeOrder.push("maintenance-work-queue-stop");
-    });
-    const maintenanceAgent: any = closeable("maintenance", closeOrder, {
-      closeFailure: new Error("maintenance close failed")
-    });
-    maintenanceAgent.start = vi.fn(async () : Promise<any> => {});
     const agentWorkspace: any = closeable("agent-workspace", closeOrder, {
       closeFailure: new Error("workspace close failed")
     });
     factories.createAgentMemory.mockReturnValue(agentMemory);
     factories.createContextRuntime.mockReturnValue(contextRuntime);
     factories.createOperationPermissionStore.mockReturnValue(operationPermissionStore);
-    factories.createMaintenanceWorkQueueProvider.mockReturnValue(maintenanceWorkQueue);
     operationPermissionStore.isClosed.mockImplementation(() : any => {
       throw new Error("operation permission state check failed");
     });
-    factories.createMaintenanceAgentService.mockReturnValue(maintenanceAgent);
     factories.createAgentWorkspace.mockReturnValue(agentWorkspace);
     factories.createStrategyManagementProvider.mockImplementation(() : any => {
       throw constructionFailure;
     });
 
     const failure: any = await createServerRuntimeProviders(runtimeInput([
-      "maintenance-agent-runbooks",
       "agent-workspace-core",
       "strategy-management"
     ])).catch((error?: any) : any => error);
 
     expect(failure).toBe(constructionFailure);
-    expect(closeOrder).toEqual([
-      "agent-workspace",
-      "maintenance-work-queue-stop",
-      "maintenance",
-      "maintenance-work-queue",
-      "operation-permission",
-      "context-runtime",
-      "agent-memory"
-    ]);
+    expect(closeOrder).toEqual(["agent-workspace"]);
     expect(agentWorkspace.close).toHaveBeenCalledOnce();
-    expect(maintenanceAgent.close).toHaveBeenCalledOnce();
-    expect(operationPermissionStore.close).toHaveBeenCalledOnce();
+    expect(operationPermissionStore.close).not.toHaveBeenCalled();
   });
 });

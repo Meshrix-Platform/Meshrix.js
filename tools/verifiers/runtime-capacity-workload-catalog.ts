@@ -23,7 +23,7 @@ const COUNTER_KINDS: readonly any[] = Object.freeze([
 
 const CLOSED_LOOP_WORKLOADS: readonly any[] = Object.freeze([
   {
-    id: "model-routing-admission",
+    id: "external-gateway-admission",
     mode: "closed",
     iterations: 200,
     seed: 7,

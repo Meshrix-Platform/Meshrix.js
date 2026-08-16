@@ -11,7 +11,7 @@ import {
   INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS,
   ROOT_SOURCE_FILES,
   SOURCE_PACKAGE_ROOTS
-} from "./package-server-source.ts";
+} from "./lib/source-package-contract.ts";
 import { scanPublicArtifact } from "./lib/public-artifact-boundary.ts";
 
 const sourceRoot: any = process.cwd();

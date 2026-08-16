@@ -1,35 +1,37 @@
 import crypto from "node:crypto";
 
-const RISK_RANK: Readonly<Record<string, any>> = Object.freeze({
+const RISK_RANK: Readonly<Record<string, number>> = Object.freeze({
   read_only: 0,
   safe_write: 1,
   repair_write: 2,
   destructive: 3
 });
 
-export function nowIso() : any {
+export function nowIso(): string {
   return new Date().toISOString();
 }
 
-export function randomId(prefix?: any) : any {
+export function randomId(prefix?: unknown): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-export function uniqueStrings(values: any = []) : any {
-  return [...new Set<any>(values.map((value?: any) : any => String(value || "").trim()).filter(Boolean))];
+export function uniqueStrings(values: readonly unknown[] = []): string[] {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
 }
 
-export function stringSet(values: any = []) : any {
-  return new Set<any>(uniqueStrings(values));
+export function stringSet(values: readonly unknown[] = []): Set<string> {
+  return new Set(uniqueStrings(values));
 }
 
-export function objectOrNull(value?: any) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+export function objectOrNull(value?: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
-export function firstString(...values: any[]) : any {
+export function firstString(...values: unknown[]): string {
   for (const value of values) {
-    const text: any = String(value || "").trim();
+    const text = String(value || "").trim();
     if (text) {
       return text;
     }
@@ -37,8 +39,8 @@ export function firstString(...values: any[]) : any {
   return "";
 }
 
-export function stringsFrom(...values: any[]) : any {
-  const output: any[] = [];
+export function stringsFrom(...values: unknown[]): string[] {
+  const output: unknown[] = [];
   for (const value of values) {
     if (Array.isArray(value)) {
       output.push(...value);
@@ -51,16 +53,37 @@ export function stringsFrom(...values: any[]) : any {
   return uniqueStrings(output);
 }
 
-export function deniedOutsideAllowed(values: any = [], allowedValues: any = []) : any {
-  const allowed: any = allowedValues instanceof Set ? allowedValues : stringSet(allowedValues);
-  return stringsFrom(...values).find((value?: any) : any => allowed.size > 0 && !allowed.has(value)) || "";
+export function deniedOutsideAllowed(
+  values: readonly unknown[] = [],
+  allowedValues: readonly unknown[] | ReadonlySet<string> = []
+): string {
+  const allowed: ReadonlySet<string> = Array.isArray(allowedValues)
+    ? stringSet(allowedValues)
+    : allowedValues as ReadonlySet<string>;
+  return stringsFrom(...values).find((value) => allowed.size > 0 && !allowed.has(value)) || "";
 }
 
 
-export function riskRank(value: any = "read_only") : any {
+export function riskRank(value: unknown = "read_only"): number {
   return RISK_RANK[String(value || "read_only")] ?? RISK_RANK.read_only;
 }
 
-export function effectDetails(effect?: any, reasonCode?: any, redactedReason?: any, extra: Record<string, any> = {}) : any {
-  return { effect, reasonCode, redactedReason, ...extra };
+export interface AuthorizationEffectDetails extends Record<string, unknown> {
+  effect: string;
+  reasonCode: string;
+  redactedReason: string;
+}
+
+export function effectDetails(
+  effect?: unknown,
+  reasonCode?: unknown,
+  redactedReason?: unknown,
+  extra: Record<string, unknown> = {}
+): AuthorizationEffectDetails {
+  return {
+    effect: String(effect || ""),
+    reasonCode: String(reasonCode || ""),
+    redactedReason: String(redactedReason || ""),
+    ...extra
+  };
 }

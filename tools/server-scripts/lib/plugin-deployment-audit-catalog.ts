@@ -26,7 +26,12 @@ export async function createPluginDeploymentAuditCatalog({
   }
   const resolvedRepoRoot: any = path.resolve(String(repoRoot));
   const artifactFixture: any = await stagePluginArtifactVerificationFixture({
-    sourcePluginRoot: path.join(resolvedRepoRoot, "plugins")
+    sourcePluginRoot: path.join(resolvedRepoRoot, "plugins"),
+    runtimeDependencyNodeModulesRoot: path.join(resolvedRepoRoot, "node_modules"),
+    runtimeDependencyPackages: {
+      "external-gateway": ["@meshrix/contracts"],
+      "model-gateway": ["@meshrix/contracts"]
+    }
   });
   const pluginCatalog: any = await loadPluginRegistry({ artifactAuthority: artifactFixture.authority });
   const enabledPluginIds: any = pluginCatalog.listPlugins().map((plugin?: any) : any => plugin.id).sort();

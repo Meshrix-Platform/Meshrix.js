@@ -1,9 +1,8 @@
 import { executeConsoleDomainOperation } from "./operation-executor.ts";
 import {
-  buildAgentSettingsConsoleProjection as buildAgentSettingsConsoleProjectionBase,
+  buildSettingsConsoleProjection as buildSettingsConsoleProjectionBase,
   buildConsoleClientConnections,
   buildConsoleJobsSummary,
-  buildMaintenanceAgentConsoleSummary,
   buildRuntimeInfoSettings
 } from "./state-projections.ts";
 import { buildRuntimeConsoleSummary } from "./runtime-summary.ts";
@@ -34,23 +33,13 @@ function assertConsoleOperationProviders(providers?: any) : any {
 
 export function createConsoleDomainServices({
   userDataPath,
-  getAgentConfigRegistry,
-  agentRuntimeProvider,
   uploadSessionStore,
   consoleOperationProviders = {},
   settingsPort,
-  loadAgentGatewayModule,
-  loadModelProbeModule
 }: Record<string, any> = {}) : any {
   const runtimeDataPath: any = String(userDataPath || "").trim();
   if (!runtimeDataPath) {
     throw new TypeError("Console domain services require an explicit userDataPath.");
-  }
-  if (typeof getAgentConfigRegistry !== "function") {
-    throw new TypeError("Console domain services require an AgentConfig registry port.");
-  }
-  if (!agentRuntimeProvider || typeof agentRuntimeProvider.callAgentGateway !== "function") {
-    throw new TypeError("Console domain services require an AgentRuntime provider port.");
   }
   if (!uploadSessionStore || typeof uploadSessionStore.resolveUploadSessionFiles !== "function") {
     throw new TypeError("Console domain services require an upload session store port.");
@@ -67,18 +56,14 @@ export function createConsoleDomainServices({
   assertConsoleOperationProviders(consoleOperationProviders);
 
   return Object.freeze({
-    getAgentConfigRegistry,
-    agentRuntimeProvider,
     settingsPort,
-    buildAgentSettingsConsoleProjection: (input: Record<string, any> = {}) : any =>
-      buildAgentSettingsConsoleProjectionBase({
+    buildSettingsConsoleProjection: (input: Record<string, any> = {}) : any =>
+      buildSettingsConsoleProjectionBase({
         ...input,
-        getAgentConfigRegistry,
         settingsPort
       }),
     buildConsoleClientConnections,
     buildConsoleJobsSummary,
-    buildMaintenanceAgentConsoleSummary,
     buildRuntimeInfoSettings: (input: Record<string, any> = {}) : any =>
       buildRuntimeInfoSettings({
         ...input,
@@ -88,8 +73,6 @@ export function createConsoleDomainServices({
     executeConsoleDomainOperation,
     uploadSessionStore,
     appearancePresetCatalog,
-    consoleOperationProviders: Object.freeze({ ...consoleOperationProviders }),
-    loadAgentGatewayModule,
-    loadModelProbeModule
+    consoleOperationProviders: Object.freeze({ ...consoleOperationProviders })
   });
 }

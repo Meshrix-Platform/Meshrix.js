@@ -799,54 +799,6 @@
       "risk": "read_only"
     },
     {
-      "id": "cap:api:maintenance_agent.config.get",
-      "operationId": "maintenance_agent.config.get",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:maintenance_agent.config.set",
-      "operationId": "maintenance_agent.config.set",
-      "kind": "api",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:maintenance_agent.chat",
-      "operationId": "maintenance_agent.chat",
-      "kind": "api",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:api:maintenance_agent.runs.create",
-      "operationId": "maintenance_agent.runs.create",
-      "kind": "api",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:api:maintenance_agent.runs.list",
-      "operationId": "maintenance_agent.runs.list",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:maintenance_agent.runs.get",
-      "operationId": "maintenance_agent.runs.get",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:maintenance_agent.runs.approve",
-      "operationId": "maintenance_agent.runs.approve",
-      "kind": "api",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:maintenance_agent.runs.cancel",
-      "operationId": "maintenance_agent.runs.cancel",
-      "kind": "api",
-      "risk": "safe_write"
-    },
-    {
       "id": "cap:api:auth.session",
       "operationId": "auth.session",
       "kind": "api",
@@ -1015,6 +967,18 @@
       "risk": "safe_write"
     },
     {
+      "id": "cap:api:runtime.gateway_channels",
+      "operationId": "runtime.gateway_channels",
+      "kind": "api",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:api:runtime.gateway_channels.select",
+      "operationId": "runtime.gateway_channels.select",
+      "kind": "api",
+      "risk": "safe_write"
+    },
+    {
       "id": "cap:api:runtime.path_browse",
       "operationId": "runtime.path_browse",
       "kind": "api",
@@ -1025,30 +989,6 @@
       "operationId": "runtime.mounts",
       "kind": "api",
       "risk": "read_only"
-    },
-    {
-      "id": "cap:api:runtime.external_gateway",
-      "operationId": "runtime.external_gateway",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:runtime.external_gateway.validate",
-      "operationId": "runtime.external_gateway.validate",
-      "kind": "api",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:api:runtime.external_gateway.apply",
-      "operationId": "runtime.external_gateway.apply",
-      "kind": "api",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:runtime.external_gateway.switch_direct",
-      "operationId": "runtime.external_gateway.switch_direct",
-      "kind": "api",
-      "risk": "repair_write"
     },
     {
       "id": "cap:api:runtime.set_mounts",
@@ -1073,24 +1013,6 @@
       "operationId": "settings.set",
       "kind": "api",
       "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:settings.model_probe",
-      "operationId": "settings.model_probe",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:agent_gateway.call",
-      "operationId": "agent_gateway.call",
-      "kind": "api",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:api:model_routing.health",
-      "operationId": "model_routing.health",
-      "kind": "api",
-      "risk": "read_only"
     },
     {
       "id": "cap:api:strategy.describe",
@@ -1127,30 +1049,6 @@
       "operationId": "strategy.tool_policy.preview",
       "kind": "api",
       "risk": "read_only"
-    },
-    {
-      "id": "cap:api:agents.list",
-      "operationId": "agents.list",
-      "kind": "api",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:api:agents.create",
-      "operationId": "agents.create",
-      "kind": "api",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:agents.update",
-      "operationId": "agents.update",
-      "kind": "api",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:api:agents.delete",
-      "operationId": "agents.delete",
-      "kind": "api",
-      "risk": "repair_write"
     },
     {
       "id": "cap:api:operation_permission.api_keys.issuer_scopes",
@@ -1851,6 +1749,30 @@
       "risk": "read_only"
     },
     {
+      "id": "cap:tool:meshrix.authorization.organizationGovernance.get:execute",
+      "toolId": "meshrix.authorization.organizationGovernance.get",
+      "kind": "tool",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:tool:meshrix.authorization.organizationGovernance.import:execute",
+      "toolId": "meshrix.authorization.organizationGovernance.import",
+      "kind": "tool",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:tool:meshrix.authorization.organizationGovernance.preview:execute",
+      "toolId": "meshrix.authorization.organizationGovernance.preview",
+      "kind": "tool",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:tool:meshrix.authorization.organizationGovernance.publish:execute",
+      "toolId": "meshrix.authorization.organizationGovernance.publish",
+      "kind": "tool",
+      "risk": "repair_write"
+    },
+    {
       "id": "cap:tool:meshrix.tagManagement.tags.list:execute",
       "toolId": "meshrix.tagManagement.tags.list",
       "kind": "tool",
@@ -2541,54 +2463,6 @@
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:meshrix.maintenanceAgent.config.get:execute",
-      "toolId": "meshrix.maintenanceAgent.config.get",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.config.set:execute",
-      "toolId": "meshrix.maintenanceAgent.config.set",
-      "kind": "tool",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.chat:execute",
-      "toolId": "meshrix.maintenanceAgent.chat",
-      "kind": "tool",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.runs.create:execute",
-      "toolId": "meshrix.maintenanceAgent.runs.create",
-      "kind": "tool",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.runs.list:execute",
-      "toolId": "meshrix.maintenanceAgent.runs.list",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.runs.get:execute",
-      "toolId": "meshrix.maintenanceAgent.runs.get",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.runs.approve:execute",
-      "toolId": "meshrix.maintenanceAgent.runs.approve",
-      "kind": "tool",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:tool:meshrix.maintenanceAgent.runs.cancel:execute",
-      "toolId": "meshrix.maintenanceAgent.runs.cancel",
-      "kind": "tool",
-      "risk": "safe_write"
-    },
-    {
       "id": "cap:tool:meshrix.runtime.info:execute",
       "toolId": "meshrix.runtime.info",
       "kind": "tool",
@@ -2611,18 +2485,6 @@
       "toolId": "meshrix.runtime.mounts.reload",
       "kind": "tool",
       "risk": "repair_write"
-    },
-    {
-      "id": "cap:tool:meshrix.agentGateway.call:execute",
-      "toolId": "meshrix.agentGateway.call",
-      "kind": "tool",
-      "risk": "safe_write"
-    },
-    {
-      "id": "cap:tool:meshrix.agentGateway.modelRouting.health:execute",
-      "toolId": "meshrix.agentGateway.modelRouting.health",
-      "kind": "tool",
-      "risk": "read_only"
     },
     {
       "id": "cap:tool:meshrix.strategy.describe:execute",
@@ -2661,26 +2523,32 @@
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:meshrix.agentManagement.agents.list:execute",
-      "toolId": "meshrix.agentManagement.agents.list",
+      "id": "cap:tool:meshrix.operationPermission.apiKeys.issuerScopes:execute",
+      "toolId": "meshrix.operationPermission.apiKeys.issuerScopes",
       "kind": "tool",
       "risk": "read_only"
     },
     {
-      "id": "cap:tool:meshrix.agentManagement.agents.create:execute",
-      "toolId": "meshrix.agentManagement.agents.create",
+      "id": "cap:tool:meshrix.operationPermission.apiKeys.list:execute",
+      "toolId": "meshrix.operationPermission.apiKeys.list",
+      "kind": "tool",
+      "risk": "read_only"
+    },
+    {
+      "id": "cap:tool:meshrix.operationPermission.apiKeys.create:execute",
+      "toolId": "meshrix.operationPermission.apiKeys.create",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:meshrix.agentManagement.agents.update:execute",
-      "toolId": "meshrix.agentManagement.agents.update",
+      "id": "cap:tool:meshrix.operationPermission.apiKeys.rotate:execute",
+      "toolId": "meshrix.operationPermission.apiKeys.rotate",
       "kind": "tool",
       "risk": "repair_write"
     },
     {
-      "id": "cap:tool:meshrix.agentManagement.agents.delete:execute",
-      "toolId": "meshrix.agentManagement.agents.delete",
+      "id": "cap:tool:meshrix.operationPermission.apiKeys.revoke:execute",
+      "toolId": "meshrix.operationPermission.apiKeys.revoke",
       "kind": "tool",
       "risk": "repair_write"
     },
@@ -3181,54 +3049,6 @@
       "toolId": "meshrix.jobs.get",
       "kind": "tool",
       "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.system.health:execute",
-      "toolId": "maintenance-agent.system.health",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.runtime.info:execute",
-      "toolId": "maintenance-agent.runtime.info",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.storage.summary:execute",
-      "toolId": "maintenance-agent.storage.summary",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.storage.doctor:execute",
-      "toolId": "maintenance-agent.storage.doctor",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.storage.reconcile:execute",
-      "toolId": "maintenance-agent.storage.reconcile",
-      "kind": "tool",
-      "risk": "repair_write"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.jobs.list:execute",
-      "toolId": "maintenance-agent.jobs.list",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.jobs.failed_review:execute",
-      "toolId": "maintenance-agent.jobs.failed_review",
-      "kind": "tool",
-      "risk": "read_only"
-    },
-    {
-      "id": "cap:tool:maintenance-agent.runtime.reload_mounts:execute",
-      "toolId": "maintenance-agent.runtime.reload_mounts",
-      "kind": "tool",
-      "risk": "repair_write"
     }
   ],
   "wildcards": [

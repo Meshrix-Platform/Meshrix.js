@@ -25,7 +25,7 @@ export const OPERATION_PERMISSION_STORE_COMMANDS: readonly string[] = Object.fre
 ]);
 
 export const OPERATION_PERMISSION_API_KEY_COMMANDS: readonly string[] = Object.freeze([
-  "getIssuerScopes", "list", "create", "rotate", "revoke", "authenticateRuntime",
+  "getIssuerScopes", "list", "listAudienceGrants", "create", "rotate", "revoke", "authenticateRuntime",
   "revalidateAuthorization", "authorizeOperation", "reserveEffect", "revalidateEffect",
   "releaseEffect", "explainLookupPlan"
 ]);

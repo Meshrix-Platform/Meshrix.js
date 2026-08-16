@@ -2,6 +2,7 @@ import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/ca
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import type Database from "better-sqlite3";
 import { openSqliteDatabase } from "../storage/sqlite-database.ts";
 import { ensurePrivateDir } from "../storage/private-file-atomic.ts";
 import {
@@ -20,46 +21,204 @@ import {
   redactOperationAuditValue,
   truncateOperationAuditJson
 } from "./operation-audit-common.ts";
-const DEFAULT_RETENTION_DAYS: any = 90;
-const DEFAULT_MAX_EXPORT_ITEMS: any = 1000;
-const DEFAULT_MAX_RECORDS: any = 250_000;
-const DEFAULT_MAX_LOGICAL_BYTES: any = 256 * 1024 * 1024;
-const DEFAULT_MAX_DATABASE_BYTES: any = 512 * 1024 * 1024;
-const DEFAULT_CLEANUP_BATCH_SIZE: any = 512;
-const DEFAULT_MAINTENANCE_EVERY_APPENDS: any = 128;
-const MAX_RECORDS: any = 2_000_000;
-const MAX_LOGICAL_BYTES: any = 2 * 1024 * 1024 * 1024;
-const MAX_DATABASE_BYTES: any = 4 * 1024 * 1024 * 1024;
-const MAX_CLEANUP_BATCH_SIZE: any = 4096;
-const MAX_MAINTENANCE_EVERY_APPENDS: any = 4096;
-const MIN_DATABASE_BYTES: any = 4 * 1024 * 1024;
-const WAL_JOURNAL_SIZE_LIMIT_BYTES: any = 16 * 1024 * 1024;
-const AUDIT_RECORD_FIXED_BYTES: any = 128;
+type DataRecord = Record<string, unknown>;
+type SqliteValue = string | number;
 
-function nowIso() : any {
+interface OperationAuditRecord {
+  auditId: string;
+  traceId: string;
+  requestId: string;
+  tenantId: string;
+  decisionId: string;
+  proofId: string;
+  operationId: string;
+  transport: string;
+  actorJson: string;
+  risk: string;
+  readOnly: number;
+  status: string;
+  durationMs: number;
+  inputHash: string;
+  redactedInputJson: string;
+  redactedOutputSummaryJson: string;
+  error: string;
+  riskControlAnchorDigest: string;
+  riskControlLastRecordDigest: string;
+  riskControlGateCount: number;
+  riskControlEnvelopeJson: string;
+  createdAt: string;
+}
+
+interface OperationAuditRow {
+  audit_id: string;
+  trace_id: string;
+  request_id: string;
+  tenant_id: string;
+  decision_id: string;
+  proof_id: string;
+  operation_id: string;
+  transport: string;
+  actor_json: string;
+  risk: string;
+  read_only: number;
+  status: string;
+  duration_ms: number;
+  input_hash: string;
+  redacted_input_json: string;
+  redacted_output_summary_json: string;
+  error: string;
+  risk_control_anchor_digest: string;
+  risk_control_last_record_digest: string;
+  risk_control_gate_count: number;
+  risk_control_envelope_json: string;
+  created_at: string;
+}
+
+interface OperationAuditActor extends DataRecord {
+  type: string;
+  userId: string;
+  username: string;
+  roleId: string;
+  tenantId: string;
+  orgId: string;
+  teamIds: unknown[];
+  departmentIds: unknown[];
+}
+
+interface RiskControlSnapshot {
+  anchorDigest: string;
+  lastRecordDigest: string;
+  gateCount: number;
+  envelope: unknown;
+}
+
+interface RetentionPolicy extends DataRecord {
+  policyVersion: string;
+  retentionDays: number;
+  maxExportItems: number;
+  maxRecords: number;
+  maxLogicalBytes: number;
+  maxDatabaseBytes: number;
+  cleanupBatchSize: number;
+  maintenanceEveryAppends: number;
+  updatedAt: string;
+  updatedBy: unknown;
+}
+
+interface AuditMetaRow {
+  rowCount: number;
+  logicalBytes: number;
+  appendCount: number;
+  lastMaintenanceAt: string;
+}
+
+interface CapacityFailure {
+  reason: string;
+  limit: number;
+  actual: number;
+}
+
+interface AppendOutcome {
+  deletedCount: number;
+  capacity: CapacityFailure | null;
+}
+
+interface IdempotentAppendOutcome extends AppendOutcome {
+  auditId: string;
+  replayed: boolean;
+}
+
+interface PreparedAuditRecord {
+  values: SqliteValue[];
+  recordBytes: number;
+}
+
+interface OperationAuditItem extends DataRecord {
+  auditId: string;
+  traceId: string;
+  requestId: string;
+  tenantId: string;
+  decisionId: string;
+  proofId: string;
+  operationId: string;
+  transport: string;
+  actor: DataRecord;
+  risk: string;
+  readOnly: boolean;
+  status: string;
+  durationMs: number;
+  inputHash: string;
+  redactedInput: unknown;
+  redactedOutputSummary: unknown;
+  riskControl: RiskControlSnapshot;
+  error: string;
+  createdAt: string;
+}
+
+export interface OperationAuditWorkerStore {
+  db: Database.Database;
+  rootPath: string;
+  append(entry?: DataRecord): { auditId: string; maintenance: { deletedCount: number } };
+  appendIdempotent(entry?: DataRecord): { auditId: string; replayed: boolean; maintenance: { deletedCount: number } };
+  getById(auditId?: unknown): OperationAuditItem | null;
+  list(input?: DataRecord): OperationAuditItem[];
+  getRetentionPolicy(): RetentionPolicy;
+  setRetentionPolicy(input?: DataRecord): RetentionPolicy;
+  pruneExpired(input?: DataRecord): DataRecord;
+  exportRedacted(input?: DataRecord): unknown;
+  getTrace(traceId?: unknown, input?: DataRecord): DataRecord;
+  close(): void;
+}
+
+const DEFAULT_RETENTION_DAYS = 90;
+const DEFAULT_MAX_EXPORT_ITEMS = 1000;
+const DEFAULT_MAX_RECORDS = 250_000;
+const DEFAULT_MAX_LOGICAL_BYTES = 256 * 1024 * 1024;
+const DEFAULT_MAX_DATABASE_BYTES = 512 * 1024 * 1024;
+const DEFAULT_CLEANUP_BATCH_SIZE = 512;
+const DEFAULT_MAINTENANCE_EVERY_APPENDS = 128;
+const MAX_RECORDS = 2_000_000;
+const MAX_LOGICAL_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_DATABASE_BYTES = 4 * 1024 * 1024 * 1024;
+const MAX_CLEANUP_BATCH_SIZE = 4096;
+const MAX_MAINTENANCE_EVERY_APPENDS = 4096;
+const MIN_DATABASE_BYTES = 4 * 1024 * 1024;
+const WAL_JOURNAL_SIZE_LIMIT_BYTES = 16 * 1024 * 1024;
+const AUDIT_RECORD_FIXED_BYTES = 128;
+
+function nowIso(): string {
   return new Date().toISOString();
 }
 
+function asRecord(value: unknown): DataRecord {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as DataRecord
+    : {};
+}
 
-function hashValue(value?: any) : any {
+function sqliteErrorCode(error: unknown): string {
+  return String(asRecord(error).code || "");
+}
+
+function hashValue(value?: unknown): string {
   return crypto.createHash("sha256").update(stableJson(value)).digest("hex");
 }
 
-function asLimit(value?: any, fallback: any = 100, max: any = 500) : any {
+function asLimit(value?: unknown, fallback = 100, max = 500): number {
   return Math.max(1, Math.min(Number(value || fallback) || fallback, max));
 }
 
-function boundedInteger(value?: any, fallback?: any, min?: any, max?: any) : any {
-  const number: any = Number(value);
+function boundedInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const number = Number(value);
   if (!Number.isSafeInteger(number)) {
     return fallback;
   }
   return Math.max(min, Math.min(number, max));
 }
 
-function firstString(...values: any[]) : any {
+function firstString(...values: unknown[]): string {
   for (const value of values) {
-    const text: any = String(value || "").trim();
+    const text = String(value || "").trim();
     if (text) {
       return text;
     }
@@ -67,7 +226,7 @@ function firstString(...values: any[]) : any {
   return "";
 }
 
-function summarizeOutput(value?: any) : any {
+function summarizeOutput(value?: unknown): unknown {
   if (value === null || value === undefined) {
     return {};
   }
@@ -80,8 +239,8 @@ function summarizeOutput(value?: any) : any {
   if (Array.isArray(value)) {
     return { type: "array", length: value.length };
   }
-  const summary: Record<string, any> = {};
-  for (const [key, nested] of (Object.entries(value) as [string, any][]).slice(0, 40)) {
+  const summary: DataRecord = {};
+  for (const [key, nested] of Object.entries(value).slice(0, 40)) {
     if (SENSITIVE_KEY_PATTERN.test(key)) {
       summary[key] = "<redacted>";
     } else if (Array.isArray(nested)) {
@@ -99,22 +258,24 @@ function summarizeOutput(value?: any) : any {
   return truncateOperationAuditJson(summary);
 }
 
-function actorFrom(value: Record<string, any> = {}) : any {
-  const user: any = value.user || value;
+function actorFrom(value: DataRecord = {}): OperationAuditActor {
+  const user = asRecord(value.user || value);
+  const teamIds = user.teamIds || value.teamIds;
+  const departmentIds = user.departmentIds || value.departmentIds;
   return {
-    type: value.type || (user?.userId ? "console-user" : "anonymous"),
-    userId: user?.userId || "",
-    username: user?.username || "",
-    roleId: user?.roleId || "",
-    tenantId: user?.tenantId || value.tenantId || "",
-    orgId: user?.orgId || value.orgId || "",
-    teamIds: Array.isArray(user?.teamIds || value.teamIds) ? [...(user?.teamIds || value.teamIds)] : [],
-    departmentIds: Array.isArray(user?.departmentIds || value.departmentIds) ? [...(user?.departmentIds || value.departmentIds)] : []
+    type: String(value.type || (user.userId ? "console-user" : "anonymous")),
+    userId: String(user.userId || ""),
+    username: String(user.username || ""),
+    roleId: String(user.roleId || ""),
+    tenantId: String(user.tenantId || value.tenantId || ""),
+    orgId: String(user.orgId || value.orgId || ""),
+    teamIds: Array.isArray(teamIds) ? [...teamIds] : [],
+    departmentIds: Array.isArray(departmentIds) ? [...departmentIds] : []
   };
 }
 
-function ensureOperationAuditColumns(db?: any) : any {
-  const cols: any = new Set<any>(db.prepare("PRAGMA table_info(operation_audit_log)").all().map((row?: any) : any => row.name));
+function ensureOperationAuditColumns(db: Database.Database): void {
+  const cols = new Set(db.prepare<[], { name: unknown }>("PRAGMA table_info(operation_audit_log)").all().map((row) => String(row.name || "")));
   if (!cols.has("trace_id")) {
     db.exec("ALTER TABLE operation_audit_log ADD COLUMN trace_id TEXT NOT NULL DEFAULT ''");
   }
@@ -147,7 +308,7 @@ function ensureOperationAuditColumns(db?: any) : any {
   }
 }
 
-function ensureOperationAuditRetentionSchema(db?: any) : any {
+function ensureOperationAuditRetentionSchema(db: Database.Database): void {
   db.exec(`
     UPDATE operation_audit_log
     SET record_bytes =
@@ -209,7 +370,7 @@ function ensureOperationAuditRetentionSchema(db?: any) : any {
   `);
 }
 
-function ensureSchema(db?: any) : any {
+function ensureSchema(db: Database.Database): void {
   // Establish the first SQLite failure boundary before any driver-specific
   // metadata reads so constructor unwind always preserves the schema error.
   db.exec("PRAGMA busy_timeout = 5000;");
@@ -253,20 +414,20 @@ function ensureSchema(db?: any) : any {
   runMigrations(db, [
     {
       version: 1,
-      up: (d?: any) : any => {
+      up: (d: Database.Database): void => {
         ensureOperationAuditColumns(d);
       }
     },
     {
       version: 2,
-      up: (d?: any) : any => {
+      up: (d: Database.Database): void => {
         ensureOperationAuditColumns(d);
         ensureOperationAuditRetentionSchema(d);
       }
     },
     {
       version: 3,
-      up: (d?: any) : any => {
+      up: (d: Database.Database): void => {
         ensureOperationAuditColumns(d);
       }
     }
@@ -282,24 +443,26 @@ function ensureSchema(db?: any) : any {
   `);
 }
 
-function parseJson(value?: any, fallback?: any) : any {
+function parseJson<T>(value: unknown, fallback: T): T {
   try {
-    return JSON.parse(value || "");
+    return JSON.parse(String(value || "")) as T;
   } catch {
     return fallback;
   }
 }
 
-function riskControlAuditSnapshot(value: any = null) : any {
-  const envelope: any = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const records: any = Array.isArray(envelope.gateRecords) ? envelope.gateRecords : [];
-  const compactEnvelope: Record<string, any> = {
+function riskControlAuditSnapshot(value: unknown = null): RiskControlSnapshot {
+  const envelope = asRecord(value);
+  const records = Array.isArray(envelope.gateRecords)
+    ? envelope.gateRecords.map(asRecord)
+    : [];
+  const compactEnvelope: DataRecord = {
     envelopeVersion: String(envelope.envelopeVersion || ""),
     operationId: String(envelope.operationId || ""),
     traceId: String(envelope.traceId || ""),
     inputHash: String(envelope.inputHash || ""),
     operationAnchorDigest: String(envelope.operationAnchorDigest || ""),
-    gateRecords: records.map((record?: any) : any => ({
+    gateRecords: records.map((record) => ({
       recordVersion: String(record.recordVersion || ""),
       controlRef: record.controlRef || {},
       gate: String(record.gate || ""),
@@ -314,7 +477,7 @@ function riskControlAuditSnapshot(value: any = null) : any {
       recordDigest: String(record.recordDigest || "")
     }))
   };
-  const redactedEnvelope: any = redactOperationAuditValue(compactEnvelope);
+  const redactedEnvelope = redactOperationAuditValue(compactEnvelope);
   return {
     anchorDigest: String(envelope.operationAnchorDigest || ""),
     lastRecordDigest: String(records.at(-1)?.recordDigest || ""),
@@ -323,26 +486,27 @@ function riskControlAuditSnapshot(value: any = null) : any {
   };
 }
 
-function normalizeOperationAuditRecord(entry?: any, {
+function normalizeOperationAuditRecord(entry: DataRecord = {}, {
   auditId,
   fallbackCreatedAt = ""
-}: Record<string, any> = {}) : any {
-  const input: any = entry.input ?? {};
-  const actor: any = actorFrom(entry.actor || {});
-  const riskControl: any = riskControlAuditSnapshot(entry.riskControl || entry.riskControlEnvelope || null);
-  const decisionId: any = String(entry.decisionId || entry.authorizationDecisionId || "");
-  const proofId: any = String(entry.proofId || entry.ledgerEventId || "");
-  const canonicalReference: any = Boolean(decisionId || proofId);
+}: { auditId: string; fallbackCreatedAt?: string }): OperationAuditRecord {
+  const input = entry.input ?? {};
+  const inputRecord = asRecord(input);
+  const actor = actorFrom(asRecord(entry.actor));
+  const riskControl = riskControlAuditSnapshot(entry.riskControl || entry.riskControlEnvelope || null);
+  const decisionId = String(entry.decisionId || entry.authorizationDecisionId || "");
+  const proofId = String(entry.proofId || entry.ledgerEventId || "");
+  const canonicalReference = Boolean(decisionId || proofId);
   return {
     auditId,
     traceId: String(entry.traceId || ""),
     requestId: String(entry.requestId || ""),
     tenantId: firstString(
       entry.tenantId,
-      entry.tenant?.tenantId,
+      asRecord(entry.tenant).tenantId,
       actor.tenantId,
-      input.tenantId,
-      input["tenant-id"]
+      inputRecord.tenantId,
+      inputRecord["tenant-id"]
     ),
     decisionId,
     proofId,
@@ -367,7 +531,7 @@ function normalizeOperationAuditRecord(entry?: any, {
   };
 }
 
-function operationAuditRecordValues(record?: any) : any {
+function operationAuditRecordValues(record: OperationAuditRecord): SqliteValue[] {
   return [
     record.auditId,
     record.traceId,
@@ -394,22 +558,22 @@ function operationAuditRecordValues(record?: any) : any {
   ];
 }
 
-function canonicalStoredJson(value?: any) : any {
+function canonicalStoredJson(value: unknown): string | null {
   try {
-    return stableJson(JSON.parse(value));
+    return stableJson(JSON.parse(String(value)));
   } catch {
     return null;
   }
 }
 
-function normalizedOperationAuditRow(row?: any) : any {
+function normalizedOperationAuditRow(row: OperationAuditRow | null | undefined): OperationAuditRecord | null {
   if (!row) {
     return null;
   }
-  const actorJson: any = canonicalStoredJson(row.actor_json);
-  const redactedInputJson: any = canonicalStoredJson(row.redacted_input_json);
-  const redactedOutputSummaryJson: any = canonicalStoredJson(row.redacted_output_summary_json);
-  const riskControlEnvelopeJson: any = canonicalStoredJson(row.risk_control_envelope_json);
+  const actorJson = canonicalStoredJson(row.actor_json);
+  const redactedInputJson = canonicalStoredJson(row.redacted_input_json);
+  const redactedOutputSummaryJson = canonicalStoredJson(row.redacted_output_summary_json);
+  const riskControlEnvelopeJson = canonicalStoredJson(row.risk_control_envelope_json);
   if (
     actorJson === null ||
     redactedInputJson === null ||
@@ -444,9 +608,9 @@ function normalizedOperationAuditRow(row?: any) : any {
   };
 }
 
-function operationAuditRecordsEqual(row?: any, record?: any) : any {
-  const stored: any = normalizedOperationAuditRow(row);
-  const normalizedRecord: any = normalizedOperationAuditRow({
+function operationAuditRecordsEqual(row: OperationAuditRow, record: OperationAuditRecord): boolean {
+  const stored = normalizedOperationAuditRow(row);
+  const normalizedRecord = normalizedOperationAuditRow({
     audit_id: record.auditId,
     trace_id: record.traceId,
     request_id: record.requestId,
@@ -477,7 +641,7 @@ function operationAuditRecordsEqual(row?: any, record?: any) : any {
   );
 }
 
-function projectOperationAuditRow(row?: any) : any {
+function projectOperationAuditRow(row: OperationAuditRow): OperationAuditItem {
   return {
     auditId: row.audit_id,
     traceId: row.trace_id || "",
@@ -487,7 +651,7 @@ function projectOperationAuditRow(row?: any) : any {
     proofId: row.proof_id || "",
     operationId: row.operation_id,
     transport: row.transport,
-    actor: parseJson(row.actor_json, {}),
+    actor: asRecord(parseJson<unknown>(row.actor_json, {})),
     risk: row.risk,
     readOnly: Boolean(row.read_only),
     status: row.status,
@@ -506,15 +670,20 @@ function projectOperationAuditRow(row?: any) : any {
   };
 }
 
-function openOperationAuditDatabase(rootPath?: any) : any {
-  const databasePath: any = ensurePrivateSqliteLocation(path.join(rootPath, "operation-audit.sqlite"));
-  let db: any = null;
+function openOperationAuditDatabase(rootPath: string): {
+  db: Database.Database;
+  insertStmt: Database.Statement<SqliteValue[]>;
+  databasePath: string;
+} {
+  const databasePath = ensurePrivateSqliteLocation(path.join(rootPath, "operation-audit.sqlite"));
+  const state: { db: Database.Database | null } = { db: null };
   try {
-    return withPrivateFileCreationMask(() : any => {
-      db = openSqliteDatabase(databasePath);
-      ensureSchema(db);
+    return withPrivateFileCreationMask(() => {
+      const openedDatabase = openSqliteDatabase(databasePath) as Database.Database;
+      state.db = openedDatabase;
+      ensureSchema(openedDatabase);
       ensurePrivateSqliteLocation(databasePath);
-      const insertStmt: any = db.prepare(`
+      const insertStmt = openedDatabase.prepare<SqliteValue[]>(`
       INSERT INTO operation_audit_log (
         audit_id, trace_id, request_id, tenant_id, decision_id, proof_id, operation_id, transport, actor_json, risk, read_only, status, duration_ms,
         input_hash, redacted_input_json, redacted_output_summary_json, error,
@@ -522,11 +691,11 @@ function openOperationAuditDatabase(rootPath?: any) : any {
         created_at, record_bytes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      return { db, insertStmt, databasePath };
+      return { db: openedDatabase, insertStmt, databasePath };
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     try {
-      db?.close?.();
+      state.db?.close();
     } catch {
       // Preserve the audit-store initialization failure.
     }
@@ -538,12 +707,12 @@ function openOperationAuditDatabase(rootPath?: any) : any {
  * Worker-private synchronous owner. Runtime code must reach this store only
  * through the typed operation-audit SQLite execution lane.
  */
-export function createOperationAuditWorkerStore({ userDataPath }: Record<string, any>) : any {
-  const rootPath: any = path.join(userDataPath, "security");
+export function createOperationAuditWorkerStore({ userDataPath }: { userDataPath: string }): OperationAuditWorkerStore {
+  const rootPath = path.join(userDataPath, "security");
   ensurePrivateDir(rootPath);
   const { db, insertStmt } = openOperationAuditDatabase(rootPath);
-  const retentionPolicyPath: any = path.join(rootPath, "audit-retention.json");
-  const deleteExpiredStmt: any = db.prepare(`
+  const retentionPolicyPath = path.join(rootPath, "audit-retention.json");
+  const deleteExpiredStmt = db.prepare<[string, number]>(`
     DELETE FROM operation_audit_log
     WHERE audit_id IN (
       SELECT audit_id
@@ -553,7 +722,7 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
       LIMIT ?
     )
   `);
-  const readMetaStmt: any = db.prepare(`
+  const readMetaStmt = db.prepare<[], AuditMetaRow>(`
     SELECT row_count AS rowCount,
            logical_bytes AS logicalBytes,
            append_count AS appendCount,
@@ -561,18 +730,18 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     FROM operation_audit_meta
     WHERE singleton = 1
   `);
-  const markMaintenanceStmt: any = db.prepare(`
+  const markMaintenanceStmt = db.prepare<[string]>(`
     UPDATE operation_audit_meta
     SET last_maintenance_at = ?
     WHERE singleton = 1
   `);
-  const selectByIdStmt: any = db.prepare(`
+  const selectByIdStmt = db.prepare<[string], OperationAuditRow>(`
     SELECT *
     FROM operation_audit_log
     WHERE audit_id = ?
   `);
 
-  function normalizeRetentionPolicy(input: Record<string, any> = {}) : any {
+  function normalizeRetentionPolicy(input: DataRecord = {}): RetentionPolicy {
     return {
       policyVersion: "v0.0.1:platform:audit-retention-1",
       retentionDays: boundedInteger(input.retentionDays, DEFAULT_RETENTION_DAYS, 1, 3650),
@@ -607,39 +776,39 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     };
   }
 
-  function readRetentionPolicy() : any {
+  function readRetentionPolicy(): RetentionPolicy {
     try {
-      return normalizeRetentionPolicy(JSON.parse(fs.readFileSync(retentionPolicyPath, "utf8")));
+      return normalizeRetentionPolicy(asRecord(JSON.parse(fs.readFileSync(retentionPolicyPath, "utf8"))));
     } catch {
       return normalizeRetentionPolicy();
     }
   }
 
-  let retentionPolicy: any = readRetentionPolicy();
+  let retentionPolicy = readRetentionPolicy();
 
-  function configureDatabaseCapacity(policy?: any) : any {
-    const pageSize: any = Number(db.pragma("page_size", { simple: true }) || 4096);
-    const maxPages: any = Math.max(1, Math.floor(policy.maxDatabaseBytes / pageSize));
+  function configureDatabaseCapacity(policy: RetentionPolicy): void {
+    const pageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
+    const maxPages = Math.max(1, Math.floor(policy.maxDatabaseBytes / pageSize));
     db.pragma(`max_page_count = ${maxPages}`);
   }
 
   configureDatabaseCapacity(retentionPolicy);
 
-  function recordBytes(values?: any) : any {
-    return AUDIT_RECORD_FIXED_BYTES + values.reduce(
-      (total?: any, value?: any) : any => total + Buffer.byteLength(String(value ?? ""), "utf8"),
+  function recordBytes(values: readonly SqliteValue[]): number {
+    return AUDIT_RECORD_FIXED_BYTES + values.reduce<number>(
+      (total, value) => total + Buffer.byteLength(String(value ?? ""), "utf8"),
       0
     );
   }
 
-  function activeDatabaseBytes() : any {
-    const pageSize: any = Number(db.pragma("page_size", { simple: true }) || 4096);
-    const pageCount: any = Number(db.pragma("page_count", { simple: true }) || 0);
-    const freePages: any = Number(db.pragma("freelist_count", { simple: true }) || 0);
+  function activeDatabaseBytes(): number {
+    const pageSize = Number(db.pragma("page_size", { simple: true }) || 4096);
+    const pageCount = Number(db.pragma("page_count", { simple: true }) || 0);
+    const freePages = Number(db.pragma("freelist_count", { simple: true }) || 0);
     return Math.max(0, pageCount - freePages) * pageSize;
   }
 
-  function maintainStorageAfterDelete(deletedCount?: any) : any {
+  function maintainStorageAfterDelete(deletedCount: number): void {
     if (deletedCount <= 0) {
       return;
     }
@@ -649,26 +818,33 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     }
   }
 
-  function pruneExpiredInTransaction(policy?: any, cutoff?: any) : any {
-    const result: any = deleteExpiredStmt.run(cutoff, policy.cleanupBatchSize);
+  function pruneExpiredInTransaction(policy: RetentionPolicy, cutoff: string): number {
+    const result = deleteExpiredStmt.run(cutoff, policy.cleanupBatchSize);
     markMaintenanceStmt.run(nowIso());
     return Number(result.changes || 0);
   }
 
-  function appendNewRecordInTransaction(record?: any, policy?: any) : any {
-    let meta: any = readMetaStmt.get();
-    const exceedsCount: any = meta.rowCount + 1 > policy.maxRecords;
-    const exceedsLogicalBytes: any = meta.logicalBytes + record.recordBytes > policy.maxLogicalBytes;
-    const maintenanceDue: any =
+  function appendNewRecordInTransaction(record: PreparedAuditRecord, policy: RetentionPolicy): AppendOutcome {
+    let meta = readMetaStmt.get();
+    if (!meta) {
+      throw new Error("Operation audit metadata row is missing.");
+    }
+    const exceedsCount = meta.rowCount + 1 > policy.maxRecords;
+    const exceedsLogicalBytes = meta.logicalBytes + record.recordBytes > policy.maxLogicalBytes;
+    const maintenanceDue =
       meta.appendCount === 0 ||
       meta.appendCount % policy.maintenanceEveryAppends === 0 ||
       exceedsCount ||
       exceedsLogicalBytes;
-    let deletedCount: any = 0;
+    let deletedCount = 0;
     if (maintenanceDue) {
-      const cutoff: any = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000).toISOString();
       deletedCount = pruneExpiredInTransaction(policy, cutoff);
-      meta = readMetaStmt.get();
+      const refreshedMeta = readMetaStmt.get();
+      if (!refreshedMeta) {
+        throw new Error("Operation audit metadata row is missing after retention cleanup.");
+      }
+      meta = refreshedMeta;
     }
     if (meta.rowCount + 1 > policy.maxRecords) {
       return {
@@ -691,20 +867,24 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
       };
     }
     insertStmt.run(...record.values, record.recordBytes);
-    const databaseBytes: any = activeDatabaseBytes();
+    const databaseBytes = activeDatabaseBytes();
     if (databaseBytes > policy.maxDatabaseBytes) {
       throw new OperationAuditCapacityError("database_bytes", policy.maxDatabaseBytes, databaseBytes);
     }
     return { deletedCount, capacity: null };
   }
 
-  const appendTransaction: any = db.transaction((record?: any, policy?: any) : any => (
+  const appendTransaction = db.transaction((record: PreparedAuditRecord, policy: RetentionPolicy): AppendOutcome => (
     appendNewRecordInTransaction(record, policy)
   ));
 
-  const appendIdempotentTransaction: any = db.transaction((entry?: any, auditId?: any, policy?: any) : any => {
-    const existing: any = selectByIdStmt.get(auditId);
-    const record: any = normalizeOperationAuditRecord(entry, {
+  const appendIdempotentTransaction = db.transaction((
+    entry: DataRecord,
+    auditId: string,
+    policy: RetentionPolicy
+  ): IdempotentAppendOutcome => {
+    const existing = selectByIdStmt.get(auditId);
+    const record = normalizeOperationAuditRecord(entry, {
       auditId,
       fallbackCreatedAt: existing?.created_at || ""
     });
@@ -720,12 +900,12 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
       };
     }
 
-    const values: any = operationAuditRecordValues(record);
-    const bytes: any = recordBytes(values);
+    const values = operationAuditRecordValues(record);
+    const bytes = recordBytes(values);
     if (bytes > policy.maxLogicalBytes) {
       throw new OperationAuditCapacityError("record_bytes", policy.maxLogicalBytes, bytes);
     }
-    const outcome: any = appendNewRecordInTransaction({ values, recordBytes: bytes }, policy);
+    const outcome = appendNewRecordInTransaction({ values, recordBytes: bytes }, policy);
     return {
       auditId,
       replayed: false,
@@ -733,20 +913,20 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     };
   });
 
-  function append(entry: Record<string, any> = {}) : any {
-    const auditId: any = entry.auditId || `op_audit_${crypto.randomUUID()}`;
-    const record: any = normalizeOperationAuditRecord(entry, { auditId });
-    const values: any = operationAuditRecordValues(record);
-    const bytes: any = recordBytes(values);
+  function append(entry: DataRecord = {}): { auditId: string; maintenance: { deletedCount: number } } {
+    const auditId = String(entry.auditId || `op_audit_${crypto.randomUUID()}`);
+    const record = normalizeOperationAuditRecord(entry, { auditId });
+    const values = operationAuditRecordValues(record);
+    const bytes = recordBytes(values);
     if (bytes > retentionPolicy.maxLogicalBytes) {
       throw new OperationAuditCapacityError("record_bytes", retentionPolicy.maxLogicalBytes, bytes);
     }
     configureDatabaseCapacity(retentionPolicy);
-    let outcome: any = null;
+    let outcome: AppendOutcome;
     try {
       outcome = appendTransaction({ values, recordBytes: bytes }, retentionPolicy);
-    } catch (error: any) {
-      if (error?.code === "SQLITE_FULL") {
+    } catch (error: unknown) {
+      if (sqliteErrorCode(error) === "SQLITE_FULL") {
         throw new OperationAuditCapacityError(
           "database_bytes",
           retentionPolicy.maxDatabaseBytes,
@@ -766,7 +946,11 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     return { auditId, maintenance: { deletedCount: outcome.deletedCount } };
   }
 
-  function appendIdempotent(entry: Record<string, any> = {}) : any {
+  function appendIdempotent(entry: DataRecord = {}): {
+    auditId: string;
+    replayed: boolean;
+    maintenance: { deletedCount: number };
+  } {
     if (
       !entry ||
       typeof entry !== "object" ||
@@ -776,13 +960,13 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     ) {
       throw new OperationAuditIdRequiredError();
     }
-    const auditId: any = entry.auditId;
+    const auditId = entry.auditId;
     configureDatabaseCapacity(retentionPolicy);
-    let outcome: any = null;
+    let outcome: IdempotentAppendOutcome;
     try {
       outcome = appendIdempotentTransaction.immediate(entry, auditId, retentionPolicy);
-    } catch (error: any) {
-      if (error?.code === "SQLITE_FULL") {
+    } catch (error: unknown) {
+      if (sqliteErrorCode(error) === "SQLITE_FULL") {
         throw new OperationAuditCapacityError(
           "database_bytes",
           retentionPolicy.maxDatabaseBytes,
@@ -806,12 +990,12 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     };
   }
 
-  function getById(auditId?: any) : any {
-    const normalizedAuditId: any = typeof auditId === "string" ? auditId : "";
+  function getById(auditId?: unknown): OperationAuditItem | null {
+    const normalizedAuditId = typeof auditId === "string" ? auditId : "";
     if (!normalizedAuditId) {
       return null;
     }
-    const row: any = selectByIdStmt.get(normalizedAuditId);
+    const row = selectByIdStmt.get(normalizedAuditId);
     return row ? projectOperationAuditRow(row) : null;
   }
 
@@ -824,9 +1008,9 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     tenantId = "",
     createdFrom = "",
     createdTo = ""
-  }: Record<string, any> = {}) : any {
-    const clauses: any[] = [];
-    const params: any[] = [];
+  }: DataRecord = {}): OperationAuditItem[] {
+    const clauses: string[] = [];
+    const params: SqliteValue[] = [];
     if (operationId) {
       clauses.push("operation_id = ?");
       params.push(String(operationId));
@@ -851,8 +1035,8 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
       clauses.push("created_at <= ?");
       params.push(String(createdTo));
     }
-    const where: any = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const rows: any = db.prepare(`
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const rows = db.prepare<SqliteValue[], OperationAuditRow>(`
       SELECT * FROM operation_audit_log
       ${where}
       ORDER BY created_at DESC
@@ -860,21 +1044,21 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     `).all(...params, asLimit(limit));
     return rows
       .map(projectOperationAuditRow)
-      .filter((entry?: any) : any => !userId || entry.actor?.userId === String(userId));
+      .filter((entry) => !userId || entry.actor.userId === String(userId));
   }
 
-  function getRetentionPolicy() : any {
+  function getRetentionPolicy(): RetentionPolicy {
     return {
       ...retentionPolicy,
       updatedBy: redactOperationAuditValue(retentionPolicy.updatedBy || {})
     };
   }
 
-  function setRetentionPolicy(input: Record<string, any> = {}) : any {
-    const definedInput: any = Object.fromEntries(
-      (Object.entries(input) as [string, any][]).filter(([, value]: any[]) : any => value !== undefined && value !== null && value !== "")
+  function setRetentionPolicy(input: DataRecord = {}): RetentionPolicy {
+    const definedInput = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined && value !== null && value !== "")
     );
-    const policy: any = normalizeRetentionPolicy({
+    const policy = normalizeRetentionPolicy({
       ...retentionPolicy,
       ...definedInput,
       updatedAt: nowIso(),
@@ -886,11 +1070,11 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     return policy;
   }
 
-  function pruneExpired(input: Record<string, any> = {}) : any {
-    const policy: any = input.retentionDays ? setRetentionPolicy(input) : getRetentionPolicy();
-    const cutoff: any = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000).toISOString();
-    const result: any = db.transaction(() : any => {
-      const deletedCount: any = pruneExpiredInTransaction(policy, cutoff);
+  function pruneExpired(input: DataRecord = {}): DataRecord {
+    const policy = input.retentionDays ? setRetentionPolicy(input) : getRetentionPolicy();
+    const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000).toISOString();
+    const result = db.transaction(() => {
+      const deletedCount = pruneExpiredInTransaction(policy, cutoff);
       return { deletedCount };
     })();
     maintainStorageAfterDelete(result.deletedCount);
@@ -909,13 +1093,13 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     };
   }
 
-  function exportRedacted(input: Record<string, any> = {}) : any {
-    const policy: any = getRetentionPolicy();
-    const items: any = list({
+  function exportRedacted(input: DataRecord = {}): unknown {
+    const policy = getRetentionPolicy();
+    const items = list({
       ...input,
       limit: asLimit(input.limit, Math.min(policy.maxExportItems, DEFAULT_MAX_EXPORT_ITEMS), policy.maxExportItems)
     });
-    const manifest: Record<string, any> = {
+    const manifest: DataRecord = {
       protocolVersion: "v0.0.1:platform:audit-export-1",
       exportedAt: nowIso(),
       redactionPolicy: "operation-audit-redacted-v1",
@@ -931,13 +1115,13 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
         createdTo: input.createdTo || ""
       })
     };
-    const redactedItems: any = items.map((item?: any) : any => redactOperationAuditValue(item));
+    const redactedItems = items.map((item) => redactOperationAuditValue(item));
     return finalizeSensitiveReport({
       manifest,
       items: redactedItems,
       jsonl: [
         JSON.stringify({ type: "manifest", ...manifest }),
-        ...redactedItems.map((item?: any) : any => JSON.stringify({ type: "audit", item }))
+        ...redactedItems.map((item) => JSON.stringify({ type: "audit", item }))
       ].join("\n") + "\n"
     }, {
       provenance: {
@@ -948,8 +1132,8 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     });
   }
 
-  function getTrace(traceId?: any, input: Record<string, any> = {}) : any {
-    const normalizedTraceId: any = String(traceId || input.traceId || "").trim();
+  function getTrace(traceId?: unknown, input: DataRecord = {}): DataRecord {
+    const normalizedTraceId = String(traceId || input.traceId || "").trim();
     if (!normalizedTraceId) {
       return {
         protocolVersion: "v0.0.1:platform:trace-drilldown-1",
@@ -959,7 +1143,7 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
         count: 0
       };
     }
-    const auditItems: any = list({
+    const auditItems = list({
       ...input,
       traceId: normalizedTraceId,
       limit: input.limit || 200
@@ -969,7 +1153,7 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
       traceId: normalizedTraceId,
       count: auditItems.length,
       auditItems,
-      spans: auditItems.map((item?: any) : any => ({
+      spans: auditItems.map((item) => ({
         auditId: item.auditId,
         operationId: item.operationId,
         transport: item.transport,
@@ -1000,7 +1184,7 @@ export function createOperationAuditWorkerStore({ userDataPath }: Record<string,
     pruneExpired,
     exportRedacted,
     getTrace,
-    close() : any {
+    close(): void {
       db.close();
     }
   };

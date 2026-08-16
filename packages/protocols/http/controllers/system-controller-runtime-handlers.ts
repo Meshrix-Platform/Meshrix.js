@@ -15,12 +15,11 @@ export function createSystemControllerRuntimeHandlers({
   distPath,
   runtime,
   moduleManagement,
-  externalGatewayManagement,
+  gatewayChannelRouter,
   jobWorkflowProvider,
   storageProvider,
   clientRegistryService,
   securityPermissions,
-  maintenanceAgent,
   getToolSkillManagementProvider = () : any => null,
   getIntegrationTaskSupervisorSnapshot = () : any => null,
   consoleDomainServices
@@ -142,7 +141,7 @@ export function createSystemControllerRuntimeHandlers({
           protocolEventBus,
           request,
           response,
-          agentSyncFeatureActive: isFeatureActive("agent-gateway")
+          agentSyncFeatureActive: isFeatureActive("core-platform")
         },
         errorMessage: "订阅事件失败。"
       });
@@ -154,7 +153,7 @@ export function createSystemControllerRuntimeHandlers({
         response,
         context: {
           protocolEventBus,
-          agentSyncFeatureActive: isFeatureActive("agent-gateway")
+          agentSyncFeatureActive: isFeatureActive("core-platform")
         },
         errorMessage: "处理智能体同步配置失败。"
       });
@@ -168,7 +167,7 @@ export function createSystemControllerRuntimeHandlers({
           protocolEventBus,
           toolSkillManagementProvider: getToolSkillManagementProvider(),
           request,
-          agentSyncFeatureActive: isFeatureActive("agent-gateway")
+          agentSyncFeatureActive: isFeatureActive("core-platform")
         },
         errorMessage: "发布智能体同步事件失败。"
       });
@@ -182,7 +181,7 @@ export function createSystemControllerRuntimeHandlers({
           protocolEventBus,
           request,
           response,
-          agentSyncFeatureActive: isFeatureActive("agent-gateway")
+          agentSyncFeatureActive: isFeatureActive("core-platform")
         },
         errorMessage: "订阅智能体同步事件失败。"
       });
@@ -320,39 +319,21 @@ export function createSystemControllerRuntimeHandlers({
         errorMessage: "读取挂载配置失败。"
       });
     },
-    async handleGetExternalGateway({ operation, response }: Record<string, any>) : Promise<any> {
+    async handleGetGatewayChannels({ operation, response, authSession }: Record<string, any>) : Promise<any> {
       await sendConsoleDomainOperation({
-        operationId: operation?.id || "runtime.external_gateway",
+        operationId: operation?.id || "runtime.gateway_channels",
         response,
-        context: { externalGatewayManagement },
-        errorMessage: "读取外置网关配置失败。"
+        context: { gatewayChannelRouter, authSession },
+        errorMessage: "读取 Gateway 通道失败。"
       });
     },
-    async handleValidateExternalGateway({ operation, requestBody, response }: Record<string, any>) : Promise<any> {
+    async handleSelectGatewayChannel({ operation, requestBody, response, authSession }: Record<string, any>) : Promise<any> {
       await sendConsoleDomainOperation({
-        operationId: operation?.id || "runtime.external_gateway.validate",
+        operationId: operation?.id || "runtime.gateway_channels.select",
         input: parseJsonBody(requestBody),
         response,
-        context: { externalGatewayManagement },
-        errorMessage: "校验外置网关配置失败。"
-      });
-    },
-    async handleApplyExternalGateway({ operation, requestBody, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "runtime.external_gateway.apply",
-        input: parseJsonBody(requestBody),
-        response,
-        context: { externalGatewayManagement },
-        errorMessage: "启用外置网关配置失败。"
-      });
-    },
-    async handleSwitchExternalGatewayDirect({ operation, requestBody, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "runtime.external_gateway.switch_direct",
-        input: parseJsonBody(requestBody),
-        response,
-        context: { externalGatewayManagement },
-        errorMessage: "切换内置网关流控失败。"
+        context: { gatewayChannelRouter, authSession, protocolEventBus },
+        errorMessage: "切换 Gateway 通道失败。"
       });
     },
 	    async handleSetMounts({ operation, requestBody, response }: Record<string, any>) : Promise<any> {
@@ -388,7 +369,6 @@ export function createSystemControllerRuntimeHandlers({
           serverUrl: getListenUrl(),
           securityPermissions,
           request,
-          maintenanceAgent,
           features: getFeatureEntries ? getFeatureEntries() : null,
           toolSkillManagementProvider: getToolSkillManagementProvider(),
           consoleDomainServices
@@ -396,85 +376,5 @@ export function createSystemControllerRuntimeHandlers({
         errorMessage: "读取控制台状态失败。"
       });
     },
-    async handleMaintenanceAgentConfig({ operation, requestBody, authSession, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || (requestBody.length > 0
-          ? "maintenance_agent.config.set"
-          : "maintenance_agent.config.get"),
-        input: requestBody.length > 0 ? parseJsonBody(requestBody) : {},
-        response,
-        context: { maintenanceAgent, authSession },
-        errorMessage: "维护智能体配置操作失败。"
-      });
-    },
-    async handleMaintenanceAgentChat({ operation, request, requestBody, authSession, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "maintenance_agent.chat",
-        input: parseJsonBody(requestBody),
-        response,
-        context: { maintenanceAgent, authSession, request },
-        errorMessage: "维护智能体对话失败。"
-      });
-    },
-    async handleMaintenanceAgentRuns({
-      operation,
-      request,
-      requestBody,
-      url,
-      authSession,
-      response
-    }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || (requestBody.length > 0
-          ? "maintenance_agent.runs.create"
-          : "maintenance_agent.runs.list"),
-        input: requestBody.length > 0
-          ? parseJsonBody(requestBody)
-          : { limit: Number(url.searchParams.get("limit") || 50) },
-        response,
-        context: { maintenanceAgent, authSession, request },
-        errorMessage: "维护智能体运行操作失败。"
-      });
-    },
-    async handleMaintenanceAgentRun({ operation, runId, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "maintenance_agent.runs.get",
-        input: { runId },
-        response,
-        context: { maintenanceAgent },
-        errorMessage: "读取维护智能体运行失败。"
-      });
-    },
-    async handleMaintenanceAgentApprove({
-      operation,
-      request,
-      runId,
-      requestBody,
-      authSession,
-      response
-    }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "maintenance_agent.runs.approve",
-        input: {
-          ...parseJsonBody(requestBody),
-          runId
-        },
-        response,
-        context: { maintenanceAgent, authSession, request },
-        errorMessage: "维护运行审批失败。"
-      });
-    },
-    async handleMaintenanceAgentCancel({ operation, runId, requestBody, authSession, response }: Record<string, any>) : Promise<any> {
-      await sendConsoleDomainOperation({
-        operationId: operation?.id || "maintenance_agent.runs.cancel",
-        input: {
-          ...parseJsonBody(requestBody),
-          runId
-        },
-        response,
-        context: { maintenanceAgent, authSession },
-        errorMessage: "维护运行取消失败。"
-      });
-    }
   };
 }

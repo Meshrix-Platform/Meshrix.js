@@ -292,8 +292,13 @@ describe("scoped API Key distribution", () : any => {
       "operation_permission.api_keys.rotate",
       "operation_permission.api_keys.revoke"
     ]);
-    expect(operations.every((operation: any) =>
-      JSON.stringify(operation.requiredScopes) === JSON.stringify(["console:read"]))).toBe(true);
+    expect(Object.fromEntries(operations.map((operation: any) => [operation.id, operation.requiredScopes]))).toEqual({
+      "operation_permission.api_keys.issuer_scopes": ["console:read"],
+      "operation_permission.api_keys.list": ["console:read"],
+      "operation_permission.api_keys.create": ["auth:admin"],
+      "operation_permission.api_keys.rotate": ["auth:admin"],
+      "operation_permission.api_keys.revoke": ["auth:admin"]
+    });
   });
 
   it("derives restricted issuer roots only from current explicit assignments", () : any => {

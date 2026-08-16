@@ -11,11 +11,27 @@ import {
   uniqueStrings
 } from "./authorization-engine-common.ts";
 
-export function hasConfirmation(input: Record<string, any> = {}, request: any = null) : any {
+interface AuthzRecord extends Record<string, unknown> {
+  metadata?: AuthzRecord;
+  user?: AuthzRecord;
+  safety?: AuthzRecord;
+  headers?: Record<string, unknown>;
+  scopes?: string[];
+  toolsets?: string[];
+  abac?: Record<string, string | string[] | ReadonlySet<string>>;
+}
+export type CompiledIpPredicate =
+  | { kind: "exact"; ip: string }
+  | { kind: "range"; base: number; bits: number; mask: number };
+export type CompiledIpRule =
+  | { ok: false }
+  | { ok: true; predicate: CompiledIpPredicate };
+
+export function hasConfirmation(input: AuthzRecord = {}, request: AuthzRecord | null = null) {
   if (input?.confirm === true || input?.confirmed === true) {
     return true;
   }
-  const header: any = String(
+  const header = String(
     request?.headers?.["x-meshrix-confirm"] ||
       request?.headers?.["x-meshrix-safety-confirm"] ||
       ""
@@ -23,12 +39,12 @@ export function hasConfirmation(input: Record<string, any> = {}, request: any = 
   return ["1", "true", "yes"].includes(header);
 }
 
-export function requestOrigin(request?: any) : any {
-  const origin: any = String(request?.headers?.origin || "").trim();
+export function requestOrigin(request?: AuthzRecord | null): string {
+  const origin = String(request?.headers?.origin || "").trim();
   if (origin) {
     return origin.replace(/\/+$/, "");
   }
-  const referer: any = String(request?.headers?.referer || "").trim();
+  const referer = String(request?.headers?.referer || "").trim();
   if (referer) {
     try {
       return new URL(referer).origin;
@@ -39,22 +55,22 @@ export function requestOrigin(request?: any) : any {
   return "";
 }
 
-export function sourceIpFromRequest(request?: any) : any {
+export function sourceIpFromRequest(request?: Parameters<typeof clientIpFromRequest>[0]) {
   return clientIpFromRequest(request);
 }
 
-function normalizeIp(value?: any) : any {
+function normalizeIp(value?: unknown) {
   return normalizeIpAddress(value);
 }
 
-function ipv4ToInt(value?: any) : any {
-  const parts: any = normalizeIp(value).split(".");
+function ipv4ToInt(value?: unknown): number | null {
+  const parts = normalizeIp(value).split(".");
   if (parts.length !== 4) {
     return null;
   }
-  let output: any = 0;
+  let output = 0;
   for (const part of parts) {
-    const number: any = Number(part);
+    const number = Number(part);
     if (!Number.isInteger(number) || number < 0 || number > 255) {
       return null;
     }
@@ -63,21 +79,21 @@ function ipv4ToInt(value?: any) : any {
   return output >>> 0;
 }
 
-export function compileIpRule(rule?: any) : any {
-  const normalizedRule: any = String(rule || "").trim();
+export function compileIpRule(rule?: unknown): CompiledIpRule {
+  const normalizedRule = String(rule || "").trim();
   if (!normalizedRule) {
     return { ok: false };
   }
   if (!normalizedRule.includes("/")) {
-    const normalizedIp: any = normalizeIp(normalizedRule);
+    const normalizedIp = normalizeIp(normalizedRule);
     if (!normalizedIp) {
       return { ok: false };
     }
     return { ok: true, predicate: { kind: "exact", ip: normalizedIp } };
   }
   const [base, bitsText] = normalizedRule.split("/");
-  const bits: any = Number(bitsText);
-  const baseInt: any = ipv4ToInt(base);
+  const bits = Number(bitsText);
+  const baseInt = ipv4ToInt(base);
   if (baseInt === null || !Number.isInteger(bits) || bits < 0 || bits > 32) {
     return { ok: false };
   }
@@ -92,43 +108,48 @@ export function compileIpRule(rule?: any) : any {
   };
 }
 
-export function ipMatchesRule(ip?: any, rule?: any) : any {
-  const normalizedIp: any = normalizeIp(ip);
+export function ipMatchesRule(ip?: unknown, rule?: unknown): boolean {
+  const normalizedIp = normalizeIp(ip);
   if (!normalizedIp) {
     return false;
   }
-  const compiled: any = compileIpRule(rule);
+  const compiled = compileIpRule(rule);
   if (!compiled.ok) {
     return false;
   }
-  const predicate: any = compiled.predicate;
+  const predicate = compiled.predicate;
   if (predicate.kind === "exact") {
     return normalizedIp === predicate.ip;
   }
-  const ipInt: any = ipv4ToInt(normalizedIp);
+  const ipInt = ipv4ToInt(normalizedIp);
   if (ipInt === null) {
     return false;
   }
   return (ipInt & predicate.mask) === (predicate.base & predicate.mask);
 }
 
-export function ipMatchesPredicate(ip?: any, predicate?: any) : any {
-  const normalizedIp: any = normalizeIp(ip);
+export function ipMatchesPredicate(ip: unknown, predicate?: CompiledIpPredicate | null): boolean {
+  const normalizedIp = normalizeIp(ip);
   if (!normalizedIp || !predicate) {
     return false;
   }
   if (predicate.kind === "exact") {
     return normalizedIp === predicate.ip;
   }
-  const ipInt: any = ipv4ToInt(normalizedIp);
+  const ipInt = ipv4ToInt(normalizedIp);
   if (ipInt === null) {
     return false;
   }
   return (ipInt & predicate.mask) === (predicate.base & predicate.mask);
 }
 
-export function maxRiskAllowed(profile: any = null, grant: any = null, subject: any = null, fallback: any = "safe_write") : any {
-  const candidates: any = [
+export function maxRiskAllowed(
+  profile: AuthzRecord | null = null,
+  grant: AuthzRecord | null = null,
+  subject: AuthzRecord | null = null,
+  fallback: unknown = "safe_write"
+): unknown {
+  const candidates = [
     profile?.maxRisk,
     grant?.maxRisk,
     grant?.metadata?.maxRisk,
@@ -137,38 +158,41 @@ export function maxRiskAllowed(profile: any = null, grant: any = null, subject: 
   if (candidates.length === 0) {
     return fallback;
   }
-  return candidates.reduce((lowest?: any, item?: any) : any =>
+  return candidates.reduce((lowest, item) =>
     riskRank(item) < riskRank(lowest) ? item : lowest
   );
 }
 
-export function inferOperationAction(operation: Record<string, any> = {}, tool: any = null) : any {
+export function inferOperationAction(operation: AuthzRecord = {}, tool: AuthzRecord | null = null): string {
   if (operation?.action) {
     return String(operation.action);
   }
-  const operationId: any = String(operation?.id || tool?.operationId || "");
+  const operationId = String(operation?.id || tool?.operationId || "");
   if (!operationId) {
     return tool?.readOnly === false ? "write" : "read";
   }
-  const last: any = operationId.split(".").filter(Boolean).pop() || "";
+  const last = operationId.split(".").filter(Boolean).pop() || "";
   if (["list", "get", "read", "download", "query", "evaluate", "preview", "history", "info"].includes(last)) {
     return "read";
   }
   return "write";
 }
 
-export function operationRisk(operation: Record<string, any> = {}, tool: any = null) : any {
+export function operationRisk(operation: AuthzRecord = {}, tool: AuthzRecord | null = null): string {
   return String(tool?.risk || operation?.safety?.risk || operation?.risk || (operation?.readOnly === false ? "safe_write" : "read_only"));
 }
 
-export function requiredScopesFor(operation: Record<string, any> = {}, tool: any = null) : any {
+export function requiredScopesFor(operation: AuthzRecord = {}, tool: AuthzRecord | null = null): string[] {
   return uniqueStrings([
     ...(Array.isArray(operation?.requiredScopes) ? operation.requiredScopes : []),
     ...(Array.isArray(tool?.requiredScopes) ? tool.requiredScopes : [])
   ]);
 }
 
-export function subjectScopes(subject: Record<string, any> = {}, actor: any = null, authSession: any = null, grant: any = null) : any {
+export function subjectScopes(
+  subject: AuthzRecord = {}, actor: AuthzRecord | null = null,
+  authSession: AuthzRecord | null = null, grant: AuthzRecord | null = null
+): string[] {
   return uniqueStrings([
     ...(Array.isArray(subject.scopes) ? subject.scopes : []),
     ...(Array.isArray(actor?.scopes) ? actor.scopes : []),
@@ -178,38 +202,46 @@ export function subjectScopes(subject: Record<string, any> = {}, actor: any = nu
   ]);
 }
 
-export function grantHasToolset(grant: any = null, tool: any = null) : any {
+export function grantHasToolset(grant: AuthzRecord | null = null, tool: AuthzRecord | null = null): boolean {
   if (!tool || !grant?.toolsets?.length) {
     return true;
   }
-  return (tool.toolsets || []).some((toolset?: any) : any => grant.toolsets.includes(toolset));
+  return (tool.toolsets || []).some((toolset) => grant.toolsets?.includes(toolset));
 }
 
-export function toolsetMisses(grant: any = null, tool: any = null) : any {
+export function toolsetMisses(grant: AuthzRecord | null = null, tool: AuthzRecord | null = null): string[] {
   if (!tool || !grant?.toolsets?.length) {
     return [];
   }
-  const grantToolsets: any = stringSet(grant.toolsets);
-  return uniqueStrings(tool.toolsets || []).filter((toolset?: any) : any => !grantToolsets.has(toolset));
+  const grantToolsets = stringSet(grant.toolsets);
+  return uniqueStrings(tool.toolsets || []).filter((toolset) => !grantToolsets.has(toolset));
 }
 
-function subjectHasTenantBypass(subject: Record<string, any> = {}) : any {
-  return subject.roleId === "owner" || subject.scopes?.includes("auth:admin");
+function subjectHasTenantBypass(subject: AuthzRecord = {}): boolean {
+  return subject.roleId === "owner" || subject.scopes?.includes("auth:admin") === true;
 }
 
-function subjectHasResourceBoundaryBypass(subject: Record<string, any> = {}) : any {
+function subjectHasResourceBoundaryBypass(subject: AuthzRecord = {}): boolean {
   return subject.roleId === "owner" ||
-    subject.scopes?.includes("auth:admin");
+    subject.scopes?.includes("auth:admin") === true;
 }
 
-export function abacDenyDetails({ subject = {}, grant = null, profile = null, resource = {}, compiled = null }: Record<string, any> = {}) : any {
-  const compiledAbac: any = compiled?.abac || null;
-  const policyString: any = (compiledKey?: any, ...dynamic: any[]) : any =>
-    compiledAbac?.[compiledKey] || firstString(...dynamic);
-  const allowedValues: any = (compiledKey?: any, ...dynamic: any[]) : any =>
-    compiledAbac?.[compiledKey] || stringsFrom(...dynamic);
-  const countOf: any = (value?: any) : any => value?.size ?? value?.length ?? 0;
-  const tenantPolicy: any = policyString("tenantId", subject.tenantId, grant?.tenantId, grant?.metadata?.tenantId, profile?.tenantId);
+export function abacDenyDetails({
+  subject = {}, grant = null, profile = null, resource = {}, compiled = null
+}: {
+  subject?: AuthzRecord; grant?: AuthzRecord | null; profile?: AuthzRecord | null;
+  resource?: AuthzRecord; compiled?: AuthzRecord | null;
+} = {}) {
+  const compiledAbac = compiled?.abac || null;
+  const policyString = (compiledKey: string, ...dynamic: unknown[]): string =>
+    firstString(compiledAbac?.[compiledKey], ...dynamic);
+  const allowedValues = (compiledKey: string, ...dynamic: unknown[]): string[] => {
+    const compiledValue = compiledAbac?.[compiledKey];
+    return compiledValue instanceof Set ? [...compiledValue] : stringsFrom(compiledValue, ...dynamic);
+  };
+  const countOf = (value?: readonly unknown[] | ReadonlySet<unknown>) =>
+    Array.isArray(value) ? value.length : (value as ReadonlySet<unknown> | undefined)?.size ?? 0;
+  const tenantPolicy = policyString("tenantId", subject.tenantId, grant?.tenantId, grant?.metadata?.tenantId, profile?.tenantId);
   if (
     resource.tenantId &&
     tenantPolicy &&
@@ -219,7 +251,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "tenant_mismatch", "Requested tenant is outside the subject boundary.");
   }
 
-  const allowedWorkspaceIds: any = allowedValues(
+  const allowedWorkspaceIds = allowedValues(
     "allowedWorkspaceIds",
     subject.allowedWorkspaceIds,
     grant?.allowedWorkspaceIds,
@@ -230,9 +262,9 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "workspace_not_allowed", "Requested workspace is outside the allowed workspace set.");
   }
 
-  const hasResourceBoundaryBypass: any = subjectHasResourceBoundaryBypass(subject);
-  const accountPolicy: any = policyString("accountId", subject.accountId, grant?.accountId, grant?.metadata?.accountId, profile?.accountId);
-  const allowedAccountIds: any = allowedValues(
+  const hasResourceBoundaryBypass = subjectHasResourceBoundaryBypass(subject);
+  const accountPolicy = policyString("accountId", subject.accountId, grant?.accountId, grant?.metadata?.accountId, profile?.accountId);
+  const allowedAccountIds = allowedValues(
     "allowedAccountIds",
     subject.allowedAccountIds,
     grant?.allowedAccountIds,
@@ -254,8 +286,8 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     }
   }
 
-  const endpointPolicy: any = policyString("endpointId", subject.endpointId, grant?.endpointId, grant?.metadata?.endpointId, profile?.endpointId);
-  const allowedEndpointIds: any = allowedValues(
+  const endpointPolicy = policyString("endpointId", subject.endpointId, grant?.endpointId, grant?.metadata?.endpointId, profile?.endpointId);
+  const allowedEndpointIds = allowedValues(
     "allowedEndpointIds",
     subject.allowedEndpointIds,
     grant?.allowedEndpointIds,
@@ -277,14 +309,14 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     }
   }
 
-  const mailboxPolicy: any = policyString(
+  const mailboxPolicy = policyString(
     "opaqueMailboxId",
     subject.opaqueMailboxId,
     grant?.opaqueMailboxId,
     grant?.metadata?.opaqueMailboxId,
     profile?.opaqueMailboxId
   );
-  const allowedMailboxIds: any = allowedValues(
+  const allowedMailboxIds = allowedValues(
     "allowedMailboxIds",
     subject.allowedOpaqueMailboxIds,
     subject.allowedMailboxIds,
@@ -310,7 +342,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     }
   }
 
-  const allowedDataClasses: any = allowedValues(
+  const allowedDataClasses = allowedValues(
     "allowedDataClasses",
     subject.allowedDataClasses,
     grant?.allowedDataClasses,
@@ -320,12 +352,12 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
   if (deniedOutsideAllowed([resource.dataClass], allowedDataClasses)) {
     return effectDetails("deny", "data_class_not_allowed", "Requested data class is outside the allowed data classes.");
   }
-  const deniedDataClass: any = deniedOutsideAllowed([resource.dataClasses], allowedDataClasses);
+  const deniedDataClass = deniedOutsideAllowed([resource.dataClasses], allowedDataClasses);
   if (deniedDataClass) {
     return effectDetails("deny", "data_class_not_allowed", "Requested semantic data class is outside the allowed data classes.");
   }
 
-  const allowedEgress: any = allowedValues(
+  const allowedEgress = allowedValues(
     "allowedEgress",
     subject.allowedEgress,
     grant?.allowedEgress,
@@ -336,7 +368,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     return effectDetails("deny", "egress_not_allowed", "Requested egress is outside the allowed egress set.");
   }
 
-  const semanticChecks: any[] = [
+  const semanticChecks: ReadonlyArray<readonly [string, string, string, string, string]> = [
     ["staticSemanticFamilyId", "staticSemanticFamilyIds", "allowedStaticSemanticFamilies", "static_semantic_family_not_allowed", "Requested static semantic family is outside the allowed set."],
     ["capabilityDomain", "capabilityDomains", "allowedCapabilityDomains", "capability_domain_not_allowed", "Requested capability domain is outside the allowed set."],
     ["capabilityVerb", "capabilityVerbs", "allowedCapabilityVerbs", "capability_verb_not_allowed", "Requested capability verb is outside the allowed set."],
@@ -346,7 +378,7 @@ export function abacDenyDetails({ subject = {}, grant = null, profile = null, re
     ["secretBindingId", "secretBindingIds", "allowedSecretBindings", "secret_binding_not_allowed", "Requested secret binding is outside the allowed secret binding set."]
   ];
   for (const [resourceKey, resourceListKey, allowedKey, reasonCode, reason] of semanticChecks) {
-    const allowed: any = allowedValues(allowedKey, subject[allowedKey], grant?.[allowedKey], grant?.metadata?.[allowedKey], profile?.[allowedKey]);
+    const allowed = allowedValues(allowedKey, subject[allowedKey], grant?.[allowedKey], grant?.metadata?.[allowedKey], profile?.[allowedKey]);
     if (deniedOutsideAllowed([resource[resourceKey], resource[resourceListKey]], allowed)) {
       return effectDetails("deny", reasonCode, reason);
     }
@@ -360,14 +392,17 @@ export function resolveAuthorizationSubject({
   actor = null,
   authSession = null,
   grant = null
-}: Record<string, any> = {}) : any {
-  const user: any = authSession?.user || actor?.user || null;
-  const metadata: any = objectOrNull(subject?.metadata) || objectOrNull(grant?.metadata) || {};
-  const attributes: Record<string, any> = {
-    ...(objectOrNull(user?.attributes) || {}),
-    ...(objectOrNull(actor?.attributes) || {}),
-    ...(objectOrNull(subject?.attributes) || {}),
-    ...(objectOrNull(metadata.attributes) || {})
+}: {
+  subject?: AuthzRecord | null; actor?: AuthzRecord | null;
+  authSession?: AuthzRecord | null; grant?: AuthzRecord | null;
+} = {}) {
+  const user = authSession?.user || actor?.user || null;
+  const metadata = objectOrNull(subject?.metadata) || objectOrNull(grant?.metadata) || {};
+  const attributes: Record<string, unknown> = {
+    ...objectOrNull(user?.attributes),
+    ...objectOrNull(actor?.attributes),
+    ...objectOrNull(subject?.attributes),
+    ...objectOrNull(metadata.attributes)
   };
   if (subject && typeof subject === "object" && !Array.isArray(subject)) {
     return {

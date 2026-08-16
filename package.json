@@ -21,14 +21,6 @@
       "source": "./packages/agents/src/agent-memory/index.ts",
       "default": "./packages/agents/dist/agent-memory/index.js"
     },
-    "#meshrix/agents/maintenance/planner": {
-      "source": "./packages/agents/src/maintenance/planner.ts",
-      "default": "./packages/agents/dist/maintenance/planner.js"
-    },
-    "#meshrix/agents/maintenance/tool-registry": {
-      "source": "./packages/agents/src/maintenance/tool-registry.ts",
-      "default": "./packages/agents/dist/maintenance/tool-registry.js"
-    },
     "#meshrix/agents/upstream-gateway/index": {
       "source": "./packages/agents/src/upstream-gateway/index.ts",
       "default": "./packages/agents/dist/upstream-gateway/index.js"
@@ -358,6 +350,7 @@
     "vite.config.ts",
     "vitest.config.ts",
     "tsconfig.json",
+    "tsconfig.node.json",
     "tools/server-scripts/verify-public-boundary.ts",
     "!apps/*/node_modules",
     "!packages/*/node_modules",
@@ -527,11 +520,10 @@
     "server:verify:memory-leaks": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-runtime-memory-leaks.ts",
     "server:verify:strategy-management": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-strategy-management.ts",
     "server:verify:strategy-management-browser": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-strategy-management-browser.ts",
-    "server:verify:agent-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-agent-gateway.ts",
-    "server:verify:external-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-external-gateway.ts && npm run vitest -- tests/vitest/server/external-gateway.test.ts tests/vitest/server/external-gateway-management.test.ts tests/vitest/console/external-gateway-management.test.ts",
-    "server:verify:model-routing": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-routing.ts",
-    "server:verify:agent-management": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-agent-management.ts",
-    "server:verify:maintenance-agent": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-maintenance-agent.ts",
+    "server:verify:external-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-external-gateway-plugin.ts && npm --prefix plugins/external-gateway test && npx vitest run tests/vitest/server/external-gateway-plugin.test.ts",
+    "server:verify:agent-self-maintenance-boundary": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-agent-self-maintenance-runtime.ts && npm --prefix plugins/agents/meshrix-self-maintenance test && npx vitest run tests/acceptance/agent-self-maintenance-directionality.test.ts",
+    "server:verify:model-gateway": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-plugin.ts && npm --prefix plugins/model-gateway test",
+    "server:verify:model-gateway-detachment": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-model-gateway-detachment.ts && npx vitest run tests/acceptance/model-gateway-adapter-boundary.test.ts tests/acceptance/agent-mcp-fixed-gateway-pipeline.test.ts tests/acceptance/gateway-application-stage-bypass.test.ts",
     "server:verify:integration-task-supervisor": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-integration-task-supervisor.ts",
     "server:verify:trusted-forwarding": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/verify-trusted-forwarding-invariants.ts",
     "server:prepare:npm-cache": "cross-env NODE_OPTIONS=--conditions=source node tools/server-scripts/prepare-npm-artifact-cache.ts",
@@ -579,7 +571,7 @@
     "es-module-lexer": "^2.3.1",
     "fflate": "^0.8.2",
     "marked": "^18.0.2",
-    "pactium": "file:vendor/pactium-0.8.0.tgz",
+    "pactium": "0.8.0",
     "pg": "^8.22.0",
     "undici": "^8.8.0",
     "vue": "^3.5.32",

@@ -178,13 +178,6 @@ describe("console component tiers", () => {
   });
 
   it("allows same-feature and feature-views Tier-3 import fixtures", () => {
-    // Same owning feature (agent-config).
-    expect(
-      isAllowedTier3Import(
-        "apps/console/components/admin/agent-config/AgentModelEntryCard.vue",
-        "apps/console/components/admin/agent-config/AgentModelLibraryPanel.vue",
-      ),
-    ).toBe(true);
     // The owning feature's views directory (views/admin exists for feature "admin").
     expect(
       isAllowedTier3Import(

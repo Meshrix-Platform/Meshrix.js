@@ -3,10 +3,20 @@ import {
   DOWNSTREAM_CLIENT_ASPECT_SERVICE_KIND
 } from "./constants.ts";
 import { asText, cloneJson, lowerToken } from "./identity-helpers.ts";
+import type { DownstreamAspectServicePort } from "./types.ts";
 
-export function translateDownstreamClientInboundRequest(service?: any, { protocol = "", method = "", input = {}, context = {}, frameworkId = "" }: Record<string, any> = {}) : any {
-  const normalizedProtocol: any = lowerToken(protocol);
-  const routeTarget: any = DOWNSTREAM_CLIENT_ASPECT_ROUTE_TARGETS[normalizedProtocol];
+export function translateDownstreamClientInboundRequest(
+  service: DownstreamAspectServicePort,
+  { protocol = "", method = "", input = {}, context = {}, frameworkId = "" }: {
+    protocol?: string;
+    method?: string;
+    input?: unknown;
+    context?: unknown;
+    frameworkId?: string;
+  } = {}
+) {
+  const normalizedProtocol = lowerToken(protocol);
+  const routeTarget = DOWNSTREAM_CLIENT_ASPECT_ROUTE_TARGETS[normalizedProtocol];
   if (!routeTarget) {
     return Object.freeze({
       ok: false,
@@ -16,11 +26,11 @@ export function translateDownstreamClientInboundRequest(service?: any, { protoco
     });
   }
 
-  const candidate: any = service.listCapabilities({
+  const candidate = service.listCapabilities({
     protocol: normalizedProtocol,
     frameworkId,
     includeUnavailable: true
-  }).find((record?: any) : any => !frameworkId || record.frameworkId === lowerToken(frameworkId));
+  }).find((record) => !frameworkId || record.frameworkId === lowerToken(frameworkId));
 
   return Object.freeze({
     ok: true,

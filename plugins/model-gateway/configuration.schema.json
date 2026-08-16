@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.local/schema/model-gateway-adapter-configuration.schema.json",
+  "title": "Model Gateway Adapter Configuration",
+  "type": "object",
+  "required": ["enabled", "serviceRef", "timeoutMs"],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "serviceRef": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z][a-z0-9._:-]{2,127}$"
+    },
+    "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 120000 }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": { "properties": { "serviceRef": { "type": "string" } } }
+    }
+  ]
+}

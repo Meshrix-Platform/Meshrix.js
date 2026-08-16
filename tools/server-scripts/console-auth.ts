@@ -1,7 +1,10 @@
 import path from "node:path";
 import process from "node:process";
 import crypto from "node:crypto";
-import { createConsoleAuth } from "../../packages/foundation/src/security/auth/console-auth.ts";
+import {
+  CONSOLE_ROLES,
+  createConsoleAuth
+} from "../../packages/foundation/src/security/auth/console-auth.ts";
 import { createTagStoreAdapter } from "../../packages/server-runtime/src/state/tags/tag-store.adapter.ts";
 import { ServerConfig } from "#meshrix/server-config";
 
@@ -86,7 +89,11 @@ async function main() : Promise<any> {
     String(args["data-dir"] || process.env.MESHRIX_SERVER_DATA_DIR || ServerConfig.getDataDir())
   );
   const tagManagementStore: any = createTagStoreAdapter({ userDataPath });
-  const auth: any = createConsoleAuth({ userDataPath, tagManagementStore });
+  const auth: any = createConsoleAuth({
+    userDataPath,
+    consoleRoles: CONSOLE_ROLES,
+    tagManagementStore
+  });
 
   try {
     if (command === "init-owner") {

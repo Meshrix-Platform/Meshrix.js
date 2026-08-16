@@ -3,12 +3,12 @@
  *
  * Generated from: packages/contracts/src/operations/operation-registry.ts
  * Generator: tools/generators/generate-operation-artifacts.ts
- * Hash: sha256:07ebb979094716a3
+ * Hash: sha256:c2377f5a31a50d56
  * Generated at: 2026-06-30T09:41:12.259Z
  *
  * To modify operations: edit the source operation definitions, then run the generator.
  */
-export const GENERATED_OPERATIONS_HASH = "sha256:07ebb979094716a3";
+export const GENERATED_OPERATIONS_HASH = "sha256:c2377f5a31a50d56";
 export const SERVER_API_OPERATIONS: any = [
   {
     "id": "readiness.baseline.status",
@@ -76,6 +76,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -208,6 +209,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -356,6 +358,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -490,6 +493,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -619,6 +623,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -789,6 +794,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -1110,6 +1116,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -1442,6 +1449,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -1621,6 +1629,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -1771,6 +1780,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -1935,6 +1945,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2091,6 +2102,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2239,6 +2251,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2417,6 +2430,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2558,6 +2572,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2736,6 +2751,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2862,6 +2878,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -2995,6 +3012,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3121,6 +3139,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3254,6 +3273,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3380,6 +3400,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3513,6 +3534,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3640,6 +3662,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3774,6 +3797,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -3900,6 +3924,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4033,6 +4058,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4160,6 +4186,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4294,6 +4321,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4474,6 +4502,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4607,6 +4636,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4754,6 +4784,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -4915,6 +4946,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -5076,6 +5108,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -5237,6 +5270,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -5384,6 +5418,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -5541,6 +5576,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -5746,6 +5782,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -5953,6 +5990,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -6160,6 +6198,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -6318,6 +6357,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -6474,6 +6514,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -6615,6 +6656,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -6763,6 +6805,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -6921,6 +6964,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7079,6 +7123,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7215,6 +7260,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7364,6 +7410,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7522,6 +7569,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7670,6 +7718,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7817,6 +7866,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -7964,6 +8014,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -8111,6 +8162,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -8258,6 +8310,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -8405,6 +8458,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -8552,6 +8606,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -8699,6 +8754,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -8846,6 +8902,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -9000,6 +9057,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -9162,6 +9220,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -9304,6 +9363,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -9431,6 +9491,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -9657,6 +9718,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -9925,6 +9987,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -10230,6 +10293,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -10470,6 +10534,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -10703,6 +10768,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -10935,6 +11001,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -11168,6 +11235,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -11401,6 +11469,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -11634,6 +11703,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -11868,6 +11938,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -12102,6 +12173,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -12336,6 +12408,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -12569,6 +12642,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -12800,6 +12874,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -13031,6 +13106,7 @@ export const SERVER_API_OPERATIONS: any = [
       "operation-proof"
     ],
     "readOnly": true,
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -13263,6 +13339,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -13432,6 +13509,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -13593,6 +13671,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -13770,6 +13849,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -13920,6 +14000,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -14062,6 +14143,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -14214,6 +14296,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -14373,6 +14456,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -14518,6 +14602,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -14682,6 +14767,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -14854,6 +14940,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -15059,6 +15146,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -15263,6 +15351,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -15465,6 +15554,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -15675,6 +15765,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -15891,6 +15982,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -16107,6 +16199,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -16323,6 +16416,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -16532,6 +16626,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -16735,6 +16830,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -16944,6 +17040,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -17140,6 +17237,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -17338,6 +17436,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -17557,6 +17656,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -17764,6 +17864,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -17981,6 +18082,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -18172,6 +18274,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -18381,6 +18484,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -18532,6 +18636,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -18689,6 +18794,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -18824,6 +18930,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -18900,6 +19007,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "storage:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19009,6 +19117,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "bootstrap"
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19122,6 +19231,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19257,6 +19367,7 @@ export const SERVER_API_OPERATIONS: any = [
       "required": [],
       "properties": {}
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19391,6 +19502,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -19499,6 +19611,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19614,6 +19727,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19728,6 +19842,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19843,6 +19958,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -19963,6 +20079,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -20083,6 +20200,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -20207,6 +20325,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -20325,6 +20444,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -20449,6 +20569,7 @@ export const SERVER_API_OPERATIONS: any = [
     "metadata": {
       "staticSemanticFamilyCount": 6
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -20580,6 +20701,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -20686,6 +20808,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -20810,6 +20933,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -20937,6 +21061,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -21062,6 +21187,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -21246,6 +21372,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "events subscribe [--cursor N] [--topic jobs.job] [--timeout-ms 10000] [--include-snapshot 1]"
     },
+    "trafficModel": "gateway_transit",
     "requiredScopes": [
       "console:read"
     ],
@@ -21381,6 +21508,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -21499,6 +21627,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -21630,6 +21759,7 @@ export const SERVER_API_OPERATIONS: any = [
         "agent_sync:publish"
       ]
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -21831,6 +21961,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "agent-sync subscribe [--topic answer] [--cursor N] [--include-snapshot 1]"
     },
+    "trafficModel": "gateway_transit",
     "requiredScopes": [
       "console:read"
     ],
@@ -21980,6 +22111,7 @@ export const SERVER_API_OPERATIONS: any = [
       "redaction": "default",
       "write": false
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -22055,1170 +22187,6 @@ export const SERVER_API_OPERATIONS: any = [
     }
   },
   {
-    "id": "maintenance_agent.config.get",
-    "feature": "maintenance_agent",
-    "label": "读取维护智能体配置",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentConfig"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/maintenance-agent/config",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.config.get"
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "config"
-      ],
-      "usage": "maintenance-agent config"
-    },
-    "requiredScopes": [
-      "maintenance:read"
-    ],
-    "readOnly": true,
-    "concurrency": {
-      "workloadClass": "parallel",
-      "key": "maintenance_agent.config.get",
-      "maxParallel": 16,
-      "cost": 2
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "get",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "get",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "读取维护智能体配置",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_config_get"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.config.set",
-    "feature": "maintenance_agent",
-    "label": "保存维护智能体配置",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentConfig"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/maintenance-agent/config",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.config.set",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "config",
-        "set"
-      ],
-      "usage": "maintenance-agent config set --body maintenance-agent.json"
-    },
-    "requiredScopes": [
-      "maintenance:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "concurrency": {
-      "workloadClass": "exclusive",
-      "key": "maintenance_agent.config",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "set",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "set",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "保存维护智能体配置",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_config_set"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.chat",
-    "feature": "maintenance_agent",
-    "label": "维护智能体对话规划",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentChat"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/maintenance-agent/chat",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.chat",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "chat"
-      ],
-      "usage": "maintenance-agent chat --message MESSAGE",
-      "bodyParams": [
-        {
-          "name": "message",
-          "aliases": [
-            "message",
-            "question",
-            "q"
-          ],
-          "required": true
-        },
-        {
-          "name": "wait",
-          "aliases": [
-            "wait"
-          ],
-          "type": "boolean"
-        }
-      ]
-    },
-    "requiredScopes": [
-      "maintenance:run"
-    ],
-    "safety": {
-      "risk": "safe_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "planner",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": true,
-      "redaction": "default",
-      "write": true
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "chat",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "chat",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "standard",
-      "key": "maintenance_agent.chat",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "message"
-      ],
-      "properties": {
-        "message": {
-          "type": "string"
-        },
-        "wait": {
-          "type": "boolean"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "维护智能体对话规划",
-    "risk": "safe_write",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_chat"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": true,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.runs.create",
-    "feature": "maintenance_agent",
-    "label": "创建维护智能体运行",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentRuns"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/maintenance-agent/runs",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.runs.create",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "run"
-      ],
-      "usage": "maintenance-agent run --runbook health_smoke",
-      "bodyParams": [
-        {
-          "name": "runbook",
-          "aliases": [
-            "runbook",
-            "intent"
-          ]
-        },
-        {
-          "name": "wait",
-          "aliases": [
-            "wait"
-          ],
-          "type": "boolean"
-        }
-      ]
-    },
-    "requiredScopes": [
-      "maintenance:run"
-    ],
-    "safety": {
-      "risk": "safe_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "create",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "create",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "standard",
-      "key": "maintenance_agent.runs.create",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "runbook": {
-          "type": "string"
-        },
-        "wait": {
-          "type": "boolean"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "创建维护智能体运行",
-    "risk": "safe_write",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_runs_create"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.runs.list",
-    "feature": "maintenance_agent",
-    "label": "维护智能体运行列表",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentRuns"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/maintenance-agent/runs",
-      "localInForwardMode": true,
-      "query": [
-        {
-          "name": "limit",
-          "aliases": [
-            "limit"
-          ]
-        }
-      ],
-      "coerce": {
-        "limit": "number"
-      }
-    },
-    "rpc": {
-      "method": "maintenance_agent.runs.list",
-      "query": [
-        {
-          "name": "limit",
-          "aliases": [
-            "limit"
-          ]
-        }
-      ]
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "runs"
-      ],
-      "usage": "maintenance-agent runs [--limit 50]"
-    },
-    "requiredScopes": [
-      "maintenance:read"
-    ],
-    "readOnly": true,
-    "concurrency": {
-      "workloadClass": "parallel",
-      "key": "maintenance_agent.runs.list",
-      "maxParallel": 16,
-      "cost": 2
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "list",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "list",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "limit": {
-          "type": "number"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "维护智能体运行列表",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_runs_list"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.runs.get",
-    "feature": "maintenance_agent",
-    "label": "维护智能体运行详情",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentRun"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/maintenance-agent/runs/:runId",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.runs.get",
-      "params": [
-        {
-          "name": "runId",
-          "aliases": [
-            "run-id",
-            "runId",
-            "id"
-          ],
-          "required": true
-        }
-      ]
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "run",
-        "get"
-      ],
-      "usage": "maintenance-agent run get --id RUN_ID",
-      "pathParams": {
-        "runId": [
-          "run-id",
-          "runId",
-          "id"
-        ]
-      }
-    },
-    "requiredScopes": [
-      "maintenance:read"
-    ],
-    "readOnly": true,
-    "concurrency": {
-      "workloadClass": "parallel",
-      "key": "maintenance_agent.runs.get",
-      "maxParallel": 16,
-      "cost": 2
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "get",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "get",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "runId"
-      ],
-      "properties": {
-        "runId": {
-          "type": "string"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "维护智能体运行详情",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_runs_get"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.runs.approve",
-    "feature": "maintenance_agent",
-    "label": "批准维护智能体运行",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentApprove"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/maintenance-agent/runs/:runId/approve",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.runs.approve",
-      "body": "params",
-      "params": [
-        {
-          "name": "runId",
-          "aliases": [
-            "run-id",
-            "runId",
-            "id"
-          ],
-          "required": true
-        }
-      ]
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "approve"
-      ],
-      "usage": "maintenance-agent approve --id RUN_ID --plan-hash HASH",
-      "pathParams": {
-        "runId": [
-          "run-id",
-          "runId",
-          "id"
-        ]
-      },
-      "bodyParams": [
-        {
-          "name": "planHash",
-          "aliases": [
-            "plan-hash",
-            "planHash"
-          ],
-          "required": true
-        },
-        {
-          "name": "wait",
-          "aliases": [
-            "wait"
-          ],
-          "type": "boolean"
-        }
-      ]
-    },
-    "requiredScopes": [
-      "maintenance:approve"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": true,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "approval",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "approve",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "approve",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "standard",
-      "key": "maintenance_agent.runs.approve",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "runId",
-        "planHash"
-      ],
-      "properties": {
-        "runId": {
-          "type": "string"
-        },
-        "planHash": {
-          "type": "string"
-        },
-        "wait": {
-          "type": "boolean"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "批准维护智能体运行",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_runs_approve"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "maintenance_agent.runs.cancel",
-    "feature": "maintenance_agent",
-    "label": "取消维护智能体运行",
-    "target": {
-      "controller": "system",
-      "method": "handleMaintenanceAgentCancel"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/maintenance-agent/runs/:runId/cancel",
-      "localInForwardMode": true
-    },
-    "rpc": {
-      "method": "maintenance_agent.runs.cancel",
-      "body": "params",
-      "params": [
-        {
-          "name": "runId",
-          "aliases": [
-            "run-id",
-            "runId",
-            "id"
-          ],
-          "required": true
-        }
-      ]
-    },
-    "cli": {
-      "command": [
-        "maintenance-agent",
-        "cancel"
-      ],
-      "usage": "maintenance-agent cancel --id RUN_ID",
-      "pathParams": {
-        "runId": [
-          "run-id",
-          "runId",
-          "id"
-        ]
-      },
-      "bodyParams": [
-        {
-          "name": "reason",
-          "aliases": [
-            "reason"
-          ]
-        }
-      ]
-    },
-    "requiredScopes": [
-      "maintenance:run"
-    ],
-    "safety": {
-      "risk": "safe_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "aspects": [
-      "maintenance-agent",
-      "runbook",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "cancel",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "maintenance_agent",
-      "resourceKind": "maintenance_agent",
-      "capabilityVerb": "cancel",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "standard",
-      "key": "maintenance_agent.runs.cancel",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "runId"
-      ],
-      "properties": {
-        "runId": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "取消维护智能体运行",
-    "risk": "safe_write",
-    "otel": {
-      "semanticGroup": "maintenance_agent",
-      "operationName": "maintenance_agent_runs_cancel"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
     "id": "auth.session",
     "feature": "auth",
     "label": "控制台登录状态",
@@ -23241,6 +22209,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "auth session"
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -23392,6 +22361,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordOutput": false
     },
     "skipCsrf": true,
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -23486,6 +22456,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -23606,6 +22577,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -23724,6 +22696,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -23865,6 +22838,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -24010,6 +22984,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -24132,6 +23107,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -24250,6 +23226,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -24446,6 +23423,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -24676,6 +23654,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -24822,6 +23801,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -24941,6 +23921,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -25066,6 +24047,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -25239,6 +24221,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -25377,6 +24360,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -25494,6 +24478,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -25634,6 +24619,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "auth:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -25852,6 +24838,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
     "requiredScopes": [],
@@ -26001,6 +24988,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -26150,6 +25138,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -26242,6 +25231,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "discovery check-in --body check-in.json"
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -26360,6 +25350,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "usage": "discovery clients"
     },
+    "trafficModel": "gateway_transit",
     "requiredScopes": [
       "console:read"
     ],
@@ -26497,6 +25488,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -26624,6 +25616,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -26740,6 +25733,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -26861,6 +25855,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -27020,6 +26015,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "concurrency": {
       "workloadClass": "exclusive",
       "key": "runtime.assembly",
@@ -27094,6 +26090,253 @@ export const SERVER_API_OPERATIONS: any = [
     }
   },
   {
+    "id": "runtime.gateway_channels",
+    "feature": "runtime",
+    "label": "Read Gateway channel selections",
+    "target": {
+      "controller": "system",
+      "method": "handleGetGatewayChannels"
+    },
+    "http": {
+      "method": "GET",
+      "path": "/api/runtime/gateway-channels",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "runtime.gateway_channels"
+    },
+    "requiredScopes": [
+      "runtime:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "required": []
+    },
+    "trafficModel": "gateway_transit",
+    "safety": {
+      "risk": "read_only",
+      "readOnly": true,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": false,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": true,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "runtime",
+      "resourceKind": "runtime",
+      "capabilityVerb": "gateway-channels",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "runtime",
+      "resourceKind": "runtime",
+      "capabilityVerb": "gateway-channels",
+      "effectKind": "read",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "receipt",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "terminal-receipt",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "light",
+      "key": "runtime.gateway_channels",
+      "maxParallel": 64,
+      "cost": 1
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default",
+      "write": false
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "default",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "Read Gateway channel selections",
+    "risk": "read_only",
+    "otel": {
+      "semanticGroup": "runtime",
+      "operationName": "runtime_gateway_channels"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": false,
+      "redaction": "default"
+    }
+  },
+  {
+    "id": "runtime.gateway_channels.select",
+    "feature": "runtime",
+    "label": "Select one Gateway direction",
+    "target": {
+      "controller": "system",
+      "method": "handleSelectGatewayChannel"
+    },
+    "http": {
+      "method": "POST",
+      "path": "/api/runtime/gateway-channels/select",
+      "localInForwardMode": true
+    },
+    "rpc": {
+      "method": "runtime.gateway_channels.select",
+      "body": "params"
+    },
+    "requiredScopes": [
+      "runtime:admin"
+    ],
+    "inputSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "direction",
+        "channelId",
+        "expectedGeneration"
+      ],
+      "properties": {
+        "confirm": {
+          "type": "boolean"
+        },
+        "safetyConfirm": {
+          "type": "boolean"
+        },
+        "direction": {
+          "enum": [
+            "downstream",
+            "upstream"
+          ]
+        },
+        "channelId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "safety": {
+      "risk": "safe_write",
+      "readOnly": false,
+      "destructive": false,
+      "approvalScope": "maintenance:approve",
+      "requiresConfirmation": false,
+      "requiresConfirmationExplicit": true,
+      "blocked": false,
+      "reason": "",
+      "resolveRisk": null
+    },
+    "audit": {
+      "enabled": true,
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default",
+      "write": true
+    },
+    "log": {
+      "enabled": true,
+      "redaction": "strict",
+      "recordInput": false,
+      "recordOutput": false
+    },
+    "trafficModel": "gateway_transit",
+    "public": false,
+    "externalAuth": false,
+    "externalAuthMissingCode": "missing_external_auth",
+    "readOnly": false,
+    "destructive": false,
+    "resource": {
+      "capabilityDomain": "runtime",
+      "resourceKind": "runtime",
+      "capabilityVerb": "select",
+      "effectKind": "safe-write",
+      "fieldMap": {}
+    },
+    "resourceContext": {
+      "capabilityDomain": "runtime",
+      "resourceKind": "runtime",
+      "capabilityVerb": "select",
+      "effectKind": "safe-write",
+      "fieldMap": {}
+    },
+    "proof": {
+      "profile": "full",
+      "exclusionReason": "",
+      "changeProjection": "",
+      "lifecycle": "two-stage",
+      "substrate": "operation-proof-substrate"
+    },
+    "concurrency": {
+      "workloadClass": "standard",
+      "key": "runtime.gateway_channels.select",
+      "maxParallel": 1,
+      "cost": 2
+    },
+    "aspects": [
+      "dispatch",
+      "authorization",
+      "safety",
+      "audit",
+      "operation-proof"
+    ],
+    "aspectOptions": {
+      "dispatch": {},
+      "authorization": {},
+      "safety": {},
+      "audit": {},
+      "operation-proof": {}
+    },
+    "description": "Select one Gateway direction",
+    "risk": "safe_write",
+    "otel": {
+      "semanticGroup": "runtime",
+      "operationName": "runtime_gateway_channels_select"
+    },
+    "auditPolicy": {
+      "recordInput": false,
+      "recordOutput": false,
+      "metadataOnly": true,
+      "redaction": "default"
+    }
+  },
+  {
     "id": "runtime.path_browse",
     "feature": "runtime",
     "label": "服务端路径浏览",
@@ -27120,6 +26363,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -27242,6 +26486,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -27333,493 +26578,6 @@ export const SERVER_API_OPERATIONS: any = [
     }
   },
   {
-    "id": "runtime.external_gateway",
-    "feature": "runtime",
-    "label": "读取外置网关配置",
-    "target": {
-      "controller": "system",
-      "method": "handleGetExternalGateway"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/runtime/external-gateway"
-    },
-    "rpc": {
-      "method": "runtime.external_gateway"
-    },
-    "cli": {
-      "command": [
-        "runtime",
-        "external-gateway"
-      ],
-      "usage": "runtime external-gateway"
-    },
-    "requiredScopes": [
-      "console:read"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": true,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "external-gateway",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "external-gateway",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "light",
-      "key": "runtime.external_gateway",
-      "maxParallel": 64,
-      "cost": 1
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "读取外置网关配置",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "runtime",
-      "operationName": "runtime_external_gateway"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "runtime.external_gateway.validate",
-    "feature": "runtime",
-    "label": "校验外置网关配置",
-    "target": {
-      "controller": "system",
-      "method": "handleValidateExternalGateway"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/runtime/external-gateway/validate"
-    },
-    "rpc": {
-      "method": "runtime.external_gateway.validate",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "runtime",
-        "external-gateway",
-        "validate"
-      ],
-      "usage": "runtime external-gateway validate --body profile.json"
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "safe_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": true,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "validate",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "validate",
-      "effectKind": "safe-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "standard",
-      "key": "runtime.external_gateway.validate",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "校验外置网关配置",
-    "risk": "safe_write",
-    "otel": {
-      "semanticGroup": "runtime",
-      "operationName": "runtime_external_gateway_validate"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "runtime.external_gateway.apply",
-    "feature": "runtime",
-    "label": "启用外置网关配置",
-    "target": {
-      "controller": "system",
-      "method": "handleApplyExternalGateway"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/runtime/external-gateway/apply"
-    },
-    "rpc": {
-      "method": "runtime.external_gateway.apply",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "runtime",
-        "external-gateway",
-        "apply"
-      ],
-      "usage": "runtime external-gateway apply --body profile.json"
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "runtime:admin",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "concurrency": {
-      "workloadClass": "exclusive",
-      "key": "runtime.external_gateway",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "apply",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "apply",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "启用外置网关配置",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "runtime",
-      "operationName": "runtime_external_gateway_apply"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "runtime.external_gateway.switch_direct",
-    "feature": "runtime",
-    "label": "切换为内置网关流控",
-    "target": {
-      "controller": "system",
-      "method": "handleSwitchExternalGatewayDirect"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/runtime/external-gateway/direct"
-    },
-    "rpc": {
-      "method": "runtime.external_gateway.switch_direct",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "runtime",
-        "external-gateway",
-        "direct"
-      ],
-      "usage": "runtime external-gateway direct --body generation.json"
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "runtime:admin",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "concurrency": {
-      "workloadClass": "exclusive",
-      "key": "runtime.external_gateway",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "switch-direct",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "runtime",
-      "resourceKind": "runtime",
-      "capabilityVerb": "switch-direct",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "切换为内置网关流控",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "runtime",
-      "operationName": "runtime_external_gateway_switch_direct"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
     "id": "runtime.set_mounts",
     "feature": "runtime",
     "label": "保存挂载配置",
@@ -27845,6 +26603,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -27968,6 +26727,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -28090,6 +26850,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -28206,6 +26967,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -28304,551 +27066,6 @@ export const SERVER_API_OPERATIONS: any = [
     }
   },
   {
-    "id": "settings.model_probe",
-    "feature": "settings",
-    "label": "探测模型连通性",
-    "target": {
-      "controller": "system",
-      "method": "handleProbeModel"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/settings/model-probe"
-    },
-    "rpc": {
-      "method": "settings.model_probe",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "settings",
-        "probe-model"
-      ],
-      "usage": "settings probe-model --provider PROVIDER [--body settings.json]",
-      "bodyParams": [
-        {
-          "name": "provider",
-          "aliases": [
-            "provider",
-            "model-provider"
-          ],
-          "required": true
-        }
-      ]
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": true,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "settings",
-      "resourceKind": "settings",
-      "capabilityVerb": "model-probe",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "settings",
-      "resourceKind": "settings",
-      "capabilityVerb": "model-probe",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "light",
-      "key": "settings.model_probe",
-      "maxParallel": 64,
-      "cost": 1
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "provider"
-      ],
-      "properties": {
-        "provider": {
-          "type": "string"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "探测模型连通性",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "settings",
-      "operationName": "settings_model_probe"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "agent_gateway.call",
-    "feature": "agent_gateway",
-    "label": "调用智能体模型接入点",
-    "target": {
-      "controller": "system",
-      "method": "handleAgentGatewayCall"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/agent-gateway/call"
-    },
-    "rpc": {
-      "method": "agent_gateway.call",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "agent-gateway",
-        "call"
-      ],
-      "usage": "agent-gateway call --question QUESTION [--workspace-id WORKSPACE_ID] [--agent-session-id SESSION_ID] [--tool-grant-id GRANT_ID] [--agent-name NAME] [--plugin-list a,b]",
-      "bodyParams": [
-        {
-          "name": "agentName",
-          "aliases": [
-            "agent-name",
-            "agentName"
-          ]
-        },
-        {
-          "name": "pluginList",
-          "aliases": [
-            "plugin-list",
-            "pluginList"
-          ]
-        },
-        {
-          "name": "question",
-          "aliases": [
-            "question",
-            "q"
-          ],
-          "required": true
-        },
-        {
-          "name": "sessionId",
-          "aliases": [
-            "session-id",
-            "sessionId"
-          ]
-        },
-        {
-          "name": "agentSessionId",
-          "aliases": [
-            "agent-session-id",
-            "agentSessionId",
-            "session-thread-id",
-            "sessionThreadId"
-          ]
-        },
-        {
-          "name": "clientUid",
-          "aliases": [
-            "client-uid",
-            "clientUid"
-          ]
-        },
-        {
-          "name": "modelAlias",
-          "aliases": [
-            "model-alias",
-            "modelAlias",
-            "alias",
-            "model"
-          ]
-        },
-        {
-          "name": "contextProfileId",
-          "aliases": [
-            "context-profile",
-            "context-profile-id",
-            "contextProfileId"
-          ]
-        },
-        {
-          "name": "toolGrantId",
-          "aliases": [
-            "tool-grant-id",
-            "toolGrantId",
-            "grant-id",
-            "grantId"
-          ]
-        },
-        {
-          "name": "workspaceId",
-          "aliases": [
-            "workspace-id",
-            "workspaceId"
-          ]
-        },
-        {
-          "name": "userId",
-          "aliases": [
-            "user-id",
-            "userId"
-          ]
-        },
-        {
-          "name": "projectId",
-          "aliases": [
-            "project-id",
-            "projectId"
-          ]
-        },
-        {
-          "name": "engine",
-          "aliases": [
-            "engine"
-          ]
-        }
-      ]
-    },
-    "requiredScopes": [
-      "model:call"
-    ],
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "question"
-      ],
-      "properties": {
-        "agentName": {
-          "type": "string"
-        },
-        "pluginList": {
-          "type": "string"
-        },
-        "question": {
-          "type": "string"
-        },
-        "sessionId": {
-          "type": "string"
-        },
-        "agentSessionId": {
-          "type": "string"
-        },
-        "clientUid": {
-          "type": "string"
-        },
-        "modelAlias": {
-          "type": "string"
-        },
-        "contextProfileId": {
-          "type": "string"
-        },
-        "toolGrantId": {
-          "type": "string"
-        },
-        "workspaceId": {
-          "type": "string"
-        },
-        "userId": {
-          "type": "string"
-        },
-        "projectId": {
-          "type": "string"
-        },
-        "engine": {
-          "type": "string"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        },
-        "query": {
-          "type": "string"
-        },
-        "messages": {
-          "type": "array"
-        }
-      }
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": true,
-      "redaction": "default",
-      "write": true
-    },
-    "safety": {
-      "risk": "safe_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "agent_gateway",
-      "resourceKind": "agent_gateway",
-      "capabilityVerb": "call",
-      "effectKind": "safe-write",
-      "fieldMap": {
-        "workspaceId": [
-          "workspaceId",
-          "workspace-id"
-        ]
-      }
-    },
-    "resourceContext": {
-      "capabilityDomain": "agent_gateway",
-      "resourceKind": "agent_gateway",
-      "capabilityVerb": "call",
-      "effectKind": "safe-write",
-      "fieldMap": {
-        "workspaceId": [
-          "workspaceId",
-          "workspace-id"
-        ]
-      }
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "concurrency": {
-      "workloadClass": "standard",
-      "key": "agent_gateway.call",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "aspects": [
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "调用智能体模型接入点",
-    "risk": "safe_write",
-    "otel": {
-      "semanticGroup": "agent_gateway",
-      "operationName": "agent_gateway_call"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": true,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "model_routing.health",
-    "feature": "agent_gateway",
-    "label": "读取模型路由健康和成本台账",
-    "target": {
-      "controller": "system",
-      "method": "handleModelRoutingHealth"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/model-routing/health",
-      "query": [
-        {
-          "name": "limit",
-          "aliases": [
-            "limit"
-          ]
-        }
-      ],
-      "coerce": {
-        "limit": "number"
-      }
-    },
-    "rpc": {
-      "method": "model_routing.health"
-    },
-    "cli": {
-      "command": [
-        "model-routing",
-        "health"
-      ],
-      "usage": "model-routing health [--limit 50]"
-    },
-    "requiredScopes": [
-      "console:read"
-    ],
-    "readOnly": true,
-    "concurrency": {
-      "workloadClass": "parallel",
-      "key": "model_routing.health",
-      "maxParallel": 16,
-      "cost": 2
-    },
-    "aspects": [
-      "model-routing",
-      "cost-ledger",
-      "circuit-breaker",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "agent_gateway",
-      "resourceKind": "agent_gateway",
-      "capabilityVerb": "health",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "agent_gateway",
-      "resourceKind": "agent_gateway",
-      "capabilityVerb": "health",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {
-        "limit": {
-          "type": "number"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "读取模型路由健康和成本台账",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "agent_gateway",
-      "operationName": "model_routing_health"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
     "id": "strategy.describe",
     "feature": "strategy_management",
     "label": "读取策略管理协议能力",
@@ -28897,6 +27114,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -29091,6 +27309,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29198,18 +27417,6 @@ export const SERVER_API_OPERATIONS: any = [
           "type": "string",
           "minLength": 1,
           "maxLength": 512
-        },
-        "modelRouting": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [],
-          "properties": {
-            "routeId": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 512
-            }
-          }
         }
       }
     },
@@ -29234,13 +27441,13 @@ export const SERVER_API_OPERATIONS: any = [
     "aspects": [
       "strategy-management",
       "agent-policy",
-      "model-routing",
       "dispatch",
       "authorization",
       "safety",
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29473,6 +27680,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29748,6 +27956,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29899,6 +28108,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -29959,846 +28169,6 @@ export const SERVER_API_OPERATIONS: any = [
     }
   },
   {
-    "id": "agents.list",
-    "feature": "agent_management",
-    "label": "列出可用智能体模型接入点",
-    "target": {
-      "controller": "system",
-      "method": "handleAgentRegistry"
-    },
-    "http": {
-      "method": "GET",
-      "path": "/api/agents"
-    },
-    "rpc": {
-      "method": "agents.list"
-    },
-    "cli": {
-      "command": [
-        "agents",
-        "list"
-      ],
-      "usage": "agents list"
-    },
-    "requiredScopes": [
-      "console:read"
-    ],
-    "readOnly": true,
-    "concurrency": {
-      "workloadClass": "parallel",
-      "key": "agents.list",
-      "maxParallel": 16,
-      "cost": 2
-    },
-    "aspects": [
-      "agent-management",
-      "model-library",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "safety": {
-      "risk": "read_only",
-      "readOnly": true,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": false,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "list",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "list",
-      "effectKind": "read",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "receipt",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "terminal-receipt",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [],
-      "properties": {}
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": false
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": false,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "列出可用智能体模型接入点",
-    "risk": "read_only",
-    "otel": {
-      "semanticGroup": "agent_management",
-      "operationName": "agents_list"
-    },
-    "auditPolicy": {
-      "recordInput": false,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "agents.create",
-    "feature": "agent_management",
-    "label": "创建智能体模型配置",
-    "target": {
-      "controller": "system",
-      "method": "handleCreateAgent"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/agents"
-    },
-    "rpc": {
-      "method": "agents.create",
-      "body": "params"
-    },
-    "cli": {
-      "command": [
-        "agents",
-        "create"
-      ],
-      "usage": "agents create --name NAME --model MODEL [--provider PROVIDER] [--api-key KEY]",
-      "bodyParams": [
-        {
-          "name": "provider",
-          "aliases": [
-            "provider",
-            "model-provider"
-          ]
-        },
-        {
-          "name": "name",
-          "aliases": [
-            "name",
-            "agent-name",
-            "agentName",
-            "label"
-          ]
-        },
-        {
-          "name": "model",
-          "aliases": [
-            "model",
-            "model-id",
-            "modelId",
-            "engine"
-          ],
-          "required": true
-        },
-        {
-          "name": "baseUrl",
-          "aliases": [
-            "base-url",
-            "baseUrl"
-          ]
-        },
-        {
-          "name": "url",
-          "aliases": [
-            "url",
-            "endpoint"
-          ]
-        },
-        {
-          "name": "apiKey",
-          "aliases": [
-            "api-key",
-            "apiKey",
-            "key"
-          ]
-        },
-        {
-          "name": "token",
-          "aliases": [
-            "token"
-          ]
-        },
-        {
-          "name": "tokenHeader",
-          "aliases": [
-            "token-header",
-            "tokenHeader"
-          ]
-        },
-        {
-          "name": "tokenPrefix",
-          "aliases": [
-            "token-prefix",
-            "tokenPrefix"
-          ]
-        },
-        {
-          "name": "systemPrompt",
-          "aliases": [
-            "system-prompt",
-            "systemPrompt",
-            "prompt"
-          ]
-        },
-        {
-          "name": "parameters",
-          "aliases": [
-            "parameters",
-            "params"
-          ],
-          "type": "json"
-        },
-        {
-          "name": "pluginList",
-          "aliases": [
-            "plugin-list",
-            "pluginList",
-            "plugins"
-          ],
-          "type": "string-list"
-        },
-        {
-          "name": "timeoutMs",
-          "aliases": [
-            "timeout-ms",
-            "timeoutMs"
-          ],
-          "type": "number"
-        }
-      ]
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "concurrency": {
-      "workloadClass": "exclusive",
-      "key": "agent_management.model_library",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "aspects": [
-      "agent-management",
-      "model-library",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "create",
-      "effectKind": "repair-write",
-      "fieldMap": {
-        "endpointId": [
-          "endpoint"
-        ]
-      }
-    },
-    "resourceContext": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "create",
-      "effectKind": "repair-write",
-      "fieldMap": {
-        "endpointId": [
-          "endpoint"
-        ]
-      }
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "model"
-      ],
-      "properties": {
-        "provider": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
-        "baseUrl": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "apiKey": {
-          "type": "string"
-        },
-        "token": {
-          "type": "string"
-        },
-        "tokenHeader": {
-          "type": "string"
-        },
-        "tokenPrefix": {
-          "type": "string"
-        },
-        "systemPrompt": {
-          "type": "string"
-        },
-        "parameters": {},
-        "pluginList": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "timeoutMs": {
-          "type": "number"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "创建智能体模型配置",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "agent_management",
-      "operationName": "agents_create"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "agents.update",
-    "feature": "agent_management",
-    "label": "更新智能体模型配置",
-    "target": {
-      "controller": "system",
-      "method": "handleUpdateAgent"
-    },
-    "http": {
-      "method": "POST",
-      "path": "/api/agents/:agentId"
-    },
-    "rpc": {
-      "method": "agents.update",
-      "body": "params",
-      "params": [
-        {
-          "name": "agentId",
-          "aliases": [
-            "agent-id",
-            "agentId",
-            "id"
-          ],
-          "required": true
-        }
-      ]
-    },
-    "cli": {
-      "command": [
-        "agents",
-        "update"
-      ],
-      "usage": "agents update --id AGENT_UID [--name NAME] [--model MODEL] [--body patch.json]",
-      "pathParams": {
-        "agentId": [
-          "agent-id",
-          "agentId",
-          "id"
-        ]
-      },
-      "bodyParams": [
-        {
-          "name": "provider",
-          "aliases": [
-            "provider",
-            "model-provider"
-          ]
-        },
-        {
-          "name": "name",
-          "aliases": [
-            "name",
-            "agent-name",
-            "agentName",
-            "label"
-          ]
-        },
-        {
-          "name": "model",
-          "aliases": [
-            "model",
-            "model-id",
-            "modelId",
-            "engine"
-          ]
-        },
-        {
-          "name": "baseUrl",
-          "aliases": [
-            "base-url",
-            "baseUrl"
-          ]
-        },
-        {
-          "name": "url",
-          "aliases": [
-            "url",
-            "endpoint"
-          ]
-        },
-        {
-          "name": "apiKey",
-          "aliases": [
-            "api-key",
-            "apiKey",
-            "key"
-          ]
-        },
-        {
-          "name": "token",
-          "aliases": [
-            "token"
-          ]
-        },
-        {
-          "name": "tokenHeader",
-          "aliases": [
-            "token-header",
-            "tokenHeader"
-          ]
-        },
-        {
-          "name": "tokenPrefix",
-          "aliases": [
-            "token-prefix",
-            "tokenPrefix"
-          ]
-        },
-        {
-          "name": "systemPrompt",
-          "aliases": [
-            "system-prompt",
-            "systemPrompt",
-            "prompt"
-          ]
-        },
-        {
-          "name": "parameters",
-          "aliases": [
-            "parameters",
-            "params"
-          ],
-          "type": "json"
-        },
-        {
-          "name": "pluginList",
-          "aliases": [
-            "plugin-list",
-            "pluginList",
-            "plugins"
-          ],
-          "type": "string-list"
-        },
-        {
-          "name": "timeoutMs",
-          "aliases": [
-            "timeout-ms",
-            "timeoutMs"
-          ],
-          "type": "number"
-        }
-      ]
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "concurrency": {
-      "workloadClass": "exclusive",
-      "key": "agent_management.model_library",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "aspects": [
-      "agent-management",
-      "model-library",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "update",
-      "effectKind": "repair-write",
-      "fieldMap": {
-        "endpointId": [
-          "endpoint"
-        ]
-      }
-    },
-    "resourceContext": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "update",
-      "effectKind": "repair-write",
-      "fieldMap": {
-        "endpointId": [
-          "endpoint"
-        ]
-      }
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "agentId"
-      ],
-      "properties": {
-        "agentId": {
-          "type": "string"
-        },
-        "provider": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
-        "baseUrl": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "apiKey": {
-          "type": "string"
-        },
-        "token": {
-          "type": "string"
-        },
-        "tokenHeader": {
-          "type": "string"
-        },
-        "tokenPrefix": {
-          "type": "string"
-        },
-        "systemPrompt": {
-          "type": "string"
-        },
-        "parameters": {},
-        "pluginList": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "timeoutMs": {
-          "type": "number"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "更新智能体模型配置",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "agent_management",
-      "operationName": "agents_update"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
-    "id": "agents.delete",
-    "feature": "agent_management",
-    "label": "删除智能体模型配置",
-    "target": {
-      "controller": "system",
-      "method": "handleDeleteAgent"
-    },
-    "http": {
-      "method": "DELETE",
-      "path": "/api/agents/:agentId"
-    },
-    "rpc": {
-      "method": "agents.delete",
-      "params": [
-        {
-          "name": "agentId",
-          "aliases": [
-            "agent-id",
-            "agentId",
-            "id"
-          ],
-          "required": true
-        }
-      ]
-    },
-    "cli": {
-      "command": [
-        "agents",
-        "delete"
-      ],
-      "usage": "agents delete --id AGENT_UID",
-      "pathParams": {
-        "agentId": [
-          "agent-id",
-          "agentId",
-          "id"
-        ]
-      }
-    },
-    "requiredScopes": [
-      "runtime:admin"
-    ],
-    "safety": {
-      "risk": "repair_write",
-      "readOnly": false,
-      "destructive": false,
-      "approvalScope": "maintenance:approve",
-      "requiresConfirmation": true,
-      "requiresConfirmationExplicit": false,
-      "blocked": false,
-      "reason": "",
-      "resolveRisk": null
-    },
-    "concurrency": {
-      "workloadClass": "exclusive",
-      "key": "agent_management.model_library",
-      "maxParallel": 1,
-      "cost": 2
-    },
-    "aspects": [
-      "agent-management",
-      "model-library",
-      "dispatch",
-      "authorization",
-      "safety",
-      "audit",
-      "operation-proof"
-    ],
-    "public": false,
-    "externalAuth": false,
-    "externalAuthMissingCode": "missing_external_auth",
-    "readOnly": false,
-    "destructive": false,
-    "resource": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "delete",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "resourceContext": {
-      "capabilityDomain": "agent_management",
-      "resourceKind": "agent_management",
-      "capabilityVerb": "delete",
-      "effectKind": "repair-write",
-      "fieldMap": {}
-    },
-    "proof": {
-      "profile": "full",
-      "exclusionReason": "",
-      "changeProjection": "",
-      "lifecycle": "two-stage",
-      "substrate": "operation-proof-substrate"
-    },
-    "inputSchema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "agentId"
-      ],
-      "properties": {
-        "agentId": {
-          "type": "string"
-        },
-        "confirm": {
-          "type": "boolean"
-        },
-        "safetyConfirm": {
-          "type": "boolean"
-        }
-      }
-    },
-    "audit": {
-      "enabled": true,
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default",
-      "write": true
-    },
-    "log": {
-      "enabled": true,
-      "redaction": "default",
-      "recordInput": true,
-      "recordOutput": false
-    },
-    "aspectOptions": {
-      "dispatch": {},
-      "authorization": {},
-      "safety": {},
-      "audit": {},
-      "operation-proof": {}
-    },
-    "description": "删除智能体模型配置",
-    "risk": "repair_write",
-    "otel": {
-      "semanticGroup": "agent_management",
-      "operationName": "agents_delete"
-    },
-    "auditPolicy": {
-      "recordInput": true,
-      "recordOutput": false,
-      "metadataOnly": false,
-      "redaction": "default"
-    }
-  },
-  {
     "id": "operation_permission.api_keys.issuer_scopes",
     "feature": "operation_permission",
     "label": "读取 API Key 签发范围",
@@ -30842,6 +28212,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -30976,6 +28347,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -31080,7 +28452,7 @@ export const SERVER_API_OPERATIONS: any = [
       "body": "params"
     },
     "requiredScopes": [
-      "console:read"
+      "auth:admin"
     ],
     "inputSchema": {
       "type": "object",
@@ -31421,6 +28793,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -31524,7 +28897,7 @@ export const SERVER_API_OPERATIONS: any = [
       "body": "params"
     },
     "requiredScopes": [
-      "console:read"
+      "auth:admin"
     ],
     "inputSchema": {
       "type": "object",
@@ -31559,6 +28932,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -31662,7 +29036,7 @@ export const SERVER_API_OPERATIONS: any = [
       "body": "params"
     },
     "requiredScopes": [
-      "console:read"
+      "auth:admin"
     ],
     "inputSchema": {
       "type": "object",
@@ -31703,6 +29077,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -31803,6 +29178,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -31924,6 +29300,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -32047,6 +29424,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -32177,6 +29555,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -32283,6 +29662,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -32405,6 +29785,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -32555,6 +29936,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -32702,6 +30084,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuthMissingCode": "missing_token",
     "requiredScopes": [],
@@ -32856,6 +30239,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuthMissingCode": "missing_token",
     "requiredScopes": [],
@@ -32994,6 +30378,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuthMissingCode": "missing_token",
     "requiredScopes": [],
@@ -33088,6 +30473,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -33419,6 +30805,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -33785,6 +31172,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -33956,6 +31344,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -34123,6 +31512,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -34282,6 +31672,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -34416,6 +31807,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -34676,6 +32068,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -34959,6 +32352,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -35197,6 +32591,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -35412,6 +32807,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -35546,6 +32942,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -35676,6 +33073,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -35801,6 +33199,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -35965,6 +33364,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -36136,6 +33536,7 @@ export const SERVER_API_OPERATIONS: any = [
         }
       }
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -36233,6 +33634,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -36348,6 +33750,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -36481,6 +33884,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -36625,6 +34029,7 @@ export const SERVER_API_OPERATIONS: any = [
       "audit",
       "operation-proof"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -36763,6 +34168,7 @@ export const SERVER_API_OPERATIONS: any = [
       },
       "required": []
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -36908,6 +34314,7 @@ export const SERVER_API_OPERATIONS: any = [
       "recordInput": false,
       "recordOutput": false
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -37031,6 +34438,7 @@ export const SERVER_API_OPERATIONS: any = [
         }
       }
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -37160,6 +34568,7 @@ export const SERVER_API_OPERATIONS: any = [
         }
       }
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -37252,6 +34661,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -37368,6 +34778,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -37500,6 +34911,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -37622,6 +35034,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -37740,6 +35153,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "maintenance:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -37880,6 +35294,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "maintenance:admin"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -38020,6 +35435,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -38159,6 +35575,7 @@ export const SERVER_API_OPERATIONS: any = [
         }
       }
     },
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -38321,6 +35738,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -38475,6 +35893,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -38635,6 +36054,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -38827,6 +36247,7 @@ export const SERVER_API_OPERATIONS: any = [
         }
       }
     },
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -38998,6 +36419,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -39186,6 +36608,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -39342,6 +36765,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -39494,6 +36918,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -39651,6 +37076,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -39815,6 +37241,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 16,
       "cost": 2
     },
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -39959,6 +37386,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -40116,6 +37544,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -40275,6 +37704,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:maintain"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -40448,6 +37878,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:maintain"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -40641,6 +38072,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -40797,6 +38229,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -41048,6 +38481,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 16,
       "cost": 2
     },
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -41263,6 +38697,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -41444,6 +38879,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 16,
       "cost": 2
     },
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -41661,6 +39097,7 @@ export const SERVER_API_OPERATIONS: any = [
       "cost": 2
     },
     "binary": true,
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -41867,6 +39304,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -42048,6 +39486,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -42258,6 +39697,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -42384,6 +39824,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -42638,6 +40079,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -42818,6 +40260,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:maintain"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -42973,6 +40416,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -43108,6 +40552,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:maintain"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -43263,6 +40708,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:maintain"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -43404,6 +40850,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:maintain"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -43565,6 +41012,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -43708,6 +41156,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "workspace_application",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -43827,6 +41276,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -43944,6 +41394,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -44067,6 +41518,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -44216,6 +41668,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -44361,6 +41814,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "workspace:write"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -44483,6 +41937,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -44628,6 +42083,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -44777,6 +42233,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -44898,6 +42355,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "console:read"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -45019,6 +42477,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "runtime:admin"
     ],
+    "trafficModel": "workspace_application",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -45182,6 +42641,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "recordUse": true
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -45316,6 +42776,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "recordUse": true
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -45493,6 +42954,7 @@ export const SERVER_API_OPERATIONS: any = [
       ],
       "recordUse": true
     },
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -45710,6 +43172,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:write"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -45885,6 +43348,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -46020,6 +43484,7 @@ export const SERVER_API_OPERATIONS: any = [
       "maxParallel": 1,
       "cost": 2
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -46151,6 +43616,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -46290,6 +43756,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -46430,6 +43897,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -46579,6 +44047,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -46707,6 +44176,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -46835,6 +44305,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -46947,6 +44418,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -47072,6 +44544,7 @@ export const SERVER_API_OPERATIONS: any = [
       "reason": "",
       "resolveRisk": null
     },
+    "trafficModel": "gateway_transit",
     "public": false,
     "externalAuth": false,
     "externalAuthMissingCode": "missing_external_auth",
@@ -47200,6 +44673,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -47339,6 +44813,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:write"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -47483,6 +44958,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:write"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "safe_write",
       "readOnly": false,
@@ -47627,6 +45103,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:write"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "repair_write",
       "readOnly": false,
@@ -47771,6 +45248,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -47909,6 +45387,7 @@ export const SERVER_API_OPERATIONS: any = [
     "requiredScopes": [
       "jobs:read"
     ],
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -48058,6 +45537,7 @@ export const SERVER_API_OPERATIONS: any = [
       "jobs:read"
     ],
     "binary": true,
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,
@@ -48199,6 +45679,7 @@ export const SERVER_API_OPERATIONS: any = [
       "jobs:read"
     ],
     "binary": true,
+    "trafficModel": "gateway_transit",
     "safety": {
       "risk": "read_only",
       "readOnly": true,

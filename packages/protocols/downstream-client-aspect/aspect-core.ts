@@ -11,18 +11,41 @@ import {
 } from "./client-registry.ts";
 import { lowerToken } from "./identity-helpers.ts";
 import { translateDownstreamClientInboundRequest } from "./request-helpers.ts";
+import type {
+  DownstreamAspectLayer,
+  DownstreamCapability,
+  DownstreamFrameworkDefinition,
+  UnknownRecord
+} from "./types.ts";
+
+interface AspectLogger {
+  info(message: string, facts: UnknownRecord): void;
+}
+
+export interface DownstreamClientAspectOptions {
+  serviceId?: string;
+  frameworks?: readonly unknown[] | null;
+  frameworkOverrides?: readonly unknown[];
+  layers?: DownstreamAspectLayer[] | null;
+  env?: NodeJS.ProcessEnv;
+  cwd?: string;
+  localBinDirs?: readonly string[];
+  includeDefaultLocalBin?: boolean;
+  logger?: AspectLogger | null;
+  start?: { now?: Date };
+}
 
 export class DownstreamClientAspectService {
-  assemblies: any;
-  cwd: any;
-  env: any;
-  frameworks: any;
-  includeDefaultLocalBin: any;
-  layers: any;
-  localBinDirs: any;
-  logger: any;
-  serviceId: any;
-  started: any;
+  assemblies: DownstreamCapability[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  frameworks: DownstreamFrameworkDefinition[];
+  includeDefaultLocalBin: boolean;
+  layers: DownstreamAspectLayer[];
+  localBinDirs: readonly string[];
+  logger: AspectLogger | null;
+  serviceId: string;
+  started: boolean;
   constructor({
     serviceId = "meshrix.downstream-client-aspect",
     frameworks = null,
@@ -33,10 +56,12 @@ export class DownstreamClientAspectService {
     localBinDirs = [],
     includeDefaultLocalBin = true,
     logger = null
-  }: Record<string, any> = {}) {
+  }: DownstreamClientAspectOptions = {}) {
     this.serviceId = serviceId;
     this.frameworks = (frameworks || defaultDownstreamClientFrameworks(frameworkOverrides))
-      .map(normalizeFrameworkDefinition);
+      .map((entry) => normalizeFrameworkDefinition(
+        entry && typeof entry === "object" && !Array.isArray(entry) ? { ...entry } : {}
+      ));
     this.layers = layers || createDefaultDownstreamClientAspectLayers();
     this.env = env;
     this.cwd = cwd;
@@ -47,21 +72,21 @@ export class DownstreamClientAspectService {
     this.assemblies = [];
   }
 
-  listProtocolLayers() : any {
-    return this.layers.map((layer?: any) : any => Object.freeze({
+  listProtocolLayers() {
+    return this.layers.map((layer) => Object.freeze({
       layerId: layer.layerId,
       adapterKind: layer.adapterKind
     }));
   }
 
-  start({ now = new Date() }: Record<string, any> = {}) : any {
-    const assembledAt: any = now.toISOString();
-    const assemblies: any[] = [];
-    let sequence: any = 0;
+  start({ now = new Date() }: { now?: Date } = {}) {
+    const assembledAt = now.toISOString();
+    const assemblies: DownstreamCapability[] = [];
+    let sequence = 0;
     for (const framework of this.frameworks) {
       for (const layer of this.layers) {
         sequence += 1;
-        const record: any = layer.assembleFramework(framework, {
+        const record = layer.assembleFramework(framework, {
           env: this.env,
           cwd: this.cwd,
           localBinDirs: this.localBinDirs,
@@ -85,10 +110,10 @@ export class DownstreamClientAspectService {
     return this.summary();
   }
 
-  listCapabilities({ protocol = "", frameworkId = "", includeUnavailable = true }: Record<string, any> = {}) : any {
-    const protocolFilter: any = lowerToken(protocol);
-    const frameworkFilter: any = lowerToken(frameworkId);
-    return this.assemblies.filter((record?: any) : any => {
+  listCapabilities({ protocol = "", frameworkId = "", includeUnavailable = true }: { protocol?: string; frameworkId?: string; includeUnavailable?: boolean } = {}): DownstreamCapability[] {
+    const protocolFilter = lowerToken(protocol);
+    const frameworkFilter = lowerToken(frameworkId);
+    return this.assemblies.filter((record) => {
       if (!includeUnavailable && record.status === "unavailable") {
         return false;
       }
@@ -102,13 +127,13 @@ export class DownstreamClientAspectService {
     });
   }
 
-  translateInboundRequest(request: Record<string, any> = {}) : any {
+  translateInboundRequest(request: UnknownRecord = {}) {
     return translateDownstreamClientInboundRequest(this, request);
   }
 
-  summary() : any {
-    const byProtocol: Record<string, any> = {};
-    const byStatus: Record<string, any> = {};
+  summary() {
+    const byProtocol: Record<string, number> = {};
+    const byStatus: Record<string, number> = {};
     for (const record of this.assemblies) {
       byProtocol[record.protocol] = (byProtocol[record.protocol] || 0) + 1;
       byStatus[record.status] = (byStatus[record.status] || 0) + 1;
@@ -130,7 +155,7 @@ export class DownstreamClientAspectService {
     });
   }
 
-  stop() : any {
+  stop() {
     this.started = false;
     return {
       ok: true,
@@ -140,13 +165,13 @@ export class DownstreamClientAspectService {
   }
 }
 
-export function createDownstreamClientAspectService(options: Record<string, any> = {}) : any {
+export function createDownstreamClientAspectService(options: DownstreamClientAspectOptions = {}): DownstreamClientAspectService {
   return new DownstreamClientAspectService(options);
 }
 
-export function assembleDownstreamClientAspect(options: Record<string, any> = {}) : any {
-  const service: any = createDownstreamClientAspectService(options);
-  const summary: any = service.start(options.start || {});
+export function assembleDownstreamClientAspect(options: DownstreamClientAspectOptions = {}) {
+  const service = createDownstreamClientAspectService(options);
+  const summary = service.start(options.start || {});
   return {
     service,
     summary,

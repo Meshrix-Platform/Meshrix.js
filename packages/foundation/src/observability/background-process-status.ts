@@ -5,11 +5,9 @@ import {
   unifiedRegistrationForProcess
 } from "../unified-registration-core/unified-registration.ts";
 import {
-  AGENT_WORKER_SUPPORTED_PROVIDERS,
   BACKGROUND_PROCESS_DEFINITIONS,
   BACKGROUND_PROCESS_SCHEMA_VERSION,
   IMPORT_PARSE_ACTIVE_STATUSES,
-  MAINTENANCE_ACTIVE_STATUSES,
   SAFE_PATH_SEGMENT_PATTERN,
   SERVER_PROCESS_DEFINITIONS,
   isRoleEnabledByFeatures
@@ -27,7 +25,6 @@ let _deps: Record<string, any> = {
   atomicWriteJson: null,
   queueStateMutation: null,
   stateFileKey: null,
-  loadSettings: null,
 };
 
 export function setBackgroundProcessDeps(deps?: any) : any {
@@ -48,11 +45,6 @@ function stateFileKey(filePath?: any) : any {
   if (!_deps.stateFileKey) throw new Error("background-process-status: stateFileKey not wired");
   return _deps.stateFileKey(filePath);
 }
-async function loadSettings(userDataPath?: any, opts?: any) : Promise<any> {
-  if (!_deps.loadSettings) throw new Error("background-process-status: loadSettings not wired");
-  return _deps.loadSettings(userDataPath, opts);
-}
-
 function nowIso() : any {
   return new Date().toISOString();
 }
@@ -83,14 +75,6 @@ function systemInspectionStatePath(userDataPath?: any) : any {
 
 function importJobsRootPath(userDataPath?: any) : any {
   return path.join(userDataPath, "jobs");
-}
-
-function maintenanceAgentConfigPath(userDataPath?: any) : any {
-  return path.join(userDataPath, "maintenance-agent.json");
-}
-
-function maintenanceAgentRunsPath(userDataPath?: any) : any {
-  return path.join(userDataPath, "maintenance-agent-runs.jsonl");
 }
 
 function importJobMetaPath(userDataPath?: any, jobId?: any) : any {
@@ -139,172 +123,6 @@ export async function inspectImportParseWorkerDemand(userDataPath?: any) : Promi
   demand.activeCount = demand.queuedCount + demand.runningCount;
   demand.active = demand.activeCount > 0;
   demand.activeJobIds = demand.activeJobIds.filter(Boolean).sort();
-  return demand;
-}
-
-async function readLatestMaintenanceRuns(userDataPath?: any) : Promise<any> {
-  let content: any = "";
-  try {
-    content = await fs.readFile(maintenanceAgentRunsPath(userDataPath), "utf8");
-  } catch (error: any) {
-    if (error?.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  }
-  const latest: any = new Map<any, any>();
-  for (const line of content.split(/\r?\n/)) {
-    const trimmed: any = line.trim();
-    if (!trimmed) {
-      continue;
-    }
-    try {
-      const parsed: any = JSON.parse(trimmed);
-      const run: any = parsed?.run;
-      if (run?.runId) {
-        latest.set(run.runId, run);
-      }
-    } catch {
-      // Ignore malformed historical run snapshots.
-    }
-  }
-  return [...latest.values()];
-}
-
-export async function inspectMaintenanceWorkerDemand(userDataPath?: any) : Promise<any> {
-  const configPath: any = maintenanceAgentConfigPath(userDataPath);
-  const runsPath: any = maintenanceAgentRunsPath(userDataPath);
-  const demand: Record<string, any> = {
-    kind: "maintenance_agent",
-    active: false,
-    configPath,
-    runsPath,
-    enabled: false,
-    enabledScheduleCount: 0,
-    activeRunCount: 0,
-    queuedRunCount: 0,
-    runningRunCount: 0,
-    activeRunIds: [],
-    checkedAt: nowIso()
-  };
-  try {
-    const parsed: any = JSON.parse(await fs.readFile(configPath, "utf8"));
-    demand.enabled = parsed?.enabled === true;
-    const schedules: any = Array.isArray(parsed?.schedules) ? parsed.schedules : [];
-    demand.enabledScheduleCount = schedules.filter((schedule?: any) : any => schedule?.enabled === true).length;
-  } catch (error: any) {
-    if (error?.code !== "ENOENT") {
-      demand.error = error instanceof Error ? error.message : String(error);
-    }
-  }
-  try {
-    for (const run of await readLatestMaintenanceRuns(userDataPath)) {
-      const status: any = String(run.status || "").trim();
-      if (!MAINTENANCE_ACTIVE_STATUSES.has(status)) {
-        continue;
-      }
-      demand.activeRunIds.push(String(run.runId || "").trim());
-      if (status === "queued") {
-        demand.queuedRunCount += 1;
-      } else if (status === "running") {
-        demand.runningRunCount += 1;
-      }
-    }
-  } catch (error: any) {
-    demand.error = demand.error || (error instanceof Error ? error.message : String(error));
-  }
-  demand.activeRunCount = demand.queuedRunCount + demand.runningRunCount;
-  demand.activeRunIds = demand.activeRunIds.filter(Boolean).sort();
-  demand.active = (demand.enabled && demand.enabledScheduleCount > 0) || demand.activeRunCount > 0;
-  return demand;
-}
-
-function agentEntryUid(entry: Record<string, any> = {}) : any {
-  return stringValue(entry.uid || entry.instanceId || entry.alias);
-}
-
-function inspectAgentEntryAvailability(settings: Record<string, any> = {}, entry: Record<string, any> = {}) : any {
-  const provider: any = stringValue(entry.provider);
-  const model: any = stringValue(entry.model || entry.engine);
-  const hasModel: any = Boolean(model);
-  if (!AGENT_WORKER_SUPPORTED_PROVIDERS.has(provider)) {
-    return {
-      status: "unsupported",
-      selectable: false,
-      reason: "该智能体来源尚未接入服务端调用链路。"
-    };
-  }
-  void settings;
-  const hasUrl: any = Boolean(stringValue(entry.url || entry.baseUrl));
-  const timeoutMs: any = Number(entry.timeoutMs || 0);
-  const credentialConfigured: any = Boolean(
-    entry.apiKeyConfigured ||
-    entry.tokenConfigured ||
-    stringValue(entry.apiKey || entry.token)
-  );
-  const credentialReady: any = provider === "local-model" || credentialConfigured;
-  const headerReady: any = !credentialConfigured || Boolean(stringValue(entry.tokenHeader));
-  if (!hasModel || !hasUrl || !Number.isFinite(timeoutMs) || timeoutMs <= 0 || !credentialReady || !headerReady) {
-    return {
-      status: "unconfigured",
-      selectable: false,
-      reason: "缺少模型、调用地址、超时或凭据配置。"
-    };
-  }
-  return { status: "available", selectable: true, reason: "" };
-}
-
-export async function inspectAgentWorkerDemand(userDataPath?: any) : Promise<any> {
-  const demand: Record<string, any> = {
-    kind: "agent_runtime",
-    active: false,
-    reason: "not_configured",
-    configured: false,
-    connected: false,
-    modelCount: 0,
-    availableModelCount: 0,
-    unavailableModelCount: 0,
-    unsupportedModelCount: 0,
-    activeTaskCount: 0,
-    availableAgentIds: [],
-    unavailableAgentIds: [],
-    unsupportedAgentIds: [],
-    checkedAt: nowIso()
-  };
-  try {
-    const settings: any = await loadSettings(userDataPath, { redactSecrets: false });
-    const entries: any = Array.isArray(settings.modelLibraryAgents) ? settings.modelLibraryAgents : [];
-    demand.modelCount = entries.length;
-    demand.configured = entries.length > 0;
-    for (const entry of entries) {
-      const uid: any = agentEntryUid(entry);
-      const availability: any = inspectAgentEntryAvailability(settings, entry);
-      if (availability.status === "available") {
-        demand.availableModelCount += 1;
-        demand.availableAgentIds.push(uid);
-        continue;
-      }
-      if (availability.status === "unsupported") {
-        demand.unsupportedModelCount += 1;
-        demand.unsupportedAgentIds.push(uid);
-      } else {
-        demand.unavailableModelCount += 1;
-        demand.unavailableAgentIds.push(uid);
-      }
-    }
-    demand.connected = demand.availableModelCount > 0;
-    demand.reason = !demand.configured
-      ? "not_configured"
-      : demand.connected
-        ? "idle"
-        : "not_connected";
-  } catch (error: any) {
-    demand.reason = "inspection_failed";
-    demand.error = error instanceof Error ? error.message : String(error);
-  }
-  demand.availableAgentIds = demand.availableAgentIds.filter(Boolean).sort();
-  demand.unavailableAgentIds = demand.unavailableAgentIds.filter(Boolean).sort();
-  demand.unsupportedAgentIds = demand.unsupportedAgentIds.filter(Boolean).sort();
   return demand;
 }
 
@@ -407,12 +225,6 @@ function withRuntimeStatus(processRecord?: any, nowMs?: any) : any {
 function demandForRole(role?: any, demandByRole: Record<string, any> = {}) : any {
   if (role === "import-worker") {
     return demandByRole.importWorker || null;
-  }
-  if (role === "maintenance-worker") {
-    return demandByRole.maintenanceWorker || null;
-  }
-  if (role === "agent-worker") {
-    return demandByRole.agentWorker || null;
   }
   return null;
 }
@@ -535,9 +347,7 @@ export async function getBackgroundProcessStatus(userDataPath?: any) : Promise<a
   const nowMs: any = Date.now();
   const definitions: any = BACKGROUND_PROCESS_DEFINITIONS;
   const demandByRole: Record<string, any> = {
-    importWorker: await inspectImportParseWorkerDemand(userDataPath),
-    maintenanceWorker: await inspectMaintenanceWorkerDemand(userDataPath),
-    agentWorker: await inspectAgentWorkerDemand(userDataPath)
+    importWorker: await inspectImportParseWorkerDemand(userDataPath)
   };
   if (!state) {
     const supervisor: Record<string, any> = {

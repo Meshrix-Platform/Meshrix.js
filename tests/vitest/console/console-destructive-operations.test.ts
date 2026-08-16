@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { computed, ref } from "vue";
+import { ref } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,14 +23,6 @@ vi.mock("../../../apps/console/lib/auth-client", () : any => ({
   revokeAuthSession: authClientMocks.revokeAuthSession,
   saveAuthOidc: vi.fn(),
   updateAuthUser: vi.fn(),
-}));
-
-const settingsClientMocks: any = vi.hoisted(() : any => ({
-  saveSettings: vi.fn(),
-}));
-
-vi.mock("../../../apps/console/lib/agent-settings-client", () : any => ({
-  saveSettings: settingsClientMocks.saveSettings,
 }));
 
 const shellContext: any = vi.hoisted(() : any => ({} as any));
@@ -56,19 +48,12 @@ import {
   getDestructiveOperation,
   requestDestructiveConfirm,
 } from "../../../apps/console/composables/console-destructive-operation-registry";
-import { createConsoleMaintenanceAgentController } from "../../../apps/console/composables/console-maintenance-agent-controller";
-import { createConsoleModelRepositoryController } from "../../../apps/console/composables/console-model-repository-controller";
-import {
-  clearConsoleToasts,
-  useConsoleToasts,
-} from "../../../apps/console/composables/console-toast-controller";
-import { consoleMessages, currentConsoleLocale } from "../../../apps/console/i18n/console";
+import { clearConsoleToasts } from "../../../apps/console/composables/console-toast-controller";
+import { consoleMessages } from "../../../apps/console/i18n/console";
 import { SERVER_ADDRESS_STORAGE_KEY } from "../../../apps/console/lib/console-server-addresses";
 
 const EXPECTED_OPERATION_IDS: any = [
   "auth.session.revoke",
-  "model-repository.provider.remove",
-  "maintenance-agent.schedule.remove",
   "service-discovery.address.remove",
   "publish.service.disable",
   "publish.service.republish",
@@ -136,8 +121,6 @@ describe("console destructive operation registry", () : any => {
     expect(getDestructiveOperation("service-discovery.address.remove")?.tone).toBe("danger");
     expect(getDestructiveOperation("publish.service.disable")?.tone).toBe("danger");
     expect(getDestructiveOperation("publish.service.remove")?.tone).toBe("danger");
-    expect(getDestructiveOperation("model-repository.provider.remove")?.tone).toBe("warning");
-    expect(getDestructiveOperation("maintenance-agent.schedule.remove")?.tone).toBe("warning");
     expect(getDestructiveOperation("publish.service.republish")?.tone).toBe("warning");
     expect(getDestructiveOperation("unknown.id")).toBeUndefined();
   });
@@ -171,8 +154,8 @@ describe("console destructive operation registry", () : any => {
 
   it("maps the audit-level warning tone to the dialog neutral tone", async () : Promise<any> => {
     const { currentConfirm } = useConsoleConfirmState();
-    const pending: any = requestDestructiveConfirm("model-repository.provider.remove", {
-      resource: "OpenAI",
+    const pending: any = requestDestructiveConfirm("publish.service.republish", {
+      resource: "service-a",
     });
     expect(currentConfirm.value?.tone).toBe("neutral");
     settleConsoleConfirm(true);
@@ -248,125 +231,6 @@ describe("auth session revoke confirm", () : any => {
     expect(authClientMocks.revokeAuthSession).toHaveBeenCalledWith("session-1");
     expect(setBusy).toHaveBeenCalledWith("auth:session:session-1");
     expect(clearBusy).toHaveBeenCalledWith("auth:session:session-1");
-  });
-});
-
-describe("model repository provider remove confirm", () : any => {
-  const entry: any = { uid: "agent-1", provider: "openai", label: "OpenAI agent" };
-
-  beforeEach(() : any => {
-    settingsClientMocks.saveSettings.mockReset();
-    settingsClientMocks.saveSettings.mockResolvedValue({});
-  });
-
-  function createController() : any {
-    const settingsDraft: any = ref<any>({
-      modelLibraryAgents: [entry],
-      modelLibraryEntries: ["openai"],
-    });
-    const setBusy: any = vi.fn();
-    const replaceSettingsDraftFromServer: any = vi.fn();
-    const controller: any = createConsoleModelRepositoryController({
-      clearBusy: vi.fn(),
-      error: ref(""),
-      modelEntryBindingSummary: () : any => "",
-      modelEntryIsBound: () : any => false,
-      modelEntryStatusKey: (item: any) : any => item.uid,
-      modelLibraryExpandedCards: ref<Record<string, boolean>>({}),
-      normalizeModelEntry: (value: any) : any => value,
-      providerLabel: (provider: any) : any => String(provider),
-      replaceSettingsDraftFromServer,
-      selectedModelProvider: ref("openai"),
-      setBusy,
-      settingsDraft,
-      settingsPayloadForSave: () : any => settingsDraft.value,
-      visibleModelEntries: computed(() : any => settingsDraft.value.modelLibraryAgents),
-      visibleModelProviders: computed(() : any => settingsDraft.value.modelLibraryEntries),
-    });
-    return { controller, settingsDraft, setBusy, replaceSettingsDraftFromServer };
-  }
-
-  it("requires a consequence-stating confirm before removing a provider", async () : Promise<any> => {
-    const { controller, settingsDraft, setBusy, replaceSettingsDraftFromServer } = createController();
-    const { currentConfirm } = useConsoleConfirmState();
-
-    const declined: any = controller.removeModelProvider(entry);
-    expect(currentConfirm.value?.message).toContain("OpenAI agent");
-    expect(settingsClientMocks.saveSettings).not.toHaveBeenCalled();
-    settleConsoleConfirm(false);
-    await declined;
-    expect(settingsClientMocks.saveSettings).not.toHaveBeenCalled();
-    expect(settingsDraft.value.modelLibraryAgents).toHaveLength(1);
-    expect(setBusy).not.toHaveBeenCalled();
-
-    const accepted: any = controller.removeModelProvider(entry);
-    settleConsoleConfirm(true);
-    await accepted;
-    expect(settingsClientMocks.saveSettings).toHaveBeenCalledTimes(1);
-    expect(settingsDraft.value.modelLibraryAgents).toHaveLength(0);
-    expect(replaceSettingsDraftFromServer).toHaveBeenCalledTimes(1);
-    expect(setBusy).toHaveBeenCalledWith("model-remove:agent-1");
-  });
-});
-
-describe("maintenance agent schedule remove confirm", () : any => {
-  function createController() : any {
-    const controller: any = createConsoleMaintenanceAgentController({
-      canReadMaintenanceAgent: computed(() : any => false),
-      clearBusy: vi.fn(),
-      consoleState: ref(null),
-      error: ref(""),
-      modelEntryStatusKey: (item: any) : any => item.uid,
-      setBusy: vi.fn(),
-      visibleModelEntries: computed(() : any => []),
-    });
-    controller.maintenanceAgentConfig.value = {
-      schedules: [
-        {
-          id: "sch-1",
-          label: "Daily scan",
-          enabled: true,
-          runbook: "rb-1",
-          intervalMinutes: 60,
-          nextRunAt: "",
-        },
-      ],
-    };
-    return controller;
-  }
-
-  it("keeps the draft row and shows no toast when the confirm is declined", async () : Promise<any> => {
-    const controller: any = createController();
-    const { currentConfirm } = useConsoleConfirmState();
-
-    const pending: any = controller.removeMaintenanceAgentSchedule("sch-1");
-    expect(currentConfirm.value?.message).toContain("Daily scan");
-    expect(controller.maintenanceAgentConfig.value.schedules).toHaveLength(1);
-    settleConsoleConfirm(false);
-    await pending;
-
-    expect(controller.maintenanceAgentConfig.value.schedules).toHaveLength(1);
-    expect(useConsoleToasts().toasts).toHaveLength(0);
-  });
-
-  it("removes the row after confirm and preserves the undo toast", async () : Promise<any> => {
-    const controller: any = createController();
-
-    const pending: any = controller.removeMaintenanceAgentSchedule("sch-1");
-    settleConsoleConfirm(true);
-    await pending;
-
-    expect(controller.maintenanceAgentConfig.value.schedules).toHaveLength(0);
-    const { toasts } = useConsoleToasts();
-    expect(toasts).toHaveLength(1);
-    const messages: any = consoleMessages[currentConsoleLocale.value];
-    expect(toasts[0].message).toBe(messages.toast.scheduleRemoved);
-    expect(toasts[0].action?.label).toBe(messages.toast.undo);
-
-    toasts[0].action.run();
-    expect(
-      controller.maintenanceAgentConfig.value.schedules.map((schedule: any) : any => schedule.id),
-    ).toEqual(["sch-1"]);
   });
 });
 

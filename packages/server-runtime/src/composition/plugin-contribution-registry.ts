@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import { decorateServerApiOperations } from "#meshrix/contracts/operations/operation-decorators";
 import { operationFeatureId } from "#meshrix/contracts/operations/operation-feature-resolution";
+import { assertPluginGatewayChannelContribution } from "@meshrix/contracts/plugins/gateway-channel-contract";
 import {
   pluginManifestArtifactIdentity,
   readPluginArtifactFile
@@ -19,6 +20,7 @@ const CONTRIBUTION_KINDS: readonly any[] = Object.freeze([
   "operations",
   "routes",
   "mcpTools",
+  "gatewayChannels",
   "consoleEntries",
   "stateMachines",
   "verifierHooks"
@@ -456,6 +458,25 @@ function normalizeMcpTools({ contributions, manifests, operationRecords }: Recor
   return output;
 }
 
+function normalizeGatewayChannels({ contributions, manifests, loadedPlugins }: Record<string, any>) : any {
+  const manifestsById: any = manifestIndex(manifests);
+  const enabledIds: any = enabledPluginIds(loadedPlugins);
+  const output: any = new Map<any, any>();
+  for (const record of contributionEntries(contributions, "gatewayChannels")) {
+    if (!enabledIds.has(record.pluginId)) throw new Error(`Disabled plugin ${record.pluginId} published Gateway channels.`);
+    const manifest: any = manifestsById.get(record.pluginId);
+    if (!manifest?.gatewayChannels?.includes(record.id)) {
+      throw new Error(`Plugin ${record.pluginId} Gateway channel contribution ${record.id} is not declared by its manifest.`);
+    }
+    const implementation: any = assertPluginGatewayChannelContribution(record.implementation);
+    for (const channel of implementation.channels) {
+      if (output.has(channel.channelId)) throw new Error(`Gateway channel ${channel.channelId} has more than one owner.`);
+      output.set(channel.channelId, Object.freeze({ ...record, implementation, channel }));
+    }
+  }
+  return output;
+}
+
 function normalizeConsoleEntries({ contributions, manifests, artifactIdentityResolver }: Record<string, any>) : any {
   const manifestsById: any = manifestIndex(manifests);
   const output: any = new Map<any, any>();
@@ -618,6 +639,7 @@ export function createPluginContributionRegistry({
   }
   const operationRecords: any = normalizeOperationContributions({ contributions: admittedContributions, manifests, loadedPlugins });
   const mcpTools: any = normalizeMcpTools({ contributions: admittedContributions, manifests, operationRecords });
+  const gatewayChannels: any = normalizeGatewayChannels({ contributions: admittedContributions, manifests, loadedPlugins });
   const mcpToolByOperation: any = new Map<any, any>();
   for (const tool of mcpTools.values()) {
     if (mcpToolByOperation.has(tool.operationId)) {
@@ -704,6 +726,7 @@ export function createPluginContributionRegistry({
     }
     const nextOperations: any = normalizeOperationContributions({ contributions: admitted, manifests, loadedPlugins });
     const nextMcpTools: any = normalizeMcpTools({ contributions: admitted, manifests, operationRecords: nextOperations });
+    const nextGatewayChannels: any = normalizeGatewayChannels({ contributions: admitted, manifests, loadedPlugins });
     const nextRoutes: any = normalizeRoutes({ contributions: admitted, manifests, operationRecords: nextOperations });
     const nextConsoleEntries: any = normalizeConsoleEntries({
       contributions: admitted,
@@ -716,6 +739,7 @@ export function createPluginContributionRegistry({
       [operationRecords, nextOperations],
       [routes, nextRoutes],
       [mcpTools, nextMcpTools],
+      [gatewayChannels, nextGatewayChannels],
       [consoleEntries, nextConsoleEntries],
       [stateMachines, nextStateMachines],
       [verifierHooks, nextVerifierHooks]
@@ -761,7 +785,7 @@ export function createPluginContributionRegistry({
   function deactivatePlugin(pluginId?: any) : any {
     const id: any = String(pluginId || "").trim();
     if (!activePluginIds.delete(id)) return Object.freeze({ ok: true, changed: false, pluginId: id });
-    for (const records of [operationRecords, routes, mcpTools, consoleEntries, stateMachines, verifierHooks]) {
+    for (const records of [operationRecords, routes, mcpTools, gatewayChannels, consoleEntries, stateMachines, verifierHooks]) {
       for (const [key, record] of records) {
         if (record.pluginId === id) records.delete(key);
       }
@@ -773,7 +797,7 @@ export function createPluginContributionRegistry({
 
   function preparePluginDeactivation(pluginId?: any) : any {
     const id: any = String(pluginId || "").trim();
-    const snapshots: any = [operationRecords, routes, mcpTools, consoleEntries, stateMachines, verifierHooks]
+    const snapshots: any = [operationRecords, routes, mcpTools, gatewayChannels, consoleEntries, stateMachines, verifierHooks]
       .map((records?: any) : any => [records, [...records].filter(([, record]: any[]) : any => record.pluginId === id)]);
     const wasActive: any = activePluginIds.has(id);
     let committed: any = false;
@@ -825,6 +849,7 @@ export function createPluginContributionRegistry({
     operations: readonlyMap(operationRecords),
     routes: readonlyMap(routes),
     mcpTools: readonlyMap(mcpTools),
+    gatewayChannels: readonlyMap(gatewayChannels),
     consoleEntries: readonlyMap(consoleEntries),
     stateMachines: readonlyMap(stateMachines),
     verifierHooks: readonlyMap(verifierHooks),

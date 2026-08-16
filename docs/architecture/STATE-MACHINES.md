@@ -4,7 +4,7 @@
 
 Projection schema: `v0.0.1:docs:state-machines-projection-1`
 Generated at: `1970-01-01T00:00:00.000Z`
-Integrity registry digest: `sha256:3ef4f2f637c64016c960ee5f6dbb3be5c039d018cece1e89f6429c3521e81ee2`
+Integrity registry digest: `sha256:f5e96df9ace44b88de5d8a9c9bb6e63e6f33faff1139d37307f4a4f00a192d12`
 Authority: JSON definitions under `packages/foundation/src/workflow/state-machine/definitions/`. This markdown file is projection-only and must not be treated as an independent authority.
 
 Core state-machine definitions live under `packages/foundation/src/workflow/state-machine/definitions/`. Package-owned definitions are admitted from verified plugin bundles and are not compiled into Core documentation.
@@ -46,7 +46,6 @@ Only `npm run verify:acceptance` may reduce capability evidence and the other re
 
 | Machine | Definition digest | States/Events/Cells | Authority path |
 | --- | --- | --- | --- |
-| `acceptance.agent-gateway-model-routing` | `sha256:8291e94b933c7a7d970673ba8f0536fd05af8c00d62065538a70f70e2776fe4d` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/agent-gateway-model-routing.json` |
 | `acceptance.approval-governance` | `sha256:b5a918a7c0c491216ab29b3696a80bd3428653a140f162026dd82ee4ade9f8cb` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/approval-governance.json` |
 | `acceptance.console-administration` | `sha256:244383535c9ede809b9a143882f402d81fdfc68466e79bc7009fc608a79e8566` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/console-administration.json` |
 | `acceptance.container-deployment-resumability` | `sha256:732701212974d4847c559e633b1f6a5b2253a42fff1cb0de8e44ec74e5e7ab8d` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/container-deployment-resumability.json` |
@@ -54,8 +53,8 @@ Only `npm run verify:acceptance` may reduce capability evidence and the other re
 | `acceptance.downstream-mcp-gateway` | `sha256:ac253218ad590e04efa9e12ce6ec546c00b91782c7b52d7c7b9dfabdfea64371` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/downstream-mcp-gateway.json` |
 | `acceptance.execution-sandbox` | `sha256:21c20d4007aaf9fa4fedce563b9f510cedb66936be572fe31acde66dba5b1c77` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/execution-sandbox.json` |
 | `acceptance.jobs-work-queue-runtime` | `sha256:e70166f348820344aa2cbb33530b26a70772019995ca1983dde5b221c329df96` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/jobs-work-queue-runtime.json` |
-| `acceptance.maintenance-agent-collaboration` | `sha256:6411ce513e99d38d885ffac593abf36b3c96d76c803c4abee2ab57e28fd2b6b4` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/maintenance-agent-collaboration.json` |
 | `acceptance.mcp-native-installer-process-identity` | `sha256:ce3225eee3c0643cb8506b69b1ad76e1e2b33af66bf2f2bdfefbfcf349951338` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/mcp-native-installer-process-identity.json` |
+| `acceptance.model-gateway-service` | `sha256:68071835dce68dcefdadfbd4b1bbc8fc087288cb2ae65bf55eb12b956b52aac7` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/model-gateway-service.json` |
 | `acceptance.observability-alerts-reporting` | `sha256:7b29ace9374ad882bdd34c095283ba6e9dd998e60c44ba9b00517514848f641c` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/observability-alerts-reporting.json` |
 | `acceptance.operation-permission-authorization` | `sha256:944050d50d85081a3eb91ea49e10db2e51075a2fcdf32431547e8e6dd85bcf8f` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/operation-permission-authorization.json` |
 | `acceptance.pactium-cryptographic-foundation` | `sha256:29971392f3a3479ed7ec5ee6f0f6dbe5d4ed4bfa9099636b579d1f3bc46b0ea9` | 5/8/40 | `packages/foundation/src/workflow/state-machine/definitions/acceptance/pactium-cryptographic-foundation.json` |

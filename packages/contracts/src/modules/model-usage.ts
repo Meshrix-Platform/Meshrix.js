@@ -1,4 +1,4 @@
-export const MODEL_USAGE_DEFINITIONS: readonly any[] = Object.freeze([
+export const MODEL_USAGE_DEFINITIONS = Object.freeze([
   Object.freeze({
     id: "gatewayRouting",
     label: "网关路由智能体",
@@ -22,17 +22,9 @@ export const MODEL_USAGE_DEFINITIONS: readonly any[] = Object.freeze([
     description: "智能体可使用服务端工具的权限范围，不需要单独绑定智能体。",
     requiresIntelligence: false,
     alertRequired: false
-  }),
-  Object.freeze({
-    id: "maintenance-agent-runbooks",
-    label: "智能巡检",
-    designedModule: "维护代理运行手册",
-    description: "维护代理 gateway planner 的模型、模块画像和依赖上下文。",
-    requiresIntelligence: false,
-    alertRequired: false
   })
 ]);
 
-export const MODEL_USAGE_DEFINITION_IDS: any = Object.freeze(
-  MODEL_USAGE_DEFINITIONS.map((definition?: any) : any => definition.id)
+export const MODEL_USAGE_DEFINITION_IDS = Object.freeze(
+  MODEL_USAGE_DEFINITIONS.map((definition) => definition.id)
 );

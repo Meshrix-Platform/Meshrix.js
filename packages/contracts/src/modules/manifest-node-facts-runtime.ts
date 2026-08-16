@@ -1,6 +1,6 @@
 import { defineArchitectureNodeFacts } from "./manifest-node-facts-support.ts";
 
-export const RUNTIME_ARCHITECTURE_NODE_FACTS: readonly any[] = Object.freeze([
+export const RUNTIME_ARCHITECTURE_NODE_FACTS = Object.freeze([
   ...defineArchitectureNodeFacts("application", "application", [
     {
       moduleId: "gateway-governance",

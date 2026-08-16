@@ -3,7 +3,6 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 
-import AgentModelOptionBar from "../../../apps/console/components/AgentModelOptionBar.vue";
 import BinaryCheckbox from "@meshrix/ui-console/binary-checkbox";
 import ConsoleEmptyState from "../../../apps/console/components/ConsoleEmptyState.vue";
 import ConsoleInlineAlert from "../../../apps/console/components/ConsoleInlineAlert.vue";
@@ -15,7 +14,6 @@ import SplitToggleCard from "../../../apps/console/components/SplitToggleCard.vu
 import {
   commonComponentRegistry,
   commonComponentReusePolicy,
-  AgentModelOptionBar as RegisteredAgentModelOptionBar,
   BinaryCheckbox as RegisteredBinaryCheckbox,
   FeatureToggle as RegisteredFeatureToggle,
   SegmentedToggle as RegisteredSegmentedToggle,
@@ -249,52 +247,6 @@ describe("console common components behavior", () : any => {
     expect(wrapper.emitted("change")?.[0]).toEqual(["b"]);
   });
 
-  it("normalizes AgentModelOptionBar options and navigates when the model library is empty", async () : Promise<any> => {
-    navigateBrowserHashRouteMock.mockClear();
-    const wrapper: any = mount(AgentModelOptionBar, {
-      props: {
-        modelValue: "",
-        label: "默认智能体",
-        includeEmpty: true,
-        options: [
-          { agentUid: "agent-a", label: "Agent A" },
-          { value: "agent-a", label: "Duplicate" },
-          { value: "agent-b", label: "Agent B", enabled: false, reason: "维护中" },
-          { value: "", label: "ignored" },
-        ],
-      },
-    });
-
-    expect(wrapper.find(".agent-option-label").text()).toBe("默认智能体");
-    expect(wrapper.findAll("option").map((option?: any) : any => option.text())).toEqual([
-      "未分配智能体",
-      "Agent A",
-      "Agent B（维护中）",
-    ]);
-
-    await wrapper.find("select").setValue("agent-a");
-    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual(["agent-a"]);
-    expect(wrapper.emitted("change")?.[0]).toEqual(["agent-a"]);
-
-    const emptyWrapper: any = mount(AgentModelOptionBar, {
-      props: {
-        modelValue: "",
-        options: [],
-        emptyLibraryRoute: "/admin/models",
-        emptyLibraryActionIcon: "＋",
-        emptyLibraryLabel: "配置模型",
-      },
-    });
-    expect(emptyWrapper.find(".agent-option-shell").attributes("data-empty-library")).toBe("true");
-    await emptyWrapper.find("select").trigger("click");
-    expect(navigateBrowserHashRouteMock).toHaveBeenCalledWith("/admin/models", "/admin/agent-config");
-
-    const event: any = new KeyboardEvent("keydown", { key: "Enter" });
-    const preventDefault: any = vi.spyOn(event, "preventDefault");
-    await emptyWrapper.find("select").element.dispatchEvent(event);
-    expect(preventDefault).toHaveBeenCalled();
-  });
-
   it("wraps DataTable Element Plus events and slots", async () : Promise<any> => {
     const rowKey: any = (row: { id: string }) : any => row.id;
     const wrapper: any = mount(DataTable, {
@@ -430,7 +382,6 @@ describe("console common components behavior", () : any => {
   });
 
   it("exports common component registry entries and reuse policy", () : any => {
-    expect(RegisteredAgentModelOptionBar).toBe(AgentModelOptionBar);
     expect(RegisteredBinaryCheckbox).toBe(BinaryCheckbox);
     expect(RegisteredFeatureToggle).toBe(FeatureToggle);
     expect(RegisteredSegmentedToggle).toBe(SegmentedToggle);
@@ -439,7 +390,6 @@ describe("console common components behavior", () : any => {
       "BinaryCheckbox",
       "FeatureToggle",
       "OptionBar",
-      "AgentModelOptionBar",
       "SegmentedToggle",
     ]));
     expect(commonComponentRegistry.every((entry?: any) : any => [

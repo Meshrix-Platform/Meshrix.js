@@ -10,8 +10,8 @@ assets. It is not exposed to downstream agents (`allowDownstream: false`).
   only project-level acceptance authority.
 - `npm run verify:real-machine -- ...` runs remaining candidate-bound
   Real-Machine Verification Workflows. A passing receipt is the named
-  Environment Support Claim for that exact environment and cannot block or
-  promote project acceptance.
+  Environment Support Claim for that exact environment
+  and cannot block or promote project acceptance.
 - `.github/workflows/release.yml` is the only release publication path.
 - `.github/RELEASE_TEMPLATE.md` is the canonical release-notes template.
 - The canonical publication branch is `release`. A version tag is accepted

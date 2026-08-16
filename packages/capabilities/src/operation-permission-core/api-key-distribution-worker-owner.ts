@@ -629,6 +629,27 @@ export function createApiKeyDistributionWorkerOwner({
     });
   }
 
+  function listAudienceGrants(input: Record<string, any> = {}): any {
+    exactKeys(input, []);
+    const rows: any[] = db.prepare("SELECT * FROM api_key_records WHERE status = 'active' ORDER BY key_id ASC").all();
+    return Object.freeze(rows
+      .map((row?: any) : any => recordFromRow(row, now()))
+      .filter((record?: any) : any => record.status === "active")
+      .map((record?: any) : any => Object.freeze({
+        id: record.workloadPrincipalId,
+        type: "scoped-api-key",
+        subjectId: record.workloadPrincipalId,
+        organizationId: record.organizationNodeId,
+        scopes: Object.freeze([...(record.policy?.scopeIds || [])]),
+        toolsets: Object.freeze([...(record.policy?.toolsetIds || [])]),
+        dynamicCapabilities: Object.freeze([...(record.policy?.capabilityIds || [])]),
+        allowedServiceIds: Object.freeze([...(record.policy?.serviceIds || [])]),
+        allowedSecretBindings: Object.freeze([...(record.policy?.resources?.secretBindingIds || [])]),
+        maxRisk: ({ low: "read_only", medium: "safe_write", high: "repair_write" } as Record<string, string>)[record.policy?.maximumRisk] || "read_only",
+        status: "active"
+      })));
+  }
+
   async function scopedRecord(input: any): Promise<{ row: any; scopes: any }> {
     const scopes: any = authority(text(input.subjectId, "subjectId", 256));
     const row: any = getRow(text(input.keyId, "keyId", 64));
@@ -744,10 +765,6 @@ export function createApiKeyDistributionWorkerOwner({
         })();
       }
       errorForInactive(record);
-    }
-    const catalogFingerprint: any = registry?.getCatalog?.()?.fingerprint;
-    if (catalogFingerprint && catalogFingerprint !== record.policy.catalogFingerprint) {
-      fail("api_key_authority_unavailable", "Operation Permission catalog changed.", 503);
     }
     if (record.policy.audience.serverAudience !== String(input.serverAudience || "") ||
         !record.policy.audience.targetIds.includes(String(input.targetId || "")) ||
@@ -903,6 +920,7 @@ export function createApiKeyDistributionWorkerOwner({
   return Object.freeze({
     getIssuerScopes,
     list,
+    listAudienceGrants,
     create,
     rotate,
     revoke,

@@ -35,9 +35,9 @@ Route specialized work to:
 - `$meshrix-js-ingestion-job-processing` for upload, queue, job, result, cancellation, or deletion recovery.
 - `$meshrix-js-workspace-governed-sharing` for workspace assets, governed sharing, Shared Space, or checkpoint recovery.
 - `$meshrix-js-skill-hub-lifecycle` for skill contribution, review, publication, adoption, or revocation.
-- `$meshrix-js-agent-gateway-model-routing` for configured model calls, provider routing, and circuit behavior.
+- The standalone Model Gateway Service documentation for configured model calls, provider routing, and circuit behavior.
 - `$meshrix-js-strategy-management` for deterministic, non-mutating policy preview.
-- `$meshrix-js-maintenance-agent-automation` for governed maintenance plans, approval, scheduling, and execution.
+- The independently started Agent self-maintenance plugin for local maintenance scheduling and execution.
 - `$meshrix-js-operations-observability` for telemetry, alerts, diagnostics, reports, and readiness evidence.
 - `$meshrix-js-performance-load-testing` for bounded load, capacity, latency, saturation, and performance-regression evidence.
 - `$meshrix-js-protocol-gateway` for downstream or upstream protocol boundaries.

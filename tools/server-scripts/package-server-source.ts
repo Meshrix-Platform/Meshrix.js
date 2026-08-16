@@ -13,58 +13,20 @@ import {
 } from "../../packages/server-runtime/src/composition/features/feature-manifest.ts";
 import { scanPublicArtifact } from "./lib/public-artifact-boundary.ts";
 import { resolveGitRepoRoot } from "./lib/source-tree-digest.ts";
+import {
+  INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS,
+  ROOT_SOURCE_FILES,
+  SOURCE_PACKAGE_ROOTS
+} from "./lib/source-package-contract.ts";
 
 const REPO_ROOT: any = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const SOURCE_PACKAGE_MANIFEST: any = "meshrix-source-package-manifest.json";
 const SOURCE_PACKAGE_ARCHIVE_SUFFIX: any = ".tar.gz";
 const SOURCE_PACKAGE_CHECKSUM_SUFFIX: any = ".sha256";
-const SOURCE_PACKAGE_NAME_PATTERN: any = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const SOURCE_PACKAGE_NAME_PATTERN: any = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
 const SOURCE_PACKAGE_VERSION_PATTERN: any = /^[0-9A-Za-z]+(?:[.+-][0-9A-Za-z]+)*$/u;
 
 export const DEFAULT_SERVER_SOURCE_PACKAGE_OUTPUT_DIRECTORY: any = "build/packages";
-
-export const SOURCE_PACKAGE_ROOTS: readonly any[] = Object.freeze([
-  "packages",
-  "plugins",
-  "apps/server",
-  "apps/console",
-  "content",
-  "tools",
-  "docs/README.md",
-  "docs/RUNBOOK.md",
-  "docs/COMPATIBILITY.md",
-  "docs/ENTITY-CONFIG-LAYOUT.md",
-  "docs/architecture-overview.svg",
-  "docs/banner.svg",
-  "docs/logo.svg",
-  "docs/architecture",
-  "docs/adrs",
-  "docs/examples",
-  "docs/functionality",
-  "docs/protocols"
-]);
-
-export const ROOT_SOURCE_FILES: readonly any[] = Object.freeze([
-  "package.json",
-  "package-lock.json",
-  "tsconfig.json",
-  "vite.config.ts",
-  "vitest.config.ts",
-  "Dockerfile",
-  "docker-compose.yml",
-  ".dockerignore",
-  ".env.example",
-  ".gitattributes",
-  ".gitignore",
-  "README.md",
-  "README.zh-CN.md",
-  "PRODUCT.md",
-  "LICENSE",
-  "CHANGELOG.md",
-  "SECURITY.md",
-  "CONTRIBUTING.md",
-  "CODE_OF_CONDUCT.md"
-]);
 
 const EXCLUDED_PATH_SEGMENTS: any = new Set<any>([
   ".git",
@@ -85,11 +47,6 @@ const EXCLUDED_PATH_SEGMENTS: any = new Set<any>([
   "target",
   "test-results"
 ]);
-export const INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS: readonly any[] = Object.freeze([
-  "docs/plans",
-  "docs/reports"
-]);
-
 export function createPackagingPlan(args: Record<string, any> = {}) : any {
   const edition: any = String(args.edition || DEFAULT_EDITION).trim() || DEFAULT_EDITION;
   return {
@@ -327,10 +284,13 @@ export async function applyFeatureSourcePlan(stagingPath?: any, packagingPlan: a
       });
     }
   }
-  const ignoredPaths: any = await ignoredSourcePaths(
-    repoRoot,
-    sourceFiles.map((sourceFile?: any) : any => sourceFile.relativePath)
-  );
+  const gitIgnoreAware: any = options.gitIgnoreAware !== false;
+  const ignoredPaths: any = gitIgnoreAware
+    ? await ignoredSourcePaths(
+        repoRoot,
+        sourceFiles.map((sourceFile?: any) : any => sourceFile.relativePath)
+      )
+    : new Set<any>();
   for (const sourceFile of sourceFiles) {
     if (ignoredPaths.has(sourceFile.relativePath)) {
       continue;
@@ -349,7 +309,7 @@ export async function applyFeatureSourcePlan(stagingPath?: any, packagingPlan: a
   const packageSha256: any = packageHash.digest("hex");
   const manifest: Record<string, any> = {
     schemaVersion: "v0.0.1:release:source-package-manifest-4",
-    sourceRevision: resolveSourceRevision(repoRoot),
+    sourceRevision: options.sourceRevision || resolveSourceRevision(repoRoot),
     sourceTreeDigest: `sha256:${packageSha256}`,
     packagingPlan,
     sourceRoots: SOURCE_PACKAGE_ROOTS,
@@ -357,7 +317,7 @@ export async function applyFeatureSourcePlan(stagingPath?: any, packagingPlan: a
     excludedPaths: INTERNAL_SOURCE_PACKAGE_EXCLUDED_PATHS,
     boundaryPolicy: {
       explicitPublicRoots: true,
-      gitIgnoreAware: true,
+      gitIgnoreAware,
       ignoredFileCount: ignoredPaths.size
     },
     featureRuntime: {

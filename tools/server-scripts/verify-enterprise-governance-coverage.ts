@@ -95,8 +95,6 @@ function capabilityForOperation(operation: Record<string, any> = {}, matrix: Rec
   }
   const feature: any = String(operation.feature || "");
   const platformSupportFeatures: any = new Set<any>([
-    "agent_gateway",
-    "agent_management",
     "agent_memory",
     "agent_sync",
     "agent_workspace",
@@ -104,7 +102,6 @@ function capabilityForOperation(operation: Record<string, any> = {}, matrix: Rec
     "context_runtime",
     "discovery",
     "events",
-    "maintenance_agent",
     "module_management",
     "production",
     "raw_objects",

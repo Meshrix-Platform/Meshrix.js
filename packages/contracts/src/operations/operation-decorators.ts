@@ -650,7 +650,16 @@ export function decorateServerApiOperations(operations: any = []) : any {
     rpc: new Set<any>()
   };
   return operations.map((operation?: any) : any => {
+    if (operation.trafficModel !== "workspace_application" && operation.trafficModel !== "gateway_transit") {
+      throw new Error(`Operation ${operation.id || "<unknown>"} requires trafficModel.`);
+    }
     const decorated: any = decorateOperation(operation);
+    Object.defineProperty(decorated, "trafficModel", {
+      value: operation.trafficModel,
+      enumerable: true,
+      configurable: false,
+      writable: false
+    });
     validateOperation(decorated, seen);
     return decorated;
   });

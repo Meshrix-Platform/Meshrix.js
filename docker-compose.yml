@@ -105,7 +105,7 @@ services:
       PORT: 8080
       SKILL_HUB_DATA_ROOT: /var/lib/skill-hub
       MAX_REQUEST_BYTES: 2097152
-      SKILL_HUB_AUTH_TOKEN: ${MESHRIX_SKILL_HUB_AUTH_TOKEN:?set MESHRIX_SKILL_HUB_AUTH_TOKEN}
+      SKILL_HUB_AUTH_TOKEN: ${MESHRIX_SKILL_HUB_AUTH_TOKEN:-}
     volumes:
       - meshrix-skill-hub-data:/var/lib/skill-hub
     healthcheck:

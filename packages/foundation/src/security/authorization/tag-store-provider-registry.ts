@@ -32,13 +32,14 @@
 
 import {
   createTagStoreProviderRegistry,
-  TAG_STORE_PORT_VERSION
+  type TagStoreProvider,
+  type TagStoreProviderDiagnostic
 } from "./tag-store.port.ts";
 
 /**
  * @type {ReturnType<typeof createTagStoreProviderRegistry> | null}
  */
-const registry: any = createTagStoreProviderRegistry();
+const registry = createTagStoreProviderRegistry();
 
 /**
  * Registers a tag store provider at composition time.
@@ -51,7 +52,7 @@ const registry: any = createTagStoreProviderRegistry();
  *   The tag store provider instance to register. Must conform to the
  *   TagStoreProvider interface.
  */
-export function registerTagStoreProvider(provider?: any) : any {
+export function registerTagStoreProvider(provider: TagStoreProvider): void {
   registry.setProvider(provider);
 }
 
@@ -63,7 +64,7 @@ export function registerTagStoreProvider(provider?: any) : any {
  *
  * @returns {import("./tag-store.port.ts").TagStoreProvider | null}
  */
-export function getTagStoreProvider() : any {
+export function getTagStoreProvider(): TagStoreProvider | null {
   return registry.getProvider();
 }
 
@@ -72,7 +73,7 @@ export function getTagStoreProvider() : any {
  *
  * @returns {import("./tag-store.port.ts").TagStoreProviderDiagnostic}
  */
-export function getTagStoreProviderDiagnostic() : any {
+export function getTagStoreProviderDiagnostic(): TagStoreProviderDiagnostic {
   return registry.getProviderDiagnostic();
 }
 
@@ -81,6 +82,6 @@ export function getTagStoreProviderDiagnostic() : any {
  *
  * @returns {boolean}
  */
-export function hasTagStoreProvider() : any {
+export function hasTagStoreProvider(): boolean {
   return registry.hasProvider();
 }

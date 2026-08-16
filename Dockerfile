@@ -17,8 +17,6 @@ COPY packages/foundation/package.json ./packages/foundation/package.json
 COPY packages/protocols/package.json ./packages/protocols/package.json
 COPY packages/server-runtime/package.json ./packages/server-runtime/package.json
 COPY packages/ui-console/package.json ./packages/ui-console/package.json
-COPY vendor ./vendor
-
 RUN rm -f "${ROOTFS}etc/apt/apt.conf.d/docker-clean"
 
 RUN --mount=type=cache,target=${ROOTFS}var/cache/apt,sharing=locked \

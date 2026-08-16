@@ -53,7 +53,6 @@ export const DEFAULT_REPAIR_APPROVAL_SCOPE: any = "maintenance:approve";
 export const READ_ONLY_POST_OPERATION_IDS: any = new Set<any>([
   "auth.roles.get",
   "context.compaction.preview",
-  "settings.model_probe"
 ]);
 
 export const PUBLIC_OPERATION_IDS: any = new Set<any>([
@@ -102,16 +101,10 @@ export const REQUIRED_SCOPE_DECORATORS: any = new Map<any, any>([
   ["events.subscribe", ["console:read"]],
   ["agent_sync.subscribe", ["console:read"]],
   ["discovery.clients", ["console:read"]],
-  ["agents.list", ["console:read"]]
 ]);
 
 export const SAFETY_DECORATORS: any = new Map<any, any>([
   ["agent_sync.config.set", { risk: "repair_write" }],
-  ["maintenance_agent.config.set", { risk: "repair_write" }],
-  ["maintenance_agent.runs.approve", { risk: "repair_write", requiresConfirmation: false }],
-  ["agents.create", { risk: "repair_write" }],
-  ["agents.update", { risk: "repair_write" }],
-  ["agents.delete", { risk: "repair_write" }],
   ["auth.roles.get", { risk: "read_only" }],
   ["auth.users.update", { risk: "repair_write" }],
   ["auth.oidc.set", { risk: "repair_write" }],
@@ -124,9 +117,6 @@ export const SAFETY_DECORATORS: any = new Map<any, any>([
   ["discovery.set_config", { risk: "repair_write" }],
   ["runtime.set_mounts", { risk: "repair_write", approvalScope: "runtime:admin" }],
   ["runtime.reload_mounts", { risk: "repair_write", approvalScope: "runtime:admin" }],
-  ["runtime.external_gateway.validate", { risk: "safe_write", requiresConfirmation: false }],
-  ["runtime.external_gateway.apply", { risk: "repair_write", approvalScope: "runtime:admin" }],
-  ["runtime.external_gateway.switch_direct", { risk: "repair_write", approvalScope: "runtime:admin" }],
   ["storage.reconcile", { risk: "repair_write" }],
   ["settings.set", { risk: "repair_write" }],
   ["context.session_memory.clear", { risk: "repair_write" }],
@@ -138,15 +128,9 @@ export const CONCURRENCY_GROUP_DECORATORS: any = new Map<any, any>([
   ["settings.set", "settings"],
   ["runtime.set_mounts", "runtime.mounts"],
   ["runtime.reload_mounts", "runtime.mounts"],
-  ["runtime.external_gateway.apply", "runtime.external_gateway"],
-  ["runtime.external_gateway.switch_direct", "runtime.external_gateway"],
   ["runtime.assembly.build", "runtime.assembly"],
   ["discovery.set_config", "discovery.config"],
   ["agent_sync.config.set", "agent_sync.config"],
-  ["agents.create", "agent_management.model_library"],
-  ["agents.update", "agent_management.model_library"],
-  ["agents.delete", "agent_management.model_library"],
-  ["maintenance_agent.config.set", "maintenance_agent.config"],
   ["context.compaction.run", "context.compaction"],
   ["context.session_memory.clear", "agent.memory"]
 ]);

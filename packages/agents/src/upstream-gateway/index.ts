@@ -401,7 +401,7 @@ export function createUpstreamGatewayRegistry({
     const bypass: any = ["owner", "admin"].includes(roleId) ||
       ["auth:admin", "runtime:admin", "gateway:admin"].some((scope?: any) : any => subjectScopes.has(scope));
     const missingScopes: any = bypass ? [] : operation.requiredScopes.filter((scope?: any) : any => !subjectScopes.has(scope));
-    const tagPolicy: any = evaluateServiceTagPolicy(service);
+    const tagPolicy: any = evaluateServiceTagPolicy(service, subject);
     const dynamicAuthorization: any = evaluateDynamicOperationAuthorization(subject, operation);
     return {
       protocolVersion: UPSTREAM_GATEWAY_PROTOCOL_VERSION,
@@ -437,7 +437,7 @@ export function createUpstreamGatewayRegistry({
     };
   }
 
-  function evaluateServiceTagPolicy(service?: any) : any {
+  function evaluateServiceTagPolicy(service?: any, subject: Record<string, any> = {}) : any {
     if (!hasUniversalTagPolicyRules(service.tagPolicy || {})) {
       return {
         allowed: true,
@@ -447,9 +447,20 @@ export function createUpstreamGatewayRegistry({
         }
       };
     }
+    const entityRefs: any[] = Array.isArray(subject.entityRefs)
+      ? subject.entityRefs
+      : [
+          subject.subjectId ? { entityType: "subject", entityId: subject.subjectId } : null,
+          (subject.organizationNodeId || subject.organizationId)
+            ? { entityType: "organization", entityId: subject.organizationNodeId || subject.organizationId }
+            : null,
+          subject.teamId ? { entityType: "team", entityId: subject.teamId } : null,
+          subject.roleId ? { entityType: "role", entityId: subject.roleId } : null
+        ].filter(Boolean);
     const decision: any = evaluateUniversalTagPolicy({
       tagStore: resolvedTagStore,
-      ...service.tagPolicy
+      ...service.tagPolicy,
+      entityRefs: entityRefs.length > 0 ? entityRefs : service.tagPolicy?.entityRefs
     });
     return {
       allowed: decision.allowed === true,
@@ -529,7 +540,7 @@ export function createUpstreamGatewayRegistry({
       });
     }
     if (preview.tagPolicy?.enabled && !preview.tagPolicy.allowed) {
-      rejectServiceTagPolicy(service, operation, evaluateServiceTagPolicy(service).decision);
+      rejectServiceTagPolicy(service, operation, evaluateServiceTagPolicy(service, subject).decision);
     }
     return preview;
   }
@@ -1809,10 +1820,10 @@ export function createUpstreamGatewayRegistry({
           inputDigest: sinkInputDigest
         });
         const finalProtectedSinkPermit: any = options.finalProtectedSinkPermit;
-        if (!finalProtectedSinkPermit) {
+        if (!finalProtectedSinkPermit && claimProtectedSinkAttempt === claimFinalProtectedSinkAttempt) {
           finalEffectAuthorityRequired();
         }
-        await claimFinalProtectedSinkAttempt({
+        await claimProtectedSinkAttempt({
           attempt: finalProtectedSinkPermit,
           targetSelector: targetFacts.targetSelector,
           effect: targetFacts.effect,

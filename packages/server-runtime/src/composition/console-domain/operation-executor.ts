@@ -22,7 +22,7 @@ import {
   executeSystemInterfaceOperation,
   executeSystemObservationOperation
 } from "./operation-executors/system-observation-executors.ts";
-import { executeSettingsAgentGatewayOperation } from "./operation-executors/settings-agent-gateway-executor.ts";
+import { executeSettingsOperation } from "./operation-executors/settings-executor.ts";
 import { executeConsoleAuthOperation } from "./operation-executors/console-auth-executor.ts";
 import { executeWorkspaceAuditOperation } from "./operation-executors/workspace-audit-executor.ts";
 import { executeAuthorizationFacadeOperation } from "./operation-executors/authorization-facade-executor.ts";
@@ -30,7 +30,6 @@ import { executeAgentSyncOperation } from "./operation-executors/agent-sync-exec
 import { executeOperationPermissionPassthroughOperation } from "./operation-executors/operation-permission-passthrough-executor.ts";
 import {
   executeContextRuntimeOperation,
-  executeMaintenanceAgentOperation,
   executeProtocolFacadeOperation,
   executeRuntimeMountOperation,
   executeSecurityAlertsOperation,
@@ -51,7 +50,6 @@ const executeUpstreamGatewayOperation: any = createUpstreamGatewayOperationExecu
 });
 
 export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.freeze([
-  "agent_gateway.call",
   "agent_sessions.archive",
   "agent_sessions.compare",
   "agent_sessions.context.get",
@@ -91,11 +89,6 @@ export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.f
   "agent_workspaces.sources.set",
   "agent_workspaces.submissions.resolve",
   "agent_workspaces.unshare",
-  "agents.create",
-  "agents.delete",
-  "agents.list",
-  "agents.update",
-  "api.agent_gateway.call",
   "architecture.live_map",
   "auth.audit",
   "auth.audit.export",
@@ -189,15 +182,6 @@ export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.f
   "executive_report.list",
   "executive_report.preview",
   "jobs.failed_review",
-  "maintenance_agent.chat",
-  "maintenance_agent.config.get",
-  "maintenance_agent.config.set",
-  "maintenance_agent.runs.approve",
-  "maintenance_agent.runs.cancel",
-  "maintenance_agent.runs.create",
-  "maintenance_agent.runs.get",
-  "maintenance_agent.runs.list",
-  "model_routing.health",
   "observability.trace.get",
   "operation_permission.http.passthrough",
   "permissions.updated",
@@ -207,10 +191,8 @@ export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.f
   "review.approve",
   "review.comment",
   "runtime.assembly.build",
-  "runtime.external_gateway",
-  "runtime.external_gateway.validate",
-  "runtime.external_gateway.apply",
-  "runtime.external_gateway.switch_direct",
+  "runtime.gateway_channels",
+  "runtime.gateway_channels.select",
   "runtime.info",
   "runtime.mounts",
   "runtime.mounts.reloaded",
@@ -233,7 +215,6 @@ export const CONSOLE_DOMAIN_OPERATION_SOURCE_EVIDENCE: readonly any[] = Object.f
   "settings.model_library.probe",
   "settings.model_library.save",
   "settings.model_library.update",
-  "settings.model_probe",
   "settings.set",
   "settings.updated",
   "storage.backups.create",
@@ -333,7 +314,7 @@ export const CONSOLE_DOMAIN_OPERATION_EXECUTOR_REGISTRY: readonly any[] = Object
   { featureId: "system-interface", handler: executeSystemInterfaceOperation },
   { featureId: "runtime-path-browse", handler: executeRuntimePathBrowseOperation },
   { featureId: "production-readiness", handler: executeProductionReadinessOperation },
-  { featureId: "settings-agent-gateway", handler: executeSettingsAgentGatewayOperation },
+  { featureId: "settings", handler: executeSettingsOperation },
   { featureId: "authorization-facade", handler: executeAuthorizationFacadeOperation },
   { featureId: "workspace-audit", handler: executeWorkspaceAuditOperation },
   { featureId: "agent-sync", handler: executeAgentSyncOperation },
@@ -343,7 +324,6 @@ export const CONSOLE_DOMAIN_OPERATION_EXECUTOR_REGISTRY: readonly any[] = Object
   { featureId: "runtime-mount", handler: executeRuntimeMountOperation },
   { featureId: "discovery", handler: executeDiscoveryOperation },
   { featureId: "console-auth", handler: executeConsoleAuthOperation },
-  { featureId: "maintenance-agent", handler: executeMaintenanceAgentOperation },
   { featureId: "context-runtime", handler: executeContextRuntimeOperation },
   { featureId: "agent-workspace-files", handler: executeAgentWorkspaceFileOperation },
   { featureId: "agent-workspace-management", handler: executeAgentWorkspaceManagementOperation },

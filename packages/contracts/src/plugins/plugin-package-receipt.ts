@@ -1,6 +1,6 @@
 import { isPluginPackageState } from "./plugin-package-state.ts";
 
-const REASON_PATTERN: any = /^PLUGIN_PACKAGE_[A-Z0-9_]+$/u;
+const REASON_PATTERN = /^PLUGIN_PACKAGE_[A-Z0-9_]+$/u;
 
 export function createPluginPackageReceipt({
   pluginId,
@@ -11,7 +11,7 @@ export function createPluginPackageReceipt({
   acquisitionIdempotencyKey = null,
   activationIdempotencyKey = null,
   recordedAt = new Date().toISOString()
-}: Record<string, any> = {}) : any {
+}: Record<string, unknown> = {}) {
   if (typeof pluginId !== "string" || pluginId.trim().length === 0) {
     throw new Error("PLUGIN_PACKAGE_FORMAT_REJECTED: receipt pluginId is required");
   }

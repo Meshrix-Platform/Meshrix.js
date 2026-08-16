@@ -2,7 +2,7 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: packages/contracts/src/operations/operation-registry.ts",
   "version": "v1.0.0",
   "generatedAt": "2026-06-30T09:41:12.259Z",
-  "routeCount": 604,
+  "routeCount": 570,
   "routes": [
     {
       "method": "GET",
@@ -2118,134 +2118,6 @@
     },
     {
       "method": "GET",
-      "path": "/api/maintenance-agent/config",
-      "operationId": "maintenance_agent.config.get",
-      "feature": "maintenance_agent",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.config.get",
-      "operationId": "maintenance_agent.config.get",
-      "feature": "maintenance_agent",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/maintenance-agent/config",
-      "operationId": "maintenance_agent.config.set",
-      "feature": "maintenance_agent",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.config.set",
-      "operationId": "maintenance_agent.config.set",
-      "feature": "maintenance_agent",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/maintenance-agent/chat",
-      "operationId": "maintenance_agent.chat",
-      "feature": "maintenance_agent",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.chat",
-      "operationId": "maintenance_agent.chat",
-      "feature": "maintenance_agent",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/maintenance-agent/runs",
-      "operationId": "maintenance_agent.runs.create",
-      "feature": "maintenance_agent",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.runs.create",
-      "operationId": "maintenance_agent.runs.create",
-      "feature": "maintenance_agent",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "GET",
-      "path": "/api/maintenance-agent/runs",
-      "operationId": "maintenance_agent.runs.list",
-      "feature": "maintenance_agent",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.runs.list",
-      "operationId": "maintenance_agent.runs.list",
-      "feature": "maintenance_agent",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "GET",
-      "path": "/api/maintenance-agent/runs/:runId",
-      "operationId": "maintenance_agent.runs.get",
-      "feature": "maintenance_agent",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.runs.get",
-      "operationId": "maintenance_agent.runs.get",
-      "feature": "maintenance_agent",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/maintenance-agent/runs/:runId/approve",
-      "operationId": "maintenance_agent.runs.approve",
-      "feature": "maintenance_agent",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.runs.approve",
-      "operationId": "maintenance_agent.runs.approve",
-      "feature": "maintenance_agent",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/maintenance-agent/runs/:runId/cancel",
-      "operationId": "maintenance_agent.runs.cancel",
-      "feature": "maintenance_agent",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "maintenance_agent.runs.cancel",
-      "operationId": "maintenance_agent.runs.cancel",
-      "feature": "maintenance_agent",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "GET",
       "path": "/api/auth/session",
       "operationId": "auth.session",
       "feature": "auth",
@@ -2693,6 +2565,38 @@
       "public": false
     },
     {
+      "method": "GET",
+      "path": "/api/runtime/gateway-channels",
+      "operationId": "runtime.gateway_channels",
+      "feature": "runtime",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "runtime.gateway_channels",
+      "operationId": "runtime.gateway_channels",
+      "feature": "runtime",
+      "risk": "read_only",
+      "public": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/runtime/gateway-channels/select",
+      "operationId": "runtime.gateway_channels.select",
+      "feature": "runtime",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
+      "method": "RPC",
+      "path": "runtime.gateway_channels.select",
+      "operationId": "runtime.gateway_channels.select",
+      "feature": "runtime",
+      "risk": "safe_write",
+      "public": false
+    },
+    {
       "method": "POST",
       "path": "/api/runtime/path-browse",
       "operationId": "runtime.path_browse",
@@ -2722,70 +2626,6 @@
       "operationId": "runtime.mounts",
       "feature": "runtime",
       "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "GET",
-      "path": "/api/runtime/external-gateway",
-      "operationId": "runtime.external_gateway",
-      "feature": "runtime",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "runtime.external_gateway",
-      "operationId": "runtime.external_gateway",
-      "feature": "runtime",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/runtime/external-gateway/validate",
-      "operationId": "runtime.external_gateway.validate",
-      "feature": "runtime",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "runtime.external_gateway.validate",
-      "operationId": "runtime.external_gateway.validate",
-      "feature": "runtime",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/runtime/external-gateway/apply",
-      "operationId": "runtime.external_gateway.apply",
-      "feature": "runtime",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "runtime.external_gateway.apply",
-      "operationId": "runtime.external_gateway.apply",
-      "feature": "runtime",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/runtime/external-gateway/direct",
-      "operationId": "runtime.external_gateway.switch_direct",
-      "feature": "runtime",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "runtime.external_gateway.switch_direct",
-      "operationId": "runtime.external_gateway.switch_direct",
-      "feature": "runtime",
-      "risk": "repair_write",
       "public": false
     },
     {
@@ -2850,54 +2690,6 @@
       "operationId": "settings.set",
       "feature": "settings",
       "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/settings/model-probe",
-      "operationId": "settings.model_probe",
-      "feature": "settings",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "settings.model_probe",
-      "operationId": "settings.model_probe",
-      "feature": "settings",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/agent-gateway/call",
-      "operationId": "agent_gateway.call",
-      "feature": "agent_gateway",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "agent_gateway.call",
-      "operationId": "agent_gateway.call",
-      "feature": "agent_gateway",
-      "risk": "safe_write",
-      "public": false
-    },
-    {
-      "method": "GET",
-      "path": "/api/model-routing/health",
-      "operationId": "model_routing.health",
-      "feature": "agent_gateway",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "model_routing.health",
-      "operationId": "model_routing.health",
-      "feature": "agent_gateway",
-      "risk": "read_only",
       "public": false
     },
     {
@@ -2994,70 +2786,6 @@
       "operationId": "strategy.tool_policy.preview",
       "feature": "strategy_management",
       "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "GET",
-      "path": "/api/agents",
-      "operationId": "agents.list",
-      "feature": "agent_management",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "agents.list",
-      "operationId": "agents.list",
-      "feature": "agent_management",
-      "risk": "read_only",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/agents",
-      "operationId": "agents.create",
-      "feature": "agent_management",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "agents.create",
-      "operationId": "agents.create",
-      "feature": "agent_management",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "POST",
-      "path": "/api/agents/:agentId",
-      "operationId": "agents.update",
-      "feature": "agent_management",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "agents.update",
-      "operationId": "agents.update",
-      "feature": "agent_management",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/agents/:agentId",
-      "operationId": "agents.delete",
-      "feature": "agent_management",
-      "risk": "repair_write",
-      "public": false
-    },
-    {
-      "method": "RPC",
-      "path": "agents.delete",
-      "operationId": "agents.delete",
-      "feature": "agent_management",
-      "risk": "repair_write",
       "public": false
     },
     {

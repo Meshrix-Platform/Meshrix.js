@@ -1,0 +1,22 @@
+{
+  "name": "@meshrix/agent-self-maintenance",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Separately started, configuration-controlled Meshrix self-maintenance client peer.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "files": [
+    "contracts",
+    "internal",
+    "src",
+    "README.md",
+    "plugin.json"
+  ]
+}

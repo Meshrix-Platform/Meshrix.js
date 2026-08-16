@@ -24,14 +24,11 @@ type ConsoleShellPageRefreshControllerOptions = {
   activeRouteDebugTab: ComputedRef<string>;
   activeRouteView: ComputedRef<string>;
   isAnyBusy: ComputedRef<boolean>;
-  hasFeature: (featureId: string) => boolean;
   msg: ComputedRef<PageRefreshMessages>;
   refreshAuthAdmin: () => MaybePromise<unknown>;
   refreshAuthState: () => MaybePromise<unknown>;
   refreshBackgroundProcesses: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
-  refreshContextCompiler: () => MaybePromise<unknown>;
   refreshDashboardAlertsSnapshot: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
-  refreshMaintenanceAgent: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshMonitorAlerts: (options?: SilentRefreshOptions) => MaybePromise<unknown>;
   refreshOperationPermissionPendingOperations: () => MaybePromise<unknown>;
   refreshState: (options?: RefreshStateOptions) => MaybePromise<unknown>;
@@ -88,19 +85,13 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
       case "jobs":
         await Promise.all([
           options.refreshState({ silent: true, forceDrafts: true }),
-          options.refreshMaintenanceAgent({ silent: true }),
           options.refreshMonitorAlerts({ silent: true }),
         ]);
         return;
       case "logs":
         await Promise.all([
           options.refreshState({ silent: true }),
-          options.hasFeature("maintenance-agent-runbooks")
-            ? options.refreshMaintenanceAgent({ silent: true })
-            : Promise.resolve(),
-          options.hasFeature("agent-gateway") || options.hasFeature("agent-management")
-            ? options.refreshOperationPermission({ silent: true })
-            : Promise.resolve(),
+          options.refreshOperationPermission({ silent: true }),
           options.refreshBackgroundProcesses({ silent: true }),
           options.refreshMonitorAlerts({ silent: true }),
           options.refreshAuthAdmin(),
@@ -134,16 +125,6 @@ export function createConsoleShellPageRefreshController(options: ConsoleShellPag
           options.refreshAuthAdmin(),
           options.refreshOperationPermission(),
         ]);
-        return;
-      case "agentConfig":
-      case "agentAssignment":
-        await options.refreshState({ silent: true, forceDrafts: true });
-        return;
-      case "contextManagement":
-        await options.refreshContextCompiler();
-        return;
-      case "maintenanceAgent":
-        await options.refreshMaintenanceAgent();
         return;
       default:
         await options.refreshState({ silent: true });

@@ -15,7 +15,6 @@ export {
 import {
   ARCHITECTURE_FACT_MANIFEST_VERSION,
   ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS,
-  ARCHITECTURE_MODULE_CATEGORY_BY_LAYER,
   DOCUMENTATION_ASSET_CLASSIFICATIONS,
   SYSTEM_ARCHITECTURE_LAYERS
 } from "./manifest-categories.ts";
@@ -25,8 +24,9 @@ import {
   SERVICE_CAPABILITY_LAYERS,
   SERVICE_CAPABILITY_PROTOCOL_FIELDS
 } from "./manifest-service-capability.ts";
+import type { ArchitectureNodeFactInput } from "./manifest-node-facts-support.ts";
 
-export const MESHRIX_ARCHITECTURE_FACTS: Readonly<Record<string, any>> = Object.freeze({
+export const MESHRIX_ARCHITECTURE_FACTS = Object.freeze({
   schemaVersion: "v0.0.1:schema:definition-1",
   protocolVersion: ARCHITECTURE_FACT_MANIFEST_VERSION,
   authority: "packages/contracts/src/modules/manifest.ts",
@@ -43,19 +43,25 @@ export const MESHRIX_ARCHITECTURE_FACTS: Readonly<Record<string, any>> = Object.
   serviceCapabilityProtocolFields: SERVICE_CAPABILITY_PROTOCOL_FIELDS
 });
 
-export function listDocumentationAssetsByClassification(classification?: any) : any {
-  return DOCUMENTATION_ASSET_CLASSIFICATIONS.filter((asset?: any) : any => asset.classification === classification);
+export function listDocumentationAssetsByClassification(classification?: string) {
+  return DOCUMENTATION_ASSET_CLASSIFICATIONS.filter((asset) => asset.classification === classification);
 }
 
-export function listArchitectureModules() : any {
+export function listArchitectureModules() {
   return SYSTEM_ARCHITECTURE_MODULES;
 }
 
-export function listArchitectureNodeFacts() : any {
+export function listArchitectureNodeFacts() {
   return SYSTEM_ARCHITECTURE_NODE_FACTS;
 }
 
-export function toRuntimeArchitectureComponent(node?: any) : any {
+type ArchitectureNodeFact = ArchitectureNodeFactInput & {
+  layerId: string;
+  moduleCategory: string;
+};
+type ArchitectureModule = typeof SYSTEM_ARCHITECTURE_MODULES[number];
+
+export function toRuntimeArchitectureComponent(node: ArchitectureNodeFact) {
   return Object.freeze({
     componentId: node.moduleId,
     moduleId: node.moduleId,
@@ -71,20 +77,22 @@ export function toRuntimeArchitectureComponent(node?: any) : any {
   });
 }
 
-export function buildArchitectureComponentInventory({ activeFeatureIds = null }: Record<string, any> = {}) : any {
-  const activeFeatures: any = activeFeatureIds === null ? null : new Set<any>(activeFeatureIds || []);
-  const allComponents: any = SYSTEM_ARCHITECTURE_NODE_FACTS
-    .filter((node?: any) : any => !activeFeatures || !node.featureId || activeFeatures.has(node.featureId))
+export function buildArchitectureComponentInventory({
+  activeFeatureIds = null
+}: { activeFeatureIds?: readonly string[] | null } = {}) {
+  const activeFeatures = activeFeatureIds === null ? null : new Set(activeFeatureIds);
+  const allComponents = SYSTEM_ARCHITECTURE_NODE_FACTS
+    .filter((node: ArchitectureNodeFact) => !activeFeatures || !node.featureId || activeFeatures.has(node.featureId))
     .map(toRuntimeArchitectureComponent);
-  const baseComponents: any = allComponents.filter((component?: any) : any => component.moduleCategory === "foundation");
-  const hydratableComponents: any = allComponents.filter((component?: any) : any => component.hydratable);
-  const nonHydratableComponents: any = allComponents.filter((component?: any) : any => !component.hydratable);
-  const hydratableBaseComponents: any = baseComponents.filter((component?: any) : any => component.hydratable);
-  const nonHydratableBaseComponents: any = baseComponents.filter((component?: any) : any => !component.hydratable);
+  const baseComponents = allComponents.filter((component) => component.moduleCategory === "foundation");
+  const hydratableComponents = allComponents.filter((component) => component.hydratable);
+  const nonHydratableComponents = allComponents.filter((component) => !component.hydratable);
+  const hydratableBaseComponents = baseComponents.filter((component) => component.hydratable);
+  const nonHydratableBaseComponents = baseComponents.filter((component) => !component.hydratable);
   return Object.freeze({
     protocolVersion: ARCHITECTURE_FACT_MANIFEST_VERSION,
     source: "packages/contracts/src/modules/manifest.ts",
-    layers: SYSTEM_ARCHITECTURE_LAYERS.map((layer?: any) : any => Object.freeze({
+    layers: SYSTEM_ARCHITECTURE_LAYERS.map((layer) => Object.freeze({
       layerId: layer.layerId,
       moduleCategory: layer.moduleCategory,
       label: layer.label,
@@ -92,7 +100,7 @@ export function buildArchitectureComponentInventory({ activeFeatureIds = null }:
       hydratable: layer.hydratable,
       functionItems: [...(layer.functionItems || [])]
     })),
-    moduleCategoryDefinitions: ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS.map((definition?: any) : any => Object.freeze({
+    moduleCategoryDefinitions: ARCHITECTURE_MODULE_CATEGORY_DEFINITIONS.map((definition) => Object.freeze({
       categoryId: definition.categoryId,
       label: definition.label,
       description: definition.description
@@ -105,29 +113,29 @@ export function buildArchitectureComponentInventory({ activeFeatureIds = null }:
     nonHydratableComponents,
     componentsByCategory: Object.freeze({
       foundation: baseComponents,
-      "core-capability": allComponents.filter((component?: any) : any => component.moduleCategory === "core-capability"),
-      application: allComponents.filter((component?: any) : any => component.moduleCategory === "application"),
-      aspect: allComponents.filter((component?: any) : any => component.moduleCategory === "aspect"),
-      appearance: allComponents.filter((component?: any) : any => component.moduleCategory === "appearance")
+      "core-capability": allComponents.filter((component) => component.moduleCategory === "core-capability"),
+      application: allComponents.filter((component) => component.moduleCategory === "application"),
+      aspect: allComponents.filter((component) => component.moduleCategory === "aspect"),
+      appearance: allComponents.filter((component) => component.moduleCategory === "appearance")
     }),
     allComponents
   });
 }
 
-export function listBaseArchitectureComponents() : any {
+export function listBaseArchitectureComponents() {
   return buildArchitectureComponentInventory().baseComponents;
 }
 
-export function listHydratableArchitectureComponents() : any {
+export function listHydratableArchitectureComponents() {
   return buildArchitectureComponentInventory().hydratableComponents;
 }
 
-export function listNonHydratableArchitectureComponents() : any {
+export function listNonHydratableArchitectureComponents() {
   return buildArchitectureComponentInventory().nonHydratableComponents;
 }
 
-export function listHydrationFacts() : any {
-  return SYSTEM_ARCHITECTURE_NODE_FACTS.map((node?: any) : any => ({
+export function listHydrationFacts() {
+  return SYSTEM_ARCHITECTURE_NODE_FACTS.map((node) => ({
     moduleId: node.moduleId,
     label: node.label,
     layerId: node.layerId,
@@ -138,10 +146,10 @@ export function listHydrationFacts() : any {
   }));
 }
 
-export function getArchitectureModule(moduleId?: any) : any {
-  return SYSTEM_ARCHITECTURE_MODULES.find((module?: any) : any => module.moduleId === moduleId) || null;
+export function getArchitectureModule(moduleId?: string): ArchitectureModule | null {
+  return SYSTEM_ARCHITECTURE_MODULES.find((module) => module.moduleId === moduleId) || null;
 }
 
-export function getArchitectureNodeFact(moduleId?: any) : any {
-  return SYSTEM_ARCHITECTURE_NODE_FACTS.find((node?: any) : any => node.moduleId === moduleId) || null;
+export function getArchitectureNodeFact(moduleId?: string): ArchitectureNodeFact | null {
+  return SYSTEM_ARCHITECTURE_NODE_FACTS.find((node) => node.moduleId === moduleId) || null;
 }

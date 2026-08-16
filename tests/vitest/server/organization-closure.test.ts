@@ -61,7 +61,6 @@ const testsRegistry: any = readJson(TESTS_REGISTRY_PATH);
 
 const REQUIRED_RECOVERED_CAPABILITIES: readonly any[] = Object.freeze([
   "external-plugin-packaging-loading",
-  "agent-gateway-model-routing",
   "core-workspace-assets-governance",
 ]);
 const STRATEGY_VERSION_REGISTRY_IDENTITIES: readonly any[] = Object.freeze([
@@ -188,17 +187,12 @@ const MATRIX_CAPABILITY_FACTS: Readonly<Record<string, any>> = Object.freeze({
     verifier_identities: ["tools/server-scripts/verify-plugin-runtime.ts"],
     acceptance_capabilities: ["plugin-runtime-and-module-system"],
   },
-  "agent-gateway-model-routing": {
-    layer: "agents-and-protocols",
-    code_owner: "packages/agents/src/agent-gateway/gateway-core.ts",
-    document_owner: "docs/functionality/AGENT-GATEWAY.md",
+  "model-gateway-service": {
+    layer: "domain-capabilities",
+    code_owner: "services/model-gateway/src/main.mjs",
     plan_owner: "docs/plans/end-to-end-release",
-    plan_node: "34000000-0000-4000-8000-000000000031",
-    verifier_identities: [
-      "tools/server-scripts/verify-agent-gateway.ts",
-      "tools/server-scripts/verify-model-routing.ts",
-    ],
-    acceptance_capabilities: ["agent-gateway-model-routing"],
+    plan_node: "71fe435e-88ad-4426-ac45-db709bbc9707",
+    acceptance_capabilities: ["model-gateway-service"],
   },
   "core-workspace-assets-governance": {
     layer: "domain-capabilities",
@@ -254,10 +248,6 @@ const CAPABILITY_REGISTRY_CONTRACTS: Readonly<Record<string, any>> = Object.free
     operation_ids: [], acceptance_ids: ["plugin-runtime-and-module-system"],
     test_suite_ids: [],
     version_artifact_ids: ["meshrix.state-machine.capability-acceptance-plugin-runtime-and-module-system"],
-  },
-  "agent-gateway-model-routing": {
-    operation_ids: ["agent_gateway.call"], acceptance_ids: ["agent-gateway-model-routing"],
-    test_suite_ids: ["agent-gateway.runtime", "model-routing.runtime"], version_artifact_ids: ["meshrix.strategy.model-routing"],
   },
   "core-workspace-assets-governance": {
     operation_ids: ["workspace.file.list"], acceptance_ids: ["core-workspace-assets-governance"],
@@ -380,7 +370,7 @@ function sourceFact(capability?: any, owners?: any, matrix: any = null) : any {
   const acceptanceCapabilities: any = owners.acceptance_capabilities ?? [owners.acceptance_capability];
   const requiredRegistryIdentitySet: any = CAPABILITY_REGISTRY_CONTRACTS[capability]
     ? requiredRegistryIdentities(capability)
-    : [CAPABILITY_MATRIX_PATH];
+    : [matrix ? matrixRegistryIdentity(capability) : CAPABILITY_MATRIX_PATH];
   for (const owner of [owners.code_owner, ...documentOwners, ...verifierIdentities]) {
     assertRepositoryFact(owner);
   }

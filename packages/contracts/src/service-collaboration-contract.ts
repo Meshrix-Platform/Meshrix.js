@@ -1,18 +1,18 @@
-export const SERVICE_COLLABORATION_SCHEMA_VERSION: any = "v0.0.1:service-collaboration:wire-1";
-export const SERVICE_COLLABORATION_REPORT_SCHEMA_VERSION: any = "v0.0.1:service-collaboration:report-1";
-export const SERVICE_COLLABORATION_PROTOCOL_VERSION: any = "2026-07-28";
-export const SERVICE_COLLABORATION_CORE_STATE_GENERATION: any = "meshrix-core-state-1";
-export const SERVICE_COLLABORATION_PROFILE: any = "service-collaboration";
-export const SERVICE_COLLABORATION_FALLBACK_PATH: any = "ordinary-mcp";
+export const SERVICE_COLLABORATION_SCHEMA_VERSION = "v0.0.1:service-collaboration:wire-1";
+export const SERVICE_COLLABORATION_REPORT_SCHEMA_VERSION = "v0.0.1:service-collaboration:report-1";
+export const SERVICE_COLLABORATION_PROTOCOL_VERSION = "2026-07-28";
+export const SERVICE_COLLABORATION_CORE_STATE_GENERATION = "meshrix-core-state-1";
+export const SERVICE_COLLABORATION_PROFILE = "service-collaboration";
+export const SERVICE_COLLABORATION_FALLBACK_PATH = "ordinary-mcp";
 
-export const SERVICE_COLLABORATION_SUBSCRIBE_METHOD: any = "subscriptions/listen";
-export const SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD: any = "notifications/resources/updated";
-export const SERVICE_COLLABORATION_FALLBACK_METHODS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_SUBSCRIBE_METHOD = "subscriptions/listen";
+export const SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD = "notifications/resources/updated";
+export const SERVICE_COLLABORATION_FALLBACK_METHODS = Object.freeze([
   "tools/call",
   "resources/read",
   "resources/list"
 ]);
-export const SERVICE_COLLABORATION_PROFILE_METHODS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_PROFILE_METHODS = Object.freeze([
   "meshrix/collaboration/open",
   "meshrix/collaboration/observe",
   "meshrix/collaboration/commit",
@@ -24,11 +24,11 @@ export const SERVICE_COLLABORATION_PROFILE_METHODS: readonly any[] = Object.free
   SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD
 ]);
 
-export const SERVICE_COLLABORATION_FAMILIES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_FAMILIES = Object.freeze([
   "document-state",
   "effect-command"
 ]);
-export const SERVICE_COLLABORATION_VERBS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_VERBS = Object.freeze([
   "open",
   "observe",
   "edit",
@@ -38,7 +38,7 @@ export const SERVICE_COLLABORATION_VERBS: readonly any[] = Object.freeze([
   "rebase",
   "resync"
 ]);
-export const SERVICE_COLLABORATION_KINDS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_KINDS = Object.freeze([
   "open-request",
   "open-response",
   "observe-request",
@@ -55,11 +55,11 @@ export const SERVICE_COLLABORATION_KINDS: readonly any[] = Object.freeze([
   "effect-command",
   "fallback"
 ]);
-export const SERVICE_COLLABORATION_CACHE_SCOPES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_CACHE_SCOPES = Object.freeze([
   "public",
   "private"
 ]);
-export const SERVICE_COLLABORATION_PRIVATE_KINDS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_PRIVATE_KINDS = Object.freeze([
   "open-response",
   "observe-request",
   "observe-response",
@@ -73,48 +73,48 @@ export const SERVICE_COLLABORATION_PRIVATE_KINDS: readonly any[] = Object.freeze
   "resync-response",
   "effect-command"
 ]);
-export const SERVICE_COLLABORATION_CURSOR_STATES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_CURSOR_STATES = Object.freeze([
   "valid",
   "expired"
 ]);
-export const SERVICE_COLLABORATION_OPERATION_TYPES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_OPERATION_TYPES = Object.freeze([
   "insert",
   "update",
   "delete",
   "move",
   "retain"
 ]);
-export const SERVICE_COLLABORATION_REBASEABLE_OPERATION_TYPES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_REBASEABLE_OPERATION_TYPES = Object.freeze([
   "insert",
   "update",
   "delete",
   "retain"
 ]);
-export const SERVICE_COLLABORATION_UNREBASEABLE_OPERATION_TYPES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_UNREBASEABLE_OPERATION_TYPES = Object.freeze([
   "move"
 ]);
-export const SERVICE_COLLABORATION_VISIBILITY: any = "atomic";
-export const SERVICE_COLLABORATION_DELTA_ORDERING: any = "cursor-indexed-monotonic";
-export const SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_VISIBILITY = "atomic";
+export const SERVICE_COLLABORATION_DELTA_ORDERING = "cursor-indexed-monotonic";
+export const SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY = Object.freeze([
   "idempotent",
   "non_idempotent"
 ]);
-export const SERVICE_COLLABORATION_EFFECT_RESULT_STATES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_EFFECT_RESULT_STATES = Object.freeze([
   "accepted",
   "terminal",
   "uncertain",
   "cancelled"
 ]);
-export const SERVICE_COLLABORATION_CANCELLATION_STATES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_CANCELLATION_STATES = Object.freeze([
   "none",
   "requested",
   "cancelled"
 ]);
-export const SERVICE_COLLABORATION_REBASE_OUTCOMES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_REBASE_OUTCOMES = Object.freeze([
   "rebased",
   "conflict"
 ]);
-export const SERVICE_COLLABORATION_RESYNC_OUTCOMES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_RESYNC_OUTCOMES = Object.freeze([
   "delta",
   "snapshot-tail",
   "overload",
@@ -122,7 +122,7 @@ export const SERVICE_COLLABORATION_RESYNC_OUTCOMES: readonly any[] = Object.free
   "cancelled",
   "backpressure"
 ]);
-export const SERVICE_COLLABORATION_CONFLICT_CODES: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_CONFLICT_CODES = Object.freeze([
   "conflict.concurrent_edit",
   "conflict.stale_baseline",
   "conflict.unrebasable_operation",
@@ -137,7 +137,7 @@ export const SERVICE_COLLABORATION_CONFLICT_CODES: readonly any[] = Object.freez
   "conflict.unknown_required_field",
   "conflict.index_collision"
 ]);
-export const SERVICE_COLLABORATION_LOOKUP_FACTS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_LOOKUP_FACTS = Object.freeze([
   "handle",
   "cursor",
   "cachedBytes",
@@ -145,7 +145,7 @@ export const SERVICE_COLLABORATION_LOOKUP_FACTS: readonly any[] = Object.freeze(
   "earlierDiscovery",
   "priorApproval"
 ]);
-export const SERVICE_COLLABORATION_PRIVACY_FORBIDDEN_KEYS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_PRIVACY_FORBIDDEN_KEYS = Object.freeze([
   "apiKey",
   "authorization",
   "backendRow",
@@ -166,7 +166,7 @@ export const SERVICE_COLLABORATION_PRIVACY_FORBIDDEN_KEYS: readonly any[] = Obje
   "subject",
   "token"
 ]);
-export const SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS: readonly any[] = Object.freeze([
+export const SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS = Object.freeze([
   "automerge",
   "automergeChange",
   "crdt",
@@ -175,11 +175,11 @@ export const SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS: readonly any[] = Object.
   "yjs",
   "yjsUpdate"
 ]);
-export const SERVICE_COLLABORATION_LOCAL_ROLLBACK_REVERSES_EFFECT: any = false;
-export const SERVICE_COLLABORATION_SILENT_UNCERTAIN_RETRY: any = false;
-export const SERVICE_COLLABORATION_SECOND_CORE_GENERATION_ALLOWED: any = false;
+export const SERVICE_COLLABORATION_LOCAL_ROLLBACK_REVERSES_EFFECT = false;
+export const SERVICE_COLLABORATION_SILENT_UNCERTAIN_RETRY = false;
+export const SERVICE_COLLABORATION_SECOND_CORE_GENERATION_ALLOWED: boolean = false;
 
-export const SERVICE_COLLABORATION_LIMITS: any = Object.freeze({
+export const SERVICE_COLLABORATION_LIMITS = Object.freeze({
   maxIdentityBytes: 128,
   maxHandleBytes: 64,
   maxCursorBytes: 128,
@@ -203,51 +203,81 @@ export const SERVICE_COLLABORATION_LIMITS: any = Object.freeze({
   minCursorChars: 8
 });
 
-const FAIL: any = Symbol("service-collaboration-fail");
-const IDENTITY_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,126}$/u;
-const HANDLE_PATTERN: any = /^[A-Za-z0-9_-]+$/u;
-const CURSOR_PATTERN: any = /^[A-Za-z0-9._:-]+$/u;
-const DIGEST_PATTERN: any = /^sha256:[a-f0-9]{64}$/u;
-const RESOURCE_URI_PATTERN: any = /^meshrix:\/\/collaboration\/[A-Za-z0-9._:-]+(?:\/[A-Za-z0-9._:-]+)*$/u;
-const KIND_PARSERS: Record<string, any> = {};
+const FAIL = Symbol("service-collaboration-fail");
+const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,126}$/u;
+const HANDLE_PATTERN = /^[A-Za-z0-9_-]+$/u;
+const CURSOR_PATTERN = /^[A-Za-z0-9._:-]+$/u;
+const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/u;
+const RESOURCE_URI_PATTERN = /^meshrix:\/\/collaboration\/[A-Za-z0-9._:-]+(?:\/[A-Za-z0-9._:-]+)*$/u;
+type UnknownRecord = Record<string, unknown>;
+type FieldParser<T> = (value: unknown, source: UnknownRecord) => T | typeof FAIL;
+type ParserSpec = Record<string, FieldParser<unknown>>;
+type ParsedSpec<T extends ParserSpec> = Readonly<{
+  [K in keyof T]: T[K] extends FieldParser<infer R> ? R : never;
+}>;
+type CollaborationParser = (value?: unknown) => Readonly<UnknownRecord> | null;
+type BaseRemoteSpec = {
+  schemaVersion: FieldParser<string>;
+  protocolVersion: FieldParser<string>;
+  coreStateGeneration: FieldParser<string>;
+  kind: FieldParser<string>;
+  verb: FieldParser<string>;
+  authorizationReResolved: FieldParser<true>;
+};
+type ParsedDelta = Readonly<{
+  head: number;
+  opIndex: number;
+  operation: Readonly<UnknownRecord>;
+}>;
+type ParsedResourceLink = Readonly<{
+  uri: string;
+  head: number;
+  cacheHint: Readonly<UnknownRecord>;
+}>;
+interface ServiceCollaborationPeer {
+  encode(value: unknown): string;
+  decode(value: unknown): Readonly<UnknownRecord> | null;
+}
 
-function isPlainObject(value?: any) : any {
+const KIND_PARSERS: Record<string, CollaborationParser> = {};
+
+function isPlainObject(value?: unknown): value is UnknownRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const prototype: any = Object.getPrototypeOf(value);
+  const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 }
 
-function hasExactKeys(value?: any, expected?: any) : any {
+function hasExactKeys(value: unknown, expected: readonly string[]): value is UnknownRecord {
   if (!isPlainObject(value)) return false;
-  const keys: any = Object.keys(value).sort();
-  return keys.length === expected.length && expected.every((key?: any, index?: any) : any => key === keys[index]);
+  const keys = Object.keys(value).sort();
+  return keys.length === expected.length && expected.every((key, index) => key === keys[index]);
 }
 
-function boundedText(value?: any, maxBytes: any = SERVICE_COLLABORATION_LIMITS.maxIdentityBytes) : any {
+function boundedText(value: unknown, maxBytes: number = SERVICE_COLLABORATION_LIMITS.maxIdentityBytes): string {
   if (typeof value !== "string") return "";
-  const normalized: any = value.trim();
+  const normalized = value.trim();
   return normalized && Buffer.byteLength(normalized, "utf8") <= maxBytes ? normalized : "";
 }
 
-function revision(value?: any) : any {
-  return Number.isSafeInteger(value) && value >= 0 ? value : FAIL;
+function revision(value?: unknown): number | typeof FAIL {
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : FAIL;
 }
 
-function trueFlag(value?: any) : any {
+function trueFlag(value?: unknown): true | typeof FAIL {
   return value === true ? true : FAIL;
 }
 
-function enumValue(value?: any, allowed?: any) : any {
-  return allowed.includes(value) ? value : FAIL;
+function enumValue<T extends string>(value: unknown, allowed: readonly T[]): T | typeof FAIL {
+  return typeof value === "string" && allowed.includes(value as T) ? value as T : FAIL;
 }
 
-function opaqueId(value?: any, maxBytes: any = SERVICE_COLLABORATION_LIMITS.maxIdentityBytes) : any {
-  const normalized: any = boundedText(value, maxBytes);
+function opaqueId(value: unknown, maxBytes: number = SERVICE_COLLABORATION_LIMITS.maxIdentityBytes): string | typeof FAIL {
+  const normalized = boundedText(value, maxBytes);
   return normalized && IDENTITY_PATTERN.test(normalized) ? normalized : FAIL;
 }
 
-function handleToken(value?: any) : any {
-  const normalized: any = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxHandleBytes);
+function handleToken(value?: unknown): string | typeof FAIL {
+  const normalized = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxHandleBytes);
   return normalized
     && normalized.length >= SERVICE_COLLABORATION_LIMITS.minHandleChars
     && HANDLE_PATTERN.test(normalized)
@@ -255,8 +285,8 @@ function handleToken(value?: any) : any {
     : FAIL;
 }
 
-function cursorToken(value?: any) : any {
-  const normalized: any = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxCursorBytes);
+function cursorToken(value?: unknown): string | typeof FAIL {
+  const normalized = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxCursorBytes);
   return normalized
     && normalized.length >= SERVICE_COLLABORATION_LIMITS.minCursorChars
     && CURSOR_PATTERN.test(normalized)
@@ -264,69 +294,99 @@ function cursorToken(value?: any) : any {
     : FAIL;
 }
 
-function resourceUri(value?: any) : any {
-  const normalized: any = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxUriBytes);
+function resourceUri(value?: unknown): string | typeof FAIL {
+  const normalized = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxUriBytes);
   return normalized && RESOURCE_URI_PATTERN.test(normalized) ? normalized : FAIL;
 }
 
-function digest(value?: any) : any {
-  const normalized: any = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxDigestBytes);
+function digest(value?: unknown): string | typeof FAIL {
+  const normalized = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxDigestBytes);
   return normalized && DIGEST_PATTERN.test(normalized) ? normalized : FAIL;
 }
 
-function codeToken(value?: any) : any {
-  const normalized: any = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxCodeBytes);
+function codeToken(value?: unknown): string | typeof FAIL {
+  const normalized = boundedText(value, SERVICE_COLLABORATION_LIMITS.maxCodeBytes);
   return normalized && IDENTITY_PATTERN.test(normalized) ? normalized : FAIL;
 }
 
-function uniqueIds(value?: any, max: any = SERVICE_COLLABORATION_LIMITS.maxEntitiesPerWorkingSet) : any {
+function uniqueIds(
+  value?: unknown,
+  max: number = SERVICE_COLLABORATION_LIMITS.maxEntitiesPerWorkingSet
+): readonly string[] | typeof FAIL {
   if (!Array.isArray(value) || value.length === 0 || value.length > max) return FAIL;
-  const ids: any = value.map((entry?: any) : any => opaqueId(entry));
-  if (ids.includes(FAIL) || new Set<any>(ids).size !== ids.length) return FAIL;
+  const ids: string[] = [];
+  for (const entry of value) {
+    const id = opaqueId(entry);
+    if (id === FAIL) return FAIL;
+    ids.push(id);
+  }
+  if (new Set(ids).size !== ids.length) return FAIL;
   return Object.freeze(ids);
 }
 
-function optionalUniqueIds(value?: any, max: any = SERVICE_COLLABORATION_LIMITS.maxEntitiesPerWorkingSet) : any {
+function optionalUniqueIds(
+  value?: unknown,
+  max: number = SERVICE_COLLABORATION_LIMITS.maxEntitiesPerWorkingSet
+): readonly string[] | typeof FAIL {
   if (!Array.isArray(value) || value.length > max) return FAIL;
-  const ids: any = value.map((entry?: any) : any => opaqueId(entry));
-  if (ids.includes(FAIL) || new Set<any>(ids).size !== ids.length) return FAIL;
+  const ids: string[] = [];
+  for (const entry of value) {
+    const id = opaqueId(entry);
+    if (id === FAIL) return FAIL;
+    ids.push(id);
+  }
+  if (new Set(ids).size !== ids.length) return FAIL;
   return Object.freeze(ids);
 }
 
-function uniqueIndexes(value?: any) : any {
+function uniqueIndexes(value?: unknown): readonly number[] | typeof FAIL {
   if (!Array.isArray(value) || value.length > SERVICE_COLLABORATION_LIMITS.maxRelevantIndexes) return FAIL;
-  const indexes: any = value.map((entry?: any) : any => revision(entry));
-  if (indexes.includes(FAIL) || new Set<any>(indexes).size !== indexes.length) return FAIL;
-  const sorted: any = [...indexes].sort((left?: any, right?: any) : any => left - right);
-  return indexes.every((entry?: any, index?: any) : any => entry === sorted[index]) ? Object.freeze(indexes) : FAIL;
+  const indexes: number[] = [];
+  for (const entry of value) {
+    const index = revision(entry);
+    if (index === FAIL) return FAIL;
+    indexes.push(index);
+  }
+  if (new Set(indexes).size !== indexes.length) return FAIL;
+  const sorted = [...indexes].sort((left, right) => left - right);
+  return indexes.every((entry, index) => entry === sorted[index]) ? Object.freeze(indexes) : FAIL;
 }
 
-function parseObject(value?: any, spec?: any) : any {
-  const keys: any = Object.keys(spec).sort();
+function parseObject<T extends ParserSpec>(value: unknown, spec: T): ParsedSpec<T> | null {
+  const keys = Object.keys(spec).sort();
   if (!hasExactKeys(value, keys) || containsForbiddenKeys(value)) return null;
-  const output: Record<string, any> = {};
+  const output: Record<string, unknown> = {};
   for (const key of Object.keys(spec)) {
-    const parsed: any = spec[key](value[key], value);
+    const parsed = spec[key](value[key], value);
     if (parsed === FAIL) return null;
     output[key] = parsed;
   }
-  return Object.freeze(output);
+  return Object.freeze(output) as ParsedSpec<T>;
 }
 
-function parseArray(value?: any, parseItem?: any, max?: any, allowEmpty: any = true) : any {
+function parseArray<T>(
+  value: unknown,
+  parseItem: (value: unknown) => T | typeof FAIL | null,
+  max: number,
+  allowEmpty: boolean = true
+): readonly T[] | typeof FAIL {
   if (!Array.isArray(value) || value.length > max || (!allowEmpty && value.length === 0)) return FAIL;
-  const items: any = value.map((entry?: any) : any => parseItem(entry));
-  if (items.some((entry?: any) : any => entry === FAIL || entry == null)) return FAIL;
+  const items: T[] = [];
+  for (const entry of value) {
+    const item = parseItem(entry);
+    if (item === FAIL || item == null) return FAIL;
+    items.push(item);
+  }
   return Object.freeze(items);
 }
 
-function created(parseFn?: any, value?: any, message?: any) : any {
-  const parsed: any = parseFn(value);
+function created<T>(parseFn: (value: unknown) => T | null, value: unknown, message: string): T {
+  const parsed = parseFn(value);
   if (!parsed) throw new TypeError(message);
   return parsed;
 }
 
-function envelope(kind?: any, extras: Record<string, any> = {}) : any {
+function envelope(kind: string, extras: Record<string, unknown> = {}): UnknownRecord {
   return {
     schemaVersion: SERVICE_COLLABORATION_SCHEMA_VERSION,
     protocolVersion: SERVICE_COLLABORATION_PROTOCOL_VERSION,
@@ -336,136 +396,137 @@ function envelope(kind?: any, extras: Record<string, any> = {}) : any {
   };
 }
 
-export function containsForbiddenKeys(value?: any, seen: any = new WeakSet<object>()) : any {
+export function containsForbiddenKeys(value?: unknown, seen: WeakSet<object> = new WeakSet<object>()): boolean {
   if (!value || typeof value !== "object") return false;
   if (seen.has(value)) return false;
   seen.add(value);
-  const keys: any = Object.keys(value);
-  if (keys.some((key?: any) : any => (
+  const keys = Object.keys(value);
+  if (keys.some((key) => (
     SERVICE_COLLABORATION_PRIVACY_FORBIDDEN_KEYS.includes(key)
     || SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS.includes(key)
   ))) return true;
-  return Object.values(value).some((entry?: any) : any => containsForbiddenKeys(entry, seen));
+  return Object.values(value).some((entry) => containsForbiddenKeys(entry, seen));
 }
 
-export function requiredCacheScopeFor(kind?: any) : any {
-  return SERVICE_COLLABORATION_PRIVATE_KINDS.includes(kind) ? "private" : "public";
+export function requiredCacheScopeFor(kind?: unknown): "public" | "private" {
+  return typeof kind === "string" && SERVICE_COLLABORATION_PRIVATE_KINDS.includes(kind) ? "private" : "public";
 }
 
-export function parseCacheHint(value?: any, kind: any = "") : any {
-  const parsed: any = parseObject(value, {
-    ttlMs: (entry?: any) : any => Number.isSafeInteger(entry) && entry >= 0 ? entry : FAIL,
-    cacheScope: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_CACHE_SCOPES)
+export function parseCacheHint(value?: unknown, kind: unknown = "") {
+  const parsed = parseObject(value, {
+    ttlMs: (entry) => typeof entry === "number" && Number.isSafeInteger(entry) && entry >= 0 ? entry : FAIL,
+    cacheScope: (entry) => enumValue(entry, SERVICE_COLLABORATION_CACHE_SCOPES)
   });
   if (!parsed) return null;
   if (kind && requiredCacheScopeFor(kind) === "private" && parsed.cacheScope !== "private") return null;
   return parsed;
 }
 
-export function parseCursor(value?: any) : any {
+export function parseCursor(value?: unknown) {
   return parseObject(value, {
-    cursor: (entry?: any) : any => cursorToken(entry),
+    cursor: (entry) => cursorToken(entry),
     indexedHead: revision,
-    cursorState: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_CURSOR_STATES)
+    cursorState: (entry) => enumValue(entry, SERVICE_COLLABORATION_CURSOR_STATES)
   });
 }
 
-export function parseHandle(value?: any) : any {
+export function parseHandle(value?: unknown) {
   return parseObject(value, {
-    handle: (entry?: any) : any => handleToken(entry),
-    entityId: (entry?: any) : any => opaqueId(entry)
+    handle: (entry) => handleToken(entry),
+    entityId: (entry) => opaqueId(entry)
   });
 }
 
-export function parseResourceLink(value?: any, kind: any = "observe-response") : any {
+export function parseResourceLink(value?: unknown, kind: unknown = "observe-response") {
   return parseObject(value, {
-    uri: (entry?: any) : any => resourceUri(entry),
+    uri: (entry) => resourceUri(entry),
     head: revision,
-    cacheHint: (entry?: any) : any => parseCacheHint(entry, kind) || FAIL
+    cacheHint: (entry) => parseCacheHint(entry, kind) || FAIL
   });
 }
 
-export function parseOperation(value?: any) : any {
+export function parseOperation(value?: unknown) {
   return parseObject(value, {
-    opId: (entry?: any) : any => opaqueId(entry),
-    type: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_OPERATION_TYPES),
-    entityId: (entry?: any) : any => opaqueId(entry),
+    opId: (entry) => opaqueId(entry),
+    type: (entry) => enumValue(entry, SERVICE_COLLABORATION_OPERATION_TYPES),
+    entityId: (entry) => opaqueId(entry),
     index: revision,
     relevantIndexes: uniqueIndexes,
     payloadDigest: digest
   });
 }
 
-export function parseChangeSet(value?: any) : any {
-  const parsed: any = parseObject(value, {
-    changeId: (entry?: any) : any => opaqueId(entry),
+export function parseChangeSet(value?: unknown) {
+  const parsed = parseObject(value, {
+    changeId: (entry) => opaqueId(entry),
     baselineHead: revision,
-    operations: (entry?: any) : any => {
-      const operations: any = parseArray(entry, parseOperation, SERVICE_COLLABORATION_LIMITS.maxOperationsPerChangeSet, false);
+    operations: (entry) => {
+      const operations = parseArray(entry, parseOperation, SERVICE_COLLABORATION_LIMITS.maxOperationsPerChangeSet, false);
       if (operations === FAIL) return FAIL;
-      const opIds: any = operations.map((item?: any) : any => item.opId);
-      return new Set<any>(opIds).size === opIds.length ? operations : FAIL;
+      const opIds = operations.map((item) => item.opId);
+      return new Set(opIds).size === opIds.length ? operations : FAIL;
     },
-    attributionRef: (entry?: any) : any => opaqueId(entry),
-    family: (entry?: any) : any => entry === "document-state" ? entry : FAIL,
-    visibility: (entry?: any) : any => entry === SERVICE_COLLABORATION_VISIBILITY ? entry : FAIL
+    attributionRef: (entry) => opaqueId(entry),
+    family: (entry) => entry === "document-state" ? entry : FAIL,
+    visibility: (entry) => entry === SERVICE_COLLABORATION_VISIBILITY ? entry : FAIL
   });
   if (!parsed) return null;
   if (Buffer.byteLength(JSON.stringify(parsed), "utf8") > SERVICE_COLLABORATION_LIMITS.maxChangeSetBytes) return null;
   return parsed;
 }
 
-export function parseResultFact(value?: any) : any {
+export function parseResultFact(value?: unknown) {
   return parseObject(value, {
-    code: (entry?: any) : any => codeToken(entry),
-    entityId: (entry?: any) : any => opaqueId(entry)
+    code: (entry) => codeToken(entry),
+    entityId: (entry) => opaqueId(entry)
   });
 }
 
-export function parseConflictFact(value?: any) : any {
+export function parseConflictFact(value?: unknown) {
   return parseObject(value, {
-    code: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_CONFLICT_CODES),
-    entityId: (entry?: any) : any => opaqueId(entry),
+    code: (entry) => enumValue(entry, SERVICE_COLLABORATION_CONFLICT_CODES),
+    entityId: (entry) => opaqueId(entry),
     head: revision
   });
 }
 
-export function parseInvalidationFact(value?: any) : any {
+export function parseInvalidationFact(value?: unknown) {
   return parseObject(value, {
-    code: (entry?: any) : any => codeToken(entry),
-    resourceUri: (entry?: any) : any => resourceUri(entry)
+    code: (entry) => codeToken(entry),
+    resourceUri: (entry) => resourceUri(entry)
   });
 }
 
-export function parseHistoryEntry(value?: any) : any {
+export function parseHistoryEntry(value?: unknown) {
   return parseObject(value, {
     head: revision,
-    changeId: (entry?: any) : any => opaqueId(entry),
-    entityIds: (entry?: any) : any => uniqueIds(entry)
+    changeId: (entry) => opaqueId(entry),
+    entityIds: (entry) => uniqueIds(entry)
   });
 }
 
-export function parseAcknowledgementFact(value?: any) : any {
+export function parseAcknowledgementFact(value?: unknown) {
   return parseObject(value, {
     head: revision,
-    changeId: (entry?: any) : any => opaqueId(entry)
+    changeId: (entry) => opaqueId(entry)
   });
 }
 
-export function parseSnapshot(value?: any) : any {
-  const parsed: any = parseObject(value, {
-    snapshotId: (entry?: any) : any => opaqueId(entry),
+export function parseSnapshot(value?: unknown) {
+  const parsed = parseObject(value, {
+    snapshotId: (entry) => opaqueId(entry),
     head: revision,
-    entityIds: (entry?: any) : any => uniqueIds(entry),
-    resourceUris: (entry?: any) : any => {
+    entityIds: (entry) => uniqueIds(entry),
+    resourceUris: (entry) => {
       if (!Array.isArray(entry) || entry.length === 0 || entry.length > SERVICE_COLLABORATION_LIMITS.maxResourceLinks) {
         return FAIL;
       }
-      const uris: any = entry.map((item?: any) : any => resourceUri(item));
-      return uris.includes(FAIL) || new Set<any>(uris).size !== uris.length ? FAIL : Object.freeze(uris);
+      const uris = entry.map((item) => resourceUri(item));
+      return uris.includes(FAIL) || new Set(uris).size !== uris.length ? FAIL : Object.freeze(uris);
     },
-    byteLength: (entry?: any) : any => (
-      Number.isSafeInteger(entry) && entry >= 0 && entry <= SERVICE_COLLABORATION_LIMITS.maxSnapshotBytes
+    byteLength: (entry) => (
+      typeof entry === "number" && Number.isSafeInteger(entry)
+        && entry >= 0 && entry <= SERVICE_COLLABORATION_LIMITS.maxSnapshotBytes
         ? entry
         : FAIL
     )
@@ -473,33 +534,37 @@ export function parseSnapshot(value?: any) : any {
   return parsed;
 }
 
-export function parseDelta(value?: any) : any {
+export function parseDelta(value?: unknown) {
   return parseObject(value, {
     head: revision,
     opIndex: revision,
-    operation: (entry?: any) : any => parseOperation(entry) || FAIL
+    operation: (entry) => parseOperation(entry) || FAIL
   });
 }
 
-export function orderDeltas(value?: any) : any {
+export function orderDeltas(value?: unknown) {
   if (!Array.isArray(value) || value.length > SERVICE_COLLABORATION_LIMITS.maxDeltaPage) return null;
-  const deltas: any = value.map((entry?: any) : any => parseDelta(entry));
-  if (deltas.includes(null)) return null;
+  const deltas: ParsedDelta[] = [];
+  for (const entry of value) {
+    const delta = parseDelta(entry);
+    if (!delta) return null;
+    deltas.push(delta);
+  }
   for (let index = 1; index < deltas.length; index += 1) {
-    const previous: any = deltas[index - 1];
-    const current: any = deltas[index];
+    const previous = deltas[index - 1];
+    const current = deltas[index];
     if (current.head < previous.head) return null;
     if (current.head === previous.head && current.opIndex <= previous.opIndex) return null;
   }
   return Object.freeze(deltas);
 }
 
-function parseHandles(value?: any, entityIds?: any) : any {
+function parseHandles(value: unknown, entityIds: readonly string[]) {
   if (!Array.isArray(value) || value.length !== entityIds.length) return FAIL;
-  const handles: any[] = [];
-  const tokens: any = new Set<any>();
+  const handles = [];
+  const tokens = new Set();
   for (let index = 0; index < value.length; index += 1) {
-    const parsed: any = parseHandle(value[index]);
+    const parsed = parseHandle(value[index]);
     if (!parsed || tokens.has(parsed.handle) || parsed.entityId !== entityIds[index]) return FAIL;
     tokens.add(parsed.handle);
     handles.push(parsed);
@@ -507,114 +572,118 @@ function parseHandles(value?: any, entityIds?: any) : any {
   return Object.freeze(handles);
 }
 
-function parseResourceLinks(value?: any, kind?: any) : any {
+function parseResourceLinks(value: unknown, kind: string) {
   if (!Array.isArray(value) || value.length === 0 || value.length > SERVICE_COLLABORATION_LIMITS.maxResourceLinks) {
     return FAIL;
   }
-  const links: any = value.map((entry?: any) : any => parseResourceLink(entry, kind));
-  if (links.includes(null)) return FAIL;
-  const uris: any = links.map((entry?: any) : any => entry.uri);
-  return new Set<any>(uris).size === uris.length ? Object.freeze(links) : FAIL;
+  const links: ParsedResourceLink[] = [];
+  for (const entry of value) {
+    const link = parseResourceLink(entry, kind);
+    if (!link) return FAIL;
+    links.push(link);
+  }
+  const uris = links.map((entry) => entry.uri);
+  return new Set(uris).size === uris.length ? Object.freeze(links) : FAIL;
 }
 
-function commonRemote(kind?: any, verb?: any, extra: Record<string, any> = {}) : any {
-  return {
-    schemaVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
-    protocolVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
-    coreStateGeneration: (entry?: any) : any => (
+function commonRemote<T extends ParserSpec>(kind: string, verb: string, extra: T): BaseRemoteSpec & T {
+  const base: BaseRemoteSpec = {
+    schemaVersion: (entry) => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
+    protocolVersion: (entry) => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
+    coreStateGeneration: (entry) => (
       entry === SERVICE_COLLABORATION_CORE_STATE_GENERATION ? entry : FAIL
     ),
-    kind: (entry?: any) : any => entry === kind ? entry : FAIL,
-    verb: (entry?: any) : any => entry === verb ? entry : FAIL,
-    authorizationReResolved: trueFlag,
-    ...extra
+    kind: (entry) => entry === kind ? entry : FAIL,
+    verb: (entry) => entry === verb ? entry : FAIL,
+    authorizationReResolved: trueFlag
   };
+  return { ...base, ...extra };
 }
 
-export function parseOpenRequest(value?: any) : any {
+export function parseOpenRequest(value?: unknown) {
   return parseObject(value, commonRemote("open-request", "open", {
-    workingSetRef: (entry?: any) : any => opaqueId(entry),
-    resourceRefs: (entry?: any) : any => uniqueIds(entry, SERVICE_COLLABORATION_LIMITS.maxResourceLinks),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    workingSetRef: (entry) => opaqueId(entry),
+    resourceRefs: (entry) => uniqueIds(entry, SERVICE_COLLABORATION_LIMITS.maxResourceLinks),
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
 }
 
-export function parseOpenResponse(value?: any) : any {
+export function parseOpenResponse(value?: unknown) {
   return parseObject(value, commonRemote("open-response", "open", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    entityIds: uniqueIds,
-    handles: (entry?: any, record?: any) : any => {
-      const entityIds: any = uniqueIds(record.entityIds);
+    workingSetId: (entry) => opaqueId(entry),
+    entityIds: (entry) => uniqueIds(entry),
+    handles: (entry, record) => {
+      const entityIds = uniqueIds(record.entityIds);
       return entityIds === FAIL ? FAIL : parseHandles(entry, entityIds);
     },
     head: revision,
-    resourceLinks: (entry?: any) : any => parseResourceLinks(entry, "open-response"),
-    cacheHint: (entry?: any) : any => parseCacheHint(entry, "open-response") || FAIL,
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    resourceLinks: (entry) => parseResourceLinks(entry, "open-response"),
+    cacheHint: (entry) => parseCacheHint(entry, "open-response") || FAIL,
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
 }
 
-export function parseObserveRequest(value?: any) : any {
+export function parseObserveRequest(value?: unknown) {
   return parseObject(value, commonRemote("observe-request", "observe", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    handle: (entry?: any) : any => handleToken(entry),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    workingSetId: (entry) => opaqueId(entry),
+    handle: (entry) => handleToken(entry),
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
 }
 
-export function parseObserveResponse(value?: any) : any {
+export function parseObserveResponse(value?: unknown) {
   return parseObject(value, commonRemote("observe-response", "observe", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
+    workingSetId: (entry) => opaqueId(entry),
     head: revision,
-    resourceLinks: (entry?: any) : any => parseResourceLinks(entry, "observe-response"),
-    catalogRevision: (entry?: any) : any => opaqueId(entry),
-    schemaRevision: (entry?: any) : any => opaqueId(entry),
-    acknowledgements: (entry?: any) : any => parseArray(
+    resourceLinks: (entry) => parseResourceLinks(entry, "observe-response"),
+    catalogRevision: (entry) => opaqueId(entry),
+    schemaRevision: (entry) => opaqueId(entry),
+    acknowledgements: (entry) => parseArray(
       entry,
       parseAcknowledgementFact,
       SERVICE_COLLABORATION_LIMITS.maxHistoryEntries
     ),
-    history: (entry?: any) : any => parseArray(entry, parseHistoryEntry, SERVICE_COLLABORATION_LIMITS.maxHistoryEntries),
-    cacheHit: (entry?: any) : any => typeof entry === "boolean" ? entry : FAIL,
-    cacheHint: (entry?: any) : any => parseCacheHint(entry, "observe-response") || FAIL
+    history: (entry) => parseArray(entry, parseHistoryEntry, SERVICE_COLLABORATION_LIMITS.maxHistoryEntries),
+    cacheHit: (entry) => typeof entry === "boolean" ? entry : FAIL,
+    cacheHint: (entry) => parseCacheHint(entry, "observe-response") || FAIL
   }));
 }
 
-export function parseEditView(value?: any) : any {
+export function parseEditView(value?: unknown) {
   return parseObject(value, {
-    schemaVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
-    coreStateGeneration: (entry?: any) : any => (
+    schemaVersion: (entry) => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
+    coreStateGeneration: (entry) => (
       entry === SERVICE_COLLABORATION_CORE_STATE_GENERATION ? entry : FAIL
     ),
-    kind: (entry?: any) : any => entry === "edit-view" ? entry : FAIL,
-    verb: (entry?: any) : any => entry === "edit" ? entry : FAIL,
-    workingSetId: (entry?: any) : any => opaqueId(entry),
+    kind: (entry) => entry === "edit-view" ? entry : FAIL,
+    verb: (entry) => entry === "edit" ? entry : FAIL,
+    workingSetId: (entry) => opaqueId(entry),
     head: revision,
-    dirtyEntityIds: optionalUniqueIds,
+    dirtyEntityIds: (entry) => optionalUniqueIds(entry),
     omittedUnchanged: trueFlag
   });
 }
 
-export function parseCommitRequest(value?: any) : any {
+export function parseCommitRequest(value?: unknown) {
   return parseObject(value, commonRemote("commit-request", "commit", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    handle: (entry?: any) : any => handleToken(entry),
-    dirty: (entry?: any) : any => typeof entry === "boolean" ? entry : FAIL,
-    changeSet: (entry?: any, record?: any) : any => {
+    workingSetId: (entry) => opaqueId(entry),
+    handle: (entry) => handleToken(entry),
+    dirty: (entry) => typeof entry === "boolean" ? entry : FAIL,
+    changeSet: (entry, record) => {
       if (record.dirty === true) return parseChangeSet(entry) || FAIL;
       return entry === null ? null : FAIL;
     }
   }));
 }
 
-export function parseAcknowledge(value?: any) : any {
+export function parseAcknowledge(value?: unknown) {
   return parseObject(value, commonRemote("acknowledge", "acknowledge", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
+    workingSetId: (entry) => opaqueId(entry),
     assignedHead: revision,
-    changedEntityIds: optionalUniqueIds,
-    resultFacts: (entry?: any) : any => parseArray(entry, parseResultFact, SERVICE_COLLABORATION_LIMITS.maxResultFacts),
-    conflicts: (entry?: any) : any => parseArray(entry, parseConflictFact, SERVICE_COLLABORATION_LIMITS.maxConflicts),
-    invalidations: (entry?: any) : any => parseArray(
+    changedEntityIds: (entry) => optionalUniqueIds(entry),
+    resultFacts: (entry) => parseArray(entry, parseResultFact, SERVICE_COLLABORATION_LIMITS.maxResultFacts),
+    conflicts: (entry) => parseArray(entry, parseConflictFact, SERVICE_COLLABORATION_LIMITS.maxConflicts),
+    invalidations: (entry) => parseArray(
       entry,
       parseInvalidationFact,
       SERVICE_COLLABORATION_LIMITS.maxInvalidations
@@ -622,93 +691,93 @@ export function parseAcknowledge(value?: any) : any {
   }));
 }
 
-export function parseSubscribeRequest(value?: any) : any {
+export function parseSubscribeRequest(value?: unknown) {
   return parseObject(value, commonRemote("subscribe-request", "subscribe", {
-    method: (entry?: any) : any => entry === SERVICE_COLLABORATION_SUBSCRIBE_METHOD ? entry : FAIL,
-    notifications: (entry?: any) : any => {
+    method: (entry) => entry === SERVICE_COLLABORATION_SUBSCRIBE_METHOD ? entry : FAIL,
+    notifications: (entry) => {
       if (!Array.isArray(entry) || entry.length === 0 || entry.length > SERVICE_COLLABORATION_LIMITS.maxSubscriptions) {
         return FAIL;
       }
-      if (!entry.every((item?: any) : any => item === SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD)) return FAIL;
+      if (!entry.every((item) => item === SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD)) return FAIL;
       return Object.freeze([...entry]);
     },
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL,
-    cacheHint: (entry?: any) : any => parseCacheHint(entry, "subscribe-request") || FAIL
+    workingSetId: (entry) => opaqueId(entry),
+    cursor: (entry) => parseCursor(entry) || FAIL,
+    cacheHint: (entry) => parseCacheHint(entry, "subscribe-request") || FAIL
   }));
 }
 
-export function parseResourceUpdatedNotification(value?: any) : any {
+export function parseResourceUpdatedNotification(value?: unknown) {
   return parseObject(value, {
-    schemaVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
-    protocolVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
-    coreStateGeneration: (entry?: any) : any => (
+    schemaVersion: (entry) => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
+    protocolVersion: (entry) => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
+    coreStateGeneration: (entry) => (
       entry === SERVICE_COLLABORATION_CORE_STATE_GENERATION ? entry : FAIL
     ),
-    kind: (entry?: any) : any => entry === "resource-updated" ? entry : FAIL,
-    method: (entry?: any) : any => entry === SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD ? entry : FAIL,
+    kind: (entry) => entry === "resource-updated" ? entry : FAIL,
+    method: (entry) => entry === SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD ? entry : FAIL,
     authorizationReResolved: trueFlag,
-    resourceUri: (entry?: any) : any => resourceUri(entry),
+    resourceUri: (entry) => resourceUri(entry),
     head: revision,
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL,
-    cacheHint: (entry?: any) : any => parseCacheHint(entry, "resource-updated") || FAIL,
-    invalidationCodes: (entry?: any) : any => {
+    cursor: (entry) => parseCursor(entry) || FAIL,
+    cacheHint: (entry) => parseCacheHint(entry, "resource-updated") || FAIL,
+    invalidationCodes: (entry) => {
       if (!Array.isArray(entry) || entry.length === 0 || entry.length > SERVICE_COLLABORATION_LIMITS.maxInvalidations) {
         return FAIL;
       }
-      const codes: any = entry.map((item?: any) : any => codeToken(item));
-      return codes.includes(FAIL) || new Set<any>(codes).size !== codes.length ? FAIL : Object.freeze(codes);
+      const codes = entry.map((item) => codeToken(item));
+      return codes.includes(FAIL) || new Set(codes).size !== codes.length ? FAIL : Object.freeze(codes);
     }
   });
 }
 
-export function parseRebaseRequest(value?: any) : any {
+export function parseRebaseRequest(value?: unknown) {
   return parseObject(value, commonRemote("rebase-request", "rebase", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    handle: (entry?: any) : any => handleToken(entry),
+    workingSetId: (entry) => opaqueId(entry),
+    handle: (entry) => handleToken(entry),
     baselineHead: revision,
-    operations: (entry?: any) : any => parseArray(
+    operations: (entry) => parseArray(
       entry,
       parseOperation,
       SERVICE_COLLABORATION_LIMITS.maxOperationsPerChangeSet,
       false
     ),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
 }
 
-export function parseRebaseResponse(value?: any) : any {
+export function parseRebaseResponse(value?: unknown) {
   return parseObject(value, commonRemote("rebase-response", "rebase", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
+    workingSetId: (entry) => opaqueId(entry),
     head: revision,
-    outcome: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_REBASE_OUTCOMES),
-    rebasedOperations: (entry?: any) : any => parseArray(
+    outcome: (entry) => enumValue(entry, SERVICE_COLLABORATION_REBASE_OUTCOMES),
+    rebasedOperations: (entry) => parseArray(
       entry,
       parseOperation,
       SERVICE_COLLABORATION_LIMITS.maxOperationsPerChangeSet
     ),
-    conflicts: (entry?: any) : any => parseArray(entry, parseConflictFact, SERVICE_COLLABORATION_LIMITS.maxConflicts),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    conflicts: (entry) => parseArray(entry, parseConflictFact, SERVICE_COLLABORATION_LIMITS.maxConflicts),
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
 }
 
-export function parseResyncRequest(value?: any) : any {
+export function parseResyncRequest(value?: unknown) {
   return parseObject(value, commonRemote("resync-request", "resync", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    handle: (entry?: any) : any => handleToken(entry),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    workingSetId: (entry) => opaqueId(entry),
+    handle: (entry) => handleToken(entry),
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
 }
 
-export function parseResyncResponse(value?: any) : any {
-  const parsed: any = parseObject(value, commonRemote("resync-response", "resync", {
-    workingSetId: (entry?: any) : any => opaqueId(entry),
-    outcome: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_RESYNC_OUTCOMES),
+export function parseResyncResponse(value?: unknown) {
+  const parsed = parseObject(value, commonRemote("resync-response", "resync", {
+    workingSetId: (entry) => opaqueId(entry),
+    outcome: (entry) => enumValue(entry, SERVICE_COLLABORATION_RESYNC_OUTCOMES),
     head: revision,
-    deltas: (entry?: any) : any => orderDeltas(entry) || FAIL,
-    snapshot: (entry?: any) : any => entry === null ? null : (parseSnapshot(entry) || FAIL),
-    tail: (entry?: any) : any => parseArray(entry, parseOperation, SERVICE_COLLABORATION_LIMITS.maxTailOps),
-    cursor: (entry?: any) : any => parseCursor(entry) || FAIL
+    deltas: (entry) => orderDeltas(entry) || FAIL,
+    snapshot: (entry) => entry === null ? null : (parseSnapshot(entry) || FAIL),
+    tail: (entry) => parseArray(entry, parseOperation, SERVICE_COLLABORATION_LIMITS.maxTailOps),
+    cursor: (entry) => parseCursor(entry) || FAIL
   }));
   if (!parsed) return null;
   if (parsed.outcome === "delta" && (parsed.snapshot !== null || parsed.tail.length !== 0)) return null;
@@ -722,44 +791,44 @@ export function parseResyncResponse(value?: any) : any {
   return parsed;
 }
 
-export function parseEffectCommand(value?: any) : any {
+export function parseEffectCommand(value?: unknown) {
   return parseObject(value, {
-    schemaVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
-    protocolVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
-    coreStateGeneration: (entry?: any) : any => (
+    schemaVersion: (entry) => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
+    protocolVersion: (entry) => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
+    coreStateGeneration: (entry) => (
       entry === SERVICE_COLLABORATION_CORE_STATE_GENERATION ? entry : FAIL
     ),
-    kind: (entry?: any) : any => entry === "effect-command" ? entry : FAIL,
-    family: (entry?: any) : any => entry === "effect-command" ? entry : FAIL,
+    kind: (entry) => entry === "effect-command" ? entry : FAIL,
+    family: (entry) => entry === "effect-command" ? entry : FAIL,
     authorizationReResolved: trueFlag,
-    effectId: (entry?: any) : any => opaqueId(entry),
-    idempotency: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY),
-    principalLookup: (entry?: any) : any => opaqueId(entry),
-    grantLookup: (entry?: any) : any => opaqueId(entry),
-    targetRef: (entry?: any) : any => opaqueId(entry),
-    policyRef: (entry?: any) : any => opaqueId(entry),
-    approvalLookup: (entry?: any) : any => opaqueId(entry),
-    audienceRef: (entry?: any) : any => opaqueId(entry),
-    requestRef: (entry?: any) : any => opaqueId(entry),
-    cancellationState: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_CANCELLATION_STATES),
-    resultState: (entry?: any) : any => enumValue(entry, SERVICE_COLLABORATION_EFFECT_RESULT_STATES),
-    auditRef: (entry?: any) : any => opaqueId(entry),
-    compensationRef: (entry?: any) : any => entry === null ? null : opaqueId(entry)
+    effectId: (entry) => opaqueId(entry),
+    idempotency: (entry) => enumValue(entry, SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY),
+    principalLookup: (entry) => opaqueId(entry),
+    grantLookup: (entry) => opaqueId(entry),
+    targetRef: (entry) => opaqueId(entry),
+    policyRef: (entry) => opaqueId(entry),
+    approvalLookup: (entry) => opaqueId(entry),
+    audienceRef: (entry) => opaqueId(entry),
+    requestRef: (entry) => opaqueId(entry),
+    cancellationState: (entry) => enumValue(entry, SERVICE_COLLABORATION_CANCELLATION_STATES),
+    resultState: (entry) => enumValue(entry, SERVICE_COLLABORATION_EFFECT_RESULT_STATES),
+    auditRef: (entry) => opaqueId(entry),
+    compensationRef: (entry) => entry === null ? null : opaqueId(entry)
   });
 }
 
-export function parseFallbackDescriptor(value?: any) : any {
+export function parseFallbackDescriptor(value?: unknown) {
   return parseObject(value, {
-    schemaVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
-    protocolVersion: (entry?: any) : any => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
-    coreStateGeneration: (entry?: any) : any => (
+    schemaVersion: (entry) => entry === SERVICE_COLLABORATION_SCHEMA_VERSION ? entry : FAIL,
+    protocolVersion: (entry) => entry === SERVICE_COLLABORATION_PROTOCOL_VERSION ? entry : FAIL,
+    coreStateGeneration: (entry) => (
       entry === SERVICE_COLLABORATION_CORE_STATE_GENERATION ? entry : FAIL
     ),
-    kind: (entry?: any) : any => entry === "fallback" ? entry : FAIL,
-    protocolPath: (entry?: any) : any => entry === SERVICE_COLLABORATION_FALLBACK_PATH ? entry : FAIL,
-    methods: (entry?: any) : any => {
+    kind: (entry) => entry === "fallback" ? entry : FAIL,
+    protocolPath: (entry) => entry === SERVICE_COLLABORATION_FALLBACK_PATH ? entry : FAIL,
+    methods: (entry) => {
       if (!Array.isArray(entry) || entry.length !== SERVICE_COLLABORATION_FALLBACK_METHODS.length) return FAIL;
-      return entry.every((item?: any, index?: any) : any => item === SERVICE_COLLABORATION_FALLBACK_METHODS[index])
+      return entry.every((item, index) => item === SERVICE_COLLABORATION_FALLBACK_METHODS[index])
         ? Object.freeze([...SERVICE_COLLABORATION_FALLBACK_METHODS])
         : FAIL;
     },
@@ -783,13 +852,13 @@ KIND_PARSERS["resync-response"] = parseResyncResponse;
 KIND_PARSERS["effect-command"] = parseEffectCommand;
 KIND_PARSERS["fallback"] = parseFallbackDescriptor;
 
-export function parseCollaborationMessage(value?: any) : any {
+export function parseCollaborationMessage(value?: unknown) {
   if (!isPlainObject(value) || containsForbiddenKeys(value)) return null;
-  const parser: any = KIND_PARSERS[value.kind];
+  const parser = typeof value.kind === "string" ? KIND_PARSERS[value.kind] : undefined;
   return parser ? parser(value) : null;
 }
 
-export function createOpenRequest(value: Record<string, any> = {}) : any {
+export function createOpenRequest(value: Record<string, unknown> = {}) {
   return created(parseOpenRequest, envelope("open-request", {
     verb: "open",
     authorizationReResolved: true,
@@ -799,7 +868,7 @@ export function createOpenRequest(value: Record<string, any> = {}) : any {
   }), "Service collaboration open request does not satisfy the wire contract.");
 }
 
-export function createOpenResponse(value: Record<string, any> = {}) : any {
+export function createOpenResponse(value: Record<string, unknown> = {}) {
   return created(parseOpenResponse, envelope("open-response", {
     verb: "open",
     authorizationReResolved: true,
@@ -813,7 +882,7 @@ export function createOpenResponse(value: Record<string, any> = {}) : any {
   }), "Service collaboration open response does not satisfy the wire contract.");
 }
 
-export function createObserveRequest(value: Record<string, any> = {}) : any {
+export function createObserveRequest(value: Record<string, unknown> = {}) {
   return created(parseObserveRequest, envelope("observe-request", {
     verb: "observe",
     authorizationReResolved: true,
@@ -823,7 +892,7 @@ export function createObserveRequest(value: Record<string, any> = {}) : any {
   }), "Service collaboration observe request does not satisfy the wire contract.");
 }
 
-export function createObserveResponse(value: Record<string, any> = {}) : any {
+export function createObserveResponse(value: Record<string, unknown> = {}) {
   return created(parseObserveResponse, envelope("observe-response", {
     verb: "observe",
     authorizationReResolved: true,
@@ -839,7 +908,7 @@ export function createObserveResponse(value: Record<string, any> = {}) : any {
   }), "Service collaboration observe response does not satisfy the wire contract.");
 }
 
-export function createEditView(value: Record<string, any> = {}) : any {
+export function createEditView(value: Record<string, unknown> = {}) {
   return created(parseEditView, {
     schemaVersion: SERVICE_COLLABORATION_SCHEMA_VERSION,
     coreStateGeneration: SERVICE_COLLABORATION_CORE_STATE_GENERATION,
@@ -852,7 +921,7 @@ export function createEditView(value: Record<string, any> = {}) : any {
   }, "Service collaboration edit view does not satisfy the wire contract.");
 }
 
-export function createCommitRequest(value: Record<string, any> = {}) : any {
+export function createCommitRequest(value: Record<string, unknown> = {}) {
   return created(parseCommitRequest, envelope("commit-request", {
     verb: "commit",
     authorizationReResolved: true,
@@ -863,7 +932,7 @@ export function createCommitRequest(value: Record<string, any> = {}) : any {
   }), "Service collaboration commit request does not satisfy the wire contract.");
 }
 
-export function createAcknowledge(value: Record<string, any> = {}) : any {
+export function createAcknowledge(value: Record<string, unknown> = {}) {
   return created(parseAcknowledge, envelope("acknowledge", {
     verb: "acknowledge",
     authorizationReResolved: true,
@@ -876,7 +945,7 @@ export function createAcknowledge(value: Record<string, any> = {}) : any {
   }), "Service collaboration acknowledgement does not satisfy the wire contract.");
 }
 
-export function createSubscribeRequest(value: Record<string, any> = {}) : any {
+export function createSubscribeRequest(value: Record<string, unknown> = {}) {
   return created(parseSubscribeRequest, envelope("subscribe-request", {
     verb: "subscribe",
     authorizationReResolved: true,
@@ -888,7 +957,7 @@ export function createSubscribeRequest(value: Record<string, any> = {}) : any {
   }), "Service collaboration subscribe request does not satisfy the wire contract.");
 }
 
-export function createResourceUpdatedNotification(value: Record<string, any> = {}) : any {
+export function createResourceUpdatedNotification(value: Record<string, unknown> = {}) {
   return created(parseResourceUpdatedNotification, envelope("resource-updated", {
     method: SERVICE_COLLABORATION_RESOURCE_UPDATED_METHOD,
     authorizationReResolved: true,
@@ -900,7 +969,7 @@ export function createResourceUpdatedNotification(value: Record<string, any> = {
   }), "Service collaboration resource notification does not satisfy the wire contract.");
 }
 
-export function createRebaseRequest(value: Record<string, any> = {}) : any {
+export function createRebaseRequest(value: Record<string, unknown> = {}) {
   return created(parseRebaseRequest, envelope("rebase-request", {
     verb: "rebase",
     authorizationReResolved: true,
@@ -912,7 +981,7 @@ export function createRebaseRequest(value: Record<string, any> = {}) : any {
   }), "Service collaboration rebase request does not satisfy the wire contract.");
 }
 
-export function createRebaseResponse(value: Record<string, any> = {}) : any {
+export function createRebaseResponse(value: Record<string, unknown> = {}) {
   return created(parseRebaseResponse, envelope("rebase-response", {
     verb: "rebase",
     authorizationReResolved: true,
@@ -925,7 +994,7 @@ export function createRebaseResponse(value: Record<string, any> = {}) : any {
   }), "Service collaboration rebase response does not satisfy the wire contract.");
 }
 
-export function createResyncRequest(value: Record<string, any> = {}) : any {
+export function createResyncRequest(value: Record<string, unknown> = {}) {
   return created(parseResyncRequest, envelope("resync-request", {
     verb: "resync",
     authorizationReResolved: true,
@@ -935,7 +1004,7 @@ export function createResyncRequest(value: Record<string, any> = {}) : any {
   }), "Service collaboration resync request does not satisfy the wire contract.");
 }
 
-export function createResyncResponse(value: Record<string, any> = {}) : any {
+export function createResyncResponse(value: Record<string, unknown> = {}) {
   return created(parseResyncResponse, envelope("resync-response", {
     verb: "resync",
     authorizationReResolved: true,
@@ -949,7 +1018,7 @@ export function createResyncResponse(value: Record<string, any> = {}) : any {
   }), "Service collaboration resync response does not satisfy the wire contract.");
 }
 
-export function createEffectCommand(value: Record<string, any> = {}) : any {
+export function createEffectCommand(value: Record<string, unknown> = {}) {
   return created(parseEffectCommand, envelope("effect-command", {
     family: "effect-command",
     authorizationReResolved: true,
@@ -969,7 +1038,7 @@ export function createEffectCommand(value: Record<string, any> = {}) : any {
   }), "Service collaboration Effect Command does not satisfy the wire contract.");
 }
 
-export function createFallbackDescriptor() : any {
+export function createFallbackDescriptor() {
   return created(parseFallbackDescriptor, envelope("fallback", {
     protocolPath: SERVICE_COLLABORATION_FALLBACK_PATH,
     methods: [...SERVICE_COLLABORATION_FALLBACK_METHODS],
@@ -977,7 +1046,7 @@ export function createFallbackDescriptor() : any {
   }), "Service collaboration fallback descriptor does not satisfy the wire contract.");
 }
 
-export function createChangeSet(value: Record<string, any> = {}) : any {
+export function createChangeSet(value: Record<string, unknown> = {}) {
   return created(parseChangeSet, {
     changeId: value.changeId,
     baselineHead: value.baselineHead,
@@ -988,8 +1057,8 @@ export function createChangeSet(value: Record<string, any> = {}) : any {
   }, "Service collaboration Change Set does not satisfy the wire contract.");
 }
 
-export function assertCommitTurn(value: Record<string, any> = {}) : any {
-  const parsed: any = parseCommitRequest(value) || parseCollaborationMessage(value);
+export function assertCommitTurn(value: Record<string, unknown> = {}) {
+  const parsed = parseCommitRequest(value) || parseCollaborationMessage(value);
   if (!parsed || parsed.kind !== "commit-request") {
     throw new Error("Commit turn must be a versioned commit request.");
   }
@@ -999,24 +1068,26 @@ export function assertCommitTurn(value: Record<string, any> = {}) : any {
   if (parsed.dirty !== true && parsed.changeSet !== null) {
     throw new Error("A clean or read-only turn must emit no Change Set.");
   }
-  if (parsed.changeSet && parsed.changeSet.family !== "document-state") {
+  if (parsed.changeSet && (!isPlainObject(parsed.changeSet) || parsed.changeSet.family !== "document-state")) {
     throw new Error("Change Sets are a separate family from Effect Commands.");
   }
   return true;
 }
 
-export function assertObserveCacheHit(value: Record<string, any> = {}) : any {
-  const parsed: any = parseObserveResponse(value) || parseCollaborationMessage(value);
+export function assertObserveCacheHit(value: Record<string, unknown> = {}) {
+  const parsed = parseObserveResponse(value) || parseCollaborationMessage(value);
   if (!parsed || parsed.kind !== "observe-response") {
     throw new Error("Observe cache contract requires a versioned observe response.");
   }
-  if (parsed.cacheHit === true && parsed.cacheHint.cacheScope !== "private") {
+  if (parsed.cacheHit === true && (
+    !isPlainObject(parsed.cacheHint) || parsed.cacheHint.cacheScope !== "private"
+  )) {
     throw new Error("Valid cache hits are private to the current authorization partition.");
   }
   return parsed.cacheHit === true ? "no-model-visible-remote-read" : "remote-read-allowed";
 }
 
-export function assertOneCoreStateGeneration(value?: any) : any {
+export function assertOneCoreStateGeneration(value?: unknown) {
   if (!isPlainObject(value) || value.coreStateGeneration !== SERVICE_COLLABORATION_CORE_STATE_GENERATION) {
     throw new Error("Service collaboration retains only one Core state generation.");
   }
@@ -1029,8 +1100,8 @@ export function assertOneCoreStateGeneration(value?: any) : any {
   return true;
 }
 
-export function assertProtocolFallback(value?: any) : any {
-  const parsed: any = parseFallbackDescriptor(value) || parseCollaborationMessage(value);
+export function assertProtocolFallback(value?: unknown) {
+  const parsed = parseFallbackDescriptor(value) || parseCollaborationMessage(value);
   if (!parsed || parsed.kind !== "fallback") {
     throw new Error("Protocol fallback must be the ordinary MCP tool and resource path.");
   }
@@ -1040,8 +1111,8 @@ export function assertProtocolFallback(value?: any) : any {
   return true;
 }
 
-export function assertEffectCommandFamily(value?: any) : any {
-  const parsed: any = parseEffectCommand(value) || parseCollaborationMessage(value);
+export function assertEffectCommandFamily(value?: unknown) {
+  const parsed = parseEffectCommand(value) || parseCollaborationMessage(value);
   if (!parsed || parsed.family !== "effect-command") {
     throw new Error("Effect Commands are a separate contract family from document-state Change Sets.");
   }
@@ -1054,28 +1125,28 @@ export function assertEffectCommandFamily(value?: any) : any {
   return true;
 }
 
-export function effectRetryAllowed(value?: any) : any {
-  const parsed: any = parseEffectCommand(value) || parseCollaborationMessage(value);
+export function effectRetryAllowed(value?: unknown) {
+  const parsed = parseEffectCommand(value) || parseCollaborationMessage(value);
   if (!parsed) return false;
   if (parsed.resultState === "uncertain" || parsed.resultState === "cancelled") return false;
   if (parsed.idempotency !== "idempotent") return false;
   return parsed.resultState === "accepted";
 }
 
-export function lookupFactIsAuthority(_factName?: any) : any {
+export function lookupFactIsAuthority(_factName?: unknown) {
   return false;
 }
 
-export function relevantOperations(localOperations: any = [], remoteOperations: any = []) : any {
-  const locals: any = Array.isArray(localOperations) ? localOperations : [];
-  const remotes: any = Array.isArray(remoteOperations) ? remoteOperations : [];
-  const entities: any = new Set<any>(locals.map((entry?: any) : any => entry?.entityId).filter(Boolean));
-  return Object.freeze(remotes.filter((entry?: any) : any => entities.has(entry?.entityId)));
+export function relevantOperations(localOperations: unknown = [], remoteOperations: unknown = []) {
+  const locals = Array.isArray(localOperations) ? localOperations : [];
+  const remotes = Array.isArray(remoteOperations) ? remoteOperations : [];
+  const entities = new Set(locals.map((entry) => entry?.entityId).filter(Boolean));
+  return Object.freeze(remotes.filter((entry) => entities.has(entry?.entityId)));
 }
 
-export function transformRelevantOperation(local?: any, remote?: any) : any {
-  const current: any = parseOperation(local);
-  const other: any = parseOperation(remote);
+export function transformRelevantOperation(local?: unknown, remote?: unknown) {
+  const current = parseOperation(local);
+  const other = parseOperation(remote);
   if (!current || !other) {
     return { operation: null, conflict: { code: "conflict.unknown_required_field", entityId: "ent.unknown", head: 0 } };
   }
@@ -1098,7 +1169,7 @@ export function transformRelevantOperation(local?: any, remote?: any) : any {
   if (current.type === "delete" && other.type === "delete" && current.index === other.index) {
     return { operation: parseOperation({ ...current, type: "retain" }), conflict: null };
   }
-  let index: any = current.index;
+  let index = current.index;
   if (other.type === "insert" && other.index <= index) index += 1;
   if (other.type === "delete" && other.index < index) index -= 1;
   if (other.type === "delete" && other.index === index && current.type !== "delete") {
@@ -1116,9 +1187,9 @@ export function transformRelevantOperation(local?: any, remote?: any) : any {
   return { operation: parseOperation({ ...current, index }), conflict: null };
 }
 
-export function rebaseOperations(localOperations: any = [], remoteOperations: any = []) : any {
-  const locals: any = (Array.isArray(localOperations) ? localOperations : [])
-    .map((entry?: any) : any => parseOperation(entry));
+export function rebaseOperations(localOperations: unknown = [], remoteOperations: unknown = []) {
+  const locals = (Array.isArray(localOperations) ? localOperations : [])
+    .map((entry) => parseOperation(entry));
   if (locals.includes(null)) {
     return Object.freeze({
       rebasedOperations: Object.freeze([]),
@@ -1127,16 +1198,16 @@ export function rebaseOperations(localOperations: any = [], remoteOperations: an
       ])
     });
   }
-  const relevant: any = relevantOperations(locals, remoteOperations)
-    .map((entry?: any) : any => parseOperation(entry))
+  const relevant = relevantOperations(locals, remoteOperations)
+    .map((entry) => parseOperation(entry))
     .filter(Boolean);
-  const rebased: any[] = [];
-  const conflicts: any[] = [];
+  const rebased = [];
+  const conflicts = [];
   for (const local of locals) {
-    let current: any = local;
-    let failed: any = false;
+    let current = local;
+    let failed = false;
     for (const remote of relevant) {
-      const result: any = transformRelevantOperation(current, remote);
+      const result = transformRelevantOperation(current, remote);
       if (result.conflict) {
         conflicts.push(parseConflictFact({ ...result.conflict, head: result.conflict.head || 0 }));
         failed = true;
@@ -1152,7 +1223,7 @@ export function rebaseOperations(localOperations: any = [], remoteOperations: an
   });
 }
 
-export function selectProtocolPath(supportsCollaboration: any = false) : any {
+export function selectProtocolPath(supportsCollaboration: unknown = false) {
   if (supportsCollaboration === true) {
     return Object.freeze({
       profile: SERVICE_COLLABORATION_PROFILE,
@@ -1169,13 +1240,13 @@ export function selectProtocolPath(supportsCollaboration: any = false) : any {
   });
 }
 
-export function encodeCollaborationMessage(value?: any) : any {
-  const parsed: any = parseCollaborationMessage(value);
+export function encodeCollaborationMessage(value?: unknown) {
+  const parsed = parseCollaborationMessage(value);
   if (!parsed) return "";
   return JSON.stringify(parsed);
 }
 
-export function decodeCollaborationMessage(value?: any) : any {
+export function decodeCollaborationMessage(value?: unknown) {
   if (typeof value !== "string" || !value) return null;
   try {
     return parseCollaborationMessage(JSON.parse(value));
@@ -1184,8 +1255,8 @@ export function decodeCollaborationMessage(value?: any) : any {
   }
 }
 
-export function createServiceCollaborationPeer(peerId: any = "peer-a") : any {
-  const normalizedPeerId: any = opaqueId(peerId);
+export function createServiceCollaborationPeer(peerId: unknown = "peer-a") {
+  const normalizedPeerId = opaqueId(peerId);
   if (normalizedPeerId === FAIL) throw new TypeError("Neutral collaboration peer requires a stable opaque identity.");
   return Object.freeze({
     peerId: normalizedPeerId,
@@ -1195,15 +1266,21 @@ export function createServiceCollaborationPeer(peerId: any = "peer-a") : any {
   });
 }
 
-export function agreeServiceCollaborationPeers(left?: any, right?: any, message?: any) : any {
-  if (!left?.encode || !right?.encode || !left?.decode || !right?.decode) return null;
-  const encodedByLeft: any = left.encode(message);
-  const encodedByRight: any = right.encode(message);
+function isServiceCollaborationPeer(value: unknown): value is ServiceCollaborationPeer {
+  return isPlainObject(value)
+    && typeof value.encode === "function"
+    && typeof value.decode === "function";
+}
+
+export function agreeServiceCollaborationPeers(left?: unknown, right?: unknown, message?: unknown) {
+  if (!isServiceCollaborationPeer(left) || !isServiceCollaborationPeer(right)) return null;
+  const encodedByLeft = left.encode(message);
+  const encodedByRight = right.encode(message);
   if (!encodedByLeft || !encodedByRight) return null;
-  const leftView: any = right.decode(encodedByLeft);
-  const rightView: any = left.decode(encodedByRight);
-  const leftEcho: any = left.decode(encodedByRight);
-  const rightEcho: any = right.decode(encodedByLeft);
+  const leftView = right.decode(encodedByLeft);
+  const rightView = left.decode(encodedByRight);
+  const leftEcho = left.decode(encodedByRight);
+  const rightEcho = right.decode(encodedByLeft);
   if (!leftView || !rightView || !leftEcho || !rightEcho) return null;
   if (JSON.stringify(leftView) !== JSON.stringify(rightView)) return null;
   if (JSON.stringify(leftEcho) !== JSON.stringify(rightEcho)) return null;
@@ -1211,11 +1288,11 @@ export function agreeServiceCollaborationPeers(left?: any, right?: any, message?
   return leftView;
 }
 
-export function rejectUnknownRequiredFields(value?: any) : any {
+export function rejectUnknownRequiredFields(value?: unknown) {
   return parseCollaborationMessage(value) === null;
 }
 
-export function rejectSecondCoreGeneration(value?: any) : any {
+export function rejectSecondCoreGeneration(value?: unknown) {
   if (!isPlainObject(value)) return true;
   if (value.coreStateGeneration !== SERVICE_COLLABORATION_CORE_STATE_GENERATION) return true;
   return containsForbiddenKeys(value);

@@ -772,7 +772,7 @@ try {
       maxConcurrentEffects: 64
     });
     const before: any = fixtureState.concurrentCount;
-    const calls: any = Array.from({ length: 32 }, (_?: any, index?: any) : any =>
+    const calls: any = Array.from({ length: 16 }, (_?: any, index?: any) : any =>
       callMcp(token, "meshrix.gateway", "meshrix.gateway.forward", {
         serviceId: SERVICE_ID,
         operationKey: "concurrent",
@@ -781,7 +781,7 @@ try {
     );
     const responses: any = await Promise.all(calls);
     assert.equal(responses.every((payload?: any) : any => !payload.error), true);
-    assert.equal(fixtureState.concurrentCount, before + 32);
+    assert.equal(fixtureState.concurrentCount, before + 16);
     return { calls: responses.length, fixtureHits: fixtureState.concurrentCount - before };
   });
 

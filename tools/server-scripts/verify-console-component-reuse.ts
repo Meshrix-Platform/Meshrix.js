@@ -22,11 +22,8 @@ const destructiveRegistryOverride: any = process.env.CONSOLE_COMPONENT_REUSE_DES
 // was landed item 1.4's job and is a declared non-goal of this plan, so this is a permanent
 // grandfather list (NOT a ratchet) — the gate only prevents NEW hand-rolled blocks.
 const legacyEmptyBlockFiles: readonly any[] = Object.freeze([
-  "apps/console/components/admin/agent-config/AgentModelLibraryPanel.vue",
   "apps/console/components/admin/authorization-governance/AuthorizationGovernancePanel.vue",
-  "apps/console/components/admin/maintenance-agent/MaintenanceAgentPolicyPanel.vue",
   "apps/console/components/admin/operation-permission/ToolGrantCreateCard.vue",
-  "apps/console/components/AgentModelOptionBar.vue",
   "apps/console/components/approval/ApprovalFlowCardList.vue",
   "apps/console/components/dashboard/DashboardPluginCard.vue",
   "apps/console/components/MultiChoiceCardGroup.vue",
@@ -34,7 +31,6 @@ const legacyEmptyBlockFiles: readonly any[] = Object.freeze([
   "apps/console/components/shell/side-nav/ConsoleSideNavDirectory.vue",
   "apps/console/components/UploadFileListCard.vue",
   "apps/console/views/admin/ApiKeyDistributionView.vue",
-  "apps/console/views/admin/context-management/ContextBuildRecordCard.vue",
   "apps/console/views/admin/organization-governance/OrganizationAdministratorRoles.vue",
   "apps/console/views/admin/tools/ToolCatalogSearch.vue",
   "apps/console/views/admin/UpstreamGatewayView.vue",

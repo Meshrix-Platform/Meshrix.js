@@ -22,7 +22,6 @@ type ConsoleRuntimeLifecycleControllerOptions = {
   liveDashboardAlerts: { readonly value: DashboardAlert[] };
   onBootstrapError?: (error: unknown) => void;
   refreshAuthState: () => Promise<ConsoleAuthSessionSnapshot | null | undefined>;
-  refreshContextCompiler: (options?: SilentRefreshOptions) => void | Promise<void>;
   refreshMonitorAlerts: (options?: SilentRefreshOptions) => void | Promise<void>;
   refreshState: (options?: RefreshStateOptions) => void | Promise<void>;
   startServerEventSubscription: () => void;
@@ -51,8 +50,6 @@ export function createConsoleRuntimeLifecycleController(options: ConsoleRuntimeL
         await options.refreshState({ silent: true });
         if (!isGenerationActive(generation)) return;
         await options.refreshMonitorAlerts({ silent: true });
-        if (!isGenerationActive(generation)) return;
-        await options.refreshContextCompiler({ silent: true });
         if (!isGenerationActive(generation)) return;
         options.startServerEventSubscription();
         options.syncDashboardAlertInbox(options.liveDashboardAlerts.value);

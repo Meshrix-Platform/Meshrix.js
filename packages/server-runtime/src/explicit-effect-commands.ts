@@ -23,19 +23,91 @@ import {
   lookupFactIsAuthority
 } from "@meshrix/contracts/service-collaboration-contract";
 
-export const EXPLICIT_EFFECT_COMMAND_FAMILY: any = "effect-command";
-export const EXPLICIT_EFFECT_COMMAND_DOCUMENT_FAMILY: any = "document-state";
-export const EXPLICIT_EFFECT_COMMAND_OPERATION_ID: any = "collaboration.effect";
-export const EXPLICIT_EFFECT_COMMAND_AUDIENCE: any = "service-collaboration-effect-command";
-export const EXPLICIT_EFFECT_COMMAND_TRANSPORT: any = "effect-command";
-export const EXPLICIT_EFFECT_COMMAND_PERMIT_AUTHORITY: any =
-  "packages/foundation/src/security/governed-execution-permit-authority.ts";
-export const EXPLICIT_EFFECT_COMMAND_CAPACITY_CERTIFIED: any = false;
-export const EXPLICIT_EFFECT_COMMAND_NON_CERTIFICATION_REASON: any = "owner_profile_not_authorized";
-export const EXPLICIT_EFFECT_COMMAND_MAX_RECORDS: any = 4_096;
+type UnknownRecord = Record<string, unknown>;
+type EffectSink = (input: Readonly<UnknownRecord>) => unknown | Promise<unknown>;
+type AuthorizationRevalidator = (input: Readonly<UnknownRecord>) => unknown | Promise<unknown>;
 
-const IDENTITY_PATTERN: any = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,126}$/u;
-const REQUIRED_LOOKUP_KEYS: readonly any[] = Object.freeze([
+interface EffectBinding extends UnknownRecord {
+  effectId: string;
+  idempotency: string;
+  principalLookup: string;
+  grantLookup: string;
+  targetRef: string;
+  policyRef: string;
+  approvalLookup: string;
+  audienceRef: string;
+  requestRef: string;
+  auditRef: string;
+  compensationRef: string | null;
+}
+
+interface CurrentEffectAuthorization extends UnknownRecord {
+  allowed: boolean;
+  reasonCode: string;
+  principalLookup: string;
+  grantLookup: string;
+  targetRef: string;
+  policyRef: string;
+  approvalLookup: string;
+  audienceRef: string;
+  requestRef: string;
+  grantRevision: string;
+  policyRevision: string;
+  approvalRevision: string;
+  riskRevision: string;
+  workloadGeneration: string;
+  subject: Readonly<{ type: string; subjectId: string; tenantId: string; generation: string }>;
+}
+
+interface EffectRecord extends EffectBinding {
+  command: UnknownRecord;
+  resultState: string;
+  cancellationState: string;
+  authorizationReResolved: boolean;
+  reasonCode: string;
+}
+
+interface RuntimeOptions {
+  revalidateAuthorization?: AuthorizationRevalidator | null;
+  performExternalEffect?: EffectSink | null;
+  now?: number | (() => number);
+}
+
+interface EffectResult extends UnknownRecord {
+  ok: boolean;
+  binding?: Readonly<EffectBinding>;
+  reasonCode?: string;
+}
+
+export interface ExplicitEffectCommandRuntime {
+  readonly family: typeof EXPLICIT_EFFECT_COMMAND_FAMILY;
+  readonly documentFamily: typeof EXPLICIT_EFFECT_COMMAND_DOCUMENT_FAMILY;
+  readonly families: readonly unknown[];
+  readonly permitAuthority: string;
+  readonly capacityCertified: false;
+  bind(input?: UnknownRecord): EffectResult;
+  execute(input?: UnknownRecord): Promise<EffectResult>;
+  retry(input?: UnknownRecord): EffectResult;
+  cancel(input?: UnknownRecord): EffectResult;
+  compensate(input?: UnknownRecord): Promise<Readonly<UnknownRecord>>;
+  inspect(effectId?: unknown): EffectResult | null;
+  mergeIntoChangeSet: typeof mergeEffectCommandIntoChangeSet;
+  rejectCrdtMerge: typeof rejectCrdtEffectMerge;
+}
+
+export const EXPLICIT_EFFECT_COMMAND_FAMILY = "effect-command" as const;
+export const EXPLICIT_EFFECT_COMMAND_DOCUMENT_FAMILY = "document-state" as const;
+export const EXPLICIT_EFFECT_COMMAND_OPERATION_ID = "collaboration.effect" as const;
+export const EXPLICIT_EFFECT_COMMAND_AUDIENCE = "service-collaboration-effect-command" as const;
+export const EXPLICIT_EFFECT_COMMAND_TRANSPORT = "effect-command" as const;
+export const EXPLICIT_EFFECT_COMMAND_PERMIT_AUTHORITY =
+  "packages/foundation/src/security/governed-execution-permit-authority.ts";
+export const EXPLICIT_EFFECT_COMMAND_CAPACITY_CERTIFIED = false as const;
+export const EXPLICIT_EFFECT_COMMAND_NON_CERTIFICATION_REASON = "owner_profile_not_authorized" as const;
+export const EXPLICIT_EFFECT_COMMAND_MAX_RECORDS = 4_096;
+
+const IDENTITY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{1,126}$/u;
+const REQUIRED_LOOKUP_KEYS = Object.freeze([
   "principalLookup",
   "grantLookup",
   "targetRef",
@@ -43,51 +115,55 @@ const REQUIRED_LOOKUP_KEYS: readonly any[] = Object.freeze([
   "approvalLookup",
   "audienceRef",
   "requestRef"
-]);
-const CURRENT_REVISION_KEYS: readonly any[] = Object.freeze([
+]) satisfies readonly string[];
+const CURRENT_REVISION_KEYS = Object.freeze([
   "grantRevision",
   "policyRevision",
   "approvalRevision",
   "riskRevision",
   "workloadGeneration"
-]);
+]) satisfies readonly string[];
 
-function text(value?: any, maxBytes: any = 128) : any {
+function text(value?: unknown, maxBytes = 128): string {
   if (typeof value !== "string") return "";
-  const normalized: any = value.trim();
+  const normalized = value.trim();
   return normalized && Buffer.byteLength(normalized, "utf8") <= maxBytes ? normalized : "";
 }
 
-function opaqueId(value?: any) : any {
-  const normalized: any = text(value);
+function opaqueId(value?: unknown): string {
+  const normalized = text(value);
   return normalized && IDENTITY_PATTERN.test(normalized) ? normalized : "";
 }
 
-function requiredOpaque(value?: any, field?: any) : any {
-  const normalized: any = opaqueId(value);
+function requiredOpaque(value: unknown, field: string): string {
+  const normalized = opaqueId(value);
   if (!normalized) {
     deny("effect_command_binding_incomplete", `Effect Command requires ${field}.`);
   }
   return normalized;
 }
 
-function deny(code?: any, message?: any) : any {
+function deny(code: string, message: string): never {
   throw Object.assign(new Error(message), { code, statusCode: 403, retryable: false });
 }
 
-function isPlainObject(value?: any) : any {
+function isPlainObject(value: unknown): value is UnknownRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function usesLookupFactAsAuthority(input: Record<string, any> = {}) : any {
-  const source: any = text(input.authoritySource || input.authorizationSource);
-  if (source && SERVICE_COLLABORATION_LOOKUP_FACTS.includes(source)) return true;
+function includesValue(values: readonly unknown[], value: unknown): boolean {
+  return values.includes(value);
+}
+
+function usesLookupFactAsAuthority(input: UnknownRecord = {}): boolean {
+  const source = text(input.authoritySource || input.authorizationSource);
+  if (source && includesValue(SERVICE_COLLABORATION_LOOKUP_FACTS, source)) return true;
   if (input.usePriorApprovalAsAuthority === true) return true;
   if (input.priorApproval === true && input.revalidationPerformed !== true) return true;
   return false;
 }
 
-function usesStrategyPreviewAsAuthority(input: Record<string, any> = {}) : any {
+function usesStrategyPreviewAsAuthority(input: UnknownRecord = {}): boolean {
   return Boolean(
     input.strategyPreview ||
     input.previewDecision ||
@@ -96,11 +172,11 @@ function usesStrategyPreviewAsAuthority(input: Record<string, any> = {}) : any {
   );
 }
 
-function copiedReResolutionIsProof(input: Record<string, any> = {}) : any {
+function copiedReResolutionIsProof(input: UnknownRecord = {}): boolean {
   return input.authorizationReResolved === true && input.revalidationPerformed !== true && input.skipRevalidation === true;
 }
 
-function currentAuthorizationDenied(input: Record<string, any> = {}) : any {
+function currentAuthorizationDenied(input: UnknownRecord = {}): Readonly<{ allowed: false; reasonCode: string }> | null {
   if (usesLookupFactAsAuthority(input)) {
     return Object.freeze({
       allowed: false,
@@ -122,13 +198,14 @@ function currentAuthorizationDenied(input: Record<string, any> = {}) : any {
   return null;
 }
 
-export function createExplicitEffectCommandInput(value: Record<string, any> = {}) : any {
-  const current: any = createCurrentEffectAuthorization(value);
+export function createExplicitEffectCommandInput(value: UnknownRecord = {}): Readonly<UnknownRecord> {
+  const current = createCurrentEffectAuthorization(value);
+  const authorization = isPlainObject(value.authorization) ? value.authorization : {};
   return Object.freeze({
     family: EXPLICIT_EFFECT_COMMAND_FAMILY,
     effectId: requiredOpaque(value.effectId || "eff.sc.1", "effectId"),
-    idempotency: SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY.includes(value.idempotency)
-      ? value.idempotency
+    idempotency: includesValue(SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY, value.idempotency)
+      ? String(value.idempotency)
       : "idempotent",
     principalLookup: current.principalLookup,
     grantLookup: current.grantLookup,
@@ -142,31 +219,32 @@ export function createExplicitEffectCommandInput(value: Record<string, any> = {}
     cancellationState: value.cancellationState,
     authorization: Object.freeze({
       ...current,
-      ...(isPlainObject(value.authorization) ? value.authorization : {}),
+      ...authorization,
       usePriorApprovalAsAuthority: value.usePriorApprovalAsAuthority === true ||
-        value.authorization?.usePriorApprovalAsAuthority === true,
+        authorization.usePriorApprovalAsAuthority === true,
       usePreviewAsAuthority: value.usePreviewAsAuthority === true ||
-        value.authorization?.usePreviewAsAuthority === true,
-      strategyPreview: value.strategyPreview || value.authorization?.strategyPreview,
-      previewDecision: value.previewDecision || value.authorization?.previewDecision,
-      dryRunResult: value.dryRunResult || value.authorization?.dryRunResult
+        authorization.usePreviewAsAuthority === true,
+      strategyPreview: value.strategyPreview || authorization.strategyPreview,
+      previewDecision: value.previewDecision || authorization.previewDecision,
+      dryRunResult: value.dryRunResult || authorization.dryRunResult
     })
   });
 }
 
-export function createCurrentEffectAuthorization(value: Record<string, any> = {}) : any {
-  const subject: any = isPlainObject(value.subject) ? value.subject : {};
+export function createCurrentEffectAuthorization(value: UnknownRecord = {}): Readonly<CurrentEffectAuthorization> {
+  const subject = isPlainObject(value.subject) ? value.subject : {};
+  const grant = isPlainObject(value.grant) ? value.grant : {};
   return Object.freeze({
     allowed: value.allowed !== false,
     reasonCode: text(value.reasonCode) || "allowed",
     principalLookup: requiredOpaque(value.principalLookup || subject.subjectId || "prin.sc.1", "principalLookup"),
-    grantLookup: requiredOpaque(value.grantLookup || value.grant?.id || "gr.sc.1", "grantLookup"),
+    grantLookup: requiredOpaque(value.grantLookup || grant.id || "gr.sc.1", "grantLookup"),
     targetRef: requiredOpaque(value.targetRef || "tgt.sc.1", "targetRef"),
     policyRef: requiredOpaque(value.policyRef || "pol.sc.1", "policyRef"),
     approvalLookup: requiredOpaque(value.approvalLookup || "apr.sc.1", "approvalLookup"),
     audienceRef: requiredOpaque(value.audienceRef || "aud.sc.1", "audienceRef"),
     requestRef: requiredOpaque(value.requestRef || "req.sc.1", "requestRef"),
-    grantRevision: requiredOpaque(value.grantRevision || value.grant?.revision || "rev.grant.1", "grantRevision"),
+    grantRevision: requiredOpaque(value.grantRevision || grant.revision || "rev.grant.1", "grantRevision"),
     policyRevision: requiredOpaque(value.policyRevision || "rev.policy.1", "policyRevision"),
     approvalRevision: requiredOpaque(value.approvalRevision || "rev.approval.1", "approvalRevision"),
     riskRevision: requiredOpaque(value.riskRevision || "rev.risk.1", "riskRevision"),
@@ -180,20 +258,20 @@ export function createCurrentEffectAuthorization(value: Record<string, any> = {}
   });
 }
 
-function createDefaultRevalidator() : any {
-  const engine: any = createAuthorizationEngine();
-  return async (input: Record<string, any> = {}) : Promise<any> => {
-    const blocked: any = currentAuthorizationDenied(input);
+function createDefaultRevalidator(): AuthorizationRevalidator {
+  const engine = createAuthorizationEngine();
+  return async (input: Readonly<UnknownRecord> = {}) => {
+    const blocked = currentAuthorizationDenied(input);
     if (blocked) return blocked;
-    const current: any = createCurrentEffectAuthorization(input);
-    const decision: any = await engine.evaluate({
+    const current = createCurrentEffectAuthorization(input);
+    const decision = await engine.evaluate({
       operation: Object.freeze({
         id: EXPLICIT_EFFECT_COMMAND_OPERATION_ID,
         public: false,
         readOnly: false
       }),
       subject: current.subject,
-      grant: input.grant || null,
+      grant: isPlainObject(input.grant) ? input.grant : null,
       enforceConfirmation: true,
       dryRun: false
     });
@@ -207,7 +285,7 @@ function createDefaultRevalidator() : any {
   };
 }
 
-function commandProjection(value: Record<string, any> = {}) : any {
+function commandProjection(value: UnknownRecord = {}): Readonly<UnknownRecord> {
   return Object.freeze({
     family: value.family,
     effectId: value.effectId,
@@ -226,27 +304,33 @@ function commandProjection(value: Record<string, any> = {}) : any {
   });
 }
 
-function bindLookups(value: Record<string, any> = {}) : any {
-  const bound: Record<string, any> = {};
+function bindLookups(value: UnknownRecord = {}): Readonly<EffectBinding> {
+  const bound: Record<string, string> = {};
   for (const key of REQUIRED_LOOKUP_KEYS) {
     bound[key] = requiredOpaque(value[key], key);
   }
   return Object.freeze({
-    ...bound,
+    principalLookup: bound.principalLookup,
+    grantLookup: bound.grantLookup,
+    targetRef: bound.targetRef,
+    policyRef: bound.policyRef,
+    approvalLookup: bound.approvalLookup,
+    audienceRef: bound.audienceRef,
+    requestRef: bound.requestRef,
     effectId: requiredOpaque(value.effectId, "effectId"),
-    idempotency: SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY.includes(value.idempotency)
-      ? value.idempotency
+    idempotency: includesValue(SERVICE_COLLABORATION_EFFECT_IDEMPOTENCY, value.idempotency)
+      ? String(value.idempotency)
       : deny("effect_command_idempotency_required", "Effect Command requires idempotent or explicit non_idempotent."),
     auditRef: requiredOpaque(value.auditRef || `audt.${value.effectId}`, "auditRef"),
     compensationRef: value.compensationRef == null ? null : requiredOpaque(value.compensationRef, "compensationRef")
   });
 }
 
-function lookupsMatch(bound?: any, current?: any) : any {
-  return REQUIRED_LOOKUP_KEYS.every((key?: any) : any => bound[key] === current[key]);
+function lookupsMatch(bound: UnknownRecord, current: UnknownRecord): boolean {
+  return REQUIRED_LOOKUP_KEYS.every((key) => bound[key] === current[key]);
 }
 
-function privacySafeAudit(record: Record<string, any> = {}) : any {
+function privacySafeAudit(record: UnknownRecord = {}): Readonly<UnknownRecord> {
   return Object.freeze({
     auditRef: record.auditRef,
     effectId: record.effectId,
@@ -261,12 +345,12 @@ function privacySafeAudit(record: Record<string, any> = {}) : any {
   });
 }
 
-export function changeSetHidesEffectCommand(changeSet?: any) : any {
+export function changeSetHidesEffectCommand(changeSet?: unknown): boolean {
   if (!isPlainObject(changeSet)) return false;
   if (changeSet.family === EXPLICIT_EFFECT_COMMAND_FAMILY) return true;
   if (changeSet.effectId || changeSet.effectCommand) return true;
-  const operations: any = Array.isArray(changeSet.operations) ? changeSet.operations : [];
-  return operations.some((operation?: any) : any => (
+  const operations: unknown[] = Array.isArray(changeSet.operations) ? changeSet.operations : [];
+  return operations.some((operation) => (
     isPlainObject(operation) && (
       operation.family === EXPLICIT_EFFECT_COMMAND_FAMILY ||
       Boolean(operation.effectId) ||
@@ -275,7 +359,7 @@ export function changeSetHidesEffectCommand(changeSet?: any) : any {
   ));
 }
 
-export function mergeEffectCommandIntoChangeSet(_effect?: any, changeSet?: any) : any {
+export function mergeEffectCommandIntoChangeSet(_effect?: unknown, changeSet?: unknown): Readonly<UnknownRecord> {
   return Object.freeze({
     ok: false,
     merged: false,
@@ -287,9 +371,9 @@ export function mergeEffectCommandIntoChangeSet(_effect?: any, changeSet?: any) 
   });
 }
 
-export function rejectCrdtEffectMerge(value?: any) : any {
-  const keys: any = isPlainObject(value) ? Object.keys(value) : [];
-  const crdt: any = keys.some((key?: any) : any => SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS.includes(key));
+export function rejectCrdtEffectMerge(value?: unknown): Readonly<UnknownRecord> {
+  const keys = isPlainObject(value) ? Object.keys(value) : [];
+  const crdt = keys.some((key) => includesValue(SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS, key));
   return Object.freeze({
     ok: false,
     merged: false,
@@ -300,7 +384,7 @@ export function rejectCrdtEffectMerge(value?: any) : any {
   });
 }
 
-export function compensateUnownedExternalEffect(value: Record<string, any> = {}) : any {
+export function compensateUnownedExternalEffect(value: UnknownRecord = {}): Readonly<UnknownRecord> {
   return Object.freeze({
     ok: false,
     compensated: false,
@@ -312,7 +396,7 @@ export function compensateUnownedExternalEffect(value: Record<string, any> = {})
   });
 }
 
-function retryFence(record?: any) : any {
+function retryFence(record?: EffectRecord | null): Readonly<UnknownRecord> {
   if (!record) {
     return Object.freeze({
       allowed: false,
@@ -355,20 +439,21 @@ export function createExplicitEffectCommandRuntime({
   revalidateAuthorization = null,
   performExternalEffect = null,
   now = Date.now
-}: Record<string, any> = {}) : any {
-  const records: any = new Map<any, any>();
-  const resolveAuthorization: any = typeof revalidateAuthorization === "function"
+}: RuntimeOptions = {}): ExplicitEffectCommandRuntime {
+  const records = new Map<string, Readonly<EffectRecord>>();
+  const resolveAuthorization: AuthorizationRevalidator = typeof revalidateAuthorization === "function"
     ? revalidateAuthorization
     : createDefaultRevalidator();
   if (typeof performExternalEffect !== "function") {
     throw new TypeError("Explicit Effect Commands require an external-effect sink.");
   }
+  const effectSink: EffectSink = performExternalEffect;
 
-  function stored(effectId?: any) : any {
-    return records.get(effectId) || null;
+  function stored(effectId?: unknown): Readonly<EffectRecord> | null {
+    return typeof effectId === "string" ? records.get(effectId) || null : null;
   }
 
-  function remember(record?: any) : any {
+  function remember(record: Readonly<EffectRecord>): Readonly<EffectRecord> {
     if (!records.has(record.effectId) && records.size >= EXPLICIT_EFFECT_COMMAND_MAX_RECORDS) {
       deny("effect_command_backpressure", "Explicit Effect Command capacity is exhausted.");
     }
@@ -376,7 +461,7 @@ export function createExplicitEffectCommandRuntime({
     return record;
   }
 
-  function project(record?: any, extras: Record<string, any> = {}) : any {
+  function project(record: Readonly<EffectRecord> | null, extras: UnknownRecord = {}): EffectResult {
     return Object.freeze({
       ok: extras.ok !== false,
       handled: true,
@@ -392,15 +477,16 @@ export function createExplicitEffectCommandRuntime({
       reversesExternalEffect: false,
       compensated: extras.compensated === true,
       owned: extras.owned !== false,
-      reasonCode: extras.reasonCode || record?.reasonCode || "ok",
+      reasonCode: text(extras.reasonCode) || record?.reasonCode || "ok",
       audit: record ? privacySafeAudit(record) : extras.audit || null,
       capacityCertified: EXPLICIT_EFFECT_COMMAND_CAPACITY_CERTIFIED,
       permitAuthority: EXPLICIT_EFFECT_COMMAND_PERMIT_AUTHORITY
     });
   }
 
-  function denied(reasonCode?: any, extras: Record<string, any> = {}) : any {
-    return project(extras.record || null, {
+  function denied(reasonCode: string, extras: UnknownRecord = {}): EffectResult {
+    const record = isPlainObject(extras.record) ? extras.record as EffectRecord : null;
+    return project(record, {
       ok: false,
       invokedSink: false,
       permitConsumed: extras.permitConsumed === true,
@@ -415,11 +501,11 @@ export function createExplicitEffectCommandRuntime({
     });
   }
 
-  async function currentAuthority(input: Record<string, any> = {}) : Promise<any> {
-    const facts: any = isPlainObject(input.authorization) ? input.authorization : input;
-    const blocked: any = currentAuthorizationDenied(facts);
+  async function currentAuthority(input: UnknownRecord = {}): Promise<Readonly<CurrentEffectAuthorization> | Readonly<{ allowed: false; reasonCode: string }>> {
+    const facts = isPlainObject(input.authorization) ? input.authorization : input;
+    const blocked = currentAuthorizationDenied(facts);
     if (blocked) return blocked;
-    let decision: any;
+    let decision: unknown;
     try {
       decision = await resolveAuthorization(Object.freeze({
         ...facts,
@@ -440,10 +526,10 @@ export function createExplicitEffectCommandRuntime({
         reasonCode: "execution_authorization_failed"
       });
     }
-    if (decision?.allowed !== true) {
+    if (!isPlainObject(decision) || decision.allowed !== true) {
       return Object.freeze({
         allowed: false,
-        reasonCode: text(decision?.reasonCode) || "execution_authorization_denied"
+        reasonCode: text(isPlainObject(decision) ? decision.reasonCode : undefined) || "execution_authorization_denied"
       });
     }
     try {
@@ -456,7 +542,7 @@ export function createExplicitEffectCommandRuntime({
     }
   }
 
-  function toCommand(bound?: any, resultState?: any, cancellationState: any = "none") : any {
+  function toCommand(bound: Readonly<EffectBinding>, resultState: unknown, cancellationState: unknown = "none"): UnknownRecord {
     return createEffectCommand({
       effectId: bound.effectId,
       idempotency: bound.idempotency,
@@ -471,24 +557,24 @@ export function createExplicitEffectCommandRuntime({
       resultState,
       auditRef: bound.auditRef,
       compensationRef: bound.compensationRef
-    });
+    }) as UnknownRecord;
   }
 
-  function bind(input: Record<string, any> = {}) : any {
-    const command: any = commandProjection(input);
+  function bind(input: UnknownRecord = {}): EffectResult {
+    const command = commandProjection(input);
     if (command.family && command.family !== EXPLICIT_EFFECT_COMMAND_FAMILY) {
       return denied("effect_family_separated", { effectId: opaqueId(command.effectId) });
     }
     if (containsForbiddenKeys(command)) {
       return denied(
-        SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS.some((key?: any) : any => Object.hasOwn(command, key))
+        SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS.some((key: string) => Object.hasOwn(command, key))
           ? "effect_crdt_merge_forbidden"
           : "effect_privacy_forbidden",
         { effectId: opaqueId(command.effectId) }
       );
     }
     try {
-      const bound: any = bindLookups(command);
+      const bound = bindLookups(command);
       return Object.freeze({
         ok: true,
         family: EXPLICIT_EFFECT_COMMAND_FAMILY,
@@ -497,20 +583,20 @@ export function createExplicitEffectCommandRuntime({
         reversesExternalEffect: false,
         capacityCertified: EXPLICIT_EFFECT_COMMAND_CAPACITY_CERTIFIED
       });
-    } catch (error: any) {
-      return denied(text(error?.code) || "effect_command_binding_incomplete", {
+    } catch (error: unknown) {
+      return denied(text(isPlainObject(error) ? error.code : undefined) || "effect_command_binding_incomplete", {
         effectId: opaqueId(command.effectId)
       });
     }
   }
 
-  async function execute(input: Record<string, any> = {}) : Promise<any> {
-    const boundResult: any = bind(input);
+  async function execute(input: UnknownRecord = {}): Promise<EffectResult> {
+    const boundResult = bind(input);
     if (boundResult.ok !== true) return boundResult;
-    const bound: any = boundResult.binding;
-    const existing: any = stored(bound.effectId);
+    const bound = boundResult.binding!;
+    const existing = stored(bound.effectId);
     if (existing) {
-      const fence: any = retryFence(existing);
+      const fence = retryFence(existing);
       return project(existing, {
         ok: fence.reasonCode === "effect_idempotent_replay",
         invokedSink: false,
@@ -521,9 +607,9 @@ export function createExplicitEffectCommandRuntime({
       });
     }
     if (input.cancellationState === "cancelled" || input.cancellationState === "requested") {
-      const command: any = toCommand(bound, "cancelled", "cancelled");
+      const command = toCommand(bound, "cancelled", "cancelled");
       assertEffectCommandFamily(command);
-      const record: any = remember(Object.freeze({
+      const record = remember(Object.freeze({
         ...bound,
         command,
         resultState: "cancelled",
@@ -540,7 +626,7 @@ export function createExplicitEffectCommandRuntime({
       });
     }
 
-    const authority: any = await currentAuthority({
+    const authority = await currentAuthority({
       ...input,
       ...bound
     });
@@ -554,7 +640,7 @@ export function createExplicitEffectCommandRuntime({
       });
     }
 
-    const requestDigest: any = digestGovernedExecutionRequest({
+    const requestDigest = digestGovernedExecutionRequest({
       operationId: EXPLICIT_EFFECT_COMMAND_OPERATION_ID,
       transport: EXPLICIT_EFFECT_COMMAND_TRANSPORT,
       method: "EFFECT",
@@ -566,13 +652,13 @@ export function createExplicitEffectCommandRuntime({
         idempotency: bound.idempotency
       })
     });
-    const principal: any = Object.freeze({
+    const principal = Object.freeze({
       type: authority.subject.type,
       subjectId: authority.subject.subjectId,
       tenantId: authority.subject.tenantId,
       generation: authority.subject.generation
     });
-    const resource: any = Object.freeze({
+    const resource = Object.freeze({
       targetRef: bound.targetRef,
       grantRevision: authority.grantRevision,
       policyRevision: authority.policyRevision,
@@ -580,10 +666,10 @@ export function createExplicitEffectCommandRuntime({
       riskRevision: authority.riskRevision,
       workloadGeneration: authority.workloadGeneration
     });
-    const clock: any = Number(typeof now === "function" ? now() : now);
-    let permitReceipt: any = null;
+    const clock = Number(typeof now === "function" ? now() : now);
+    let permitReceipt: ReturnType<typeof consumeGovernedExecutionPermit> | null = null;
     try {
-      const permit: any = mintGovernedExecutionPermit({
+      const permit = mintGovernedExecutionPermit({
         operationId: EXPLICIT_EFFECT_COMMAND_OPERATION_ID,
         audience: EXPLICIT_EFFECT_COMMAND_AUDIENCE,
         principal,
@@ -616,16 +702,16 @@ export function createExplicitEffectCommandRuntime({
         requestDigest,
         principal
       });
-    } catch (error: any) {
-      return denied(text(error?.code) || "governed_execution_permit_required", {
+    } catch (error: unknown) {
+      return denied(text(isPlainObject(error) ? error.code : undefined) || "governed_execution_permit_required", {
         effectId: bound.effectId,
         authorizationReResolved: true
       });
     }
 
-    let sinkResult: any;
+    let sinkResult: unknown;
     try {
-      sinkResult = await performExternalEffect(Object.freeze({
+      sinkResult = await effectSink(Object.freeze({
         family: EXPLICIT_EFFECT_COMMAND_FAMILY,
         effectId: bound.effectId,
         idempotency: bound.idempotency,
@@ -633,13 +719,13 @@ export function createExplicitEffectCommandRuntime({
         permitReceipt,
         principalDigest: digestGovernedExecutionPrincipal(principal),
         currentRevisions: Object.freeze(Object.fromEntries(
-          CURRENT_REVISION_KEYS.map((key?: any) : any => [key, authority[key]])
+          CURRENT_REVISION_KEYS.map((key) => [key, authority[key]])
         ))
       }));
     } catch {
-      const command: any = toCommand(bound, "uncertain", "none");
+      const command = toCommand(bound, "uncertain", "none");
       assertEffectCommandFamily(command);
-      const record: any = remember(Object.freeze({
+      const record = remember(Object.freeze({
         ...bound,
         command,
         resultState: "uncertain",
@@ -657,22 +743,24 @@ export function createExplicitEffectCommandRuntime({
       });
     }
 
-    const resultState: any = SERVICE_COLLABORATION_EFFECT_RESULT_STATES.includes(sinkResult?.resultState)
-      ? sinkResult.resultState
+    const sinkRecord = isPlainObject(sinkResult) ? sinkResult : {};
+    const resultState = includesValue(SERVICE_COLLABORATION_EFFECT_RESULT_STATES, sinkRecord.resultState)
+      ? String(sinkRecord.resultState)
       : "accepted";
-    const command: any = toCommand(
+    const cancellationState = includesValue(SERVICE_COLLABORATION_CANCELLATION_STATES, sinkRecord.cancellationState)
+      ? String(sinkRecord.cancellationState)
+      : "none";
+    const command = toCommand(
       bound,
       resultState,
-      SERVICE_COLLABORATION_CANCELLATION_STATES.includes(sinkResult?.cancellationState)
-        ? sinkResult.cancellationState
-        : "none"
+      cancellationState
     );
     assertEffectCommandFamily(command);
-    const record: any = remember(Object.freeze({
+    const record = remember(Object.freeze({
       ...bound,
       command,
       resultState,
-      cancellationState: command.cancellationState,
+      cancellationState,
       authorizationReResolved: true,
       reasonCode: resultState === "uncertain" ? "conflict.effect_uncertain" : "ok"
     }));
@@ -686,9 +774,9 @@ export function createExplicitEffectCommandRuntime({
     });
   }
 
-  function retry(input: Record<string, any> = {}) : any {
-    const effectId: any = opaqueId(input.effectId);
-    const existing: any = stored(effectId);
+  function retry(input: UnknownRecord = {}): EffectResult {
+    const effectId = opaqueId(input.effectId);
+    const existing = stored(effectId);
     if (input.silent === true || input.automatic === true) {
       return denied("silent_uncertain_retry_forbidden", {
         record: existing,
@@ -696,7 +784,7 @@ export function createExplicitEffectCommandRuntime({
         owned: Boolean(existing)
       });
     }
-    const fence: any = retryFence(existing);
+    const fence = retryFence(existing);
     if (!existing) return denied("unowned_external_effect", { effectId, owned: false });
     return project(existing, {
       ok: fence.reasonCode === "effect_idempotent_replay",
@@ -707,9 +795,9 @@ export function createExplicitEffectCommandRuntime({
     });
   }
 
-  function cancel(input: Record<string, any> = {}) : any {
-    const effectId: any = requiredOpaque(input.effectId, "effectId");
-    const existing: any = stored(effectId);
+  function cancel(input: UnknownRecord = {}): EffectResult {
+    const effectId = requiredOpaque(input.effectId, "effectId");
+    const existing = stored(effectId);
     if (!existing) return denied("unowned_external_effect", { effectId, owned: false });
     if (existing.resultState === "accepted" || existing.resultState === "terminal" || existing.resultState === "uncertain") {
       return project(existing, {
@@ -719,8 +807,8 @@ export function createExplicitEffectCommandRuntime({
         reasonCode: "effect_already_settled"
       });
     }
-    const command: any = toCommand(existing, "cancelled", "cancelled");
-    const record: any = remember(Object.freeze({
+    const command = toCommand(existing, "cancelled", "cancelled");
+    const record = remember(Object.freeze({
       ...existing,
       command,
       resultState: "cancelled",
@@ -735,9 +823,9 @@ export function createExplicitEffectCommandRuntime({
     });
   }
 
-  async function compensate(input: Record<string, any> = {}) : Promise<any> {
-    const originalId: any = opaqueId(input.effectId);
-    const existing: any = stored(originalId);
+  async function compensate(input: UnknownRecord = {}): Promise<Readonly<UnknownRecord>> {
+    const originalId = opaqueId(input.effectId);
+    const existing = stored(originalId);
     if (!existing) {
       return Object.freeze({
         ...compensateUnownedExternalEffect({ effectId: originalId }),
@@ -747,8 +835,8 @@ export function createExplicitEffectCommandRuntime({
         authorizationReResolved: false
       });
     }
-    const compensationId: any = requiredOpaque(input.compensationEffectId || `eff.comp.${existing.effectId}`, "compensationEffectId");
-    const compensation: any = await execute({
+    const compensationId = requiredOpaque(input.compensationEffectId || `eff.comp.${existing.effectId}`, "compensationEffectId");
+    const compensation = await execute({
       effectId: compensationId,
       idempotency: input.idempotency || "non_idempotent",
       principalLookup: existing.principalLookup,
@@ -783,8 +871,8 @@ export function createExplicitEffectCommandRuntime({
     retry,
     cancel,
     compensate,
-    inspect(effectId?: any) : any {
-      const record: any = stored(opaqueId(effectId));
+    inspect(effectId?: unknown): EffectResult | null {
+      const record = stored(opaqueId(effectId));
       return record ? project(record, { ok: true, retryAllowed: effectRetryAllowed(record.command) === true }) : null;
     },
     mergeIntoChangeSet: mergeEffectCommandIntoChangeSet,
@@ -799,5 +887,5 @@ export {
   privacySafeAudit as createPrivacySafeEffectAudit
 };
 
-export const EXPLICIT_EFFECT_COMMAND_PRIVACY_FORBIDDEN_KEYS: any = SERVICE_COLLABORATION_PRIVACY_FORBIDDEN_KEYS;
-export const EXPLICIT_EFFECT_COMMAND_CRDT_FORBIDDEN_KEYS: any = SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS;
+export const EXPLICIT_EFFECT_COMMAND_PRIVACY_FORBIDDEN_KEYS = SERVICE_COLLABORATION_PRIVACY_FORBIDDEN_KEYS;
+export const EXPLICIT_EFFECT_COMMAND_CRDT_FORBIDDEN_KEYS = SERVICE_COLLABORATION_CRDT_FORBIDDEN_KEYS;

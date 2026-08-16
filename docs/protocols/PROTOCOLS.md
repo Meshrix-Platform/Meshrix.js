@@ -169,9 +169,8 @@ npm run verify:plugin-bundle-protocol
 npm run verify:plugin-runtime
 npm test -- --suite domains.manifest
 npm run server:verify:strategy-management
-npm run server:verify:agent-gateway
-npm run server:verify:model-routing
-npm run server:verify:agent-management
-npm run server:verify:maintenance-agent
+npm run server:verify:model-gateway
+npm run server:verify:model-gateway-detachment
+npm run server:verify:external-gateway
 npm test
 ```

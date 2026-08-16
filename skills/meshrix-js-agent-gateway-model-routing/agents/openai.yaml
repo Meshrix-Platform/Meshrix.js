@@ -1,4 +1,0 @@
-interface:
-  display_name: "Meshrix.js Agent Gateway Model Routing"
-  short_description: "Guide governed model calls and resilient provider routing"
-  default_prompt: "Use $meshrix-js-agent-gateway-model-routing to design, implement, or verify the model-agent routing capability flow."

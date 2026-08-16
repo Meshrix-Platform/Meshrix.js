@@ -37,7 +37,6 @@ export { estimateTokens } from "./validation.ts";
 export function createContextRuntime({
   userDataPath,
   modelCompressor = null,
-  agentGatewayCall = null,
   agentMemory = null,
   strategies = [],
   compactionStrategies = []
@@ -49,7 +48,6 @@ export function createContextRuntime({
   const compactionRuntime: any = createContextCompactionRuntime({
     userDataPath,
     modelCompressor,
-    agentGatewayCall,
     agentMemory,
     strategies,
     compactionStrategies
@@ -149,13 +147,12 @@ export function createContextRuntime({
 
   async function modelCompressText({ profile, text, targetTokens, kind, citations = [] }: Record<string, any>) : Promise<any> {
     const sourceText: any = String(text || "");
-    const compressionAlias: any = String(profile.modelCompression.alias || "").trim();
     const maxInputTokens: any = Number(profile.modelCompression.maxInputTokens);
     const modelInputText: any = compactText(sourceText, maxInputTokens);
     if (
       !sourceText ||
       profile.modelCompression.enabled !== true ||
-      !compressionAlias ||
+      typeof modelCompressor !== "function" ||
       Number(profile.modelCompression.maxOutputTokens || 0) <= 0 ||
       !["model-assisted", "workbench-reconstruction", "session-memory-first"].includes(profile.compression.mode)
     ) {
@@ -177,25 +174,13 @@ export function createContextRuntime({
         "",
         modelInputText
       ].filter(Boolean).join("\n");
-      const response: any = typeof modelCompressor === "function"
-        ? await modelCompressor({
+      const response: any = await modelCompressor({
             profile,
             kind,
             text: modelInputText,
             targetTokens,
             citations,
             prompt
-          })
-        : await agentGatewayCall?.({
-            alias: compressionAlias,
-            modelAlias: compressionAlias,
-            question: prompt,
-            parameters: {
-              temperature: 0,
-              max_tokens: Math.min(profile.modelCompression.maxOutputTokens, targetTokens),
-              stream: false,
-              tool_choice: "none"
-            }
           });
       const summary: any = String(response?.summary || response?.answer || response?.text || "").trim();
       if (!summary) {

@@ -420,6 +420,33 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     }
   }
 
+  async function latestHttpFailureDiagnostic() : Promise<any> {
+    const logDirectory = path.join(userDataPath, "logs", "runtime");
+    await new Promise((resolve?: any) : any => setTimeout(resolve, 100));
+    const files = await fs.readdir(logDirectory).catch(() : any => []);
+    for (const file of [...files].sort().reverse()) {
+      if (!file.endsWith(".jsonl")) continue;
+      const lines = (await fs.readFile(path.join(logDirectory, file), "utf8"))
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .reverse();
+      for (const line of lines) {
+        const record = JSON.parse(line);
+        if (record?.event !== "http.request.failed") continue;
+        const reasonCode = String(record?.details?.error?.reasonCode || record?.error?.reasonCode || "");
+        return Object.freeze({
+          route: record?.details?.route === "/mcp" || record?.route === "/mcp" ? "/mcp" : "other",
+          statusCode: record?.details?.statusCode || record?.statusCode || 0,
+          error: {
+            reasonCode: /^[a-z0-9][a-z0-9._:-]*$/u.test(reasonCode) ? reasonCode : "runtime_error",
+            status: record?.details?.error?.status || record?.error?.status || 0
+          }
+        });
+      }
+    }
+    return null;
+  }
+
   return {
     userDataPath,
     fixtureState,
@@ -465,6 +492,7 @@ export async function createOperationPermissionTagGovernedE2eHarness() : Promise
     tagPolicy,
     tagProjections,
     upsertTag,
+    latestHttpFailureDiagnostic,
     cleanup
   };
 }

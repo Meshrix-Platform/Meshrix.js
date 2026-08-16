@@ -4,21 +4,11 @@
   "kind": "domain",
   "owner": "platform",
   "directory": "packages/agents",
-  "description": "Agent configuration, gateway, workspace, collaboration, and maintenance features.",
+  "description": "Agent workspace, memory, upstream gateway, and collaboration features.",
   "publicApi": [
-    "#meshrix/agents/agent-configs/config-registry",
-    "#meshrix/agents/agent-configs/credential-binding",
-    "#meshrix/agents/agent-gateway/external-gateway/index",
-    "#meshrix/agents/agent-gateway/index",
-    "#meshrix/agents/agent-gateway/model-probe/index",
     "#meshrix/agents/agent-memory/index",
-    "#meshrix/agents/agent-runtime-provider",
     "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
     "#meshrix/agents/agent-workspace/agent-workspace-materialization-port",
-    "#meshrix/agents/maintenance/index",
-    "#meshrix/agents/maintenance/planner",
-    "#meshrix/agents/maintenance/tool-registry",
-    "#meshrix/agents/maintenance/work-queue-contract",
     "#meshrix/agents/upstream-gateway/index",
     "#meshrix/agents/workspace-asset-registry/index",
     "#meshrix/agents/workspace-contribution",
@@ -31,23 +21,6 @@
   ],
   "sourceOwnership": [
     {
-      "feature": "agent-configuration",
-      "path": "src/agent-configs",
-      "fileCount": 4,
-      "testSuites": [
-        "agent-management.runtime"
-      ]
-    },
-    {
-      "feature": "agent-gateway",
-      "path": "src/agent-gateway",
-      "fileCount": 15,
-      "testSuites": [
-        "agent-gateway.runtime",
-        "model-routing.runtime"
-      ]
-    },
-    {
       "feature": "agent-memory",
       "path": "src/agent-memory",
       "fileCount": 1,
@@ -56,27 +29,19 @@
       ]
     },
     {
-      "feature": "agent-runtime",
-      "path": "src/agent-runtime-provider.ts",
-      "fileCount": 1,
-      "testSuites": [
-        "agent-management.runtime"
-      ]
-    },
-    {
       "feature": "agent-workspace",
       "path": "src/agent-workspace",
-      "fileCount": 23,
+      "fileCount": 25,
       "testSuites": [
         "agents.agent-workspace-schema"
       ]
     },
     {
-      "feature": "maintenance-agent",
-      "path": "src/maintenance",
-      "fileCount": 14,
+      "feature": "workspace-change-set-authority",
+      "path": "src/core-change-set-authority.ts",
+      "fileCount": 1,
       "testSuites": [
-        "maintenance-agent.runtime"
+        "agents.agent-workspace-schema"
       ]
     },
     {

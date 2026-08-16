@@ -1,6 +1,31 @@
-export const UNIFIED_REGISTRATION_SCHEMA_VERSION: any = "v0.0.1:platform:unified-registration-schema-1";
+export const UNIFIED_REGISTRATION_SCHEMA_VERSION = "v0.0.1:platform:unified-registration-schema-1";
 
-export const ORIGINAL_TYPES: Readonly<Record<string, any>> = Object.freeze({
+type UnknownRecord = Record<string, unknown>;
+export type UnifiedRegistrationType = "process" | "queue" | "task" | "monitor" | "alert";
+type RegistrationSection = "processes" | "queues" | "tasks" | "monitors" | "alerts";
+
+interface RegistrationRoute {
+  section: RegistrationSection;
+  behavior: string;
+}
+
+export interface UnifiedSystemStatusRecord extends UnknownRecord {
+  schemaVersion: typeof UNIFIED_REGISTRATION_SCHEMA_VERSION;
+  registrationId: string;
+  originalType: UnifiedRegistrationType;
+  originalId: string;
+  label: string;
+  status: string;
+  tone: string;
+  source: string;
+  registeredAt: string;
+  route: RegistrationRoute & { originalType: UnifiedRegistrationType };
+  relations: UnknownRecord;
+  attributes: UnknownRecord;
+  originalRef: UnknownRecord;
+}
+
+export const ORIGINAL_TYPES = Object.freeze({
   PROCESS: "process",
   QUEUE: "queue",
   TASK: "task",
@@ -8,7 +33,7 @@ export const ORIGINAL_TYPES: Readonly<Record<string, any>> = Object.freeze({
   ALERT: "alert"
 });
 
-export const UNIFIED_REGISTRATION_ROUTES: Readonly<Record<string, any>> = Object.freeze({
+export const UNIFIED_REGISTRATION_ROUTES: Readonly<Record<UnifiedRegistrationType, RegistrationRoute>> = Object.freeze({
   [ORIGINAL_TYPES.PROCESS]: {
     section: "processes",
     behavior: "render_process_status"
@@ -31,22 +56,26 @@ export const UNIFIED_REGISTRATION_ROUTES: Readonly<Record<string, any>> = Object
   }
 });
 
-function nowIso() : any {
+function nowIso(): string {
   return new Date().toISOString();
 }
 
-function asObject(value?: any) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function asObject(value?: unknown): UnknownRecord {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : {};
 }
 
-function stringArray(value?: any) : any {
+function stringArray(value?: unknown): string[] {
   return Array.isArray(value)
-    ? value.map((item?: any) : any => String(item || "").trim()).filter(Boolean)
+    ? value.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
 }
 
-function normalizeStatusTone(type?: any, status?: any, extra: Record<string, any> = {}) : any {
-  const normalized: any = String(status || "").toLowerCase();
+function firstString(value: unknown): string {
+  return Array.isArray(value) ? String(value[0] || "") : "";
+}
+
+function normalizeStatusTone(type: UnifiedRegistrationType, status: unknown, extra: UnknownRecord = {}): string {
+  const normalized = String(status || "").toLowerCase();
   if (type === ORIGINAL_TYPES.ALERT) {
     if (extra.ackRequired || normalized === "recovered") {
       return "success";
@@ -66,46 +95,46 @@ function normalizeStatusTone(type?: any, status?: any, extra: Record<string, any
 }
 
 export class UnifiedRegistration {
-  getOriginalType() : any {
+  getOriginalType(): UnifiedRegistrationType {
     throw new Error("UnifiedRegistration.getOriginalType must be implemented.");
   }
 
-  getOriginalId() : any {
+  getOriginalId(): string {
     throw new Error("UnifiedRegistration.getOriginalId must be implemented.");
   }
 
-  getLabel() : any {
+  getLabel(): string {
     return this.getOriginalId();
   }
 
-  getStatus() : any {
+  getStatus(): string {
     return "unknown";
   }
 
-  getSource() : any {
+  getSource(): string {
     return "";
   }
 
-  getRegisteredAt() : any {
+  getRegisteredAt(): string {
     return nowIso();
   }
 
-  getRelations() : any {
+  getRelations(): UnknownRecord {
     return {};
   }
 
-  getAttributes() : any {
+  getAttributes(): UnknownRecord {
     return {};
   }
 
-  getOriginalRef() : any {
+  getOriginalRef(): UnknownRecord {
     return {};
   }
 
-  toSystemStatusRecord() : any {
-    const originalType: any = this.getOriginalType();
-    const route: any = routeUnifiedRegistration(this);
-    const status: any = String(this.getStatus() || "unknown");
+  toSystemStatusRecord(): UnifiedSystemStatusRecord {
+    const originalType = this.getOriginalType();
+    const route = routeUnifiedRegistration(this);
+    const status = String(this.getStatus() || "unknown");
     return {
       schemaVersion: UNIFIED_REGISTRATION_SCHEMA_VERSION,
       registrationId: `${originalType}:${this.getOriginalId()}`,
@@ -125,37 +154,37 @@ export class UnifiedRegistration {
 }
 
 export class ProcessUnifiedRegistration extends UnifiedRegistration {
-  processItem: any;
-  constructor(processItem: Record<string, any> = {}) {
+  processItem: UnknownRecord;
+  constructor(processItem: UnknownRecord = {}) {
     super();
     this.processItem = asObject(processItem);
   }
 
-  getOriginalType() : any {
+  getOriginalType(): UnifiedRegistrationType {
     return ORIGINAL_TYPES.PROCESS;
   }
 
-  getOriginalId() : any {
+  getOriginalId(): string {
     return String(this.processItem.role || "unknown-process");
   }
 
-  getLabel() : any {
+  getLabel(): string {
     return String(this.processItem.label || this.processItem.role || "unknown-process");
   }
 
-  getStatus() : any {
+  getStatus(): string {
     return String(this.processItem.status || "unknown");
   }
 
-  getSource() : any {
+  getSource(): string {
     return String(this.processItem.processType || "service");
   }
 
-  getRegisteredAt() : any {
+  getRegisteredAt(): string {
     return String(this.processItem.lastHeartbeatAt || this.processItem.startedAt || nowIso());
   }
 
-  getRelations() : any {
+  getRelations(): UnknownRecord {
     return {
       features: stringArray(this.processItem.features),
       services: stringArray(this.processItem.services),
@@ -164,7 +193,7 @@ export class ProcessUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getAttributes() : any {
+  getAttributes(): UnknownRecord {
     return {
       role: this.getOriginalId(),
       processType: String(this.processItem.processType || "service"),
@@ -179,7 +208,7 @@ export class ProcessUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getOriginalRef() : any {
+  getOriginalRef(): UnknownRecord {
     return {
       role: this.getOriginalId(),
       pid: Number(this.processItem.pid || 0)
@@ -188,33 +217,33 @@ export class ProcessUnifiedRegistration extends UnifiedRegistration {
 }
 
 export class QueueUnifiedRegistration extends UnifiedRegistration {
-  queueItem: any;
-  constructor(queueItem: Record<string, any> = {}) {
+  queueItem: UnknownRecord;
+  constructor(queueItem: UnknownRecord = {}) {
     super();
     this.queueItem = asObject(queueItem);
   }
 
-  getOriginalType() : any {
+  getOriginalType(): UnifiedRegistrationType {
     return ORIGINAL_TYPES.QUEUE;
   }
 
-  getOriginalId() : any {
+  getOriginalId(): string {
     return String(this.queueItem.queueId || "unknown-queue");
   }
 
-  getLabel() : any {
+  getLabel(): string {
     return String(this.queueItem.label || this.queueItem.queueId || "unknown-queue");
   }
 
-  getStatus() : any {
+  getStatus(): string {
     return String(this.queueItem.lifecycleStatus || this.queueItem.status || "unknown");
   }
 
-  getSource() : any {
-    return String(this.queueItem.source || this.queueItem.sources?.[0] || "work-queue-observation");
+  getSource(): string {
+    return String(this.queueItem.source || firstString(this.queueItem.sources) || "work-queue-observation");
   }
 
-  getRegisteredAt() : any {
+  getRegisteredAt(): string {
     return String(
       this.queueItem.lastHeartbeatAt ||
         this.queueItem.closedAt ||
@@ -224,7 +253,7 @@ export class QueueUnifiedRegistration extends UnifiedRegistration {
     );
   }
 
-  getRelations() : any {
+  getRelations(): UnknownRecord {
     return {
       ownerId: String(this.queueItem.ownerId || ""),
       checkpointId: String(this.queueItem.checkpointId || ""),
@@ -233,7 +262,7 @@ export class QueueUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getAttributes() : any {
+  getAttributes(): UnknownRecord {
     return {
       queueId: this.getOriginalId(),
       kind: String(this.queueItem.kind || "queue"),
@@ -250,7 +279,7 @@ export class QueueUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getOriginalRef() : any {
+  getOriginalRef(): UnknownRecord {
     return {
       queueId: this.getOriginalId(),
       ownerId: String(this.queueItem.ownerId || ""),
@@ -260,23 +289,23 @@ export class QueueUnifiedRegistration extends UnifiedRegistration {
 }
 
 export class TaskUnifiedRegistration extends UnifiedRegistration {
-  options: any;
-  taskItem: any;
-  constructor(taskItem: Record<string, any> = {}, options: Record<string, any> = {}) {
+  options: UnknownRecord;
+  taskItem: UnknownRecord;
+  constructor(taskItem: UnknownRecord = {}, options: UnknownRecord = {}) {
     super();
     this.taskItem = asObject(taskItem);
     this.options = asObject(options);
   }
 
-  getOriginalType() : any {
+  getOriginalType(): UnifiedRegistrationType {
     return ORIGINAL_TYPES.TASK;
   }
 
-  getOriginalId() : any {
+  getOriginalId(): string {
     return String(this.options.taskId || this.taskItem.id || this.taskItem.runId || "unknown-task");
   }
 
-  getLabel() : any {
+  getLabel(): string {
     return String(
       this.options.label ||
         this.taskItem.summary ||
@@ -286,19 +315,19 @@ export class TaskUnifiedRegistration extends UnifiedRegistration {
     );
   }
 
-  getStatus() : any {
+  getStatus(): string {
     return String(this.taskItem.status || "unknown");
   }
 
-  getSource() : any {
+  getSource(): string {
     return String(this.options.source || this.taskItem.source || "task");
   }
 
-  getRegisteredAt() : any {
+  getRegisteredAt(): string {
     return String(this.taskItem.updatedAt || this.taskItem.startedAt || this.taskItem.createdAt || nowIso());
   }
 
-  getRelations() : any {
+  getRelations(): UnknownRecord {
     return {
       queueId: String(this.options.queueId || this.taskItem.queueId || ""),
       checkpointId: String(this.taskItem.checkpointId || ""),
@@ -307,7 +336,7 @@ export class TaskUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getAttributes() : any {
+  getAttributes(): UnknownRecord {
     return {
       taskType: String(this.options.taskType || this.taskItem.taskType || "task"),
       progressPercent: Number(this.taskItem.progressPercent || 0),
@@ -320,7 +349,7 @@ export class TaskUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getOriginalRef() : any {
+  getOriginalRef(): UnknownRecord {
     return {
       taskId: this.getOriginalId(),
       taskType: String(this.options.taskType || this.taskItem.taskType || "task")
@@ -329,37 +358,37 @@ export class TaskUnifiedRegistration extends UnifiedRegistration {
 }
 
 export class MonitorUnifiedRegistration extends UnifiedRegistration {
-  monitorItem: any;
-  constructor(monitorItem: Record<string, any> = {}) {
+  monitorItem: UnknownRecord;
+  constructor(monitorItem: UnknownRecord = {}) {
     super();
     this.monitorItem = asObject(monitorItem);
   }
 
-  getOriginalType() : any {
+  getOriginalType(): UnifiedRegistrationType {
     return ORIGINAL_TYPES.MONITOR;
   }
 
-  getOriginalId() : any {
+  getOriginalId(): string {
     return String(this.monitorItem.monitorId || this.monitorItem.id || "system-monitor");
   }
 
-  getLabel() : any {
+  getLabel(): string {
     return String(this.monitorItem.label || this.getOriginalId());
   }
 
-  getStatus() : any {
+  getStatus(): string {
     return String(this.monitorItem.status || "unknown");
   }
 
-  getSource() : any {
+  getSource(): string {
     return String(this.monitorItem.source || "system-status");
   }
 
-  getRegisteredAt() : any {
+  getRegisteredAt(): string {
     return String(this.monitorItem.updatedAt || nowIso());
   }
 
-  getRelations() : any {
+  getRelations(): UnknownRecord {
     return {
       features: stringArray(this.monitorItem.features),
       monitors: stringArray(this.monitorItem.monitors),
@@ -367,7 +396,7 @@ export class MonitorUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getAttributes() : any {
+  getAttributes(): UnknownRecord {
     return {
       ok: this.monitorItem.ok !== false,
       summary: asObject(this.monitorItem.summary),
@@ -376,7 +405,7 @@ export class MonitorUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getOriginalRef() : any {
+  getOriginalRef(): UnknownRecord {
     return {
       monitorId: this.getOriginalId()
     };
@@ -384,39 +413,39 @@ export class MonitorUnifiedRegistration extends UnifiedRegistration {
 }
 
 export class AlertUnifiedRegistration extends UnifiedRegistration {
-  alertItem: any;
-  constructor(alertItem: Record<string, any> = {}) {
+  alertItem: UnknownRecord;
+  constructor(alertItem: UnknownRecord = {}) {
     super();
     this.alertItem = asObject(alertItem);
   }
 
-  getOriginalType() : any {
+  getOriginalType(): UnifiedRegistrationType {
     return ORIGINAL_TYPES.ALERT;
   }
 
-  getOriginalId() : any {
+  getOriginalId(): string {
     return String(this.alertItem.alertId || "unknown-alert");
   }
 
-  getLabel() : any {
+  getLabel(): string {
     return String(this.alertItem.title || this.alertItem.alertId || "unknown-alert");
   }
 
-  getStatus() : any {
+  getStatus(): string {
     return this.alertItem.ackRequired || this.alertItem.active === false
       ? "recovered"
       : String(this.alertItem.status || this.alertItem.severity || "unknown");
   }
 
-  getSource() : any {
+  getSource(): string {
     return String(this.alertItem.source || "monitor-alerts");
   }
 
-  getRegisteredAt() : any {
+  getRegisteredAt(): string {
     return String(this.alertItem.lastSeenAt || this.alertItem.firstSeenAt || nowIso());
   }
 
-  getRelations() : any {
+  getRelations(): UnknownRecord {
     return {
       role: String(this.alertItem.role || ""),
       queueId: String(this.alertItem.queueId || ""),
@@ -424,7 +453,7 @@ export class AlertUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getAttributes() : any {
+  getAttributes(): UnknownRecord {
     return {
       severity: String(this.alertItem.severity || ""),
       ruleId: String(this.alertItem.ruleId || ""),
@@ -437,7 +466,7 @@ export class AlertUnifiedRegistration extends UnifiedRegistration {
     };
   }
 
-  getOriginalRef() : any {
+  getOriginalRef(): UnknownRecord {
     return {
       alertId: this.getOriginalId(),
       ruleId: String(this.alertItem.ruleId || "")
@@ -445,12 +474,12 @@ export class AlertUnifiedRegistration extends UnifiedRegistration {
   }
 }
 
-export function routeUnifiedRegistration(registration?: any) : any {
-  const originalType: any =
+export function routeUnifiedRegistration(registration: UnifiedRegistration | UnknownRecord): RegistrationRoute & { originalType: UnifiedRegistrationType } {
+  const originalType =
     registration instanceof UnifiedRegistration
       ? registration.getOriginalType()
-      : String(registration?.originalType || "");
-  const route: any = UNIFIED_REGISTRATION_ROUTES[originalType];
+      : String(registration.originalType || "") as UnifiedRegistrationType;
+  const route = UNIFIED_REGISTRATION_ROUTES[originalType];
   if (!route) {
     throw new Error(`Unsupported unified registration type: ${originalType || "unknown"}`);
   }
@@ -460,47 +489,60 @@ export function routeUnifiedRegistration(registration?: any) : any {
   };
 }
 
-export function normalizeUnifiedRegistration(registration?: any) : any {
+export function normalizeUnifiedRegistration(registration?: unknown): UnifiedSystemStatusRecord {
   if (registration instanceof UnifiedRegistration) {
     return registration.toSystemStatusRecord();
   }
-  const record: any = asObject(registration);
+  const record = asObject(registration);
   if (!record.registrationId || !record.originalType) {
     throw new Error("Invalid unified registration record.");
   }
-  const route: any = record.route || routeUnifiedRegistration(record);
+  const route = asObject(record.route).section
+    ? asObject(record.route) as unknown as RegistrationRoute & { originalType: UnifiedRegistrationType }
+    : routeUnifiedRegistration(record);
   return {
     schemaVersion: UNIFIED_REGISTRATION_SCHEMA_VERSION,
+    registrationId: String(record.registrationId),
+    originalType: String(record.originalType) as UnifiedRegistrationType,
+    originalId: String(record.originalId || ""),
+    label: String(record.label || record.originalId || ""),
+    status: String(record.status || "unknown"),
+    tone: String(record.tone || "neutral"),
+    source: String(record.source || ""),
+    registeredAt: String(record.registeredAt || nowIso()),
+    relations: asObject(record.relations),
+    attributes: asObject(record.attributes),
+    originalRef: asObject(record.originalRef),
     ...record,
-    route
+    route,
   };
 }
 
-export function unifiedRegistrationForProcess(processItem?: any) : any {
-  return new ProcessUnifiedRegistration(processItem).toSystemStatusRecord();
+export function unifiedRegistrationForProcess(processItem?: unknown): UnifiedSystemStatusRecord {
+  return new ProcessUnifiedRegistration(asObject(processItem)).toSystemStatusRecord();
 }
 
-export function unifiedRegistrationForQueue(queueItem?: any) : any {
-  return new QueueUnifiedRegistration(queueItem).toSystemStatusRecord();
+export function unifiedRegistrationForQueue(queueItem?: unknown): UnifiedSystemStatusRecord {
+  return new QueueUnifiedRegistration(asObject(queueItem)).toSystemStatusRecord();
 }
 
-export function unifiedRegistrationForTask(taskItem?: any, options: Record<string, any> = {}) : any {
-  return new TaskUnifiedRegistration(taskItem, options).toSystemStatusRecord();
+export function unifiedRegistrationForTask(taskItem?: unknown, options: UnknownRecord = {}): UnifiedSystemStatusRecord {
+  return new TaskUnifiedRegistration(asObject(taskItem), options).toSystemStatusRecord();
 }
 
-export function unifiedRegistrationForMonitor(monitorItem?: any) : any {
-  return new MonitorUnifiedRegistration(monitorItem).toSystemStatusRecord();
+export function unifiedRegistrationForMonitor(monitorItem?: unknown): UnifiedSystemStatusRecord {
+  return new MonitorUnifiedRegistration(asObject(monitorItem)).toSystemStatusRecord();
 }
 
-export function unifiedRegistrationForAlert(alertItem?: any) : any {
-  return new AlertUnifiedRegistration(alertItem).toSystemStatusRecord();
+export function unifiedRegistrationForAlert(alertItem?: unknown): UnifiedSystemStatusRecord {
+  return new AlertUnifiedRegistration(asObject(alertItem)).toSystemStatusRecord();
 }
 
-export function composeUnifiedSystemStatus(registrations: any = [], options: Record<string, any> = {}) : any {
-  const normalized: any = registrations
+export function composeUnifiedSystemStatus(registrations: readonly unknown[] = [], options: UnknownRecord = {}) {
+  const normalized = registrations
     .filter(Boolean)
-    .map((item?: any) : any => normalizeUnifiedRegistration(item));
-  const buckets: Record<string, any> = {
+    .map((item) => normalizeUnifiedRegistration(item));
+  const buckets: Record<RegistrationSection, UnifiedSystemStatusRecord[]> = {
     processes: [],
     queues: [],
     tasks: [],
@@ -508,10 +550,7 @@ export function composeUnifiedSystemStatus(registrations: any = [], options: Rec
     alerts: []
   };
   for (const registration of normalized) {
-    const section: any = registration.route?.section;
-    if (!buckets[section]) {
-      continue;
-    }
+    const section = registration.route.section;
     buckets[section].push(registration);
   }
   return {

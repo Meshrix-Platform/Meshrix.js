@@ -3,24 +3,8 @@
   "$comment": "GENERATED - DO NOT EDIT MANUALLY. Source: tools/generators/generate-capability-acceptance-definitions.ts and tools/registry/capability-acceptance-checkpoints/*.json",
   "version": "v0.0.1:registry:capability-acceptance-4",
   "generatedAt": "1970-01-01T00:00:00.000Z",
-  "entryCount": 19,
+  "entryCount": 18,
   "entries": [
-    {
-      "capabilityId": "agent-gateway-model-routing",
-      "capabilityClass": "detachable-core",
-      "releaseScope": "optional-support-matrix",
-      "activationFeatureId": "agent-gateway",
-      "governedEvidenceCommandIds": [
-        "agent-gateway",
-        "model-routing"
-      ],
-      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/agent-gateway-model-routing.json",
-      "acceptanceMachineId": "acceptance.agent-gateway-model-routing",
-      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/agent-gateway-model-routing.json",
-      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.ts",
-      "reportPath": "build/reports/capability-acceptance-machines.json",
-      "platformReducerCommand": "npm run verify:acceptance"
-    },
     {
       "capabilityId": "approval-governance",
       "capabilityClass": "core",
@@ -99,23 +83,6 @@
       "platformReducerCommand": "npm run verify:acceptance"
     },
     {
-      "capabilityId": "maintenance-agent-collaboration",
-      "capabilityClass": "detachable-core",
-      "releaseScope": "optional-support-matrix",
-      "activationFeatureId": "maintenance-agent-runbooks",
-      "governedEvidenceCommandIds": [
-        "maintenance-agent",
-        "enterprise-governance-coverage",
-        "operation-permission-tag-governed-e2e"
-      ],
-      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/maintenance-agent-collaboration.json",
-      "acceptanceMachineId": "acceptance.maintenance-agent-collaboration",
-      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/maintenance-agent-collaboration.json",
-      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.ts",
-      "reportPath": "build/reports/capability-acceptance-machines.json",
-      "platformReducerCommand": "npm run verify:acceptance"
-    },
-    {
       "capabilityId": "mcp-native-installer-process-identity",
       "capabilityClass": "core",
       "releaseScope": "core-release",
@@ -125,6 +92,29 @@
       "verifier": "tools/server-scripts/verify-capability-acceptance-machines.ts",
       "reportPath": "build/reports/capability-acceptance-machines.json",
       "platformReducerCommand": "npm run verify:acceptance"
+    },
+    {
+      "capabilityId": "model-gateway-service",
+      "capabilityClass": "detachable-core",
+      "releaseScope": "optional-support-matrix",
+      "activationFeatureId": "model-gateway",
+      "governedEvidenceCommandIds": [
+        "model-gateway-service",
+        "model-gateway-routing",
+        "model-gateway-admission",
+        "model-gateway-usage-accounting"
+      ],
+      "checkpointPath": "tools/registry/capability-acceptance-checkpoints/model-gateway-service.json",
+      "acceptanceMachineId": "acceptance.model-gateway-service",
+      "definitionPath": "packages/foundation/src/workflow/state-machine/definitions/acceptance/model-gateway-service.json",
+      "verifier": "tools/server-scripts/verify-capability-acceptance-machines.ts",
+      "reportPath": "build/reports/capability-acceptance-machines.json",
+      "platformReducerCommand": "npm run verify:acceptance",
+      "pluginRuntime": {
+        "pluginIds": [
+          "model-gateway"
+        ]
+      }
     },
     {
       "capabilityId": "observability-alerts-reporting",
@@ -170,7 +160,12 @@
       "reportPath": "build/reports/capability-acceptance-machines.json",
       "platformReducerCommand": "npm run verify:acceptance",
       "pluginRuntime": {
-        "aggregate": true
+        "aggregate": true,
+        "pluginIds": [
+          "external-gateway",
+          "shared-space",
+          "skill-hub"
+        ]
       }
     },
     {

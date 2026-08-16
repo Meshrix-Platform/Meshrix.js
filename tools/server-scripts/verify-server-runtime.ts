@@ -13,10 +13,6 @@ export const SERVER_VERIFY_COMMANDS: readonly any[] = Object.freeze([
   npmScript("public-boundary", "server:verify:public-boundary"),
   npmScript("security-hardening", "server:verify:security-hardening"),
   npmScript("strategy-management", "server:verify:strategy-management"),
-  npmScript("agent-gateway", "server:verify:agent-gateway"),
-  npmScript("model-routing", "server:verify:model-routing"),
-  npmScript("agent-management", "server:verify:agent-management"),
-  npmScript("maintenance-agent", "server:verify:maintenance-agent"),
   npmScript("deployment-flow", "server:verify:deployment-flow"),
   npmScript("deployment-index", "server:verify:deployment-index")
 ]);

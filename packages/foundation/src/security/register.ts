@@ -1,15 +1,38 @@
 // registerPlatformService is injected by the composition root (server-runtime).
 // Foundation must not import from server-runtime directly.
-export function registerSecurityPlatformServices(registry?: any, {
+interface SecurityPlatformServiceEntry {
+  id: string;
+  platform: "security";
+  label: string;
+  kind: string;
+  ownerFeatureId: "security-permissions";
+  value: unknown;
+}
+
+interface SecurityPlatformRegistry {
+  register(entry: SecurityPlatformServiceEntry): unknown;
+}
+
+type RegisterPlatformService = (registry: SecurityPlatformRegistry | undefined, entry: SecurityPlatformServiceEntry) => unknown;
+
+interface SecurityPlatformServices {
+  securityPermissions?: unknown;
+  consoleAuth?: unknown;
+  operationAuditStore?: unknown;
+  processIdentity?: unknown;
+  registerPlatformService?: RegisterPlatformService | null;
+}
+
+export function registerSecurityPlatformServices(registry?: SecurityPlatformRegistry, {
   securityPermissions = null,
   consoleAuth = null,
   operationAuditStore = null,
   processIdentity = null,
   registerPlatformService = null
-}: Record<string, any> = {}) : any {
-  const register: any = typeof registerPlatformService === "function"
+}: SecurityPlatformServices = {}): unknown[] {
+  const register: RegisterPlatformService = typeof registerPlatformService === "function"
     ? registerPlatformService
-    : (targetRegistry?: any, entry?: any) : any => {
+    : (targetRegistry, entry) => {
         if (!targetRegistry || typeof targetRegistry.register !== "function") {
           throw new Error("A PlatformRegistry instance is required.");
         }

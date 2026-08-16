@@ -57,7 +57,6 @@ function assertAgentMemoryPort(agentMemory?: any) : any {
 
 export function createContextCompactionRuntime({
   userDataPath,
-  agentGatewayCall = null,
   modelCompressor = null,
   agentMemory = null,
   strategies = [],
@@ -147,7 +146,6 @@ export function createContextCompactionRuntime({
     strategies,
     compactionStrategies,
     modelCompressor,
-    agentGatewayCall,
     latestSessionMemory,
     resetFailureState,
     registerModelFailure

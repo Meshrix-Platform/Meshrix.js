@@ -1,55 +1,94 @@
 import { canonicalJson as stableJson } from "@meshrix/contracts/serialization/canonical-json";
 import { createHash, createPrivateKey, createPublicKey, sign } from "node:crypto";
+import type { JsonWebKey, JsonWebKeyInput, KeyObject } from "node:crypto";
 
 import { resolveLocalSecretPayload } from "./secrets/local-secret-store.ts";
+import type { LocalSecretKeyProvider } from "./secrets/local-secret-key-provider.ts";
 
-export const ARTIFACT_SIGNER_PORT_ID: any = "ArtifactSignerPort";
-export const ARTIFACT_SIGNER_ALGORITHM: any = "ed25519";
-export const ARTIFACT_SIGNER_PAYLOAD_ENCODING: any = "sha256-digest-utf8";
+export const ARTIFACT_SIGNER_PORT_ID = "ArtifactSignerPort";
+export const ARTIFACT_SIGNER_ALGORITHM = "ed25519";
+export const ARTIFACT_SIGNER_PAYLOAD_ENCODING = "sha256-digest-utf8";
 
-function text(value: any = "") : any {
+type DataRecord = Record<string, unknown>;
+interface SignerRequest { secretRef: string; purpose: string; context: DataRecord; }
+interface KeyFacts { privateKey: KeyObject; publicKeyJwk: JsonWebKey; keyId: string; }
+interface PrivateJwkRecord extends DataRecord { kty: string; crv: string; x: string; d: string; }
+interface ResolvedSecret { payload?: unknown; revision?: number; }
+type SecretResolver = (input: {
+  dataDir: string;
+  secretRef: string;
+  expectedScope: { serviceId: string; requiredScopes: string[]; protocol: string };
+  keyProvider: LocalSecretKeyProvider | null;
+}) => Promise<ResolvedSecret>;
+interface ArtifactSignerOptions {
+  dataDir?: string;
+  resolveSecretPayload?: SecretResolver;
+  secretKeyProvider?: LocalSecretKeyProvider | null;
+  pluginId?: string;
+  serviceId?: string;
+  allowedPurposes?: unknown[];
+}
+
+function text(value: unknown = ""): string {
   return String(value ?? "").trim();
 }
 
-function record(value?: any, fallback: Record<string, any> | null = {}) : any {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+function record(value: unknown, fallback: DataRecord | null = {}): DataRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as DataRecord : fallback;
 }
 
 
-function sha256(value?: any) : any {
+function sha256(value: unknown = ""): string {
   return createHash("sha256").update(String(value)).digest("hex");
 }
 
-function validateInput(input: Record<string, any> = {}, pluginId?: any, allowedPurposes?: any) : any {
-  const source: any = record(input);
-  const secretRef: any = text(source.secretRef);
-  const purpose: any = text(source.purpose);
-  const context: any = record(source.context, null);
+function validateInput(input: DataRecord = {}, allowedPurposes: ReadonlySet<string>): SignerRequest {
+  const source = record(input) ?? {};
+  const secretRef = text(source.secretRef);
+  const purpose = text(source.purpose);
+  const context = record(source.context, null);
   if (!secretRef || !purpose || !context) {
-    const error: Error & Record<string, any> = new Error("Artifact signer request is incomplete.");
-    error.code = "artifact_signer_request_invalid";
+    const error = Object.assign(new Error("Artifact signer request is incomplete."), { code: "artifact_signer_request_invalid" });
     throw error;
   }
   if (!allowedPurposes.has(purpose)) {
-    const error: Error & Record<string, any> = new Error("Artifact signer purpose is not allowed.");
-    error.code = "artifact_signer_purpose_denied";
+    const error = Object.assign(new Error("Artifact signer purpose is not allowed."), { code: "artifact_signer_purpose_denied" });
     throw error;
   }
   return { secretRef, purpose, context };
 }
 
-function clearPrivateJwk(jwk: any = null) : any {
+function clearPrivateJwk(jwk: DataRecord | null = null): void {
   if (!jwk || typeof jwk !== "object") return;
   for (const key of Object.keys(jwk)) {
     if (typeof jwk[key] === "string") jwk[key] = "";
-    else if (jwk[key] && typeof jwk[key] === "object") clearPrivateJwk(jwk[key]);
+    else {
+      const nested = record(jwk[key], null);
+      if (nested) clearPrivateJwk(nested);
+    }
   }
 }
 
-function keyFacts(privateKeyJwk?: any) : any {
-  const privateKey: any = createPrivateKey({ key: privateKeyJwk, format: "jwk" });
-  const publicKeyJwk: any = createPublicKey(privateKey).export({ format: "jwk" });
-  const keyId: any = `ed25519:${sha256(stableJson(publicKeyJwk)).slice(0, 32)}`;
+function privateJwkRecord(value: unknown): PrivateJwkRecord | null {
+  const source = record(value, null);
+  if (!source || source.kty !== "OKP" || source.crv !== "Ed25519" ||
+      typeof source.x !== "string" || typeof source.d !== "string") {
+    return null;
+  }
+  return { ...source, kty: source.kty, crv: source.crv, x: source.x, d: source.d };
+}
+
+function keyFacts(privateKeyJwk: PrivateJwkRecord): KeyFacts {
+  const key: JsonWebKey = {
+    kty: privateKeyJwk.kty,
+    crv: privateKeyJwk.crv,
+    x: privateKeyJwk.x,
+    d: privateKeyJwk.d
+  };
+  const keyInput: JsonWebKeyInput = { key, format: "jwk" };
+  const privateKey = createPrivateKey(keyInput);
+  const publicKeyJwk = createPublicKey(privateKey).export({ format: "jwk" });
+  const keyId = `ed25519:${sha256(stableJson(publicKeyJwk)).slice(0, 32)}`;
   return { privateKey, publicKeyJwk, keyId };
 }
 
@@ -60,18 +99,18 @@ export function createArtifactSignerPort({
   pluginId = "",
   serviceId = "",
   allowedPurposes = []
-}: Record<string, any> = {}) : any {
-  const boundPluginId: any = text(pluginId);
-  const purposeGrant: any = new Set<any>(Array.isArray(allowedPurposes) ? allowedPurposes.map(text).filter(Boolean) : []);
+}: ArtifactSignerOptions = {}) {
+  const boundPluginId = text(pluginId);
+  const purposeGrant = new Set(Array.isArray(allowedPurposes) ? allowedPurposes.map(text).filter(Boolean) : []);
   if (!text(dataDir) || typeof resolveSecretPayload !== "function" || !/^[a-z][a-z0-9-]*$/u.test(boundPluginId) || purposeGrant.size === 0 ||
-      [...purposeGrant].some((purpose?: any) : any => !purpose.startsWith(`plugin-artifact.${boundPluginId}.`))) {
+      [...purposeGrant].some((purpose) => !purpose.startsWith(`plugin-artifact.${boundPluginId}.`))) {
     throw new TypeError("Artifact signer custody is not configured.");
   }
-  const boundServiceId: any = text(serviceId) || `plugin-artifact:${boundPluginId}`;
+  const boundServiceId = text(serviceId) || `plugin-artifact:${boundPluginId}`;
 
-  async function withKey(input?: any, task?: any) : Promise<any> {
-    const request: any = validateInput(input, boundPluginId, purposeGrant);
-    const resolved: any = await resolveSecretPayload({
+  async function withKey<T>(input: DataRecord, task: (input: { request: SignerRequest; facts: KeyFacts; revision: number }) => Promise<T>): Promise<T> {
+    const request = validateInput(input, purposeGrant);
+    const resolved = await resolveSecretPayload({
       dataDir,
       secretRef: request.secretRef,
       expectedScope: {
@@ -81,15 +120,15 @@ export function createArtifactSignerPort({
       },
       keyProvider: secretKeyProvider
     });
-    const payload: any = record(resolved.payload);
-    const privateKeyJwk: any = payload.privateKeyJwk ? structuredClone(payload.privateKeyJwk) : null;
+    const payload = record(resolved.payload) ?? {};
+    const sourcePrivateKeyJwk = privateJwkRecord(payload.privateKeyJwk);
+    const privateKeyJwk = sourcePrivateKeyJwk ? structuredClone(sourcePrivateKeyJwk) : null;
     if (!privateKeyJwk) {
-      const error: Error & Record<string, any> = new Error("Artifact signing key material is unavailable.");
-      error.code = "artifact_signer_key_unavailable";
+      const error = Object.assign(new Error("Artifact signing key material is unavailable."), { code: "artifact_signer_key_unavailable" });
       throw error;
     }
     try {
-      const facts: any = keyFacts(privateKeyJwk);
+      const facts = keyFacts(privateKeyJwk);
       return await task({ request, facts, revision: Number(resolved.revision || 0) });
     } finally {
       clearPrivateJwk(privateKeyJwk);
@@ -98,8 +137,8 @@ export function createArtifactSignerPort({
 
   return Object.freeze({
     id: ARTIFACT_SIGNER_PORT_ID,
-    async describe(input: Record<string, any> = {}) : Promise<any> {
-      return withKey(input, async ({ request, facts, revision }: Record<string, any>) : Promise<any> => Object.freeze({
+    async describe(input: DataRecord = {}) {
+      return withKey(input, async ({ request, facts, revision }) => Object.freeze({
         ok: true,
         keyId: facts.keyId,
         publicKeyJwk: Object.freeze({ ...facts.publicKeyJwk }),
@@ -109,20 +148,19 @@ export function createArtifactSignerPort({
         revision
       }));
     },
-    async sign(input: Record<string, any> = {}) : Promise<any> {
-      const payloadDigest: any = text(input.payloadDigest);
+    async sign(input: DataRecord = {}) {
+      const payloadDigest = text(input.payloadDigest);
       if (!/^sha256:[0-9a-f]{64}$/u.test(payloadDigest)) {
-        const error: Error & Record<string, any> = new Error("Artifact signer payload digest is invalid.");
-        error.code = "artifact_signer_payload_digest_invalid";
+        const error = Object.assign(new Error("Artifact signer payload digest is invalid."), { code: "artifact_signer_payload_digest_invalid" });
         throw error;
       }
-      return withKey(input, async ({ request, facts, revision }: Record<string, any>) : Promise<any> => {
-        const contextDigest: any = `sha256:${sha256(stableJson(request.context))}`;
-        const signedEnvelope: Readonly<Record<string, any>> = Object.freeze({ purpose: request.purpose, payloadDigest, contextDigest });
-        const bytes: any = Buffer.from(stableJson(signedEnvelope), "utf8");
+      return withKey(input, async ({ request, facts, revision }) => {
+        const contextDigest = `sha256:${sha256(stableJson(request.context))}`;
+        const signedEnvelope = Object.freeze({ purpose: request.purpose, payloadDigest, contextDigest });
+        const bytes = Buffer.from(stableJson(signedEnvelope), "utf8");
         try {
-          const signature: any = sign(null, bytes, facts.privateKey).toString("base64url");
-          const signedAt: any = new Date().toISOString();
+          const signature = sign(null, bytes, facts.privateKey).toString("base64url");
+          const signedAt = new Date().toISOString();
           return Object.freeze({
             ok: true,
             keyId: facts.keyId,

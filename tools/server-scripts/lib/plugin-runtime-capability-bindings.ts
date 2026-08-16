@@ -138,14 +138,6 @@ export function reducePluginRuntimeCapabilityBindings({
     }
     if (aggregate) {
       aggregateCapabilityIds.push(capabilityId);
-      if (pluginIds.length > 0) {
-        findings.push(bindingFinding(
-          "plugin-runtime-aggregate-has-plugin-ids",
-          "The aggregate plugin runtime capability cannot also own individual plugin ids.",
-          { capabilityId }
-        ));
-      }
-      continue;
     }
     for (const pluginId of pluginIds) {
       if (!knownPluginIdSet.has(pluginId)) {

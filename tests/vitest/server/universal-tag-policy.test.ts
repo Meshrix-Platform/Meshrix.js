@@ -133,7 +133,7 @@ describe("universal tag policy evaluator", () : any => {
         }
       });
 
-      const decision: any = provider.evaluatePolicy({
+      const decision: any = await provider.evaluatePolicy({
         operation: { id: "console.release.open" },
         context: {
           tagPolicy: {
@@ -180,7 +180,7 @@ describe("universal tag policy evaluator", () : any => {
         }
       });
 
-      const decision: any = provider.evaluatePolicy({
+      const decision: any = await provider.evaluatePolicy({
         operation: { id: "external_services.forward" },
         input: {
           serviceId: "service-blocked",

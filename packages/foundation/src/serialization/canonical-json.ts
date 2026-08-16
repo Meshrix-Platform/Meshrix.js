@@ -17,7 +17,7 @@ import {
   canonicalJson
 } from "@meshrix/contracts/serialization/canonical-json";
 
-const CANONICAL_VERSION: any = CANONICAL_JSON_VERSION;
+const CANONICAL_VERSION = CANONICAL_JSON_VERSION;
 
 /**
  * Serialize a value to canonical JSON.
@@ -35,8 +35,8 @@ export { canonicalJson };
  * @param {string} [algorithm='sha256']
  * @returns {string} Hex-encoded hash
  */
-export function canonicalHash(value?: any, algorithm: any = "sha256") : any {
-  const json: any = canonicalJson(value);
+export function canonicalHash(value?: unknown, algorithm = "sha256"): string {
+  const json = canonicalJson(value);
   return crypto.createHash(algorithm).update(json, "utf8").digest("hex");
 }
 
@@ -46,7 +46,7 @@ export function canonicalHash(value?: any, algorithm: any = "sha256") : any {
  * @param {string} [algorithm='sha256']
  * @returns {string} `${algorithm}:${hex}`
  */
-export function canonicalHashWithPrefix(value?: any, algorithm: any = "sha256") : any {
+export function canonicalHashWithPrefix(value?: unknown, algorithm = "sha256"): string {
   return `${algorithm}:${canonicalHash(value, algorithm)}`;
 }
 

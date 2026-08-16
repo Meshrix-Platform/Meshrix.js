@@ -24,8 +24,8 @@ describe("runtime capacity workload catalog", () : any => {
   });
 
   it("produces reproducible closed-loop and open-loop schemas", async () : Promise<any> => {
-    const closed: any = runClosedLoopWorkload(workloadById("model-routing-admission"), null);
-    const replay: any = await replayClosedLoopDeterminism("model-routing-admission");
+    const closed: any = runClosedLoopWorkload(workloadById("external-gateway-admission"), null);
+    const replay: any = await replayClosedLoopDeterminism("external-gateway-admission");
     expect(closed.mode).toBe("closed");
     expect(closed.iterations).toBe(200);
     expect(closed.counters).toEqual(replay.first);

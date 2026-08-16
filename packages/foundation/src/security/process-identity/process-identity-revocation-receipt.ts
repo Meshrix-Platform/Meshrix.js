@@ -8,14 +8,32 @@ import {
   sha256Hex,
   signStableObject,
   stableJson,
-  text
+  text,
+  type ProcessIdentityObject
 } from "./process-identity-core.ts";
 
-export const PROCESS_IDENTITY_REVOCATION_RECEIPT_VERSION: any = "v0.0.1:process-identity:revocation-receipt-1";
-export const PROCESS_IDENTITY_SIGNATURE_PAYLOAD_ENCODING: any = "v0.0.1:platform:stable-json-1";
+export const PROCESS_IDENTITY_REVOCATION_RECEIPT_VERSION = "v0.0.1:process-identity:revocation-receipt-1";
+export const PROCESS_IDENTITY_SIGNATURE_PAYLOAD_ENCODING = "v0.0.1:platform:stable-json-1";
 
-function revocationReceiptPayloadFromInput(input: Record<string, any> = {}) : any {
-  const source: any = asObject(input);
+interface RevocationReceiptOptions {
+  state?: ProcessIdentityObject;
+  client?: ProcessIdentityObject;
+  revokedAt?: string;
+  reason?: string;
+  endpoint?: string;
+  ownerSubjectRef?: string;
+  ownerArtifactId?: string;
+  ownerArtifactDigestSha256?: string;
+}
+
+interface VerifyRevocationReceiptOptions {
+  receipt?: Record<string, unknown> | null;
+  serverIdentity?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
+}
+
+function revocationReceiptPayloadFromInput(input: Record<string, unknown> = {}) {
+  const source = asObject(input);
   return {
     schemaVersion: text(source.schemaVersion) || "v0.0.1:schema:definition-1",
     protocolVersion: text(source.protocolVersion) || PROCESS_IDENTITY_PROTOCOL_VERSION,
@@ -50,10 +68,10 @@ export function createProcessIdentityRevocationReceipt({
   ownerSubjectRef = "",
   ownerArtifactId = "",
   ownerArtifactDigestSha256 = ""
-}: Record<string, any> = {}) : any {
-  const serverIdentity: any = state.serverIdentity || {};
-  const fingerprint: any = normalizeClientFingerprint(client.clientFingerprint, { required: false });
-  const payload: any = revocationReceiptPayloadFromInput({
+}: RevocationReceiptOptions = {}) {
+  const serverIdentity = asObject(state.serverIdentity);
+  const fingerprint = normalizeClientFingerprint(asObject(client.clientFingerprint), { required: false });
+  const payload = revocationReceiptPayloadFromInput({
     serverId: serverIdentity.serverId,
     serverKeyId: serverIdentity.serverKeyId,
     serverTrustPin: serverIdentity.serverTrustPin,
@@ -71,7 +89,7 @@ export function createProcessIdentityRevocationReceipt({
     ownerArtifactId,
     ownerArtifactDigestSha256
   });
-  const receiptDigestSha256: any = sha256Hex(stableJson(payload));
+  const receiptDigestSha256 = sha256Hex(stableJson(payload));
   return {
     ...payload,
     receiptDigestSha256,
@@ -82,7 +100,7 @@ export function createProcessIdentityRevocationReceipt({
       authority: serverIdentity.serverId,
       payloadEncoding: PROCESS_IDENTITY_SIGNATURE_PAYLOAD_ENCODING,
       payloadDigest: `sha256:${receiptDigestSha256}`,
-      value: signStableObject(serverIdentity.privateKeyPem, payload)
+      value: signStableObject(text(serverIdentity.privateKeyPem), payload)
     }
   };
 }
@@ -91,16 +109,16 @@ export function verifyProcessIdentityRevocationReceiptSignature({
   receipt = null,
   serverIdentity = {},
   expected = {}
-}: Record<string, any> = {}) : any {
-  const source: any = asObject(receipt, null);
+}: VerifyRevocationReceiptOptions = {}) {
+  const source = asObject(receipt, null);
   if (!source) {
     return { ok: false, reasonCode: "process_identity_revocation_receipt_missing" };
   }
-  const effectiveServerIdentity: any = asObject(serverIdentity, {});
-  const payload: any = revocationReceiptPayloadFromInput(source);
-  const receiptDigestSha256: any = sha256Hex(stableJson(payload));
-  const signature: any = asObject(source.signature);
-  const publicKeyPem: any = text(effectiveServerIdentity.publicKeyPem);
+  const effectiveServerIdentity = asObject(serverIdentity, {});
+  const payload = revocationReceiptPayloadFromInput(source);
+  const receiptDigestSha256 = sha256Hex(stableJson(payload));
+  const signature = asObject(source.signature);
+  const publicKeyPem = text(effectiveServerIdentity.publicKeyPem);
   if (
     source.receiptDigestSha256 !== receiptDigestSha256 ||
     signature.algorithm !== "ed25519" ||
@@ -113,7 +131,7 @@ export function verifyProcessIdentityRevocationReceiptSignature({
   ) {
     return { ok: false, reasonCode: "process_identity_revocation_receipt_signature_metadata_invalid" };
   }
-  const checks: Record<string, any> = {
+  const checks: Record<string, string> = {
     serverId: text(effectiveServerIdentity.serverId),
     serverKeyId: text(effectiveServerIdentity.serverKeyId),
     serverTrustPin: text(effectiveServerIdentity.serverTrustPin),
@@ -127,7 +145,10 @@ export function verifyProcessIdentityRevocationReceiptSignature({
     ownerArtifactId: text(expected.ownerArtifactId),
     ownerArtifactDigestSha256: text(expected.ownerArtifactDigestSha256)
   };
-  for (const [field, expectedValue] of (Object.entries(checks) as [string, any][])) {
+  for (const [field, expectedValue] of Object.entries(checks) as Array<[
+    keyof typeof payload,
+    string
+  ]>) {
     if (expectedValue && text(payload[field]) !== expectedValue) {
       return {
         ok: false,
@@ -137,7 +158,7 @@ export function verifyProcessIdentityRevocationReceiptSignature({
     }
   }
   try {
-    const ok: any = crypto.verify(
+    const ok = crypto.verify(
       null,
       Buffer.from(stableJson(payload), "utf8"),
       crypto.createPublicKey(publicKeyPem),

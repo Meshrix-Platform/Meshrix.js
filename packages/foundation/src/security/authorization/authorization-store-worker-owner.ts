@@ -8,34 +8,68 @@ import {
 import { ServerConfig } from "#meshrix/server-config";
 import { runMigrations } from "../../storage/sqlite-migrations.ts";
 
-function nowIso() : any {
+interface EvidenceRecord extends Record<string, unknown> {
+  subject?: EvidenceRecord;
+  operation?: EvidenceRecord;
+  tool?: EvidenceRecord;
+  grant?: EvidenceRecord;
+  tenant?: EvidenceRecord;
+  resource?: EvidenceRecord;
+  abac?: EvidenceRecord;
+  deniedRequest?: EvidenceRecord;
+}
+interface EvidenceQuery extends Record<string, unknown> {
+  limit?: unknown; subjectId?: unknown; operationId?: unknown; effect?: unknown;
+  traceId?: unknown; tenantId?: unknown; workspaceId?: unknown;
+  toolId?: unknown; reasonCode?: unknown;
+}
+interface SqliteResult { changes?: number }
+interface SqliteStatement {
+  all(...params: unknown[]): EvidenceRecord[];
+  get(...params: unknown[]): EvidenceRecord | undefined;
+  run(...params: unknown[]): SqliteResult;
+}
+interface SqliteDatabase {
+  exec(sql: string): unknown;
+  prepare(sql: string): SqliteStatement;
+  transaction<T>(action: (input: EvidenceRecord) => T): (input: EvidenceRecord) => T;
+  close(): void;
+}
+
+function evidenceRecord(value: unknown): EvidenceRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as EvidenceRecord
+    : {};
+}
+
+function nowIso() {
   return new Date().toISOString();
 }
 
-function stringifyJson(value?: any) : any {
+function stringifyJson(value?: unknown): string {
   return JSON.stringify(value ?? null);
 }
 
-function parseJson(value?: any, fallback?: any) : any {
+function parseJson<T>(value: unknown, fallback: T): unknown | T {
   try {
-    const parsed: any = JSON.parse(value || "");
+    const parsed: unknown = JSON.parse(String(value || ""));
     return parsed === undefined || parsed === null ? fallback : parsed;
   } catch {
     return fallback;
   }
 }
 
-function randomId(prefix?: any) : any {
+function randomId(prefix?: unknown): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
-function asLimit(value?: any, fallback: any = 100) : any {
+function asLimit(value?: unknown, fallback = 100): number {
   return Math.max(1, Math.min(Number(value || fallback) || fallback, 500));
 }
 
-function firstString(...values: any[]) : any {
+function firstString(...values: unknown[]): string {
   for (const value of values) {
-    const text: any = String(value || "").trim();
+    const text = String(value || "").trim();
     if (text) {
       return text;
     }
@@ -43,15 +77,15 @@ function firstString(...values: any[]) : any {
   return "";
 }
 
-const DENIED_REFERENCE_SCHEMA: any = "authorization_decisions.decision_json";
+const DENIED_REFERENCE_SCHEMA = "authorization_decisions.decision_json";
 
-let deniedReferenceWrites: any = 0;
-let deniedReferencesResolved: any = 0;
-let deniedDuplicateRowsRemoved: any = 0;
-let deniedRowsConverted: any = 0;
+let deniedReferenceWrites = 0;
+let deniedReferencesResolved = 0;
+let deniedDuplicateRowsRemoved = 0;
+let deniedRowsConverted = 0;
 
-function migrateAuthorizationDeniedReferences(db?: any) : any {
-  const duplicateGroups: any = db.prepare(`
+function migrateAuthorizationDeniedReferences(db: SqliteDatabase): void {
+  const duplicateGroups = db.prepare(`
     SELECT decision_id
     FROM authorization_denied_requests
     WHERE decision_id <> ''
@@ -59,17 +93,17 @@ function migrateAuthorizationDeniedReferences(db?: any) : any {
     HAVING COUNT(*) > 1
   `).all();
   for (const group of duplicateGroups) {
-    const rows: any = db.prepare(`
+    const rows = db.prepare(`
       SELECT subject_id, operation_id, tool_id, tenant_id, workspace_id, reason_code
       FROM authorization_denied_requests
       WHERE decision_id = ?
     `).all(group.decision_id);
-    const uniqueProjectionCount: any = new Set<any>(rows.map((row?: any) : any => JSON.stringify(row))).size;
+    const uniqueProjectionCount = new Set(rows.map((row) => JSON.stringify(row))).size;
     if (uniqueProjectionCount !== 1) {
       throw new Error("Authorization denial migration found conflicting decision projections.");
     }
   }
-  const deleteResult: any = db.prepare(`
+  const deleteResult = db.prepare(`
     DELETE FROM authorization_denied_requests
     WHERE decision_id <> ''
       AND EXISTS (
@@ -85,7 +119,7 @@ function migrateAuthorizationDeniedReferences(db?: any) : any {
       )
   `).run();
   deniedDuplicateRowsRemoved += Number(deleteResult.changes || 0);
-  const updateResult: any = db.prepare(`
+  const updateResult = db.prepare(`
     UPDATE authorization_denied_requests AS denied
     SET denied_json = json_object(
       'decisionId', denied.decision_id,
@@ -102,7 +136,7 @@ function migrateAuthorizationDeniedReferences(db?: any) : any {
       )
   `).run();
   deniedRowsConverted += Number(updateResult.changes || 0);
-  const unconverted: any = db.prepare(`
+  const unconverted = db.prepare(`
     SELECT denied.denied_request_id
     FROM authorization_denied_requests AS denied
     WHERE denied.decision_id <> ''
@@ -122,7 +156,7 @@ function migrateAuthorizationDeniedReferences(db?: any) : any {
   }
 }
 
-function redactAuthorizationDecisionValue(value?: any, depth: any = 0, path: any = []) : any {
+function redactAuthorizationDecisionValue(value?: unknown, depth = 0, path: string[] = []): unknown {
   if (depth > 8) {
     return "<redacted-depth>";
   }
@@ -138,12 +172,12 @@ function redactAuthorizationDecisionValue(value?: any, depth: any = 0, path: any
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((item?: any) : any => redactAuthorizationDecisionValue(item, depth + 1, path));
+    return value.map((item) => redactAuthorizationDecisionValue(item, depth + 1, path));
   }
-  const output: Record<string, any> = {};
-  for (const [key, nested] of (Object.entries(value) as [string, any][])) {
-    const nextPath: any[] = [...path, key];
-    const lowerKey: any = key.toLowerCase();
+  const output: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value)) {
+    const nextPath = [...path, key];
+    const lowerKey = key.toLowerCase();
     if (/token|secret|password|authorization|cookie|api[-_]?key|csrf/i.test(key)) {
       output[key] = "<redacted>";
     } else if (["keyhash", "capabilitysethash", "runtimelookupkeybase64", "bindinglookupkeybase64"].includes(lowerKey)) {
@@ -163,7 +197,7 @@ function redactAuthorizationDecisionValue(value?: any, depth: any = 0, path: any
   return output;
 }
 
-function subjectIdFrom(value: Record<string, any> = {}) : any {
+function subjectIdFrom(value: EvidenceRecord = {}) {
   return String(
     value.subjectId ||
       value.userId ||
@@ -175,7 +209,7 @@ function subjectIdFrom(value: Record<string, any> = {}) : any {
   );
 }
 
-function ensureSchema(db?: any) : any {
+function ensureSchema(db: SqliteDatabase): void {
   db.exec(`
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -254,13 +288,13 @@ function ensureSchema(db?: any) : any {
   runMigrations(db, [
     {
       version: 1,
-      up: (d?: any) : any => {
+      up: (d: SqliteDatabase) => {
         migrateAuthorizationDeniedReferences(d);
       }
     },
     {
       version: 2,
-      up: (d?: any) : any => {
+      up: (d: SqliteDatabase) => {
         migrateAuthorizationDeniedReferences(d);
         d.exec(`
           CREATE UNIQUE INDEX IF NOT EXISTS idx_authorization_denied_decision_unique
@@ -272,7 +306,7 @@ function ensureSchema(db?: any) : any {
   ]);
 }
 
-function rowToDecision(row?: any) : any {
+function rowToDecision(row: EvidenceRecord) {
   return {
     decisionId: row.decision_id,
     traceId: row.trace_id,
@@ -297,7 +331,7 @@ function rowToDecision(row?: any) : any {
   };
 }
 
-function rowToReceipt(row?: any) : any {
+function rowToReceipt(row: EvidenceRecord) {
   return {
     receiptId: row.receipt_id,
     decisionId: row.decision_id,
@@ -309,7 +343,7 @@ function rowToReceipt(row?: any) : any {
   };
 }
 
-function rowToLoanRecord(row?: any) : any {
+function rowToLoanRecord(row: EvidenceRecord) {
   return {
     loanRecordId: row.loan_record_id,
     receiptId: row.receipt_id,
@@ -322,7 +356,7 @@ function rowToLoanRecord(row?: any) : any {
   };
 }
 
-function rowToDeniedRequest(row?: any) : any {
+function rowToDeniedRequest(row: EvidenceRecord): EvidenceRecord {
   return {
     deniedRequestId: row.denied_request_id,
     decisionId: row.decision_id,
@@ -332,23 +366,24 @@ function rowToDeniedRequest(row?: any) : any {
     tenantId: row.tenant_id || "",
     workspaceId: row.workspace_id || "",
     reasonCode: row.reason_code,
-    deniedRequest: parseJson(row.denied_json, {}),
+    deniedRequest: evidenceRecord(parseJson(row.denied_json, {})),
     createdAt: row.created_at
   };
 }
 
-export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPath = "" }: Record<string, any> = {}) : any {
-  const resolvedRoot: any = rootPath ||
+export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPath = "" }: { userDataPath?: string; rootPath?: string } = {}) {
+  const resolvedRoot = rootPath ||
     path.join(userDataPath || ServerConfig.getDataDir(), "security", "authorization");
-  const databasePath: any = ensurePrivateSqliteLocation(path.join(resolvedRoot, "authorization.sqlite"));
-  let db: any = null;
+  const databasePath = ensurePrivateSqliteLocation(path.join(resolvedRoot, "authorization.sqlite"));
+  let db: SqliteDatabase | undefined;
   try {
-    withPrivateFileCreationMask(() : any => {
-      db = openSqliteDatabase(databasePath);
-      ensureSchema(db);
+    withPrivateFileCreationMask(() => {
+      const openedDatabase: SqliteDatabase = openSqliteDatabase(databasePath);
+      db = openedDatabase;
+      ensureSchema(openedDatabase);
       ensurePrivateSqliteLocation(databasePath);
     });
-  } catch (error: any) {
+  } catch (error) {
     try {
       db?.close?.();
     } catch {
@@ -356,18 +391,23 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     }
     throw error;
   }
-  let isClosed: any = false;
+  if (!db) {
+    throw new Error("Authorization evidence storage initialization failed.");
+  }
+  const database = db;
+  const statement = (sql: string): SqliteStatement => database.prepare(sql);
+  let isClosed = false;
 
-  function appendDeniedRequest(entry: Record<string, any> = {}) : any {
-    const deniedRequest: any = entry.deniedRequest || entry;
-    const storedDeniedRequest: any = redactAuthorizationDecisionValue(deniedRequest);
-    const deniedRequestId: any = String(
+  function appendDeniedRequest(entry: EvidenceRecord = {}) {
+    const deniedRequest = entry.deniedRequest || entry;
+    const storedDeniedRequest = redactAuthorizationDecisionValue(deniedRequest);
+    const deniedRequestId = String(
       entry.deniedRequestId ||
         deniedRequest.deniedRequestId ||
         deniedRequest.auditId ||
         randomId("authz_denied")
     );
-    db.prepare(`
+    statement(`
       INSERT INTO authorization_denied_requests (
         denied_request_id, decision_id, subject_id, operation_id, tool_id, tenant_id, workspace_id, reason_code, denied_json, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -386,11 +426,11 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     return { deniedRequestId };
   }
 
-  const appendDecisionTransaction: any = db.transaction((decision: Record<string, any> = {}) : any => {
-    const decisionId: any = String(decision.decisionId || randomId("authz_decision"));
-    const subject: any = decision.subject || {};
-    const storedDecision: any = redactAuthorizationDecisionValue({ ...decision, decisionId });
-    db.prepare(`
+  const appendDecisionTransaction = database.transaction((decision: EvidenceRecord = {}) => {
+    const decisionId = String(decision.decisionId || randomId("authz_decision"));
+    const subject = decision.subject || {};
+    const storedDecision = redactAuthorizationDecisionValue({ ...decision, decisionId });
+    statement(`
       INSERT INTO authorization_decisions (
         decision_id, trace_id, subject_type, subject_id, operation_id, tool_id, grant_id, action,
         tenant_id, workspace_id, data_class, requested_egress, effect, reason_code,
@@ -439,13 +479,13 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     return { decisionId };
   });
 
-  function appendDecision(decision: Record<string, any> = {}) : any {
+  function appendDecision(decision: EvidenceRecord = {}) {
     return appendDecisionTransaction(decision);
   }
 
-  function appendReceipt(receipt: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const receiptId: any = String(receipt.receiptId || options.receiptId || randomId("authz_receipt"));
-    db.prepare(`
+  function appendReceipt(receipt: EvidenceRecord = {}, options: EvidenceRecord = {}) {
+    const receiptId = String(receipt.receiptId || options.receiptId || randomId("authz_receipt"));
+    statement(`
       INSERT INTO authorization_receipts (
         receipt_id, decision_id, subject_id, workspace_id, access_mode, receipt_json, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -461,9 +501,9 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     return { receiptId };
   }
 
-  function appendLoanRecord(loanRecord: Record<string, any> = {}, options: Record<string, any> = {}) : any {
-    const loanRecordId: any = String(loanRecord.loanRecordId || options.loanRecordId || randomId("authz_loan"));
-    db.prepare(`
+  function appendLoanRecord(loanRecord: EvidenceRecord = {}, options: EvidenceRecord = {}) {
+    const loanRecordId = String(loanRecord.loanRecordId || options.loanRecordId || randomId("authz_loan"));
+    statement(`
       INSERT INTO authorization_loan_records (
         loan_record_id, receipt_id, decision_id, subject_id, workspace_id, access_mode, loan_json, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -488,9 +528,9 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     traceId = "",
     tenantId = "",
     workspaceId = ""
-  }: Record<string, any> = {}) : any {
-    const clauses: any[] = [];
-    const params: any[] = [];
+  }: EvidenceQuery = {}) {
+    const clauses: string[] = [];
+    const params: string[] = [];
     if (subjectId) {
       clauses.push("subject_id = ?");
       params.push(String(subjectId));
@@ -515,8 +555,8 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
       clauses.push("workspace_id = ?");
       params.push(String(workspaceId));
     }
-    const where: any = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    return db.prepare(`
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    return statement(`
       SELECT * FROM authorization_decisions
       ${where}
       ORDER BY created_at DESC
@@ -524,10 +564,10 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     `).all(...params, asLimit(limit)).map(rowToDecision);
   }
 
-  function listReceipts({ limit = 100, subjectId = "" }: Record<string, any> = {}) : any {
-    const where: any = subjectId ? "WHERE subject_id = ?" : "";
-    const params: any = subjectId ? [String(subjectId)] : [];
-    return db.prepare(`
+  function listReceipts({ limit = 100, subjectId = "" }: EvidenceQuery = {}) {
+    const where = subjectId ? "WHERE subject_id = ?" : "";
+    const params = subjectId ? [String(subjectId)] : [];
+    return statement(`
       SELECT * FROM authorization_receipts
       ${where}
       ORDER BY created_at DESC
@@ -535,10 +575,10 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     `).all(...params, asLimit(limit)).map(rowToReceipt);
   }
 
-  function listLoanRecords({ limit = 100, subjectId = "" }: Record<string, any> = {}) : any {
-    const where: any = subjectId ? "WHERE subject_id = ?" : "";
-    const params: any = subjectId ? [String(subjectId)] : [];
-    return db.prepare(`
+  function listLoanRecords({ limit = 100, subjectId = "" }: EvidenceQuery = {}) {
+    const where = subjectId ? "WHERE subject_id = ?" : "";
+    const params = subjectId ? [String(subjectId)] : [];
+    return statement(`
       SELECT * FROM authorization_loan_records
       ${where}
       ORDER BY created_at DESC
@@ -554,9 +594,9 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     operationId = "",
     toolId = "",
     reasonCode = ""
-  }: Record<string, any> = {}) : any {
-    const clauses: any[] = [];
-    const params: any[] = [];
+  }: EvidenceQuery = {}) {
+    const clauses: string[] = [];
+    const params: string[] = [];
     if (subjectId) {
       clauses.push("subject_id = ?");
       params.push(String(subjectId));
@@ -581,27 +621,27 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
       clauses.push("reason_code = ?");
       params.push(String(reasonCode));
     }
-    const where: any = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-    const resolveDeniedRequest: any = (entry: Record<string, any> = {}) : any => {
-      const stored: any = entry.deniedRequest || {};
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const resolveDeniedRequest = (entry: EvidenceRecord = {}) => {
+      const stored = entry.deniedRequest || {};
       if (
         stored.reference !== DENIED_REFERENCE_SCHEMA ||
         !entry.decisionId
       ) {
         return stored;
       }
-      const canonical: any = db.prepare(
+      const canonical = statement(
         "SELECT decision_json FROM authorization_decisions WHERE decision_id = ?"
       ).get(String(entry.decisionId));
       deniedReferencesResolved += 1;
       return canonical ? parseJson(canonical.decision_json, stored) : stored;
     };
-    return db.prepare(`
+    return statement(`
       SELECT * FROM authorization_denied_requests
       ${where}
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(...params, asLimit(limit)).map(rowToDeniedRequest).map((entry?: any) : any => ({
+    `).all(...params, asLimit(limit)).map(rowToDeniedRequest).map((entry) => ({
       ...entry,
       deniedRequest: resolveDeniedRequest(entry)
     }));
@@ -618,19 +658,19 @@ export function createAuthorizationStoreWorkerOwner({ userDataPath = "", rootPat
     listReceipts,
     listLoanRecords,
     listDeniedRequests,
-    getRefactorInstrumentation: () : any => ({
+    getRefactorInstrumentation: () => ({
       schemaVersion: "v0.0.1:risk-control:authorization-denied-reference-store-1",
       deniedReferenceWrites,
       deniedReferencesResolved,
       deniedDuplicateRowsRemoved,
       deniedRowsConverted
     }),
-    close() : any {
+    close() {
       if (isClosed) {
         return;
       }
       isClosed = true;
-      db.close();
+      database.close();
     }
   };
 }

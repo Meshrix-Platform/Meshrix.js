@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "v0.0.1:plugin:manifest-1",
+  "id": "model-gateway",
+  "label": "Model Gateway",
+  "version": "0.0.1",
+  "description": "Default-disabled stateless adapter for an independently deployed Model Gateway Service.",
+  "defaultEnabled": false,
+  "contributionMode": "selected",
+  "dependencies": [],
+  "hostCapabilities": [],
+  "features": ["model-gateway"],
+  "operations": [
+    "model_gateway.call",
+    "models.list",
+    "models.get"
+  ],
+  "routes": [],
+  "mcpTools": [
+    "meshrix.modelGateway.call",
+    "meshrix.modelGateway.models.list",
+    "meshrix.modelGateway.models.get"
+  ],
+  "consoleEntries": [],
+  "stateMachines": [],
+  "runtime": { "module": "./runtime.mjs" },
+  "verifierHooks": []
+}

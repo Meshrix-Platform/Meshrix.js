@@ -42,9 +42,12 @@ export function createPendingStoreMethods(ctx?: any) : any {
       .concat(requiredApproval.approvalLayers || [])
       .map((item?: any) : any => String(item || "").trim())
       .filter(Boolean))];
+    const redactedApproval = redactOperationAuditValue(requiredApproval);
     return {
       requiredApproval: {
-        ...redactOperationAuditValue(requiredApproval),
+        ...(redactedApproval && typeof redactedApproval === "object" && !Array.isArray(redactedApproval)
+          ? redactedApproval
+          : {}),
         ...(approvalLayers.length ? { approvalLayers } : {})
       },
       approvalLayers

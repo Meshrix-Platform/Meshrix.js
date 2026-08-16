@@ -68,6 +68,13 @@ async function runStage(errorCode?: any, command?: any, args?: any, options: Rec
   } catch (error: any) {
     if (options.classifyNpmInstall === true) {
       const output: any = `${String(error?.stdout || "")}\n${String(error?.stderr || "")}`;
+      if (inContainer && String(error?.signal || "").toUpperCase() === "SIGKILL") {
+        const memoryEvents = fsSync.readFileSync("/sys/fs/cgroup/memory.events", "utf8");
+        const oomKills = Number(memoryEvents.match(/^oom_kill\s+(\d+)$/mu)?.[1] || 0);
+        if (oomKills > 0) {
+          throw new Error("npm_package_install_oom_killed");
+        }
+      }
       if (/ENOTCACHED|cache mode is ['"]?only-if-cached/iu.test(output)) {
         const registryPath: any = output.match(
           /https:\/\/registry\.npmjs\.org\/([^\s?]+)/iu
@@ -94,11 +101,60 @@ async function runStage(errorCode?: any, command?: any, args?: any, options: Rec
       if (/ETIMEDOUT|ENETUNREACH|EAI_AGAIN/iu.test(output)) {
         throw new Error("npm_package_registry_unreachable");
       }
+      if (/\bENOENT\b/iu.test(output)) {
+        const missingPath = output.match(/npm (?:error|ERR!) path ([^\r\n]+)/iu)?.[1]?.trim() || "";
+        const normalizedPath = missingPath.replaceAll("\\", "/");
+        const modulePath = normalizedPath.match(/\/node_modules\/(@?[^/]+(?:\/[^/]+)?)(?:\/(.*))?$/u);
+        const safeTarget = modulePath
+          ? `${modulePath[1]}_${path.posix.basename(modulePath[2] || "package")}`
+          : path.posix.basename(normalizedPath || "unknown");
+        const normalizedTarget = safeTarget
+          .replace(/^@/u, "")
+          .replace(/[^a-z0-9]+/giu, "_")
+          .replace(/^_+|_+$/gu, "")
+          .toLowerCase()
+          .slice(0, 100);
+        throw new Error(`npm_package_install_enoent_${normalizedTarget || "unknown"}`);
+      }
+      const npmErrorCode = output.match(/npm (?:error|ERR!) code ([A-Z0-9_]+)/iu)?.[1];
+      if (npmErrorCode) {
+        const normalizedCode = npmErrorCode.toLowerCase().replace(/[^a-z0-9_]+/gu, "_");
+        throw new Error(`npm_package_install_${normalizedCode}`);
+      }
+      const failedPackage = output.match(
+        /node_modules\/(@?[a-z0-9._-]+(?:\/[a-z0-9._-]+)?)[/\\\s]/iu
+      )?.[1];
+      if (/command failed|lifecycle/iu.test(output) && failedPackage) {
+        const normalizedPackage = failedPackage
+          .replace(/^@/u, "")
+          .replace(/[^a-z0-9]+/giu, "_")
+          .toLowerCase();
+        throw new Error(`npm_package_install_script_failed_${normalizedPackage}`);
+      }
+      const fallbackMarkers = [
+        output.trim() ? "output" : "empty",
+        /npm (?:error|ERR!)/iu.test(output) ? "npm_error" : "no_npm_error",
+        /command failed/iu.test(output) ? "command_failed" : "no_command_failure",
+        /not found|no such file/iu.test(output) ? "missing_file" : "no_missing_file",
+        `exit_${String(error?.code || "unknown").replace(/[^a-z0-9]+/giu, "_").toLowerCase()}`,
+        `signal_${String(error?.signal || "none").replace(/[^a-z0-9]+/giu, "_").toLowerCase()}`
+      ];
+      throw new Error(`npm_package_release_set_install_failed_${fallbackMarkers.join("_")}`);
     }
     if (options.classifyRuntime === true) {
       const output: any = `${String(error?.stdout || "")}\n${String(error?.stderr || "")}`;
       if (/ERR_MODULE_NOT_FOUND|Cannot find package/iu.test(output)) {
-        throw new Error("npm_package_runtime_module_resolution_failed");
+        const missingModule = output.match(/Cannot find (?:package|module) ['"]([^'"]+)['"]/iu)?.[1] || "unknown";
+        const safeModule = path.isAbsolute(missingModule)
+          ? path.basename(missingModule)
+          : missingModule;
+        const normalizedModule = safeModule
+          .replace(/^@/u, "")
+          .replace(/[^a-z0-9]+/giu, "_")
+          .replace(/^_+|_+$/gu, "")
+          .toLowerCase()
+          .slice(0, 100);
+        throw new Error(`npm_package_runtime_module_resolution_failed_${normalizedModule || "unknown"}`);
       }
       if (/Could not locate the bindings file|better_sqlite3|better-sqlite3/iu.test(output)) {
         throw new Error("npm_package_runtime_native_storage_failed");
@@ -108,6 +164,32 @@ async function runStage(errorCode?: any, command?: any, args?: any, options: Rec
       }
       if (/EACCES|permission denied|read-only file system/iu.test(output)) {
         throw new Error("npm_package_runtime_write_boundary_failed");
+      }
+      const reasonCode = output.match(/reasonCode=([a-z0-9_]+)/iu)?.[1];
+      if (reasonCode) {
+        throw new Error(`npm_package_runtime_${reasonCode.toLowerCase()}`);
+      }
+      const knownRuntimeAssertion = [
+        "startup status is missing",
+        "UI mode is missing",
+        "runtime profile is missing",
+        "discovery mode is missing",
+        "startup output exposed an endpoint URL",
+        "startup output exposed a stack frame",
+        "shutdown start status is missing",
+        "shutdown completion status is missing",
+        "server output exposed an endpoint URL",
+        "server output exposed a stack frame",
+        "runtime log output is missing",
+        "sanitized startup failure status is missing",
+        "dynamic port did not require private readiness IPC"
+      ].find((message) => output.includes(message));
+      if (knownRuntimeAssertion) {
+        const normalizedAssertion = knownRuntimeAssertion
+          .replace(/[^a-z0-9]+/giu, "_")
+          .replace(/^_+|_+$/gu, "")
+          .toLowerCase();
+        throw new Error(`npm_package_runtime_assertion_${normalizedAssertion}`);
       }
     }
     throw new Error(errorCode);
@@ -172,9 +254,13 @@ const probeEnvironment: Record<string, any> = {
   XDG_CACHE_HOME: path.join(isolatedHome, ".cache"),
   CODEX_HOME: isolatedCodexHome,
   MESHRIX_USER_DATA_DIR: isolatedData,
-  NODE_OPTIONS: "",
+  NODE_OPTIONS: "--max-old-space-size=384",
   npm_config_userconfig: isolatedNpmrc,
   npm_config_cache: isolatedCache,
+  npm_config_jobs: "1",
+  MAKEFLAGS: "-j1",
+  CFLAGS: "-O1 -g0",
+  CXXFLAGS: "-O1 -g0",
   ...(freshContainer === true
     ? {
         npm_config_build_from_source: "true",
@@ -356,7 +442,7 @@ try {
       npmCommand(),
       npmArgs([
         "install",
-        "--ignore-scripts=false",
+        "--ignore-scripts=true",
         "--omit=dev",
         "--no-audit",
         "--no-fund",
@@ -372,6 +458,16 @@ try {
   } finally {
     await registryMirror?.close();
   }
+  await runProbeStage(
+    "npm_package_native_dependency_build_failed",
+    npmCommand(),
+    npmArgs(["rebuild", "better-sqlite3", "--build-from-source"]),
+    {
+      cwd: consumerDirectory,
+      classifyNpmInstall: true,
+      registry: installRegistry
+    }
+  );
 
   const help: any = await runProbeStage(
     "npm_package_cli_help_failed",

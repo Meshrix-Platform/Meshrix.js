@@ -1,15 +1,7 @@
 const WORKER_PROVIDERS: Readonly<Record<string, any>> = Object.freeze({
-  "agent-worker": {
-    specifier: "./agent-worker.ts",
-    exportName: "createAgentWorkerRuntime"
-  },
   "import-worker": {
     specifier: "./import-worker.ts",
     exportName: "createImportWorkerRuntime"
-  },
-  "maintenance-worker": {
-    specifier: "./maintenance-worker.ts",
-    exportName: "createMaintenanceWorkerRuntime"
   }
 });
 

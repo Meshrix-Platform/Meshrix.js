@@ -2,25 +2,88 @@ import path from "node:path";
 import { openSqliteDatabase } from "@meshrix/foundation/storage/sqlite-database";
 import { ensurePrivateDir } from "#meshrix/foundation/storage/private-file-atomic";
 import { ensurePrivateSqliteLocation } from "#meshrix/foundation/storage/private-sqlite";
+import type Database from "better-sqlite3";
 
-const STORE_SCHEMA_REVISION: any = 2;
-const DEFAULT_MAX_RECORDS: any = 100_000;
-const DEFAULT_MAX_BYTES: any = 32 * 1024 * 1024;
-const DEFAULT_MAX_AGE_MS: any = 7 * 24 * 60 * 60 * 1000;
-const DEFAULT_RETENTION_BATCH: any = 256;
-const DEFAULT_MAX_LATEST_TOPICS: any = 512;
-const DEFAULT_MAX_LATEST_BYTES: any = 16 * 1024 * 1024;
-const DEFAULT_MAX_EVENT_BYTES: any = 2 * 1024 * 1024;
-const DEFAULT_BUSY_TIMEOUT_MS: any = 5_000;
-const STATEMENT_CACHES: any = new WeakMap<object, any>();
+const STORE_SCHEMA_REVISION = 2;
+const DEFAULT_MAX_RECORDS = 100_000;
+const DEFAULT_MAX_BYTES = 32 * 1024 * 1024;
+const DEFAULT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_RETENTION_BATCH = 256;
+const DEFAULT_MAX_LATEST_TOPICS = 512;
+const DEFAULT_MAX_LATEST_BYTES = 16 * 1024 * 1024;
+const DEFAULT_MAX_EVENT_BYTES = 2 * 1024 * 1024;
+const DEFAULT_BUSY_TIMEOUT_MS = 5_000;
+const STATEMENT_CACHES = new WeakMap<Database.Database, Map<string, Database.Statement>>();
 
-function prepareCached(db?: any, sql?: any) : any {
-  let cache: any = STATEMENT_CACHES.get(db);
+type UnknownRecord = Record<string, unknown>;
+
+export interface ProtocolEventStorePolicy {
+  maxRecords: number;
+  maxBytes: number;
+  maxAgeMs: number;
+  retentionBatch: number;
+  maxLatestTopics: number;
+  maxLatestBytes: number;
+  maxEventBytes: number;
+  busyTimeoutMs: number;
+}
+
+export interface ProtocolEvent extends UnknownRecord {
+  schemaVersion: string;
+  offset: number;
+  id: string;
+  traceId: string;
+  requestId: string;
+  spanId: string;
+  topic: string;
+  type: string;
+  publisher: string;
+  publishedAt: string;
+  payload: unknown;
+}
+
+export interface ProtocolEventCandidate extends UnknownRecord {
+  schemaVersion: string;
+  id: string;
+  traceId: string;
+  requestId: string;
+  spanId: string;
+  topic: string;
+  type: string;
+  publisher: string;
+  publishedAt: string;
+  payload: unknown;
+}
+
+interface StoreCounters {
+  eventCount: number;
+  eventBytes: number;
+  latestCount: number;
+  latestBytes: number;
+  revision: number;
+  retentionPending: number;
+}
+
+export interface SqliteProtocolEventStore {
+  policy: ProtocolEventStorePolicy;
+  databasePath: string;
+  publish(candidate: ProtocolEventCandidate, options?: { retain?: boolean }): Promise<{ event: Readonly<ProtocolEvent>; revision: number }>;
+  read(options?: { cursor?: number; topics?: readonly string[]; limit?: number }): Promise<{ events: ProtocolEvent[]; nextCursor: number; revision: number }>;
+  getLatest(topics?: readonly string[]): Promise<ProtocolEvent[]>;
+  getRevision(): Promise<number>;
+  getStats(): Promise<Readonly<StoreCounters & ProtocolEventStorePolicy>>;
+  explainRead(options?: { topics?: readonly string[] }): unknown[];
+  checkpoint(): void;
+  close(): void;
+}
+
+function prepareCached(db: Database.Database, sql: string): Database.Statement {
+  let cache = STATEMENT_CACHES.get(db);
   if (!cache) {
-    cache = new Map<any, any>();
+    cache = new Map<string, Database.Statement>();
     STATEMENT_CACHES.set(db, cache);
   }
-  let statement: any = cache.get(sql);
+  let statement = cache.get(sql);
   if (!statement) {
     statement = db.prepare(sql);
     cache.set(sql, statement);
@@ -28,17 +91,17 @@ function prepareCached(db?: any, sql?: any) : any {
   return statement;
 }
 
-function storeError(code?: any, message?: any, statusCode: any = 500) : any {
+function storeError(code: string, message: string, statusCode = 500): Error & { code: string; statusCode: number } {
   return Object.assign(new Error(message), { code, statusCode });
 }
 
-function positiveInteger(value?: any, fallback?: any, maximum: any = Number.MAX_SAFE_INTEGER) : any {
-  const parsed: any = Number(value);
+function positiveInteger(value: unknown, fallback: number, maximum = Number.MAX_SAFE_INTEGER): number {
+  const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
   return Math.min(parsed, maximum);
 }
 
-function normalizePolicy(policy: Record<string, any> = {}) : any {
+function normalizePolicy(policy: Partial<ProtocolEventStorePolicy> = {}): ProtocolEventStorePolicy {
   return Object.freeze({
     maxRecords: positiveInteger(policy.maxRecords, DEFAULT_MAX_RECORDS, 1_000_000),
     maxBytes: positiveInteger(policy.maxBytes, DEFAULT_MAX_BYTES, 1024 * 1024 * 1024),
@@ -67,13 +130,16 @@ function normalizePolicy(policy: Record<string, any> = {}) : any {
   });
 }
 
-function eventStorePath(userDataPath?: any) : any {
+function eventStorePath(userDataPath = ""): string {
   return path.join(userDataPath, "protocol-events", "events.sqlite");
 }
 
-function eventFromRow(row?: any) : any {
+function eventFromRow(row?: UnknownRecord): ProtocolEvent | null {
   if (!row) return null;
-  const trace: any = JSON.parse(String(row.trace_json || "{}"));
+  const parsedTrace: unknown = JSON.parse(String(row.trace_json || "{}"));
+  const trace = parsedTrace && typeof parsedTrace === "object" && !Array.isArray(parsedTrace)
+    ? parsedTrace as UnknownRecord
+    : {};
   return {
     schemaVersion: String(row.schema_version || ""),
     offset: Number(row.offset),
@@ -89,8 +155,8 @@ function eventFromRow(row?: any) : any {
   };
 }
 
-function createSchema(db?: any) : any {
-  const existingTables: any = new Set<any>(
+function createSchema(db: Database.Database): void {
+  const existingTables = new Set<string>(
     prepareCached(db, `
       SELECT name
       FROM sqlite_master
@@ -100,7 +166,7 @@ function createSchema(db?: any) : any {
           'protocol_event_latest',
           'protocol_event_meta'
         )
-    `).all().map((entry?: any) : any => String(entry.name))
+    `).all().map((entry) => String((entry as UnknownRecord).name))
   );
   if (existingTables.size !== 0 && existingTables.size !== 3) {
     throw storeError(
@@ -108,7 +174,7 @@ function createSchema(db?: any) : any {
       "Protocol event store schema is incomplete."
     );
   }
-  const initializing: any = existingTables.size === 0;
+  const initializing = existingTables.size === 0;
   db.exec(`
     CREATE TABLE IF NOT EXISTS protocol_events (
       offset INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,7 +206,7 @@ function createSchema(db?: any) : any {
       value INTEGER NOT NULL
     );
   `);
-  const initialMeta: any[] = [
+  const initialMeta: Array<readonly [string, number]> = [
     ["schema_version", STORE_SCHEMA_REVISION],
     ["event_count", 0],
     ["event_bytes", 0],
@@ -150,39 +216,39 @@ function createSchema(db?: any) : any {
     ["retention_pending", 0]
   ];
   if (initializing) {
-    const insertMeta: any = prepareCached(db,
+    const insertMeta = prepareCached(db,
       "INSERT INTO protocol_event_meta(key,value) VALUES(?,?)"
     );
-    db.transaction(() : any => {
+    db.transaction(() => {
       for (const [key, value] of initialMeta) {
         insertMeta.run(key, value);
       }
     })();
   } else {
-    const keys: any = new Set<any>(
+    const keys = new Set<string>(
       prepareCached(db, "SELECT key FROM protocol_event_meta").all()
-        .map((entry?: any) : any => String(entry.key))
+        .map((entry) => String((entry as UnknownRecord).key))
     );
-    const existingRevision: any = Number(
-      prepareCached(db, "SELECT value FROM protocol_event_meta WHERE key='schema_version'").get()?.value
+    const existingRevision = Number(
+      (prepareCached(db, "SELECT value FROM protocol_event_meta WHERE key='schema_version'").get() as UnknownRecord | undefined)?.value
     );
     if (existingRevision === 1 && !keys.has("retention_pending")) {
-      db.transaction(() : any => {
+      db.transaction(() => {
         prepareCached(db, "INSERT INTO protocol_event_meta(key,value) VALUES('retention_pending',0)").run();
         prepareCached(db, "UPDATE protocol_event_meta SET value=? WHERE key='schema_version'")
           .run(STORE_SCHEMA_REVISION);
       })();
       keys.add("retention_pending");
     }
-    if (initialMeta.some(([key]: any[]) : any => !keys.has(key))) {
+    if (initialMeta.some(([key]) => !keys.has(key))) {
       throw storeError(
         "protocol_event_store_meta_incomplete",
         "Protocol event store metadata is incomplete."
       );
     }
   }
-  const schemaVersion: any = Number(
-    prepareCached(db, "SELECT value FROM protocol_event_meta WHERE key='schema_version'").get()?.value
+  const schemaVersion = Number(
+    (prepareCached(db, "SELECT value FROM protocol_event_meta WHERE key='schema_version'").get() as UnknownRecord | undefined)?.value
   );
   if (schemaVersion !== STORE_SCHEMA_REVISION) {
     throw storeError(
@@ -192,14 +258,17 @@ function createSchema(db?: any) : any {
   }
 }
 
-function readCounters(db?: any) : any {
-  const counters: any = Object.fromEntries(
+function readCounters(db: Database.Database): StoreCounters {
+  const counters = Object.fromEntries(
     prepareCached(db, `
       SELECT key,value
       FROM protocol_event_meta
       WHERE key IN ('event_count','event_bytes','latest_count','latest_bytes','revision','retention_pending')
-    `).all().map((entry?: any) : any => [entry.key, Number(entry.value)])
-  );
+    `).all().map((entry) => {
+      const row = entry as UnknownRecord;
+      return [String(row.key), Number(row.value)];
+    })
+  ) as Record<string, number>;
   return {
     eventCount: Number(counters.event_count || 0),
     eventBytes: Number(counters.event_bytes || 0),
@@ -210,8 +279,8 @@ function readCounters(db?: any) : any {
   };
 }
 
-function updateCounters(db?: any, counters?: any) : any {
-  const update: any = prepareCached(db, "UPDATE protocol_event_meta SET value=? WHERE key=?");
+function updateCounters(db: Database.Database, counters: StoreCounters): void {
+  const update = prepareCached(db, "UPDATE protocol_event_meta SET value=? WHERE key=?");
   update.run(counters.eventCount, "event_count");
   update.run(counters.eventBytes, "event_bytes");
   update.run(counters.latestCount, "latest_count");
@@ -220,19 +289,19 @@ function updateCounters(db?: any, counters?: any) : any {
   update.run(counters.retentionPending, "retention_pending");
 }
 
-function pruneAtWatermark(db?: any, counters?: any, policy?: any, incomingBytes?: any, nowMs?: any) : any {
-  const expiresBefore: any = nowMs - policy.maxAgeMs;
-  const candidates: any[] = prepareCached(db, `
+function pruneAtWatermark(db: Database.Database, counters: StoreCounters, policy: ProtocolEventStorePolicy, incomingBytes: number, nowMs: number): number {
+  const expiresBefore = nowMs - policy.maxAgeMs;
+  const candidates = prepareCached(db, `
     SELECT offset,event_bytes,published_at_ms
     FROM protocol_events
     ORDER BY offset ASC
     LIMIT ?
-  `).all(policy.retentionBatch);
-  let removedCount: any = 0;
-  let removedBytes: any = 0;
-  let watermark: any = 0;
+  `).all(policy.retentionBatch) as UnknownRecord[];
+  let removedCount = 0;
+  let removedBytes = 0;
+  let watermark = 0;
   for (const entry of candidates) {
-    const overCapacity: any =
+    const overCapacity =
       counters.eventCount - removedCount + 1 > policy.maxRecords ||
       counters.eventBytes - removedBytes + incomingBytes > policy.maxBytes;
     if (!overCapacity && Number(entry.published_at_ms) > expiresBefore) break;
@@ -241,11 +310,11 @@ function pruneAtWatermark(db?: any, counters?: any, policy?: any, incomingBytes?
     removedBytes += Number(entry.event_bytes);
   }
   if (watermark <= 0) return 0;
-  const latestTotals: any = prepareCached(db, `
+  const latestTotals = prepareCached(db, `
     SELECT COUNT(*) AS count,COALESCE(SUM(event_bytes),0) AS bytes
     FROM protocol_event_latest
     WHERE offset<=?
-  `).get(watermark);
+  `).get(watermark) as UnknownRecord;
   prepareCached(db, "DELETE FROM protocol_event_latest WHERE offset<=?").run(watermark);
   prepareCached(db, "DELETE FROM protocol_events WHERE offset<=?").run(watermark);
   counters.eventCount -= removedCount;
@@ -256,10 +325,17 @@ function pruneAtWatermark(db?: any, counters?: any, policy?: any, incomingBytes?
   return removedCount;
 }
 
-function upsertLatest(db?: any, event?: any, serialized?: any, eventBytes?: any, counters?: any, policy?: any) : any {
-  const existing: any = prepareCached(db,
+function upsertLatest(
+  db: Database.Database,
+  event: ProtocolEvent,
+  serialized: string,
+  eventBytes: number,
+  counters: StoreCounters,
+  policy: ProtocolEventStorePolicy
+): void {
+  const existing = prepareCached(db,
     "SELECT event_bytes FROM protocol_event_latest WHERE topic=?"
-  ).get(event.topic);
+  ).get(event.topic) as UnknownRecord | undefined;
   prepareCached(db, `
     INSERT INTO protocol_event_latest(topic,offset,event_json,event_bytes)
     VALUES(?,?,?,?)
@@ -274,13 +350,13 @@ function upsertLatest(db?: any, event?: any, serialized?: any, eventBytes?: any,
     counters.latestCount += 1;
     counters.latestBytes += eventBytes;
   }
-  const oldestLatest: any = prepareCached(db, `
+  const oldestLatest = prepareCached(db, `
     SELECT topic,event_bytes
     FROM protocol_event_latest
     ORDER BY offset ASC
     LIMIT 1
   `);
-  let removed: any = 0;
+  let removed = 0;
   while (
     counters.latestCount > policy.maxLatestTopics ||
     counters.latestBytes > policy.maxLatestBytes
@@ -292,7 +368,7 @@ function upsertLatest(db?: any, event?: any, serialized?: any, eventBytes?: any,
         503
       );
     }
-    const entry: any = oldestLatest.get();
+    const entry = oldestLatest.get() as UnknownRecord | undefined;
     if (!entry) break;
     prepareCached(db, "DELETE FROM protocol_event_latest WHERE topic=?").run(entry.topic);
     counters.latestCount -= 1;
@@ -306,40 +382,45 @@ export function createSqliteProtocolEventStore({
   databasePath = "",
   policy: requestedPolicy = {},
   now = Date.now
-}: Record<string, any> = {}) : any {
-  const policy: any = normalizePolicy(requestedPolicy);
-  const selectedPath: any = databasePath || eventStorePath(userDataPath);
+}: {
+  userDataPath?: string;
+  databasePath?: string;
+  policy?: Partial<ProtocolEventStorePolicy>;
+  now?: () => number;
+} = {}): SqliteProtocolEventStore {
+  const policy = normalizePolicy(requestedPolicy);
+  const selectedPath = databasePath || eventStorePath(userDataPath);
   ensurePrivateDir(path.dirname(selectedPath));
   ensurePrivateSqliteLocation(selectedPath);
-  const db: any = openSqliteDatabase(selectedPath);
+  const db = openSqliteDatabase(selectedPath) as Database.Database;
   db.pragma("journal_mode = WAL");
   db.pragma("synchronous = NORMAL");
   db.pragma(`busy_timeout = ${policy.busyTimeoutMs}`);
   createSchema(db);
 
-  const insertEvent: any = prepareCached(db, `
+  const insertEvent = prepareCached(db, `
     INSERT INTO protocol_events(
       event_id,schema_version,topic,event_type,publisher,published_at_ms,
       payload_json,payload_bytes,trace_json,event_bytes
     ) VALUES(?,?,?,?,?,?,?,?,?,0)
   `);
-  const publishTransaction: any = db.transaction((candidate?: any, retain?: any) : any => {
-    const payloadJson: any = JSON.stringify(candidate.payload ?? {});
-    const traceJson: any = JSON.stringify({
+  const publishTransaction = db.transaction((candidate: ProtocolEventCandidate, retain: boolean) => {
+    const payloadJson = JSON.stringify(candidate.payload ?? {});
+    const traceJson = JSON.stringify({
       traceId: String(candidate.traceId || ""),
       requestId: String(candidate.requestId || ""),
       spanId: String(candidate.spanId || "")
     });
-    const payloadBytes: any = Buffer.byteLength(payloadJson);
-    const parsedPublishedAt: any = Date.parse(candidate.publishedAt);
-    const publishedAtMs: any = Number.isFinite(parsedPublishedAt)
+    const payloadBytes = Buffer.byteLength(payloadJson);
+    const parsedPublishedAt = Date.parse(candidate.publishedAt);
+    const publishedAtMs = Number.isFinite(parsedPublishedAt)
       ? parsedPublishedAt
       : now();
-    const normalizedCandidate: Record<string, any> = {
+    const normalizedCandidate: ProtocolEventCandidate = {
       ...candidate,
       publishedAt: new Date(publishedAtMs).toISOString()
     };
-    const admissionBytes: any = Buffer.byteLength(JSON.stringify({
+    const admissionBytes = Buffer.byteLength(JSON.stringify({
       ...normalizedCandidate,
       offset: Number.MAX_SAFE_INTEGER
     }));
@@ -355,9 +436,9 @@ export function createSqliteProtocolEventStore({
         )
       };
     }
-    const counters: any = readCounters(db);
-    const maintenanceDue: any = counters.retentionPending >= policy.retentionBatch;
-    const capacityPressure: any =
+    const counters = readCounters(db);
+    const maintenanceDue = counters.retentionPending >= policy.retentionBatch;
+    const capacityPressure =
       counters.eventCount + 1 > policy.maxRecords ||
       counters.eventBytes + admissionBytes > policy.maxBytes;
     if (maintenanceDue || capacityPressure) {
@@ -377,7 +458,7 @@ export function createSqliteProtocolEventStore({
         )
       };
     }
-    const inserted: any = insertEvent.run(
+    const inserted = insertEvent.run(
       normalizedCandidate.id,
       normalizedCandidate.schemaVersion,
       normalizedCandidate.topic,
@@ -388,12 +469,12 @@ export function createSqliteProtocolEventStore({
       payloadBytes,
       traceJson
     );
-    const event: Readonly<Record<string, any>> = Object.freeze({
+    const event: Readonly<ProtocolEvent> = Object.freeze({
       ...normalizedCandidate,
       offset: Number(inserted.lastInsertRowid)
     });
-    const serialized: any = JSON.stringify(event);
-    const eventBytes: any = Buffer.byteLength(serialized);
+    const serialized = JSON.stringify(event);
+    const eventBytes = Buffer.byteLength(serialized);
     if (eventBytes > policy.maxEventBytes) {
       throw storeError(
         "protocol_event_record_too_large",
@@ -414,8 +495,8 @@ export function createSqliteProtocolEventStore({
     return { event, revision: counters.revision };
   });
 
-  let closed: any = false;
-  const requireOpen: any = () : any => {
+  let closed = false;
+  const requireOpen = (): void => {
     if (closed) {
       throw storeError(
         "protocol_event_store_closed",
@@ -428,70 +509,70 @@ export function createSqliteProtocolEventStore({
   return Object.freeze({
     policy,
     databasePath: selectedPath,
-    async publish(candidate?: any, { retain = true }: Record<string, any> = {}) : Promise<any> {
+    async publish(candidate: ProtocolEventCandidate, { retain = true }: { retain?: boolean } = {}) {
       requireOpen();
-      const result: any = publishTransaction(candidate, retain === true);
+      const result = publishTransaction(candidate, retain === true);
       if (result.error) throw result.error;
-      return result;
+      return { event: result.event, revision: result.revision };
     },
-    async read({ cursor = 0, topics = [], limit = 100 }: Record<string, any> = {}) : Promise<any> {
+    async read({ cursor = 0, topics = [], limit = 100 }: { cursor?: number; topics?: readonly string[]; limit?: number } = {}) {
       requireOpen();
-      const afterOffset: any = Math.max(0, Number(cursor) || 0);
-      const safeLimit: any = Math.max(1, Math.min(500, Number(limit) || 100));
-      const normalizedTopics: any[] = [...new Set<any>(topics.map(String).filter(Boolean))];
-      const params: any[] = [afterOffset];
-      let where: any = "offset>?";
+      const afterOffset = Math.max(0, Number(cursor) || 0);
+      const safeLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+      const normalizedTopics = [...new Set(topics.map(String).filter(Boolean))];
+      const params: Array<string | number> = [afterOffset];
+      let where = "offset>?";
       if (normalizedTopics.length > 0) {
-        where += ` AND topic IN (${normalizedTopics.map(() : any => "?").join(",")})`;
+        where += ` AND topic IN (${normalizedTopics.map(() => "?").join(",")})`;
         params.push(...normalizedTopics);
       }
       params.push(safeLimit);
-      const rows: any = prepareCached(db, `
+      const rows = prepareCached(db, `
         SELECT *
         FROM protocol_events
         WHERE ${where}
         ORDER BY offset ASC
         LIMIT ?
-      `).all(...params);
-      const maxOffset: any = Number(
-        prepareCached(db, "SELECT COALESCE(MAX(offset),0) AS value FROM protocol_events").get().value
+      `).all(...params) as UnknownRecord[];
+      const maxOffset = Number(
+        (prepareCached(db, "SELECT COALESCE(MAX(offset),0) AS value FROM protocol_events").get() as UnknownRecord).value
       );
       return {
-        events: rows.map(eventFromRow),
+        events: rows.map(eventFromRow).filter((event): event is ProtocolEvent => event !== null),
         nextCursor: rows.length >= safeLimit
           ? Number(rows.at(-1)?.offset || afterOffset)
           : Math.max(afterOffset, maxOffset),
         revision: readCounters(db).revision
       };
     },
-    async getLatest(topics: any = []) : Promise<any> {
+    async getLatest(topics: readonly string[] = []): Promise<ProtocolEvent[]> {
       requireOpen();
-      const normalizedTopics: any = [...new Set<any>(topics.map(String).filter(Boolean))]
+      const normalizedTopics = [...new Set(topics.map(String).filter(Boolean))]
         .slice(0, policy.maxLatestTopics);
       if (normalizedTopics.length === 0) {
         return prepareCached(db, `
           SELECT event_json
           FROM protocol_event_latest
           ORDER BY offset ASC
-        `).all().map((entry?: any) : any => JSON.parse(String(entry.event_json)));
+        `).all().map((entry) => JSON.parse(String((entry as UnknownRecord).event_json)) as ProtocolEvent);
       }
       return prepareCached(db, `
         SELECT event_json
         FROM protocol_event_latest
-        WHERE topic IN (${normalizedTopics.map(() : any => "?").join(",")})
+        WHERE topic IN (${normalizedTopics.map(() => "?").join(",")})
         ORDER BY offset ASC
       `).all(...normalizedTopics)
-        .map((entry?: any) : any => JSON.parse(String(entry.event_json)));
+        .map((entry) => JSON.parse(String((entry as UnknownRecord).event_json)) as ProtocolEvent);
     },
-    async getRevision() : Promise<any> {
+    async getRevision(): Promise<number> {
       requireOpen();
       return readCounters(db).revision;
     },
-    async getStats() : Promise<any> {
+    async getStats() {
       requireOpen();
       return Object.freeze({ ...readCounters(db), ...policy });
     },
-    explainRead({ topics = [] }: Record<string, any> = {}) : any {
+    explainRead({ topics = [] }: { topics?: readonly string[] } = {}): unknown[] {
       requireOpen();
       if (topics.length > 0) {
         return prepareCached(db, `
@@ -512,11 +593,11 @@ export function createSqliteProtocolEventStore({
         LIMIT ?
       `).all(0, 10);
     },
-    checkpoint() : any {
+    checkpoint(): void {
       requireOpen();
       db.pragma("wal_checkpoint(TRUNCATE)");
     },
-    close() : any {
+    close(): void {
       if (closed) return;
       closed = true;
       db.close();
@@ -524,4 +605,4 @@ export function createSqliteProtocolEventStore({
   });
 }
 
-export const PROTOCOL_EVENT_STORE_SCHEMA_REVISION: any = STORE_SCHEMA_REVISION;
+export const PROTOCOL_EVENT_STORE_SCHEMA_REVISION = STORE_SCHEMA_REVISION;

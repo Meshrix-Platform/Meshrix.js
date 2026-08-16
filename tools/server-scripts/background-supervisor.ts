@@ -7,9 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   backgroundDefinitionForRole,
   getBackgroundProcessStatus,
-  inspectAgentWorkerDemand,
   inspectImportParseWorkerDemand,
-  inspectMaintenanceWorkerDemand,
   normalizeBackgroundRoleList,
   setBackgroundProcessDeps,
   statusForInactiveDemand,
@@ -21,7 +19,6 @@ import {
   queueStateMutation,
   stateFileKey
 } from "#meshrix/state-coordinator";
-import { loadSettings } from "#meshrix/settings";
 import {
   createRuntimeLogger,
   setRuntimeLogger,
@@ -43,7 +40,6 @@ setBackgroundProcessDeps({
   atomicWriteJson,
   queueStateMutation,
   stateFileKey,
-  loadSettings,
 });
 
 function parseArgs(argv?: any) : any {
@@ -221,20 +217,12 @@ async function recoverSystemInspectionIfNeeded(reason: any = "interval") : Promi
 }
 
 function isOnDemandRole(role?: any) : any {
-  return role === "import-worker" ||
-    role === "maintenance-worker" ||
-    role === "agent-worker";
+  return role === "import-worker";
 }
 
 async function inspectRoleDemand(role?: any) : Promise<any> {
   if (role === "import-worker") {
     return inspectImportParseWorkerDemand(userDataPath);
-  }
-  if (role === "maintenance-worker") {
-    return inspectMaintenanceWorkerDemand(userDataPath);
-  }
-  if (role === "agent-worker") {
-    return inspectAgentWorkerDemand(userDataPath);
   }
   return {
     kind: "always_on",

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meshrix.local/schema/external-gateway-configuration.schema.json",
+  "title": "External Gateway Plugin Configuration",
+  "type": "object",
+  "required": ["enabled"],
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "downstream": { "$ref": "#/$defs/channel" },
+    "upstream": { "$ref": "#/$defs/channel" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "enabled": { "const": true } }, "required": ["enabled"] },
+      "then": { "required": ["downstream", "upstream"] }
+    }
+  ],
+  "$defs": {
+    "channel": {
+      "type": "object",
+      "required": ["adapter", "endpointRefs", "maxConcurrency", "maxRatePerSecond", "maxQueueDepth", "timeoutMs", "circuitFailureThreshold", "circuitResetMs"],
+      "properties": {
+        "adapter": { "enum": ["caddy", "nginx", "direct"] },
+        "endpointRefs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{2,127}$" }
+        },
+        "maxConcurrency": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "maxRatePerSecond": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "maxQueueDepth": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "timeoutMs": { "type": "integer", "minimum": 10, "maximum": 120000 },
+        "circuitFailureThreshold": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "circuitResetMs": { "type": "integer", "minimum": 10, "maximum": 300000 }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "adapter": { "const": "direct" } }, "required": ["adapter"] },
+          "then": { "properties": { "endpointRefs": { "maxItems": 1 } } }
+        }
+      ]
+    }
+  }
+}

@@ -191,7 +191,7 @@ export async function publishStartupLifecycle({
     discoveryConfigSnapshot,
     { type: "discovery.config.snapshot" }
   );
-  if (isFeatureActive("agent-gateway")) {
+  if (isFeatureActive("core-platform")) {
     const agentSyncConfigSnapshot: any = (await startupSnapshotPort.readAgentSyncConfig())?.config || {};
     await protocolEventBus.publish(
       "agent_sync.config",

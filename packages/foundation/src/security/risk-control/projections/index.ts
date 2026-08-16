@@ -6,59 +6,60 @@ import {
 } from "../model/index.ts";
 import { RISK_CONTROL_POINTS } from "../controls/index.ts";
 import { RISK_CONTROL_PATHS } from "../paths/index.ts";
+import type { RiskControlBoundary, RiskControlEnvironment, RiskControlObject, RiskControlPath, RiskControlPoint } from "../types.ts";
 
-function clone(value?: any) : any {
-  return JSON.parse(JSON.stringify(value));
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function listRiskControlBoundaries() : any {
+export function listRiskControlBoundaries(): readonly RiskControlBoundary[] {
   return clone(RISK_CONTROL_BOUNDARIES);
 }
 
-export function listRiskControlEnvironments() : any {
+export function listRiskControlEnvironments(): readonly RiskControlEnvironment[] {
   return clone(RISK_CONTROL_ENVIRONMENTS);
 }
 
-export function listRiskControlObjects() : any {
+export function listRiskControlObjects(): readonly RiskControlObject[] {
   return clone(RISK_CONTROL_OBJECTS);
 }
 
-export function listRiskControlPoints({ lifecycleState = "" }: Record<string, any> = {}) : any {
-  const controls: any = lifecycleState
-    ? RISK_CONTROL_POINTS.filter((control?: any) : any => control.lifecycleState === lifecycleState)
+export function listRiskControlPoints({ lifecycleState = "" }: { lifecycleState?: string } = {}): readonly RiskControlPoint[] {
+  const controls = lifecycleState
+    ? RISK_CONTROL_POINTS.filter((control) => control.lifecycleState === lifecycleState)
     : RISK_CONTROL_POINTS;
   return clone(controls);
 }
 
-export function listRiskControlPaths() : any {
+export function listRiskControlPaths(): readonly RiskControlPath[] {
   return clone(RISK_CONTROL_PATHS);
 }
 
-export function riskControlControlsByObject({ boundaryId = "" }: Record<string, any> = {}) : any {
-  const controls: any = boundaryId
-    ? RISK_CONTROL_POINTS.filter((control?: any) : any => control.owner.boundaryId === boundaryId)
+export function riskControlControlsByObject({ boundaryId = "" }: { boundaryId?: string } = {}) {
+  const controls = boundaryId
+    ? RISK_CONTROL_POINTS.filter((control) => control.owner.boundaryId === boundaryId)
     : RISK_CONTROL_POINTS;
-  return RISK_CONTROL_OBJECT_ORDER.map((objectId?: any) : any => ({
+  return RISK_CONTROL_OBJECT_ORDER.map((objectId) => ({
     objectId,
-    controls: clone(controls.filter((control?: any) : any => control.owner.objectId === objectId))
+    controls: clone(controls.filter((control) => control.owner.objectId === objectId))
   }));
 }
 
-export function riskControlControlsByGate({ boundaryId = "" }: Record<string, any> = {}) : any {
-  const controls: any = boundaryId
-    ? RISK_CONTROL_POINTS.filter((control?: any) : any => control.owner.boundaryId === boundaryId)
+export function riskControlControlsByGate({ boundaryId = "" }: { boundaryId?: string } = {}) {
+  const controls = boundaryId
+    ? RISK_CONTROL_POINTS.filter((control) => control.owner.boundaryId === boundaryId)
     : RISK_CONTROL_POINTS;
-  const groups: any = new Map<any, any>();
+  const groups = new Map<string, RiskControlPoint[]>();
   for (const control of controls) {
     if (!groups.has(control.gate)) {
       groups.set(control.gate, []);
     }
-    groups.get(control.gate).push(control);
+    groups.get(control.gate)?.push(control);
   }
-  return [...groups.entries()].map(([gate, entries]: any[]) : any => ({ gate, controls: clone(entries) }));
+  return [...groups.entries()].map(([gate, entries]) => ({ gate, controls: clone(entries) }));
 }
 
-export function createRiskControlProjection() : any {
+export function createRiskControlProjection() {
   return {
     boundaries: listRiskControlBoundaries(),
     environments: listRiskControlEnvironments(),

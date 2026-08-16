@@ -10,35 +10,94 @@ import {
   waitForStateIdle
 } from "@meshrix/foundation/storage/state-coordinator";
 
-export const AGENT_MEMORY_PROTOCOL_VERSION: any = "v0.0.1:agent:memory-1";
+export const AGENT_MEMORY_PROTOCOL_VERSION = "v0.0.1:agent:memory-1";
 
-const SENSITIVE_KEY_PATTERN: any =
+const SENSITIVE_KEY_PATTERN =
   /token|secret|password|passwd|authorization|cookie|api[-_]?key|client[-_]?secret|csrf/i;
-const SENSITIVE_TEXT_PATTERN: any =
+const SENSITIVE_TEXT_PATTERN =
   /(Bearer\s+[A-Za-z0-9._~+/=-]+|sk-[A-Za-z0-9._-]+|xox[baprs]-[A-Za-z0-9-]+|(?:(?:api[-_]?key|token|secret|password)\s*[:=]\s*)[^\s"',;]+)/gi;
-const ABSOLUTE_PATH_PATTERN: any =
+const ABSOLUTE_PATH_PATTERN =
   /(?:[A-Za-z]:\\[^\s"'<>]+|\/(?:Users|home|var|tmp|private|Volumes|opt|etc)\/[^\s"'<>]+)/g;
-const DEFAULT_MAX_STORAGE_BYTES: any = 16 * 1024 * 1024;
-const DEFAULT_MAX_SCAN_BYTES: any = 16 * 1024 * 1024;
-const DEFAULT_MAX_RECORD_BYTES: any = 256 * 1024;
-const DEFAULT_MAX_STORED_RECORDS: any = 1000;
-const MAX_STRING_CHARS: any = 32 * 1024;
-const MAX_ARRAY_ITEMS: any = 128;
-const MAX_OBJECT_KEYS: any = 128;
+const DEFAULT_MAX_STORAGE_BYTES = 16 * 1024 * 1024;
+const DEFAULT_MAX_SCAN_BYTES = 16 * 1024 * 1024;
+const DEFAULT_MAX_RECORD_BYTES = 256 * 1024;
+const DEFAULT_MAX_STORED_RECORDS = 1000;
+const MAX_STRING_CHARS = 32 * 1024;
+const MAX_ARRAY_ITEMS = 128;
+const MAX_OBJECT_KEYS = 128;
 
-function nowIso() : any {
+type UnknownRecord = Record<string, unknown>;
+
+export interface AgentMemoryRecord extends UnknownRecord {
+  protocolVersion: typeof AGENT_MEMORY_PROTOCOL_VERSION;
+  memoryId: string;
+  sessionId: string;
+  profileId: string;
+  boundaryId: string;
+  sourceHash: string;
+  summaryChecksum: string;
+  summary: string;
+  structured: unknown;
+  sourceRange: unknown;
+  createdAt: string;
+  status: string;
+  sourceProtocolVersion: string;
+}
+
+interface AgentMemoryOptions {
+  userDataPath?: string;
+  rootPath?: string;
+  sessionMemoryPath?: string;
+  maxStorageBytes?: number;
+  maxScanBytes?: number;
+  maxRecordBytes?: number;
+  maxStoredRecords?: number;
+}
+
+interface AgentMemoryQuery {
+  sessionId?: string;
+  profileId?: string;
+  sourceHash?: string;
+  limit?: number;
+  reason?: string;
+}
+
+export interface AgentMemory {
+  protocolVersion: typeof AGENT_MEMORY_PROTOCOL_VERSION;
+  rootPath: string;
+  sessionMemoryPath: string;
+  latestSessionMemory(query?: AgentMemoryQuery): Promise<AgentMemoryRecord | null>;
+  appendSessionMemory(entry?: UnknownRecord): Promise<AgentMemoryRecord>;
+  listSessionMemory(query?: AgentMemoryQuery): Promise<AgentMemoryList>;
+  clearSessionMemory(query?: AgentMemoryQuery): Promise<AgentMemoryClearResult>;
+}
+
+export interface AgentMemoryList {
+  protocolVersion: typeof AGENT_MEMORY_PROTOCOL_VERSION;
+  rootPath: string;
+  path: string;
+  records: AgentMemoryRecord[];
+}
+
+export interface AgentMemoryClearResult {
+  protocolVersion: typeof AGENT_MEMORY_PROTOCOL_VERSION;
+  ok: true;
+  record: AgentMemoryRecord;
+}
+
+function nowIso(): string {
   return new Date().toISOString();
 }
 
 
-function hashValue(value?: any, length: any = 32) : any {
+function hashValue(value?: unknown, length = 32): string {
   return crypto.createHash("sha256").update(stableJson(value)).digest("hex").slice(0, length);
 }
 
-function redactText(value?: any) : any {
-  const text: any = String(value ?? "")
-    .replace(SENSITIVE_TEXT_PATTERN, (match?: any) : any => {
-      const prefix: any = match.match(/^\s*(api[-_]?key|token|secret|password)\s*[:=]/i)?.[0] || "";
+function redactText(value?: unknown): string {
+  const text = String(value ?? "")
+    .replace(SENSITIVE_TEXT_PATTERN, (match) => {
+      const prefix = match.match(/^\s*(api[-_]?key|token|secret|password)\s*[:=]/i)?.[0] || "";
       return prefix ? `${prefix}<redacted>` : "<redacted-secret>";
     })
     .replace(ABSOLUTE_PATH_PATTERN, "<redacted-path>");
@@ -47,7 +106,7 @@ function redactText(value?: any) : any {
     : `${text.slice(0, MAX_STRING_CHARS)}<truncated>`;
 }
 
-export function redactAgentMemoryValue(value?: any, depth: any = 0) : any {
+export function redactAgentMemoryValue(value?: unknown, depth = 0): unknown {
   if (depth > 8) {
     return "<redacted-depth>";
   }
@@ -70,10 +129,10 @@ export function redactAgentMemoryValue(value?: any, depth: any = 0) : any {
   }
   if (Array.isArray(value)) {
     return value.slice(0, MAX_ARRAY_ITEMS)
-      .map((item?: any) : any => redactAgentMemoryValue(item, depth + 1));
+      .map((item) => redactAgentMemoryValue(item, depth + 1));
   }
-  const output: Record<string, any> = {};
-  for (const [key, nested] of (Object.entries(value) as [string, any][]).slice(0, MAX_OBJECT_KEYS)) {
+  const output: UnknownRecord = {};
+  for (const [key, nested] of Object.entries(value).slice(0, MAX_OBJECT_KEYS)) {
     output[key] = SENSITIVE_KEY_PATTERN.test(key)
       ? "<redacted>"
       : redactAgentMemoryValue(nested, depth + 1);
@@ -81,19 +140,20 @@ export function redactAgentMemoryValue(value?: any, depth: any = 0) : any {
   return output;
 }
 
-function positiveInteger(value?: any, fallback?: any, maximum: any = Number.MAX_SAFE_INTEGER) : any {
-  const parsed: any = Number(value);
+function positiveInteger(value: unknown, fallback: number, maximum = Number.MAX_SAFE_INTEGER): number {
+  const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) return fallback;
   return Math.min(parsed, maximum);
 }
 
-function parseJsonLines(text?: any) : any {
-  const records: any[] = [];
+function parseJsonLines(text?: unknown): UnknownRecord[] {
+  const records: UnknownRecord[] = [];
   for (const line of String(text || "").split(/\r?\n/)) {
-    const trimmed: any = line.trim();
+    const trimmed = line.trim();
     if (!trimmed) continue;
     try {
-      records.push(JSON.parse(trimmed));
+      const record: unknown = JSON.parse(trimmed);
+      if (record && typeof record === "object" && !Array.isArray(record)) records.push(record as UnknownRecord);
     } catch {
       // A malformed historical line must not hide newer valid memory records.
     }
@@ -101,21 +161,21 @@ function parseJsonLines(text?: any) : any {
   return records;
 }
 
-async function readJsonlTail(filePath?: any, limit: any = 50, maxScanBytes: any = DEFAULT_MAX_SCAN_BYTES) : Promise<any> {
-  let handle: any = null;
+async function readJsonlTail(filePath: string, limit = 50, maxScanBytes = DEFAULT_MAX_SCAN_BYTES): Promise<UnknownRecord[]> {
+  let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
   try {
     handle = await fs.open(filePath, "r");
-    const stat: any = await handle.stat();
-    const scanBytes: any = Math.min(
+    const stat = await handle.stat();
+    const scanBytes = Math.min(
       stat.size,
       positiveInteger(maxScanBytes, DEFAULT_MAX_SCAN_BYTES, 64 * 1024 * 1024)
     );
-    const start: any = Math.max(0, stat.size - scanBytes);
-    const buffer: any = Buffer.allocUnsafe(scanBytes);
+    const start = Math.max(0, stat.size - scanBytes);
+    const buffer = Buffer.allocUnsafe(scanBytes);
     if (scanBytes > 0) await handle.read(buffer, 0, scanBytes, start);
-    let content: any = buffer.toString("utf8");
+    let content = buffer.toString("utf8");
     if (start > 0) {
-      const firstLineBreak: any = content.indexOf("\n");
+      const firstLineBreak = content.indexOf("\n");
       content = firstLineBreak >= 0 ? content.slice(firstLineBreak + 1) : "";
     }
     return parseJsonLines(content)
@@ -123,40 +183,40 @@ async function readJsonlTail(filePath?: any, limit: any = 50, maxScanBytes: any 
   } catch {
     return [];
   } finally {
-    await handle?.close().catch(() : any => null);
+    await handle?.close().catch(() => null);
   }
 }
 
-function recordTimestamp(record: Record<string, any> = {}) : any {
-  const time: any = Date.parse(record.createdAt || record.updatedAt || "");
+function recordTimestamp(record: UnknownRecord = {}): number {
+  const time = Date.parse(String(record.createdAt || record.updatedAt || ""));
   return Number.isFinite(time) ? time : 0;
 }
 
-function normalizeSessionRecord(entry: Record<string, any> = {}) : any {
+function normalizeSessionRecord(entry: UnknownRecord = {}): AgentMemoryRecord {
   return {
     protocolVersion: AGENT_MEMORY_PROTOCOL_VERSION,
-    memoryId: entry.memoryId || `agent_memory_${crypto.randomUUID()}`,
+    memoryId: String(entry.memoryId || `agent_memory_${crypto.randomUUID()}`),
     sessionId: String(entry.sessionId || ""),
     profileId: String(entry.profileId || ""),
     boundaryId: String(entry.boundaryId || ""),
     sourceHash: String(entry.sourceHash || ""),
-    summaryChecksum: entry.summaryChecksum || hashValue(entry.summary || ""),
+    summaryChecksum: String(entry.summaryChecksum || hashValue(entry.summary || "")),
     summary: redactText(entry.summary || ""),
     structured: redactAgentMemoryValue(entry.structured || {}),
     sourceRange: redactAgentMemoryValue(entry.sourceRange || {}),
-    createdAt: entry.createdAt || nowIso(),
-    status: entry.status || "active",
-    sourceProtocolVersion: entry.protocolVersion || entry.sourceProtocolVersion || ""
+    createdAt: String(entry.createdAt || nowIso()),
+    status: String(entry.status || "active"),
+    sourceProtocolVersion: String(entry.protocolVersion || entry.sourceProtocolVersion || "")
   };
 }
 
-function fitSessionRecord(record?: any, maxRecordBytes?: any) : any {
-  const serialized: any = JSON.stringify(record);
-  const byteLength: any = Buffer.byteLength(serialized);
+function fitSessionRecord(record: AgentMemoryRecord, maxRecordBytes: number): AgentMemoryRecord {
+  const serialized = JSON.stringify(record);
+  const byteLength = Buffer.byteLength(serialized);
   if (byteLength <= maxRecordBytes) return record;
-  const structured: any = record.structured;
-  const sourceRange: any = record.sourceRange;
-  const compacted: Record<string, any> = {
+  const structured = record.structured;
+  const sourceRange = record.sourceRange;
+  const compacted: AgentMemoryRecord = {
     ...record,
     summary: redactText(record.summary).slice(0, Math.min(MAX_STRING_CHARS, 16 * 1024)),
     structured: {
@@ -184,70 +244,70 @@ export function createAgentMemory({
   maxScanBytes = DEFAULT_MAX_SCAN_BYTES,
   maxRecordBytes = DEFAULT_MAX_RECORD_BYTES,
   maxStoredRecords = DEFAULT_MAX_STORED_RECORDS
-}: Record<string, any> = {}) : any {
+}: AgentMemoryOptions = {}): AgentMemory {
   if (!userDataPath && !rootPath && !sessionMemoryPath) {
     throw new Error("agent_memory_user_data_path_required");
   }
-  const resolvedRootPath: any = rootPath || path.join(userDataPath, "agent-memory");
-  const resolvedSessionMemoryPath: any = sessionMemoryPath || path.join(resolvedRootPath, "session-memory.jsonl");
-  const storageByteLimit: any = positiveInteger(maxStorageBytes, DEFAULT_MAX_STORAGE_BYTES, 64 * 1024 * 1024);
-  const scanByteLimit: any = Math.max(
+  const resolvedRootPath = rootPath || path.join(userDataPath || "", "agent-memory");
+  const resolvedSessionMemoryPath = sessionMemoryPath || path.join(resolvedRootPath, "session-memory.jsonl");
+  const storageByteLimit = positiveInteger(maxStorageBytes, DEFAULT_MAX_STORAGE_BYTES, 64 * 1024 * 1024);
+  const scanByteLimit = Math.max(
     storageByteLimit,
     positiveInteger(maxScanBytes, DEFAULT_MAX_SCAN_BYTES, 64 * 1024 * 1024)
   );
-  const recordByteLimit: any = Math.min(
+  const recordByteLimit = Math.min(
     storageByteLimit,
     positiveInteger(maxRecordBytes, DEFAULT_MAX_RECORD_BYTES, 4 * 1024 * 1024)
   );
-  const storedRecordLimit: any = positiveInteger(maxStoredRecords, DEFAULT_MAX_STORED_RECORDS, 10_000);
+  const storedRecordLimit = positiveInteger(maxStoredRecords, DEFAULT_MAX_STORED_RECORDS, 10_000);
 
-  async function compactSessionMemoryIfNeeded() : Promise<any> {
-    const stat: any = await fs.stat(resolvedSessionMemoryPath).catch(() : any => null);
+  async function compactSessionMemoryIfNeeded(): Promise<void> {
+    const stat = await fs.stat(resolvedSessionMemoryPath).catch(() => null);
     if (!stat || stat.size <= storageByteLimit) return;
-    const records: any = await readJsonlTail(
+    const records = await readJsonlTail(
       resolvedSessionMemoryPath,
       storedRecordLimit,
       scanByteLimit + recordByteLimit
     );
-    const targetBytes: any = Math.max(recordByteLimit, Math.floor(storageByteLimit * 0.75));
-    let retained: any = records.slice(-storedRecordLimit);
-    let content: any = retained.map((record?: any) : any => JSON.stringify(record)).join("\n");
+    const targetBytes = Math.max(recordByteLimit, Math.floor(storageByteLimit * 0.75));
+    let retained = records.slice(-storedRecordLimit);
+    let content = retained.map((record) => JSON.stringify(record)).join("\n");
     if (content) content += "\n";
     while (retained.length > 1 && Buffer.byteLength(content) > targetBytes) {
       retained = retained.slice(1);
-      content = `${retained.map((record?: any) : any => JSON.stringify(record)).join("\n")}\n`;
+      content = `${retained.map((record) => JSON.stringify(record)).join("\n")}\n`;
     }
     await atomicWriteFile(resolvedSessionMemoryPath, content, "utf8");
   }
 
-  async function readSessionRecords(limit: any = 50) : Promise<any> {
+  async function readSessionRecords(limit = 50): Promise<AgentMemoryRecord[]> {
     await waitForStateIdle(stateFileKey(resolvedSessionMemoryPath));
-    const safeLimit: any = Math.max(1, Math.min(Number(limit || 50), 1000));
-    const records: any[] = [];
-    const pathRecords: any = await readJsonlTail(resolvedSessionMemoryPath, safeLimit, scanByteLimit);
-    pathRecords.forEach((record?: any, index?: any) : any => {
+    const safeLimit = Math.max(1, Math.min(Number(limit || 50), 1000));
+    const records: Array<AgentMemoryRecord & { storagePath: string; __lineIndex: number }> = [];
+    const pathRecords = await readJsonlTail(resolvedSessionMemoryPath, safeLimit, scanByteLimit);
+    pathRecords.forEach((record, index) => {
       records.push({
-        ...record,
+        ...normalizeSessionRecord(record),
         storagePath: resolvedSessionMemoryPath,
         __lineIndex: index
       });
     });
     return records
-      .sort((left?: any, right?: any) : any => {
-        const timestampDelta: any = recordTimestamp(right) - recordTimestamp(left);
+      .sort((left, right) => {
+        const timestampDelta = recordTimestamp(right) - recordTimestamp(left);
         if (timestampDelta !== 0) {
           return timestampDelta;
         }
         return Number(right.__lineIndex || 0) - Number(left.__lineIndex || 0);
       })
       .slice(0, safeLimit)
-      .map(({ __lineIndex, ...record }: Record<string, any>) : any => record);
+      .map(({ __lineIndex: _lineIndex, ...record }) => record);
   }
 
-  async function latestSessionMemory({ sessionId = "", profileId = "", sourceHash = "" }: Record<string, any> = {}) : Promise<any> {
-    const records: any = await readSessionRecords(500);
+  async function latestSessionMemory({ sessionId = "", profileId = "", sourceHash = "" }: AgentMemoryQuery = {}): Promise<AgentMemoryRecord | null> {
+    const records = await readSessionRecords(500);
     for (const record of records) {
-      const baseMatches: any =
+      const baseMatches =
         (!sessionId || record.sessionId === sessionId) &&
         (!profileId || !record.profileId || record.profileId === profileId);
       if (!baseMatches) {
@@ -264,30 +324,30 @@ export function createAgentMemory({
     return null;
   }
 
-  async function appendSessionMemory(entry: Record<string, any> = {}) : Promise<any> {
-    const record: any = fitSessionRecord(normalizeSessionRecord(entry), recordByteLimit);
-    await queueStateMutation(stateFileKey(resolvedSessionMemoryPath), async () : Promise<any> => {
+  async function appendSessionMemory(entry: UnknownRecord = {}): Promise<AgentMemoryRecord> {
+    const record = fitSessionRecord(normalizeSessionRecord(entry), recordByteLimit);
+    await queueStateMutation(stateFileKey(resolvedSessionMemoryPath), async (): Promise<void> => {
       await appendJsonLine(resolvedSessionMemoryPath, record);
       await compactSessionMemoryIfNeeded();
     });
     return record;
   }
 
-  async function listSessionMemory(input: Record<string, any> = {}) : Promise<any> {
-    const records: any = await readSessionRecords(input.limit || 50);
+  async function listSessionMemory(input: AgentMemoryQuery = {}): Promise<AgentMemoryList> {
+    const records = await readSessionRecords(input.limit || 50);
     return {
       protocolVersion: AGENT_MEMORY_PROTOCOL_VERSION,
       rootPath: resolvedRootPath,
       path: resolvedSessionMemoryPath,
-      records: records.filter((record?: any) : any =>
+      records: records.filter((record) =>
         (!input.sessionId || record.sessionId === input.sessionId) &&
         (!input.profileId || record.profileId === input.profileId)
       )
     };
   }
 
-  async function clearSessionMemory(input: Record<string, any> = {}) : Promise<any> {
-    const record: any = fitSessionRecord(normalizeSessionRecord({
+  async function clearSessionMemory(input: AgentMemoryQuery = {}): Promise<AgentMemoryClearResult> {
+    const record = fitSessionRecord(normalizeSessionRecord({
       memoryId: `agent_memory_clear_${crypto.randomUUID()}`,
       sessionId: input.sessionId || "",
       profileId: input.profileId || "",
@@ -298,7 +358,7 @@ export function createAgentMemory({
         reason: input.reason || "manual_clear"
       }
     }), recordByteLimit);
-    await queueStateMutation(stateFileKey(resolvedSessionMemoryPath), async () : Promise<any> => {
+    await queueStateMutation(stateFileKey(resolvedSessionMemoryPath), async (): Promise<void> => {
       await appendJsonLine(resolvedSessionMemoryPath, record);
       await compactSessionMemoryIfNeeded();
     });

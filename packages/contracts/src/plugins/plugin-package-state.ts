@@ -1,4 +1,4 @@
-export const PLUGIN_PACKAGE_STATES: readonly any[] = Object.freeze([
+export const PLUGIN_PACKAGE_STATES = Object.freeze([
   "declared",
   "acquiring",
   "acquired",
@@ -10,10 +10,11 @@ export const PLUGIN_PACKAGE_STATES: readonly any[] = Object.freeze([
   "rolled-back",
   "removed"
 ]);
+export type PluginPackageState = typeof PLUGIN_PACKAGE_STATES[number];
 
-const PLUGIN_PACKAGE_STATE_SET: any = new Set<any>(PLUGIN_PACKAGE_STATES);
+const PLUGIN_PACKAGE_STATE_SET = new Set(PLUGIN_PACKAGE_STATES);
 
-const TRANSITIONS: Readonly<Record<string, any>> = Object.freeze({
+const TRANSITIONS: Readonly<Record<PluginPackageState, readonly PluginPackageState[]>> = Object.freeze({
   declared: Object.freeze(["acquiring", "failed", "removed"]),
   acquiring: Object.freeze(["acquired", "failed", "removed"]),
   acquired: Object.freeze(["verified", "failed", "removed"]),
@@ -26,25 +27,25 @@ const TRANSITIONS: Readonly<Record<string, any>> = Object.freeze({
   removed: Object.freeze([])
 });
 
-export function isPluginPackageState(value?: any) : any {
+export function isPluginPackageState(value?: unknown): value is PluginPackageState {
   return typeof value === "string" && PLUGIN_PACKAGE_STATE_SET.has(value);
 }
 
-export function assertPluginPackageTransition(from?: any, to?: any, event: any = "transition") : any {
+export function assertPluginPackageTransition(from?: unknown, to?: unknown, event: unknown = "transition") {
   if (!isPluginPackageState(from)) {
     throw new Error(`PLUGIN_PACKAGE_STATE_INVALID: unknown from-state for ${event}`);
   }
   if (!isPluginPackageState(to)) {
     throw new Error(`PLUGIN_PACKAGE_STATE_INVALID: unknown to-state for ${event}`);
   }
-  const allowed: any = TRANSITIONS[from] || [];
+  const allowed = TRANSITIONS[from] || [];
   if (!allowed.includes(to)) {
     throw new Error(`PLUGIN_PACKAGE_STATE_INVALID: ${from} cannot move to ${to} (${event})`);
   }
   return true;
 }
 
-export function listPluginPackageTransitions(from?: any) : any {
+export function listPluginPackageTransitions(from?: unknown) {
   if (!isPluginPackageState(from)) return Object.freeze([]);
   return TRANSITIONS[from];
 }

@@ -1,50 +1,67 @@
 import path from "node:path";
-import { MODEL_USAGE_DEFINITIONS } from "#meshrix/contracts/modules/model-usage";
 
-export { MODEL_USAGE_DEFINITIONS };
+export interface AgentToolCommandVariable {
+  name: string;
+  label: string;
+  required: boolean;
+  defaultValue?: string;
+  allowedValues: string[];
+  description: string;
+}
 
-export const MODEL_PROVIDERS: any = new Set<any>([
-  "openai",
-  "deepseek",
-  "openrouter",
-  "copilot",
-  "local-model"
-]);
-export const MODEL_LIBRARY_PROVIDERS: any = new Set<any>([
-  "openai",
-  "deepseek",
-  "openrouter",
-  "copilot",
-  "local-model"
-]);
-export const DEFAULT_MODEL_PROVIDER: any = process.env.MESHRIX_DEFAULT_MODEL_PROVIDER || "";
-export const DEFAULT_MODEL: any = process.env.MESHRIX_DEFAULT_MODEL || "";
-export const AGENT_LOCAL_NODE_COMMAND_ENV_KEYS: any[] = [
+export interface AgentToolCommand {
+  commandId: string;
+  label: string;
+  command: string;
+  args: string[];
+  cwd: string;
+  description: string;
+  variables: AgentToolCommandVariable[];
+  allowExtraArgs: boolean;
+}
+
+export interface AgentToolExecutionSettings {
+  functionCallSchema: Record<string, unknown>;
+  http: {
+    enabled: boolean;
+    allowedHosts: string[];
+    allowLocalForDevelopment: boolean;
+    timeoutMs: number;
+    maxResponseBytes: number;
+  };
+  local: {
+    enabled: boolean;
+    allowDirectCommands: false;
+    timeoutMs: number;
+    maxOutputBytes: number;
+    nodeCommand: string;
+    commands: AgentToolCommand[];
+  };
+}
+
+export interface ExecutionSandboxSettings {
+  enabled: boolean;
+  providerMode: string;
+  providerId: string;
+  profileId: string;
+  policyRevision: string;
+  receiptRequirement: string;
+  allowedProviderClasses: string[];
+  profiles: Record<string, unknown>[];
+}
+
+export interface RuntimeSettings {
+  agentToolExecution: AgentToolExecutionSettings;
+  executionSandbox: ExecutionSandboxSettings | null;
+}
+
+export const AGENT_LOCAL_NODE_COMMAND_ENV_KEYS = Object.freeze([
   "MESHRIX_AGENT_LOCAL_NODE_COMMAND",
   "MESHRIX_NODE_COMMAND",
   "NODE_BINARY"
-];
-export const DEFAULT_GATEWAY_ASSISTANT_DEFAULTS: Record<string, any> = {
-  systemPrompt: "",
-  toolPolicyPrompt: "",
-  continuationPrompt: "",
-  answerTemplate: "",
-  temperature: 0,
-  maxTokens: 0,
-  maxIterations: 0,
-  limit: 0,
-  contextProfileId: "",
-  thinkingMode: "",
-  toolChoice: "",
-  gatewayReviewModelAlias: "",
-  ruleAuthoringModelAlias: "",
-  reviewFusionModelAlias: "",
-  reviewFusionSystemPrompt: "",
-  reviewFusionTemperature: 0,
-  reviewFusionMaxTokens: 0
-};
+]);
 
-export const DEFAULT_AGENT_TOOL_EXECUTION: Record<string, any> = {
+export const DEFAULT_AGENT_TOOL_EXECUTION: AgentToolExecutionSettings = {
   functionCallSchema: {},
   http: {
     enabled: false,
@@ -63,35 +80,19 @@ export const DEFAULT_AGENT_TOOL_EXECUTION: Record<string, any> = {
   }
 };
 
-export function defaultModuleIntelligence() : any {
-  return {};
-}
-
-export const DEFAULT_SETTINGS: Record<string, any> = {
-  modelIntelligenceEnabled:
-    process.env.MESHRIX_MODEL_INTELLIGENCE_ENABLED === "1",
-  defaultModelProvider: DEFAULT_MODEL_PROVIDER,
-  defaultModel: DEFAULT_MODEL,
-  modelLibraryEntries: [],
-  modelLibraryAgentIds: [],
-  modelLibraryAgents: [],
-  modelLibraryRevision: 0,
-  gatewayAssistantDefaults: DEFAULT_GATEWAY_ASSISTANT_DEFAULTS,
+export const DEFAULT_SETTINGS: RuntimeSettings = Object.freeze({
   agentToolExecution: DEFAULT_AGENT_TOOL_EXECUTION,
-  executionSandbox: null,
-  moduleModelAssignments: {},
-  moduleAgentProfiles: {},
-  moduleIntelligence: defaultModuleIntelligence()
-};
+  executionSandbox: null
+});
 
-export function getSettingsPath(userDataPath?: any) : any {
+export function getSettingsPath(userDataPath: string): string {
   return path.join(userDataPath, "settings.json");
 }
 
-export function getAgentToolSettingsDirectory(userDataPath?: any) : any {
+export function getAgentToolSettingsDirectory(userDataPath: string): string {
   return path.join(userDataPath, "operation-permission");
 }
 
-export function getAgentToolExecutionSettingsPath(userDataPath?: any) : any {
+export function getAgentToolExecutionSettingsPath(userDataPath: string): string {
   return path.join(getAgentToolSettingsDirectory(userDataPath), "execution.json");
 }

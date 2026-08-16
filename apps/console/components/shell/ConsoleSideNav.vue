@@ -4,7 +4,6 @@ import { useConsoleSideNavContext } from "../../composables/consoleSideNavContex
 import ConsoleSideNavBackdrop from "./side-nav/ConsoleSideNavBackdrop.vue";
 import ConsoleSideNavBrand from "./side-nav/ConsoleSideNavBrand.vue";
 import ConsoleSideNavFooter from "./side-nav/ConsoleSideNavFooter.vue";
-import ConsoleSideNavModelSection from "./side-nav/ConsoleSideNavModelSection.vue";
 import ConsoleSideNavOperationsSection from "./side-nav/ConsoleSideNavOperationsSection.vue";
 import ConsoleSideNavPermissionSection from "./side-nav/ConsoleSideNavPermissionSection.vue";
 import ConsoleSideNavPrimaryLinks from "./side-nav/ConsoleSideNavPrimaryLinks.vue";
@@ -114,7 +113,6 @@ onBeforeUnmount(stopSideNavResize);
           <ConsoleSideNavServiceSection />
           <ConsoleSideNavToolsSection />
           <ConsoleSideNavPermissionSection />
-          <ConsoleSideNavModelSection />
           <ConsoleSideNavSystemSection />
           <ConsoleSideNavOperationsSection />
           <ConsoleSideNavVersionSection />

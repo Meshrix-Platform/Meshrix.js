@@ -12,6 +12,7 @@ import {
 } from "../../packages/server-runtime/src/composition/queued-job-workflow-provider.ts";
 import { createQueueApplicationPort } from "../../packages/server-runtime/src/composition/queue-application-port.ts";
 import { createJobManager } from "../../packages/server-runtime/src/jobs/jobs/job-manager.ts";
+import { createUploadSessionStore } from "../../packages/server-runtime/src/state/upload-session-store.ts";
 import {
   assertNoSensitiveReportLeak,
   assertReportProvenance,
@@ -136,8 +137,22 @@ async function waitForJobManagerIdle(jobManager?: any, { timeoutMs = 30_000 }: R
 async function main() : Promise<any> {
   const startedAt: any = new Date();
   const userDataPath: any = await fs.mkdtemp(path.join(os.tmpdir(), "meshrix-job-work-queue-"));
+  const rejectUnexpectedUploadAccess: any = async () : Promise<never> => {
+    throw new Error("The job work queue verifier does not admit upload-session access.");
+  };
+  const uploadSessionStore: any = createUploadSessionStore({
+    userDataPath,
+    custodyPort: {
+      begin: rejectUnexpectedUploadAccess,
+      append: rejectUnexpectedUploadAccess,
+      seal: rejectUnexpectedUploadAccess
+    },
+    custodyDescribe: rejectUnexpectedUploadAccess
+  });
   const jobManager: any = createJobManager({
     userDataPath,
+    uploadSessionStore,
+    storageProvider: { commitUploadConsumptionReceipt: rejectUnexpectedUploadAccess },
     processingEnabled: true,
     runtimeOptions: {
       testHooks: {

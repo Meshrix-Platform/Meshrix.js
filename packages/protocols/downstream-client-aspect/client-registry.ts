@@ -1,13 +1,14 @@
 import { asArray, asObject, asText, lowerToken, publicMetadata, uniqueStrings } from "./identity-helpers.ts";
+import type { DownstreamFrameworkDefinition, DownstreamMcpDefinition, UnknownRecord } from "./types.ts";
 
-function normalizeMcp(value?: any, frameworkId?: any, inheritedCommands?: any) : any {
-  const mcp: any = asObject(value, null);
+function normalizeMcp(value: unknown, frameworkId: string, inheritedCommands: readonly string[]): DownstreamMcpDefinition {
+  const mcp = asObject(value, null);
   if (!mcp) throw new TypeError(`Downstream framework ${frameworkId} requires an MCP adapter.`);
-  const adapterId: any = lowerToken(mcp.adapterId);
-  const profileId: any = asText(mcp.profileId);
-  const installMode: any = lowerToken(mcp.installMode);
-  const locations: any = uniqueStrings(asArray(mcp.locations).map(lowerToken));
-  const configurationStrategy: any = lowerToken(mcp.configurationStrategy);
+  const adapterId = lowerToken(mcp.adapterId);
+  const profileId = asText(mcp.profileId);
+  const installMode = lowerToken(mcp.installMode);
+  const locations = uniqueStrings(asArray(mcp.locations).map(lowerToken));
+  const configurationStrategy = lowerToken(mcp.configurationStrategy);
   if (!adapterId || !profileId || !installMode || locations.length === 0 || !configurationStrategy) {
     throw new TypeError(`Downstream framework ${frameworkId} MCP adapter is incomplete.`);
   }
@@ -19,16 +20,16 @@ function normalizeMcp(value?: any, frameworkId?: any, inheritedCommands?: any) :
     configurationStrategy,
     serverName: asText(mcp.serverName, "meshrix"),
     commandNames: Object.freeze(uniqueStrings([...inheritedCommands, ...asArray(mcp.commandNames)])),
-    metadata: Object.freeze({ public: Object.freeze(publicMetadata(mcp.metadata)) })
+    metadata: Object.freeze({ public: Object.freeze(publicMetadata(asObject(mcp.metadata) ?? {})) })
   });
 }
 
-export function normalizeFrameworkDefinition(value: Record<string, any> = {}) : any {
-  const framework: any = asObject(value);
-  const frameworkId: any = lowerToken(framework.frameworkId);
-  const label: any = asText(framework.label);
-  const kind: any = lowerToken(framework.kind);
-  const commandNames: any = uniqueStrings(asArray(framework.commandNames));
+export function normalizeFrameworkDefinition(value: UnknownRecord = {}): DownstreamFrameworkDefinition {
+  const framework = asObject(value) ?? {};
+  const frameworkId = lowerToken(framework.frameworkId);
+  const label = asText(framework.label);
+  const kind = lowerToken(framework.kind);
+  const commandNames = uniqueStrings(asArray(framework.commandNames));
   if (!frameworkId || !label || !kind || commandNames.length === 0) {
     throw new TypeError("Downstream MCP framework definition is incomplete.");
   }
@@ -41,6 +42,6 @@ export function normalizeFrameworkDefinition(value: Record<string, any> = {}) : 
   });
 }
 
-export function defaultDownstreamClientFrameworks(overrides: any = []) : any {
-  return Object.freeze(asArray(overrides).map((entry?: any) : any => normalizeFrameworkDefinition(asObject(entry))));
+export function defaultDownstreamClientFrameworks(overrides: readonly unknown[] = []): readonly DownstreamFrameworkDefinition[] {
+  return Object.freeze(asArray(overrides).map((entry) => normalizeFrameworkDefinition(asObject(entry) ?? {})));
 }

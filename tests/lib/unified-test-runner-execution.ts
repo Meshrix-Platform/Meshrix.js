@@ -1,5 +1,86 @@
 import { spawn as nodeSpawn } from "node:child_process";
 
+export interface TestSuiteEntry {
+  id: string;
+  label?: string;
+  command: string;
+  args: string[];
+  timeoutClass: string;
+  sideEffects?: string;
+  flakePolicy?: string;
+  requiredServices?: string[];
+  childSuiteIds?: string[];
+}
+
+export interface TestShard {
+  index: number;
+  count: number;
+}
+
+function isVitestEntry(entry: TestSuiteEntry): boolean {
+  return entry.command === "npm"
+    && entry.args[0] === "run"
+    && entry.args[1] === "vitest"
+    && entry.args[2] === "--";
+}
+
+function mergeCompatibilityKey(entry: TestSuiteEntry): string | null {
+  if (!isVitestEntry(entry)) return null;
+  return JSON.stringify([
+    entry.timeoutClass,
+    entry.sideEffects ?? "none",
+    entry.flakePolicy ?? "fail",
+    [...(entry.requiredServices ?? [])].sort()
+  ]);
+}
+
+export function mergeCompatibleSuiteProcesses(entries: readonly TestSuiteEntry[]): TestSuiteEntry[] {
+  const planned: TestSuiteEntry[] = [];
+  const mergeTargetByKey = new Map<string, number>();
+  for (const entry of entries) {
+    const key = mergeCompatibilityKey(entry);
+    const targetIndex = key === null ? undefined : mergeTargetByKey.get(key);
+    if (targetIndex === undefined) {
+      planned.push({ ...entry, args: [...entry.args] });
+      if (key !== null) mergeTargetByKey.set(key, planned.length - 1);
+      continue;
+    }
+    const previous = planned[targetIndex];
+    const childSuiteIds = [...(previous.childSuiteIds ?? [previous.id]), entry.id];
+    const testArgs = [...new Set([...previous.args.slice(3), ...entry.args.slice(3)])];
+    planned[targetIndex] = {
+      ...previous,
+      id: `merged:${childSuiteIds.join("+")}`,
+      label: `Merged Vitest suites (${childSuiteIds.length})`,
+      args: ["run", "vitest", "--", ...testArgs],
+      childSuiteIds
+    };
+  }
+  return planned;
+}
+
+export function parseTestShard(value: string | null | undefined): TestShard | null {
+  const match = /^(\d+)\/(\d+)$/u.exec(String(value ?? "").trim());
+  if (!match) {
+    if (value === null || value === undefined || String(value).trim() === "") return null;
+    throw new Error("Test shard must use the form <index>/<count>.");
+  }
+  const index = Number(match[1]);
+  const count = Number(match[2]);
+  if (count < 2 || index < 1 || index > count) {
+    throw new Error("Test shard index must be between 1 and count, and count must be at least 2.");
+  }
+  return { index, count };
+}
+
+export function applyVitestShard(entry: TestSuiteEntry, shard: TestShard | null): TestSuiteEntry {
+  if (!shard || !isVitestEntry(entry)) return entry;
+  return {
+    ...entry,
+    args: [...entry.args, `--shard=${shard.index}/${shard.count}`]
+  };
+}
+
 export const TEST_SUITE_TIMEOUT_MS: Readonly<Record<string, any>> = Object.freeze({
   fast: 2 * 60 * 1000,
   standard: 15 * 60 * 1000,

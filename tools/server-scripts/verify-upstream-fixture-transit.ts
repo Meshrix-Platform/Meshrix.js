@@ -422,7 +422,10 @@ try {
     });
   });
 
-  registry = createUpstreamGatewayRegistry({ userDataPath });
+  registry = createUpstreamGatewayRegistry({
+    userDataPath,
+    claimProtectedSinkAttempt: async () : Promise<any> => Object.freeze({ verifier: true })
+  });
   const manifestLoad: any = await loadVerifierPublishedServices({ userDataPath, registry });
   publishedManifestSnapshot = manifestLoad.snapshot;
   const services: any = registry.listServices().items;
@@ -639,12 +642,19 @@ try {
   });
   await runPhase("upstream-operation-catalog-commit", () : any =>
     manifestCommitter.commitManifestSnapshot(publishedManifestSnapshot));
-  const downstreamProvider: any = createToolSkillManagementProvider({
+  const downstreamProviderCore: any = createToolSkillManagementProvider({
     operationPermissionPlatform,
     userDataPath,
     evaluateToolAudience: (input?: any) : any => registry.evaluateProjectedOperationAudience(input),
     resolveAudiencePartitionKeys: (grantId?: any) : any => manifestCommitter.getAudiencePartitionKeysForGrant(grantId),
     resolveAudienceCatalogFacts: (grantId?: any) : any => manifestCommitter.getAudienceCatalogFactsForGrant(grantId)
+  });
+  // This in-process fixture verifies projection and transit. Direct MCP API Key
+  // authentication is covered by its own real-HTTP verifier, so retain the
+  // canonical Grant authorization result without reopening the public boundary.
+  const downstreamProvider: any = Object.freeze({
+    ...downstreamProviderCore,
+    authorizeMcpClientRequest: (input?: any) : any => downstreamProviderCore.authorizeRequest(input)
   });
   const grantBindings: any = upstreamFixtureGrantBindings({ secretRef: MCP_SECRET_REF });
   const downstreamGrant: any = await runPhase("downstream-operation-permission-grant", () : any => operationPermissionPlatform.store.createGrant({

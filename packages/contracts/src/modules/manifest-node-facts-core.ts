@@ -1,6 +1,6 @@
 import { defineArchitectureNodeFacts } from "./manifest-node-facts-support.ts";
 
-export const CORE_ARCHITECTURE_NODE_FACTS: readonly any[] = Object.freeze([
+export const CORE_ARCHITECTURE_NODE_FACTS = Object.freeze([
   ...defineArchitectureNodeFacts("appearance", "appearance", [
     {
       moduleId: "appearance-control-panel",
@@ -214,76 +214,12 @@ export const CORE_ARCHITECTURE_NODE_FACTS: readonly any[] = Object.freeze([
       functionItems: ["长期上下文", "contentRefs"]
     },
     {
-      moduleId: "agent-gateway",
+      moduleId: "model-gateway-adapter",
       parentModuleId: "agent-capabilities",
-      label: "模型网关",
+      label: "Model Gateway Adapter",
       hydration: "optional",
       hydratable: true,
-      functionItems: ["alias / provider / model resolution", "degraded routing chain / rate limit", "budget / circuit breaker / ledger"]
-    },
-    {
-      moduleId: "model-routing",
-      parentModuleId: "agent-gateway",
-      label: "Model Routing",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["degraded routing chain / rate limit", "budget / circuit breaker / ledger"]
-    },
-    {
-      moduleId: "model-probe",
-      parentModuleId: "agent-gateway",
-      label: "Model Probe",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["connectivity probe", "latency / status / configured check"]
-    },
-    {
-      moduleId: "agent-gateway-call",
-      parentModuleId: "agent-gateway",
-      label: "Provider Registry & Call",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["alias / provider / model resolution", "configured upstream forwarding"]
-    },
-    {
-      moduleId: "agent-configs",
-      parentModuleId: "agent-capabilities",
-      label: "基础配置",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["manifest load / normalize / persist", "model library", "gateway defaults and profiles"]
-    },
-    {
-      moduleId: "config-registry",
-      parentModuleId: "agent-configs",
-      label: "Config Registry",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["generation validate / atomic pointer commit", "redacted public projection"]
-    },
-    {
-      moduleId: "model-list",
-      parentModuleId: "agent-configs",
-      label: "Model Library",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["provider / model / endpoint config", "encrypted credential references only"]
-    },
-    {
-      moduleId: "agent-list",
-      parentModuleId: "agent-configs",
-      label: "Gateway Agents",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["agent alias / prompt / plugin list", "explicit module visibility"]
-    },
-    {
-      moduleId: "agent-defaults",
-      parentModuleId: "agent-configs",
-      label: "Defaults & Profiles",
-      hydration: "optional",
-      hydratable: true,
-      functionItems: ["timeout / parameters / system prompt", "context profile binding"]
+      functionItems: ["stateless service adapter", "mandatory downstream and upstream Gateway traversal"]
     }
   ])
 ]);

@@ -143,9 +143,9 @@ Permission permit at the sink. That permission authorizes only Meshrix's own
 effect: it cannot call, observe, configure, schedule, cancel, start, stop, or
 restart the plugin. Meshrix owns no maintenance scheduler, queue, state,
 configuration, credential, PID, socket, status, process handle, or run
-observation. The same cutover removes `agent_gateway.call`, every
-`maintenance_agent.*` projection, the Core-owned Maintenance Agent and all old
-compatibility paths without migrating retired data.
+observation. The same cutover removes the retired embedded model-call and Core
+maintenance control surfaces together with all compatibility paths, without
+migrating retired data.
 
 ## Required closures
 

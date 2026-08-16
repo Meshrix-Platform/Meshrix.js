@@ -16,18 +16,10 @@
     "pactium": "0.8.0"
   },
   "imports": {
-    "#meshrix/agents/agent-configs/config-registry": "@meshrix/agents/agent-configs/config-registry",
-    "#meshrix/agents/agent-configs/credential-binding": "@meshrix/agents/agent-configs/credential-binding",
-    "#meshrix/agents/agent-gateway/external-gateway/index": "@meshrix/agents/agent-gateway/external-gateway/index",
-    "#meshrix/agents/agent-gateway/index": "@meshrix/agents/agent-gateway/index",
-    "#meshrix/agents/agent-gateway/model-probe/index": "@meshrix/agents/agent-gateway/model-probe/index",
     "#meshrix/agents/agent-memory/index": "@meshrix/agents/agent-memory/index",
-    "#meshrix/agents/agent-runtime-provider": "@meshrix/agents/agent-runtime-provider",
     "#meshrix/agents/agent-workspace/agent-workspace-materialization-brand": "@meshrix/agents/agent-workspace/agent-workspace-materialization-brand",
     "#meshrix/agents/agent-workspace/agent-workspace-materialization-port": "@meshrix/agents/agent-workspace/agent-workspace-materialization-port",
     "#meshrix/agents/agent-workspace/index": "@meshrix/agents/agent-workspace/index",
-    "#meshrix/agents/maintenance/index": "@meshrix/agents/maintenance/index",
-    "#meshrix/agents/maintenance/work-queue-contract": "@meshrix/agents/maintenance/work-queue-contract",
     "#meshrix/agents/upstream-gateway/index": "@meshrix/agents/upstream-gateway/index",
     "#meshrix/agents/workspace-asset-registry/index": "@meshrix/agents/workspace-asset-registry/index",
     "#meshrix/agents/workspace-contribution": "@meshrix/agents/workspace-contribution",
@@ -138,11 +130,6 @@
       "types": "./dist/composition/dispatch-operation.d.ts",
       "source": "./src/composition/dispatch-operation.ts",
       "default": "./dist/composition/dispatch-operation.js"
-    },
-    "#meshrix/server-runtime/composition/maintenance-work-queue-provider": {
-      "types": "./dist/composition/maintenance-work-queue-provider.d.ts",
-      "source": "./src/composition/maintenance-work-queue-provider.ts",
-      "default": "./dist/composition/maintenance-work-queue-provider.js"
     },
     "#meshrix/server-runtime/composition/strategy-management-provider": {
       "types": "./dist/composition/strategy-management-provider.d.ts",
